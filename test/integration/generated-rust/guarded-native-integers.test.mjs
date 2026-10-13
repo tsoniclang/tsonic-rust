@@ -10,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`guarded native integer arithmetic retains exact width (${name})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "guarded_integers" } },
-      files: { "index.ts": guardedNativeIntegerSource + '\nexport function main(): void { if (!run()) throw new Error("guarded integers"); }' } });
+      files: { "index.ts": guardedNativeIntegerSource + '\nexport function main(): void { if (!run()) throw new Error("guarded integers"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /value as u64/u);

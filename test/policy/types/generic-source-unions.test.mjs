@@ -130,6 +130,7 @@ export function main(): void {
   check(readByteRegion(inline) === 31);
   check(readByteRegion(undefined) === 0);
 }
+main();
 `,
     },
   });

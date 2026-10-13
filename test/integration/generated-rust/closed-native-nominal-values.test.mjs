@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) {
     const { result } = compileRust({ surfaces: surface === "native" ? [] : ["js"],
       target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": closedNativeNominalValuesSource +
-        '\nexport function main(): void { if (!run()) throw new Error("closed native nominal values"); }' },
+        '\nexport function main(): void { if (!run()) throw new Error("closed native nominal values"); }\nmain();\n' },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5)
       .map(row => row.message.slice(0, 256)).join("\n"));

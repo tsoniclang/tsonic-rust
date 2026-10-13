@@ -21,6 +21,7 @@ export function main(): void {
   check(resolvePath.native(".", { encoding: "buffer" }).toString("utf8") === text);
   check(resolvePath.native(path, { encoding: "buffer" }).toString("utf8") === text);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

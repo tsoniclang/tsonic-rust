@@ -8,7 +8,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`cross-file branch unions preserve exact aliases, native payloads and absence on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { ...crossFileBranchUnionFiles, "index.ts": crossFileBranchUnionFiles["index.ts"] +
-        '\nexport function main(): void { if (!run()) throw new Error("cross-file branch union"); }' } });
+        '\nexport function main(): void { if (!run()) throw new Error("cross-file branch union"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     validateGeneratedProject("cross-file-branch-unions", result.artifacts, { run: true });
   });

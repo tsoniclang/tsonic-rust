@@ -23,6 +23,7 @@ export function main(): void {
   try { Atomics.wait(ordinary, 0, 0, 0); } catch { rejected = true; }
   check(rejected);
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("compiler-provider-atomics", result.artifacts, { run: true });

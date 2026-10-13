@@ -42,6 +42,7 @@ export function main(): void {
   ok(stripVTControlCharacters("plain") === "plain");
   setTimeout(() => {}, 0);
 }
+main();
 `,
     },
   });

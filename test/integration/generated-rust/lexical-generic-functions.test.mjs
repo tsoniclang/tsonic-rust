@@ -8,9 +8,9 @@ for (const surfaces of [[], ["js"]]) {
   test(`native lexical generics retain outer binders, transitive captures and shadowing in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: `lexical_generic_${surfaces[0] ?? "native"}` } },
-      files: { "index.ts": `${lexicalGenericFunctionsSource}
+      files: { "index.ts": (`${lexicalGenericFunctionsSource}
 export function main(): void { if (run() !== 23 || readKeeper(19 as int32) !== 19) throw new Error("lexical generic result"); }
-` } });
+` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(`lexical-generic-${surfaces[0] ?? "native"}`, [...result.artifacts, {
       path: "tests/capture_cost.rs",
@@ -70,6 +70,7 @@ export function main(): void {
   const value = 23 as int32;
   if (load(outer(ref(value))) !== 23) throw new Error("lexical lifetime result");
 }
+main();
 ` } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(`lexical-lifetime-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
@@ -94,6 +95,7 @@ export function main(): void {
   const value = 23 as int32;
   if (load(outer(ref(value))) !== 23) throw new Error("outer lifetime result");
 }
+main();
 ` } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(`lexical-lifetime-shadow-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });

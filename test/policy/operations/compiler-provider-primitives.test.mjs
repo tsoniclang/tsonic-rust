@@ -59,6 +59,7 @@ export function main(): void {
   for (const value of "xyz") { visited = value; break; }
   check(visited === "x");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

@@ -9,10 +9,10 @@ test("module exports inside a binary retain finite generic virtual dispatch", { 
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "closed_generic_dispatch" } },
     files: { ...closedGenericDispatchProofFiles,
-      "index.ts": `${closedGenericDispatchProofFiles["index.ts"]}
+      "index.ts": (`${closedGenericDispatchProofFiles["index.ts"]}
 import { check } from "@acme/testing";
 export function main(): void { check(run()); }
-` },
+` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("closed-generic-dispatch", result.artifacts, { run: true });
@@ -52,6 +52,7 @@ export function main(): void {
   check(first.get(0) === 7 && second.get(0) === "after");
   check(first.identity<string>("separate") === "separate");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

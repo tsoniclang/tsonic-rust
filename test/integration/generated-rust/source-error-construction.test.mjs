@@ -21,7 +21,9 @@ for (const surfaces of [[], ["js"]]) {
   test(`explicit native error fields preserve owned inputs, reused inputs and absence effects (${profile})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": sourceExplicitErrorInitializationProof + `
-        export function main(): void { if (!run()) throw new Error("explicit error initialization"); }` } });
+        export function main(): void { if (!run()) throw new Error("explicit error initialization"); }
+main();
+` } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`explicit-error-initialization-${profile}`, result.artifacts, { run: true });
   });
@@ -30,7 +32,9 @@ for (const surfaces of [[], ["js"]]) {
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
         files: { "constructors.ts": source,
           "index.ts": `import { run } from "./constructors.js";
-            export function main(): void { if (!run()) throw new Error("source error constructors"); }` },
+            export function main(): void { if (!run()) throw new Error("source error constructors"); }
+main();
+` },
       });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(({ code, message }) => `${code}: ${message}`).join("\n"));
       validateGeneratedProject(`source-error-constructors-${name}-${profile}`, result.artifacts, { run: true });
@@ -42,7 +46,9 @@ test("JS error constructor families preserve native optional message parameters"
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "constructors.ts": sourceJsErrorConstructorProof,
       "index.ts": `import { run } from "./constructors.js";
-        export function main(): void { if (!run()) throw new Error("JS error constructors"); }` },
+        export function main(): void { if (!run()) throw new Error("JS error constructors"); }
+main();
+` },
   });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(({ code, message }) => `${code}: ${message}`).join("\n"));
   validateGeneratedProject("source-js-error-constructors", result.artifacts, { run: true });

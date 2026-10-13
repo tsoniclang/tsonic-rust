@@ -8,7 +8,7 @@ import { closedInstanceFiles, closedNativeInstanceSource } from "../../../../tso
 for (const surfaces of [[], ["js"]]) {
   test(`closed nominal union tests preserve inheritance, absence and effects on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      ...closedInstanceFiles, "index.ts": closedInstanceFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("closed class tests"); }',
+      ...closedInstanceFiles, "index.ts": closedInstanceFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("closed class tests"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("closed-instance-tests", result.artifacts, { run: true });
@@ -17,7 +17,7 @@ for (const surfaces of [[], ["js"]]) {
 
 test("selected native constructors test closed payloads without copying them", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
-    "index.ts": closedNativeInstanceSource + '\nexport function main(): void { if (!run()) throw new Error("closed native tests"); }',
+    "index.ts": closedNativeInstanceSource + '\nexport function main(): void { if (!run()) throw new Error("closed native tests"); }\nmain();\n',
   } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");

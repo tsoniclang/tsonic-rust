@@ -8,7 +8,7 @@ import { nativeGuardReachabilitySource, nativeHeaderReachabilitySource } from ".
 for (const surfaces of [[], ["js"]]) {
   test(`native guard reachability preserves absence and effects on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": nativeGuardReachabilitySource + '\nexport function main(): void { if (!run()) throw new Error("native guard reachability"); }',
+      "index.ts": nativeGuardReachabilitySource + '\nexport function main(): void { if (!run()) throw new Error("native guard reachability"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("native-guard-reachability", result.artifacts, { run: true });
@@ -18,7 +18,7 @@ for (const surfaces of [[], ["js"]]) {
 test("exact native header provider omits the impossible number and array paths", { timeout: 300_000 }, async () => {
   const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
     target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": nativeHeaderReachabilitySource + '\nexport function main(): void { if (!run()) throw new Error("native header reachability"); }',
+      "index.ts": nativeHeaderReachabilitySource + '\nexport function main(): void { if (!run()) throw new Error("native header reachability"); }\nmain();\n',
     } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("native-header-reachability", result.artifacts, { run: true });

@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) test(`empty array storage retains its un
   const files = surface === "js" ? emptyArrayStorageFiles : emptyNativeArrayStorageFiles;
   const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
     target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": files["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("empty array storage"); }',
+      "index.ts": files["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("empty array storage"); }\nmain();\n',
     } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

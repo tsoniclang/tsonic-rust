@@ -35,7 +35,7 @@ test("closed Promise callback inputs preserve authored Error payload and identit
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": closedPromiseCallbackInputsSource +
-      '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("closed callback input"); }' },
+      '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("closed callback input"); }\nawait main();\n' },
   });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   assert.equal(/JsValue|dyn Any/u.test(artifactText(result, "src/index.rs")), false,
@@ -46,7 +46,7 @@ test("closed Promise callback inputs preserve authored Error payload and identit
 test("stored native callbacks preserve thrown Error identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": closedThrowingCallbackInputsSource +
-      '\nexport function main(): void { if (!run()) throw new Error("native callback failure identity"); }' } });
+      '\nexport function main(): void { if (!run()) throw new Error("native callback failure identity"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   validateGeneratedProject("closed-throwing-callback-inputs", result.artifacts, { run: true });
 });
@@ -54,7 +54,7 @@ test("stored native callbacks preserve thrown Error identity", { timeout: 300_00
 test("physical callback effects do not change an infallible direct implementation", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": closedNativeCallbackEffectsSource +
-      '\nexport function main(): void { if (!run()) throw new Error("native callback effects"); }' } });
+      '\nexport function main(): void { if (!run()) throw new Error("native callback effects"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   assert.match(artifactText(result, "src/index.rs"), /pub fn positive\(value: i32\) -> bool/u);
   validateGeneratedProject("closed-native-callback-effects", result.artifacts, { run: true });

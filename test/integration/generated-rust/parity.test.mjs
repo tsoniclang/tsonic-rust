@@ -77,6 +77,7 @@ export function main(): void {
   check(random >= 0);
   check(random < 1);
 }
+main();
 `,
     },
   });
@@ -123,6 +124,7 @@ export function main(): void {
   if (objectValue(token) !== "[object Object]" || !objectArray(values).includes("[object Object]") ||
       objectRecord({ token }) !== "[Native object]") throw new Error("closed native carrier inspection");
 }
+main();
 `,
     },
   });
@@ -271,6 +273,7 @@ export function main(): void {
   }
   check(ok);
 }
+main();
 `,
     },
   });
@@ -327,6 +330,7 @@ export function main(): void {
   }
   check(ok);
 }
+main();
 `,
     },
   });

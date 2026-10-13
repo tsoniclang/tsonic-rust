@@ -11,6 +11,7 @@ test("generic Number predicates borrow exact native carriers and propagate their
     files: { "index.ts": genericNumberPredicatesSource + `
 import { check } from "@acme/testing";
 export function main(): void { check(run()); }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
@@ -37,6 +38,7 @@ export function main(): void {
   check(forward(large));
   check(!above(Number.NaN) && above(Number.POSITIVE_INFINITY) && !above(Number.NEGATIVE_INFINITY));
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -82,6 +84,7 @@ export function main(): void {
   try { toBigInt(3.5); } catch { rejected = true; }
   check(rejected);
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

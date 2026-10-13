@@ -10,8 +10,8 @@ for (const surfaces of [[], ["js"]]) {
     { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: "captured_callback_arity" } },
-        files: { "index.ts": `${capturedCallbackAritySource}
-export function main(): void { if (!run()) throw new Error("captured callback arity"); }` } });
+        files: { "index.ts": (`${capturedCallbackAritySource}
+export function main(): void { if (!run()) throw new Error("captured callback arity"); }` + "\nmain();\n") } });
       assertNoTargetDiagnostics(result.diagnostics);
       assert.equal(validateGeneratedProject(`captured-callback-arity-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
     });

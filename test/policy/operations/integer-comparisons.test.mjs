@@ -72,6 +72,7 @@ export function main(): void {
   check(!inBounds(-1, 4) && !inBounds(4, 4) && !inBounds(0, 0) && inBounds(0, 4) && inBounds(3, 4));
   check(next() < maximum && calls === 1);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

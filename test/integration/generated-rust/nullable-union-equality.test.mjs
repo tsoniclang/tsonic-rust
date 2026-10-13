@@ -40,6 +40,7 @@ function run(): boolean {
   return equal(entry, entry) && entry.value === (7 as int32);
 }
 export function main(): void { if (!run()) throw new Error("nullable union equality"); }
+main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     const generated = artifactText(result, "src/index.rs");

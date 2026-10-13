@@ -23,6 +23,7 @@ export function main(): void {
   if (!inspect(textOrBytes(true)) || !inspect(textOrBytes(false)) ||
       !inspect("abc") || !inspect(undefined)) throw new Error("binary union");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

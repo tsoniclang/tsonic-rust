@@ -105,6 +105,7 @@ export function main(): void {
   check(nativeUnsigned(42) === 42);
   void letter();
 }
+main();
 `,
     },
   });
@@ -180,6 +181,7 @@ export function main(): void {
   check(derived.value === 21);
   check(derived.doubled === 42);
 }
+main();
 `,
     },
   });
@@ -334,6 +336,7 @@ export function main(): void {
   check(unequal);
   check(counter.value === 1212);
 }
+main();
 `,
     },
   });

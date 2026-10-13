@@ -23,6 +23,7 @@ test("Promise executors and continuations preserve exact native values and adopt
         await done;
         if (value !== wide || adopted !== 3 || recovered !== 7 || fromExecutor !== 5) throw new Error("Promise completion");
       }
+    await main();
     `,
   } });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -48,6 +49,7 @@ test("Promise rejection preserves a source error's identity and native payload",
           if (reason !== original || reason.code !== wide) throw new Error("lost identity or payload");
         }
       }
+    await main();
     `,
   } });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -72,6 +74,7 @@ test("authored unknown rejection handlers receive the exact native error for the
         await fail().catch(failUnknown);
         if (counter.count !== 2) throw new Error("native rejection handler did not run");
       }
+    await main();
     `,
   } });
   assertNoTargetDiagnostics(result.diagnostics);

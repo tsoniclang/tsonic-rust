@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("overloaded rest callbacks use the selected element and preserve effects", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": overloadedRestCallbackSource + '\nexport function main(): void { if (!run()) throw new Error("overloaded callbacks"); }' } });
+    files: { "index.ts": overloadedRestCallbackSource + '\nexport function main(): void { if (!run()) throw new Error("overloaded callbacks"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("overloaded-rest-callbacks", result.artifacts, { run: true });
 });
@@ -16,13 +16,13 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`overloaded exact and virtual dispatch remain distinct in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": overloadedRestOverrideSource + '\nexport function main(): void { if (!run()) throw new Error("overloaded overrides"); }' } });
+      files: { "index.ts": overloadedRestOverrideSource + '\nexport function main(): void { if (!run()) throw new Error("overloaded overrides"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`overloaded-rest-overrides-${lane}`, result.artifacts, { run: true });
   });
   test(`overloaded and generic rest arguments retain exact native integers in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": overloadedRestIntegerSource + '\nexport function main(): void { if (!run()) throw new Error("overloaded integers"); }' } });
+      files: { "index.ts": overloadedRestIntegerSource + '\nexport function main(): void { if (!run()) throw new Error("overloaded integers"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /9007199254740993/u);

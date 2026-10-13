@@ -10,7 +10,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 for (const surfaces of [[], ["js"]]) test(`independent frame alternatives preserve native aliases and callback identity in ${surfaces[0] ?? "native"}`,
   { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": independentFrameAlternativesSource } });
+      files: { "index.ts": (independentFrameAlternativesSource + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`independent-frame-alternatives-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
     const directory = writeGeneratedProject(`independent-frame-cost-${surfaces[0] ?? "native"}`, result.artifacts);

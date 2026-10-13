@@ -25,6 +25,7 @@ export function main(): void {
   check(BigInt.asIntN(Number.NaN, 4n) === 0n);
   check(BigInt.asIntN(-0.5, 4n) === 0n);
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -75,6 +76,7 @@ export function main(): void {
   const evaluate = (): number => { evaluations += 1; return 7; };
   check(String(evaluate()) === "7" && evaluations === 1 && local() === "local");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -113,6 +115,7 @@ export function main(): void {
     throw new Error("void evaluation");
   }
 }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("void-source-values", result.artifacts, { run: true });
@@ -130,6 +133,7 @@ export async function main(): Promise<void> {
     throw new Error("awaited void evaluation");
   }
 }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("void-awaited-values", result.artifacts, { run: true });
@@ -144,9 +148,11 @@ export async function main(): Promise<void> {
   void await unit();
   console.log(visits);
 }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
-  assert.match(artifactText(result, "src/main.rs"), /tsonic_entry\(\)\.into_value\(\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /main\(\)\.into_value\(\)\.await/u);
+  assert.doesNotMatch(artifactText(result, "src/main.rs"), /tsonic_entry/u);
   const native = validateGeneratedProject("infallible-js-async-entry", result.artifacts, { run: true });
   assert.equal(native.stdout.trim(), "1");
 });

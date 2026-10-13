@@ -33,8 +33,8 @@ for (const surfaces of [[], ["js"]]) {
     const name = `deferred_captures_${surfaces[0] ?? "native"}`;
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": `${deferredCapturesSource}
-        export function main(): void { if (!run()) throw new Error("deferred captures"); }` },
+      files: { "index.ts": (`${deferredCapturesSource}
+        export function main(): void { if (!run()) throw new Error("deferred captures"); }` + "\nmain();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     const source = artifactText(result, "src/index.rs");

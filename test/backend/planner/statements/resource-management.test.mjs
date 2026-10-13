@@ -63,6 +63,7 @@ export function main(): void {
   using resource = new Resource();
   const unselected = new UnselectedResource();
 }
+main();
 `,
     },
   });
@@ -405,6 +406,7 @@ export function main(): void {
   } catch {}
   check(disposed === 3);
 }
+main();
 `,
     },
   });
@@ -456,6 +458,7 @@ export async function main(): Promise<void> {
   } catch {}
   check(disposed === 2);
 }
+await main();
 `,
     },
   });

@@ -41,6 +41,7 @@ const source = `
     return infallible.value === 9 && other.stored === 9;
   }
   export function main(): void { if (!run()) throw new Error("structural accessor result ABI"); }
+main();
 `;
 
 for (const surfaces of [[], ["js"]]) {

@@ -6,7 +6,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("exact ordinal and broad capture indexes preserve optional native results", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": optionalSelectedIndexSource } });
+    files: { "index.ts": (optionalSelectedIndexSource + "\nmain();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("optional-selected-indexes", result.artifacts, { run: true });
 });

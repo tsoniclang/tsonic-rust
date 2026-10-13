@@ -382,6 +382,7 @@ test("numeric shared arrays preserve cross-file carriers, length, indexing and n
             throw new Error("numeric fixed-array contract");
           }
         }
+      main();
       `,
     },
   });

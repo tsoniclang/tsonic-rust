@@ -10,7 +10,7 @@ test("provider indexed types preserve native fields, aliases and unannotated ret
     target: { id: "rust", options: { outputType: "bin", crateName: "provider_indexed_native_types" } },
     files: {
       "model.ts": providerIndexedNativeTypes,
-      "index.ts": providerIndexedNativeUse + '\nexport function main(): void { if (!run()) throw new Error("provider indexed native types"); }',
+      "index.ts": providerIndexedNativeUse + '\nexport function main(): void { if (!run()) throw new Error("provider indexed native types"); }\nmain();\n',
     },
   });
   assertNoTargetDiagnostics(result.diagnostics);

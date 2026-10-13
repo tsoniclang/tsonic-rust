@@ -24,6 +24,7 @@ export async function main(): Promise<void> {
   const completed = await pending;
   if (completed !== (18446744073709551615n as uint64)) throw new Error("exact future payload");
 }
+await main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

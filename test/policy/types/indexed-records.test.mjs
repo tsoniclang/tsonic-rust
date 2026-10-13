@@ -112,6 +112,7 @@ for (const surfaces of [[], ["js"]]) {
           check(count === 2);
           check(copy(one("generic"))["first"] === "generic");
         }
+      main();
       ` },
     });
     assertNoTargetDiagnostics(source.diagnostics);
@@ -140,6 +141,7 @@ test("Object operations retain native indexed storage and requested dense result
         delete values["one"];
         check(!Object.hasOwn(values, "one") && values["one"] === undefined);
       }
+    main();
     ` },
   });
   assertNoTargetDiagnostics(source.diagnostics);

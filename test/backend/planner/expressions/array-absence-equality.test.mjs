@@ -54,6 +54,7 @@ export function main(): void {
   check(lookup.get("present") === null && lookup.get("present") === undefined);
   check(lookup.get("missing") === undefined && lookup.get("missing") === null);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

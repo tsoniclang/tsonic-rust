@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("contextual broad callbacks complete through their native absence storage", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": contextualCallableCompletionSource + '\nexport function main(): void { if (!run()) throw new Error("contextual completion"); }' } });
+    files: { "index.ts": contextualCallableCompletionSource + '\nexport function main(): void { if (!run()) throw new Error("contextual completion"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /OptionalStorage<.*JsValue>.*>::absent\(/u);
@@ -19,7 +19,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`optional callable completion retains exact native absence in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": optionalCallableCompletionSource + '\nexport function main(): void { if (!run()) throw new Error("optional completion"); }' } });
+      files: { "index.ts": optionalCallableCompletionSource + '\nexport function main(): void { if (!run()) throw new Error("optional completion"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`optional-callable-completion-${lane}`, result.artifacts, { run: true });
   });

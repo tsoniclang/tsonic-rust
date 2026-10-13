@@ -36,6 +36,7 @@ export function main(): void {
   check(first() === 2 && first() === 4 && calls === 4);
   check(second() === "second");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -80,6 +81,7 @@ function create(value: number): number {
   return holder.read().value;
 }
 export function main(): void { check(create(7) === 7 && create(9) === 9); }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -111,6 +113,7 @@ function create(): number {
 export function main(): void {
   check(create() === 11 && create() === 12 && count === 2);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -143,6 +146,7 @@ export function main(): void {
   check(second.read() === 5 && second.extra === 7);
   check(simple("plain") === "plain" && simple(9) === 9);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

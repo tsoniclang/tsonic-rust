@@ -19,6 +19,7 @@ export function main(): void {
   const textual: Textual = {kind: "text", value: "ready"};
   if (change(numeric) !== 5 || numeric.value !== 5 || change(textual) !== 7) throw new Error("closed union");
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);

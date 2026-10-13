@@ -75,7 +75,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`value sequences emit canonical native completion on ${surfaces[0] ?? "native"}`, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": nativeExpressionSequencesSource },
+      files: { "index.ts": (nativeExpressionSequencesSource + "\nawait main();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
     const output = artifactText(result, "src/index.rs");

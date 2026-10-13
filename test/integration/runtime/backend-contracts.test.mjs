@@ -445,13 +445,13 @@ export function make(): Empty {
   validateGeneratedProject("backend-empty-class", result.artifacts);
   const executable = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "empty_class_identity" } },
-    files: { "index.ts": `${files["index.ts"]}
+    files: { "index.ts": (`${files["index.ts"]}
 export function main(): void {
   const original = make();
   const alias = original;
   const different = make();
   if (original !== alias || original === different) throw new Error("empty class identity was lost");
-}` },
+}` + "\nmain();\n") },
   }).result;
   assertNoTargetDiagnostics(executable.diagnostics);
   const native = validateGeneratedProject("backend-empty-class-identity", executable.artifacts, { run: true });
@@ -481,6 +481,7 @@ export function main(): void {
     throw new Error("duplicate enum discriminants were not preserved");
   }
 }
+main();
 `,
     },
   });
@@ -543,6 +544,7 @@ test("binary entry modules are emitted through the structured Rust AST", () => {
     files: {
       "index.ts": `
 export function main(): void {}
+main();
 `,
     },
   });
@@ -550,7 +552,7 @@ export function main(): void {}
   assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) \{\n    structured_main::tsonic_entry\(\);\n\}/u,
+    /fn main\(\) \{\n    structured_main::initialize\(\);\n\}/u,
   );
   validateGeneratedProject("backend-structured-main", result.artifacts, { run: true });
 });
@@ -568,6 +570,7 @@ import { helper } from "./dependency/index.js";
 export function main(): void {
   helper();
 }
+main();
 `,
     },
   });
@@ -575,7 +578,7 @@ export function main(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /exact_entry_path::tsonic_entry\(\);/u,
+    /exact_entry_path::initialize\(\);/u,
   );
   validateGeneratedProject("backend-exact-entry-path", result.artifacts, { run: true });
 });
@@ -591,6 +594,7 @@ import { createMeter } from "telemetry";
 export function main(): void {
   createMeter("requests");
 }
+main();
 `,
     },
   });
@@ -598,7 +602,7 @@ export function main(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   assert.match(
     artifactText(result, "src/main.rs"),
-    /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError> \{\n    fallible_main::tsonic_entry\(\)\?;\n    Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)\n\}/u,
+    /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError> \{\n    fallible_main::initialize\(\)\?;\n    Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)\n\}/u,
   );
   validateGeneratedProject("backend-fallible-main", result.artifacts, { run: true });
 });

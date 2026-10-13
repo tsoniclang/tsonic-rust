@@ -68,6 +68,7 @@ export function main(): void {
   check(counter.value === 16);
   check(readBase(counter) === "derived");
 }
+main();
 `,
   }, "rust_inheritance_dispatch_proof");
 
@@ -105,6 +106,7 @@ export function main(): void {
   const result = new ParseResult();
   check(result.value() === 1);
 }
+main();
 `,
   }, "rust_polymorphic_debug_proof");
 
@@ -159,6 +161,7 @@ export function main(): void {
   check(counted.count === 2);
   check(describe(item) === "ready");
 }
+main();
 `,
   }, "rust_interface_dispatch_proof");
 
@@ -209,6 +212,7 @@ export function main(): void {
   check(readBox(value) === "closed");
   check(readNamed(value) === "closed");
 }
+main();
 `,
   }, "rust_generic_heritage_proof");
 
@@ -278,6 +282,7 @@ export function main(): void {
   const value = new Derived();
   check(value.format("x", 2) === "x:x:");
 }
+main();
 `,
   }, "rust_inherited_lexical_binding_proof");
 

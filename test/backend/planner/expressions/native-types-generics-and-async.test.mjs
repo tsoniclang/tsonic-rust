@@ -203,6 +203,7 @@ export function main(): void {
   check(withOptionalFallback(undefined) === undefined);
   check(fallbackCalls === 2);
 }
+main();
 `,
     },
   });
@@ -313,6 +314,7 @@ export function main(): void {
   check(holder.calls === 1);
   check(cell.value === 5);
 }
+main();
 `,
     },
   });
@@ -341,6 +343,7 @@ export function main(): void {
   const separate = { x: 3, label: "done" };
   check(separate !== point);
 }
+main();
 `,
     },
   });
@@ -402,6 +405,7 @@ export function pick(entry: [int32, int32], i: int32): int32 {
 export function main(): void {
   check(pick([10, 20], 1) === 20);
 }
+main();
 `,
     },
   });
@@ -483,6 +487,7 @@ export function main(): void {
   check(area(circleShape) === 21);
   check(area(squareShape) === 49);
 }
+main();
 `,
     },
   });
@@ -618,13 +623,14 @@ export function bad(): int32 {
     files: {
       "index.ts": `
 export async function main(): Promise<void> {}
+await main();
 `,
     },
   });
   assertNoTargetDiagnostics(asyncMain.result.diagnostics);
   assert.match(
     artifactText(asyncMain.result, "src/main.rs"),
-    /tsonic_rust_runtime::block_on\(async_main::tsonic_entry\(\)\)/u,
+    /tsonic_rust_runtime::block_on\(async_main::initialize\(\)\)/u,
   );
 });
 

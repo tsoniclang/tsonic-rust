@@ -28,6 +28,7 @@ test("one synchronous capture owns inline native storage across calls and callab
       if (first() !== 2 || alias() !== 3 || second() !== 11 || first() !== 4 ||
         stored() !== 3 || stored() !== 6 || choose(true) !== 9 || choose(false) !== 8) throw new Error("single owner");
     }
+  main();
   `);
   assert.match(output, /core::cell::Cell::new/u);
   assert.match(output, /\.get\(\)/u);
@@ -53,6 +54,7 @@ test("independent, repeated, nested and addressed capture owners retain their sh
       if (pair[0]() !== 2 || pair[1]() !== 3 || loop[0]() !== 11 || loop[1]() !== 12 ||
         first() !== 21 || second() !== 22 || pointer() !== 31 || pointer() !== 32) throw new Error("shared owner");
     }
+  main();
   `);
   assert.match(output, /Location::allocate/u);
   assert.doesNotMatch(output, /core::cell::Cell::new/u);
@@ -70,6 +72,7 @@ test("a single non-Copy capture uses inline native interior storage without a se
       const second = append("b");
       if (first("x") !== "ax" || alias("y") !== "axy" || second("z") !== "bz") throw new Error("owned string capture");
     }
+  main();
   `);
   assert.match(output, /core::cell::RefCell::new/u);
   assert.doesNotMatch(output, /Location::allocate|Rc::new\([^\n]*RefCell/u);
@@ -104,6 +107,7 @@ test("non-Copy independent, nested and deferred owners retain one live binding",
         later() !== "dx" || later() !== "dxx")
         throw new Error("live non-Copy binding");
     }
+  main();
   `);
   assert.equal(/Location::allocate/u.test(output), true, "independent owners retain their shared binding");
   assert.equal(/core::cell::(?:Cell|RefCell)::new/u.test(output), false,

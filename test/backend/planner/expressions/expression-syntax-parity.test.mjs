@@ -94,6 +94,7 @@ export function main(): void {
   check("alpha" >= "alpha");
   check(supplementary > privateUse);
 }
+main();
 `,
     },
   });
@@ -149,6 +150,7 @@ export function main(): void {
   check(require("ready") === "ready");
   check(selected(["zero", "one"], 1) === "one");
 }
+main();
 `,
     },
   });
@@ -178,6 +180,7 @@ export function main(): void {
   check(selected(["zero", "one"], 1) === "one");
   check(selected(["zero", "one"], 4) === "fallback");
 }
+main();
 `,
     },
   });
@@ -244,6 +247,7 @@ export function main(): void {
   check(transform([1, 2])[1] === 3);
   check(factorial(5) === 120);
 }
+main();
 `,
     },
   });
@@ -271,6 +275,7 @@ export function main(): void {
   const text = \`count=\${count}; enabled=\${enabled}; zero=\${negativeZero}\`;
   check(text === "count=42; enabled=true; zero=-0");
 }
+main();
 `,
     },
   });
@@ -288,7 +293,7 @@ test("flow-selected optional values project before direct template and arithmeti
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "flow_read_proof" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 import { check } from "@acme/testing";
 import type { int32 } from "@tsonic/core/types.js";
 
@@ -320,7 +325,7 @@ export function main(): void {
   check(direct(undefined) === "missing");
   check(direct("ready") === "value=ready");
 }
-`,
+` + "\nmain();\n"),
     },
   });
 
@@ -352,6 +357,7 @@ export function main(): void {
   const artifact = new Artifact(expected);
   check(artifact.output_path === \`site.\${"css"}\`);
 }
+main();
 `,
     },
   });
@@ -399,6 +405,7 @@ export function main(): void {
   const discarded = void check(true);
   check(typeof discarded === "object");
 }
+main();
 `,
     },
   });
@@ -448,6 +455,7 @@ export function main(): void {
   check(counter.read() === huge);
   check(counter.read() === huge);
 }
+main();
 `,
     },
   });
@@ -574,6 +582,7 @@ export function main(): void {
   check(accessor.current === 2n);
   check(accessor.writes === 1);
 }
+main();
 `,
     },
   });
@@ -611,6 +620,7 @@ export function main(): void {
   }
   check(keyCount === 3);
 }
+main();
 `,
     },
   });

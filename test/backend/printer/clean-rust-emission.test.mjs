@@ -44,6 +44,7 @@ export function preserveCollision(_value: int32, value: int32): int32 {
 export function main(): void {
   buildSite("site").pageLabel("built: ");
 }
+main();
 `,
     },
   });
@@ -104,6 +105,7 @@ export function main(): void {
   const marker = new Marker<int32>("ready");
   marker.label;
 }
+main();
 `,
     },
   });

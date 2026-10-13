@@ -25,7 +25,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`mixed owning and borrowing native callbacks execute through one declared input ABI in ${lane}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": callableInputDomainSource } });
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (callableInputDomainSource + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`callable-input-domains-${lane}`, result.artifacts, { run: true });
   });

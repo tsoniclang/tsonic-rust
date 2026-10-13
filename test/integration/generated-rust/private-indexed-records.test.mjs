@@ -23,6 +23,7 @@ export function run(): boolean {
     settings.get("empty") === undefined;
 }
 export function main(): void { check(run()); }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("private-indexed-records", result.artifacts, { run: true });

@@ -28,6 +28,7 @@ export function main(): void {
   check(repeated(values) === "café😀:café😀:changed");
   check(values[0] === "changed");
 }
+main();
 `,
     },
   });

@@ -37,6 +37,7 @@ export function main(): void {
   check(failed);
   check(second(1) === 1 && second("right") === "right");
 }
+main();
 ` },
       });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 8)
@@ -53,7 +54,7 @@ export function main(): void {
       surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: `unbounded_generic_equality_${profile}` } },
       files: { "index.ts": receiverFieldUnconstrainedEqualitySource +
-        '\nexport function main(): void { if (!run()) throw new Error("equal"); }' },
+        '\nexport function main(): void { if (!run()) throw new Error("equal"); }\nmain();\n' },
     });
     assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_BINARY_OPERATOR_CARRIER_UNSUPPORTED"), true);
     assert.equal(result.artifacts.length, 0);

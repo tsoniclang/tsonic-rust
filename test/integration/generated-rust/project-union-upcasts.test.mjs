@@ -39,6 +39,7 @@ export function main(): void {
   if (typeof fused === "string" || fused !== original || fused.read() !== (9 as int32)) throw new Error("fused identity");
   if (narrowAndWiden("native text") !== "native text" || narrowAndWiden(false) !== "excluded") throw new Error("fused arms");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

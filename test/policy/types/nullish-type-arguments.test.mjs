@@ -19,6 +19,7 @@ export function main(): void {
     throw new Error("native absence values");
   }
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);

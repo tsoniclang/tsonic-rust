@@ -23,9 +23,9 @@ for (const [name, files] of [
     const { result } = compileRust({
       surfaces: ["js"], packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: name.replaceAll("-", "_") } },
-      files: { ...files, "index.ts": `${files["index.ts"]}
+      files: { ...files, "index.ts": (`${files["index.ts"]}
         import { check } from "@acme/testing";
-        export function main(): void { check(run()); }` },
+        export function main(): void { check(run()); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject(name, result.artifacts, { run: true });

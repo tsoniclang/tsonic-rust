@@ -10,7 +10,7 @@ import { fixedFieldSelfSource } from "../../helpers/fixed-field-self.mjs";
 for (const surfaces of [[], ["js"]]) test(`escaped fixed field self releases the last native owner in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
   const profile = surfaces[0] ?? "native";
   const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": fixedFieldSelfSource } });
+    files: { "index.ts": (fixedFieldSelfSource + "\nmain();\n") } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
   const emitted = artifactText(result, "src/index.rs");
   assert.equal(typeof emitted === "string", true, "actual native source is produced");

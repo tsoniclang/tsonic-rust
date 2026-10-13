@@ -18,6 +18,7 @@ export function main(): void {
     throw new Error("module binding mismatch");
   }
 }
+main();
 `,
     },
   });

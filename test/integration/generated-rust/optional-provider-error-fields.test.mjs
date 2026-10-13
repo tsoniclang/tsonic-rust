@@ -9,7 +9,7 @@ test("optional provider Error fields retain canonical storage through aliases an
     const name = "optional_provider_error_fields";
     const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": optionalProviderErrorFieldSource },
+      files: { "index.ts": (optionalProviderErrorFieldSource + "\nmain();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(name, result.artifacts, { run: true });

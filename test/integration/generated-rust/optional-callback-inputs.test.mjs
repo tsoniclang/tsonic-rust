@@ -8,7 +8,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`optional callback inputs preserve exact absent aliases on ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": optionalCallbackInputsSource + '\nexport function main(): void { if (!run()) throw new Error("optional callback input"); }' } });
+      files: { "index.ts": optionalCallbackInputsSource + '\nexport function main(): void { if (!run()) throw new Error("optional callback input"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     validateGeneratedProject(`optional-callback-inputs-${lane}`, result.artifacts, { run: true });
   });
@@ -16,7 +16,7 @@ for (const surfaces of [[], ["js"]]) {
 
 test("optional async callback inputs retain exact Promise completion and live captures", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": optionalAsyncCallbackInputsSource + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("optional async callback input"); }' } });
+    files: { "index.ts": optionalAsyncCallbackInputsSource + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("optional async callback input"); }\nawait main();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   validateGeneratedProject("optional-async-callback-inputs", result.artifacts, { run: true });
 });

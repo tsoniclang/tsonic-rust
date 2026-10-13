@@ -45,6 +45,7 @@ test("constructor values retain selected generics, class aliases and live static
           numbers.count = 10;
           if (NumberBox.count !== 10 || same.count !== 10 || TextBox.count !== 1) throw new Error("static storage");
         }
+      main();
       `,
     } });
   assert.deepEqual(result.diagnostics, []);
@@ -79,6 +80,7 @@ test("constructor values preserve callee-before-argument order and constructor e
           if (!rejected) throw new Error("failure");
           expectTrace("sacsc");
         }
+      main();
       `,
     } });
   assert.deepEqual(result.diagnostics, []);
@@ -140,6 +142,7 @@ test("constructor predicates retain closed base-interface narrowing and native d
           if (extract(textFactory, text, "missing") !== "native" || extract(factory, text, -1) !== -1 ||
             extract(textFactory, value, "missing") !== "missing") throw new Error("independent native types");
         }
+      main();
       `,
     } });
   assert.deepEqual(result.diagnostics, []);

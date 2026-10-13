@@ -8,7 +8,7 @@ import { partialNativeGuardsSource } from "../../../../tsonic/test/fixtures/part
 for (const surfaces of [[], ["js"]]) {
   test(`partial native guards preserve stronger checked evidence on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": partialNativeGuardsSource + '\nexport function main(): void { if (!run()) throw new Error("partial native guards"); }',
+      "index.ts": partialNativeGuardsSource + '\nexport function main(): void { if (!run()) throw new Error("partial native guards"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("partial-native-guards", result.artifacts, { run: true });
@@ -40,6 +40,7 @@ export function main(): void {
     throw new Error("native disjunction carrier or alias lost");
   }
 }
+main();
 `,
   } });
   assertNoTargetDiagnostics(result.diagnostics);

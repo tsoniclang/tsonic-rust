@@ -29,6 +29,7 @@ async function run(): Promise<boolean> {
   return rejected;
 }
 export async function main(): Promise<void> { if (!await run()) throw new Error("retained input"); }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");

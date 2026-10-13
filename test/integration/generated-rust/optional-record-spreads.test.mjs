@@ -9,8 +9,8 @@ for (const surfaces of [[], ["js"]]) {
     const name = `optional_record_spreads_${surfaces[0] ?? "native"}`;
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": `${optionalRecordSpreadsSource}
-        export function main(): void { if (!run()) throw new Error("optional record spread"); }` },
+      files: { "index.ts": (`${optionalRecordSpreadsSource}
+        export function main(): void { if (!run()) throw new Error("optional record spread"); }` + "\nmain();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     const source = artifactText(result, "src/index.rs");

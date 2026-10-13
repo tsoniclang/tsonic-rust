@@ -12,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
   test(`observable callable creations retain fresh native identities in ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": observableCallableCreationSource } });
+      files: { "index.ts": (observableCallableCreationSource + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
     validateGeneratedProject(`observable-callable-creation-${profile}`, result.artifacts, { run: true });
     const directory = writeGeneratedProject(`observable-callable-creation-drop-${profile}`, result.artifacts);
@@ -51,7 +51,7 @@ mod creation_cost {
 
   test(`lexical loop activations retain copied and live captures in ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": loopCaptureStorageSource } });
+      files: { "index.ts": (loopCaptureStorageSource + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
     validateGeneratedProject(`loop-capture-storage-${profile}`, result.artifacts, { run: true });

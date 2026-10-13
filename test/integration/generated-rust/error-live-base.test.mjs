@@ -11,8 +11,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`live inherited Error storage survives base values and throw recovery in Rust ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "live_error_storage" } },
-      files: { ...liveErrorStorageFiles, "index.ts": `${liveErrorStorageFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("live Error storage failed"); }` } });
+      files: { ...liveErrorStorageFiles, "index.ts": (`${liveErrorStorageFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("live Error storage failed"); }` + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.doesNotMatch(source, /JsError::new\([^\n]*\.message\(/);
@@ -22,8 +22,8 @@ export function main(): void { if (!run()) throw new Error("live Error storage f
   test(`writes through Error base values retain native field identity in Rust ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "live_error_writes" } },
-      files: { "index.ts": `${liveErrorBaseWriteSource}
-export function main(): void { if (!run()) throw new Error("live Error base writes failed"); }` } });
+      files: { "index.ts": (`${liveErrorBaseWriteSource}
+export function main(): void { if (!run()) throw new Error("live Error base writes failed"); }` + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(validateGeneratedProject(`live-error-writes-${profile}`, result.artifacts, { run: true }).status, 0);
   });
@@ -32,8 +32,8 @@ export function main(): void { if (!run()) throw new Error("live Error base writ
     test(`sealed mixed throws retain writable ${projectError ? "project" : "native"} Error identity in Rust ${profile}`, { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: "mixed_error_recovery" } },
-        files: { "index.ts": `${liveErrorMixedRecoverySource(projectError)}
-export function main(): void { if (!run()) throw new Error("mixed Error recovery failed"); }` } });
+        files: { "index.ts": (`${liveErrorMixedRecoverySource(projectError)}
+export function main(): void { if (!run()) throw new Error("mixed Error recovery failed"); }` + "\nmain();\n") } });
       assertNoTargetDiagnostics(result.diagnostics);
       assert.equal(validateGeneratedProject(`mixed-error-recovery-${profile}-${projectError ? "project" : "native"}`, result.artifacts, { run: true }).status, 0);
     });

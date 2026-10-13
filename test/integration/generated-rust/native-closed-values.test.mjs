@@ -8,7 +8,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 for (const surfaces of [undefined, ["js"]]) {
   test(`native closed values retain exact primitive, absence and shared-object operations in ${surfaces?.[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": nativeClosedValuesSource + '\nexport function main(): void { if (!run()) throw new Error("native closed values"); }' } });
+      files: { "index.ts": nativeClosedValuesSource + '\nexport function main(): void { if (!run()) throw new Error("native closed values"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");
     if (surfaces === undefined) assert.match(source, /native_values_equal/u);

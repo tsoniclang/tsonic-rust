@@ -291,6 +291,7 @@ export function main(): void {
     throw new Error("native Option predicate changed");
   }
 }
+main();
 `,
     },
   });
@@ -359,6 +360,7 @@ export function main(): void {
   require_local_future(completeLater());
   require_send_static_future(completeLater());
 }
+main();
 `,
     },
   });
@@ -467,6 +469,7 @@ export function main(): void {
     throw new Error("GAT or associated constraint call failed");
   }
 }
+main();
 `,
     },
   });
@@ -702,6 +705,7 @@ export function main(): void {
   const constructed = new PublicRecord(29);
   if (constructed.value !== 29) throw new Error("renamed nominal constructor failed");
 }
+main();
 `,
     },
   });

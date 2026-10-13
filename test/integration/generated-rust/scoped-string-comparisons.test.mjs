@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 for (const profile of ["native", "js"]) {
   test(`scoped string comparisons preserve native snapshots and literals in ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: profile === "native" ? [] : ["js"],
-      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": scopedStringComparisonsSource } });
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (scopedStringComparisonsSource + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
     validateGeneratedProject(`scoped-string-comparisons-${profile}`, result.artifacts, { run: true });

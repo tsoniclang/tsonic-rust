@@ -17,7 +17,7 @@ test("native rest contracts preserve array-valued arguments and nested storage i
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "nested_array_rest" } },
     files: {
-      "index.ts": `${nestedArrayRestSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }`,
+      "index.ts": (`${nestedArrayRestSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n"),
     },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -28,7 +28,7 @@ test("native optional array equality preserves identity, repeated reads and muta
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "optional_array_comparisons" } },
-    files: { "index.ts": `${optionalArrayComparisonSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+    files: { "index.ts": (`${optionalArrayComparisonSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n") },
   });
   assert.equal(result.diagnostics.length, 0, "unchanged authored optional array comparisons compile");
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -136,6 +136,7 @@ export async function main(): Promise<void> {
   catch { caught = true; }
   check(caught);
 }
+await main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

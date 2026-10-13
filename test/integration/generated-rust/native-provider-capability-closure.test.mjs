@@ -26,6 +26,7 @@ export function main(): void {
   const third: int32 = sumBraces(5, 6);
   check(first === 3 && second === 7 && third === 11);
 }
+main();
 `,
     },
   });

@@ -31,6 +31,7 @@ export function main(): void {
     check(caught.message === "other");
   }
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -51,7 +52,7 @@ export function identical(value: object): boolean { return value === value; }
     "export function rejected(value: unknown): never { return (() => { throw value; })(); }",
   ].entries()) {
     const accepted = compileRust({ surfaces, packages: [acmeTestingPackage()],
-      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (`
 import { check } from "@acme/testing";
 ${source}
 export function main(): void {
@@ -59,7 +60,7 @@ export function main(): void {
   try { rejected({}); } catch { caughtCount++; }
   check(caughtCount === 1);
 }
-` } }).result;
+` + "\nmain();\n") } }).result;
     assert.equal(accepted.diagnostics.length, 0, accepted.diagnostics.slice(0, 5)
       .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
     validateGeneratedProject(`closed-throw-storage-${profile}-${index}`, accepted.artifacts, { run: true });
@@ -73,6 +74,7 @@ export function main(): void {
   try { rethrow({}); } catch { caughtCount++; }
   check(caughtCount === 1);
 }
+main();
 ` } }).result;
   assert.equal(direct.diagnostics.length, 0, direct.diagnostics.slice(0, 5)
     .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));
@@ -100,6 +102,7 @@ export function main(): void {
   }
   check(caughtCount === 1);
 }
+main();
 ` } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5)
     .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));

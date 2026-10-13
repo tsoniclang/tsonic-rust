@@ -9,7 +9,7 @@ test("static intrinsic aliases retain exact JS API calls without runtime wrapper
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
         ...staticCallableAliasFiles,
-        "index.ts": staticCallableAliasFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("static intrinsic aliases"); }',
+        "index.ts": staticCallableAliasFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("static intrinsic aliases"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -30,7 +30,7 @@ test("escaping or mutable intrinsic aliases do not obtain compile-only erasure",
 
 test("generic object methods do not retain compile-only intrinsic captures", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
-    "index.ts": staticCallableAliasObjectFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("intrinsic alias capture"); }',
+    "index.ts": staticCallableAliasObjectFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("intrinsic alias capture"); }\nmain();\n',
   } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

@@ -9,7 +9,7 @@ test("suspended frame entries retain one exact activation across awaits and late
     const name = "suspended_activation_callables";
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": suspendedActivationCallableSource },
+      files: { "index.ts": (suspendedActivationCallableSource + "\nawait main();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(name, result.artifacts, { run: true });
@@ -21,7 +21,7 @@ test("suspended class entries retain their owning activation across aliases and 
     const name = "suspended_class_activation_callables";
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": suspendedClassActivationCallableSource },
+      files: { "index.ts": (suspendedClassActivationCallableSource + "\nawait main();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(name, result.artifacts, { run: true });

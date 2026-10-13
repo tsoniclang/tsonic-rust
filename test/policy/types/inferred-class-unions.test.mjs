@@ -138,6 +138,7 @@ function run(): boolean {
   return initial && retained && caught && ordered;
 }
 export function main(): void { check(run()); }
+main();
 `,
     },
   });
@@ -189,6 +190,7 @@ export function main(): void {
   check(first.read() === "changed");
   check(second.read() === "second");
 }
+main();
 `,
     },
   });

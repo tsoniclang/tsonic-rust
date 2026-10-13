@@ -9,9 +9,9 @@ test("non-returning calls preserve native termination, catches and evaluation co
   for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": `${nonReturningCallsSource}\nexport async function main(): Promise<void> {
+      files: { "index.ts": (`${nonReturningCallsSource}\nexport async function main(): Promise<void> {
         if (!await run()) throw new Error("non-returning call observations");
-      }` },
+      }` + "\nawait main();\n") },
     });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("non-returning-calls", result.artifacts, { run: true });

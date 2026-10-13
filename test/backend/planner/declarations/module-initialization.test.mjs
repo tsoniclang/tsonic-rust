@@ -39,6 +39,7 @@ export function main(): void {
     throw new Error("module evaluation order mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -99,6 +100,7 @@ export function main(): void {
     throw new Error("cyclic function call mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -137,6 +139,7 @@ export function main(): void {
     throw new Error("single cyclic initializer mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -173,6 +176,7 @@ import { Box, ready } from "./a.js";
 export function main(): void {
   if (!ready() || Box.empty.text.value !== "") throw new Error("cyclic construction mismatch");
 }
+main();
 `,
     },
   });
@@ -222,6 +226,7 @@ export let fromB: int32 = fromA + 1;
       "index.ts": `
 import { fromA } from "./a.js";
 export function main(): void { if (fromA === 0) { throw new Error("unreachable"); } }
+main();
 `,
     },
   });
@@ -252,6 +257,7 @@ export function main(): void {
     throw new Error("async module initialization mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -280,6 +286,7 @@ test("fallible top-level operations propagate through binary startup", () => {
 export let value: unknown = JSON.parse("1");
 
 export function main(): void {}
+main();
 `,
     },
   });
@@ -345,14 +352,16 @@ import { readText } from "@acme/files";
 export function main(): void {
   readText("unused");
 }
+main();
 `,
     },
   });
 
   assert.deepEqual(result.diagnostics, []);
   const main = artifactText(result, "src/main.rs");
-  assert.equal(main.indexOf("provider_epilogue_proof::index::main()") <
-    main.indexOf("acme_files::drain_runtime()"), true);
+  const initialization = main.indexOf("provider_epilogue_proof::initialize()");
+  const epilogue = main.indexOf("acme_files::drain_runtime()");
+  assert.equal(initialization >= 0 && epilogue > initialization, true);
   validateGeneratedProject("provider-epilogue-proof", result.artifacts);
 });
 
@@ -375,6 +384,7 @@ import type { Store } from "@acme/platform";
 
 export function accept(_value: Store): void {}
 export function main(): void {}
+main();
 `,
     },
   });
@@ -408,6 +418,7 @@ import { readText } from "@acme/files";
 export function main(): void {
   readText("unused");
 }
+main();
 `,
     },
   });

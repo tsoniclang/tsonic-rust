@@ -36,6 +36,7 @@ export function main(): void {
     throw new Error("allocation contract");
   }
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -68,6 +69,7 @@ export function main(): void {
   if (saved !== "bb" || repeat(saved) !== "bbbb" || finalize(saved) !== "bb" || observed !== "bb")
     throw new Error("ownership was erased");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -137,6 +139,7 @@ export function main(): void {
   if (directResult !== "direct" || nestedResult !== "nested" || completedResult !== "completed" ||
       ownedResult[0] !== "copies" || ownedResult[1] !== "copies") throw new Error("argument ownership");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -163,6 +166,7 @@ export function main(): void {
   if (copied(ref(value)) !== "borrowed" || empty(ref(value)) !== "borrowed" || !observed(ref(value)) ||
       combined(borrowed(ref(value)), value) !== "borrowedborrowed") throw new Error("nested native reference");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -414,6 +418,7 @@ export function main(): void {
   if ((counter.clone() as string) !== undefined) matches++;
   if (matches !== 3 || calls !== 3) throw new Error("authored call was erased");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -442,6 +447,7 @@ export function main(): void {
   if (first.join("|") !== "xa|cc|bbb" || second.join("|") !== "xxxz|aa|yyy")
     throw new Error("retained callable ABI");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -470,6 +476,7 @@ export function main(): void {
   if (read_to_string<string>("captured-reference.txt").unwrap() !== "abc")
     throw new Error("captured borrow");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -499,6 +506,7 @@ export function main(): void {
   if (local.next() !== 1 || local.next() !== 2 || retained.next() !== 1 || alias.next() !== 2)
     throw new Error("cursor receiver contract");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

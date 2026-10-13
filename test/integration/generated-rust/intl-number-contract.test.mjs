@@ -93,6 +93,7 @@ test("Intl exact integer, optional precision and grouping contracts execute in R
         check(wide.toLocaleString("en", { useGrouping: false }) === "-170141183460469231731687303715884105728");
         check(arbitrary === 340282366920938463463374607431768211456123n);
       }
+    main();
     ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

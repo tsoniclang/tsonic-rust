@@ -23,6 +23,7 @@ export function main(): void {
   check(reversedNull(null) && reversedNull(undefined));
   check(reversedUndefined(undefined) && reversedUndefined(null));
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("compiler-provider-string-number", result.artifacts, { run: true });
@@ -66,7 +67,9 @@ export function main(): void {
   check(coalesce(undefined, 7) === 7 && calls === 2);
   check(coalesce(null, undefined) === null && calls === 3);
   check(coalesce(undefined, null) === undefined && calls === 4);
-}`,
+}
+main();
+`,
   } });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("nullable-native-union-coalescing", result.artifacts, { run: true });

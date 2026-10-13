@@ -8,9 +8,9 @@ import { nativeWordConversionsSource } from "../../../../tsonic/test/fixtures/na
 test("native-word conversions preserve exact values, absence and evaluation count", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_word_conversions" } },
-    files: { "index.ts": `${nativeWordConversionsSource}
+    files: { "index.ts": (`${nativeWordConversionsSource}
       export function main(): void { if (!run()) throw new Error("native word conversion"); }
-    ` },
+    ` + "\nmain();\n") },
   });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
@@ -43,6 +43,7 @@ test("explicit native integer casts reject out-of-range values without floating 
           throw new Error("checked integer range");
         }
       }
+    main();
     ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

@@ -46,6 +46,7 @@ export function run(): boolean {
     exactInteger(undefined) === 0n && exactInteger(7) === 1n && exactInteger(9007199254740993n) === 9007199254740993n;
 }
 export function main(): void { check(run()); }
+main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("optional-union-refinement", result.artifacts, { run: true });

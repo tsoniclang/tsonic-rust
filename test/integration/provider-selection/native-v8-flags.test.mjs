@@ -10,10 +10,10 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({
       surfaces, packages: [acmeTestingPackage()], capabilities: [await nodejsCapability()],
       target: { id: "rust", options: { outputType: "bin", crateName: "native_v8_heap" } },
-      files: { "index.ts": `${nativeV8HeapSource}
+      files: { "index.ts": (`${nativeV8HeapSource}
 import { check } from "@acme/testing";
 export function main(): void { check(run()); }
-` },
+` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject(`native-v8-heap-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
@@ -22,10 +22,10 @@ export function main(): void { check(run()); }
     const { result } = compileRust({
       surfaces, packages: [acmeTestingPackage()], capabilities: [await nodejsCapability()],
       target: { id: "rust", options: { outputType: "bin", crateName: "native_v8_flags" } },
-      files: { "index.ts": `${nativeV8FlagsSource}
+      files: { "index.ts": (`${nativeV8FlagsSource}
 import { check } from "@acme/testing";
 export function main(): void { check(run()); }
-` },
+` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject(`native-v8-flags-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);

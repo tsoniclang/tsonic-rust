@@ -43,6 +43,7 @@ export function main(): void {
   const raw: Uint8Array = deflateRawSync(alias);
   check(read(inflateRawSync(raw)) === 21);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

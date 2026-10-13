@@ -9,9 +9,9 @@ for (const surfaces of [[], ["js"]]) {
     const name = `lexical_fallibility_${surfaces[0] ?? "native"}`;
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": `${lexicalFallibilitySource}
+      files: { "index.ts": (`${lexicalFallibilitySource}
 export function main(): void { if (!run()) throw new Error("lexical invocation effects"); }
-` } });
+` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(name, result.artifacts, { run: true });
     assert.equal(executed.status, 0, executed.stderr);

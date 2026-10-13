@@ -18,8 +18,8 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({
       surfaces, capabilities: [memoryAbiCapability("rust")],
       target: { id: "rust", options: { outputType: "bin", crateName: "fixed_array_memory" } },
-      files: { ...fixedArrayMemoryProofFiles, "index.ts": `${fixedArrayMemoryProofFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("fixed array memory contract"); }` },
+      files: { ...fixedArrayMemoryProofFiles, "index.ts": (`${fixedArrayMemoryProofFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("fixed array memory contract"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject("fixed-array-memory", result.artifacts, { run: true });
@@ -28,8 +28,8 @@ export function main(): void { if (!run()) throw new Error("fixed array memory c
     const { result } = compileRust({
       surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "value_struct_proof" } },
-      files: { ...valueStructProofFiles, "index.ts": `${valueStructProofFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("value struct contract"); }` },
+      files: { ...valueStructProofFiles, "index.ts": (`${valueStructProofFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("value struct contract"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject("value-struct-contract", result.artifacts, { run: true });
@@ -38,8 +38,8 @@ export function main(): void { if (!run()) throw new Error("value struct contrac
     const { result } = compileRust({
       surfaces, capabilities: [memoryAbiCapability("rust")],
       target: { id: "rust", options: { outputType: "bin", crateName: "value_record_memory" } },
-      files: { ...valueRecordMemoryProofFiles, "index.ts": `${valueRecordMemoryProofFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("value record memory contract"); }` },
+      files: { ...valueRecordMemoryProofFiles, "index.ts": (`${valueRecordMemoryProofFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("value record memory contract"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject("value-record-memory", result.artifacts, { run: true });

@@ -8,7 +8,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`optional project positions preserve live derived identity in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": `${optionalProjectCarriersSource}\nexport function main(): void { if (!run()) throw new Error("optional-project-carriers"); }` } });
+      files: { "index.ts": (`${optionalProjectCarriersSource}\nexport function main(): void { if (!run()) throw new Error("optional-project-carriers"); }` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5).map(row => row.message.slice(0, 256)).join("\n"));
     const emitted = artifactText(result, "src/index.rs");
     assert.doesNotMatch(emitted, /invoke_dynamic|read_dynamic_slot|downcast_unchecked|transmute|Box::new/u);

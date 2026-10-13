@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
     { timeout: 300_000 }, () => {
       const name = `native_named_members_${surfaces[0] ?? "native"}`;
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin", crateName: name } },
-        files: { "index.ts": nativeNamedMemberSource } });
+        files: { "index.ts": (nativeNamedMemberSource + "\nmain();\n") } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
       validateGeneratedProject(name, result.artifacts, { run: true });
     });
@@ -17,7 +17,7 @@ for (const surfaces of [[], ["js"]]) {
     { timeout: 300_000 }, () => {
       const name = `native_object_construction_${surfaces[0] ?? "native"}`;
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin", crateName: name } },
-        files: { "index.ts": nativeObjectConstructionConversionSource } });
+        files: { "index.ts": (nativeObjectConstructionConversionSource + "\nmain();\n") } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
       validateGeneratedProject(name, result.artifacts, { run: true });
     });
@@ -25,7 +25,7 @@ for (const surfaces of [[], ["js"]]) {
     { timeout: 300_000 }, () => {
       const name = `native_callback_closure_${surfaces[0] ?? "native"}`;
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin", crateName: name } },
-        files: { "index.ts": nativeCallbackClosureSource } });
+        files: { "index.ts": (nativeCallbackClosureSource + "\nmain();\n") } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
       validateGeneratedProject(name, result.artifacts, { run: true });
     });
@@ -35,7 +35,7 @@ test("JS-profile record construction retains the exact selected dictionary and u
   { timeout: 300_000 }, () => {
     const name = "native_record_construction";
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": nativeRecordConstructionConversionSource } });
+      files: { "index.ts": (nativeRecordConstructionConversionSource + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     validateGeneratedProject(name, result.artifacts, { run: true });
   });
@@ -44,7 +44,7 @@ test("native array callback parameter elision retains typed and hygienic paramet
   { timeout: 300_000 }, () => {
     const name = "native_array_callback_closure";
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": nativeArrayCallbackClosureSource } });
+      files: { "index.ts": (nativeArrayCallbackClosureSource + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     validateGeneratedProject(name, result.artifacts, { run: true });
   });
@@ -53,7 +53,7 @@ test("native suspended callback closure retains owned promise storage and void c
   { timeout: 300_000 }, () => {
     const name = "native_suspended_callback_closure";
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": nativeSuspendedCallbackClosureSource } });
+      files: { "index.ts": (nativeSuspendedCallbackClosureSource + "\nawait main();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     validateGeneratedProject(name, result.artifacts, { run: true });
   });

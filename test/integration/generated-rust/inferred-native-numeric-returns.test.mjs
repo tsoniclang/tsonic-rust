@@ -19,6 +19,7 @@ export function main(): void {
     tuple[0] !== wide || tuple[1] !== maximum || tuple[2] !== "text" ||
     explicit[0] !== 17 || explicit[1] !== 4294967295) throw new Error("native elements");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
@@ -53,6 +54,7 @@ export function main(): void {
   if (textLength("abc") !== 3 || annotated(3) !== 3 || ordinary(5) !== 2.5 ||
     returnedLength(values) !== 2 || optional("abc", true) !== 3 || optional("abc", false) !== undefined) throw new Error("native results");
 }
+main();
 `,
     } });
   assert.deepEqual(result.diagnostics, []);
@@ -84,6 +86,7 @@ export async function main(): Promise<void> {
   if (await wide(value) !== value || callback() !== value ||
     await floating(3) !== 3 || floatingCapture(5)() !== 5) throw new Error("native callable results");
 }
+await main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
@@ -131,6 +134,7 @@ export function main(): void {
   const selected = create()[select()];
   check(selected === "owned" && sequence === 12);
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");

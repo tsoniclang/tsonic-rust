@@ -10,7 +10,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 
 test("retained lexical completions preserve owning, generic, repeated, mutable and thrown captures", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": retainedLexicalCompletionsSource } });
+    files: { "index.ts": (retainedLexicalCompletionsSource + "\nawait main();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /transmute|unreachable_unchecked/u);
   validateGeneratedProject("retained-lexical-completions", result.artifacts, { run: true });
@@ -30,6 +30,7 @@ export async function main(): Promise<void> {
   const value = 29 as int32;
   if (await borrowed(ref(value)) !== 29) throw new Error("retained native loan");
 }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");

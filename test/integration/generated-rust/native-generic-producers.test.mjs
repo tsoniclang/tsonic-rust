@@ -28,6 +28,7 @@ test("generic callback inputs retain one pure family through aliases, returns an
       const first = make(); const alias: Identity = first;
       if (forward(alias) !== 7 || alias<string>("native") !== "native" || first !== alias) throw new Error("identity");
     }
+  main();
   `);
   assert.equal(/impl crate::index::NativeCallable_[a-f\d]+ for crate::index::GenericCallable/u.test(generated), true,
     "selected native protocol retains its exact owning module");
@@ -46,6 +47,7 @@ test("native future producer families implement both quantified and ordinary nat
       const single = async (): Promise<number> => 8;
       if (await invoke(identity) !== 7 || await plain(single) !== 8) throw new Error("future");
     }
+  await main();
   `);
   assert.match(generated, /type AwaitError0<CallType0> = core::convert::Infallible/u);
   assert.match(generated, /impl core::future::Future/u);

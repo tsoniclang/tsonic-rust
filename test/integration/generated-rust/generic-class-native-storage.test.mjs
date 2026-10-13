@@ -47,7 +47,7 @@ for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
   test(`native generic classes preserve non-Clone aliases and exact required payload copies in ${profile}`,
     { timeout: 300_000 }, () => {
-      const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source } });
+      const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (source + "\nmain();\n") } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(value => value.message.slice(0, 256)).join("\n"));
       const directory = writeGeneratedProject(`generic-class-native-storage-${profile}`, result.artifacts);
       runCargo(directory, ["generate-lockfile", "--offline"]);

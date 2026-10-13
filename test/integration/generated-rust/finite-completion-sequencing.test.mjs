@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("finite suspended inputs preserve order, laziness, absence, live captures and error identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": finiteCompletionSequencingExecutionSource } });
+    files: { "index.ts": (finiteCompletionSequencingExecutionSource + "\nawait main();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /transmute|unreachable_unchecked|\.then\(|\.then_async\(/u);

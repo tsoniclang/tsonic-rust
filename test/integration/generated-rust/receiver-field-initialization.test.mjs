@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) {
   test(`receiver field initialization retains ordered construction and live callbacks (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": receiverFieldInitializationSource + '\nexport function main(): void { if (!run()) throw new Error("receiver field initialization"); }',
+        "index.ts": receiverFieldInitializationSource + '\nexport function main(): void { if (!run()) throw new Error("receiver field initialization"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`receiver-field-initialization-${surface}`, result.artifacts, { run: true });

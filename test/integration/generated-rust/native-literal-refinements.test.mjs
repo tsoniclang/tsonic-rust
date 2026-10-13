@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) {
   test(`literal union refinements preserve field absence and native carriers (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": nativeLiteralRefinementsSource + '\nexport function main(): void { if (!run()) throw new Error("native literal refinements"); }',
+        "index.ts": nativeLiteralRefinementsSource + '\nexport function main(): void { if (!run()) throw new Error("native literal refinements"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`native-literal-refinements-${surface}`, result.artifacts, { run: true });

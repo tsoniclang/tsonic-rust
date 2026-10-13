@@ -64,7 +64,7 @@ export function main(): void {
 for (const surfaces of [[], ["js"]]) {
   test(`native required options construct and copy without Default (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [provider()],
-      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source } });
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (source + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => `${row.code}: ${row.message}`).join("\n"));
     const code = artifactText(result, "src/index.rs");
     assert.doesNotMatch(code, /Default::default|unsafe|transmute/u);

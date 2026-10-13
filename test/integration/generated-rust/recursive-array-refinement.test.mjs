@@ -8,7 +8,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("recursive array refinement preserves native members and mutable backing identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": recursiveArrayRefinementSource + '\nexport function main(): void { if (!run()) throw new Error("recursive array refinement"); }' } });
+    files: { "index.ts": recursiveArrayRefinementSource + '\nexport function main(): void { if (!run()) throw new Error("recursive array refinement"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.to_vec\(|\.collect\(/u);
@@ -17,7 +17,7 @@ test("recursive array refinement preserves native members and mutable backing id
 
 test("array and record narrowing retains the exact native member instead of matching its name", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": arrayRecordRefinementSource + '\nexport function main(): void { if (!run()) throw new Error("array record refinement"); }' } });
+    files: { "index.ts": arrayRecordRefinementSource + '\nexport function main(): void { if (!run()) throw new Error("array record refinement"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.to_vec\(|\.collect\(/u);
@@ -26,7 +26,7 @@ test("array and record narrowing retains the exact native member instead of matc
 
 test("multiple refined native arrays retain their exact element carriers and backing", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": multipleArrayRefinementSource + '\nexport function main(): void { if (!run()) throw new Error("multiple array refinement"); }' } });
+    files: { "index.ts": multipleArrayRefinementSource + '\nexport function main(): void { if (!run()) throw new Error("multiple array refinement"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.to_vec\(|\.collect\(|NumberArray|dyn Any/u);
@@ -37,7 +37,7 @@ test("multiple refined native arrays retain their exact element carriers and bac
 test("cross-file generic array union aliases preserve exact native marker arguments", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { ...genericArrayRefinementFiles, "index.ts": genericArrayRefinementFiles["index.ts"] +
-      '\nexport function main(): void { if (!run()) throw new Error("generic array refinement"); }' } });
+      '\nexport function main(): void { if (!run()) throw new Error("generic array refinement"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.to_vec\(|\.collect\(|JsArray<[^>]*\bBigInt\b/u);

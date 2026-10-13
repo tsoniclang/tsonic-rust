@@ -12,8 +12,8 @@ import { classFactoryEffectsFiles } from "../../../../../tsonic/test/fixtures/cl
 test("class factories retain distinct evaluation and constructor exception boundaries", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "class_factory_effects" } },
-    files: { ...classFactoryEffectsFiles, "index.ts": `${classFactoryEffectsFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("class factory effects"); }` },
+    files: { ...classFactoryEffectsFiles, "index.ts": (`${classFactoryEffectsFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("class factory effects"); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   assert.equal(validateGeneratedProject("class-factory-effects", result.artifacts, { run: true }).status, 0);
@@ -31,8 +31,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`implicit generic base construction preserves initialization in profile ${surfaces.join() || "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "generic_base_constructors" } },
-      files: { ...genericBaseConstructorFiles, "index.ts": `${genericBaseConstructorFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("generic base constructor"); }` },
+      files: { ...genericBaseConstructorFiles, "index.ts": (`${genericBaseConstructorFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("generic base constructor"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject("generic-base-constructors", result.artifacts, { run: true }).status, 0);
@@ -57,6 +57,7 @@ class Derived extends Base {
 export function main(): void {
   check(new Derived().value === 7);
 }
+main();
 `, "rust_implicit_base_constructor_proof");
 
   assert.deepEqual(result.diagnostics, []);
@@ -92,6 +93,7 @@ export function main(): void {
   check(second.value === "two");
   check(second.count === 2);
 }
+main();
 `, "rust_implicit_derived_constructor_proof");
 
   assert.deepEqual(result.diagnostics, []);
@@ -133,6 +135,7 @@ export function main(): void {
   check(new __TsonicDispatch_Counter().marker === 1);
   check(new __TsonicRoot_Counter().marker === 2);
 }
+main();
 `, "rust_generated_project_name_hygiene_proof");
 
   assert.deepEqual(result.diagnostics, []);
@@ -197,6 +200,7 @@ export function main(): void {
   check(order === "base-field;base-body;middle-field;middle-body;");
   check(new Leaf(3) !== leaf);
 }
+main();
 `, "rust_deep_project_dispatch_proof");
 
   assert.deepEqual(result.diagnostics, []);
@@ -229,6 +233,7 @@ export function main(): void {
   check(value.identity<int32>(7) === 7);
   check(value.calls === 20);
 }
+main();
 `, "rust_generic_virtual_dispatch_proof");
 
   assert.deepEqual(result.diagnostics, []);
@@ -275,6 +280,7 @@ export function main(): void {
   check(concrete.baseString("base") === "base");
   check(concrete.calls === 11);
 }
+main();
 `, "rust_generic_interface_dispatch_proof");
 
   assert.deepEqual(result.diagnostics, []);

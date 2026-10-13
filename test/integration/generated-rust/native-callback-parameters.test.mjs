@@ -8,7 +8,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`native callbacks retain explicit local arithmetic (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_parameters" } },
-      files: { "index.ts": nativeCallbackParametersSource } });
+      files: { "index.ts": (nativeCallbackParametersSource + "\nmain();\n") } });
     assert.deepEqual(result.diagnostics, []);
     const output = artifactText(result, "src/index.rs");
     assert.match(output, /let mut value: f64 = /u);
@@ -47,6 +47,7 @@ export function main(): void {
   replaceForwarded(values);
   if (firstForwarded(values) !== 7) throw new Error("native mutation");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");

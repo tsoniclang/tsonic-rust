@@ -140,6 +140,7 @@ function valid(value: ImportedChoice<int32>): boolean {
   return value === 7;
 }
 export function main(): void { if (!valid(choose(true, 7)) || !valid(choose(false, 7))) throw new Error("alias payload"); }
+main();
 `,
   } });
   assertNoTargetDiagnostics(result.diagnostics);

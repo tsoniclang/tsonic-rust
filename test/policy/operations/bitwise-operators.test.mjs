@@ -28,6 +28,7 @@ export function main(): void {
   check(signed16(-32768) === 32767 && unsigned16(65535) === 0);
   check(before(255) === -256 && after(255) === 0);
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);
@@ -62,6 +63,7 @@ export function main(): void {
   check(invert(mask) === -high && invert(-1n) === 0n);
   check(combine(high, mask) === 36893488147419103231n);
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);
@@ -148,6 +150,7 @@ export function main(): void {
   check((highByte & -1) === 128);
   check((highByte | -256) === -128);
 }
+main();
 `,
     },
   });

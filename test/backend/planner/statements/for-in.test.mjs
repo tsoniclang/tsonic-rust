@@ -19,7 +19,7 @@ test("for-in lowers finalized JS-array and project-shape key policies", { timeou
     surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "for_in_policies" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${imports}
 interface Pair {
   first: int32;
@@ -68,7 +68,7 @@ export function main(): void {
   }
   check(assignedKey === "1");
 }
-`,
+` + "\nmain();\n"),
     },
   });
 

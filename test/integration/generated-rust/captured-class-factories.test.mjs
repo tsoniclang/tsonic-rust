@@ -49,6 +49,7 @@ test("direct local classes preserve lexical captures without per-method allocati
       alias.suffix = "?";
       if (text.first.read() !== "native?" || text.second.read() !== "native!") throw new Error("context");
     }
+  main();
   ` });
   const rust = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(rust, /struct Inline\b/);
@@ -85,6 +86,7 @@ test("captured class factories retain per-evaluation identity, static state and 
       alias.count = 7;
       if (first.type.count !== 7 || second.type.count !== 1) throw new Error("static alias");
     }
+  main();
   ` });
 });
 
@@ -106,6 +108,7 @@ test("local static storage keeps evaluations independent and releases borrows be
       if (first.increment() !== 1 || second.increment() !== 9 || first.reset() !== 4) throw new Error("static");
       if (first.increment() !== 4 || second.increment() !== 10) throw new Error("independent");
     }
+  main();
   ` });
 });
 
@@ -127,6 +130,7 @@ test("generic captured constructors share native instance views across exact ins
       const second = new text("native");
       if (first.hash() !== 5 || first.value !== 4 || invoke(second) !== 6 || second.value !== "native") throw new Error("view");
     }
+  main();
   ` });
   const rust = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(rust, /trait HashValueShapeDispatch<Value>/);
@@ -167,6 +171,7 @@ test("generic captured classes preserve cross-file base intersections and exact 
         if (read(numberType, numeric, 0) !== 7 || read(textType, text, "missing") !== "native") throw new Error("projection");
         if (read(numberType, text, 0) !== 0 || read(textType, undefined, "missing") !== "missing") throw new Error("predicate");
       }
+    main();
     `,
   });
 });
@@ -205,5 +210,6 @@ test("class evaluation and throwing initialization execute once in source order"
       expect("fsccfsfs");
       if (new other().value !== 9 || type.state !== 3) throw new Error("independent initialization");
     }
+  main();
   ` });
 });

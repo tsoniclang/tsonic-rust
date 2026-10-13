@@ -9,7 +9,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 
 test("closed JSON collections preserve exact values across broad parameters without backing adapters", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": closedJsonCollectionSource },
+    files: { "index.ts": (closedJsonCollectionSource + "\nmain();\n") },
   });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5)
     .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));

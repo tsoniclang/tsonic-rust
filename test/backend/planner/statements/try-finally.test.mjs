@@ -27,7 +27,9 @@ export function main(): void {
     caught = error instanceof LocalFailure;
   }
   if (!finalized || !caught) throw new Error("project finally lost its exact error");
-}`,
+}
+main();
+`,
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = rustSourceText(result);
@@ -120,6 +122,7 @@ export async function main(): Promise<void> {
   check(loopCompletions() === 3);
   check((await asyncFinally()) === 5);
 }
+await main();
 `,
     },
   });

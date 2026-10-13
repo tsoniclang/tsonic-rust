@@ -27,6 +27,7 @@ export function main(): void {
       (matches?.length ?? -1) !== 1 || (absent?.length ?? -1) !== -1 ||
       (matches?.length ?? unexpected()) !== 1) throw new Error("incorrect native join");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -49,6 +50,7 @@ export function main(): void {
   if (stored !== cpu.user || Atomics.load(values, 0) !== 1) throw new Error("lost integer bits");
   if (Atomics.wait(values, 0, cpu.user, 0) !== "timed-out") throw new Error("lost wait bits");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -61,9 +63,9 @@ test("numeric array construction and copy retain native element bits", { timeout
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_numeric_arrays" } },
-    files: { "index.ts": `${nativeNumericArraysSource}
+    files: { "index.ts": (`${nativeNumericArraysSource}
       import { check } from "@acme/testing";
-      export function main(): void { check(run()); }` },
+      export function main(): void { check(run()); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -76,9 +78,9 @@ test("character constructors retain native arguments and evaluation order", { ti
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_character_inputs" } },
-    files: { "index.ts": `${nativeCharacterInputsSource}
+    files: { "index.ts": (`${nativeCharacterInputsSource}
       import { check } from "@acme/testing";
-      export function main(): void { check(run()); }` },
+      export function main(): void { check(run()); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -97,9 +99,9 @@ for (const [name, source, node] of [
       surfaces: ["js"], packages: [acmeTestingPackage()],
       capabilities: node ? [await nodejsCapability()] : [],
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": `${source}
+      files: { "index.ts": (`${source}
         import { check } from "@acme/testing";
-        export function main(): void { check(run()); }` },
+        export function main(): void { check(run()); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

@@ -9,8 +9,8 @@ for (const surfaces of [[], ["js"]]) {
     const name = `field_union_flow_${surfaces[0] ?? "native"}`;
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": `${fieldUnionFlowSource}
-        export function main(): void { if (!run()) throw new Error("field union flow"); }` },
+      files: { "index.ts": (`${fieldUnionFlowSource}
+        export function main(): void { if (!run()) throw new Error("field union flow"); }` + "\nmain();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     const executed = validateGeneratedProject(name, result.artifacts, { run: true });

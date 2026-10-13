@@ -48,6 +48,7 @@ async function run(): Promise<boolean> {
   return failures === 2;
 }
 export async function main(): Promise<void> { if (!await run()) throw new Error("Promise storage"); }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");

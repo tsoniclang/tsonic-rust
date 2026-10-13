@@ -10,9 +10,9 @@ for (const surfaces of [[], ["js"]]) {
       const name = `implicit_error_interface_${surfaces[0] ?? "native"}_${projectError}`;
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: name } },
-        files: { "index.ts": `${implicitErrorInterfaceSource(projectError)}
+        files: { "index.ts": (`${implicitErrorInterfaceSource(projectError)}
 export function main(): void { if (!run()) throw new Error("implicit Error interface identity"); }
-` } });
+` + "\nmain();\n") } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
       const executed = validateGeneratedProject(name, result.artifacts, { run: true });
       assert.equal(executed.status, 0, executed.stderr);

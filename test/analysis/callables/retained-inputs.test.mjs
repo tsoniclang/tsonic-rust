@@ -37,7 +37,7 @@ test("retained native requirements propagate through exact aliases and caller in
 for (const surfaces of [undefined, ["js"]]) {
   test(`native retained callback constraints execute through aliases and forwarding in ${surfaces?.[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
-      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source } });
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (source + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => `${row.code}: ${row.message}`).join("\n"));
     const code = artifactText(result, "src/index.rs");
     assert.match(code, /InvocationError:\s*core::convert::Into</u);

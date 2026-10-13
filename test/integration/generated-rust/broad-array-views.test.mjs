@@ -7,7 +7,7 @@ import { broadArrayViewSource, broadArrayCategoryWriteSource, broadArrayFailureS
 
 test("checked broad array views retain their native backing and element identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": broadArrayViewSource + '\nexport function main(): void { if (!run()) throw new Error("broad array identity"); }' } });
+    files: { "index.ts": broadArrayViewSource + '\nexport function main(): void { if (!run()) throw new Error("broad array identity"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(source, /\.collect\(|\.values\(\)\.into_iter\(\)\.map\(/);
@@ -20,7 +20,7 @@ test("checked broad array views retain their native backing and element identity
 
 test("category-only indexed writes preserve the checked broad native backing", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": broadArrayCategoryWriteSource + '\nexport function main(): void { if (!run()) throw new Error("array category write"); }' } });
+    files: { "index.ts": broadArrayCategoryWriteSource + '\nexport function main(): void { if (!run()) throw new Error("array category write"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(source, /set_number\(/u);
@@ -30,7 +30,7 @@ test("category-only indexed writes preserve the checked broad native backing", {
 
 test("typed broad-array recovery retains the native cast failure through catch", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": broadArrayFailureSource + '\nexport function main(): void { if (!run()) throw new Error("native cast failure"); }' } });
+    files: { "index.ts": broadArrayFailureSource + '\nexport function main(): void { if (!run()) throw new Error("native cast failure"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("broad-array-failure", result.artifacts, { run: true });
 });

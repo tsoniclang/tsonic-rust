@@ -27,6 +27,7 @@ test("retained async and generator inputs keep owned carriers without disabling 
         for (const value of sequence("generator")) total += value;
         if (total !== 9) throw new Error("owned generator");
       }
+    await main();
     ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

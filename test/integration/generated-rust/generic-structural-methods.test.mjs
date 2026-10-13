@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) {
   test(`optional monomorphic methods retain their receiver without eager arguments (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": monomorphicStructuralOptionalFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("optional monomorphic method identity"); }',
+        "index.ts": monomorphicStructuralOptionalFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("optional monomorphic method identity"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`monomorphic-structural-optional-${surface}`, result.artifacts, { run: true });
@@ -17,7 +17,7 @@ for (const surface of ["native", "js"]) {
   test(`inherited optional generic methods retain lazy arguments and generic results (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": inheritedStructuralOptionalFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("inherited optional generic method identity"); }',
+        "index.ts": inheritedStructuralOptionalFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("inherited optional generic method identity"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`inherited-structural-optional-${surface}`, result.artifacts, { run: true });
@@ -25,7 +25,7 @@ for (const surface of ["native", "js"]) {
   test(`optional generic structural methods retain absence and their receiver (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": genericStructuralOptionalFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("optional generic method identity"); }',
+        "index.ts": genericStructuralOptionalFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("optional generic method identity"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`generic-structural-optional-${surface}`, result.artifacts, { run: true });
@@ -34,7 +34,7 @@ for (const surface of ["native", "js"]) {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
         ...genericStructuralMethodFiles,
-        "index.ts": genericStructuralMethodFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("generic method identity"); }',
+        "index.ts": genericStructuralMethodFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("generic method identity"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -46,7 +46,7 @@ for (const surface of ["native", "js"]) {
   test(`generic structural async methods retain their owning receiver (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": genericStructuralAsyncFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("generic async method identity"); }',
+        "index.ts": genericStructuralAsyncFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("generic async method identity"); }\nawait main();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

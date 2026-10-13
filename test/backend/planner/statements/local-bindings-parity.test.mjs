@@ -160,6 +160,7 @@ export function main(): void {
   try { choose(1, failed, true); } catch { caught = true; }
   if (!caught || failed.value !== 38) throw new Error("error propagation");
 }
+main();
 `,
     },
   });

@@ -10,6 +10,7 @@ test("raw address integers preserve every bit through nested native byte offsets
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": rawAddressProofSource + `
 export function main(): void { if (!run()) throw new Error("raw address round trip"); }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -72,6 +73,7 @@ export function main(): void {
     throw new Error("unsuffixed literal address boundaries changed");
   }
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

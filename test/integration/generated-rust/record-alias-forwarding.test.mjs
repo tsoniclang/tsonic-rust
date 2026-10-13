@@ -8,8 +8,8 @@ for (const surface of [undefined, "js"]) {
   test(`record alias forwarding retains indexed storage on ${surface ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === undefined ? [] : [surface],
       target: { id: "rust", options: { outputType: "bin", crateName: "record_alias_forwarding" } },
-      files: { ...recordAliasForwardingFiles, "index.ts": `${recordAliasForwardingFiles["index.ts"]}
-        export function main(): void { if (!run()) throw new Error("record alias forwarding"); }` } });
+      files: { ...recordAliasForwardingFiles, "index.ts": (`${recordAliasForwardingFiles["index.ts"]}
+        export function main(): void { if (!run()) throw new Error("record alias forwarding"); }` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     validateGeneratedProject(`record-alias-forwarding-${surface ?? "native"}`, result.artifacts, { run: true });
   });
@@ -18,8 +18,8 @@ for (const surface of [undefined, "js"]) {
 test("record aliases retain generic rest-callable array storage on JS", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "record_alias_listeners" } },
-    files: { ...recordAliasListenerFiles, "index.ts": `${recordAliasListenerFiles["index.ts"]}
-      export function main(): void { if (!run()) throw new Error("record alias listeners"); }` } });
+    files: { ...recordAliasListenerFiles, "index.ts": (`${recordAliasListenerFiles["index.ts"]}
+      export function main(): void { if (!run()) throw new Error("record alias listeners"); }` + "\nmain();\n") } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   validateGeneratedProject("record-alias-listeners-js", result.artifacts, { run: true });
 });

@@ -8,8 +8,8 @@ for (const surfaces of [undefined, ["js"]]) {
   test(`class instance contracts preserve real ancestry in ${surfaces?.[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "class_instance_contracts" } },
-      files: { "index.ts": `${classInstanceContractSource}
-export function main(): void { if (!run()) throw new Error("class instance contract"); }` },
+      files: { "index.ts": (`${classInstanceContractSource}
+export function main(): void { if (!run()) throw new Error("class instance contract"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject("class-instance-contracts", result.artifacts, { run: true }).status, 0);

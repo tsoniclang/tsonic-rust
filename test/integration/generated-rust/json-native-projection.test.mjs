@@ -8,7 +8,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 test("native JSON projections preserve exact integers, property keys and callback error identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "json_native_projection" } },
-    files: { "index.ts": `${jsonNativeProjectionSource}\nexport function main(): void { run(); }` },
+    files: { "index.ts": (`${jsonNativeProjectionSource}\nexport function main(): void { run(); }` + "\nmain();\n") },
   });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");

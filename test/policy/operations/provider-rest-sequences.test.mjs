@@ -44,6 +44,7 @@ export function main(): void {
   try { String.fromCharCode(...bytes, fail(), next()); } catch { caught += 1; }
   check(caught === 2 && evaluations === 2);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

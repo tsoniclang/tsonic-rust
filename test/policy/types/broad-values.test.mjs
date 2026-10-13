@@ -149,6 +149,7 @@ export function main(): void {
   consumeAny(retainAny("ready"));
   check(box.value === 7);
 }
+main();
 `,
     },
   });
@@ -192,6 +193,7 @@ export function main(): void {
   check(Number.isNaN(Number.NaN));
   check(JSON.stringify(retained) === "{\\"ready\\":true}");
 }
+main();
 `,
     },
   });
@@ -217,6 +219,7 @@ export function main(): void {
   consume(retain(token));
   consume(retain({}));
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -243,6 +246,7 @@ export function main(): void {
     throw new Error("empty value projection differs");
   }
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

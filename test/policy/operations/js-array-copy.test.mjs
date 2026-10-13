@@ -7,8 +7,8 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 test("Array.from preserves dense copies and explicit undefined entries", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": `${jsArrayCopyFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("array copy contract"); }` },
+    files: { "index.ts": (`${jsArrayCopyFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("array copy contract"); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");

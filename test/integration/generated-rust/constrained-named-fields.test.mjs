@@ -11,7 +11,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 for (const surfaces of [[], ["js"]]) {
   test(`constrained named fields preserve native widths and aliasing on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": constrainedNamedFieldsSource + '\nexport function main(): void { if (!run()) throw new Error("constrained fields"); }',
+      "index.ts": constrainedNamedFieldsSource + '\nexport function main(): void { if (!run()) throw new Error("constrained fields"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");

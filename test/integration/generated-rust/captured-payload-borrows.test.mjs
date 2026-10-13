@@ -17,6 +17,7 @@ export async function main(): Promise<void> {
   const callback = capture("payload");
   if (!await callback() || !await callback()) throw new Error("retained payload borrowing");
 }
+await main();
 ` },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));

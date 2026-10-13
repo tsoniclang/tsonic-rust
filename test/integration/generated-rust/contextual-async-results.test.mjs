@@ -10,7 +10,7 @@ import { verifyNativeBorrowedPromiseBoundary } from "../../helpers/native-promis
 
 test("native JS async bodies retain contextual union completion, captures, aliases and rejection", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": contextualAsyncResultSource } });
+    files: { "index.ts": (contextualAsyncResultSource + "\nawait main();\n") } });
   assert.equal(result.diagnostics.length, 0, "contextual async source has no diagnostics");
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /\.then\(|\.then_async\(|transmute|unreachable_unchecked/u);
@@ -30,7 +30,7 @@ test("native JS async bodies retain contextual union completion, captures, alias
 
 test("inline contextual async unions execute after native promise lifetime closure", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": inlineContextualAsyncResultSource } });
+    files: { "index.ts": (inlineContextualAsyncResultSource + "\nawait main();\n") } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
   validateGeneratedProject("inline-contextual-async-results", result.artifacts, { run: true });
 });
@@ -38,7 +38,7 @@ test("inline contextual async unions execute after native promise lifetime closu
 for (const surfaces of [[], ["js"]]) {
   test(`ordinary async output stays native and lossless on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": ordinaryAsyncResultSource } });
+      files: { "index.ts": (ordinaryAsyncResultSource + "\nawait main();\n") } });
     assert.equal(result.diagnostics.length, 0, "ordinary async source has no diagnostics");
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /\bi64\b/u);

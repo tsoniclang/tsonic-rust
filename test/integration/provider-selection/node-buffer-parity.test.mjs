@@ -72,6 +72,7 @@ export function main(): void {
   ok(numeric.readDoubleLE(32) === 1234.5);
   ok(numeric.readDoubleBE(40) === -0.5);
 }
+main();
 `,
     },
   });

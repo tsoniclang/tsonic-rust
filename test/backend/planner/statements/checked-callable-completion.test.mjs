@@ -82,6 +82,7 @@ export function main(): void {
   check(selector.choose("left") === 30 && selector.choose("right") === 40);
   check(callback("left") === 50 && callback("right") === 60);
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

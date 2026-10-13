@@ -126,6 +126,7 @@ export function main(): void {
   check(remaining.right === 2);
   check(pair.label === "kept");
 }
+main();
 `,
     },
   });
@@ -165,6 +166,7 @@ export function main(): void {
   if (missing !== 9 || value !== 3 || notCalled !== 3 || !failed || calls.count !== 1 || exact !== 9007199254740993n)
     throw new Error("native binding default");
 }
+main();
 `,
     } });
     assertNoTargetDiagnostics(result.diagnostics);

@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) {
   test(`explicit native fields have no runtime marker initializer on ${surface}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": fieldInitializationSource + '\nexport function main(): void { if (!run()) throw new Error("field initialization"); }',
+        "index.ts": fieldInitializationSource + '\nexport function main(): void { if (!run()) throw new Error("field initialization"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     const text = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

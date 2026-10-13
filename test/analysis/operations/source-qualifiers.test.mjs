@@ -27,6 +27,7 @@ export function main(): void {
   check(globalThis.Object.isFrozen(frozen));
   check(local({ String: { fromCharCode: value => value + 1 } }) === 8);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

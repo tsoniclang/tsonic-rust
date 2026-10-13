@@ -12,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`stored and factory-produced absence callbacks bind once in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": absenceCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("callable conversion"); }' } });
+      files: { "index.ts": absenceCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("callable conversion"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`absence-callable-conversion-${lane}`, result.artifacts, { run: true });
   });
@@ -22,7 +22,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`source callable input adaptation borrows native string parameters in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": nativeCallableInputBorrowSource + '\nexport function main(): void { if (!run()) throw new Error("callable input borrow"); }' } });
+      files: { "index.ts": nativeCallableInputBorrowSource + '\nexport function main(): void { if (!run()) throw new Error("callable input borrow"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n").slice(0, 6000));
     validateGeneratedProject(`source-callable-input-borrow-${lane}`, result.artifacts, { run: true });
   });
@@ -30,7 +30,7 @@ for (const surfaces of [[], ["js"]]) {
 
 test("stored and factory-produced broad callbacks bind once on the JS surface", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": broadCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("broad callable conversion"); }' } });
+    files: { "index.ts": broadCallableConversionSource + '\nexport function main(): void { if (!run()) throw new Error("broad callable conversion"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("broad-callable-conversion", result.artifacts, { run: true });
 });

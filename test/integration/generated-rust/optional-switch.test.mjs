@@ -8,7 +8,7 @@ import { optionalSwitchSource } from "../../../../tsonic/test/fixtures/optional-
 for (const surfaces of [[], ["js"]]) {
   test(`optional switch preserves native equality and ordered effects on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": optionalSwitchSource + '\nexport function main(): void { if (!run()) throw new Error("optional switch"); }',
+      "index.ts": optionalSwitchSource + '\nexport function main(): void { if (!run()) throw new Error("optional switch"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");

@@ -28,6 +28,7 @@ async function run(): Promise<boolean> {
   return rejected && await complete() === "completed";
 }
 export async function main(): Promise<void> { if (!await run()) throw new Error("retained storage"); }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");

@@ -47,6 +47,7 @@ export function main(): void {
   }
   check(holes === 0 && seen === 6 && countPresent(sparse) === 6 && payload === 7 && nulls === 0);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

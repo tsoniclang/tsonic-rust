@@ -6,7 +6,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("native defaults retain literals, signed zero and lazy suspended destructuring", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": nativeOptionDefaultsSource } });
+    files: { "index.ts": (nativeOptionDefaultsSource + "\nawait main();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("native-option-defaults", result.artifacts, { run: true });
 });

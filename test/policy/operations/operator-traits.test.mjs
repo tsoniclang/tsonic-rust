@@ -81,6 +81,7 @@ export function main(): void {
   check(c.y === 12);
   check(consume(move(c)) === 20);
 }
+main();
 `,
     },
   });

@@ -7,7 +7,7 @@ import { sourceProfileCategoriesSource } from "../../../../tsonic/test/fixtures/
 
 test("source-profile producers retain exact native object, callable and symbol categories", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
-    "index.ts": sourceProfileCategoriesSource + '\nexport function main(): void { if (!run()) throw new Error("source profile categories"); }',
+    "index.ts": sourceProfileCategoriesSource + '\nexport function main(): void { if (!run()) throw new Error("source profile categories"); }\nmain();\n',
   } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");

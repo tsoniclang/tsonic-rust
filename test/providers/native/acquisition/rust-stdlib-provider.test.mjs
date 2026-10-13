@@ -26,6 +26,7 @@ export function main(): void {
   remove_file(path).unwrap();
   if (!read_to_string(path).is_err()) throw new Error("native error was lost");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -84,6 +85,7 @@ export function main(): void {
     throw new Error("standard-library re-export identity mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -164,6 +166,7 @@ export function main(): void {
     throw new Error("compiler-backed standard-library breadth mismatch");
   }
 }
+main();
 `,
     },
   });

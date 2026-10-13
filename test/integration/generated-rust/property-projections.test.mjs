@@ -15,6 +15,7 @@ test("native property projections preserve selected generic inherited getters an
       export function main(): void {
         if (!run()) throw new Error("native selected property projection");
       }
+    main();
     ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

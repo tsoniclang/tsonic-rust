@@ -8,8 +8,8 @@ test("local class scopes preserve repeated authored names through native constru
   const { result } = compileRust({
     surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "authored_local_types" } },
-    files: { ...authoredLocalTypesFiles, "index.ts": `${authoredLocalTypesFiles["index.ts"]}
-      export function main(): void { if (!run()) throw new Error("authored local types"); }` },
+    files: { ...authoredLocalTypesFiles, "index.ts": (`${authoredLocalTypesFiles["index.ts"]}
+      export function main(): void { if (!run()) throw new Error("authored local types"); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const sources = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))

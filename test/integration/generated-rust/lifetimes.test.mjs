@@ -219,6 +219,7 @@ export function main(): void {
   copyPlusOne(mut(copied), ref(value));
   check(copied === 43);
 }
+main();
 `,
     },
   });

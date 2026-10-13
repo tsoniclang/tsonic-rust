@@ -11,7 +11,7 @@ test("optional indexed arguments retain absence and single evaluation", { timeou
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "optional_indexed_arguments" } },
-    files: { "index.ts": `import { check } from "@acme/testing";\n${optionalIndexedArgumentsSource}\nexport function main(): void { check(run()); }` },
+    files: { "index.ts": (`import { check } from "@acme/testing";\n${optionalIndexedArgumentsSource}\nexport function main(): void { check(run()); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const native = validateGeneratedProject("optional-indexed-arguments", result.artifacts, { run: true });
@@ -29,7 +29,7 @@ for (const surfaces of [[], ["js"]]) {
       const { result } = compileRust({
         surfaces, packages: [acmeTestingPackage()],
         target: { id: "rust", options: { outputType: "bin", crateName: "class_union_upcasts" } },
-        files: { "index.ts": `import { check } from "@acme/testing";\n${sourceText}\nexport function main(): void { check(run()); }` },
+        files: { "index.ts": (`import { check } from "@acme/testing";\n${sourceText}\nexport function main(): void { check(run()); }` + "\nmain();\n") },
       });
       assert.deepEqual(result.diagnostics, []);
       const native = validateGeneratedProject(`class-union-upcasts-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
@@ -43,7 +43,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({
       surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "contextual_class_arguments" } },
-      files: { "index.ts": `import { check } from "@acme/testing";\n${contextualClassArgumentsSource}\nexport function main(): void { check(run()); }` },
+      files: { "index.ts": (`import { check } from "@acme/testing";\n${contextualClassArgumentsSource}\nexport function main(): void { check(run()); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     const native = validateGeneratedProject(`contextual-class-arguments-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
@@ -54,7 +54,7 @@ for (const surfaces of [[], ["js"]]) {
       surfaces,
       packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "nullish_member_storage" } },
-      files: { "index.ts": `import { check } from "@acme/testing";\n${nullishMemberStorageSource}\nexport function main(): void { check(run()); }` },
+      files: { "index.ts": (`import { check } from "@acme/testing";\n${nullishMemberStorageSource}\nexport function main(): void { check(run()); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     const source = result.artifacts.find(artifact => artifact.path === "src/index.rs").text;
@@ -126,6 +126,7 @@ export function main(): void {
   try { const result = receiver(box).selected = fail(); check(result === 0); }
   catch { check(order === 13 && box.value === 7); }
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

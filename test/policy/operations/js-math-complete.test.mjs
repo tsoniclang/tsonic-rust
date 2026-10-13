@@ -88,6 +88,7 @@ export function main(): void {
   check(Math.E > 2 && Math.E < 3);
   check(Math.PI > 3 && Math.PI < 4);
 }
+main();
 `,
     },
   });

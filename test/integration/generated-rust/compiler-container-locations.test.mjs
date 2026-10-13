@@ -27,6 +27,7 @@ export function main(): void {
   check(loadptr(pointer) === 9 && values[0] === 9);
   check(equalptr(pointer, nestedPointer));
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

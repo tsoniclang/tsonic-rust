@@ -11,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
   test(`fixed self and written lexical bindings retain distinct native identities in ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": lexicalSelfBindingSource } });
+      files: { "index.ts": (lexicalSelfBindingSource + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
     const emitted = artifactText(result, "src/index.rs");

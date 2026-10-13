@@ -24,6 +24,7 @@ test("authored generic binders retain independent identities across modules and 
             throw new Error("authored generic binders");
           }
         }
+      main();
       `,
     },
   });
@@ -180,7 +181,7 @@ mod generic_storage_cost {
 test("polymorphic structural factories retain exact constrained field evidence", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { ...authoredGenericBinderFiles, "index.ts": authoredGenericBinderFiles["index.ts"] +
-      '\nexport function main(): void { if (!run()) throw new Error("generic constrained factory"); }' } });
+      '\nexport function main(): void { if (!run()) throw new Error("generic constrained factory"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length === 0, true,
     result.diagnostics.slice(0, 4).map(({ code, message }) => `${code}: ${message}`).join("\n"));
   validateGeneratedProject("generic-constrained-factory", result.artifacts, { run: true });

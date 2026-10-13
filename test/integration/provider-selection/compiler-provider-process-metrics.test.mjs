@@ -48,6 +48,7 @@ export function main(): void {
   const negative = process.cpuUsage(before);
   check(negative.user < 0 && negative.system < 0);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

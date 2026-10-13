@@ -23,6 +23,7 @@ export function main(): void {
   const banner = serve(3000);
   check(banner === "superbunapi:3000");
 }
+main();
 `,
     },
   });
@@ -229,6 +230,7 @@ export function main(): void {
   }
   check(rejected);
 }
+main();
 `,
     },
   });
@@ -286,6 +288,7 @@ export function main(): void {
   }
   check(counted);
 }
+main();
 `,
     },
   });
@@ -322,6 +325,7 @@ export function main(): void {
   }
   check(location === "/var/log/acme.log");
 }
+main();
 `,
     },
   });

@@ -47,6 +47,7 @@ export function main(): void {
   const derived = new Derived(7);
   check(order === 456 && derived.amount === 7 && derived.getBase() === 7);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

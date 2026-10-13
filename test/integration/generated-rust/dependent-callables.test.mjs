@@ -49,6 +49,7 @@ export function main(): void {
   original["label"] = "changed";
   check(original["label"] === "changed" && original["count"] === 15);
 }
+main();
 `);
 });
 
@@ -87,6 +88,7 @@ export function main(): void {
   new Box()[key()] = operand();
   check(events === "kvs");
 }
+main();
 `);
   const native = artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(native, /r#box\.clone\(\)/u);
@@ -109,6 +111,7 @@ export function main(): void {
   check(alias.count === 7 && alias.label === "old!");
   check(second.count === 18 && second.label === "second");
 }
+main();
 `);
 });
 
@@ -139,7 +142,9 @@ export function main(): void {
   check(alias === first.copy && alias !== second.copy);
   check(alias(42) === 42 && first.copy("value") === "value");
   check(second.copy(true) && firstCalls === 2 && secondCalls === 1);
-}`,
+}
+main();
+`,
     },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -170,6 +175,7 @@ export function main(): void {
   copied.count = 9;
   check(data.count === 9 && firstCalls === 2 && secondCalls === 2);
 }
+main();
 `);
 });
 
@@ -197,6 +203,7 @@ export function main(): void {
   check(label() === "b!" && label() === "b!!");
   check(calls === 2 && first.count === 4 && second.count === 8);
 }
+main();
 `);
 });
 
@@ -216,5 +223,6 @@ export function main(): void {
   first.copy(true);
   check(total === 1);
 }
+main();
 `);
 });

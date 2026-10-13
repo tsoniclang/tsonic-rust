@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) {
   test(`native constant absent defaults retain nullable scalars, classes and structs (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": nativeAbsentParameterDefaultsSource + '\nexport function main(): void { if (!run()) throw new Error("native absent parameter defaults"); }',
+        "index.ts": nativeAbsentParameterDefaultsSource + '\nexport function main(): void { if (!run()) throw new Error("native absent parameter defaults"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -20,7 +20,7 @@ for (const surface of ["native", "js"]) {
   test(`native broad parameter defaults retain absence, present values and callee effects (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": nativeParameterDefaultsSource + '\nexport function main(): void { if (!run()) throw new Error("native parameter defaults"); }',
+        "index.ts": nativeParameterDefaultsSource + '\nexport function main(): void { if (!run()) throw new Error("native parameter defaults"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`native-parameter-defaults-${surface}`, result.artifacts, { run: true });
@@ -29,7 +29,7 @@ for (const surface of ["native", "js"]) {
   test(`default-before-required slots retain required arity and callee effects (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": orderedParameterDefaultsSource + '\nexport function main(): void { if (!run()) throw new Error("ordered parameter defaults"); }',
+        "index.ts": orderedParameterDefaultsSource + '\nexport function main(): void { if (!run()) throw new Error("ordered parameter defaults"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`ordered-parameter-defaults-${surface}`, result.artifacts, { run: true });

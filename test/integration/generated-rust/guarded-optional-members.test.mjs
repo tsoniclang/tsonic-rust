@@ -8,7 +8,7 @@ import { guardedOptionalMemberSource, rejectedCallableConditionSource, rejectedG
 for (const surfaces of [[], ["js"]]) {
   test(`guarded optional members retain native payloads (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": guardedOptionalMemberSource + '\nexport function main(): void { if (!run()) throw new Error("guarded optional members"); }' } });
+      files: { "index.ts": guardedOptionalMemberSource + '\nexport function main(): void { if (!run()) throw new Error("guarded optional members"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(generated, /\bi64\b/u);

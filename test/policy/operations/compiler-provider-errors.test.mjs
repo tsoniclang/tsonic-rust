@@ -46,6 +46,7 @@ export function main(): void {
   check(new TypeError("direct") instanceof TypeError);
   check(!(new TypeError("direct") instanceof RangeError));
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -72,6 +73,7 @@ export function main(): void {
   const stored = error.message;
   check(stored === "native");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -103,6 +105,7 @@ export function main(): void {
   error.message = "changed";
   check(describe(error) === "changed");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

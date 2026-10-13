@@ -8,10 +8,10 @@ test("union calls compose generic, default, rest and async contracts without dis
   const { result } = compileRust({
     surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "union_call_contracts" } },
-    files: { ...unionCallContractsFiles, "index.ts": `${unionCallContractsFiles["index.ts"]}
+    files: { ...unionCallContractsFiles, "index.ts": (`${unionCallContractsFiles["index.ts"]}
 export async function main(): Promise<void> {
   if (!await run()) throw new Error("union call contracts");
-}` },
+}` + "\nawait main();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const native = validateGeneratedProject("union-call-contracts", result.artifacts, { run: true });

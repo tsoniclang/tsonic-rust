@@ -27,8 +27,8 @@ test("numeric array unions require exact numeric arms and sealed capability sele
 
 test("typed and ordinary numeric arrays cross files without copying their input storage", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()], files: {
-    ...numberArrayUnionFiles, "index.ts": `${numberArrayUnionFiles["index.ts"]}
-      import { check } from "@acme/testing"; export function main(): void { check(run()); }`,
+    ...numberArrayUnionFiles, "index.ts": (`${numberArrayUnionFiles["index.ts"]}
+      import { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n"),
   },
     target: { id: "rust", options: { outputType: "bin", crateName: "number_array_unions" } } });
   assertNoTargetDiagnostics(result.diagnostics);

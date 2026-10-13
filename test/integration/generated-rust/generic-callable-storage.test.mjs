@@ -26,6 +26,7 @@ export function main(): void {
   check(identity<int32>(7) === 7);
   check(identity<string>("native") === "native");
 }
+main();
 `);
   assert.match(generated, /impl Copy for GenericCallable/u);
   assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
@@ -55,6 +56,7 @@ export function main(): void {
   check(failed);
   check(other<int32>(5) === 5);
 }
+main();
 `);
   assert.match(generated, /Rc<[^\n]*CallableEnvironment/u);
   assert.match(generated, /fn call<[^}]*?-> Result/u);
@@ -68,6 +70,7 @@ export function main(): void {
   const value = make();
   check(value<int32>(7) === 7 && value<string>("native") === "native");
 }
+main();
 `);
   assert.match(generated, /impl Copy for GenericCallable/u);
   assert.doesNotMatch(generated, /Rc<[^\n]*CallableEnvironment/u);
@@ -101,6 +104,7 @@ export async function main(): Promise<void> {
   check(failed);
   check(await pending() === "alive");
 }
+await main();
 `);
   assert.match(generated, /Rc<[^\n]*CallableEnvironment/u);
   assert.doesNotMatch(generated, /fn call<[^}]*?-> Result/u);
@@ -123,6 +127,7 @@ export async function main(): Promise<void> {
   try { invalid<string>("not reached"); } catch { failed = true; }
   check(failed);
 }
+await main();
 `);
 });
 
@@ -163,7 +168,9 @@ export function main(): void {
   let failed = false;
   try { throwing(true)<number>(9); } catch { failed = true; }
   if (!failed) throw new Error("effects");
-}`,
+}
+main();
+`,
     },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -187,5 +194,6 @@ export function main(): void {
   const alias: Identity = first;
   if (first !== alias || invoke(alias) !== 7 || alias<string>("value") !== "value") throw new Error("flow");
 }
+main();
 `);
 });

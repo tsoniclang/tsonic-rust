@@ -5,47 +5,35 @@ import { planRustAsyncExecution } from "../../../../dist/backend/planner/program
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
 
 const lifecycle = { kind: "named", path: "RuntimeError", identity: "runtime-error" };
-const entry = { kind: "named", path: "application::EntryError", identity: "entry-error" };
 const provider = { kind: "named", path: "ProviderError", identity: "provider-error" };
 const result = { kind: "call", path: "operation", args: [] };
 
-test("native binary preserves its source entry error without an ambient conversion", () => {
-  const selected = planRustBinaryErrors({ entryErrorType: entry, lifecycleErrorType: lifecycle, lifecycleFallible: false });
-  assert.equal(selected !== undefined, true);
-  assert.equal(selected.errorType === entry, true);
-  assert.equal(selected.items.length, 0);
-  assert.equal(printRustExpr(selected.entry(result)), "operation()?");
-  assert.throws(() => selected.lifecycle(result, lifecycle), /exact native source/u);
-});
-
-test("binary lifecycle and entry errors share the existing allocation-free exact sum", () => {
-  const selected = planRustBinaryErrors({ entryErrorType: entry, lifecycleErrorType: lifecycle, lifecycleFallible: true });
-  assert.equal(selected !== undefined, true);
-  assert.equal(selected.items.length, 1);
-  assert.deepEqual(selected.errorType.genericArguments.map(argument => argument.type), [lifecycle, entry]);
-  assert.match(printRustExpr(selected.entry(result)), /map_err\(BinaryErrors::<RuntimeError, application::EntryError>::Entry\)\?/u);
-  assert.match(printRustExpr(selected.lifecycle(result, provider)), /map_err\(RuntimeError::from\)\.map_err\(BinaryErrors::<RuntimeError, application::EntryError>::Lifecycle\)\?/u);
-  assert.doesNotMatch(printRustExpr(selected.entry(result)), /Box|clone|from|unwrap/u);
-  assert.match(printRustExpr(selected.lifecycleError({ kind: "path", path: "error" }, provider)),
-    /BinaryErrors::<RuntimeError, application::EntryError>::Lifecycle\(RuntimeError::from\(error\)\)/u);
-});
-
-test("equivalent entry and lifecycle errors do not acquire a redundant sum", () => {
-  const selected = planRustBinaryErrors({ entryErrorType: { ...lifecycle, path: "other::Alias" },
-    lifecycleErrorType: lifecycle, lifecycleFallible: true });
-  assert.equal(selected !== undefined, true);
-  assert.equal(selected.items.length, 0);
+test("binary initialization preserves its selected error without an ambient conversion", () => {
+  const selected = planRustBinaryErrors(lifecycle);
   assert.equal(selected.errorType === lifecycle, true);
-  assert.equal(printRustExpr(selected.entry(result)), "operation()?");
   assert.equal(printRustExpr(selected.lifecycle(result, lifecycle)), "operation()?");
+  assert.doesNotMatch(printRustExpr(selected.lifecycle(result, lifecycle)), /Box|clone|from|unwrap/u);
 });
 
-test("infallible entry cannot invent an error source while lifecycle remains precise", () => {
-  const selected = planRustBinaryErrors({ entryErrorType: undefined, lifecycleErrorType: lifecycle, lifecycleFallible: true });
-  assert.equal(selected !== undefined, true);
-  assert.equal(selected.items.length, 0);
-  assert.throws(() => selected.entry(result), /infallible binary entry/u);
+test("binary lifecycle converts a provider error once without a second implicit-entry sum", () => {
+  const selected = planRustBinaryErrors(lifecycle);
   assert.equal(printRustExpr(selected.lifecycle(result, provider)), "operation().map_err(RuntimeError::from)?");
+  assert.doesNotMatch(printRustExpr(selected.lifecycle(result, provider)), /Box|clone|BinaryErrors|unwrap/u);
+  assert.equal(printRustExpr(selected.lifecycleError({ kind: "path", path: "error" }, provider)), "RuntimeError::from(error)");
+});
+
+test("equivalent lifecycle error aliases do not acquire a redundant conversion", () => {
+  const selected = planRustBinaryErrors(lifecycle);
+  assert.equal(selected.errorType === lifecycle, true);
+  assert.equal(printRustExpr(selected.lifecycle(result, { ...lifecycle, path: "other::Alias" })), "operation()?");
+});
+
+test("binary errors have no implicit source entry operation and retain native error identity", () => {
+  const selected = planRustBinaryErrors(lifecycle);
+  assert.equal(Object.hasOwn(selected, "entry"), false);
+  const error = { kind: "path", path: "error" };
+  assert.equal(selected.lifecycleError(error, lifecycle) === error, true);
+  assert.equal(Object.isFrozen(selected), true);
 });
 
 test("native async executors propagate their own error exactly once without consuming the future output", () => {

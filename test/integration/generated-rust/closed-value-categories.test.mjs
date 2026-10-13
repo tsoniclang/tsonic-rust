@@ -33,6 +33,7 @@ export function main(): void {
   check(describe(false) === "false" && describe(undefined) === "object");
   check(take("moved") === "moved" && take(17) === "other");
 }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const emitted = result.artifacts.find(artifact => artifact.path === "src/values.rs")?.text;

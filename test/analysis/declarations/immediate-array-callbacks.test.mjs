@@ -26,6 +26,7 @@ test("native singleton slice inputs borrow existing values without changing auth
         check(matchesText([text, "tail"], "retained"));
         check(text === "retained" && items[0] === 1 && items[1] === 2);
       }
+    main();
     ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -41,7 +42,7 @@ for (const [name, source] of [["bigint_operators", bigintOperatorSource], ["js_n
   test(`${name} preserves the shared source contract`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": `${source}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+      files: { "index.ts": (`${source}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject(name, result.artifacts, { run: true });
@@ -51,7 +52,7 @@ for (const [name, source] of [["bigint_operators", bigintOperatorSource], ["js_n
 test("JS indexed compound writes preserve evaluation order and exact result carriers", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "compound_indexed_write" } },
-    files: { "index.ts": `${compoundIndexedWriteSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+    files: { "index.ts": (`${compoundIndexedWriteSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("compound-indexed-write", result.artifacts, { run: true });
@@ -62,7 +63,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`reference defaults remain lazy for methods and delegates (${profile})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "reference_defaults" } },
-      files: { "index.ts": `${referenceDefaultSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+      files: { "index.ts": (`${referenceDefaultSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject(`reference-defaults-${profile}`, result.artifacts, { run: true });
@@ -70,7 +71,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`class flow reads preserve declaration storage and selected members (${profile})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "flow_class_reads" } },
-      files: { "index.ts": `${flowClassReadSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+      files: { "index.ts": (`${flowClassReadSource}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     if (surfaces.length === 0) {
@@ -93,6 +94,7 @@ for (const surfaces of [[], ["js"]]) {
           const result = twice(values, items => { items[0] += 1; return items[0]; });
           check(result === 5 && values[0] === 3 && values[1] === 2);
         }
+      main();
       ` },
     });
     assert.deepEqual(result.diagnostics, []);

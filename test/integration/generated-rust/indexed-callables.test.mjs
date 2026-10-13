@@ -7,7 +7,7 @@ import { indexedCallableSource } from "../../../../tsonic/test/fixtures/indexed-
 test("indexed callables retain exact presence, evaluation order and shared mutation", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": indexedCallableSource + '\nexport function main(): void { if (!run()) throw new Error("indexed callable identity and order"); }',
+      "index.ts": indexedCallableSource + '\nexport function main(): void { if (!run()) throw new Error("indexed callable identity and order"); }\nmain();\n',
     } });
   assert.deepEqual(result.diagnostics, []);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /\.get_number\([^\n]*\)\.call/u);

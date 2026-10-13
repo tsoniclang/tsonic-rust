@@ -8,7 +8,7 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 
 function compile(source, options = {}) {
   const { result } = compileRust({ surfaces: ["js"],
-    target: { id: "rust", options: { outputType: "bin", ...options } }, files: { "index.ts": source } });
+    target: { id: "rust", options: { outputType: "bin", ...options } }, files: { "index.ts": (source + "\nmain();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   return { result, output: artifactText(result, "src/index.rs") };
 }
@@ -41,6 +41,7 @@ export function main(): void {
     first() !== 3 || second() !== 3 || shared("ab")() !== 4 ||
     change() !== "x!" || change() !== "x!!" || cleanup() !== 4 || observed !== "keep") throw new Error("capture transfer");
 }
+main();
 `);
   const direct = functionSection(output, "lengthReader", "nested");
   assert.doesNotMatch(direct, /let capture_value = value\.clone\(\)/u);
@@ -134,6 +135,7 @@ export function main(): void {
   change(mut(value));
   if (size(ref(value)) !== 7) throw new Error("mutable load");
 }
+main();
 `);
   assert.match(output, /fn size\(value: &str\)/u);
   assert.match(output, /js_len\(core::convert::AsRef::<str>::as_ref\(value\)\)/u);

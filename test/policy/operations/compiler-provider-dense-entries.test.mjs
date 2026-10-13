@@ -45,6 +45,7 @@ export function main(): void {
   });
   check(absent === 1 && present === 7);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -133,6 +134,7 @@ export function main(): void {
   for (const [index, value] of array.entries()) total += index + value;
   check(total === 9);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

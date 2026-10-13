@@ -8,7 +8,7 @@ import { optionalIndexedLocationSource } from "../../../../tsonic/test/fixtures/
 for (const surfaces of [[], ["js"]]) {
   test(`optional indexed locations retain native absence, widths and identity (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": optionalIndexedLocationSource + '\nexport function main(): void { if (!run()) throw new Error("optional indexed locations"); }' } });
+      files: { "index.ts": optionalIndexedLocationSource + '\nexport function main(): void { if (!run()) throw new Error("optional indexed locations"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`optional-indexed-locations-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });

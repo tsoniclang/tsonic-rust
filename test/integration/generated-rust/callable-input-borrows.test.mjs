@@ -12,7 +12,7 @@ test("invocation-only callback inputs consume exact inferred borrowed producer s
     const name = "callable_input_borrows";
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": callableInputBorrowSource },
+      files: { "index.ts": (callableInputBorrowSource + "\nmain();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const output = artifactText(result, "src/index.rs");

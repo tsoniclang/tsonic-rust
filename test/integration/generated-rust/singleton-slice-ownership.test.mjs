@@ -10,7 +10,9 @@ function read(values: readonly string[]): boolean { return values[0] === "token"
 export function main(): void {
   const text = "token";
   if (!read([text]) || text !== "token") throw new Error("singleton borrow changed");
-}` } });
+}
+main();
+` } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   const code = artifactText(result, "src/index.rs");
   assert.match(code, /read\(core::slice::from_ref\(&text\)\)/u);
@@ -27,7 +29,9 @@ export function main(): void {
   let text = "old";
   function change(): int32 { text = "new"; return 1; }
   if (!read([text], change()) || text !== "new") throw new Error("singleton snapshot changed");
-}` } });
+}
+main();
+` } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   const code = artifactText(result, "src/index.rs");
   assert.match(code, /text\.clone\(\)/u);
@@ -41,6 +45,7 @@ test("a borrowed str is not fabricated into a String storage place", { timeout: 
 function read(values: readonly string[]): boolean { return values[0] === "view"; }
 function pass(text: string): boolean { return read([text]); }
 export function main(): void { if (!pass("view")) throw new Error("borrowed str changed"); }
+main();
 ` } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /core::slice::from_ref\(text\)/u);

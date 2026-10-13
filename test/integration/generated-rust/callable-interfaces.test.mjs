@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`callable interfaces retain exact native signatures on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...callableInterfaceFiles,
-      "index.ts": callableInterfaceFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("callable interface"); }',
+      "index.ts": callableInterfaceFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("callable interface"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("callable-interfaces", result.artifacts, { run: true });
@@ -17,7 +17,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`callable interfaces retain async results and one absence on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...asyncCallableInterfaceFiles,
-      "index.ts": asyncCallableInterfaceFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("async callable interface"); }',
+      "index.ts": asyncCallableInterfaceFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("async callable interface"); }\nawait main();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("async-callable-interfaces", result.artifacts, { run: true });
@@ -25,7 +25,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`closed native async callables retain invocation timing and owner identity on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...nativeAsyncCallableFiles,
-      "index.ts": nativeAsyncCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native callable ownership"); }',
+      "index.ts": nativeAsyncCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native callable ownership"); }\nawait main();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("native-async-callable-ownership", result.artifacts, { run: true });
@@ -40,7 +40,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`pure closed async callables retain inline native storage on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...inlineNativeAsyncCallableFiles,
-      "index.ts": inlineNativeAsyncCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("inline async callable"); }',
+      "index.ts": inlineNativeAsyncCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("inline async callable"); }\nawait main();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("inline-native-async-callables", result.artifacts, { run: true });

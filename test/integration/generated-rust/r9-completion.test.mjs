@@ -73,6 +73,7 @@ export function main(): void {
   const message = getSystemErrorMessage(-2);
   check(message.length > 0);
 }
+main();
 `,
     },
   });

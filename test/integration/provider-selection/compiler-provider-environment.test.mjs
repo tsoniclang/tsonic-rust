@@ -32,6 +32,7 @@ export function main(): void {
   try { process.env["bad=name"] = "value"; } catch { rejected = true; }
   check(rejected);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

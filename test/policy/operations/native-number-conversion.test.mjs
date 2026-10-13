@@ -48,7 +48,7 @@ test("native Number conversions execute with rounding, identity and single evalu
     files: { "shadow.ts": `
 function Number(value: number): number { return value + 3; }
 export function local(): number { return Number(4); }
-`, "index.ts": `
+`, "index.ts": (`
 import { check } from "@acme/testing";
 import { local } from "./shadow.js";
 import type { int8, uint8, int16, uint16, int32, uint32, int64, uint64, int128, uint128, nativeInt, nativeUint, float32 } from "@tsonic/core/types.js";
@@ -75,7 +75,7 @@ export function main(): void {
   check(calls === 2);
   check(local() === 7);
 }
-` },
+` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");

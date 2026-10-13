@@ -28,6 +28,7 @@ export async function main(): Promise<void> {
   try { await read(failed()); } catch { rejected = true; }
   if (!rejected) throw new Error("native await lost rejection");
 }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
@@ -39,7 +40,7 @@ export async function main(): Promise<void> {
 
 test("local finite await branches execute exact native values, futures and absence", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
-    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": localFiniteAwaitBranches } });
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (localFiniteAwaitBranches + "\nawait main();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /match value/u);
@@ -62,6 +63,7 @@ export async function main(): Promise<void> {
   const counter = new Counter();
   if (!await counter.verify()) throw new Error("await evaluated its input incorrectly");
 }
+await main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");

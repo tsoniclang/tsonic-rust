@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`relocated callable bodies retain exact module owners on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...relocatedModuleCallableFiles,
-      "index.ts": relocatedModuleCallableFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("relocated module owner"); }',
+      "index.ts": relocatedModuleCallableFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("relocated module owner"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("relocated-module-callables", result.artifacts, { run: true });
@@ -20,7 +20,9 @@ for (const surfaces of [[], ["js"]]) {
 export function main(): void {
   const selected: (value?: number) => number = original;
   if (selected() !== 9 || selected(2) !== 9) throw new Error("native direct adapter");
-}`,
+}
+main();
+`,
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
@@ -30,7 +32,7 @@ export function main(): void {
   test(`typed native module callables retain checked body ABIs on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...nativeModuleCallableFiles,
-      "index.ts": nativeModuleCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("module callable contract"); }',
+      "index.ts": nativeModuleCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("module callable contract"); }\nawait main();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/api.rs");

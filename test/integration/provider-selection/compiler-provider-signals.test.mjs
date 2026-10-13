@@ -23,6 +23,7 @@ export function main(): void {
   setTimeout((): void => { check(importedProcess.exitCode === 0); }, 200);
   check(process.kill(process.pid, "SIGUSR1"));
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

@@ -18,7 +18,7 @@ test("utility transformations preserve modifiers, overload selection, variadic p
       options: { outputType: "bin", crateName: "typescript_utility_type_edges" },
     },
     files: {
-      "index.ts": edgeUtilitySource,
+      "index.ts": (edgeUtilitySource + "\nmain();\n"),
       "overloads.d.ts": overloadDeclarations,
       "shadows.d.ts": shadowUtilityDeclarations,
     },

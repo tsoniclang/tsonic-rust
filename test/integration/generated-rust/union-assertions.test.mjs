@@ -10,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts":
         'import { check } from "@acme/testing";\n' + unionAssertionSource +
-        '\nexport function main(): void { check(run()); }' } });
+        '\nexport function main(): void { check(run()); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const shapes = artifactText(result, "src/shapes.rs");
     if (surfaces.length === 0) assert.match(shapes, /retains an unconstructed checked union variant/);
@@ -28,6 +28,7 @@ function choose(value: number | boolean): number { return typeof value === "numb
 export function main(): void {
   check(invoke(() => "called") === "called" && choose(7) === 7 && choose(true) === 3);
 }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const shapes = artifactText(result, "src/shapes.rs");

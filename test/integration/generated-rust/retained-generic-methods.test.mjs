@@ -11,7 +11,7 @@ for (const surface of ["native", "js"]) {
   test(`retained generic methods preserve state, body identity and copied values (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": genericObjectMethodStorageSource + '\nexport function main(): void { if (!run()) throw new Error("retained generic method identity"); }',
+        "index.ts": genericObjectMethodStorageSource + '\nexport function main(): void { if (!run()) throw new Error("retained generic method identity"); }\nmain();\n',
       } });
     assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), []);
     const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
@@ -24,8 +24,8 @@ for (const surface of ["native", "js"]) {
 for (const surfaces of [[], ["js"]]) {
   test(`copied generic methods use the current exact native receiver (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": `${copiedMethodReceiversSource}
-        export function main(): void { if (!run()) throw new Error("copied native receiver"); }`,
+      "index.ts": (`${copiedMethodReceiversSource}
+        export function main(): void { if (!run()) throw new Error("copied native receiver"); }` + "\nmain();\n"),
     } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     validateGeneratedProject(`copied-native-receiver-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });

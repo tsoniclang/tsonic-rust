@@ -50,6 +50,7 @@ export function main(): void {
   check(counter.countdown() === 12);
   check(counter.value === 0);
 }
+main();
 `, "rust_object_method_semantics");
 
   assert.deepEqual(result.diagnostics, []);
@@ -80,6 +81,7 @@ export function main(): void {
   check(numeric.read() === 7);
   check(text.read() === "seven");
 }
+main();
 `, "rust_object_method_identity");
 
   assert.deepEqual(result.diagnostics, []);
@@ -117,6 +119,7 @@ export function main(): void {
   check(counter.add(4) === 5);
   check(readable.read() === 5);
 }
+main();
 `, "rust_object_method_inheritance");
 
   assert.deepEqual(result.diagnostics, []);
@@ -142,6 +145,7 @@ export function main(): void {
   check(identity.identity<int32>(7) === 7);
   check(identity.identity<string>("seven") === "seven");
 }
+main();
 `, "rust_object_method_generics");
 
   assert.deepEqual(result.diagnostics, []);
@@ -171,6 +175,7 @@ export function main(): void {
   check(parser.parse("seven") === "seven");
   check(parser.parse("seven", 2) === "seven-radix");
 }
+main();
 `, "rust_object_method_overloads");
 
   assert.deepEqual(result.diagnostics, []);
@@ -219,6 +224,7 @@ export function main(): void {
   check(joiner.join("one") === "joined");
   check(joiner.join("one", "two") === "joined");
 }
+main();
 `, "rust_object_method_overload_shapes");
 
   assert.deepEqual(result.diagnostics, []);
@@ -250,6 +256,7 @@ export function main(): void {
   check(identity.identity<int32>(7) === 7);
   check(identity.identity<string>("seven") === "seven");
 }
+main();
 `, "rust_object_method_generic_alpha_equivalence");
 
   assert.deepEqual(result.diagnostics, []);
@@ -274,6 +281,7 @@ export function main(): void {
   };
   check(converter.convert(7) === 7);
 }
+main();
 `, "rust_object_method_carrier_adapters");
 
   assert.deepEqual(result.diagnostics, []);
@@ -316,6 +324,7 @@ export function main(): void {
   check(counter.add(3) === 5);
   check(readable.value === 5);
 }
+main();
 `, "rust_object_method_redeclarations");
 
   assert.deepEqual(result.diagnostics, []);
@@ -348,6 +357,7 @@ export function main(): void {
   check(counter.next(2) === 9);
   check(counter.value === 3);
 }
+main();
 `, "rust_object_function_property");
 
   assert.deepEqual(result.diagnostics, []);
@@ -373,6 +383,7 @@ export function main(): void {
   };
   check(reader.read(3) === 8);
 }
+main();
 `, "rust_object_arrow_property");
 
   assert.deepEqual(result.diagnostics, []);

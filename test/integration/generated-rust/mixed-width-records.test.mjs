@@ -8,8 +8,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`nested record fields retain only their selected numeric evidence in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "mixed_width_records" } },
-      files: { "index.ts": `${mixedWidthRecordSource}
-export function main(): void { if (!run()) throw new Error("mixed width records"); }` },
+      files: { "index.ts": (`${mixedWidthRecordSource}
+export function main(): void { if (!run()) throw new Error("mixed width records"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject("mixed-width-records", result.artifacts, { run: true }).status, 0);

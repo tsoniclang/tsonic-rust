@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("suspended callback inputs preserve borrowed function and owning method result lifetimes", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": suspendedCallbackInputsSource } });
+    files: { "index.ts": (suspendedCallbackInputsSource + "\nawait main();\n") } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal(/sum<'input>/u.test(source), true, "one exact function loan binder");

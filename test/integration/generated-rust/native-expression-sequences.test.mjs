@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
     { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin" } },
-        files: { "index.ts": nativeExpressionSequencesSource },
+        files: { "index.ts": (nativeExpressionSequencesSource + "\nawait main();\n") },
       });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
       const source = artifactText(result, "src/index.rs");

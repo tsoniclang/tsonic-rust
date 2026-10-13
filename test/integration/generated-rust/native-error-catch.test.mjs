@@ -10,8 +10,8 @@ for (const surfaces of [[], ["js"]]) {
     { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: "native_error_catch" } },
-        files: { "index.ts": `${nativeErrorCatchSource}
-export function main(): void { if (!run()) throw new Error("callback Error catch failed"); }` } });
+        files: { "index.ts": (`${nativeErrorCatchSource}
+export function main(): void { if (!run()) throw new Error("callback Error catch failed"); }` + "\nmain();\n") } });
       assertNoTargetDiagnostics(result.diagnostics);
       assert.equal(/\bSourceError\b/u.test(rustSourceText(result)), false,
         "closed native origins do not require a broader Error view");

@@ -70,6 +70,7 @@ export function main(): void {
     throw new Error("function liveness mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -128,6 +129,7 @@ export function main(): void {
   box.writeOnlyValue = 7;
   if (box.usedMethod() !== 41) throw new Error("class liveness mismatch");
 }
+main();
 `,
     },
   });
@@ -168,6 +170,7 @@ export function unusedPublicEntry(): int32 { return 0; }
 export function main(): void {
   if (publicEntry() !== 42) throw new Error("module root mismatch");
 }
+main();
 `,
     },
   });
@@ -251,6 +254,7 @@ export function main(): void {
     throw new Error("type liveness mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -308,6 +312,7 @@ export function main(): void {
     throw new Error("structural field liveness mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -354,6 +359,7 @@ export function main(): void {
   const value = new Constructed(StaticOnly.current);
   if (value.read() !== 42) throw new Error("generated instance liveness mismatch");
 }
+main();
 `,
     },
   });
@@ -418,6 +424,7 @@ export function main(): void {
   if (reader !== alias || reader === other) throw new Error("native literal identity mismatch");
   if (reader.read() !== 42) throw new Error("generated storage liveness mismatch");
 }
+main();
 `,
     },
   });

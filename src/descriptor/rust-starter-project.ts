@@ -33,6 +33,8 @@ export function createRustStarterProject(
           "  }",
           "}",
           "",
+          "main();",
+          "",
         ].join("\n"),
       }),
     ]),

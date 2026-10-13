@@ -39,6 +39,7 @@ export function main(): void {
   check(settings === 41);
   check(loadCount() === 1);
 }
+main();
 `,
     },
   });
@@ -81,6 +82,7 @@ export function main(): void {
   check(Registry.first === 11);
   check(Registry.last === 3);
 }
+main();
 `,
     },
   });
@@ -118,6 +120,7 @@ class Values {
 export function main(): void {
   check(result === 45);
 }
+main();
 `,
     },
   });

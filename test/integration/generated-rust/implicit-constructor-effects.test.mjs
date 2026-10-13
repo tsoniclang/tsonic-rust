@@ -20,7 +20,9 @@ export function main(): void {
   try { new Derived(); } catch { caught += 1; }
   try { new Inherited(); } catch { caught += 1; }
   if (caught !== 3) throw new Error("constructor failure lost");
-}` } });
+}
+main();
+` } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => `${row.code}: ${row.message}`).join("\n"));
     assert.doesNotMatch(artifactText(result, "src/index.rs"), /catch_unwind|panic_any/u);
     validateGeneratedProject(`implicit-constructor-effects-${surfaces?.[0] ?? "native"}`, result.artifacts, { run: true });

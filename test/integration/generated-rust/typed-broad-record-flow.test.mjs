@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("typed broad record array views preserve the original backing", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": typedBroadRecordFlowSource + '\nexport function main(): void { if (!run()) throw new Error("typed broad record flow"); }' } });
+    files: { "index.ts": typedBroadRecordFlowSource + '\nexport function main(): void { if (!run()) throw new Error("typed broad record flow"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /cast::<String>\(\)/u);
@@ -18,7 +18,7 @@ test("typed broad record array views preserve the original backing", { timeout: 
 
 for (const guarded of [false, true]) test(`an erased broad-element array cannot be reinterpreted as a typed native backing (${guarded ? "guarded" : "unguarded"})`, { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": incompatibleNativeArrayCastSource(guarded) + '\nexport function main(): void { if (!run()) throw new Error("incompatible native array cast"); }' } });
+    files: { "index.ts": incompatibleNativeArrayCastSource(guarded) + '\nexport function main(): void { if (!run()) throw new Error("incompatible native array cast"); }\nmain();\n' } });
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), []);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /(?:cast|cast_array)::<String>\(\)/u);
@@ -27,7 +27,7 @@ for (const guarded of [false, true]) test(`an erased broad-element array cannot 
 });
 test("fresh typed array producers retain inferred backing before record and return erasure", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": freshTypedArrayRecordSource + '\nexport function main(): void { if (!run()) throw new Error("fresh typed backing"); }' } });
+    files: { "index.ts": freshTypedArrayRecordSource + '\nexport function main(): void { if (!run()) throw new Error("fresh typed backing"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(source, /with_native_element::<String, _>/u);

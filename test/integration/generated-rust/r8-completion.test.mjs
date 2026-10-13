@@ -42,6 +42,7 @@ export function main(): void {
   }
   check(random_ok);
 }
+main();
 `,
     },
   });
@@ -87,6 +88,7 @@ export function main(): void {
   rmSync(directory.path, { recursive: true, force: true });
   check(!existsSync(directory.path));
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -108,6 +110,7 @@ export function main(): void {
   xs[i] += 3;
   check(xs[i] === 5);
 }
+main();
 `,
     },
   });
@@ -136,6 +139,7 @@ export function main(): void {
   const values: FixedArray<int32, 3> = [2, 3, 4];
   check(selected(values, 0) === 9);
 }
+main();
 `,
     },
   });
@@ -176,6 +180,7 @@ export function main(): void {
   const square: Shape = { kind: "square", size: 4 };
   if (area(make()) !== 3 || area(square) !== 16) throw new Error("selected union fields");
 }
+main();
 `,
     },
   });
@@ -216,6 +221,7 @@ export function main(): void {
     throw new Error("selected discriminant widths");
   }
 }
+main();
 `,
     },
   });

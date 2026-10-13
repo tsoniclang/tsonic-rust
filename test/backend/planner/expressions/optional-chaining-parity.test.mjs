@@ -38,6 +38,7 @@ export function main(): void {
   check((length(undefined) ?? 0) === 0);
   check((length("rust") ?? 0) === 4);
 }
+main();
 `,
     },
   });
@@ -76,6 +77,7 @@ export function main(): void {
   check((first([9]) ?? -1) === 9);
   check(calls === 1);
 }
+main();
 `,
     },
   });
@@ -177,6 +179,7 @@ export function main(): void {
   check((read(undefined) ?? -1) === -1);
   check((read(new Counter()) ?? -1) === 9);
 }
+main();
 `,
     },
   });
@@ -216,6 +219,7 @@ export function main(): void {
   check(includes("rust") ?? false);
   check(calls === 1);
 }
+main();
 `,
     },
   });

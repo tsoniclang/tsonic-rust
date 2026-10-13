@@ -52,6 +52,7 @@ export function main(): void {
   check(exact?.indices?.[2]?.[0] === 0);
   check(exact?.indices?.[9] === undefined);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -118,6 +119,7 @@ export function main(): void {
     check(named.groups["word"] === "alpha");
   }
 }
+main();
 `,
     },
   });
@@ -196,6 +198,7 @@ export function main(): void {
   check((optional[0] ?? (optional[99])) === undefined);
   check(((optional[99]) ?? "missing") === "missing");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

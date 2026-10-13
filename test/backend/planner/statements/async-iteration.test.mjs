@@ -14,7 +14,7 @@ test("for-await consumes an async generator through exact iteration evidence", {
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "async_iteration" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${imports}
 async function* rows(): AsyncGenerator<int32, int32, void> {
   yield 2;
@@ -29,7 +29,7 @@ export async function main(): Promise<void> {
   }
   check(total === 5);
 }
-`,
+` + "\nawait main();\n"),
     },
   });
 
@@ -44,7 +44,7 @@ test("for-await adapts sync generators and arrays without async runtime overhead
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "sync_async_adaptation" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${imports}
 function* rows(): Generator<int32, int32, void> {
   yield 2;
@@ -63,7 +63,7 @@ export async function main(): Promise<void> {
   }
   check(total === 14);
 }
-`,
+` + "\nawait main();\n"),
     },
   });
 

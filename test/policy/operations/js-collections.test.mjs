@@ -203,6 +203,7 @@ export function main(): void {
   const constructed = new Set<string>(["a", "b", "b"]);
   check(constructed.size === 2 && constructed.has("a") && constructed.has("b"));
 }
+main();
 `,
     },
   });
@@ -258,6 +259,7 @@ export function main(): void {
   integers = [0];
   check(integers.length === 1 && integers[0] === 0);
 }
+main();
 `,
     },
   });
@@ -297,6 +299,7 @@ export function main(): void {
   check(set.size === 2 && set.has(first) && set.has(sameValue));
   check(set.delete(first) && !set.has(first));
 }
+main();
 `,
     },
   });
@@ -329,6 +332,7 @@ export function main(): void {
   check(normalize(undefined) === "missing");
   check(normalize("  Ready  ") === "ready");
 }
+main();
 `,
     },
   });
@@ -361,6 +365,7 @@ export function main(): void {
   zero.sort(() => 0);
   check(zero[0] === 2 && zero[1] === 1);
 }
+main();
 `,
     },
   });
@@ -410,6 +415,7 @@ export function main(): void {
   check(total === 12);
   check(withoutInitial === 12);
 }
+main();
 `,
     },
   });

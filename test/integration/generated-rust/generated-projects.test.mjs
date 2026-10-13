@@ -86,6 +86,7 @@ export function main(): void {
   check(store.count === 4);
   check(store[2] === 6);
 }
+main();
 `,
       "math.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -247,6 +248,7 @@ export function main(): void {
   const reordered = { "01": "leading", tail: "tail", 2: "two", 10: "ten" };
   check(Object.keys(reordered).join(",") === "2,10,01,tail");
 }
+main();
 `,
     },
   });
@@ -312,6 +314,7 @@ export function main(): void {
   check(unit_box.size === 1);
   check(pass_through(41) + 1 === 42);
 }
+main();
 `,
     },
   });
@@ -372,6 +375,7 @@ export function main(): void {
   check(String.fromCodePoint(0x1f600) === "😀");
   check("  value  ".trimLeft().trimRight().valueOf() === "value");
 }
+main();
 `,
     },
   });
@@ -409,6 +413,7 @@ export function main(): void {
   check(alias.getUTCDay() === 2);
   check(alias.toUTCString() === "Tue, 03 Mar 2020 00:00:01 GMT");
 }
+main();
 `,
     },
   });

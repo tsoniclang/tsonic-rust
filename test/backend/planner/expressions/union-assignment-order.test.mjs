@@ -32,6 +32,7 @@ function update(shape: Shape): void {
   }
 }
 export function main(): void { update(create()); }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);

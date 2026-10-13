@@ -9,6 +9,7 @@ test("both parsing APIs preserve native numeric radix carriers and optional abse
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": nativeParsingRadixSource + `
 export function main(): void { if (!run()) throw new Error("native parsing radix contract"); }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -26,6 +27,7 @@ export function main(): void {
   try { checked(4294967298); } catch { rejected = true; }
   if (!rejected || parseInt("10", 4294967298) !== 2) throw new Error("native narrowing is not parsing radix conversion");
 }
+main();
 ` }, target: { id: "rust", options: { outputType: "bin" } } });
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /rt::conversions::f64_to_i32\(value\)\?/u);

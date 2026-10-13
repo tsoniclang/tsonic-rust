@@ -7,9 +7,9 @@ import { artifactText, compileRustThroughTargetPack, repositoryRoot } from "../.
 import { runCargo, writeGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
 
-test("native boxed errors preserve From conversion, Termination and the unboxed success path", { timeout: 300_000 }, () => {
+test("native boxed errors preserve From conversion, user-owned Termination and the unboxed success path", { timeout: 300_000 }, () => {
   const { result } = compileRustThroughTargetPack({
-    target: { id: "rust", options: { outputType: "bin", crateName: "native_boxed_errors" } },
+    target: { id: "rust", options: { outputType: "lib", crateName: "native_boxed_errors" } },
     files: { "index.ts": `
 import type { Dyn } from "@tsonic/rust/types.js";
 import type { Box } from "@tsonic/rust/std/boxed.js";
@@ -32,8 +32,10 @@ export function main(): Outcome<void> {
   assert.match(source, /Box<dyn (?:std|core)::error::Error>/u);
   assert.match(source, /read_to_string[^;]+\?/u);
   assert.doesNotMatch(source, /TsonicError|TsonicResult|Box::new|\.unwrap\(/u);
-  assert.match(artifactText(result, "src/main.rs"), /Termination::report/u);
+  assert.equal(result.artifacts.some(artifact => artifact.path === "src/main.rs"), false);
+  assert.match(source, /fn main\(\) -> Result<\(\), Box<dyn (?:std|core)::error::Error>>/u);
   const root = writeGeneratedProject("native-boxed-errors", result.artifacts);
+  writeFileSync(join(root, "src/main.rs"), "fn main() -> Result<(), Box<dyn std::error::Error>> {\n    native_boxed_errors::index::main()\n}\n");
   runCargo(root, ["generate-lockfile", "--offline"]);
   runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
   runCargo(root, ["build", "--locked", "--offline"]);

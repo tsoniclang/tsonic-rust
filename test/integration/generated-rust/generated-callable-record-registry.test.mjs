@@ -121,6 +121,7 @@ for (const surfaces of [[], ["js"]]) {
               const execute = factory();
               if (await execute() !== 3) throw new Error("record registry");
             }
+          await main();
           `,
         },
       });
@@ -153,6 +154,7 @@ for (const surfaces of [[], ["js"]]) {
               const second = create("value");
               if (first.run() !== 3 || second.run() !== 3) throw new Error("record registry");
             }
+          main();
           `,
         },
       });
@@ -194,6 +196,7 @@ for (const surfaces of [[], ["js"]]) {
               const callback = filled.callback;
               if (callback === undefined || callback() !== 7) throw new Error("present callback");
             }
+          main();
           `,
         },
       });

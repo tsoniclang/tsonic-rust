@@ -32,7 +32,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(fixture !== undefined, true);
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": fixture.source +
-        '\nexport function main(): void { if (!run()) throw new Error("borrowed Point write"); }' } });
+        '\nexport function main(): void { if (!run()) throw new Error("borrowed Point write"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     const output = artifactText(result, "src/index.rs");
     assert.doesNotMatch(output, /\bborrowed(?:_\d+)?\.clone\(\)/u);
@@ -60,7 +60,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`ordinary distinct child writes retain native borrowed storage in ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": ordinaryScalarFieldWritesSource +
-        '\nexport function main(): void { if (!run()) throw new Error("ordinary scalar write"); }' } });
+        '\nexport function main(): void { if (!run()) throw new Error("ordinary scalar write"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     const body = functionText(artifactText(result, "src/index.rs"), "distinct");
     assert.doesNotMatch(body, /\.clone\(\)|Rc::new|Box::new|ObjectHandle::new/u);

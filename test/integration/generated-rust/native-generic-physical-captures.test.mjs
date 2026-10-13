@@ -30,6 +30,7 @@ test("generic factories keep unrelated native capture types independent through 
       const right = second(() => "native");
       if (left<number>(7) !== 7 || right<string>("exact") !== "exact") throw new Error("capture");
     }
+  main();
   `);
 });
 
@@ -49,5 +50,6 @@ test("one generic factory joins two exact native captured inputs without losing 
       const second = choose(left, right, false);
       if (first<number>(7) !== 7 || second<string>("exact") !== "exact") throw new Error("join");
     }
+  main();
   `);
 });

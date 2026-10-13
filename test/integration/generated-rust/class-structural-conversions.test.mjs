@@ -7,9 +7,9 @@ import { classStructuralConversionFiles, invalidClassStructuralConversions } fro
 test("class structural views compose assignments, parameters, returns, literals, accessors and generic owners", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "class_structural_conversions" } },
-    files: { ...classStructuralConversionFiles, "index.ts": `${classStructuralConversionFiles["index.ts"]}
+    files: { ...classStructuralConversionFiles, "index.ts": (`${classStructuralConversionFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("structural conversion"); }
-` },
+` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const native = validateGeneratedProject("class-structural-conversions", result.artifacts, { run: true });

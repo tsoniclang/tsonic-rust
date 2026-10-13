@@ -43,6 +43,7 @@ export async function main(): Promise<void> {
   const completed = await asynchronous.next(12);
   check(completed.done === true && completed.value === 12);
 }
+await main();
 `);
   assert.match(source, /fn increment\(/u);
   assert.match(source, /fn values\(/u);
@@ -72,6 +73,7 @@ export async function main(): Promise<void> {
   check(await alias(3) === "value:5");
   check(await pending() === "kept:7");
 }
+await main();
 `);
   assert.match(source, /::from_shared\(/u);
   assert.match(source, /rt::CallableImplementation</u);
@@ -104,6 +106,7 @@ export function main(): void {
   const completed = second.next(40);
   check(completed.done === true && completed.value === 40);
 }
+main();
 `);
 });
 
@@ -131,6 +134,7 @@ export async function main(): Promise<void> {
   check(!next.done && next.value === 9);
   check((await asynchronous.next()).done === true);
 }
+await main();
 `);
 });
 
@@ -145,6 +149,7 @@ export async function main(): Promise<void> {
   const value = new LocalValue(3);
   check(await value.read() === 3);
 }
+await main();
 `);
   assert.doesNotMatch(generated, /(?:Rc|RefCell)<LocalValue/u);
   assert.doesNotMatch(generated, /(?:Rc|ObjectHandle)::new\(LocalValue/u);

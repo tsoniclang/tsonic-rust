@@ -9,7 +9,7 @@ for (const surface of ["native", "js"]) {
   test(`closed runtime category comparisons retain repeated arms and one evaluation (${surface})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
-        "index.ts": closedRuntimeCategoriesSource + '\nexport function main(): void { if (!run()) throw new Error("closed runtime categories"); }',
+        "index.ts": closedRuntimeCategoriesSource + '\nexport function main(): void { if (!run()) throw new Error("closed runtime categories"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.map(artifact => artifact.text).join("\n");

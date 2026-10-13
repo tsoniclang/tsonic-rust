@@ -50,6 +50,7 @@ export function main(): void {
     throw new Error("native module function mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -141,6 +142,7 @@ export const fromB = (value: int32): int32 => value <= 0 ? 1 : fromA(value - 1) 
       "index.ts": `
 import { fromA } from "./a.js";
 export function main(): void { void fromA(3); }
+main();
 `,
     },
   });
@@ -218,6 +220,7 @@ export function main(): void {
     throw new Error("native function ABI mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -257,6 +260,7 @@ export function main(): void {
     throw new Error("generic project method mismatch");
   }
 }
+main();
 `,
     },
   });
@@ -534,6 +538,7 @@ export function main(): void {
     throw new Error("sealed Rust humanization mismatch");
   }
 }
+main();
 `,
     },
   });

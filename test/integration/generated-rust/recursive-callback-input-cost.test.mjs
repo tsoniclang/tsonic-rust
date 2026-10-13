@@ -25,6 +25,7 @@ export function invoke(callback: (count: number) => number, count: number): numb
 export function main(): void {
   if (invoke(first(7), 2) !== 7 || invoke(second(7), 2) !== 14) throw new Error("borrowed input");
 }
+main();
 `;
 
 for (const profile of ["native", "js"]) {

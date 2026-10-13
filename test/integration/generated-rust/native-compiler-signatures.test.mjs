@@ -29,6 +29,7 @@ test("closed primitive unions retain native number, bigint and string identity",
         if (describe(identity(7.5)) !== "number" || describe(identity(9007199254740993n)) !== "bigint" ||
           describe(identity("native")) !== "native") throw new Error("union carrier");
       }
+    main();
     `,
   });
 });
@@ -65,6 +66,7 @@ test("constructor signatures retain inherited cross-file intersection members", 
         const value = create(Numeric, 7);
         if (value.value !== 7 || value.kind !== 1 || value.hash() !== 7) throw new Error("intersection");
       }
+    main();
     `,
   });
 });
@@ -84,6 +86,7 @@ test("nested generic structural storage retains exact substituted fields", { tim
         throw new Error("nested storage");
       }
     }
+  main();
   ` });
 });
 
@@ -119,5 +122,6 @@ test("conditional storage in nested generic signatures preserves both checked br
       const storage = project<number, Stored<string>>(input => input.first.value, new Slice(stored));
       if (result !== 7 || empty !== 1 || storage !== "native") throw new Error("conditional storage");
     }
+  main();
   ` });
 });

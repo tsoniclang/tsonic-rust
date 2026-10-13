@@ -8,7 +8,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 test("native provider unions retain selected members and nominal payloads", { timeout: 300_000 }, async () => {
   const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
     target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": nativeProviderUnionSource +
-      '\nexport function main(): void { if (!run()) throw new Error("native provider union"); }' } });
+      '\nexport function main(): void { if (!run()) throw new Error("native provider union"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.doesNotMatch(output, /JsValue::|invoke_dynamic|read_dynamic_slot/);

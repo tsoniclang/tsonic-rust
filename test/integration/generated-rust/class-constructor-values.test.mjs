@@ -32,6 +32,7 @@ export function main(): void {
   count.count = 12;
   check(value.count === 12 && Selected.count === 12);
 }
+main();
 `,
     },
   });
@@ -100,6 +101,7 @@ export function main(): void {
   const empty = new EmptyAlias();
   if (empty !== empty) throw new Error("empty alias");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("inferred-constructor-values", result.artifacts, { run: true });
@@ -129,6 +131,7 @@ export function main(): void {
   number.item = 9;
   if (number.read() !== 9 || text.seed !== "native") throw new Error("storage");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("generic-constructor-binders", result.artifacts, { run: true });
@@ -174,6 +177,7 @@ export function main(): void {
   const value = new view(3);
   if (value.value !== 7) throw new Error("construct");
 }
+main();
 `,
     } });
   assert.deepEqual(result.diagnostics, []);

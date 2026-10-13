@@ -32,7 +32,7 @@ targetOperation: { get: (subject) => subject === node
 test("inferred cross-file optional unions retain absence and compare literals without enum injection", () => {
   const { program } = analyzeRust({ target: { id: "rust", options: { outputType: "bin" } }, files: {
     ...crossFileBranchUnionFiles, "index.ts": crossFileBranchUnionFiles["index.ts"] +
-      '\nexport function main(): void { if (!run()) throw new Error("branch unions"); }',
+      '\nexport function main(): void { if (!run()) throw new Error("branch unions"); }\nmain();\n',
   } });
   const { ast } = program.source;
   const pending = [...program.sourceFiles];

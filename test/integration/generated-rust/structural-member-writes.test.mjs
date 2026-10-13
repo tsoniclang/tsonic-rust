@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 for (const surfaces of [[], ["js"]]) test(`structural member writes preserve native aliases and callback identity in ${surfaces[0] ?? "native"}`,
   { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": structuralMemberWritesSource } });
+      files: { "index.ts": (structuralMemberWritesSource + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`structural-member-writes-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });

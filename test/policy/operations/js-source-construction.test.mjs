@@ -50,6 +50,7 @@ export function main(): void {
   try { convert(1.5); } catch { rejected = true; }
   check(rejected);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -104,6 +105,7 @@ export function main(): void {
   try { new Array<number>(-1); } catch { rejected = true; }
   check(rejected);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -131,6 +133,7 @@ import { check } from "@acme/testing";
 function BigInt(value: number): number { return value + 1; }
 const Object = { freeze(value: number): number { return value + 2; } };
 export function main(): void { check(BigInt(4) === 5 && Object.freeze(4) === 6); }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -150,6 +153,7 @@ export function main(): void {
   try { value.count = 2; } catch (error) { rejected = error instanceof TypeError; }
   if (!rejected || value.count !== 1 || !Object.isFrozen(value)) throw new Error("frozen write was erased");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("frozen-write", result.artifacts, { run: true });
@@ -193,6 +197,7 @@ export function main(): void {
   check(!smaller(9007199254740993n, 9007199254740992));
   check(equal(2n, 2) && !same(2n, 2) && same(2n, 2n));
 }
+main();
 `,
     },
   });

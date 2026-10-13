@@ -21,6 +21,7 @@ export async function main(): Promise<void> {
   const value: int32 = 7;
   if (await forward(ref(value)) !== 28) throw new Error("borrowed inference");
 }
+await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("source-call-lifetime-inference", result.artifacts, { run: true });

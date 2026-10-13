@@ -162,6 +162,7 @@ export function main(): void {
   if (next() < 1 || !(next() >= 1) || callCount() !== 10) throw new Error("native one equality");
   if (!signed(-1) || !floating(-0.5)) throw new Error("signed controls");
 }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");

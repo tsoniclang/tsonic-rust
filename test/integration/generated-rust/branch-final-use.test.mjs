@@ -156,7 +156,7 @@ export function run(values: string[]): void {
 test("branch ownership and stable receiver borrowing compile and preserve alias replacement", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "branch_final_use" } },
-    files: { "index.ts": sourceText },
+    files: { "index.ts": (sourceText + "\nmain();\n") },
   });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");

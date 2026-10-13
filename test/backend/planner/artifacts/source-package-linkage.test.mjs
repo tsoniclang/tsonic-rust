@@ -35,8 +35,8 @@ test("binary source-package generic dispatch closes across the exact component g
   const { result } = compileRust({
     sourcePackages: closedGenericDispatchPackageGraph,
     target: { id: "rust", options: { outputType: "bin", crateName: "package_generic_dispatch" } },
-    files: { ...closedGenericDispatchPackageFiles, "index.ts": `${closedGenericDispatchPackageFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("package generic dispatch"); }` },
+    files: { ...closedGenericDispatchPackageFiles, "index.ts": (`${closedGenericDispatchPackageFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("package generic dispatch"); }` + "\nmain();\n") },
   });
   assertNoTargetDiagnostics(result.diagnostics);
   const manifests = result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml"));
@@ -508,6 +508,7 @@ export function main(): void {
   }
   if (count !== 2) throw new Error("source-package error transport");
 }
+main();
 `,
     },
   });

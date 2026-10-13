@@ -25,6 +25,7 @@ const source = `
     const right = () => 2;
     if (!compare(left, right)) throw new Error("native activation identity or evaluation changed");
   }
+main();
 `;
 
 for (const surfaces of [[], ["js"]]) {

@@ -11,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
       const name = `lexical_capture_conversions_${profile}`;
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: name } },
-        files: { "index.ts": lexicalCaptureConversionSource },
+        files: { "index.ts": (lexicalCaptureConversionSource + "\nmain();\n") },
       });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
       const source = artifactText(result, "src/index.rs");

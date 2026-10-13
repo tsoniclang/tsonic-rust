@@ -91,6 +91,7 @@ export function main(): void {
   destructure<Value>(holder).count = 13;
   check(data.count === 13 && holder.current.count === 13);
 }
+main();
 `,
     },
   });
@@ -106,7 +107,7 @@ for (const surfaces of [[], ["js"]]) {
       files: {
         ...independentStorageFamilyFiles,
         "index.ts": independentStorageFamilyFiles["index.ts"] +
-          '\nexport function main(): void { if (!run()) throw new Error("independent storage families"); }',
+          '\nexport function main(): void { if (!run()) throw new Error("independent storage families"); }\nmain();\n',
       },
     });
     assertNoTargetDiagnostics(result.diagnostics);
@@ -116,7 +117,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "structural_array_storage" } },
       files: { "index.ts": structuralArrayStorageSource +
-        '\nexport function main(): void { if (!run()) throw new Error("structural array storage"); }' },
+        '\nexport function main(): void { if (!run()) throw new Error("structural array storage"); }\nmain();\n' },
     });
     assertNoTargetDiagnostics(result.diagnostics);
     if (surfaces.length === 0) {
@@ -164,6 +165,7 @@ export function main(): void {
   alias.count = 7;
   check(data.count === 7 && read<Value>(record).count === 7);
 }
+main();
 `,
     },
   });
@@ -212,6 +214,7 @@ export function main(): void {
   data.count = 7;
   check(read(pointer) === 7);
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -236,6 +239,7 @@ export function main(): void {
   replace(alias, allocateptr<uint8>(11));
   check(loadptr(holder.value) === 11);
 }
+main();
 ` },
     });
     assertNoTargetDiagnostics(result.diagnostics);

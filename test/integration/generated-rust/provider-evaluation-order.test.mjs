@@ -9,7 +9,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 
 test("provider conversions borrow disjoint fields and snapshot values before overlapping receiver calls", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": providerEvaluationOrderSource + '\nexport function main(): void { if (!run()) throw new Error("native provider order"); }' } });
+    files: { "index.ts": providerEvaluationOrderSource + '\nexport function main(): void { if (!run()) throw new Error("native provider order"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   const output = artifactText(result, "src/index.rs");
   assert.match(output, /pub fn replace\(&mut self\)/u);

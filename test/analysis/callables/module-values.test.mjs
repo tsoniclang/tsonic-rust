@@ -78,7 +78,7 @@ moduleCallableStorage: { get: (node) => {
         return undefined;
     return storage;
 } }}),
-    }, {});
+    }, {}, { outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
     assert.equal(plan.requirementFor(sourceFile).kind, expected);
     assert.equal(plan.minimumFoundation(), expected === "required" ? "std" : "core");
   }

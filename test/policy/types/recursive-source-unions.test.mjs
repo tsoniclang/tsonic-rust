@@ -21,8 +21,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`recursive collection unions retain one absence state on ${surfaces[0] ?? "native"} profile`, { timeout: 300_000 }, () => {
     const files = surfaces.length === 0 ? recursiveOptionalCollectionUnionFiles : recursiveOptionalCollectionUnionJsFiles;
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { ...files, "index.ts": `${files["index.ts"]}
-export function main(): void { if (!run()) throw new Error("recursive optional collections"); }` } });
+      files: { ...files, "index.ts": (`${files["index.ts"]}
+export function main(): void { if (!run()) throw new Error("recursive optional collections"); }` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     const source = artifactText(result, "src/tree.rs");
@@ -31,8 +31,8 @@ export function main(): void { if (!run()) throw new Error("recursive optional c
   });
   test(`recursive collection union templates preserve exact instantiations on ${surfaces[0] ?? "native"} profile`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { ...recursiveGenericCollectionUnionFiles, "index.ts": `${recursiveGenericCollectionUnionFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("recursive generic collections"); }` } });
+      files: { ...recursiveGenericCollectionUnionFiles, "index.ts": (`${recursiveGenericCollectionUnionFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("recursive generic collections"); }` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     assert.equal(validateGeneratedProject(`recursive-generic-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
@@ -158,8 +158,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`recursive generic and mutually recursive unions execute on ${surfaces.length === 0 ? "native" : "js"} profile`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "recursive_unions" } },
-      files: { ...recursiveSourceUnionFiles, "index.ts": `${recursiveSourceUnionFiles["index.ts"]}
-        import { check } from "@acme/testing"; export function main(): void { check(run()); }` } });
+      files: { ...recursiveSourceUnionFiles, "index.ts": (`${recursiveSourceUnionFiles["index.ts"]}
+        import { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(/enum Step<Value, Payload0>/u.test(artifactText(result, "src/steps.rs")), true,
       "recursive native binder and independent physical payload share one canonical enum");

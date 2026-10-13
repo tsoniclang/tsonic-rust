@@ -49,6 +49,7 @@ export function main(): void {
     finalized("cleanup") !== "cleanup" || branch("yes", true) !== "yes" ||
     branch("no", false) !== "no" || observed("old") !== "oldnext") throw new Error("field transfer");
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");

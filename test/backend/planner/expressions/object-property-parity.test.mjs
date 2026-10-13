@@ -89,6 +89,7 @@ export function main(): void {
   check(overridden.next(2) === 32);
   check(counter.value === 12);
 }
+main();
 `,
     },
   });
@@ -191,6 +192,7 @@ export function main(): void {
   check((optionalEmpty.current ?? (0 as int32)) === 0);
   check(writes === 2);
 }
+main();
 `,
     },
   });
@@ -293,6 +295,7 @@ export function main(): void {
   check(concrete.current === 5);
   check(concrete.doubled === 10);
 }
+main();
 `,
     },
   });
@@ -356,6 +359,7 @@ export function main(): void {
   check(evaluations === 1);
   check((empty.read?.() ?? 0) === 0);
 }
+main();
 `,
     },
   });

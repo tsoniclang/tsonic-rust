@@ -10,9 +10,9 @@ for (const surfaces of [[], ["js"]]) {
   test(`lexical function values retain activation identity and hoisting in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "lexical_function_values" } },
-      files: { "index.ts": `${lexicalFunctionValuesSource}
+      files: { "index.ts": (`${lexicalFunctionValuesSource}
 export function main(): void { if (!run()) throw new Error("lexical function identity"); }
-` } });
+` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(`lexical-function-values-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
     assert.equal(executed.status, 0, executed.stderr);

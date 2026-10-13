@@ -22,6 +22,7 @@ export function main(): void {
   assign(request, {});
   if (request.body !== null || JSON.stringify(request.body) !== "null") throw new Error("absent record");
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

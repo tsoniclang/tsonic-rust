@@ -48,6 +48,7 @@ export function main(): void {
   const increment = (value: int32): int32 => value + 1;
   check(invoke(increment, 4) === 5);
 }
+main();
 `,
     },
   });
@@ -89,6 +90,7 @@ export function main(): void {
   check(caught);
   check(invoke(risky, 4) === 5);
 }
+main();
 `,
     },
   });
@@ -127,6 +129,7 @@ export function main(): void {
   }
   check(caught);
 }
+main();
 `,
     },
   });
@@ -155,6 +158,7 @@ const apply = (value: string, transform: TextTransform): string => transform(val
 export function main(): void {
   check(apply("rust", (value: string): string => value.toUpperCase()) === "RUST");
 }
+main();
 `,
     },
   });
@@ -192,6 +196,7 @@ const describe = (
 export function main(): void {
   check(describe(makeBox("rust"), "!").text === "rust!");
 }
+main();
 `,
     },
   });
@@ -222,6 +227,7 @@ export function main(): void {
   check(next() === 4);
   check(next() === 5);
 }
+main();
 `,
     },
   });
@@ -251,6 +257,7 @@ export function main(): void {
   const selected = increment;
   check(selected(8) === 9);
 }
+main();
 `,
     },
   });
@@ -285,6 +292,7 @@ export function main(): void {
   check(invoke((value: int32): int32 => value + 1) === 5);
   check(evaluations === 1);
 }
+main();
 `,
     },
   });
@@ -317,6 +325,7 @@ export function main(): void {
   check(defaulted() === 7);
   check(total(1, 2, 3) === 6);
 }
+main();
 `,
     },
   });
@@ -358,6 +367,7 @@ export function main(): void {
   check(optional() === 0);
   check(defaulted() === 3.5);
 }
+main();
 `,
     },
   });
@@ -413,6 +423,7 @@ export function main(): void {
   const middle: int32[] = [5, 6];
   check(total(4, ...middle, 7) === 22);
 }
+main();
 `,
     },
   });
@@ -442,6 +453,7 @@ export function main(): void {
   };
   check(factorial(5) === 120);
 }
+main();
 `,
     },
   });
@@ -535,6 +547,7 @@ export function main(): void {
   const textFunction = preserveText;
   check(textFunction("text") === "text");
 }
+main();
 `,
     },
   });

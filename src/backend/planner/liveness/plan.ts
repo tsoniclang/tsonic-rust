@@ -9,7 +9,6 @@ import { rustTargetTypeChildren } from "../../../target-model/types/carriers/chi
 import {
   analyzeRustGeneratedItemUsage,
 } from "./generated-item-usage.js";
-import { rustBinaryEntryDeclaration } from "../program/entry-point.js";
 import type {
   RustDispatchMemberRole,
   RustGeneratedProjectFieldRole,
@@ -180,11 +179,6 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     if (owner.kind !== "erased") {
       addEdge(owner.kind === "root" ? undefined : owner.declaration, use.declaration);
     }
-  }
-
-  if (program.configuration.outputType === "bin") {
-    const binaryEntry = rustBinaryEntryDeclaration(program);
-    if (binaryEntry !== undefined) roots.add(canonical(binaryEntry));
   }
 
   for (const definition of program.projectTypes.definitions) {

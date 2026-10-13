@@ -25,6 +25,7 @@ export function main(): void {
   check(after.getUTCHours() === 7);
   check(Number.isNaN(new Date(Number.NaN).getFullYear()));
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);

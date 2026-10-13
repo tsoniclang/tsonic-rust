@@ -10,10 +10,10 @@ test("shared Node spawn proof preserves byte views, options and absent results",
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()], capabilities: [await nodejsCapability()],
     target: { id: "rust", options: { outputType: "bin", crateName: "shared_provider_spawn" } },
-    files: { "index.ts": `${nativeNodeSpawnSource(process.execPath)}
+    files: { "index.ts": (`${nativeNodeSpawnSource(process.execPath)}
       import { check } from "@acme/testing";
       export function main(): void { check(run()); }
-    ` },
+    ` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /JsArray::<core::convert::Infallible>/u);
@@ -75,6 +75,7 @@ export function main(): void {
   check(error.code === "ENOENT");
   check(error.message.length > 0);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

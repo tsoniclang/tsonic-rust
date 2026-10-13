@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   const native = surfaces.length === 0;
   test(`discarded async values retain native scheduling on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": nativeAsyncDiscardSource(1) + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native async discard"); }' } });
+      files: { "index.ts": nativeAsyncDiscardSource(1) + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native async discard"); }\nawait main();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
     if (native) {

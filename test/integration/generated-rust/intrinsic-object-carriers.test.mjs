@@ -11,7 +11,9 @@ for (const surface of ["native", "js"]) {
       target: { id: "rust", options: { outputType: "bin", crateName: "intrinsic_objects" } }, files: {
         ...intrinsicObjectCarrierFiles,
         "index.ts": intrinsicObjectCarrierFiles["index.ts"] + `
-          export function main(): void { if (!run()) throw new Error("intrinsic object payload and identity"); }`,
+          export function main(): void { if (!run()) throw new Error("intrinsic object payload and identity"); }
+main();
+`,
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/objects.rs");

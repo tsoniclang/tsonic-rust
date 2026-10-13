@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`cross-file constructor and structural method signatures retain their owners on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...typeSignatureOwnershipFiles,
-      "index.ts": typeSignatureOwnershipFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("type signature ownership"); }',
+      "index.ts": typeSignatureOwnershipFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("type signature ownership"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("type-signature-ownership", result.artifacts, { run: true });

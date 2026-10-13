@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`Error container storage preserves exact element identity in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { ...errorContainerStorageFiles,
-        "index.ts": `${errorContainerStorageFiles["index.ts"]}\nexport function main(): void { if (!run()) throw new Error("error-container-storage"); }` } });
+        "index.ts": (`${errorContainerStorageFiles["index.ts"]}\nexport function main(): void { if (!run()) throw new Error("error-container-storage"); }` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5).map(row => row.message.slice(0, 256)).join("\n"));
     assert.doesNotMatch(artifactText(result, "src/index.rs"), /invoke_dynamic|downcast_unchecked|transmute|Box::new/u);
     validateGeneratedProject(`error-container-storage-${lane}`, result.artifacts, { run: true });

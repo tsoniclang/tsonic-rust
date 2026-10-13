@@ -24,6 +24,7 @@ export function main(): void {
   check(new Store(undefined).read() === undefined);
   check(identity(3) === 3 && identity("text") === "text" && identity(undefined) === undefined);
 }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("absorbed-broad-unions", result.artifacts, { run: true });

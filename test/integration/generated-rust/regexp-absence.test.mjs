@@ -7,7 +7,7 @@ import { regexpAbsenceSource } from "../../../../tsonic/test/fixtures/regexp-abs
 
 test("RegExp capture, index and split results preserve one native absence", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": regexpAbsenceSource + '\nexport function main(): void { if (!run()) throw new Error("RegExp absence"); }' } });
+    files: { "index.ts": regexpAbsenceSource + '\nexport function main(): void { if (!run()) throw new Error("RegExp absence"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("regexp-absence", result.artifacts, { run: true });
 });

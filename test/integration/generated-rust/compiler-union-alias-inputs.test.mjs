@@ -26,6 +26,7 @@ export function main(): void {
   check(read({ kind: "dense", value: 7 }) === 7);
   check(read({ kind: "remote", offset: 9 }) === 9);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

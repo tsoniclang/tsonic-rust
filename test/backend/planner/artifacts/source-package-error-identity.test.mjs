@@ -140,8 +140,8 @@ test("retained cross-package callbacks preserve the original thrown object", { t
     surfaces: ["js"],
     sourcePackages: sourcePackageCallbackErrorGraph,
     target: { id: "rust", options: { outputType: "bin", crateName: "package_callback_errors" } },
-    files: { ...sourcePackageCallbackErrorFiles, "index.ts": `${sourcePackageCallbackErrorFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("callback identity"); }` },
+    files: { ...sourcePackageCallbackErrorFiles, "index.ts": (`${sourcePackageCallbackErrorFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("callback identity"); }` + "\nmain();\n") },
   });
   assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml")).length, 3);

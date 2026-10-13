@@ -7,7 +7,7 @@ import { nativeAggregateInferenceSource, nativeAggregateInferenceRejections } fr
 
 test("aggregate generic inference preserves native carriers through nested arrays, records and spreads", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": nativeAggregateInferenceSource + '\nexport function main(): void { if (!run()) throw new Error("native inference"); }' } });
+    files: { "index.ts": nativeAggregateInferenceSource + '\nexport function main(): void { if (!run()) throw new Error("native inference"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   assert.doesNotMatch(artifactText(result, "src/index.rs"), /BigInt|i64_to_f64|u64_to_f64/u);
   validateGeneratedProject("native-aggregate-inference", result.artifacts, { run: true });

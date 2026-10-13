@@ -1,4 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { resolve } from "node:path";
+import type { SourceBinaryEntryIssue } from "@tsonic/target-api/source";
 
 import {
   KindExportAssignment,
@@ -7,6 +9,7 @@ import {
   KindImportDeclaration,
   KindVariableStatement,
   Node_Expression,
+  validateSourceBinaryEntry,
 } from "@tsonic/target-api/source";
 
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
@@ -22,6 +25,7 @@ export type RustModuleInitializationRequirement =
   | { readonly kind: "unresolved"; readonly node: Node; readonly reason: string };
 
 export interface RustModuleInitializationPlan {
+  readonly issues: readonly SourceBinaryEntryIssue[];
   requirementFor(sourceFile: SourceFile): RustModuleInitializationRequirement;
   minimumFoundation(): RustFoundation;
   hasStateIndependentCycle(sourceFile: SourceFile): boolean;
@@ -35,7 +39,13 @@ type RustModuleInitializationPlanInput = Pick<
 export function createRustModuleInitializationPlan(
   input: RustModuleInitializationPlanInput,
   classValues: RustClassValuePlan,
+  entry: { readonly outputType: "bin" | "lib"; readonly projectRoot: string; readonly entryPoint: string },
 ): RustModuleInitializationPlan {
+  const entryPath = resolve(entry.projectRoot, entry.entryPoint).split("\\").join("/");
+  const entrySourceFile = entry.outputType === "lib" ? undefined : input.sourceFiles.find(sourceFile =>
+    resolve(input.ast.getFileName(sourceFile)).split("\\").join("/") === entryPath);
+  const issues = entry.outputType === "lib" || entrySourceFile === undefined ? Object.freeze([])
+    : validateSourceBinaryEntry(input.source, entrySourceFile);
   const requirements = new Map<SourceFile, RustModuleInitializationRequirement>();
   let minimumFoundation: RustFoundation = "core";
   for (const sourceFile of input.sourceFiles) {
@@ -58,6 +68,7 @@ export function createRustModuleInitializationPlan(
     }
   }
   return Object.freeze({
+    issues,
     requirementFor(sourceFile: SourceFile) {
       return requirements.get(sourceFile) ?? unresolved(
         sourceFile,

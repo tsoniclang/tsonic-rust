@@ -11,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
       const name = `implicit_callable_interface_${profile}`;
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: name } },
-        files: { "index.ts": implicitCallableInterfaceSource },
+        files: { "index.ts": (implicitCallableInterfaceSource + "\nmain();\n") },
       });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
       const executed = validateGeneratedProject(name, result.artifacts, { run: true });

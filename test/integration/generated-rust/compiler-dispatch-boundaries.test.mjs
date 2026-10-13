@@ -22,6 +22,7 @@ export function main(): void {
   }
   check(caught && calls === 1);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -53,6 +54,7 @@ export function main(): void {
   try { read(second, -1); } catch (error) { caught = true; check(\`\${error}\` === "Error: negative"); }
   check(caught);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -75,6 +77,7 @@ export function main(): void {
   catch (error) { caught = true; check(\`\${error}\` === "Error: callback"); }
   check(caught);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -96,6 +99,7 @@ export function main(): void {
   const read = create();
   check(read() === 7 && read() === 7);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -134,6 +138,7 @@ export function main(): void {
   value.info.count = 12;
   check(info.count === 12);
 }
+main();
 `,
     },
   });

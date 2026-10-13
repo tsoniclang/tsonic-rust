@@ -29,6 +29,7 @@ export function main(): void {
   const text = ["before"];
   check(Storage.copy(new Storage(text), new Storage(["after"])) && text[0] === "after");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -67,6 +68,7 @@ export function main(): void {
   const value: Base<number> = new Derived(7);
   check(value.read() === 7);
 }
+main();
 `,
     },
   });

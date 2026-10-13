@@ -12,7 +12,7 @@ for (const [name, source, surfaces] of [
 ]) {
   test(`dense array construction preserves exact storage and evaluation in ${name}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": source + '\nexport function main(): void { if (!run()) throw new Error("dense construction"); }',
+      "index.ts": source + '\nexport function main(): void { if (!run()) throw new Error("dense construction"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const generated = artifactText(result, "src/index.rs");

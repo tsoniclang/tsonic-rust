@@ -10,7 +10,7 @@ for (const surface of ["native", "js"]) {
   test(`native receiver field owners preserve escaped, inherited, generic and replaced storage in ${surface}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: surface === "native" ? [] : ["js"],
       target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": receiverFieldCapturesSource +
-        '\nexport function main(): void { if (!run()) throw new Error("receiver field owners"); }' } });
+        '\nexport function main(): void { if (!run()) throw new Error("receiver field owners"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     assert.equal(/unsafe\s*\{|MaybeUninit|assume_init|transmute|downcast_unchecked/u.test(rustSourceText(result)), false);
     validateGeneratedProject(`receiver-field-captures-${surface}`, result.artifacts, { run: true });
@@ -20,7 +20,7 @@ for (const surface of ["native", "js"]) {
 test("retained receiver field writes preserve the selected object's freeze identity", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": receiverFieldFreezeSource +
-      '\nexport function main(): void { if (!run()) throw new Error("retained field freeze identity"); }' } });
+      '\nexport function main(): void { if (!run()) throw new Error("retained field freeze identity"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
   validateGeneratedProject("receiver-field-freeze", result.artifacts, { run: true });
 });

@@ -8,7 +8,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`conditional readonly sequences retain exact narrowing and lazy fallback on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": conditionalReadonlySequencesSource +
-        '\nexport function main(): void { if (!run()) throw new Error("readonly sequence narrowing"); }' } });
+        '\nexport function main(): void { if (!run()) throw new Error("readonly sequence narrowing"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     if (surfaces.length === 0) {
       const output = artifactText(result, "src/index.rs");

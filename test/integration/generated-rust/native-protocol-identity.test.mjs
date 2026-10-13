@@ -23,6 +23,7 @@ test("cross-file quantified forwarding shares one native protocol and executes w
           const identity = <Value>(value: Value): Value => value;
           if (invoke(identity) !== 7) throw new Error("forward");
         }
+      main();
       `,
     },
   });
@@ -59,6 +60,7 @@ test("quantified callbacks forward across independent source crates with their e
           const identity = <Value>(value: Value): Value => value;
           if (invoke(identity) !== 7) throw new Error("cross-package");
         }
+      main();
       `,
     },
   });
@@ -88,6 +90,7 @@ test("a downstream protocol implements its imported physical producer without a 
         export function main(): void {
           if (invoke(make()) !== 11) throw new Error("imported producer");
         }
+      main();
       `,
     },
   });

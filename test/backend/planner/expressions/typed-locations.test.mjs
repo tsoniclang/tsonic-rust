@@ -15,8 +15,8 @@ for (const surfaces of [undefined, ["js"]]) {
   test(`read-free pointer views retain aliases and optional ownership in ${surfaces?.[0] ?? "native"} source`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin" } },
-      files: { ...pointerViewFiles, "index.ts": `${pointerViewFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("pointer view contract"); }` },
+      files: { ...pointerViewFiles, "index.ts": (`${pointerViewFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("pointer view contract"); }` + "\nmain();\n") },
     });
     assertNoTargetDiagnostics(result.diagnostics);
     assert.match(artifactText(result, "src/index.rs"), /base\.try_view\(/u);
@@ -37,6 +37,7 @@ export function check(left: Address | undefined, right: Address | undefined): bo
   return same(pass(left), pass(right)) && hashrawptr(left) === hashrawptr(right);
 }
 export function main(): void { if (!check(undefined, undefined)) throw new Error("raw identity"); }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -176,6 +177,7 @@ export function main(): void {
   const read = (): string => value;
   check(read() === "[[[");
 }
+main();
 `,
     },
   });
@@ -211,6 +213,7 @@ export function main(): void {
   value = "second";
   check(read() === "second");
 }
+main();
 `,
     },
   });
@@ -313,6 +316,7 @@ export function main(): void {
   check(equalptr<int32>(undefined, undefined));
   check(updateParameter(8) === 9);
 }
+main();
 `,
     },
   });
@@ -380,6 +384,7 @@ export function main(): void {
   check(wide++ === 9007199254740993n);
   check(++wide === 9007199254740995n);
 }
+main();
 `,
     },
   });
@@ -439,6 +444,7 @@ export function main(): void {
   check(loadptr(first) === 2);
   check(equalptr(first, second));
 }
+main();
 `,
     },
   });
@@ -526,6 +532,7 @@ export function main(): void {
   check(loadptr(alias).length === 2);
   check(values.includes(2));
 }
+main();
 `,
     },
   });
@@ -559,6 +566,7 @@ export function main(): void {
   check(loadptr(alias).x === 6);
   check(loadptr(alias).y === 8);
 }
+main();
 `,
     },
   });
@@ -616,6 +624,7 @@ export function main(): void {
   check(values[0].y === 9);
   check(values[1].x === 5);
 }
+main();
 `,
     },
   });
@@ -666,6 +675,7 @@ export function main(): void {
   check(pair.left.x === 11);
   check(pair.right.y === 41);
 }
+main();
 `,
     },
   });
@@ -715,6 +725,7 @@ export function main(): void {
     throw new Error("empty-object pointer identity");
   }
 }
+main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("typed-location-empty-identity", result.artifacts, { run: true });

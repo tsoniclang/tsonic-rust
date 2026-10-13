@@ -9,9 +9,9 @@ for (const surfaces of [[], ["js"]]) {
     const name = `source_native_callees_${surfaces[0] ?? "native"}`;
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { ...sourceNativeCalleeFiles, "index.ts": `${sourceNativeCalleeFiles["index.ts"]}
+      files: { ...sourceNativeCalleeFiles, "index.ts": (`${sourceNativeCalleeFiles["index.ts"]}
 export function main(): void { if (!run()) throw new Error("native callee dispatch"); }
-` } });
+` + "\nmain();\n") } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
     const executed = validateGeneratedProject(name, result.artifacts, { run: true });
     assert.equal(executed.status, 0, executed.stderr);

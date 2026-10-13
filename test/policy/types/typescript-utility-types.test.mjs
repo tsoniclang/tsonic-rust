@@ -217,4 +217,5 @@ export function main(): void {
   check(greeting() === "Hello");
   check(subject() === "world");
 }
+main();
 `;

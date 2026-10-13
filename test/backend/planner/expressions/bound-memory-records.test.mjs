@@ -11,8 +11,8 @@ for (const surfaces of [undefined, ["js"]]) {
     const files = emptyMemoryRecordProofFiles(surfaces?.includes("js") === true);
     const { result } = compileRust({ surfaces, capabilities: [memoryAbiCapability("rust")],
       target: { id: "rust", options: { outputType: "bin", crateName: "empty_memory_records" } },
-      files: { ...files, "index.ts": `${files["index.ts"]}
-export function main(): void { if (!run()) throw new Error("empty bound record contract"); }` },
+      files: { ...files, "index.ts": (`${files["index.ts"]}
+export function main(): void { if (!run()) throw new Error("empty bound record contract"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject(`empty-memory-records-${surfaces?.[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);
@@ -26,8 +26,8 @@ for (const valueRepresentation of [false, true]) {
       const files = boundMemoryRecordProofFiles(valueRepresentation);
       const { result } = compileRust({ surfaces, capabilities: [memoryAbiCapability("rust")],
         target: { id: "rust", options: { outputType: "bin", crateName: "bound_memory_records" } },
-        files: { ...files, "index.ts": `${files["index.ts"]}
-export function main(): void { if (!run()) throw new Error("live bound record contract"); }` },
+        files: { ...files, "index.ts": (`${files["index.ts"]}
+export function main(): void { if (!run()) throw new Error("live bound record contract"); }` + "\nmain();\n") },
       });
       assert.deepEqual(result.diagnostics, []);
       assert.equal(validateGeneratedProject(`bound-records-${label}`, result.artifacts, { run: true }).status, 0);

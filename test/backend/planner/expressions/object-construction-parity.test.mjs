@@ -48,6 +48,7 @@ export function main(): void {
   check(point.x === 3);
   check(point.y === 8);
 }
+main();
 `,
     },
   });

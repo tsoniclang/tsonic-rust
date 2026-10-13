@@ -17,7 +17,7 @@ for (const { surfaces, parenthesized } of cases) {
       : nestedUnionProjectionFiles["index.ts"];
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
       ...nestedUnionProjectionFiles,
-      "index.ts": entry + '\nexport function main(): void { if (!run()) throw new Error("nested union projections"); }',
+      "index.ts": entry + '\nexport function main(): void { if (!run()) throw new Error("nested union projections"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.find(artifact => artifact.path === "src/index.rs").text;

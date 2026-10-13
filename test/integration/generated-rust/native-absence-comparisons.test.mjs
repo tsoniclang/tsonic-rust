@@ -10,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": nativeAbsenceComparisonSource +
-        '\nexport function main(): void { if (!run()) throw new Error("native absence comparisons"); }' },
+        '\nexport function main(): void { if (!run()) throw new Error("native absence comparisons"); }\nmain();\n' },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5)
       .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));

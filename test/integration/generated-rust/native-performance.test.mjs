@@ -20,6 +20,7 @@ export function main(): void {
   check(text.rfind("é") === 3);
   check(text.find("missing") === undefined);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -50,6 +51,7 @@ export async function main(): Promise<void> {
   if (forward(value) !== 9 || retained() !== value || localRecord() !== 8 ||
       await text() !== "result") throw new Error("native ownership contract");
 }
+await main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -105,6 +107,7 @@ export function main(): void {
   check(invoke(retaining, value) === 9);
   check(retaining.value === value);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -135,6 +138,7 @@ export function main(): void {
   check(last === "😀" && appended === "tail");
   check(flow_input === "kept" && calls === 1 && values.length === 3);
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);

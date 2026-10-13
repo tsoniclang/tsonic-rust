@@ -87,6 +87,7 @@ for (const surfaces of [[], ["js"]]) {
           check(call(amount => amount * 2) === 8);
           check(call(undefined) === -1);
         }
+      main();
       ` },
     });
     assertNoTargetDiagnostics(result.diagnostics);
@@ -106,6 +107,7 @@ test("recursive array unions retain checker-selected inherited members", { timeo
         const value = keep("preserved");
         check(typeof value === "string" && value === "preserved");
       }
+    main();
     ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

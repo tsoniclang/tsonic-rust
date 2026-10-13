@@ -11,7 +11,7 @@ import { freshArraySpreadSource, freshArraySpreadJsSource, freshArraySpreadCostS
 for (const surfaces of [[], ["js"]]) {
   test(`fresh dense spread uses exact element conversions on ${surfaces.length === 0 ? "native" : "JS"} storage`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": (surfaces.length === 0 ? freshArraySpreadSource : freshArraySpreadJsSource) + '\nexport function main(): void { if (!run()) throw new Error("fresh spread"); }' } });
+      files: { "index.ts": (surfaces.length === 0 ? freshArraySpreadSource : freshArraySpreadJsSource) + '\nexport function main(): void { if (!run()) throw new Error("fresh spread"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = result.artifacts.filter(artifact => artifact.path.endsWith("index.rs")).map(artifact => artifact.text).join("\n");
     assert.ok(source.length > 0);

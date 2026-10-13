@@ -65,6 +65,7 @@ export function main(): void {
   ok(processDefault.stdout.fd === stdout.fd);
   ok(processDefault.stderr.fd === stderr.fd);
 }
+main();
 `,
     },
   });

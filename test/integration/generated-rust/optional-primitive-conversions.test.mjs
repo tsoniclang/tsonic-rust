@@ -7,7 +7,7 @@ import { optionalPrimitiveConversionsSource } from "../../../../tsonic/test/fixt
 
 test("optional primitive conversion retains native values, absence and API-local behavior", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": optionalPrimitiveConversionsSource + '\nexport function main(): void { if (!run()) throw new Error("optional conversion"); }' } });
+    files: { "index.ts": optionalPrimitiveConversionsSource + '\nexport function main(): void { if (!run()) throw new Error("optional conversion"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const generated = artifactText(result, "src/index.rs");
   const integer = generated.split("fn integer(")[1]?.split(/\n(?:pub(?:\([^)]*\))? )?fn /u)[0];

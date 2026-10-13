@@ -12,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`optional invocation inputs retain exact native width, loans and laziness in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": optionalInvocationInputsSource + '\nexport function main(): void { if (!run()) throw new Error("optional invocation input"); }' } });
+      files: { "index.ts": optionalInvocationInputsSource + '\nexport function main(): void { if (!run()) throw new Error("optional invocation input"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");
     assert.match(source, /Option<&impl\s+(?:for<[^>]+>\s+)?rt::CallableImplementation/u);

@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 for (const surfaces of [[], ["js"]]) for (const example of receiverFieldStorageCases) {
   test(`live stored fields preserve direct structural views and reentrancy: ${example.name} in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": example.source + '\nexport function main(): void { if (!run()) throw new Error("retained structural field"); }' } });
+      files: { "index.ts": example.source + '\nexport function main(): void { if (!run()) throw new Error("retained structural field"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     assert.equal(/unsafe\s*\{|MaybeUninit|assume_init|transmute|downcast_unchecked/u.test(rustSourceText(result)), false);
     validateGeneratedProject(`receiver-field-storage-${example.name}-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
@@ -16,7 +16,7 @@ for (const surfaces of [[], ["js"]]) for (const example of receiverFieldStorageC
 
 test("freezing an identity-preserving direct view rejects live field replacement", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": receiverFieldStorageFreezeSource + '\nexport function main(): void { if (!run()) throw new Error("retained structural freeze"); }' } });
+    files: { "index.ts": receiverFieldStorageFreezeSource + '\nexport function main(): void { if (!run()) throw new Error("retained structural freeze"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
   validateGeneratedProject("receiver-field-storage-freeze", result.artifacts, { run: true });
 });

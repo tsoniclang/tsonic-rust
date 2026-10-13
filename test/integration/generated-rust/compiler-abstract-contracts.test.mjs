@@ -34,6 +34,7 @@ export function main(): void {
   check(label(first) === "first:one" && label(second) === "second:two");
   check(count(first) === 3 && count(second) === 5 && initialized === 2);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

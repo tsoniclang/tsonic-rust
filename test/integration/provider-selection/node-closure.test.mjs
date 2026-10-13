@@ -237,6 +237,7 @@ export function main(): void {
   const errName = getSystemErrorName(-2);
   check(errName.length > 0);
 }
+main();
 `,
     },
   });
@@ -307,6 +308,7 @@ export function main(): void {
   check(env[name] === undefined);
   if (previous !== undefined) env[name] = previous;
 }
+main();
 `,
     },
   });

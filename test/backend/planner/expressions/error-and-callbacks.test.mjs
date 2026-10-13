@@ -20,6 +20,7 @@ export function main(): void {
   catch { caught = true; }
   check(caught);
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);
@@ -47,6 +48,7 @@ export function main(): void {
   const error = new NamedError("failure");
   check(error.name === "NamedError" && error.message === "failure");
 }
+main();
 `,
     },
   });
@@ -87,6 +89,7 @@ export function main(): void {
   check(read(true) === "value=42");
   check(read(false).includes("ordinary"));
 }
+main();
 `,
     },
   });
@@ -189,6 +192,7 @@ export function main(): void {
   }
   check(caught && visits === 2);
 }
+main();
 `,
     },
   });
@@ -395,6 +399,7 @@ export function main(): void {
   }
   check(manifest.includes("final_proof"));
 }
+main();
 `,
     },
   });
@@ -492,6 +497,7 @@ export function main(): void {
   check(readThroughBase(new Inherited(41)) === 41);
   check(new Initialized().value === 40);
 }
+main();
 `,
     },
   });
@@ -575,6 +581,7 @@ export function main(): void {
   check(recover(true) === "domain");
   check(recover(false) === undefined);
 }
+main();
 `,
     },
   });
@@ -684,6 +691,7 @@ export function main(): void {
     check(true);
   }
 }
+main();
 `,
     },
   });

@@ -26,6 +26,8 @@ test("Rust target owns one complete immutable starter descriptor", () => {
       "  }",
       "}",
       "",
+      "main();",
+      "",
     ].join("\n"),
   }]);
   assert.deepEqual(starter.requirements[0].checks.map(({ command }) => command), [

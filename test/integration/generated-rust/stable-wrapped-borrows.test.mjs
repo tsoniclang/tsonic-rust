@@ -58,6 +58,7 @@ export function main(): void {
     mutated("17") !== 19 || ordered("17") !== 1729 || produced("17") !== 170 ||
     callback() !== 23 || callback() !== 23 || changed("owned") !== 1) throw new Error("wrapped borrow observations");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

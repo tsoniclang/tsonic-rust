@@ -50,6 +50,7 @@ export function main(): void {
   check(current === 7);
   check(Second.value === 3);
 }
+main();
 `,
     },
   });
@@ -84,6 +85,7 @@ export function main(): void {
   ImportedCounter.total += 5;
   check(ImportedCounter.total === 15);
 }
+main();
 `,
     },
   });
@@ -120,6 +122,7 @@ export function main(): void {
   ExactOwner.value = 11;
   check(read() === 11);
 }
+main();
 `,
     },
   });

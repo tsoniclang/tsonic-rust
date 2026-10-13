@@ -46,6 +46,7 @@ export function main(): void {
   check(crypto.getRandomValues(selectedWords) === selectedWords);
   check(webcrypto.getRandomValues(selectedWords) === selectedWords);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -65,6 +66,7 @@ import { check } from "@acme/testing";
 export function main(): void {
   check(new TextDecoder().decode(Buffer.from("é😀")) === "é😀");
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

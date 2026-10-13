@@ -50,6 +50,7 @@ export function main(): void {
   unlinkSync(path);
   rmSync(directory, { recursive: true });
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

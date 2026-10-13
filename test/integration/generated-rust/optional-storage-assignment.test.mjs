@@ -8,7 +8,7 @@ import { optionalStorageAssignmentSource } from "../../../../tsonic/test/fixture
 for (const surfaces of [[], ["js"]]) {
   test(`optional field declarations retain native absence, widths and identity (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": optionalStorageAssignmentSource + '\nexport function main(): void { if (!run()) throw new Error("optional storage assignment"); }' } });
+      files: { "index.ts": optionalStorageAssignmentSource + '\nexport function main(): void { if (!run()) throw new Error("optional storage assignment"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`optional-storage-assignment-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
   });

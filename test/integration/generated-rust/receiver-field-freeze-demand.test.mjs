@@ -13,7 +13,7 @@ for (const { name, declarations, invocation } of retainedFieldFreezeOrigins)
   test(`retained direct writes observe ${name} freeze without guarding reads`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": retainedFieldFreezeOriginSource(declarations, invocation) +
-        '\nexport function main(): void { if (!run()) throw new Error("retained freeze origin"); }' } });
+        '\nexport function main(): void { if (!run()) throw new Error("retained freeze origin"); }\nmain();\n' } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
     validateGeneratedProject(`retained-field-freeze-origin-${name}`, result.artifacts, { run: true });
   });
@@ -21,7 +21,7 @@ for (const { name, declarations, invocation } of retainedFieldFreezeOrigins)
 test("generic inherited field captures observe freeze through the exact structural instantiation", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": retainedFieldGenericFreezeSource +
-      '\nexport function main(): void { if (!run()) throw new Error("generic inherited freeze"); }' } });
+      '\nexport function main(): void { if (!run()) throw new Error("generic inherited freeze"); }\nmain();\n' } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
   validateGeneratedProject("retained-field-freeze-generic-inherited", result.artifacts, { run: true });
 });

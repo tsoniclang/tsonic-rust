@@ -9,9 +9,9 @@ test("bigint switches preserve wide equality, evaluation order and fallthrough",
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "bigint_switch" } },
-    files: { "index.ts": `${bigintSwitchSource}
+    files: { "index.ts": (`${bigintSwitchSource}
       import { check } from "@acme/testing";
-      export function main(): void { check(run()); }` },
+      export function main(): void { check(run()); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("bigint-switch", result.artifacts, { run: true });
@@ -35,6 +35,7 @@ export function reach(limit: int32): int32 {
 export function main(): void {
   void reach(3);
 }
+main();
 `,
     },
   });
@@ -76,6 +77,7 @@ export function main(): void {
   if (count(values) !== 2) throw new Error("constant loop count failed");
   visit(values);
 }
+main();
 `,
     },
   });
@@ -109,6 +111,7 @@ export function main(): void {
     throw new Error("callable local binding failed");
   }
 }
+main();
 `,
     },
   });

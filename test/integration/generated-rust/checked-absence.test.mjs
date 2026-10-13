@@ -8,7 +8,7 @@ import { checkedAbsenceSource } from "../../../../tsonic/test/fixtures/checked-a
 test("checked array values and loose absence tests use the canonical native absence", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": checkedAbsenceSource + '\nexport function main(): void { if (!run()) throw new Error("checked absence"); }',
+      "index.ts": checkedAbsenceSource + '\nexport function main(): void { if (!run()) throw new Error("checked absence"); }\nmain();\n',
     } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("checked-absence", result.artifacts, { run: true });

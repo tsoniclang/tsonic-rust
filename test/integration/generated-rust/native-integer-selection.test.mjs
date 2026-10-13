@@ -31,7 +31,7 @@ test("numeric analysis seals integer joins and native counters while retaining e
 test("native counters, conditional joins and integer floor preserve exact carriers and fractional controls", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_integer_selection" } },
-    files: { "index.ts": nativeIntegerSelectionSource + '\nexport function main(): void { if (!run()) throw new Error("native numeric selection"); }' },
+    files: { "index.ts": nativeIntegerSelectionSource + '\nexport function main(): void { if (!run()) throw new Error("native numeric selection"); }\nmain();\n' },
   });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
@@ -59,6 +59,7 @@ test("floor retains a wide integer behind a provider's number declaration", { ti
         const rounded = Math.floor(size);
         if (rounded !== size || rounded <= 0) throw new Error("wide integer floor");
       }
+    main();
     ` },
   });
   assert.deepEqual(result.diagnostics, []);

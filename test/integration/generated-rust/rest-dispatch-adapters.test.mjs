@@ -41,6 +41,7 @@ export function run(): boolean {
     base.fixed("a", "b") === "ab" && base.optional() === 4 && base.optional(7, 3) === 10;
 }
 export function main(): void { check(run()); }
+main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = artifactText(result, "src/index.rs");
@@ -87,6 +88,7 @@ export function run(): boolean {
     abstract.head("x", "y") === "x" && structural.head(item, new Item()) === item;
 }
 export function main(): void { check(run()); }
+main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("rest-dispatch-generics", result.artifacts, { run: true });

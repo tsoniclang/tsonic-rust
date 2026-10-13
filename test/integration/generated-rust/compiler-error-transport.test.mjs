@@ -17,8 +17,8 @@ for (const surfaces of [[], ["js"]]) {
   test(`caught builtin Errors retain identity and stack in the ${surfaces.length === 0 ? "native" : "JS"} profile`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "caught_errors" } },
-      files: { ...caughtErrorProofFiles, "index.ts": `${caughtErrorProofFiles["index.ts"]}
-export function main(): void { if (!run()) throw new Error("caught Error transport"); }` },
+      files: { ...caughtErrorProofFiles, "index.ts": (`${caughtErrorProofFiles["index.ts"]}
+export function main(): void { if (!run()) throw new Error("caught Error transport"); }` + "\nmain();\n") },
     });
     assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(validateGeneratedProject(`caught-errors-${surfaces.length}`, result.artifacts, { run: true }).status, 0);
@@ -93,6 +93,7 @@ export function main(): void {
   }
   check(matches === 2);
 }
+main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

@@ -12,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`class callback factories preserve native non-Clone borrowed inputs without retaining unused fields in ${profile}`,
     { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-        files: { "index.ts": recursiveCallbackEnvironmentSource } });
+        files: { "index.ts": (recursiveCallbackEnvironmentSource + "\nmain();\n") } });
       assert.equal(result.diagnostics.length, 0,
         result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
       const directory = writeGeneratedProject(`recursive-callback-environment-${profile}`, result.artifacts);

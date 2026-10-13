@@ -96,6 +96,7 @@ export function main(): void {
   counter.advance();
   check(counter.current() === 1);
 }
+main();
 `,
     },
   });
@@ -136,6 +137,7 @@ export function main(): void {
   check(cursor.next() === "a");
   check(cursor.next() === "b");
 }
+main();
 `,
     },
   });
@@ -178,6 +180,7 @@ export function main(): void {
   check(right.x === 11 && right.y === 14);
   check(calls === 2);
 }
+main();
 `,
     },
   });
@@ -228,6 +231,7 @@ export function main(): void {
   check(left.increment() === 2);
   check(right.current() === 9);
 }
+main();
 `,
     },
   });
@@ -305,6 +309,7 @@ export function main(): void {
   check(singleton.readCount() === 4);
   check(singleton.writeCount() === 4);
 }
+main();
 `,
     },
   });
@@ -416,6 +421,7 @@ export function main(): void {
   check(sequence === 3214);
   check(implicit.value === 4);
 }
+main();
 `,
     },
   });
@@ -565,6 +571,7 @@ export function main(): void {
   check(mode === Mode.On);
   check(mode !== Mode.Off);
 }
+main();
 `,
       "counter.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -700,6 +707,7 @@ export function main(): void {
   check(box(boxed) === 44);
   check(boxed[0] === 44);
 }
+main();
 `,
     },
   });
@@ -734,6 +742,7 @@ export function main(): void {
   bump(values);
   check(first(values) === 2);
 }
+main();
 `,
     },
   });
@@ -771,6 +780,7 @@ export function main(): void {
   const holder = new Holder([30, 40]);
   check(holder.items[1] === 40);
 }
+main();
 `,
     },
   });

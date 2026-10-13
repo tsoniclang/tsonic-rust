@@ -115,6 +115,7 @@ export function main(): void {
   check(encoded === "a%20b%2F%F0%9F%99%82");
   check(decodeURIComponent(encoded) === "a b/🙂");
 }
+main();
 `,
     },
   });

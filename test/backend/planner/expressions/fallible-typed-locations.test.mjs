@@ -13,8 +13,8 @@ for (const [name, files] of [["files", falliblePointerFiles], ["packages", falli
       const { result } = compileRust({ surfaces,
         sourcePackages: name === "packages" ? falliblePointerPackageGraph : undefined,
         target: { id: "rust", options: { outputType: "bin", crateName: "fallible_locations" } },
-        files: { ...files, "index.ts": `${files["index.ts"]}
-export function main(): void { if (!run()) throw new Error("pointer callback contract"); }` },
+        files: { ...files, "index.ts": (`${files["index.ts"]}
+export function main(): void { if (!run()) throw new Error("pointer callback contract"); }` + "\nmain();\n") },
       });
       assert.deepEqual(result.diagnostics, []);
       assert.equal(result.artifacts.filter(artifact => artifact.path.endsWith("Cargo.toml")).length, name === "packages" ? 2 : 1);

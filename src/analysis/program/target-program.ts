@@ -131,7 +131,15 @@ export function analyzeRustTargetProgram(
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
 
   const classValues = context.classValues.seal(context);
-  const moduleInitialization = createRustModuleInitializationPlan(context, classValues);
+  const moduleInitialization = createRustModuleInitializationPlan(context, classValues, {
+    outputType: configuration.outputType,
+    projectRoot: input.paths.projectRoot,
+    entryPoint: input.project.entryPoint,
+  });
+  if (moduleInitialization.issues.length > 0) return rejectedTargetStage(moduleInitialization.issues.map(issue => ({
+    code: issue.code, category: "error" as const, source: "tsonic-rust", sourceNode: issue.node,
+    message: issue.message, evidence: issue.evidence,
+  })));
   const objectRepresentations = context.objectRepresentations.seal();
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,

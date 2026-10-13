@@ -10,7 +10,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 for (const surfaces of [[], ["js"]]) test(`public type-query frame inputs preserve native owners in ${surfaces[0] ?? "native"}`,
   { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": publicFrameInputsSource } });
+      files: { "index.ts": (publicFrameInputsSource + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`public-frame-inputs-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
     const directory = writeGeneratedProject(`public-frame-input-cost-${surfaces[0] ?? "native"}`, result.artifacts);

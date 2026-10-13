@@ -7,9 +7,9 @@ import { tupleSatisfiesSource, invalidTupleSatisfiesSources } from "../../../../
 test("checked satisfies tuples preserve distinct optional elements and evaluation order", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "tuple_satisfies" } },
-    files: { "index.ts": `${tupleSatisfiesSource}
+    files: { "index.ts": (`${tupleSatisfiesSource}
       import { check } from "@acme/testing";
-      export function main(): void { check(run()); }` },
+      export function main(): void { check(run()); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("tuple-satisfies", result.artifacts, { run: true });

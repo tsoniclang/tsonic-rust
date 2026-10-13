@@ -47,6 +47,7 @@ test("pointer recursion guards preserve nominal recursion and independent finite
         const right = loadptr(second());
         if (item.next !== undefined || left() !== 7 || right() !== 7) throw new Error("pointer carrier recursion");
       }
+    main();
     ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -55,7 +56,7 @@ test("pointer recursion guards preserve nominal recursion and independent finite
 
 test("native array storage preserves strided element aliases and variable replacement", { timeout: 300_000 }, () => {
   const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")],
-    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": nativeArrayProofSource } });
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (nativeArrayProofSource + "\nmain();\n") } });
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /NativeArray/u);
   validateGeneratedProject("native-array-aliases", result.artifacts, { run: true });
@@ -63,7 +64,7 @@ test("native array storage preserves strided element aliases and variable replac
 
 test("native field storage retains aliases, ordinary writes and object replacement", { timeout: 300_000 }, () => {
   const { result } = compileRust({ capabilities: [memoryAbiCapability("rust")],
-    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": nativeFieldProofSource } });
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": (nativeFieldProofSource + "\nmain();\n") } });
   assert.deepEqual(result.diagnostics, []);
   assert.match(artifactText(result, "src/index.rs"), /allocate_native_location/u);
   validateGeneratedProject("native-field-aliases", result.artifacts, { run: true });
@@ -75,6 +76,7 @@ test("native locations retain original local storage, allocation aliases and lif
     target: { id: "rust", options: { outputType: "bin" } },
     files: { "index.ts": nativeLocationProofSource + `
 export function main(): void { if (!run()) throw new Error("native location aliasing"); }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -118,6 +120,7 @@ test("cross-file equivalent layouts preserve one native backing location", { tim
           return loadptr(right) === 17 && equalptr(pointer, left) && equalrawptr(first, second);
         }
         export function main(): void { if (!run()) throw new Error("cross-file native aliasing"); }
+      main();
       `,
     },
   });
@@ -141,6 +144,7 @@ test("native array value reads clone proven owned handles while storage writes r
           throw new Error("native index value/storage ownership");
         }
       }
+    main();
     ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -228,6 +232,7 @@ test("huge fixed-array metadata observations erase before native value admission
             throw new Error("fixed-array metadata observation");
           }
         }
+      main();
       `,
     },
   });
@@ -310,6 +315,7 @@ export function main(): void {
   const value = loadptr(pointer);
   storeptr(pointer, value);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`native async result carriers survive imported re-exports on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { ...nativeAsyncResultOwnershipFiles, "index.ts": nativeAsyncResultOwnershipFiles["index.ts"] +
-        '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native async result ownership"); }' } });
+        '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("native async result ownership"); }\nawait main();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /\bi64\b/u);

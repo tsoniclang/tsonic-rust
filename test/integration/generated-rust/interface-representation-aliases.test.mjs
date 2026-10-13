@@ -26,8 +26,8 @@ export function main(): void {
     const files = surfaces === undefined ? interfaceRepresentationAliasNativeValueFiles : interfaceRepresentationAliasFiles;
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "cross_file_facades" } },
-      files: { ...files, "index.ts": `${files["index.ts"]}
-export function main(): void { if (!run()) throw new Error("cross-file facade backing"); }` },
+      files: { ...files, "index.ts": (`${files["index.ts"]}
+export function main(): void { if (!run()) throw new Error("cross-file facade backing"); }` + "\nmain();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.code).join(", "));
     validateGeneratedProject("cross-file-interface-facades", result.artifacts, { run: true });

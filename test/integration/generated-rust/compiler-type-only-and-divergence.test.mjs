@@ -21,6 +21,7 @@ export function main(): void {
   second.value = 9;
   check(first.read() === 9);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
@@ -61,6 +62,7 @@ export function main(): void {
   try { inverse<number>(true, 3); } catch { caught = true; }
   check(caught && failures === 2);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

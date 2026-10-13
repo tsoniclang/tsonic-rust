@@ -11,7 +11,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 for (const surfaces of [[], ["js"]]) test(`recursive field transport retains a live constructor activation in ${surfaces[0] ?? "native"}`,
   { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": recursiveFieldConstructionSource } });
+      files: { "index.ts": (recursiveFieldConstructionSource + "\nmain();\n") } });
     assertNoTargetDiagnostics(result.diagnostics);
     const source = artifactText(result, "src/index.rs");
     assert.equal(source.includes("construction_frame"), true, "the frame exists before the checked callback transport");

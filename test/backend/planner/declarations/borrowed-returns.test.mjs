@@ -62,7 +62,9 @@ test("fallible lexical identity loans retain native error and call evaluation or
       let caught = false;
       try { if (read("fail") !== "fail") throw new Error("unexpected"); } catch { caught = true; }
       if (!caught || produced !== 1 || observed !== 2) throw new Error("evaluation order");
-    }` } });
+    }
+main();
+` } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
   const generated = artifactText(result, "src/index.rs");
   assert.equal(/fn read<'input>\([^)]*: &'input str[^)]*\) -> Result<&'input str,/u.test(generated), true,

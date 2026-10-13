@@ -73,6 +73,7 @@ export function main(): void {
   try { byte(256); } catch { rejected = true; }
   check(rejected);
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

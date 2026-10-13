@@ -12,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`discarded definitions preserve captured initialization, invoked effects and zero native allocation (${lane})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": discardedCallableDefinitionsSource + '\nexport function main(): void { if (!run()) throw new Error("discarded definition effects"); }' } });
+      files: { "index.ts": discardedCallableDefinitionsSource + '\nexport function main(): void { if (!run()) throw new Error("discarded definition effects"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const directory = writeGeneratedProject(`discarded-lambda-definitions-${lane}`, result.artifacts);
     runCargo(directory, ["generate-lockfile", "--offline"]);
@@ -37,7 +37,7 @@ for (const surfaces of [[], ["js"]]) {
   });
   test(`an absence default retains and invokes its required lambda (${lane})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": retainedDefaultCallableSource + '\nexport function main(): void { if (!run()) throw new Error("retained default effects"); }' } });
+      files: { "index.ts": retainedDefaultCallableSource + '\nexport function main(): void { if (!run()) throw new Error("retained default effects"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const directory = writeGeneratedProject(`retained-default-lambda-${lane}`, result.artifacts);
     runCargo(directory, ["generate-lockfile", "--offline"]);

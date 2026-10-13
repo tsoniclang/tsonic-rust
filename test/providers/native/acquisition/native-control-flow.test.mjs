@@ -120,9 +120,9 @@ fn native_iteration_results() {
   runCargo(root, ["test", "--locked", "--offline"]);
 });
 
-test("native Result entrypoint uses native Termination without an additional error carrier", { timeout: 300_000 }, () => {
+test("native Result exports support user-owned Termination startup without an additional error carrier", { timeout: 300_000 }, () => {
   const { result } = compileRustThroughTargetPack({
-    target: { id: "rust", options: { outputType: "bin", crateName: "native_result_entry" } },
+    target: { id: "rust", options: { outputType: "lib", crateName: "native_result_entry" } },
     files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import { Result } from "@tsonic/rust/core/result.js";
@@ -135,10 +135,12 @@ export function main(): Result<void, int32> {
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
-  const output = artifactText(result, "src/main.rs");
-  assert.match(output, /std::process::Termination::report/u);
+  const output = artifactText(result, "src/index.rs");
+  assert.equal(result.artifacts.some(artifact => artifact.path === "src/main.rs"), false);
+  assert.match(output, /fn main\(\) -> Result<\(\), i32>/u);
   assert.doesNotMatch(output, /TsonicError|TsonicResult|Box::|panic!|unwrap\(/u);
-  validateGeneratedProject("native-result-entry", result.artifacts, { run: true });
+  const nativeDriver = "fn main() -> Result<(), i32> {\n    native_result_entry::index::main()\n}\n";
+  validateGeneratedProject("native-result-entry", [...result.artifacts, { path: "src/main.rs", text: nativeDriver }], { run: true });
 });
 
 test("native propagation rejects non-Result enclosing returns before emission", () => {

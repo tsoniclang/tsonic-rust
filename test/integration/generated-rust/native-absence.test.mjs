@@ -7,7 +7,7 @@ import { nativeAbsenceSource, nativeAbsenceJsSource, nativeAbsenceArraySource, n
 test("JSON absence selections retain every authored argument effect", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": `${nativeAbsenceJsonSource}\nexport function main(): void { if (!run()) throw new Error("JSON absence"); }` },
+    files: { "index.ts": (`${nativeAbsenceJsonSource}\nexport function main(): void { if (!run()) throw new Error("JSON absence"); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("native-absence-json", result.artifacts, { run: true });
@@ -16,7 +16,7 @@ test("JSON absence selections retain every authored argument effect", { timeout:
 test("generic absence arrays retain native storage and aliases", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_absence_arrays" } },
-    files: { "index.ts": `${nativeAbsenceArraySource}\nexport function main(): void { if (!run()) throw new Error("native absence arrays"); }` },
+    files: { "index.ts": (`${nativeAbsenceArraySource}\nexport function main(): void { if (!run()) throw new Error("native absence arrays"); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("native-absence-js-arrays", result.artifacts, { run: true });
@@ -27,7 +27,7 @@ test("generic absence arrays retain native storage and aliases", { timeout: 300_
 test("JS surface absence keeps membership and native values", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "native_absence_collections" } },
-    files: { "index.ts": `${nativeAbsenceJsSource}\nexport function main(): void { if (!run()) throw new Error("native absence collections"); }` },
+    files: { "index.ts": (`${nativeAbsenceJsSource}\nexport function main(): void { if (!run()) throw new Error("native absence collections"); }` + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   validateGeneratedProject("native-absence-js-collections", result.artifacts, { run: true });
@@ -37,7 +37,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`one native absence preserves values, aliases and evaluation (${surfaces[0] ?? "native"})`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "native_absence" } },
-      files: { "index.ts": `${nativeAbsenceSource}\nexport function main(): void { if (!run()) throw new Error("native absence"); }` },
+      files: { "index.ts": (`${nativeAbsenceSource}\nexport function main(): void { if (!run()) throw new Error("native absence"); }` + "\nmain();\n") },
     });
     assert.deepEqual(result.diagnostics, []);
     validateGeneratedProject(`native-absence-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });

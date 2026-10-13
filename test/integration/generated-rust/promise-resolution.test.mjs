@@ -24,6 +24,7 @@ test("Promise.resolve preserves exact values, absence, evaluation and existing p
         try { await Promise.resolve(fail()); } catch { rejected = true; }
         if (!rejected) throw new Error("promise rejection");
       }
+    await main();
     ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);

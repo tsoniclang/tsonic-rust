@@ -44,6 +44,7 @@ test("void-bearing promise returns retain one native absence and precise complet
       return calls.length === 11;
     }
     export async function main(): Promise<void> { if (!await run()) throw new Error("optional promise completion"); }
+  await main();
   ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("optional-task-results", result.artifacts, { run: true });

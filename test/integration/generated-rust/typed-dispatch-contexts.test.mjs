@@ -19,6 +19,7 @@ test("provider selection without dispatch demand initializes and emits no root",
   const result = compile("no-demand", `
     import { constructions } from "@acme/dispatch";
     export function main(): void { if (constructions() !== 0) throw new Error("unexpected root"); }
+  main();
   `);
   assert.doesNotMatch(result.artifacts.map(artifact => artifact.text).join("\n"), /__tsonic_dispatch_|static dispatch_root_\d/u);
 });
@@ -39,6 +40,7 @@ test("lazy runtime-domain roots preserve Error identity and uninvoked tasks", { 
       poll();
       if (!observed || constructions() !== 1) throw new Error("later work lost");
     }
+  main();
   `);
   const support = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
     .map(artifact => artifact.text).join("\n");
@@ -58,6 +60,7 @@ test("component roots retain nominal failures and exact native int64 payloads", 
       try { poll(); } catch (error) { if (error !== failure) throw new Error("nominal identity lost"); caught = true; }
       if (!caught || failure.value !== 9007199254740993n) throw new Error("payload rounded");
     }
+  main();
   `);
   const support = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
     .map(artifact => artifact.text).join("\n");
@@ -76,6 +79,7 @@ test("composed contexts share one physical root and retain reentrant work for th
       poll();
       if (!observed || constructions() !== 1) throw new Error("reentrant work lost");
     }
+  main();
   `, { composed: true });
   const support = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))
     .map(artifact => artifact.text).join("\n");
@@ -93,6 +97,7 @@ test("authored fallible argument evaluation precedes native root initialization"
       try { enqueue(rejected()); } catch (error) { caught = true; }
       if (!caught || constructions() !== 0) throw new Error("native root changed source evaluation");
     }
+  main();
   `);
 });
 
@@ -116,6 +121,7 @@ test("receiver dispatch inputs retain native mutation source order and callback 
       }
       if (!caught) throw new Error("receiver callback lost");
     }
+  main();
   `);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /\.enqueue\(/u);

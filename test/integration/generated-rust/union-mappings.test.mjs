@@ -50,6 +50,7 @@ export function run(): boolean {
 }
 
 export function main(): void { check(run()); }
+main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("union-mappings", result.artifacts, { run: true });

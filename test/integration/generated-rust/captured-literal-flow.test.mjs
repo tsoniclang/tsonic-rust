@@ -9,8 +9,8 @@ for (const surfaces of [[], ["js"]]) {
     const name = `captured_literal_flow_${surfaces[0] ?? "native"}`;
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: name } },
-      files: { "index.ts": `${capturedLiteralFlowSource}
-        export function main(): void { if (!run()) throw new Error("captured literal flow"); }` },
+      files: { "index.ts": (`${capturedLiteralFlowSource}
+        export function main(): void { if (!run()) throw new Error("captured literal flow"); }` + "\nmain();\n") },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     validateGeneratedProject(name, result.artifacts, { run: true });

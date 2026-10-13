@@ -10,7 +10,7 @@ for (const surfaces of [[], ["js"]]) {
   for (const [name, sourceText] of [["string", optionalOverloadedMethodSource], ["broad", optionalOverloadedBroadMethodSource]]) {
     test(`optional overloaded ${name} methods retain selected native calls in ${lane}`, { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-        files: { "index.ts": sourceText + '\nexport function main(): void { if (!run()) throw new Error("optional overload"); }' } });
+        files: { "index.ts": sourceText + '\nexport function main(): void { if (!run()) throw new Error("optional overload"); }\nmain();\n' } });
       assertNoTargetDiagnostics(result.diagnostics);
       const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
       assert.doesNotMatch(output, /invoke_dynamic|read_dynamic_slot/u);

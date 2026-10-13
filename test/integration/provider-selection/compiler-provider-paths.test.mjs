@@ -44,6 +44,7 @@ export function main(): void {
   rmSync(path);
   rmSync(rootBytes, { recursive: true, force: true });
 }
+main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);

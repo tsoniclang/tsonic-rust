@@ -12,7 +12,7 @@ for (const surfaces of [[], ["js"]]) {
     test(`${name} executes with the shared source contract (${profile})`, { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces, packages: [acmeTestingPackage()],
         target: { id: "rust", options: { outputType: "bin", crateName: name.replaceAll("-", "_") } },
-        files: { "index.ts": `${source}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` },
+        files: { "index.ts": (`${source}\nimport { check } from "@acme/testing"; export function main(): void { check(run()); }` + "\nmain();\n") },
       });
       assert.deepEqual(result.diagnostics, []);
       validateGeneratedProject(`${name}-${profile}`, result.artifacts, { run: true });

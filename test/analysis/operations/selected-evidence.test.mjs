@@ -194,6 +194,7 @@ export function main(): void {
   check(pick([17, 29], true) === 17);
   check(pick([17, 29], false) === 29);
 }
+main();
 `,
     },
   });
@@ -412,6 +413,7 @@ export function main(): void {
   check(selected(text) instanceof SelectedString);
   check(evaluations === 1);
 }
+main();
 `,
     },
   });
@@ -478,6 +480,7 @@ export function main(): void {
   check(readTwice(new TextValue("a")) === "aa");
   check(readAfterAssignment(new TextValue("a")) === "ab");
 }
+main();
 `,
     },
   });
@@ -543,6 +546,7 @@ export function main(): void {
   check(isAlwaysPresent("present"));
   check(\`value=\${null}\` === "value=null");
 }
+main();
 `,
     },
   });
@@ -587,6 +591,7 @@ export function main(): void {
   check(sumToArrow(4) === 10);
   check(localSumTo(4) === 10);
 }
+main();
 `,
     },
   });

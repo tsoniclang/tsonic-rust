@@ -211,6 +211,7 @@ export function main(): void {
     throw new Error("borrowed separator contract");
   }
 }
+main();
 `,
     },
   });
@@ -272,6 +273,7 @@ export function render(label: string, count: number, ok: boolean): string {
 export function main(): void {
   if (render("count", 3, true) !== "count:3:truecount%s") throw new Error("native format contract");
 }
+main();
 `,
     },
   });
@@ -356,6 +358,7 @@ export function main(): void {
   check(format("%j %j", parsed, parsed) === '{"ok":true} {"ok":true}');
   JSON.stringify(parsed);
 }
+main();
 `,
     },
   });
@@ -402,6 +405,7 @@ export function main(): void {
   const server = createServer((aliasedHandle));
   server.listen(port, "127.0.0.1", (): void => {});
 }
+main();
 `,
     },
   });
@@ -588,6 +592,7 @@ export function workers(): void {
 export function main(): void {
   workers();
 }
+main();
 `,
       "worker.ts": `
 import { parentPort, workerData } from "node:worker_threads";

@@ -8,7 +8,7 @@ import { nativeNullishRecordsSource } from "../../../../tsonic/test/fixtures/nat
 for (const surfaces of [[], ["js"]]) {
   test(`native record coalescing retains backing and lazy fallback on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: {
-      "index.ts": nativeNullishRecordsSource + '\nexport function main(): void { if (!run()) throw new Error("native nullish records"); }',
+      "index.ts": nativeNullishRecordsSource + '\nexport function main(): void { if (!run()) throw new Error("native nullish records"); }\nmain();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");

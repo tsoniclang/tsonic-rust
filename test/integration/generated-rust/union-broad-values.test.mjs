@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("native union leaves retain their broad scalar values", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": unionBroadValuesSource + '\nexport function main(): void { if (!run()) throw new Error("union broad values"); }' } });
+    files: { "index.ts": unionBroadValuesSource + '\nexport function main(): void { if (!run()) throw new Error("union broad values"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const mixed = artifactText(result, "src/index.rs").split("fn mixed(")[1]?.split(/\n(?:pub(?:\([^)]*\))? )?fn /u)[0];
   assert.ok(mixed !== undefined);

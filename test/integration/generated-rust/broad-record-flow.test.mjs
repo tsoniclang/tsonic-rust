@@ -7,7 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("guarded broad record reads preserve raw storage and array backing", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": broadRecordFlowSource + '\nexport function main(): void { if (!run()) throw new Error("broad record flow"); }' } });
+    files: { "index.ts": broadRecordFlowSource + '\nexport function main(): void { if (!run()) throw new Error("broad record flow"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /current: .*JsValue/u);
@@ -22,7 +22,7 @@ test("guarded broad record reads preserve raw storage and array backing", { time
 
 test("fresh nested broad arrays retain empty, primitive and exact integer carriers", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-    files: { "index.ts": freshBroadArraySource + '\nexport function main(): void { if (!run()) throw new Error("fresh broad arrays"); }' } });
+    files: { "index.ts": freshBroadArraySource + '\nexport function main(): void { if (!run()) throw new Error("fresh broad arrays"); }\nmain();\n' } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
   assert.match(output, /9007199254740993/u);
@@ -35,7 +35,7 @@ for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`heterogeneous native arrays infer exact integer union arms in ${lane}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": mixedNativeArraySource + '\nexport function main(): void { if (!run()) throw new Error("mixed native array carriers"); }' } });
+      files: { "index.ts": mixedNativeArraySource + '\nexport function main(): void { if (!run()) throw new Error("mixed native array carriers"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
     const output = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
     assert.match(output, /value: u64/u);

@@ -81,7 +81,7 @@ test("generic nominal recovery preserves exact instances across a forward-only p
 test("checked generic nominal recovery includes the exact ancestor view of a more-derived root", { timeout: 300_000 }, () => {
   const { result } = compileRust({
     surfaces: ["js"], target: { id: "rust", options: { outputType: "bin", crateName: "generic_ancestor_projection" } },
-    files: { "index.ts": genericAncestorProjectionSource },
+    files: { "index.ts": (genericAncestorProjectionSource + "\nmain();\n") },
   });
   assert.deepEqual(result.diagnostics, []);
   const generated = result.artifacts.filter(artifact => artifact.path.endsWith(".rs"))

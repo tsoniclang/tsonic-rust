@@ -10,7 +10,7 @@ for (const surface of ["native", "js"]) {
     const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
       target: { id: "rust", options: { outputType: "bin" } }, files: {
         ...classMemberVisibilityFiles,
-        "index.ts": classMemberVisibilityFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("member visibility"); }',
+        "index.ts": classMemberVisibilityFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("member visibility"); }\nmain();\n',
       } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject(`class-member-visibility-${surface}`, result.artifacts, { run: true });

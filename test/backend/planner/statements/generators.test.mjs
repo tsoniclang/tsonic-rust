@@ -124,7 +124,7 @@ test("generator next values and explicit completion execute end to end", { timeo
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "generator_protocol" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${generatorTypes}
 import { check } from "@acme/testing";
 
@@ -153,7 +153,7 @@ export function main(): void {
     check(returned.value === 9);
   }
 }
-`,
+` + "\nmain();\n"),
     },
   });
 
@@ -194,7 +194,7 @@ test("async generator requests queue concurrently in FIFO order", { timeout: 300
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "async_generator_queue" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${generatorTypes}
 import { check } from "@acme/testing";
 
@@ -219,7 +219,7 @@ export async function main(): Promise<void> {
   const completed = await generator.next(11);
   if (completed.done) check(completed.value === 12);
 }
-`,
+` + "\nawait main();\n"),
     },
   });
 
@@ -254,7 +254,7 @@ test("yield star forwards yields, next values, and completion", { timeout: 300_0
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "generator_delegation" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${generatorTypes}
 import { check } from "@acme/testing";
 
@@ -277,7 +277,7 @@ export function main(): void {
   const completed = generator.next(0);
   if (completed.done) check(completed.value === 9);
 }
-`,
+` + "\nmain();\n"),
     },
   });
 
@@ -321,7 +321,7 @@ test("sync generator commands execute catch, finally, and delegated cleanup", { 
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "generator_cleanup" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${generatorTypes}
 import { check } from "@acme/testing";
 
@@ -381,7 +381,7 @@ export function main(): void {
   check(delegatedResult.done === true && delegatedResult.value === 12);
   check(cleanup === 111);
 }
-`,
+` + "\nmain();\n"),
     },
   });
 
@@ -398,7 +398,7 @@ test("async generator return and throw commands execute cleanup", { timeout: 300
     packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "async_generator_cleanup" } },
     files: {
-      "index.ts": `
+      "index.ts": (`
 ${generatorTypes}
 import { check } from "@acme/testing";
 
@@ -431,7 +431,7 @@ export async function main(): Promise<void> {
   check(observed);
   check(cleanup === 11);
 }
-`,
+` + "\nawait main();\n"),
     },
   });
 

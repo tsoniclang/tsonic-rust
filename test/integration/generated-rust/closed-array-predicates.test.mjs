@@ -8,7 +8,7 @@ import { closedArrayPredicateFiles } from "../../../../tsonic/test/fixtures/clos
 test("closed array predicates retain native union payloads and evaluate once", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
     ...closedArrayPredicateFiles,
-    "index.ts": closedArrayPredicateFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("array predicates"); }',
+    "index.ts": closedArrayPredicateFiles["index.ts"] + '\nexport function main(): void { if (!run()) throw new Error("array predicates"); }\nmain();\n',
   } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = result.artifacts.filter(artifact => artifact.path.endsWith(".rs")).map(artifact => artifact.text).join("\n");
