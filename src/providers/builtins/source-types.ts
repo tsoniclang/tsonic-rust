@@ -11,7 +11,7 @@ import {
   rustSourceTypeExportIds,
   rustSourceVirtualModulesProviderId,
   rustTypesModule,
-} from "../../source/semantics/identity.js";
+} from "../../source/extension/identity.js";
 import type {
   RustProviderSemantics,
   RustProviderTypeRow,

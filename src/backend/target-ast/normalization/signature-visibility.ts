@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustGenerics, RustItem, RustSourceFileModel, RustType, RustTypeBound } from "../nodes.js";
+import type { RustGenericArgument, RustGenerics, RustItem, RustSourceFileModel, RustType, RustTypeBound } from "../syntax/nodes.js";
 
 export function rustPublicSignatureTypeNames(model: RustSourceFileModel): readonly string[] {
   const items = closePublicRustTypeVisibility(model.items);

@@ -4,7 +4,7 @@ import { rustStructuralObjectCarrierValue } from "../../target-model/types/index
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustObjectReferenceViewKey, type RustObjectReferenceView } from "../facts/object-reference-views.js";
-import { selectRustStructuralFieldProjection } from "../../policy/types/structural-fields.js";
+import { selectRustStructuralFieldProjection } from "../../policy/types/objects/structural-fields.js";
 import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { selectRustClassValueView } from "../objects/class-values.js";

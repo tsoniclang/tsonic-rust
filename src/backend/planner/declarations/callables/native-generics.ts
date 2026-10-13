@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
-import type { RustGenericParameter, RustGenerics, RustWherePredicate, RustTypeBound } from "../../../target-ast/nodes.js";
+import type { RustGenericParameter, RustGenerics, RustWherePredicate, RustTypeBound } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";

@@ -12,13 +12,13 @@ import type {
 import {
   verifyRustCompilerDependencySource,
   verifyRustCompilerStandardLibraryMetadata,
-} from "../snapshot/cargo-snapshot.js";
+} from "../acquisition/cargo-snapshot.js";
 import { standardModuleSpecifier } from "./module-specifier.js";
 import {
   digestText,
   validateDependencyBelongsToSnapshot,
   type RustdocDocumentLoader,
-} from "../snapshot/rustdoc-artifact.js";
+} from "../acquisition/rustdoc-artifact.js";
 import {
   authoredPublicCanonicalPath,
   authoredPublicKind,

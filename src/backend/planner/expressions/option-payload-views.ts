@@ -2,7 +2,7 @@ import { isRustOptionCarrier, rustOptionElementCarrier, rustOptionValueCarrier }
 import { isRustStringCarrier } from "../../../target-model/types/carriers/js.js";
 import type { RustOptionEqualityView } from "../../../target-model/operations/option-equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 

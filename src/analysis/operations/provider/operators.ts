@@ -17,7 +17,7 @@ import {
 import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
-import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
+import { asNode, resolveSelectedJsSourceMember, resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
 import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
 import { selectJsSurfaceMemberWrite } from "../../../policy/operations/source-profiles/js/member-reads.js";
 import {
@@ -28,7 +28,7 @@ import {
 import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operation-abi.js";
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
 import {
   rustEffectiveValueCarrier,

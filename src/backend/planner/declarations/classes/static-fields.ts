@@ -8,7 +8,7 @@ import {
   rustCarrierSupportsClone,
 } from "../../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../../../analysis/project-types/object-layout.js";
-import type { RustItem, RustStmt } from "../../../target-ast/nodes.js";
+import type { RustItem, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../../expressions/index.js";
 import { planBlockLike } from "../../statements/index.js";

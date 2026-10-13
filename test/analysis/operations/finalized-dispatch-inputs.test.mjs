@@ -5,7 +5,7 @@ import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } f
 import { finalizeProviderOperationFact } from
   "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtime/dispatch-contexts.js";
+import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/dispatch-contexts.js";
 import { collectRustProviderSemanticsFromDefinitions } from "../../../dist/providers/packages/index.js";
 import { dispatchProviderDefinition } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
 import { rustFoundationForFinalizedOperationAbi } from "../../../dist/analysis/foundation/conversion-requirements.js";

@@ -3,7 +3,7 @@ import { rustTargetOperationFactKey, type RustTargetOperationFact } from "../../
 import { rustEffectiveValueCarrier } from "../../../../analysis/facts/value-carrier-queries.js";
 import { rustSliceElementCarrier } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { canBorrowRustSingletonSlice, planRustBorrowedSingletonSlice } from "./rest-assembly.js";
 import { planExpression } from "../entry.js";

@@ -1,6 +1,6 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustMemoryBindingPlanKey } from "../../../target-model/operations/memory-bindings.js";
 import { createRustStructuralObjectFromCarrier } from "../objects/project-storage.js";

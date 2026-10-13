@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { isRustOptionCarrier } from "../../../target-model/types/carriers/optional.js";
 import { isRustStringCarrier } from "../../../target-model/types/carriers/js.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustOptionPayloadView } from "./option-payload-views.js";
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldComparisonView, rustErrorFieldOptionalView, rustErrorFieldSharedView } from "./error-field-borrows.js";

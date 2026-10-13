@@ -6,7 +6,7 @@ import {
   rustLangModule,
   rustSourceProviderVersion,
   rustSourceVirtualModulesProviderId,
-} from "../../source/semantics/identity.js";
+} from "../../source/extension/identity.js";
 
 export interface RustLanguageCall {
   readonly selection: ResolvedSourceCallInfo;

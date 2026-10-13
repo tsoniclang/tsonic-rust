@@ -9,7 +9,7 @@ import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { resolveRustTypeFamilyApplication } from "../../policy/types/resolution/type-families.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { resolveRustIndexedField, resolveRustIndexedProperty } from "../../policy/types/resolution/indexed-fields.js";
 import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 

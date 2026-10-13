@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import { rustErrorEffectsFactKey, type RustErrorEffectsFact } from "../../../analysis/facts/error-effects.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
-import type { RustItem } from "../../target-ast/nodes.js";
+import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
@@ -13,7 +13,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustContextualValueConversionFactKey } from "../../../analysis/facts/keys.js";
 import { normalizeRustErrorType } from "../../../analysis/program/error-types.js";
 import { rustProducerErrorTargetType } from "../../../target-model/types/carriers/producer-errors.js";
-import type { RustType } from "../../target-ast/nodes.js";
+import type { RustType } from "../../target-ast/syntax/nodes.js";
 import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
 import { rustCallableConversionErrorArities } from "../../../target-model/conversions/callable-physical.js";
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";

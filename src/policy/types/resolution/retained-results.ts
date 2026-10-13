@@ -1,8 +1,8 @@
 import type { Node, Type } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { closeRustRetainedResult } from "../retained-result.js";
-import { closeRustSuspendedStorage } from "../suspended-storage.js";
+import { closeRustRetainedResult } from "../callables/retained-result.js";
+import { closeRustSuspendedStorage } from "../storage/suspended-storage.js";
 import type { RustRetainedEnvironment } from "../../ownership/retained-environments.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";

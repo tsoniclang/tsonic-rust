@@ -11,7 +11,7 @@ import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../t
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -25,7 +25,7 @@ import {
 } from "../program/source-package-errors.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "../objects/checked-project-projections.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 
 type RustProgramErrorTypeTestFact = Extract<
   RustTargetOperationFact,

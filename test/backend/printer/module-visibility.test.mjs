@@ -1,7 +1,7 @@
-import { rustWordAttribute, rustHiddenAttribute } from "../../../dist/backend/target-ast/attributes.js";
+import { rustWordAttribute, rustHiddenAttribute } from "../../../dist/backend/target-ast/syntax/attributes.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { closeRustModuleTypeVisibility } from "../../../dist/backend/target-ast/normalization/module-visibility.js";
 import { finalizeRustDeadCode } from "../../../dist/backend/target-ast/normalization/dead-code.js";
 import { rustLintAttributes } from "../../../dist/backend/target-ast/normalization/lint-policy.js";

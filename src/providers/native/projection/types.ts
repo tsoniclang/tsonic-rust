@@ -36,7 +36,7 @@ import {
   rustMutPointerExport,
 } from "../../../source/extension/source-extension.js";
 import { rustTypesModule } from "../../../source/profiles/source-modules.js";
-import { rustSourceTypeExportIds } from "../../../source/semantics/identity.js";
+import { rustSourceTypeExportIds } from "../../../source/extension/identity.js";
 import { sourcePrimitiveByRustName } from "./model.js";
 import type { ProjectionContext } from "./model.js";
 import type {

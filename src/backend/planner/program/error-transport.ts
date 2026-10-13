@@ -1,5 +1,5 @@
-import { rustDeriveAttributes, rustHiddenAttribute, rustListAttribute, rustWordAttribute } from "../../target-ast/attributes.js";
-import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, type RustPattern, type RustType } from "../../target-ast/nodes.js";
+import { rustDeriveAttributes, rustHiddenAttribute, rustListAttribute, rustWordAttribute } from "../../target-ast/syntax/attributes.js";
+import { emptyRustGenerics, type RustExpr, type RustGenerics, type RustItem, type RustPattern, type RustType } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 
 export interface RustErrorTransportVariant {

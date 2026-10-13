@@ -1,14 +1,14 @@
-import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
 import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
 import { rustProjectMemberIsPrivate } from "../../../../analysis/project-types/member-privacy.js";
-import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../project-storage-abi.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import { rustProjectRepresentationGenerics } from "./names.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { readRustCapturedField, rustCapturedFieldStorage, rustCapturedFieldLocation } from "../captured-fields.js";
 

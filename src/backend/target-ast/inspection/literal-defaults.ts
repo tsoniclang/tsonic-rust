@@ -1,4 +1,4 @@
-import type { RustExpr } from "../nodes.js";
+import type { RustExpr } from "../syntax/nodes.js";
 
 export function rustLiteralIsNativeDefault(expression: RustExpr): boolean {
   switch (expression.kind) {

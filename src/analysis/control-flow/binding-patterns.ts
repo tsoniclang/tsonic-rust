@@ -37,7 +37,7 @@ import type {
   RustSourceObjectField,
   RustSourceTypeRegistry,
 } from "../project-types/source-type-registry.js";
-import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/source-shapes.js";
+import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/objects/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustBindingNormalizationContract } from "../../target-model/types/binding-normalization.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";

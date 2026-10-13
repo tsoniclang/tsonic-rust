@@ -1,5 +1,5 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
-import { cloneRustExpression } from "../../target-ast/expressions.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import { planRustClosedNativeProjection } from "./closed-native-values.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -18,7 +18,7 @@ import {
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourceErrorEffectEdge } from "../../../../analysis/facts/source-error-effects.js";
 import { rustErrorEffectsFactKey } from "../../../../analysis/facts/error-effects.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { RustExpr, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planRustSelectedErrorRegion } from "../../program/error-regions.js";

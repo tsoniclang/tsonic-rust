@@ -3,22 +3,22 @@ import {
   resolveSelectedJsSourceMember,
   resolveSelectedProviderDeclaration,
   resolveSelectedSourceProfilePropertyMembers,
-} from "../../../policy/evidence/selected-source.js";
+} from "../../../policy/identities/selected-source.js";
 import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, isDeclarationFileSubject, rejectSelectedOperation, selectedDeclarationIsCallable, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isProjectAccessorDeclaration, selectRustFixedArrayLengthProperty, selectStructuralSourceProperty } from "./structural-properties.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { resolveRustProjectAccessor } from "./project-accessors.js";
 import { resolveRustProjectField } from "./project-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrier } from "../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../project-types/object-layout.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
-import { selectRustGeneratorSourceProperty } from "../../../policy/types/generator-source-profile.js";
+import { selectRustGeneratorSourceProperty } from "../../../policy/operations/source-profiles/generator-source-profile.js";
 import { selectRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
-import { selectedRustProviderGlobal } from "../../../policy/evidence/provider-globals.js";
+import { selectedRustProviderGlobal } from "../../../policy/identities/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import { selectRustRecordDelete } from "./records.js";
 import type {

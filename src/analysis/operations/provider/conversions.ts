@@ -1,16 +1,16 @@
 import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationFact, rejectSelectedOperation } from "./result.js";
 import { sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
-import { asNode } from "../../../policy/evidence/selected-source.js";
+import { asNode } from "../../../policy/identities/selected-source.js";
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import {
   finalizeProviderOperationFact,
   instantiateProviderOperationTemplate,
 } from "./calls/template-instantiation.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
-import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
 import { rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey, rustProjectDowncastFactKey } from "../../facts/keys.js";
@@ -18,7 +18,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceAssertionConversion } from "../../../policy/conversions/selection.js";
-import { selectRustProjectProjection } from "../../../policy/types/project-projections.js";
+import { selectRustProjectProjection } from "../../../policy/types/project/project-projections.js";
 import type {
   RustCheckedConversionSelectionInput,
   RustCheckedConversionSelectionResult,

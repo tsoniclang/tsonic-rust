@@ -6,7 +6,7 @@ import {
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import type {
   RustCheckedCallSelectionInput,
   RustOperationPolicyContext,

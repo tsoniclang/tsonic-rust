@@ -1,4 +1,4 @@
-import { rustHiddenAttribute } from "../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import { rustPackageFallibleBoundary } from "./fallible-boundaries.js";
 import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -28,12 +28,12 @@ import {
 import {
   createRustSourceFile,
   emptyRustGenerics,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
 import type {
   RustItem,
   RustSourceFileModel,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type { RustPlanningContext } from "../context.js";
 import {
@@ -121,7 +121,7 @@ export function planRustSourceFile(
   publicImplementationModuleNames: ReadonlySet<string>,
   publicImplementationItemIdentities: ReadonlySet<string>,
   publishesImplementationAbi: boolean,
-  errorDomain: import("../../target-ast/nodes.js").RustErrorDomain,
+  errorDomain: import("../../target-ast/syntax/nodes.js").RustErrorDomain,
   sourcePackageErrors: RustSourcePackageErrorPlan,
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
@@ -234,7 +234,7 @@ function planModuleItems(
 ): PlannedRustModuleItems {
   const { ast } = context.input.program.source;
   const items: RustItem[] = [];
-  const initializationStatements = [] as import("../../target-ast/nodes.js").RustStmt[];
+  const initializationStatements = [] as import("../../target-ast/syntax/nodes.js").RustStmt[];
   const initializationFunctionName = rustModuleInitializerFunctionName(
     context.input,
     context.sourceFile,
@@ -551,7 +551,7 @@ function ensureTopLevelPlanningDiagnostic(
 
 interface PlannedTopLevelVariableStatement {
   readonly items: readonly RustItem[];
-  readonly initialization: readonly import("../../target-ast/nodes.js").RustStmt[];
+  readonly initialization: readonly import("../../target-ast/syntax/nodes.js").RustStmt[];
 }
 
 function planDefaultExportAssignment(
@@ -622,7 +622,7 @@ function planTopLevelVariableStatement(
     return undefined;
   }
   const items: RustItem[] = [];
-  const initialization: import("../../target-ast/nodes.js").RustStmt[] = [];
+  const initialization: import("../../target-ast/syntax/nodes.js").RustStmt[] = [];
   for (const declaration of declarations) {
     if (context.input.program.facts.getFact(declaration, rustCompileTimeSourceKey)) continue;
     const name = context.input.program.names.nameForDeclaration(declaration) ?? "";

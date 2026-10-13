@@ -4,7 +4,7 @@ import { selectRustProviderOperation } from "../../../../policy/operations/provi
 import { rustOperationContext } from "../../../program/walk.js";
 import { providerOperationFact } from "../result.js";
 import { selectedSourceValueCarrier } from "../operators.js";
-import { selectedCallProviderDeclaration } from "../../../../policy/evidence/selected-source.js";
+import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { checkedCallIsConstruction, selectedCallReceiverValueCarrier, selectedProviderCallGenericArguments } from "./instantiation.js";
 import { mergeDirectGenericArgument, mergeGenericBindings, providerGenericParameterSet } from "./template-instantiation.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

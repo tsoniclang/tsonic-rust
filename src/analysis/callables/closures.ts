@@ -40,7 +40,7 @@ import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

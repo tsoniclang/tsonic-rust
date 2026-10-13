@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../target-model/types/index.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary,

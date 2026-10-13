@@ -4,7 +4,7 @@ import {
   asNode,
   isProjectSourceDeclaration,
   resolveSelectedSourceProfileMember,
-} from "../../../../policy/evidence/selected-source.js";
+} from "../../../../policy/identities/selected-source.js";
 import {
   rustJsErrorTargetType,
   rustCallableProtocol,
@@ -29,23 +29,23 @@ import { substituteProviderOperationForm } from "./template-instantiation.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { mapRustSourceMarkerCall } from "./deferred.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation } from "../result.js";
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 import { rustModuleBindingFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
-import { selectedCallProviderDeclaration } from "../../../../policy/evidence/selected-source.js";
+import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
-import { selectRustGeneratorSourceCall } from "../../../../policy/types/generator-source-profile.js";
+import { selectRustGeneratorSourceCall } from "../../../../policy/operations/source-profiles/generator-source-profile.js";
 import { rustSourceErrorConstructorOperation, selectRustSourceErrorConstructor } from "../../../../policy/operations/source-profiles/error-source-profile.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
 import { selectRustProviderPointerResult } from "../../../../policy/operations/pointers/provider-result.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { sourceCallMarkerByIdentity } from "../model.js";
 import { mapSelectedStringRegExpProtocolCall } from "../regexp-protocols.js";
-import { selectRustRuntimeCallableGenerics } from "./runtime-callable-generics.js";
+import { selectRustRuntimeCallableGenerics } from "../../../../policy/types/callables/runtime-callable-generics.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
 import { selectRustPointerViewCall } from "../../pointer-views.js";
 import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";

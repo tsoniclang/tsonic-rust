@@ -8,7 +8,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..")
 const sourceRoot = join(repositoryRoot, "src");
 
 const sourceFacts = readFileSync(
-  new URL("../../src/policy/safety/source-explicit-safety.ts", import.meta.url),
+  new URL("../../src/policy/operations/safety/source-explicit-safety.ts", import.meta.url),
   "utf8",
 );
 const nativePlanner = readFileSync(
@@ -32,7 +32,7 @@ test("shared explicit-safety fact keys have one Rust source-boundary reader", ()
       files
         .filter((path) => readFileSync(path, "utf8").includes(key))
         .map((path) => path.slice(repositoryRoot.length + 1)),
-      ["src/policy/safety/source-explicit-safety.ts"],
+      ["src/policy/operations/safety/source-explicit-safety.ts"],
       key,
     );
   }

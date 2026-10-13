@@ -1,13 +1,13 @@
 import {
   type RustSelectedSourceMemberSet,
-} from "../../../policy/evidence/selected-source.js";
+} from "../../../policy/identities/selected-source.js";
 import { selectRustErrorTypePredicate } from "../../../policy/operations/source-profiles/js/type-tests.js";
 import {
   rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
 import { acceptRustMemberOperation, acceptRustOperation, rejectSelectedOperation } from "./result.js";
 import type {

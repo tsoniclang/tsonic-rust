@@ -3,9 +3,9 @@ import type { RustOperationPolicyContext } from "../../policy/operations/contrac
 import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
-import { asNode } from "../../policy/evidence/selected-source.js";
+import { asNode } from "../../policy/identities/selected-source.js";
 import { isRustNumericCarrier } from "../../target-model/types/index.js";
-import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/types/selected-numeric-literal.js";
+import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustTargetOperationFactKey, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../facts/keys.js";
 import { rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationText } from "../facts/target-operation.js";

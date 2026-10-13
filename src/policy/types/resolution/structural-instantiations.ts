@@ -8,13 +8,13 @@ import { rustJsArrayLikeElementTargetType, isRustJsArrayCarrier } from "../../..
 import { resolveRustConstructType } from "./constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
-import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { bindRustCallableTypeParameters, bindRustSourceAliasArguments } from "./generic-arguments.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import type { SourceCallableTypeEvidence } from "@tsonic/target-api/source";
-import { isRustErasedNominalMember } from "../source-shapes.js";
+import { isRustErasedNominalMember } from "../objects/source-shapes.js";
 import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
 import { retainRustSourceUnionInstantiation, rustSourceUnionValueTypes } from "./source-unions.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";

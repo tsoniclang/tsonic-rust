@@ -3,9 +3,9 @@ import {
   isRustIntegerCarrier,
   isRustSignedNumericCarrier,
 } from "../../../target-model/types/index.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
-import { negateRustBooleanExpression } from "../../target-ast/expressions.js";
-import { rustIntegerLiteralValue } from "../../target-ast/integer-comparisons.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import { negateRustBooleanExpression } from "../../target-ast/syntax/expressions.js";
+import { rustIntegerLiteralValue } from "../../target-ast/syntax/integer-comparisons.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { effectivePlannedExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 

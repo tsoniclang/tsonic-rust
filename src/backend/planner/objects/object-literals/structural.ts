@@ -1,11 +1,11 @@
-import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { isRustCopyCarrier, rustCallableProtocol, rustCallableTargetType,
   rustProgramErrorTargetType,
   rustStructuralPropertyValueCarrier, rustUnitTargetType } from "../../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustStructField,
-  type RustType } from "../../../target-ast/nodes.js";
+  type RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustCurrentErrorBoundary, type RustPlanContext } from "../../program/plan-context.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticTypeName, type RustSyntheticNameState } from "../../names/synthetic.js";

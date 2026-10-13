@@ -1,5 +1,5 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 
 export type RustInlineBindingStorage = "cell" | "borrow-cell";
 

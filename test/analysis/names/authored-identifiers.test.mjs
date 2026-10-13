@@ -6,7 +6,7 @@ import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { isValidRustAuthoredIdentifier, isValidRustIdentifier, rustTargetIdentifier, rustModuleSegmentName, rustPackageModuleName } from "../../../dist/target-model/names/identifiers.js";
 import { allocateRustGeneratedName } from "../../../dist/target-model/names/generated.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../../dist/backend/planner/names/synthetic.js";
-import { rustSourceDeclarationTypeName } from "../../../dist/policy/types/source-declarations.js";
+import { rustSourceDeclarationTypeName } from "../../../dist/policy/types/model/source-declarations.js";
 
 function planNames(sourceText) {
   const checked = createCompilerSessionFromFiles({

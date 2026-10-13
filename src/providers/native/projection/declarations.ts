@@ -4,7 +4,7 @@ import {
   withDefaultGenericBindings,
   withProjectionGenericParameters,
 } from "./utilities.js";
-import { rustSourceTypeExportIds, rustTypesModule } from "../../../source/semantics/identity.js";
+import { rustSourceTypeExportIds, rustTypesModule } from "../../../source/extension/identity.js";
 import {
   compilerExportId,
   compilerTargetTypeId,

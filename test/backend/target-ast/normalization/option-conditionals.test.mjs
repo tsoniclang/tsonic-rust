@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeRustOptionalUnitMatch } from "../../../../dist/backend/target-ast/normalization/option-conditionals.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
-import { emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustExpressionChildren, rustExpressionReferencesPath } from "../../../../dist/backend/target-ast/inspection/source-usage.js";
 import { maxWritesInStatements, firstAccessesInStatements } from "../../../../dist/backend/target-ast/inspection/source-dataflow.js";
 import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/inspection/source-module-usage.js";

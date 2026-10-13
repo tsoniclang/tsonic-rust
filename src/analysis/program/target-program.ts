@@ -9,7 +9,7 @@ import {
 import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
-import { analyzeRustBinaryDispatchDemand } from "../runtime/binary-dispatch-demand.js";
+import { analyzeRustBinaryDispatchDemand } from "../project/binary-dispatch-demand.js";
 import { createRustAnalysisContext } from "./context.js";
 import type {
   AnalyzeRustTargetProgramResult,
@@ -32,7 +32,7 @@ import {
   analyzeRustDispatchContextCatalog,
   analyzeRustDispatchContextDemand,
   analyzeRustRuntimeReferences,
-} from "../runtime/index.js";
+} from "../project/index.js";
 import {
   analyzeRustEnumMemberConstants,
 } from "../declarations/enum-member-constants.js";

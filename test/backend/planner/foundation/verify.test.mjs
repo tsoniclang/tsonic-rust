@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { verifyRustFoundationPlan } from "../../../../dist/backend/planner/foundation/verify.js";
-import { rustValueAttribute } from "../../../../dist/backend/target-ast/attributes.js";
+import { rustValueAttribute } from "../../../../dist/backend/target-ast/syntax/attributes.js";
 
 const program = {
   foundation: { selected: "core", required: "core" },

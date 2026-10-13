@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { rustExpressionChildren } from "../../../dist/backend/target-ast/inspection/source-usage.js";

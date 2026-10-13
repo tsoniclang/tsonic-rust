@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_OperatorToken,
@@ -48,11 +48,11 @@ import { planRustSourceUnionFieldProjection, readRustUnionField, writeRustUnionF
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField, withRustProjectStoredField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../objects/project-field-dispatch.js";
 import { readRustStoredObjectField, rustDirectProjectFieldStoragePath, rustProjectObjectRepresentation, writeRustStoredObjectField } from "../objects/project-storage.js";
-import { rustStringConcat } from "../../target-ast/expressions.js";
+import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact, RustAssignmentOperationPlan } from "./core.js";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { planRustValueFieldInput, planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";

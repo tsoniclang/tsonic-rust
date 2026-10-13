@@ -12,8 +12,8 @@ import type {
   RustGenerics,
   RustTypeBound,
   RustConstArgument,
-} from "../nodes.js";
-import type { RustAttributeArgument } from "../attributes.js";
+} from "../syntax/nodes.js";
+import type { RustAttributeArgument } from "../syntax/attributes.js";
 
 function rustAttributeReferencesModuleAlias(attribute: RustAttributeArgument, alias: string): boolean {
   switch (attribute.kind) {

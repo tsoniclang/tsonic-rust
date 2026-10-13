@@ -1,5 +1,5 @@
 import type { RustFrozenWriteReceiver } from "../../../analysis/objects/frozen-data-writes.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { rustPropagateLocalError, type RustFallibleBoundary } from "../program/fallible-boundaries.js";
 

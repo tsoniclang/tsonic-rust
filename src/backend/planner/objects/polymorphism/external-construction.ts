@@ -6,7 +6,7 @@ import { rustSourceOptionalTargetType, rustStringTargetType } from "../../../../
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
 import { planFinalizedSourceInput } from "../../expressions/conversions.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 

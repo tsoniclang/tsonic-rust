@@ -1,8 +1,8 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { readRustStoredObjectField, writeRustStoredObjectField, mutateRustStoredObjectField } from "../objects/project-storage.js";

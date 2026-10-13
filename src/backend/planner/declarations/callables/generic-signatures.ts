@@ -1,7 +1,7 @@
 import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis/callables/generic-physical.js";
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import type { RustGenericParameter, RustGenerics, RustWherePredicate } from "../../../target-ast/nodes.js";
+import type { RustGenericParameter, RustGenerics, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import { rustGenericCallableMemberBindings } from "../../../../analysis/callables/generic-bindings.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";

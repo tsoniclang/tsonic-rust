@@ -3,8 +3,8 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { isRustVecCarrier, rustJsArrayLikeElementTargetType } from "../../target-model/types/index.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { selectRustArrayElementStorage } from "../../policy/types/array-storage.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { selectRustArrayElementStorage } from "../../policy/types/collections/array-storage.js";
 
 export function resolveRustArrayElementStorage(
   walk: RustFactWalk,

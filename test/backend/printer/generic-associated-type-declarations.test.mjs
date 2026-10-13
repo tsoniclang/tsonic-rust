@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { printRustItem } from "../../../dist/print/source/items.js";
 import { printRustType } from "../../../dist/print/source/types.js";
 import { rustItemsReferenceModuleAlias } from "../../../dist/backend/target-ast/inspection/source-module-usage.js";

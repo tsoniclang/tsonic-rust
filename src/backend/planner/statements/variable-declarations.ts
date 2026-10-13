@@ -28,7 +28,7 @@ import { planRustBindingPattern } from "../bindings/patterns.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
 import { planRustLocalBindingStorage } from "../bindings/local-storage.js";

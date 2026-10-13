@@ -1,4 +1,4 @@
-import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
 import { rustCapturedFieldStorage } from "../captured-fields.js";
 import {
   projectCallableShape,
@@ -12,8 +12,8 @@ import { rustCallableSpecialization } from "../../declarations/callables/generic
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 import { rustProjectCloneImplementation } from "../project-wrapper-traits.js";
-import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {

@@ -10,7 +10,7 @@ import { rustTargetTypeParameterIdentities } from "../../target-model/types/carr
 import { inferRustTargetTypeParameterBindings, rustTargetTypePatternsAreNominallyDisjoint } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustNamedTypeCarrierValue, rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { rustIndexedFieldKey, rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 
 interface ImplementationBucket {

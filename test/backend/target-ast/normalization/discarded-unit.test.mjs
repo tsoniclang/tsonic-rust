@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
-import { emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 
 const unit = { kind: "tuple-literal", elements: [] };
 const path = name => ({ kind: "path", path: name });

@@ -1,6 +1,6 @@
 import type { RustFrameCallableDefinition } from "../../../analysis/callables/frame-values.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStructField, RustVisibility } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStructField, RustVisibility } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustLiveFrameOwner } from "../program/frame-owners.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

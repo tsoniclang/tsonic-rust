@@ -1,4 +1,4 @@
-import type { RustBlock, RustStmt } from "../nodes.js";
+import type { RustBlock, RustStmt } from "../syntax/nodes.js";
 import { rustExpressionAlwaysExits } from "../inspection/source-dataflow.js";
 
 export function retainRustCheckedCompletion(body: RustBlock, canFallThrough: boolean | undefined): RustBlock {

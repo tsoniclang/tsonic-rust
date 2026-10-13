@@ -1,4 +1,4 @@
-import type { RustBlock } from "../../../target-ast/nodes.js";
+import type { RustBlock } from "../../../target-ast/syntax/nodes.js";
 
 export function wrapRustJsPromiseBody(
   body: RustBlock,

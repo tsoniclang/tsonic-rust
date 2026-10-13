@@ -25,7 +25,7 @@ import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.j
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js";
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";

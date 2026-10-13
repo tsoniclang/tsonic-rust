@@ -1,7 +1,7 @@
 import { selectTsonicProviderPointerResult } from "@tsonic/source-core/facts";
 import type { ResolvedSourceCallInfo } from "@tsonic/target-api/source";
-import { resolveRustTargetTypeRef } from "../../types/resolution.js";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution/index.js";
 import {
   rustJsArrayTargetType,
   rustSourceLocationTargetType,

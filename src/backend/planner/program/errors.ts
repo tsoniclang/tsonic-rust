@@ -1,4 +1,4 @@
-import { rustHiddenAttribute } from "../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
@@ -13,8 +13,8 @@ import {
   type RustSourceFileModel,
   type RustType,
   type RustGenerics,
-} from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { planRustErrorObservations, planRustSuppressedErrorConstructor } from "./error-observations.js";
 import { planRustErrorTransport, planRustSourceErrorTransport, rustSuppressedErrorPattern,
   type RustErrorTransportVariant } from "./error-transport.js";

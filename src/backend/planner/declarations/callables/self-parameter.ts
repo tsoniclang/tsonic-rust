@@ -1,4 +1,4 @@
-import type { RustSelfParam } from "../../../target-ast/nodes.js";
+import type { RustSelfParam } from "../../../target-ast/syntax/nodes.js";
 
 export type RustSelfMode = "ref" | "mut-ref" | "rc";
 

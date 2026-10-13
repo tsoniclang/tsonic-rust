@@ -1,4 +1,4 @@
-import { rustHiddenAttribute } from "../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { CargoDependency, CargoManifestPlan } from "../../artifact-model/project/cargo.js";
@@ -7,7 +7,7 @@ import {
   createRustSourceFile,
   type RustItem,
   type RustSourceFileModel,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import { rustPublicSignatureTypeNames } from "../../target-ast/normalization/signature-visibility.js";
 import { closeRustModuleTypeVisibility } from "../../target-ast/normalization/module-visibility.js";
 import type { RustPlanningContext } from "../context.js";

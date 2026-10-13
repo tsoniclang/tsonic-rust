@@ -1,5 +1,5 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustItem } from "../../target-ast/nodes.js";
+import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { isRustProgramErrorCarrier, rustNamedTargetType } from "../../../target-model/types/index.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

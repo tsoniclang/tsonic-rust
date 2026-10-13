@@ -1,5 +1,5 @@
 import type { RustProjectFieldDispatchPlan } from "../../../analysis/project-types/field-dispatch.js";
-import type { RustType } from "../../target-ast/nodes.js";
+import type { RustType } from "../../target-ast/syntax/nodes.js";
 import { rustLocalErrorOwner, type RustFallibleBoundary } from "../program/fallible-boundaries.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import {

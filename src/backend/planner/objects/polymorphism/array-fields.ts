@@ -1,4 +1,4 @@
-import type { RustType } from "../../../target-ast/nodes.js";
+import type { RustType } from "../../../target-ast/syntax/nodes.js";
 
 export function rustArrayFieldMutationName(readSlot: string): string {
   return `mutate_${readSlot}`;

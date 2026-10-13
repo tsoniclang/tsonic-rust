@@ -5,7 +5,7 @@ import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
-import { rustOwnedStorageChild } from "../../policy/types/owned-storage.js";
+import { rustOwnedStorageChild } from "../../policy/types/storage/owned-storage.js";
 
 export interface RustStructuralGenericCarrierSelection {
   readonly carrier: TargetTypeRef;

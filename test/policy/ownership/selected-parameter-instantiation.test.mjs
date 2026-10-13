@@ -3,7 +3,7 @@ import test from "node:test";
 import { instantiateRustSourceParameterValueCarrier } from "../../../dist/policy/ownership/source-callable-abi.js";
 import { rustJsArrayTargetType, rustOptionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustSourceTypeFamilyRegistry } from "../../../dist/analysis/project-types/type-families.js";
-import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/model/type-family-normalization.js";
 
 const emptyBindings = { types: new Map(), lifetimes: new Map(), consts: new Map() };
 const unchanged = (carrier) => carrier;

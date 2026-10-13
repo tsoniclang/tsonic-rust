@@ -1,6 +1,6 @@
-import type { RustItem, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
-import { rustHiddenAttribute, rustListAttribute, rustWordAttribute } from "../../../target-ast/attributes.js";
+import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
+import { rustHiddenAttribute, rustListAttribute, rustWordAttribute } from "../../../target-ast/syntax/attributes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import type { ProjectClassStateLayer } from "./model.js";

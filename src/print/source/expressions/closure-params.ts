@@ -1,4 +1,4 @@
-import type { RustClosureParameter } from "../../../backend/target-ast/nodes.js";
+import type { RustClosureParameter } from "../../../backend/target-ast/syntax/nodes.js";
 import { printRustAttribute } from "../attributes.js";
 import { printRustType } from "../types.js";
 

@@ -1,8 +1,8 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustSelectedCallKey } from "../../../target-model/facts/selections.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustNativeCallableOperand } from "../../../analysis/callables/native-conversions.js";

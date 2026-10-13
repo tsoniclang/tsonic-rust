@@ -6,10 +6,10 @@ import { rustOperationContext, rustResolutionContext } from "../program/walk.js"
 import { resolveRustProjectField, type RustProjectFieldSelection } from "../operations/provider/project-fields.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustClassValueCallable, type RustClassValueCallable } from "./class-value-callables.js";
-import { isRustErasedNominalMember } from "../../policy/types/source-shapes.js";
+import { isRustErasedNominalMember } from "../../policy/types/objects/source-shapes.js";
 import { resolveRustProjectAccessor, type RustProjectAccessorSelection } from "../operations/provider/project-accessors.js";
 import { selectRustCallableValueAdapter } from "../callables/adapters.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import type { RustSourceObjectShape } from "../project-types/source-type-registry.js";
 import { instantiateRustSelectedMemberCarrier } from "../operations/provider/member-carriers.js";
 import type { RustProjectStructuralView } from "./project-structural-views.js";

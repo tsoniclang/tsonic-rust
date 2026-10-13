@@ -2,7 +2,7 @@ import { printRustExpr } from "./expressions/core.js";
 import { printRustItem } from "./items.js";
 import { printRustAttribute, printRustAttributes as printRustStatementAttributes } from "./attributes.js";
 import { indentText, printRustType } from "./types.js";
-import type { RustBlock, RustStmt } from "../../backend/target-ast/nodes.js";
+import type { RustBlock, RustStmt } from "../../backend/target-ast/syntax/nodes.js";
 
 export function printRustBlockStatements(block: RustBlock, depth: number, separator = "\n"): string {
   if (block === undefined || !Array.isArray(block.statements)) {

@@ -32,11 +32,11 @@ import { rustTargetGenericReferences } from "../../../target-model/types/carrier
 import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
 import { resolveBoundSourceTypeParameter } from "./callables.js";
-import { rustTypeFamilyNormalizer } from "../type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
-import { rustCallableOrigin } from "../callable-origins.js";
-import { closeRustSuspendedStorage } from "../suspended-storage.js";
+import { rustCallableOrigin } from "../callables/callable-origins.js";
+import { closeRustSuspendedStorage } from "../storage/suspended-storage.js";
 import { resolveRustRetainedResult } from "./retained-results.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";

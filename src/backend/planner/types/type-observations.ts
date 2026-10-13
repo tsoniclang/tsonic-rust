@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustType, RustTypeBound } from "../../target-ast/nodes.js";
+import type { RustGenericArgument, RustType, RustTypeBound } from "../../target-ast/syntax/nodes.js";
 
 export function rustTypeIsLegalInPosition(
   type: RustType | undefined,

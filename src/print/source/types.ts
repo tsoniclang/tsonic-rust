@@ -6,7 +6,7 @@ import type {
   RustTraitReference,
   RustType,
   RustTypeBound,
-} from "../../backend/target-ast/nodes.js";
+} from "../../backend/target-ast/syntax/nodes.js";
 import { escapeRustChar } from "./patterns.js";
 
 export function printRustType(type: RustType): string {

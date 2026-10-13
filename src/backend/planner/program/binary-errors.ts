@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustItem, RustType } from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { rustErrorEffectsFactKey } from "../../../analysis/facts/error-effects.js";
 import { planRustSelectedErrorRegion } from "./error-regions.js";

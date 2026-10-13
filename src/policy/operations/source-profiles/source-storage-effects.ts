@@ -2,8 +2,8 @@ import type { SourceStorageEffects } from "@tsonic/target-api/analysis";
 import { createSourceGlobalCallStorageEffects } from "@tsonic/target-api/analysis";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import { selectJsSourceCallStorageEffect } from "@tsonic/js-source-profile";
-import { resolveSelectedSourceProfileMember } from "../../evidence/selected-source.js";
-import type { RustSourceProfileRegistry } from "../../types/source-profile.js";
+import { resolveSelectedSourceProfileMember } from "../../identities/selected-source.js";
+import type { RustSourceProfileRegistry } from "../../types/model/source-profile.js";
 
 export function createRustSourceProfileStorageEffects(
   source: TargetSourceProgram,

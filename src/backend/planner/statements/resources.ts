@@ -19,7 +19,7 @@ import { planStatementSequence } from "./core.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { rustResourceManagementFactKey } from "../../../analysis/facts/keys.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from "../program/plan-context.js";
 import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

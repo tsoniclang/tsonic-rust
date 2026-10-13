@@ -4,7 +4,7 @@ import type {
   RustExpr,
   RustItem,
   RustStmt,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 
 export function rustPlannedImplementationsReferenceSelfField(
   items: readonly RustItem[],

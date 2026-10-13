@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionEquality } from "./union-equality.js";
@@ -24,9 +24,9 @@ import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { isRustAssignmentOperator, isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { rustStringConcat } from "../../target-ast/expressions.js";
+import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { planEmptyStringComparison, planRustRangeContainment, planBooleanLiteralComparison } from "./native-comparisons.js";
-import { foldRustIntegerComparison } from "../../target-ast/integer-comparisons.js";
+import { foldRustIntegerComparison } from "../../target-ast/syntax/integer-comparisons.js";
 import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
 import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
@@ -51,7 +51,7 @@ import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-op
 import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import type { Node } from "@tsonic/tsts";
 import { rustProjectTypeTestMatches } from "../../../analysis/facts/operations/type-tests.js";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 

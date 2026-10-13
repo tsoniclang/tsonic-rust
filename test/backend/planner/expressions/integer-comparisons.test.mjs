@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { foldRustIntegerComparison } from "../../../../dist/backend/target-ast/integer-comparisons.js";
+import { foldRustIntegerComparison } from "../../../../dist/backend/target-ast/syntax/integer-comparisons.js";
 
 const integer = text => ({ kind: "int-literal", text });
 

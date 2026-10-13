@@ -21,9 +21,9 @@ import {
   asSourceNode,
 } from "@tsonic/target-api/source";
 import { rustOperationContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { isUnannotatedRustNumericLiteral, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { isUnannotatedRustNumericLiteral, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustSourceCallGenericLifetimeArguments } from "../facts/source-call-lifetimes.js";

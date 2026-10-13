@@ -9,7 +9,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { closedMetadataEquals, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isRustCopyCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
-import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustUnitCarrier } from "../../target-model/types/index.js";

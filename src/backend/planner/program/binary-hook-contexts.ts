@@ -1,6 +1,6 @@
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
-import type { RustBinaryHookPlan } from "../../../analysis/runtime/hooks.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
+import type { RustBinaryHookPlan } from "../../../analysis/project/hooks.js";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";

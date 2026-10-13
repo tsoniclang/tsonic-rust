@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustGenericCallableConversion } from "../../../target-model/conversions/generic-callable.js";
 import { rustGenericCallableConversionMatches } from "../../../target-model/conversions/generic-callable.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";

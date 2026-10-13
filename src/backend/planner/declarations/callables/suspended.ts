@@ -2,8 +2,8 @@ import type { RustSuspendedCallableImplementation } from "../../../../analysis/c
 import { rustCallableProtocol, rustLocationTargetType } from "../../../../target-model/types/index.js";
 import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";

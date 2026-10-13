@@ -47,7 +47,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCountedLoopRepresentation } from "../../../analysis/control-flow/counted-loop-representations.js";
-import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 

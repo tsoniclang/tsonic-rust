@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "../conversions.js";
 import { applyRustValueConversion } from "../value-conversions.js";
@@ -25,7 +25,7 @@ import { rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustReferenceOperationCall } from "../reference-operations.js";

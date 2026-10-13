@@ -4,7 +4,7 @@ import type {
   Symbol,
   Type,
 } from "@tsonic/tsts";
-import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
+import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { createRustSourceTypeFamilyRegistry } from "./type-families.js";
@@ -39,7 +39,7 @@ import type {
   RustStructuralFieldImplementation,
   RustStructuralFieldRegistration,
   RustStructuralInstantiation,
-} from "../../policy/types/source-type-registry.js";
+} from "../../policy/types/model/source-type-registry.js";
 export type {
   RustSourceEnumVariant,
   RustSourceObjectField,
@@ -49,7 +49,7 @@ export type {
   RustSourceUnionVariant,
   RustStructuralFieldImplementation,
   RustStructuralFieldRegistration,
-} from "../../policy/types/source-type-registry.js";
+} from "../../policy/types/model/source-type-registry.js";
 
 export function createRustSourceTypeRegistry(
   typeFamilies: RustSourceTypeFamilyRegistry = createRustSourceTypeFamilyRegistry(),

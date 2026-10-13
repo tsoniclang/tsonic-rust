@@ -1,5 +1,5 @@
 import type { Node, Type } from "@tsonic/tsts";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";

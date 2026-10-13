@@ -3,8 +3,8 @@ import type { Node, ResolvedSourceCallInfo } from "@tsonic/tsts";
 import { selectSourceNativeValueGuard } from "@tsonic/target-api/source";
 import type { RustClosedTypePredicate } from "../../../../target-model/operations/type-tests.js";
 import type { RustSourcePolicyContext } from "../../../model/context.js";
-import type { RustSourceProfileRegistry } from "../../../types/source-profile.js";
-import { asNode, resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember, type RustSelectedSourceMemberIdentity } from "../../../evidence/selected-source.js";
+import type { RustSourceProfileRegistry } from "../../../types/model/source-profile.js";
+import { asNode, resolveSelectedJsSourceExportName, resolveSelectedJsSourceMember, type RustSelectedSourceMemberIdentity } from "../../../identities/selected-source.js";
 import { rustSourceErrorConstructors } from "../../../../target-model/identities/source-errors.js";
 
 export function selectRustErrorTypePredicate(

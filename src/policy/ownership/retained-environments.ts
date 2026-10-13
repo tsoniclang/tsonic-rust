@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
-import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../types/owned-storage.js";
+import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../types/storage/owned-storage.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
 export interface RustRetainedEnvironment {

@@ -1,7 +1,7 @@
-import { rustValueBlock } from "../value-block.js";
-import { type RustAttribute } from "../attributes.js";
-import type { RustBlock, RustExpr, RustStmt } from "../nodes.js";
-import { mapRustExpressionChildren } from "../expression-children.js";
+import { rustValueBlock } from "../syntax/value-block.js";
+import { type RustAttribute } from "../syntax/attributes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../syntax/nodes.js";
+import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { rustLintAttributes } from "../normalization/lint-policy.js";
 import {
   firstAccessesInStatements,

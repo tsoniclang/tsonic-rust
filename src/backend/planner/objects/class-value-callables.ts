@@ -1,7 +1,7 @@
 import type { RustClassValueCallable } from "../../../analysis/objects/class-value-callables.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
-import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType, sourceModuleItemPath } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

@@ -3,7 +3,7 @@ import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTypedLocationPlanKey } from "../../../analysis/facts/keys.js";
 import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";

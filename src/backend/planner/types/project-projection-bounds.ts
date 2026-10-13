@@ -1,6 +1,6 @@
 import type { RustProjectProjectionRequirement } from "../../../target-model/types/project-projections.js";
 import { rustTargetTypeParameterIdentities } from "../../../target-model/types/carriers/generic-references.js";
-import type { RustWherePredicate } from "../../target-ast/nodes.js";
+import type { RustWherePredicate } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 
 export function rustProjectProjectionPredicates(

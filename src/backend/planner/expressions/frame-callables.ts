@@ -1,13 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustFrameCallableTypes, type RustFrameCallableTypes } from "../types/frame-callables.js";
 import { projectRustFrameOwnerData, rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
 import { planRustCaptureValue } from "./typed-locations.js";
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustReceiverFieldOwners, planRustReceiverOwners, validateRustCapturedReceiverFields,
   validateRustCapturedReceivers } from "./receiver-captures.js";

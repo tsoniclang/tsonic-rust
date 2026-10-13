@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustClosureCaptureFact } from "../../../analysis/facts/operations/keys.js";
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustCapturedBinding, RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";

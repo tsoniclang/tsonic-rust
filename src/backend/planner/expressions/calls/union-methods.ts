@@ -1,10 +1,10 @@
-import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
-import type { RustCallGenericArgument, RustExpr, RustPattern } from "../../../target-ast/nodes.js";
+import type { RustCallGenericArgument, RustExpr, RustPattern } from "../../../target-ast/syntax/nodes.js";
 import { rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, type TargetTypeRef } from "../../../../target-model/types/index.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustErrorBoundaryForProjectMember, rustErrorType } from "../../program/plan-context.js";

@@ -2,11 +2,11 @@ import type {
   RustBlock,
   RustExpr,
   RustStmt,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
 import { rustStatementExpressions } from "../../target-ast/inspection/source-usage.js";
-import { mapRustExpressionChildren } from "../../target-ast/expression-children.js";
+import { mapRustExpressionChildren } from "../../target-ast/syntax/expression-children.js";
 import type { RustFallibleBoundary } from "../program/fallible-boundaries.js";
 
 export type RustFallibleShapeOptions =

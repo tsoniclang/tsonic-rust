@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import { rustHiddenAttribute } from "../../target-ast/attributes.js";
-import { createRustSourceFile, type RustItem } from "../../target-ast/nodes.js";
+import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
+import { createRustSourceFile, type RustItem } from "../../target-ast/syntax/nodes.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 

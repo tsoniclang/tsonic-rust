@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustSwitchComparison } from "../../../target-model/operations/switch.js";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
-import { negateRustBooleanExpression, rustBorrowedStringView } from "../../target-ast/expressions.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
+import { negateRustBooleanExpression, rustBorrowedStringView } from "../../target-ast/syntax/expressions.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustValueConversion } from "../expressions/value-conversions.js";

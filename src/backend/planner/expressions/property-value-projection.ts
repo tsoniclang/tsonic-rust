@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { rustPropertyProjectionFactKey } from "../../../analysis/facts/property-projections.js";
@@ -11,7 +11,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";
 import { readRustProjectDispatchedField } from "../objects/project-objects.js";
 import { planRustProjectFieldDispatchRole } from "../objects/project-field-dispatch.js";

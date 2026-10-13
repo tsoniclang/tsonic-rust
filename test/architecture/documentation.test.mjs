@@ -25,7 +25,7 @@ test("canonical Rust configuration lists every accepted option", () => {
 
 test("canonical Rust source-module reference lists every public source alias", () => {
   const modules = readFileSync(resolve(repositoryRoot, "src/source/profiles/source-modules.ts"), "utf8");
-  const identities = readFileSync(resolve(repositoryRoot, "src/source/semantics/identity.ts"), "utf8");
+  const identities = readFileSync(resolve(repositoryRoot, "src/source/extension/identity.ts"), "utf8");
   const reference = readFileSync(resolve(referenceRoot, "source-modules.md"), "utf8");
   const names = new Set([
     ...[...modules.matchAll(/sourcePrimitive\("([^"]+)"/gu)].map((match) => match[1]),

@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import { rustOptionElementCarrier } from "../../../../target-model/types/carriers/optional.js";
 import { rustRestSequenceElements } from "../../../../target-model/operations/rest-assembly.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput } from "../../program/plan-context.js";

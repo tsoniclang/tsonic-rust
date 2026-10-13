@@ -1,8 +1,8 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
-import { resolveRustTargetTypeRef, type RustTargetTypeResolutionOptions } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef, type RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
-import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";

@@ -1,4 +1,4 @@
-import type { RustSourceFileModel } from "../nodes.js";
+import type { RustSourceFileModel } from "../syntax/nodes.js";
 import { exposeRustSignatureTypes, rustPublicSignatureTypeNames } from "./signature-visibility.js";
 
 export function closeRustModuleTypeVisibility(

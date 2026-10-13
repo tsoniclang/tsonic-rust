@@ -21,8 +21,8 @@ import type { RustObjectRepresentationPlan } from "../project-types/object-repre
 import type { RustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
 import type { RustValueLifetimePlan } from "./value-lifetimes.js";
-import type { RustRuntimeReferencePlan } from "../runtime/index.js";
-import type { RustBinaryHookPlan } from "../runtime/index.js";
+import type { RustRuntimeReferencePlan } from "../project/index.js";
+import type { RustBinaryHookPlan } from "../project/index.js";
 import type {
   RustEnumMemberConstantIndex,
 } from "../declarations/enum-member-constants.js";
@@ -97,9 +97,9 @@ export interface RustTargetProgram {
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
   readonly classValues: import("../objects/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
-  readonly dispatchContexts: import("../runtime/dispatch-contexts.js").RustDispatchContextCatalog;
-  readonly dispatchContextDemand: import("../runtime/dispatch-demand.js").RustDispatchContextDemandPlan;
-  readonly binaryDispatchDemand: import("../runtime/binary-dispatch-demand.js").RustBinaryDispatchDemandPlan;
+  readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextCatalog;
+  readonly dispatchContextDemand: import("../project/dispatch-demand.js").RustDispatchContextDemandPlan;
+  readonly binaryDispatchDemand: import("../project/binary-dispatch-demand.js").RustBinaryDispatchDemandPlan;
   readonly foundation: RustFoundationPlan;
   readonly binaryHooks: readonly RustBinaryHookPlan[];
   readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];

@@ -1,4 +1,4 @@
-import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustPattern, type RustType } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustPattern, type RustType } from "../../target-ast/syntax/nodes.js";
 import { rustSuppressedErrorPattern, type RustErrorTransportPlan } from "./error-transport.js";
 
 const path = (name: string): RustExpr => ({ kind: "path", path: name });

@@ -3,7 +3,7 @@ import type { RustSourceParameterAbiFact } from "../../../../analysis/facts/keys
 import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { RustExpr, RustStmt } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { applyRustValueConversion } from "../../expressions/value-conversions.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";

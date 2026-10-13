@@ -1,6 +1,6 @@
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
-import type { RustStructuralInstantiation } from "../../policy/types/source-type-registry.js";
+import type { RustStructuralInstantiation } from "../../policy/types/model/source-type-registry.js";
 import type { RustSourceUnionDefinition } from "../../target-model/types/source-union-definitions.js";
 import { createRustGeneratedUnionPlan, type RustGeneratedUnionPlan } from "./generated-union-plan.js";
 import type { RustNativeMemoryLayout, RustNativeObjectField } from "../../target-model/operations/native-memory.js";

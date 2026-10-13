@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
-import type { RustBlock, RustItem } from "../../../target-ast/nodes.js";
+import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
 import {

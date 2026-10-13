@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustClosedTypeTestConstant } from "../../../target-model/operations/type-tests.js";
 import { BinaryExpression_Left, BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import type { RustClosedTypeTestPlan, RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";

@@ -1,7 +1,7 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustLocationTargetType } from "../../../target-model/types/index.js";
 import type { RustClosureCaptureFact } from "../../../analysis/facts/operations/keys.js";
-import type { RustType } from "../../target-ast/nodes.js";
+import type { RustType } from "../../target-ast/syntax/nodes.js";
 import { rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 

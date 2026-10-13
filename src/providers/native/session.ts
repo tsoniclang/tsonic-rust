@@ -38,8 +38,8 @@ import {
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
 import type { RustCompilerProviderProjection } from "./projection/projection.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
-import { createRustCompilerWorkerClient } from "./protocol/worker-client.js";
-import type { RustCompilerWorkerClient } from "./protocol/worker-client.js";
+import { createRustCompilerWorkerClient } from "./acquisition/worker-client.js";
+import type { RustCompilerWorkerClient } from "./acquisition/worker-client.js";
 
 export const rustCompilerProviderSpecifierPrefix = "@tsonic/rust/crates/";
 const rustStandardProviderPackageId = "rust-standard-library";

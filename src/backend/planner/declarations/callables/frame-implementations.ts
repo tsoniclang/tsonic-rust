@@ -1,7 +1,7 @@
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation } from "../../../../analysis/callables/frame-values.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../../../../analysis/facts/keys.js";
-import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";

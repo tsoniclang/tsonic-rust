@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../../analysis/facts/source-call-lifetimes.js";
 import {
@@ -47,7 +47,7 @@ import { rustValueDestinationContext } from "../value-destinations.js";
 import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../optional-storage.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";

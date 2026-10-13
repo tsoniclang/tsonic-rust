@@ -1,5 +1,5 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 

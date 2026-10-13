@@ -1,4 +1,4 @@
-import type { RustExpr } from "../../../backend/target-ast/nodes.js";
+import type { RustExpr } from "../../../backend/target-ast/syntax/nodes.js";
 
 export const enum RustPrecedence {
   Assignment = 0,

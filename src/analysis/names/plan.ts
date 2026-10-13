@@ -10,7 +10,7 @@ import {
 } from "../../target-model/names/identifiers.js";
 import { ObjectLiteralProperty_SourceName } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
-import { rustSourceDeclarationTypeName } from "../../policy/types/source-declarations.js";
+import { rustSourceDeclarationTypeName } from "../../policy/types/model/source-declarations.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
 

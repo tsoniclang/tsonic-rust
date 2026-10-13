@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { registerAliasFromPath } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";

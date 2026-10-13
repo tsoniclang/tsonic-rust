@@ -9,7 +9,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   resolveSelectedProviderDeclaration,
-} from "../../policy/evidence/selected-source.js";
+} from "../../policy/identities/selected-source.js";
 import {
   rustProviderOperationSourceArgumentMayMutate,
   rustProviderOperationSourceReceiverMayMutate,

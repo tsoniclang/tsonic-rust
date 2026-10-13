@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { rustPreparedValueLocation } from "../../objects/value-fields.js";
 import { planRustLexicalFunctionArguments } from "../../declarations/callables/lexical-functions.js";
 import {
@@ -45,7 +45,7 @@ import {
   rustTypeFromCarrierInContext,
 } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/nodes.js";
+import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import { planRustUnionMethodCall } from "./union-methods.js";

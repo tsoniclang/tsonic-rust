@@ -5,7 +5,7 @@ import { rustCallableConversionPhysical, type RustCallablePhysicalConversion,
   type RustCallablePhysicalValueConversion } from "../../../target-model/conversions/callable-physical.js";
 import { rustCallableInputProtocol } from "../../../target-model/types/index.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
-import type { RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

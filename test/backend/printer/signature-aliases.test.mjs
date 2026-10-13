@@ -1,8 +1,8 @@
-import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
+import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nameRustSignatureTypes as nameSignatureScope } from "../../../dist/backend/target-ast/normalization/signature-aliases.js";
-import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { closePublicRustTypeVisibility } from "../../../dist/backend/target-ast/normalization/signature-visibility.js";
 

@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
@@ -11,7 +11,7 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationIsDirectLocation } from "../../../analysis/facts/target-operation.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";

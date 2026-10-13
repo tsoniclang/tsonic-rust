@@ -1,13 +1,13 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
-import { type RustAttribute } from "../../target-ast/attributes.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { type RustAttribute } from "../../target-ast/syntax/attributes.js";
 import type {
   RustExpr,
   RustItem,
   RustStmt,
   RustType,
   RustVisibility,
-} from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import {
   allocateRustSyntheticName,
   allocateRustSyntheticTypeName,

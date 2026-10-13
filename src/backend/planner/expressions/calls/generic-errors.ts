@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustGenericCallableInvocationFact } from "../../../../analysis/facts/generic-callable-effects.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { planRustGenericCallableErrorJoin } from "../../declarations/callables/generic-errors.js";
 import { rustInjectNativeError, rustPropagateMappedErrorJoin } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";

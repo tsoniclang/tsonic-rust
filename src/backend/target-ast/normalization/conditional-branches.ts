@@ -1,6 +1,6 @@
-import type { RustExpr } from "../nodes.js";
+import type { RustExpr } from "../syntax/nodes.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
-import { negateRustBooleanExpression } from "../expressions.js";
+import { negateRustBooleanExpression } from "../syntax/expressions.js";
 
 export function simplifyRustBooleanConditional(
   condition: RustExpr,

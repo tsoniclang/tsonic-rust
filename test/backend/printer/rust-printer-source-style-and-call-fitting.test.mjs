@@ -1,7 +1,7 @@
-import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
+import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { printRustSourceFile as printFinalRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { rustLintAttributes } from "../../../dist/backend/target-ast/normalization/lint-policy.js";

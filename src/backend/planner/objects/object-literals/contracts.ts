@@ -17,7 +17,7 @@ import type {
   RustItem,
   RustStmt,
   RustType,
-} from "../../../target-ast/nodes.js";
+} from "../../../target-ast/syntax/nodes.js";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
@@ -26,7 +26,7 @@ import {
 } from "../../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { checkRustDataWrite } from "../data-writes.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";

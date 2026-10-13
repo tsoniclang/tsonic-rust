@@ -44,7 +44,7 @@ import { recordProjectSourceBinding } from "../expressions/references.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
-import { resolveRustTargetTypeRef, resolveRustTupleElementTargetType } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef, resolveRustTupleElementTargetType } from "../../policy/types/resolution/index.js";
 import { resolveRustInferredUnion } from "../../policy/types/resolution/inferred-unions.js";
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../policy/types/resolution/source-unions.js";
 import { rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";

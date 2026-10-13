@@ -6,7 +6,7 @@ import type {
   RustFunctionParam,
   RustGenerics,
   RustType,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 
 export type RustArtifactFacet =

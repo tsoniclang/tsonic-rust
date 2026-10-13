@@ -4,8 +4,8 @@ import {
   resolvedTargetStage,
 } from "@tsonic/target-api/artifacts";
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
-import type { RustItem } from "../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
+import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/cargo.js";
@@ -188,7 +188,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   }
   const hookErrorTypes = new Map<
     (typeof activeHooks)[number],
-    import("../../target-ast/nodes.js").RustType
+    import("../../target-ast/syntax/nodes.js").RustType
   >();
   for (const epilogue of activeHooks) {
     if (epilogue.errorBoundary === "provider-native") {
@@ -335,7 +335,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     return rejectedTargetStage(diagnostics);
   }
   const rootErrorTypeIdentity = rootErrorDomain.errorTypeIdentity;
-  const rootCrateErrorType: import("../../target-ast/nodes.js").RustType = {
+  const rootCrateErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
     kind: "named",
     path: rootErrorDomain.errorDomain === "runtime"
       ? "tsonic_rust_runtime::TsonicError"
@@ -362,7 +362,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     crateInitializerFunctionName,
     rootCrateErrorType,
   );
-  const lifecycleErrorType: import("../../target-ast/nodes.js").RustType = {
+  const lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
     kind: "named",
     path: rootErrorDomain.errorDomain === "runtime"
       ? "tsonic_rust_runtime::TsonicError" : `${input.program.configuration.crateName}::${programModuleName}::TsonicError`,
@@ -471,7 +471,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       if (plan === undefined) return rejectedTargetStage(diagnostics);
       hookCalls.set(hook, plan);
     }
-    const executeAsync = (future: import("../../target-ast/nodes.js").RustExpr) =>
+    const executeAsync = (future: import("../../target-ast/syntax/nodes.js").RustExpr) =>
       planRustAsyncExecution(executor === undefined
         ? { kind: "call", path: "tsonic_rust_runtime::block_on", args: [future] }
         : hookCalls.get(executor)!.call([future]), executor, (execution, selected) => errors.lifecycle(execution,
@@ -482,10 +482,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                 method: entryFunction.fallible ? "into_result" : "into_value", args: [] }
             : entryCall)
       : entryCall;
-    const completionType: import("../../target-ast/nodes.js").RustType = entryFunction.nativeTermination
+    const completionType: import("../../target-ast/syntax/nodes.js").RustType = entryFunction.nativeTermination
       ? { kind: "named", path: "std::process::ExitCode" }
       : { kind: "unit" };
-    const successfulCompletion: import("../../target-ast/nodes.js").RustExpr = {
+    const successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr = {
       kind: "path", path: entryFunction.nativeTermination ? "std::process::ExitCode::SUCCESS" : "()",
     };
     const initializationStatements = crateInitializer === undefined
@@ -554,10 +554,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const executedEntry = entryFunction.fallible
         ? errors.entry(entryExecution)
         : entryExecution;
-    const entryStatement: import("../../target-ast/nodes.js").RustStmt = entryFunction.nativeTermination
+    const entryStatement: import("../../target-ast/syntax/nodes.js").RustStmt = entryFunction.nativeTermination
       ? { kind: "let", name: "entry_result", mutable: false, init: executedEntry }
       : { kind: "expr", expr: executedEntry };
-    const completedEntry: import("../../target-ast/nodes.js").RustExpr = entryFunction.nativeTermination
+    const completedEntry: import("../../target-ast/syntax/nodes.js").RustExpr = entryFunction.nativeTermination
       ? { kind: "call", path: "std::process::Termination::report",
           args: [{ kind: "path", path: "entry_result" }] }
       : successfulCompletion;
@@ -631,13 +631,13 @@ function planRustWorkerDispatch(
   input: RustPlanningContext,
   entries: readonly RustWorkerEntryPlan[],
   errors: RustBinaryErrorPlan,
-  lifecycleErrorType: import("../../target-ast/nodes.js").RustType,
-  completionType: import("../../target-ast/nodes.js").RustType,
-  successfulCompletion: import("../../target-ast/nodes.js").RustExpr,
-  epilogueStatements: readonly import("../../target-ast/nodes.js").RustStmt[],
-  executeAsync: (future: import("../../target-ast/nodes.js").RustExpr) => import("../../target-ast/nodes.js").RustExpr,
+  lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType,
+  completionType: import("../../target-ast/syntax/nodes.js").RustType,
+  successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr,
+  epilogueStatements: readonly import("../../target-ast/syntax/nodes.js").RustStmt[],
+  executeAsync: (future: import("../../target-ast/syntax/nodes.js").RustExpr) => import("../../target-ast/syntax/nodes.js").RustExpr,
   diagnostics: TargetDiagnostic[],
-): readonly import("../../target-ast/nodes.js").RustStmt[] | undefined {
+): readonly import("../../target-ast/syntax/nodes.js").RustStmt[] | undefined {
   if (entries.length === 0) return Object.freeze([]);
   const mainErrorType = errors.errorType;
   const entryBySourceFile = new Map(entries.map((entry) =>
@@ -663,7 +663,7 @@ function planRustWorkerDispatch(
   }
   if (diagnostics.length > 0) return undefined;
 
-  const statements: import("../../target-ast/nodes.js").RustStmt[] = [];
+  const statements: import("../../target-ast/syntax/nodes.js").RustStmt[] = [];
   const bootstraps = [...input.program.sourceModuleConstructions.bootstraps()]
     .sort((left, right) => left.id.localeCompare(right.id, "en"));
   for (const [bootstrapIndex, bootstrap] of bootstraps.entries()) {
@@ -706,7 +706,7 @@ function planRustWorkerDispatch(
       init: bootstrapCall,
     }, { kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: entryName }] }, expression: { kind: "path", path: entryName }, whenTrue: { kind: "block", body: {
         statements: [
-          ...selectedEntries.map((entry): import("../../target-ast/nodes.js").RustStmt => {
+          ...selectedEntries.map((entry): import("../../target-ast/syntax/nodes.js").RustStmt => {
             const call = {
               kind: "call" as const,
               path: entry.callPath,
@@ -750,10 +750,10 @@ function planRustWorkerDispatch(
 }
 
 function okReturn(
-  errorType: import("../../target-ast/nodes.js").RustType,
-  completionType: import("../../target-ast/nodes.js").RustType,
-  successfulCompletion: import("../../target-ast/nodes.js").RustExpr,
-): import("../../target-ast/nodes.js").RustStmt {
+  errorType: import("../../target-ast/syntax/nodes.js").RustType,
+  completionType: import("../../target-ast/syntax/nodes.js").RustType,
+  successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr,
+): import("../../target-ast/syntax/nodes.js").RustStmt {
   return {
     kind: "return",
     expr: {
@@ -788,7 +788,7 @@ function allocateRustRootSupportItemName(
 
 function rustSourceArtifact(
   path: string,
-  model: import("../../target-ast/nodes.js").RustSourceFileModel,
+  model: import("../../target-ast/syntax/nodes.js").RustSourceFileModel,
 ): RustPlannedArtifact {
   return Object.freeze({ kind: "source", path, model });
 }

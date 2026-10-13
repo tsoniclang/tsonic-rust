@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustPlanContext } from "../program/plan-context.js";

@@ -1,10 +1,10 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
-import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
+import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustFlowReadProjection } from "../../../dist/backend/planner/expressions/flow-reads.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
-import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";

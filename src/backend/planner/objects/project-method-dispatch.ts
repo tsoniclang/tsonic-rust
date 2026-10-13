@@ -1,8 +1,8 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
-import { cloneRustExpression } from "../../target-ast/expressions.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";

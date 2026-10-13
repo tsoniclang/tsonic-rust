@@ -1,4 +1,4 @@
-import { rustDeriveAttributes } from "../../target-ast/attributes.js";
+import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { planRustTypeFamilyDeclaration } from "./type-families.js";
 import { diagnosticInput, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition } from "../liveness/directives.js";
@@ -6,8 +6,8 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustItem } from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import type { RustItem } from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustSourceDeclarationGenerics } from "./callables/generics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";

@@ -6,8 +6,8 @@ import type { RustValueConversion } from "../../target-model/operations/model.js
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustJsValueTargetType } from "../../target-model/types/index.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { selectRustStructuralFieldProjection } from "../../policy/types/structural-fields.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { selectRustStructuralFieldProjection } from "../../policy/types/objects/structural-fields.js";
 import { selectRustProjectedValueConversion, selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { resolveRustProjectField, type RustProjectFieldSelection } from "../operations/provider/project-fields.js";

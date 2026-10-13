@@ -5,7 +5,7 @@ import { planRustErrorObservations } from "../../../../dist/backend/planner/prog
 import { planRustSourceErrorObservations } from "../../../../dist/backend/planner/program/source-error-observations.js";
 import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/carriers/source-error.js";
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourceTypeCarrier, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
-import { selectRustFlowReadProjection } from "../../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 const named = path => ({ kind: "named", path });

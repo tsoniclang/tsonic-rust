@@ -24,7 +24,7 @@ import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { rustSourceStorageComponentContext } from "./source-storage-projection.js";
 import { bindRustSourceAliasArguments, resolveRustSelectedTypeArguments } from "./generic-arguments.js";
 import { instantiateTargetType, providerCarrierFromRelations, resolveOwnedSourceProfileTypeName, resolveProviderTypeIdentity, resolveSourceProfileCarrier } from "./providers.js";
-import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } from "../source-shapes.js";
+import { isRustStructuralObjectFieldDeclaration, isRustErasedNominalMember } from "../objects/source-shapes.js";
 import { resolveBoundSourceTypeParameter, resolveCallableType, resolveSourcePrimitive, resolveSourceTypeParameter, resolveUnion } from "./callables.js";
 import { resolveRustAuthoredTargetType, resolveRustTupleElementTargetTypeWithState } from "./tuples.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -51,7 +51,7 @@ import { resolveRustIndexedField } from "./indexed-fields.js";
 import { resolveRustConstructType } from "./constructors.js";
 import { resolveRustIndexedRecordType } from "./records.js";
 import { rustSourcePropertyTargetType } from "../../../target-model/types/projections.js";
-import type { RustSourceObjectField } from "../source-type-registry.js";
+import type { RustSourceObjectField } from "../model/source-type-registry.js";
 
 export function resolveRustFixedArrayTargetType(
   fixedArray: TsonicFixedArrayFact,

@@ -4,13 +4,13 @@ import type { RustOperationsProviderOptions } from "../model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustNamedTypeCarrierValue, rustStructuralObjectCarrierValue, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
-import { resolveSelectedProviderDeclaration } from "../../../../policy/evidence/selected-source.js";
+import { resolveSelectedProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { rustProviderOperationOwnerMatches } from "../../../../policy/operations/provider-selection.js";
 import { providerCarrierFromRelations } from "../../../../policy/types/resolution/providers.js";
 import { rustProviderRecordCopyMatches, type RustProviderRecordCopy } from "../../../../target-model/conversions/provider-record.js";
 import { selectRustProviderRecordField } from "./record-fields.js";
 import type { RustProviderRecordAbsentField } from "../../../../target-model/conversions/provider-record-absence.js";
-import { selectRustStructuralFieldProjection } from "../../../../policy/types/structural-fields.js";
+import { selectRustStructuralFieldProjection } from "../../../../policy/types/objects/structural-fields.js";
 import { selectRustExactIntegerConversion } from "../../../../target-model/conversions/exact-integer.js";
 import { selectRustSourceValueConversion } from "../../../../policy/conversions/selection.js";
 

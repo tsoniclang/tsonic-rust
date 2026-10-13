@@ -1,7 +1,7 @@
 import { acceptRustMemberOperation, elementProvenance, normalizeSelectedOperationInputCarrier, rejectSelectedOperation } from "./result.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
-import { isProjectSourceDeclaration } from "../../../policy/evidence/selected-source.js";
+import { isProjectSourceDeclaration } from "../../../policy/identities/selected-source.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import {
   rustFixedArrayCarrierValue,

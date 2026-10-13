@@ -45,10 +45,10 @@ import {
   substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
 import { denseDefined } from "./project.js";
-import { mergeProviderDeclarationIdentities } from "../../evidence/selected-source.js";
+import { mergeProviderDeclarationIdentities } from "../../identities/selected-source.js";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { resolveRustTargetType } from "./target.js";
-import { rustProviderGenericRequirementsAreSatisfied } from "../provider-generic-requirements.js";
+import { rustProviderGenericRequirementsAreSatisfied } from "../../constraints/provider-generic-requirements.js";
 import { rustProviderOperationOwnerMatches } from "../../operations/provider-selection.js";
 import type {
   ExtensionFactSubject,
@@ -58,7 +58,7 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import type { RustProviderTypeRow } from "../../../providers/packages/model.js";
-import type { RustSourceProfileRegistry } from "../source-profile.js";
+import type { RustSourceProfileRegistry } from "../model/source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type {
   RustTargetGenericArgument,

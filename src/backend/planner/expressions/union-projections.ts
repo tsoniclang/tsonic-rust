@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { missingFactDiagnostic } from "../diagnostics.js";

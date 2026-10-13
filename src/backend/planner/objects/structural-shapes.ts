@@ -1,10 +1,10 @@
-import { rustDeriveAttributes } from "../../target-ast/attributes.js";
+import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import {
   createRustSourceFile,
   emptyRustGenerics,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import type {
   RustItem,
   RustGenericArgument,
@@ -13,7 +13,7 @@ import type {
   RustStructField,
   RustType,
   RustVisibility,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 import {
   rustRuntimeAliasImports,

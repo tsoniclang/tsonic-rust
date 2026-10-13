@@ -1,7 +1,7 @@
 import type { RustGenericRequirement } from "../../../analysis/declarations/generic-requirements.js";
 import type { RustLifetimeRef, RustSourceGenericParameterContract } from "../../../target-model/lifetimes/index.js";
 import { rustLifetimesEqual } from "../../../target-model/lifetimes/index.js";
-import type { RustGenericParameter, RustGenerics, RustTypeBound, RustWherePredicate } from "../../target-ast/nodes.js";
+import type { RustGenericParameter, RustGenerics, RustTypeBound, RustWherePredicate } from "../../target-ast/syntax/nodes.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 

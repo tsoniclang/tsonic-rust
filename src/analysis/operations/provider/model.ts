@@ -5,7 +5,7 @@ import type { RustProjectMethodPropertyPlanRegistry } from "../../project-types/
 import type { RustProjectMethodDispatchPlanRegistry } from "../../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../../project-types/type-policy.js";
 import type { RustSourceCallableAbiResolver } from "../../../policy/ownership/source-callable-abi.js";
-import type { RustTargetTypeResolutionOptions } from "../../../policy/types/resolution.js";
+import type { RustTargetTypeResolutionOptions } from "../../../policy/types/resolution/index.js";
 import type { RustReceiverFieldAliasQueries } from "../../project-types/receiver-field-aliases.js";
 
 export const sourceCallMarkerByIdentity = new Map(

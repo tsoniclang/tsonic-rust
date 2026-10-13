@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustUnionLeaf } from "../../../target-model/types/union-relations.js";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { planRustUnionPattern } from "./union-patterns.js";

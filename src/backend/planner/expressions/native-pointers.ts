@@ -12,7 +12,7 @@ import {
 } from "../../../analysis/facts/keys.js";
 import type {
   RustExpr,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import {
   missingFactDiagnostic,
 } from "../diagnostics.js";

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanningContext } from "../context.js";
-import type { RustDeadCodeDisposition } from "../../target-ast/nodes.js";
+import type { RustDeadCodeDisposition } from "../../target-ast/syntax/nodes.js";
 import type {
   RustDispatchMemberRole,
   RustGeneratedProjectFieldRole,

@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import {
   KindElementAccessExpression,
   KindParenthesizedExpression,
@@ -22,7 +22,7 @@ import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { sourceFieldSelectedOperationMatches } from "../properties.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";

@@ -3,7 +3,7 @@ import { fieldFactKey } from "@tsonic/tsts";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { rustEmptyObjectTargetType, rustSourceLocationTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";

@@ -4,7 +4,7 @@ import { rustFinalizedSourceInputs, type RustFinalizedSourceInput } from "../../
 import { rustTargetOperationFactKey, rustSourceBindingFactKey, type RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTargetOperationIsDirectLocation } from "../../../analysis/facts/target-operation.js";
 import { rustNativeStorageRoot } from "../../../analysis/facts/native-storage-paths.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath, type RustPlanContext } from "../program/plan-context.js";
 import { planRustPromotedStorageLocation, type RustExpressionPlanner } from "../expressions/typed-locations.js";

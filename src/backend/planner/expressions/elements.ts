@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
@@ -22,7 +22,7 @@ import { planPropertyAccess } from "./properties.js";
 import { planRustIndexedFieldRead } from "./indexed-fields.js";
 import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {

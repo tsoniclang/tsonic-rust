@@ -13,7 +13,7 @@ import {
   rustMutatedReferentFactKey,
   rustSourceParameterAbiFactKey,
 } from "../../../../analysis/facts/keys.js";
-import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import {
   requireRustCarrierRequirements,

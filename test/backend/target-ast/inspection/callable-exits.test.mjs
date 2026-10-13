@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../../../dist/backend/target-ast/value-block.js";
+import { rustValueBlock } from "../../../../dist/backend/target-ast/syntax/value-block.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustExpressionExitsCallable } from "../../../../dist/backend/target-ast/inspection/callable-exits.js";

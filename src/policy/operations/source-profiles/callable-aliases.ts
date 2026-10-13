@@ -1,8 +1,8 @@
 import { createSourceCallOnlyAliasQuery } from "@tsonic/target-api/source";
 import type { SourceCallOnlyAlias } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../../model/context.js";
-import type { RustSourceProfileRegistry } from "../../types/source-profile.js";
-import { resolveSelectedSourceProfileMember } from "../../evidence/selected-source.js";
+import type { RustSourceProfileRegistry } from "../../types/model/source-profile.js";
+import { resolveSelectedSourceProfileMember } from "../../identities/selected-source.js";
 
 export function createRustSourceProfileCallableAliasQuery(
   context: RustSourcePolicyContext,

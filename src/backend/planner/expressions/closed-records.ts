@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustJsValueTargetType } from "../../../target-model/types/index.js";

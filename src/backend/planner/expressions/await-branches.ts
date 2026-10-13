@@ -5,7 +5,7 @@ import { rustAwaitSourceErrorEffectsFactKey } from "../../../analysis/facts/awai
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import { rustJsPromiseTargetId, isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";

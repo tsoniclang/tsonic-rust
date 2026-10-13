@@ -38,9 +38,9 @@ import type { RustOperationPolicyContext } from "../../policy/operations/contrac
 import type { RustOperationsProviderOptions, RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustProviderOperationRow } from "../../providers/packages/model.js";
 import type { RustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
-import type { RustSourceProfileRegistry } from "../../policy/types/source-profile.js";
+import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
-import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution.js";
+import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCaptureStorage } from "../callables/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";

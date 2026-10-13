@@ -30,14 +30,14 @@ import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier, resolveRustRecordShape } from "../objects/record-shapes.js";
 import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
 import { selectRustUnionVariantByCheckedType } from "./union-context.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
-import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation } from "../facts/value-carrier-queries.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -154,7 +154,7 @@ export function resolveRecordLiteralCarrier(
   }
   const closed = resolveRustClosedRecordLiteral(walk, expression, sourceFile, selectedExpected, properties);
   if (closed.kind === "selected") return closed.carrier;
-  let contextualReconciliation: import("../../policy/types/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
+  let contextualReconciliation: import("../../policy/types/resolution/value-carrier-reconciliation.js").RustAppliedValueCarrierReconciliation | undefined;
   if ((expected !== undefined || contextualSelection.kind === "selected") && rustSourceTypeCarrierValue(selectedExpected)?.shape !== "object" &&
     rustSourceUnionCarrierValue(selectedExpected) === undefined &&
     rustStructuralObjectCarrierValue(selectedExpected) === undefined) {

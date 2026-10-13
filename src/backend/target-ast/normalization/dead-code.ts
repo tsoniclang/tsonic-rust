@@ -1,10 +1,10 @@
-import { type RustAttribute } from "../attributes.js";
+import { type RustAttribute } from "../syntax/attributes.js";
 import type {
   RustDeadCodeDisposition,
   RustItem,
   RustSourceFileModel,
   RustStructField,
-} from "../nodes.js";
+} from "../syntax/nodes.js";
 import { rustLintAttributes } from "./lint-policy.js";
 
 interface RustDeadCodeOwner {

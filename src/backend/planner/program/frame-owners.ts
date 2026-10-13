@@ -1,4 +1,4 @@
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
 
 export interface RustLiveFrameOwner {

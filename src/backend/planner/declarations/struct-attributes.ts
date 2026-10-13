@@ -1,4 +1,4 @@
-import { type RustAttribute } from "../../target-ast/attributes.js";
+import { type RustAttribute } from "../../target-ast/syntax/attributes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 
 export function structAttributes(typeName: string): readonly RustAttribute[] | undefined {

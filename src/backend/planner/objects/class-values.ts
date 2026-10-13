@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustItem, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustItem, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
 import { planRustModuleCell } from "../project/module-storage.js";

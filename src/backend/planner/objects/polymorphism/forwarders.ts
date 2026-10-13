@@ -5,7 +5,7 @@ import {
   projectTypeSubstitutions,
   rustFunctionTypesMatch,
 } from "./model.js";
-import { cloneRustExpression as cloneExpression } from "../../../target-ast/expressions.js";
+import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import {
   diagnosticInput,
@@ -20,13 +20,13 @@ import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProj
 import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
 import { rustProjectDispatchObjectType, rustProjectDispatchTraitType } from "./names.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { planRootCallableForwarder } from "./callable-adapters.js";
 import { rustProjectThisReferences } from "./this-references.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
-import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustProjectDowncastRoute } from "../../../../analysis/project-types/type-policy.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";

@@ -1,4 +1,4 @@
-import type { RustSelectedSourceMemberIdentity } from "../../../evidence/selected-source.js";
+import type { RustSelectedSourceMemberIdentity } from "../../../identities/selected-source.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import type { JsOperationRequest, JsOperationSelection } from "./model.js";

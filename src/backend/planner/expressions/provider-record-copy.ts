@@ -1,9 +1,9 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustProviderRecordCopy } from "../../../target-model/conversions/provider-record.js";
 import { rustProviderRecordCopyMatches } from "../../../target-model/conversions/provider-record.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { readRustStoredObjectField } from "../objects/project-storage.js";

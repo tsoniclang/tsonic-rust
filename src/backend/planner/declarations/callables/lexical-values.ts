@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustSourceCallableValueFactKey } from "../../../../analysis/facts/keys.js";
-import type { RustStmt } from "../../../target-ast/nodes.js";
+import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { planRustSourceCallableValueConstruction } from "../../expressions/source-callable-value.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";

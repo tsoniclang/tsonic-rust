@@ -7,7 +7,7 @@ import {
   rustResourceManagementFactKey,
   rustTargetOperationFactKey,
 } from "../facts/keys.js";
-import type { RustBinaryHookPlan } from "../runtime/index.js";
+import type { RustBinaryHookPlan } from "../project/index.js";
 import type { RustProviderBinaryHookRow, RustProviderOperationRow } from "../../providers/packages/model.js";
 import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
 

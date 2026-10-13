@@ -1,6 +1,6 @@
 import type { RustSuspendedOwnedReceiver } from "../../../../analysis/facts/callables-and-resources.js";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
-import type { RustStmt } from "../../../target-ast/nodes.js";
+import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 
 export function planRustSuspendedReceiver(

@@ -71,14 +71,14 @@ import {
   resolveExpressionCarrier,
   resolveExpressionCarrierBeforeFlowReadProjection,
 } from "../expressions/carriers.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
 import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../facts/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustNumericPromotionConversion } from "../../policy/operations/numeric/promotion.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";

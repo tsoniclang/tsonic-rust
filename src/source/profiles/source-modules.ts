@@ -7,9 +7,9 @@ import type {
 import {
   rustLangModule,
   rustTypesModule,
-} from "../semantics/identity.js";
+} from "../extension/identity.js";
 
-export { rustLangModule, rustTypesModule } from "../semantics/identity.js";
+export { rustLangModule, rustTypesModule } from "../extension/identity.js";
 
 const rustPrimitiveAliases = [
   sourcePrimitive("bool", "bool", "boolean"),

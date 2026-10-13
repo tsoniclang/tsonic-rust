@@ -5,7 +5,7 @@ import {
 } from "./utilities.js";
 import { compilerModuleSpecifier } from "./operations.js";
 import { rustTypesModule } from "../../../source/profiles/source-modules.js";
-import { rustSourceTypeExportIds } from "../../../source/semantics/identity.js";
+import { rustSourceTypeExportIds } from "../../../source/extension/identity.js";
 import type { ProviderTypeExpression } from "@tsonic/tsts";
 import type {
   RustCompilerConstArgument,

@@ -8,9 +8,9 @@ import { rustCarrierSupportsTrait } from "../../../dist/target-model/types/carri
 import { rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../dist/target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../../dist/policy/types/model/type-family-normalization.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
-import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { rustOptionTargetType, rustSourceLocationTargetType } from "../../../dist/target-model/types/index.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../dist/target-model/types/carriers/indexed-fields.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";

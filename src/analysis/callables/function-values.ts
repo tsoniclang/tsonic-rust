@@ -4,7 +4,7 @@ import type { RustSourceParameterAbi } from "../../policy/ownership/source-calla
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
-import { rustCallableOrigin } from "../../policy/types/callable-origins.js";
+import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { resolveRustCallableEnvironment, bindRustCallableEnvironment } from "../../policy/types/resolution/callable-environments.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";

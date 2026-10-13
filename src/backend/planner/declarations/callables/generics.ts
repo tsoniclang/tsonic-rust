@@ -10,7 +10,7 @@ import {
   type RustGenerics,
   type RustGenericParameter,
   type RustTypeBound,
-} from "../../../target-ast/nodes.js";
+} from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier } from "../../program/plan-context.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";

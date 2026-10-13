@@ -1,4 +1,4 @@
-import { type RustAttribute } from "../attributes.js";
+import { type RustAttribute } from "../syntax/attributes.js";
 import type {
   RustBlock,
   RustClosureParameter,
@@ -9,7 +9,7 @@ import type {
   RustStmt,
   RustTraitFunction,
   RustType,
-} from "../nodes.js";
+} from "../syntax/nodes.js";
 import { finalizeRustBlockLiveness } from "../inspection/source-liveness.js";
 import { firstAccessesInStatements, hasUnobservedFinalPathWrite, maxWritesInStatements } from "../inspection/source-dataflow.js";
 import { rustLintAttributes } from "./lint-policy.js";
@@ -22,7 +22,7 @@ import { rustItemsReferenceModuleAlias } from "../inspection/source-module-usage
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { mergeRustAdjacentConditionalBranches, simplifyRustBooleanConditional } from "./conditional-branches.js";
 import { normalizeRustOptionalUnitMatch } from "./option-conditionals.js";
-import { mapRustExpressionChildren } from "../expression-children.js";
+import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { lowerRustCompletionScope } from "./completion-regions.js";
 import { closeRustCompletionBindings } from "./completion-bindings.js";
 import { appendRustNamingAllowance, finalizeRustFunctionNames, finalizeRustItemNames,

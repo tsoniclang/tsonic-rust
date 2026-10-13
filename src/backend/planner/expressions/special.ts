@@ -24,7 +24,7 @@ import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, ru
 import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustOptionalChainFact } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

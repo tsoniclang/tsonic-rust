@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustType } from "../../target-ast/nodes.js";
+import type { RustGenericArgument, RustType } from "../../target-ast/syntax/nodes.js";
 
 export type RustNativeFutureRepresentation =
   | { readonly kind: "ready" }

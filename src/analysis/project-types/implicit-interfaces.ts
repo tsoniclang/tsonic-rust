@@ -2,7 +2,7 @@ import type { Node, Type } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";

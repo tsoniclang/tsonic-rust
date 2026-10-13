@@ -24,7 +24,7 @@ import type {
 import type { RustSourcePackageComponentPlan } from "../program/source-package-components.js";
 import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
-import type { RustSourceFileModel } from "../../target-ast/nodes.js";
+import type { RustSourceFileModel } from "../../target-ast/syntax/nodes.js";
 
 const minimumRustArtifactReconstructionCount = 64;
 const maximumReconstructionsPerSourceFile = 32;

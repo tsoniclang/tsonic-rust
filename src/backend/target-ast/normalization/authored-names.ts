@@ -1,5 +1,5 @@
-import type { RustAttribute } from "../attributes.js";
-import type { RustExpr, RustGenerics, RustImplFunction, RustItem, RustPattern, RustStmt, RustTraitFunction } from "../nodes.js";
+import type { RustAttribute } from "../syntax/attributes.js";
+import type { RustExpr, RustGenerics, RustImplFunction, RustItem, RustPattern, RustStmt, RustTraitFunction } from "../syntax/nodes.js";
 import { rustLintAttributes } from "./lint-policy.js";
 
 export type RustNameStyle = "snake" | "camel" | "upper";

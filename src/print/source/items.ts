@@ -20,7 +20,7 @@ import type {
   RustTraitFunction,
   RustType,
   RustVisibility,
-} from "../../backend/target-ast/nodes.js";
+} from "../../backend/target-ast/syntax/nodes.js";
 
 export function printRustSourceFile(model: RustSourceFileModel): string {
   const sections: string[] = [`// ${model.headerComment}`];

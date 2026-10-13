@@ -3,8 +3,8 @@ import type {
   RustGenerics,
   RustItem,
   RustType,
-} from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 
 export function rustDefaultImplementation(
   target: RustType,

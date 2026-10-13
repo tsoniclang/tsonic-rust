@@ -1,4 +1,4 @@
-import type { RustPattern } from "../../backend/target-ast/nodes.js";
+import type { RustPattern } from "../../backend/target-ast/syntax/nodes.js";
 
 export function printRustPattern(pattern: RustPattern): string {
   switch (pattern.kind) {

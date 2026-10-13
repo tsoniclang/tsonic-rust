@@ -7,7 +7,7 @@ import {
 import type {
   RustSourceProfileKind,
   RustSourceProfileRegistry,
-} from "../../policy/types/source-profile.js";
+} from "../../policy/types/model/source-profile.js";
 
 export function createRustSourceProfileRegistry(
   sourceFiles: readonly SourceFile[],

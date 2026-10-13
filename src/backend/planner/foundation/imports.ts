@@ -3,7 +3,7 @@ import {
   createRustSourceFile,
   type RustItem,
   type RustSourceFileModel,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 
 export function applyRustFoundationImports(
   model: RustSourceFileModel,

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectConstructionPlan } from "../../../analysis/project-types/construction-plan.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
 import { createRustFrameBindingValue, initializeOrWriteRustFrameBindingValue, initializeRustFrameBindingValue, rustFrameBindingLocalLocation } from "../bindings/frame-storage.js";

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustOptionalStorageRequirement } from "../../../analysis/declarations/type-projections.js";
-import type { RustGenericParameter, RustCallGenericArgument } from "../../target-ast/nodes.js";
+import type { RustGenericParameter, RustCallGenericArgument } from "../../target-ast/syntax/nodes.js";
 import { substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "./render.js";
 import { rustGenericRequirementBounds } from "./generic-bounds.js";

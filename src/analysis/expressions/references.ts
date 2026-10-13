@@ -1,6 +1,6 @@
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { finalizeProjectSourceGenericArguments } from "../operations/project-call-generics.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import {
   KindExportAssignment,
   KindFunctionDeclaration,
@@ -36,17 +36,17 @@ import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recor
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
 import { recordRustComputedCallEvaluation } from "../operations/computed-members.js";
-import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/safety/source-explicit-safety.js";
+import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/operations/safety/source-explicit-safety.js";
 import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
-import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
 import { selectRustOptionalCallResult } from "../operations/provider/calls/instantiation.js";
 import {
   readRustReferenceOperation,
   resolvedRustReferenceOperationCarrier,
 } from "./reference-operations.js";
-import { resolveRustExactNullishValueCarrier, resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustExactNullishValueCarrier, resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
