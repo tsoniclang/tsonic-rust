@@ -16,6 +16,7 @@ import { rustProducerErrorReference, rustProducerErrorTargetType } from "./produ
 import { rustNativeErrorJoinReference, rustNativeErrorJoinTargetType } from "../native-error-joins.js";
 import { rustTargetCaptureArguments } from "./generic-references.js";
 import { rustTargetTypeComponentRole, type RustTargetTypeChildRole, type RustTargetTypeChildSelector } from "./children.js";
+import type { RustCallableSignature } from "./callable-signatures.js";
 
 export function substituteRustTargetTypeParameters(
   type: TargetTypeRef,
@@ -400,7 +401,7 @@ function substituteCarrierParts(
       const callable = rustGenericCallableValue(type);
       if (callable !== undefined) return rustGenericCallableCarrier({
         origin: callable.origin,
-        signature: callable.signature,
+        signature: substituteCallableSignatureLifetimes(callable.signature, lifetimeSubstitutions),
         environment: callable.environment.map(argument => substituteChild(
           argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
         ...(callable.physical === undefined ? {} : { physical: { ...callable.physical,
@@ -413,7 +414,7 @@ function substituteCarrierParts(
         owner: frame.owner.kind === "lexical" ? frame.owner : { ...frame.owner,
           instance: substituteChild(frame.owner.instance, substitutions,
             lifetimeSubstitutions, constSubstitutions, normalize) },
-        signature: frame.signature,
+        signature: substituteCallableSignatureLifetimes(frame.signature, lifetimeSubstitutions),
         environment: frame.environment.map(argument => substituteChild(
           argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
       });
@@ -593,6 +594,17 @@ export function substituteRustTargetGenericArgument(
     normalize,
     substituteRustTargetGenerics,
   )[0]!;
+}
+
+function substituteCallableSignatureLifetimes(
+  signature: RustCallableSignature,
+  lifetimes: ReadonlyMap<string, RustLifetimeRef>,
+): RustCallableSignature {
+  if (lifetimes.size === 0) return signature;
+  return { ...signature,
+    parameters: signature.parameters.map(parameter => substituteRustTargetGenerics(parameter, new Map(), lifetimes)),
+    result: substituteRustTargetGenerics(signature.result, new Map(), lifetimes),
+  };
 }
 
 function lifetimeSubstitutionsOutsideBinder(

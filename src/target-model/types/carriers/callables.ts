@@ -141,6 +141,7 @@ export function rustStructuralMethodStorageCarrier(
   const storageCarrier = rustCallableTargetType(
     [receiverCarrier, ...callable.parameters],
     callable.result,
+    callable.lifetime,
   );
   return presence === "optional" ? rustOptionTargetType(storageCarrier) : storageCarrier;
 }

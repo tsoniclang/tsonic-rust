@@ -7,15 +7,49 @@ import {
   rustFrameCallableCarrier, rustFrameCallableTargetType, rustFrameCallableValue, rustFrameCallableProtocol,
 } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenerics, substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { rustTargetTypeParameterIdentities } from "../../../dist/target-model/types/carriers/generic-references.js";
-import { isRustCallableCarrier, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { isRustCallableCarrier, rustCallableProtocol, rustCallableTargetType, rustStructuralMethodStorageCarrier } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
+import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 
 const number = { kind: "source-primitive", name: "float64" };
 const string = { kind: "target-named", id: "rust.std.String" };
 const parameter = identity => ({ kind: "type-parameter", identity, name: identity });
 const owner = { kind: "lexical", origin: { fileName: "/factory.ts", declarationIdentity: "checked:activation:1" } };
+
+test("callable signatures substitute only free native lifetimes and preserve their quantified type binders", () => {
+  const free = { kind: "parameter", identity: "storage", name: "storage" };
+  const bound = { kind: "bound", binderIdentity: "call-binder", identity: "call", name: "call" };
+  const reference = lifetime => ({ kind: "reference", referent: parameter("Value"), mutable: false, lifetime });
+  const nested = { kind: "function-pointer", args: [reference(bound)], result: reference(free),
+    lifetimeBinder: { identity: "call-binder", parameters: [{ lifetime: bound, outlives: [] }] } };
+  const selected = rustGenericCallableTargetType([parameter("Value")], [reference(free), nested], reference(free), owner.origin);
+  const original = rustGenericCallableValue(selected);
+  const protocolParameter = original.signature.typeParameters[0];
+  const substitutions = new Map([[rustLifetimeKey(free), { kind: "static" }], [rustLifetimeKey(bound), { kind: "static" }]]);
+  const result = rustGenericCallableValue(substituteRustTargetGenerics(selected,
+    new Map([[protocolParameter.identity, number]]), substitutions));
+  assert.equal(rustTargetTypeRefEquals(result.signature.parameters[0].referent, protocolParameter), true);
+  assert.equal(result.signature.parameters[0].lifetime.kind, "static");
+  assert.equal(result.signature.parameters[1].args[0].lifetime.identity, bound.identity);
+  assert.equal(result.signature.parameters[1].result.lifetime.kind, "static");
+  assert.equal(result.signature.result.lifetime.kind, "static");
+  assert.deepEqual(result.signature.typeParameters, original.signature.typeParameters);
+  assert.deepEqual(result.signature.environmentParameters, original.signature.environmentParameters);
+  assert.deepEqual(result.origin, original.origin);
+  assert.equal(Object.isFrozen(result.signature.parameters), true);
+});
+
+test("monomorphic structural method storage preserves its selected native environment lifetime", () => {
+  for (const lifetime of [{ kind: "static" }, { kind: "parameter", identity: "environment", name: "environment" }]) {
+    const callable = rustCallableTargetType([number], string, lifetime);
+    const selected = rustStructuralMethodStorageCarrier(number, callable, "required");
+    assert.deepEqual(rustCallableProtocol(selected).lifetime, lifetime);
+    assert.deepEqual(rustCallableProtocol(selected).parameters, [number, number]);
+  }
+});
 
 test("monomorphic and quantified callable storage use the same normalized signature owner", () => {
   const ordinary = rustCallableSignatureBinding([], [number], string);
