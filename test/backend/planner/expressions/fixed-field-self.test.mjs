@@ -1,3 +1,4 @@
+import { rustClosureCaptureEquals } from "../../../../dist/target-model/records/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -30,18 +31,18 @@ runtimeCarrier: { get: (reference) => {
 }
 
 test("fixed field self facts carry one exact dense relation without competing field storage", () => {
-  assert.equal("closureCapture".equals(fact, { ...fact, recursiveField: { ...field } }), true);
+  assert.equal(rustClosureCaptureEquals(fact, { ...fact, recursiveField: { ...field } }), true);
   for (const changed of [
     { ...field, declaration: {} }, { ...field, receiver: {} }, { ...field, reference: {} },
     { ...field, references: [] }, { ...field, references: [references[0], {}] },
     { ...field, references: Array(2) }, { ...field, references: [...references].reverse() },
     { ...field, carrier: stringCarrier }, { ...field, unchecked: true },
-  ]) assert.equal("closureCapture".equals(fact, { ...fact, recursiveField: changed }), false);
+  ]) assert.equal(rustClosureCaptureEquals(fact, { ...fact, recursiveField: changed }), false);
   for (const changed of [
     { ...fact, recursiveDeclaration: {} }, { ...fact, recursiveField: undefined },
     { ...fact, recursiveField: { ...field, declaration: undefined }, recursiveDeclaration: undefined },
     { ...fact, receiverFields: [{ ...field, storage: { kind: "shared", initialization: "deferred" } }] },
-  ]) assert.equal("closureCapture".equals(fact, changed), false);
+  ]) assert.equal(rustClosureCaptureEquals(fact, changed), false);
 });
 
 test("fixed self schema rejects accessors without reading their hidden values", () => {
@@ -49,7 +50,7 @@ test("fixed self schema rejects accessors without reading their hidden values", 
   for (const key of ["declaration", "receiver", "reference", "references", "carrier"]) {
     const changed = { ...field };
     Object.defineProperty(changed, key, { enumerable: true, get() { reads += 1; return field[key]; } });
-    assert.equal("closureCapture".equals(fact, { ...fact, recursiveField: changed }), false);
+    assert.equal(rustClosureCaptureEquals(fact, { ...fact, recursiveField: changed }), false);
   }
   assert.equal(reads, 0, "metadata validation never executes a getter");
 });

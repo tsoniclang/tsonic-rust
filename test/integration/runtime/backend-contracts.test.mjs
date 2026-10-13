@@ -1,3 +1,4 @@
+import { rustTargetOperationFactEquals } from "../../../dist/analysis/operations/contracts/equality.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
@@ -209,8 +210,8 @@ test("operation fact equality is structural and independent of metadata key orde
     kind: "provider-operation",
   };
 
-  assert.equal("targetOperation".equals(left, right), true);
-  assert.equal("targetOperation".equals(left, {
+  assert.equal(rustTargetOperationFactEquals(left, right), true);
+  assert.equal(rustTargetOperationFactEquals(left, {
     ...right,
     abi: { ...abi, target: { form: "call", path: "acme::different" } },
   }), false);

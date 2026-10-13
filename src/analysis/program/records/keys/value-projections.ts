@@ -1,3 +1,4 @@
+import { rustFlowReadProjectionEquals } from "../../../../target-model/records/equality.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -8,22 +9,7 @@ export const rustOptionProjectionFactKey: RustPlanKey<RustOptionProjectionFact> 
   defineRustPlanKey("optionProjection", closedMetadataEquals);
 
 export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFact> =
-  defineRustPlanKey("flowReadProjection", (left, right) =>
-    left.kind === right.kind &&
-    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
-    rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
-    (left.kind !== "union-map" || right.kind === "union-map" &&
-      rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) && closedMetadataEquals(left.arms, right.arms)) &&
-    (left.kind !== "source-union" && left.kind !== "runtime-union" ||
-      (right.kind === left.kind && left.variant === right.variant &&
-        rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
-        closedMetadataEquals(left.project, right.project))) &&
-    (left.kind !== "project-downcast" ||
-      (right.kind === "project-downcast" &&
-        rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
-        closedMetadataEquals(left.projection, right.projection))) &&
-    (left.kind !== "program-error-variant" ||
-      (right.kind === "program-error-variant" && left.variant === right.variant)));
+  defineRustPlanKey("flowReadProjection", rustFlowReadProjectionEquals);
 
 export const rustContextualValueConversionFactKey: RustPlanKey<RustContextualValueConversionFact> =
   defineRustPlanKey("contextualValueConversion", closedMetadataEquals);

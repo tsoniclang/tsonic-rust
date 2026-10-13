@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
 import { resolveProjectSourceCarrier } from "../../../dist/policy/types/resolution/project.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -40,6 +41,7 @@ function selfReference({ generic = false, optional = true } = {}) {
   };
   const semantics = { types, declarations, facts: { typeSubjects: () => [] } };
   const context = {
+    records: createRustRecordFixture(),
     currentSemantics: semantics,
     semanticsFor: () => semantics,
     source: { navigation: { isProjectDeclaration: node => node === declaration },

@@ -1,3 +1,4 @@
+import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
@@ -58,7 +59,7 @@ test("runtime union projections retain exact variants, absence and ownership", (
             ...(!optional ? [{ ...selected.fact, selectedCarrier: rustOptionTargetType(alternative.carrier) }] : []),
           ]) {
             context.diagnostics.length = 0;
-            assert.equal("flowReadProjection".equals(selected.fact, changed), false);
+            assert.equal(rustFlowReadProjectionEquals(selected.fact, changed), false);
             assert.equal(planRustFlowReadProjection(node, input, changed, context), undefined);
             assert.equal(context.diagnostics.length, 1);
           }

@@ -155,7 +155,8 @@ test("analysis validates exact captured storage facts against the canonical over
     { ...fact, storage: { kind: "cell", initialization: "deferred" } },
     { ...fact, storage: { ...fact.storage, initialization: "ready" } },
     { ...fact, storage: { ...fact.storage, unchecked: true } }]) {
-    const input = program(selected);
+    const input = program();
+    input.records = { ...input.records, capturedFieldStorage: { get: () => selected } };
     assert.equal(validatedRustCapturedFieldStorageFact(declaration, input), undefined);
   }
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, { ...captures, isCaptured: () => false })), undefined);

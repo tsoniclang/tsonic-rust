@@ -1,3 +1,4 @@
+import { rustComputedMemberEquals } from "../../../../dist/target-model/records/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -73,8 +74,8 @@ test("computed member fact identity retains both evaluation decisions", () => {
   const receiver = {};
   const key = {};
   const original = { receiver, key, accessMode: "read", evaluateReceiver: true, evaluateKey: true };
-  assert.equal("computedMember".equals(original, { ...original }), true);
+  assert.equal(rustComputedMemberEquals(original, { ...original }), true);
   for (const field of ["evaluateReceiver", "evaluateKey"]) {
-    assert.equal("computedMember".equals(original, { ...original, [field]: false }), false, field);
+    assert.equal(rustComputedMemberEquals(original, { ...original, [field]: false }), false, field);
   }
 });

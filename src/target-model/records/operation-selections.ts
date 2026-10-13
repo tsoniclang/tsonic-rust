@@ -4,6 +4,14 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustReceiverFieldCapture } from "./receiver-captures.js";
 import type { RustCapturedFieldStorage } from "../types/field-storage.js";
 
+export interface RustComputedMemberFact {
+  readonly receiver: Node;
+  readonly key: Node;
+  readonly evaluateReceiver: boolean;
+  readonly evaluateKey: boolean;
+  readonly accessMode: "read" | "write" | "read-write" | "delete";
+}
+
 export interface RustPreparedOperationResultFact {
   readonly operationId: string;
   readonly operationKind: RustProviderFactOperationKind;

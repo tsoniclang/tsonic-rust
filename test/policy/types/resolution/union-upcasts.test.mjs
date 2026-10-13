@@ -1,3 +1,4 @@
+import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
@@ -97,7 +98,7 @@ test("union flow retains exact nominal payload refinement and rejects forged or 
       { ...selected.fact, project: { ...selected.fact.project, projection: { kind: "closed", slot: "forged" } } },
     ]) {
       assert.equal(rustFlowReadProjectionMatches(changed, projectTypes, definitions), false);
-      assert.equal("flowReadProjection".equals(selected.fact, changed), false);
+      assert.equal(rustFlowReadProjectionEquals(selected.fact, changed), false);
     }
   }
   const duplicate = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === union

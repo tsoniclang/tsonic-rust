@@ -1,7 +1,7 @@
 import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustYieldFact, RustResourceManagementFact, RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { RustRuntimeCarrierSelection, RustConversionSelection } from "./selections.js";
 import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
-import type { ArgumentPassingFact, Node, ExtensionFactSubject } from "@tsonic/tsts";
+import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustAwaitValueFact } from "./await-values.js";
 import type { RustSourceCallableReturnFact } from "./source-declarations.js";
 import type { RustErrorEffectsFact } from "./error-effects.js";
@@ -12,7 +12,7 @@ import type { RustObjectLiteralMethodAdapterFact, RustSourceCallEffectsFact, Rus
 import type { RustOptionProjectionFact, RustFlowReadProjectionFact, RustContextualValueConversionFact, RustCallScopedLifetimeReconciliationFact, RustProjectUpcastFact, RustSourceBindingFact, RustBindingProjectionFact } from "./value-projections.js";
 import type { RustProjectDowncastFact } from "../types/project-projections.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "./operations.js";
-import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact } from "./operation-selections.js";
+import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact, RustComputedMemberFact } from "./operation-selections.js";
 import type { RustOptionalChainFact } from "../operations/model.js";
 import type { RustNativeArrayStorage, RustRawLocationPlan } from "./native-memory.js";
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
@@ -70,13 +70,7 @@ export interface RustProgramRecords {
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
   readonly compoundWrite: RustRecordFamily<Extract<RustTargetOperationFact, { kind: "runtime-set" }>>;
-  readonly computedMember: RustRecordFamily<{
-  readonly receiver: Node;
-  readonly key: Node;
-  readonly evaluateReceiver: boolean;
-  readonly evaluateKey: boolean;
-  readonly accessMode: "read" | "write" | "read-write" | "delete";
-}>;
+  readonly computedMember: RustRecordFamily<RustComputedMemberFact>;
   readonly receiverIndependentMethod: RustRecordFamily<{ readonly carrier: TargetTypeRef }>;
   readonly preparedOperationResult: RustRecordFamily<RustPreparedOperationResultFact>;
   readonly optionalChain: RustRecordFamily<RustOptionalChainFact>;

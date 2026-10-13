@@ -1,3 +1,4 @@
+import { rustTargetOperationFactEquals } from "../../../../dist/analysis/operations/contracts/equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -83,23 +84,23 @@ const facts = [
 test("every node-bearing operation compares exact opaque identities and closed metadata separately", () => {
   for (const fact of facts) {
     const equivalent = copyMetadata(fact);
-    assert.equal("targetOperation".equals(fact, equivalent), true, fact.operationId);
-    assert.equal("targetOperation".equals(fact,
+    assert.equal(rustTargetOperationFactEquals(fact, equivalent), true, fact.operationId);
+    assert.equal(rustTargetOperationFactEquals(fact,
       copyMetadata(fact, node => node === first ? second : first)), false, fact.operationId);
-    assert.equal("targetOperation".equals(fact, { ...equivalent, operationId: "changed" }), false);
-    assert.equal("targetOperation".equals(fact, { ...equivalent, resultCarrier: text }), false);
-    assert.equal("targetOperation".equals(fact, { ...equivalent, extra: Number.NaN }), false);
+    assert.equal(rustTargetOperationFactEquals(fact, { ...equivalent, operationId: "changed" }), false);
+    assert.equal(rustTargetOperationFactEquals(fact, { ...equivalent, resultCarrier: text }), false);
+    assert.equal(rustTargetOperationFactEquals(fact, { ...equivalent, extra: Number.NaN }), false);
     const cycle = {};
     cycle.self = cycle;
-    assert.equal("targetOperation".equals(fact, { ...equivalent, extra: cycle }), false);
+    assert.equal(rustTargetOperationFactEquals(fact, { ...equivalent, extra: cycle }), false);
   }
 });
 
 test("runtime throw equality retains the independently selected native error boundary", () => {
   const fact = facts.find(item => item.kind === "throw-op");
-  assert.equal("targetOperation".equals(fact,
+  assert.equal(rustTargetOperationFactEquals(fact,
     { ...fact, error: { ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } } }), false);
-  assert.equal("targetOperation".equals(fact,
+  assert.equal(rustTargetOperationFactEquals(fact,
     { ...fact, error: { ...fact.error, conversion: { ...fact.error.conversion, route: undefined } } }), false);
 });
 

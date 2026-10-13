@@ -1,3 +1,5 @@
+import { rustCapturedFieldStorageEquals } from "../../../dist/target-model/records/equality.js";
+import { rustClosureCaptureEquals } from "../../../dist/target-model/records/equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -15,13 +17,13 @@ const fact = { captures: [], receivers: [], receiverFields: [field] };
 test("whole receiver facts retain exact owners and dense source membership", () => {
   const capture = { owner: declaration, reference: receiver, references: [receiver], carrier: stringCarrier };
   const selected = { captures: [], receiverFields: [], receivers: [capture] };
-  assert.equal("closureCapture".equals(selected, { ...selected, receivers: [{ ...capture }] }), true);
+  assert.equal(rustClosureCaptureEquals(selected, { ...selected, receivers: [{ ...capture }] }), true);
   for (const changed of [{ ...capture, owner: {} }, { ...capture, reference: {} }, { ...capture, references: [] },
     { ...capture, references: [receiver, {}] }, { ...capture, references: Array(1) },
     { ...capture, carrier: { kind: "unit" } }, { ...capture, extra: true }]) {
-    assert.equal("closureCapture".equals(selected, { ...selected, receivers: [changed] }), false);
+    assert.equal(rustClosureCaptureEquals(selected, { ...selected, receivers: [changed] }), false);
   }
-  assert.equal("closureCapture".equals(selected, { captures: [], receiverFields: [] }), false);
+  assert.equal(rustClosureCaptureEquals(selected, { captures: [], receiverFields: [] }), false);
 });
 
 test("whole receiver capture does not also promote or retain the same selected fields", () => {
@@ -40,34 +42,34 @@ test("whole receiver capture does not also promote or retain the same selected f
 });
 
 test("live receiver facts retain exact source identities, membership and physical storage", () => {
-  assert.equal("closureCapture".equals(fact, { captures: [], receivers: [], receiverFields: [{ ...field }] }), true);
+  assert.equal(rustClosureCaptureEquals(fact, { captures: [], receivers: [], receiverFields: [{ ...field }] }), true);
   for (const changed of [
     { ...field, declaration: {} }, { ...field, reference: {} }, { ...field, receiver: {} },
     { ...field, references: [] }, { ...field, references: [reference, {}] }, { ...field, references: [, reference] },
     { ...field, storage: { ...field.storage, initialization: "ready" } },
     { ...field, storage: { ...field.storage, kind: "cell" } },
     { ...field, storage: { ...field.storage, unchecked: true } }, { ...field, unrelated: true },
-  ]) assert.equal("closureCapture".equals(fact, { captures: [], receivers: [], receiverFields: [changed] }), false);
-  assert.equal("closureCapture".equals(fact, { captures: [] }), false);
-  assert.equal("closureCapture".equals(fact, { ...fact, unrelated: true }), false);
+  ]) assert.equal(rustClosureCaptureEquals(fact, { captures: [], receivers: [], receiverFields: [changed] }), false);
+  assert.equal(rustClosureCaptureEquals(fact, { captures: [] }), false);
+  assert.equal(rustClosureCaptureEquals(fact, { ...fact, unrelated: true }), false);
 });
 
 test("capture metadata rejects accessors without evaluating them", () => {
   let reads = 0;
   const changed = { ...field };
   Object.defineProperty(changed, "storage", { get() { reads++; return field.storage; }, enumerable: true });
-  assert.equal("closureCapture".equals(fact, { captures: [], receivers: [], receiverFields: [changed] }), false);
+  assert.equal(rustClosureCaptureEquals(fact, { captures: [], receivers: [], receiverFields: [changed] }), false);
   assert.equal(reads, 0);
 });
 
 test("field storage facts reject missing, invalid and competing carrier representations", () => {
   const storage = { storage: field.storage, valueCarrier: stringCarrier };
-  assert.equal("capturedFieldStorage".equals(storage, { ...storage }), true);
+  assert.equal(rustCapturedFieldStorageEquals(storage, { ...storage }), true);
   for (const changed of [{ ...storage, extra: true }, { ...storage, valueCarrier: undefined },
     { ...storage, storage: { kind: "borrow-cell", initialization: "unchecked" } },
     { ...storage, storage: { kind: "copy", initialization: "deferred" } },
     { ...storage, storage: { ...field.storage, extra: true } }])
-    assert.equal("capturedFieldStorage".equals(storage, changed), false);
+    assert.equal(rustCapturedFieldStorageEquals(storage, changed), false);
 });
 
 for (const surfaces of [[], ["js"]]) test(`immutable scalar field captures have no Rc payload in ${surfaces[0] ?? "native"}`, () => {

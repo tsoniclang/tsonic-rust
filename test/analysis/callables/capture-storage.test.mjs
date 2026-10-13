@@ -1,3 +1,4 @@
+import { rustBindingStorageEquals } from "../../../dist/target-model/records/equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
@@ -76,9 +77,9 @@ test("loop activation identities distinguish immutable values, live lexical stor
     if (selected?.iterationScope !== undefined) {
       assert.equal(current.source.ast.kindName(selected.iterationScope), "KindForStatement");
       const fact = { storage: selected.storage, valueCarrier: scalarCarrier, iterationScope: selected.iterationScope };
-      assert.equal("bindingStorage".equals(fact, { ...fact }), true);
-      assert.equal("bindingStorage".equals(fact, { ...fact, iterationScope: {} }), false);
-      assert.equal("bindingStorage".equals(fact, { storage: selected.storage, valueCarrier: scalarCarrier }), false);
+      assert.equal(rustBindingStorageEquals(fact, { ...fact }), true);
+      assert.equal(rustBindingStorageEquals(fact, { ...fact, iterationScope: {} }), false);
+      assert.equal(rustBindingStorageEquals(fact, { storage: selected.storage, valueCarrier: scalarCarrier }), false);
     }
   }
 });
@@ -120,12 +121,12 @@ test("binding activation facts reject incomplete, accessor-backed and competing 
   const fact = { storage: "location", valueCarrier: scalarCarrier, iterationScope: scope };
   for (const changed of [{ ...fact, unrelated: true }, { ...fact, valueCarrier: undefined },
     { ...fact, storage: "cell" }, { ...fact, initialization: "unchecked" }, { ...fact, iterationScope: null }]) {
-    assert.equal("bindingStorage".equals(fact, changed), false, "exact sealed native activation");
+    assert.equal(rustBindingStorageEquals(fact, changed), false, "exact sealed native activation");
   }
   let reads = 0;
   const accessor = { ...fact };
   Object.defineProperty(accessor, "iterationScope", { get() { reads++; return scope; }, enumerable: true });
-  assert.equal("bindingStorage".equals(fact, accessor), false);
+  assert.equal(rustBindingStorageEquals(fact, accessor), false);
   assert.equal(reads, 0, "evidence validation never evaluates a metadata accessor");
 });
 

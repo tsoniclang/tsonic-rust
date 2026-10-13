@@ -1,15 +1,14 @@
-import { rustClosureCaptureEquals, rustSourceCallableValueEquals } from "../../../../target-model/records/equality.js";
-import { closedMetadataEquals, hasExactObjectKeys, isMetadataRecord } from "../../../../target-model/metadata/closed-data.js";
+import { rustBindingStorageEquals, rustComputedMemberEquals, rustClosureCaptureEquals, rustSourceCallableValueEquals } from "../../../../target-model/records/equality.js";
+import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 
 import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { Node } from "@tsonic/tsts";
 import type { RustOptionalChainFact } from "../../../../target-model/operations/model.js";
 import type { RustPlanKey } from "../key.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetOperationFactEquals } from "../../../operations/contracts/equality.js";
-import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact } from "../../../../target-model/records/operation-selections.js";
+import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact, RustComputedMemberFact } from "../../../../target-model/records/operation-selections.js";
 
 
 export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
@@ -18,16 +17,7 @@ export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
 export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
   defineRustPlanKey("compoundWrite", closedMetadataEquals);
 
-export const rustComputedMemberFactKey: RustPlanKey<{
-  readonly receiver: Node;
-  readonly key: Node;
-  readonly evaluateReceiver: boolean;
-  readonly evaluateKey: boolean;
-  readonly accessMode: "read" | "write" | "read-write" | "delete";
-}> = defineRustPlanKey("computedMember", (left, right) =>
-  left.receiver === right.receiver && left.key === right.key &&
-  left.evaluateReceiver === right.evaluateReceiver &&
-  left.evaluateKey === right.evaluateKey && left.accessMode === right.accessMode);
+export const rustComputedMemberFactKey: RustPlanKey<RustComputedMemberFact> = defineRustPlanKey("computedMember", rustComputedMemberEquals);
 
 export const rustReceiverIndependentMethodFactKey: RustPlanKey<{ readonly carrier: TargetTypeRef }> =
   defineRustPlanKey("receiverIndependentMethod", (left, right) => rustTargetTypeRefEquals(left.carrier, right.carrier));
@@ -51,20 +41,8 @@ export const rustTypedLocationPlanKey: RustPlanKey<RustTypedLocationPlan> =
 
 export const rustBindingStorageFactKey: RustPlanKey<RustBindingStorageFact> = defineRustPlanKey(
   "bindingStorage",
-  (left, right) => bindingStorageShapeMatches(left) && bindingStorageShapeMatches(right) &&
-    left.storage === right.storage && left.initialization === right.initialization &&
-    left.iterationScope === right.iterationScope &&
-    rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier),
+  rustBindingStorageEquals,
 );
-
-function bindingStorageShapeMatches(value: RustBindingStorageFact): boolean {
-  return isMetadataRecord(value) && hasExactObjectKeys(value, ["storage", "valueCarrier",
-    ...["initialization", "iterationScope"].filter(key => Object.prototype.hasOwnProperty.call(value, key))]) &&
-    (value.storage === "location" || value.storage === "cell" || value.storage === "borrow-cell") &&
-    value.valueCarrier !== undefined && (value.initialization === undefined ||
-      value.initialization === "deferred" && value.storage === "location") &&
-    (value.iterationScope === undefined || value.iterationScope !== null && value.storage === "location");
-}
 
 export const rustClosureCaptureFactKey: RustPlanKey<RustClosureCaptureFact> = defineRustPlanKey(
   "closureCaptures",
