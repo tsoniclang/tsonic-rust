@@ -9,6 +9,7 @@ import { missingFactDiagnostic } from "../../diagnostics.js";
 import { planRustNativeProducerBridge } from "./native-producer-bridges.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { planRustNativeGenericProducerBridges } from "./native-generic-producers.js";
+import { rustNativeCompletionErrorBounds } from "./native-completion-bounds.js";
 
 export function planRustNativeCallableProtocolItems(context: RustPlanContext): readonly RustItem[] {
   const fileName = context.input.program.source.ast.getFileName(context.sourceFile);
@@ -46,7 +47,7 @@ export function planRustNativeCallableProtocol(
     })) },
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, bounds: [] },
       ...(protocol.completion?.futures ?? []).map(future => ({ kind: "type" as const,
-        name: `AwaitError${future.ordinal}`, generics: methodGenerics, bounds: [] })),
+        name: `AwaitError${future.ordinal}`, generics: methodGenerics, bounds: rustNativeCompletionErrorBounds(future) })),
       ...(invoked ? [{ kind: "function" as const, name: "invoke", selfParam: { kind: "reference" as const, mutable: false },
         generics: methodGenerics,
         params: (parameters as readonly RustType[]).map((type, index) => ({ name: `argument_${index}`, type })),

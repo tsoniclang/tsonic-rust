@@ -27,11 +27,14 @@ export function planRustNativeErrorJoin(input: {
   readonly referencePath?: string;
   readonly visibility: RustVisibility;
   readonly sources: readonly RustNativeErrorJoinSource[];
+  readonly clone?: boolean;
 }): RustNativeErrorJoinPlan | undefined {
   const selectedSources = snapshotRustNativeErrorSources(input.sources, errorType => errorType !== undefined &&
     errorType.kind !== "infer" && rustTypeIsLegalInPosition(errorType, "general"));
   if (!hasExactObjectKeys(input, ["identity", "name", "visibility", "sources",
-      ...(input.referencePath === undefined ? [] : ["referencePath"])]) ||
+      ...(input.referencePath === undefined ? [] : ["referencePath"]),
+      ...(input.clone === undefined ? [] : ["clone"])]) ||
+    input.clone !== undefined && typeof input.clone !== "boolean" ||
     input.identity.length === 0 || !isValidRustIdentifier(input.name) ||
     input.referencePath !== undefined && !input.referencePath.split("::").every(segment =>
       segment === "crate" || segment === "self" || segment === "super" || isValidRustIdentifier(segment)) ||
@@ -44,7 +47,7 @@ export function planRustNativeErrorJoin(input: {
       identity: input.identity, genericArguments: arguments_ };
   const items: readonly RustItem[] = selectedSources.length < 2 ? Object.freeze([]) : Object.freeze([{
     kind: "enum", name: input.name, visibility: input.visibility, generics: { ...emptyRustGenerics, parameters },
-    attrs: rustDeriveAttributes(["Debug"]),
+    attrs: rustDeriveAttributes(input.clone === true ? ["Debug", "Clone"] : ["Debug"]),
     variants: Object.freeze([...sources.values()].map((source, index) => ({ name: source.variant,
       fields: [{ kind: "named" as const, path: parameters[index]!.name }] }))),
   }]);

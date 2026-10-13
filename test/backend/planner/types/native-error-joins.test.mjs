@@ -71,6 +71,15 @@ test("native joins map a selected error once before an exactly typed try", () =>
   }
 });
 
+test("explicit shared completion demand adds conditional native Clone without imposing payload bounds", () => {
+  const joined = plan([first, second], { clone: true });
+  assert.deepEqual(joined.items[0].attrs[0].arguments.map(argument => argument.path), ["Debug", "Clone"]);
+  assert.equal(joined.items[0].generics.parameters.every(parameter => parameter.bounds.length === 0), true);
+  assert.equal(joined.items[0].generics.wherePredicates.length, 0);
+  assert.doesNotMatch(printRustExpr(joined.inject(first, path("error"))), /clone|Box|Rc/u);
+  assert.equal(plan([first, second], { clone: "yes" }), undefined);
+});
+
 test("associated errors retain native arguments without copying unrelated declaration binders", () => {
   const lifetime = { kind: "named", name: "scope" };
   const associated = { kind: "qualified", owner: named("Producer"), trait: named("Invocation"), member: "Error",

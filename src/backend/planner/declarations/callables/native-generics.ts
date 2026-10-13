@@ -10,6 +10,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
 import { rustNativeCallableInputPhysicalSignature } from "../../../../analysis/callables/native-conversions.js";
+import { rustAsyncFunctionFactKey } from "../../../../analysis/facts/keys.js";
 
 export function planRustNativeCallableGenerics(
   declaration: Node,
@@ -72,6 +73,15 @@ export function planRustNativeCallableGenerics(
   }
   const parameters: RustGenericParameter[] = [];
   const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
+  if (context.input.program.facts.getFact(declaration, rustAsyncFunctionFactKey)?.kind === "js-promise") {
+    const errors = context.input.program.facts.getFact(declaration, rustErrorEffectsFactKey)?.nativeErrors ?? [];
+    const selected = new Map(errors.map(error => [closedMetadataKey(error.errorType), error.errorType]));
+    for (const carrier of selected.values()) {
+      const type = rustTypeFromCarrierInContext(carrier, context);
+      if (type === undefined) return undefined;
+      predicates.push({ kind: "type", type, bounds: [{ kind: "trait", path: "core::clone::Clone" }] });
+    }
+  }
   for (const input of inputs) {
     const traits = [...bounds.get(input.implementation.identity)!.values()].map(trait => rustTypeFromCarrierInContext(trait, context));
     if (traits.some(trait => trait === undefined)) return undefined;

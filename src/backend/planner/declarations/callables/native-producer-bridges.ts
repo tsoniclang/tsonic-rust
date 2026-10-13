@@ -17,6 +17,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
+import { rustNativeCompletionErrorBounds } from "./native-completion-bounds.js";
 
 export function planRustNativeProducerBridge(
   protocol: RustNativeCallableProtocol,
@@ -54,7 +55,8 @@ export function planRustNativeProducerBridge(
   const genericTypes = [implementation, ...(lifetimes.length === 0 ? environment : boundTypes),
     invocationError, ...errors, ...pending.values()];
   const genericParameters: readonly RustGenericParameter[] = genericTypes.map(type => ({
-    kind: "type", name: type.name, bounds: [],
+    kind: "type", name: type.name, bounds: errors.includes(type)
+      ? rustNativeCompletionErrorBounds(futures[errors.indexOf(type)]!) : [],
   }));
   const environmentParameters: readonly RustGenericParameter[] = environment.map(type => ({
     kind: "type", name: type.name, bounds: [],
@@ -150,7 +152,8 @@ export function planRustNativeProducerBridge(
       generics: { ...emptyRustGenerics, parameters: [...lifetimes, ...boundTypes.map(type => ({
         kind: "type" as const, name: type.name, bounds: [],
       }))] },
-      members: [...channels.map(name => ({ kind: "type" as const, name, generics: emptyRustGenerics, bounds: [] })),
+      members: [...channels.map((name, index) => ({ kind: "type" as const, name, generics: emptyRustGenerics,
+        bounds: index === 0 ? [] : rustNativeCompletionErrorBounds(futures[index - 1]!) })),
         ...(invoked ? [{ kind: "function" as const, name: "invoke", generics: emptyRustGenerics,
           selfParam: { kind: "reference" as const, mutable: false }, params: directParameters, returnType: helperResult,
         }] : [])],

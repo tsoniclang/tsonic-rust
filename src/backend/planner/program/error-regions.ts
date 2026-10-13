@@ -19,6 +19,7 @@ import { rustCallableConversionErrorArities } from "../../../target-model/conver
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
 import type { RustCallableValueAdapter } from "../../../analysis/facts/callable-adapters.js";
 import { rustProjectCallableAdaptersKey } from "../../../analysis/facts/project-callable-adapters.js";
+import { rustAsyncFunctionFactKey } from "../../../analysis/facts/keys.js";
 
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
@@ -37,6 +38,7 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
     const fileName = ast.getFileName(file);
     const usedNames = new Set<string>();
     const arities = new Set<number>();
+    const clonedArities = new Set<number>();
     const registerConversion = (conversion: RustCallableConversion): void => {
       const selected = rustCallableConversionErrorArities(conversion, program.typeDefinitions);
       if (selected === undefined) throw new Error("Callable error joins require an exact sealed conversion contract.");
@@ -54,6 +56,7 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
       if (effects !== undefined && effects.nativeErrors.length > 0) {
         const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
         if (arity > 1) arities.add(arity);
+        if (program.facts.getFact(node, rustAsyncFunctionFactKey)?.kind === "js-promise") clonedArities.add(arity);
       }
       const conversion = program.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
       if (conversion?.kind === "callable-adapter") registerConversion(conversion);
@@ -81,6 +84,7 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
     for (const arity of [...arities].sort((left, right) => left - right)) {
       const name = allocateRustGeneratedName(usedNames, `NativeErrors${arity}`);
       const plan = planRustNativeErrorJoin({ identity: rustNativeErrorJoinIdentity(fileName, arity), name,
+        clone: clonedArities.has(arity),
         visibility: "public", sources: Array.from({ length: arity }, (_value, index) => ({
           identity: String(index), variant: `Error${index}`, errorType: { kind: "named", path: `Error${index}` },
         })) });
