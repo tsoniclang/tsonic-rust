@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustCallableGenericPlan } from "./generics.js";
 
-
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";

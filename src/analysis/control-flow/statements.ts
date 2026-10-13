@@ -45,8 +45,6 @@ import { rustOptionElementCarrier, rustProgramErrorTargetType } from "../../targ
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 
-
-
 import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../program/walk.js";
 import { recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -128,8 +126,7 @@ function recordVariableDeclarationListFacts(
     if (walk.context.records.compileTimeSource.get(declaration)) continue;
     recordCallableValueSignatureForDeclaration(walk, declaration);
     const nativeCallable = moduleLevel
-      ? walk.context.records.moduleBinding.get(declaration) ??
-        walk.context.records.moduleBinding.get(declaration)
+      ? walk.context.records.moduleBinding.get(declaration)
       : undefined;
     const initializer = Node_Initializer(walk.context.ast, declaration);
     const lexical = initializer !== undefined && walk.context.sourceCallables.directLexicalBinding(initializer) === declaration;
@@ -207,8 +204,7 @@ export function recordExportAssignmentFacts(
     );
     return undefined;
   }
-  const existing = walk.context.records.runtimeCarrier.get(declaration) ??
-    walk.context.records.runtimeCarrier.get(declaration);
+  const existing = walk.context.records.runtimeCarrier.get(declaration);
   const carrier = existing?.carrier ?? resolveExpressionCarrier(
     walk,
     assignment.Expression,

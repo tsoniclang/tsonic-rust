@@ -10,8 +10,6 @@ import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../tar
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
 
-
-
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableProtocolRegistry, type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding } from "./native-protocols.js";

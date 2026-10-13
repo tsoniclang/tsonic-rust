@@ -14,8 +14,6 @@ import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from 
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
 
-
-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";

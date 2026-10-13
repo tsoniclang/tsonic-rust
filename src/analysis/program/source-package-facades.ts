@@ -13,7 +13,6 @@ import {
   rustPackageModuleName,
 } from "../../target-model/names/identifiers.js";
 
-
 import type {
   RustAnalysisContext,
 } from "./context.js";

@@ -9,7 +9,6 @@ import { rustExpressionReadsStorage } from "../typed-locations.js";
 import { planExpression } from "../entry.js";
 import { isRustStringCarrier } from "../../../../target-model/types/index.js";
 
-
 export function planRustBorrowedSingletonSlice(
   node: Node,
   context: RustPlanContext,

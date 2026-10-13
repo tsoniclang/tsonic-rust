@@ -8,8 +8,6 @@ import type {
   RustAnalysisContext,
 } from "./context.js";
 
-
-
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

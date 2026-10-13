@@ -9,8 +9,6 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 
-
-
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";

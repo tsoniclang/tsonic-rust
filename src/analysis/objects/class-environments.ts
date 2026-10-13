@@ -9,7 +9,6 @@ import { Node_Initializer, sourceClassFieldIsTypeOnly } from "@tsonic/target-api
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
-
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { isRustDeclarationPathUse } from "../declarations/generic-reference-uses.js";
 

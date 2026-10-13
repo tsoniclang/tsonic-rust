@@ -14,9 +14,6 @@ import {
   sourceBindingCapturedBeforeInitialization,
 } from "@tsonic/target-api/source";
 
-
-
-
 import {
   rustOptionElementCarrier,
   rustCallableProtocol,
@@ -92,8 +89,7 @@ export function resolveIdentifierCarrier(
       }
     }
     if (declarationKind === KindParameter) {
-      const parameterAbi = walk.context.records.sourceParameterAbi.get(declaration) ??
-        walk.context.records.sourceParameterAbi.get(declaration);
+      const parameterAbi = walk.context.records.sourceParameterAbi.get(declaration);
       if (parameterAbi !== undefined) {
         walk.context.records.sourceParameterAbi.set(identifier, parameterAbi, [
           { message: "rust project-source parameter ABI use" },
@@ -133,10 +129,8 @@ export function resolveIdentifierCarrier(
       const parameters = ast.parameters(declaration);
       const parameterAbis = parameters.map((parameter) => parameter === undefined
         ? undefined
-        : walk.context.records.sourceParameterAbi.get(parameter) ??
-          walk.context.records.sourceParameterAbi.get(parameter));
-      const returnFact = walk.context.records.sourceCallableReturn.get(declaration) ??
-        walk.context.records.sourceCallableReturn.get(declaration);
+        : walk.context.records.sourceParameterAbi.get(parameter));
+      const returnFact = walk.context.records.sourceCallableReturn.get(declaration);
       const returnCarrier = returnFact === undefined ? undefined : rustCallableInvocationResult(walk.context.records, declaration);
       const name = ast.name(declaration);
       const targetName = walk.context.names.functionNameForDeclaration(declaration);
@@ -201,8 +195,7 @@ export function recordProjectSourceBinding(
   walk.context.records.sourceBinding.set(identifier, binding, [
     { message: `rust project-source ${binding.scope} binding` },
   ]);
-  const module = walk.context.records.moduleBinding.get(declaration) ??
-    walk.context.records.moduleBinding.get(declaration);
+  const module = walk.context.records.moduleBinding.get(declaration);
   if (binding.scope === "module" && module?.storage === "native-callable" && module.value !== undefined &&
     !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {
     walk.context.records.directCallableReference.set(identifier, {
@@ -276,8 +269,7 @@ export function resolveCallLikeCarrier(
     }, [{ message: "rust exact prepared callback operation result" }]);
     return setCarrierFact(walk, expression, prepared.value.resultCarrier);
   }
-  const selectedSignature = walk.context.records.selectedCall.get(expression) ??
-    walk.context.records.selectedCall.get(expression);
+  const selectedSignature = walk.context.records.selectedCall.get(expression);
   if (selectedSignature?.sourceCallableCarrier !== undefined) {
     return applySelectedRuntimeCallableCall(
       walk,
@@ -731,8 +723,7 @@ function applySelectedRuntimeCallableCall(
       walk.context.records.optionalChain.set(expression, optionalResult.fact, [{ message: "rust exact runtime-callable optional guard" }]);
     }
   }
-  const optionalCall = walk.context.records.optionalChain.get(expression) ??
-    walk.context.records.optionalChain.get(expression);
+  const optionalCall = walk.context.records.optionalChain.get(expression);
   if (optionalCall !== undefined &&
     (!rustTargetTypeRefEquals(optionalCall.innerResultCarrier, resultCarrier) ||
       optionalCall.operationKind !== "method")) {

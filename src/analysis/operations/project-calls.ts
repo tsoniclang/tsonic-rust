@@ -14,7 +14,6 @@ import {
   asSourceNode,
 } from "@tsonic/target-api/source";
 
-
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -276,8 +275,7 @@ export function applySelectedProjectSourceCall(
       );
   const calleeModuleBinding = calleeReferenceDeclaration === undefined
     ? undefined
-    : walk.context.records.moduleBinding.get(calleeReferenceDeclaration) ??
-      walk.context.records.moduleBinding.get(calleeReferenceDeclaration);
+    : walk.context.records.moduleBinding.get(calleeReferenceDeclaration);
   const directModuleFunction = calleeModuleBinding?.storage === "native-callable" &&
     calleeModuleBinding.callableDeclaration === selectedDeclaration;
   const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
@@ -289,8 +287,7 @@ export function applySelectedProjectSourceCall(
     declarationKind === KindFunctionDeclaration && calleeReferenceDeclaration === selectedDeclaration
     ? undefined
     : resolveExpressionCarrier(walk, callee, sourceFile, undefined);
-  const optionalCall = walk.context.records.optionalChain.get(expression) ??
-    walk.context.records.optionalChain.get(expression);
+  const optionalCall = walk.context.records.optionalChain.get(expression);
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
   const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
   const selectedGenericCallable = rustGenericCallableProtocol(selectedCallableCarrier,
@@ -434,8 +431,7 @@ export function applySelectedProjectSourceCall(
           receiverProjection.fact,
         );
       }
-      const selfMode = walk.context.records.selfMode.get(selectedDeclaration) ??
-        walk.context.records.selfMode.get(selectedDeclaration);
+      const selfMode = walk.context.records.selfMode.get(selectedDeclaration);
       if (selfMode === undefined) {
         return undefined;
       }

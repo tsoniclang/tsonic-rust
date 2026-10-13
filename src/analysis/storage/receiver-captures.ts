@@ -6,7 +6,6 @@ import type { RustTargetProgram } from "../program/model.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 import type { RustCapturedFieldStorageFact } from "../../target-model/records/receiver-captures.js";
 
-
 export function validatedRustCapturedFieldStorageFact(
   declaration: Node,
   program: Pick<RustTargetProgram, "records" | "objectRepresentations">,

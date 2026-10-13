@@ -9,9 +9,6 @@ import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 
-
-
-
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustErrorEffectsAreFallible } from "../errors/error-effects.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";

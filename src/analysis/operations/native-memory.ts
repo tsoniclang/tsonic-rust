@@ -9,7 +9,6 @@ import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/nati
 
 import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
 
-
 import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";

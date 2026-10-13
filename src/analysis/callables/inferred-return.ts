@@ -2,7 +2,6 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_In
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
 
-
 import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";

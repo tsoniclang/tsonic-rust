@@ -3,7 +3,6 @@ import { defineRustPlanKey } from "../key.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import type { RustProjectCallableAdapter } from "../../../../target-model/records/project-callable-adapters.js";
 
-
 export const rustProjectCallableAdaptersKey: RustPlanKey<readonly RustProjectCallableAdapter[]> =
   defineRustPlanKey("projectCallableAdapters", (left, right) =>
     left.length === right.length && left.every((entry, index) => {

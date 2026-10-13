@@ -2,7 +2,6 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
-
 export interface RustCaptureStoragePlan {
   deferredForScope(scope: Node): readonly Node[];
   iterationsForScope(scope: Node): readonly Node[];

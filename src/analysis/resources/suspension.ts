@@ -6,9 +6,6 @@ import {
   Node_Initializer,
 } from "@tsonic/target-api/source";
 
-
-
-
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
@@ -76,8 +73,7 @@ export function recordResourceManagementFacts(
 export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const resolving = new Set<Node>();
   const resolve = (node: Node): RustFutureValueFact | undefined => {
-    const existing = walk.context.records.futureValue.get(node) ??
-      walk.context.records.futureValue.get(node);
+    const existing = walk.context.records.futureValue.get(node);
     if (existing !== undefined || resolving.has(node)) {
       return existing;
     }
@@ -100,11 +96,9 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
         }
         return selected;
       };
-      const operation = walk.context.records.targetOperation.get(node) ??
-        walk.context.records.targetOperation.get(node);
+      const operation = walk.context.records.targetOperation.get(node);
       const effects = operation?.kind === "source-call"
-        ? walk.context.records.sourceCallEffects.get(node) ??
-          walk.context.records.sourceCallEffects.get(node)
+        ? walk.context.records.sourceCallEffects.get(node)
         : undefined;
       let fact = operation?.kind === "source-call"
         ? rustFutureValueForStoredBranch(walk, node, operation.resultCarrier)

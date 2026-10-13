@@ -1,7 +1,5 @@
 import type { RustSourceCallableValueFact } from "../../../target-model/records/operation-selections.js";
 
-
-
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";

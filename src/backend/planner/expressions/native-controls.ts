@@ -7,8 +7,6 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 
-
-
 import { rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../../target-model/types/index.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";

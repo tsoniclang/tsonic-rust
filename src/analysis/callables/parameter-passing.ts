@@ -1,7 +1,6 @@
 import type { ArgumentPassingMode, AstReader, Node } from "@tsonic/tsts";
 import type { RustArgumentMode } from "../../target-model/operations/model.js";
 
-
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
 import { rustProviderInputBorrowMode } from "../storage/provider-borrows.js";

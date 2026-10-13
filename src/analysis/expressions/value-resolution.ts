@@ -49,7 +49,6 @@ import {
   rustStringTargetType,
 } from "../../target-model/types/index.js";
 
-
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -532,12 +531,10 @@ export function resolveExpressionCarrierUncached(
       if (receiverCarrier === undefined) {
         return undefined;
       }
-      let operation = walk.context.records.targetOperation.get(expression) ??
-        walk.context.records.targetOperation.get(expression);
+      let operation = walk.context.records.targetOperation.get(expression);
       if (operation === undefined) {
         selectExpressionOperation(walk, expression, sourceFile);
-        operation = walk.context.records.targetOperation.get(expression) ??
-          walk.context.records.targetOperation.get(expression);
+        operation = walk.context.records.targetOperation.get(expression);
       }
       const resultCarrier = operation === undefined
         ? undefined

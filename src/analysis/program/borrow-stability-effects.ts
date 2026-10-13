@@ -1,7 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 
-
 import type { RustTargetProgram } from "./model.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs,
   rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";

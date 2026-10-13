@@ -1,12 +1,9 @@
 import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
 
-
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 
-
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-
 
 import type { RustCallableValueAdapter } from "../../../target-model/records/callable-adapters.js";
 import type { RustContextualValueConversion } from "../../../target-model/conversions/contextual.js";

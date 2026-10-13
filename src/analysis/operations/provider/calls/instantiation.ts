@@ -674,7 +674,6 @@ function selectedCallSourceCarriers(
   return resolved;
 }
 
-
 function selectedCallArgumentTargetCarrier(
   form: RustProviderOperationForm,
   sourceIndex: number,

@@ -4,7 +4,6 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectDowncastFact } from "../../target-model/records/value-projections.js";
 
-
 export function rustSelectedProjectDowncast(
   records: RustProgramRecords,
   node: Node,

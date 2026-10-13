@@ -11,7 +11,6 @@ import { rustUnionAlternatives } from "../../target-model/types/union-relations.
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 
-
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 
 export interface RustNativeFutureInput {

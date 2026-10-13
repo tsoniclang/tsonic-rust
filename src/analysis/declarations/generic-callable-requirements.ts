@@ -44,10 +44,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustBindingProjectionCloneCarriers } from "../../policy/types/storage/binding-normalization.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
-
-
-
-
 import { rustAwaitValueRequirements } from "../callables/await-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
@@ -87,7 +83,6 @@ interface ClassifyCallableInput {
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
 }
-
 
 export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   | {
@@ -819,7 +814,6 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }),
   };
 }
-
 
 function rustRequirementDescription(
   requirements: readonly RustGenericRequirement[],

@@ -54,8 +54,6 @@ import {
   planRustNonConsumingValue,
 } from "./typed-locations.js";
 
-
-
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";

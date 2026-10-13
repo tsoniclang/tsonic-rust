@@ -26,9 +26,6 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
-
-
-
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustNativeCallablePhysicalSource, rustNativeCallableInputPhysicalSignature } from "./native-conversions.js";
 import { rustNativeCallableAbsenceWitness } from "./native-conversions.js";

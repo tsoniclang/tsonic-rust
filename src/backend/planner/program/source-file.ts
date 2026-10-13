@@ -8,7 +8,6 @@ import { planRustClassValueImplementations } from "../objects/constructor-values
 import { planRustProjectStructuralImplementations } from "../objects/project-structural-views.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
-
 import {
   KindFunctionDeclaration,
   KindImportDeclaration,
@@ -17,7 +16,6 @@ import {
   KindVariableStatement,
   Node_Initializer,
 } from "@tsonic/target-api/source";
-
 
 import {
   rustCarrierSupportsClone,

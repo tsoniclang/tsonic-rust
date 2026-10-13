@@ -10,7 +10,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 
-
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { sourceCallableDefinitionIsDiscarded, sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";

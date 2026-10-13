@@ -4,7 +4,6 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 
-
 export function planRustCallableLeadingParameters(
   declaration: Node,
   leading: readonly { readonly kind: "this" | "receiver"; readonly carrier: TargetTypeRef }[],

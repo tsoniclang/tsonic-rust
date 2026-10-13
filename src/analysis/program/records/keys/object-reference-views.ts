@@ -2,7 +2,6 @@ import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustObjectReferenceView } from "../../../../target-model/records/object-reference-views.js";
 
-
 export const rustObjectReferenceViewKey = defineRustPlanKey<RustObjectReferenceView>("objectReferenceView", (left, right) =>
   rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
   rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier) &&

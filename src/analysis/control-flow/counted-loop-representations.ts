@@ -8,7 +8,6 @@ import {
   type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
 
-
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import {
   isRustBoolCarrier,

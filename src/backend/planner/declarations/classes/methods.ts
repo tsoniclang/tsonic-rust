@@ -1,8 +1,5 @@
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 
-
-
-
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../../target-ast/normalization/block-flow.js";

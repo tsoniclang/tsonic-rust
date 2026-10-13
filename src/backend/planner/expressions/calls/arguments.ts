@@ -32,7 +32,6 @@ import { planRustNonConsumingValue } from "../typed-locations.js";
 import { rustArgumentPassingMode } from "../../../../analysis/callables/parameter-passing.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/operations/target-operation.js";
 
-
 import {
   rustTargetGenericArgumentEquals,
   rustTargetTypeRefEquals,

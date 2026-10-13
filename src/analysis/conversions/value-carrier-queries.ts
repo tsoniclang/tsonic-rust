@@ -1,6 +1,5 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 
-
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProgramRecordWriter } from "../program/records/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -11,7 +10,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAppliedValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-
 
 export function recordRustFlowReadProjection(
   records: RustProgramRecordWriter,

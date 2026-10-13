@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
-
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";

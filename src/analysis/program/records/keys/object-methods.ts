@@ -3,7 +3,6 @@ import { defineRustPlanKey } from "../key.js";
 import type { RustPlanKey } from "../key.js";
 import type { RustObjectLiteralMethodAdapterFact, RustSourceCallEffectsFact, RustSourceAccessorEffectsFact, RustFutureValueFact } from "../../../../target-model/records/object-methods.js";
 
-
 export const rustObjectLiteralMethodAdapterFactKey: RustPlanKey<RustObjectLiteralMethodAdapterFact> =
   defineRustPlanKey("objectLiteralMethodAdapter", objectLiteralMethodAdapterFactEquals);
 

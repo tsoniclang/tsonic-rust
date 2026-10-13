@@ -10,7 +10,6 @@ import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operato
 import { acceptRustOperation, rejectSelectedOperation } from "./result.js";
 import { selectedValueCarrier } from "../selected-values.js";
 
-
 import { selectedRustCallSignature } from "./calls/signatures.js";
 import { selectRustArrayTypeGuard } from "../../../policy/operations/source-profiles/js/type-tests.js";
 

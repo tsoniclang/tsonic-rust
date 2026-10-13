@@ -7,7 +7,6 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
 
-
 export function selectRustIndexedCallKeys(
   walk: RustFactWalk,
   selected: RustSelectedTargetSignature,

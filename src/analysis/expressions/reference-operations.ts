@@ -271,10 +271,8 @@ function referenceStoreWriteStrategy(
   if (readExpression === undefined || rightExpression === undefined) {
     return {};
   }
-  const readFact = walk.context.records.targetOperation.get(readExpression) ??
-    walk.context.records.targetOperation.get(readExpression);
-  const valueFact = walk.context.records.targetOperation.get(valueExpression) ??
-    walk.context.records.targetOperation.get(valueExpression);
+  const readFact = walk.context.records.targetOperation.get(readExpression);
+  const valueFact = walk.context.records.targetOperation.get(valueExpression);
   if (readFact?.kind !== "reference-operation" || readFact.operation !== "load" ||
     ast.kindName(readFact.operandExpression) !== KindIdentifier ||
     valueFact?.kind !== "operator-token" || valueFact.leftConversion !== undefined ||

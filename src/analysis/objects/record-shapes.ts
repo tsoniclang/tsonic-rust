@@ -13,7 +13,6 @@ import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 
-
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustResolutionContext } from "../program/walk.js";
 
@@ -66,7 +65,6 @@ export function resolveProjectMethodPropertyCarrier(
         resultCarrier,
       );
 }
-
 
 export function resolveObjectLiteralMethodCarrier(
   walk: RustFactWalk,

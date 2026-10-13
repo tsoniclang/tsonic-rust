@@ -7,14 +7,10 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 
-
 import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
 import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { rustCallableAdapterValues } from "./adapter-values.js";
-
-
-
 
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 

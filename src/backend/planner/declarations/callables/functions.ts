@@ -14,8 +14,6 @@ import {
 import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 
-
-
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
@@ -47,7 +45,6 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
-
 
 export function planFunctionDeclarations(
   node: Node,

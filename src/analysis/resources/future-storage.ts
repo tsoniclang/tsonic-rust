@@ -3,8 +3,6 @@ import type { SourceStorageBindings, SourceStorageProducer, SourceStorageSubject
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 
-
-
 import type { RustFutureValueFact } from "../../target-model/records/object-methods.js";
 import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeFutureValueForSourceCallBranch } from "../callables/future-values.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

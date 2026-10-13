@@ -20,7 +20,6 @@ import { providerSelectedCallMatches, rustOperationFact } from "../fundamentals.
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";
 import { requireRustDefaultValueCarrier } from "../../types/generic-requirements.js";
 
-
 import { rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

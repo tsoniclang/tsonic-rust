@@ -3,7 +3,6 @@
 import type { TargetTypeRef } from "../types/model.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 
-
 interface RustNativeMemoryDimensions {
   readonly pointeeCarrier: TargetTypeRef;
   readonly size: number;
@@ -31,10 +30,6 @@ export interface RustNativeObjectField {
   readonly storageIndex: number;
   readonly layout: RustNativeMemoryLayout;
 }
-
-
-
-
 
 export function rustNativeMemoryLayoutsEqual(left: RustNativeMemoryLayout, right: RustNativeMemoryLayout): boolean {
   const pending = [[left, right] as const];

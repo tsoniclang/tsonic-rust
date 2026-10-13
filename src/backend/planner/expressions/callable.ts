@@ -23,9 +23,6 @@ import {
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 
-
-
-
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../target-ast/normalization/block-flow.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";

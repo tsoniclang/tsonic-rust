@@ -6,7 +6,6 @@ import { resolveRustTargetType } from "./target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
 
-
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
   context: RustTargetTypeResolutionContext,

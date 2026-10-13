@@ -2,7 +2,6 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustTargetProgram } from "../program/model.js";
 
-
 export interface RustNativeStoragePathInput {
   readonly ast: AstReader;
   readonly records: RustTargetProgram["records"];

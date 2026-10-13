@@ -9,7 +9,6 @@ import type { RustProjectMethodDispatchVariant } from "../../../../analysis/proj
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { createStructuralLiteralImplementation, type RustStructuralLiteralImplementation } from "./structural.js";
 
-
 export type RustObjectLiteralMethodImplementationPlan = {
   readonly kind: "authored";
   readonly propertyIdentity: Node;

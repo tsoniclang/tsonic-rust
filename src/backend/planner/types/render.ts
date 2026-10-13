@@ -684,7 +684,6 @@ export function rustReturnTypeFromCarrierInContext(
     : rustTypeFromCarrierInContext(carrier, context, "return");
 }
 
-
 export function rustTargetGenericArgumentToAstInContext(
   argument: RustTargetGenericArgument,
   context: RustTypeRenderingContext,

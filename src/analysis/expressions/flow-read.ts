@@ -23,7 +23,6 @@ import {
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
 
-
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -75,8 +74,7 @@ export function applyFlowReadLane(
   if (access?.optionalChain === true && access.receiver.expression === receiver) {
     return sourceCarrier;
   }
-  const existing = walk.context.records.flowReadProjection.get(expression) ??
-    walk.context.records.flowReadProjection.get(expression);
+  const existing = walk.context.records.flowReadProjection.get(expression);
   if (existing !== undefined) {
     if (!rustTargetTypeRefEquals(existing.sourceCarrier, sourceCarrier)) {
       appendRustDiagnostic(
@@ -329,8 +327,7 @@ function resolveSelectedFlowReadCarrier(
     walk.context.semanticsFor(expression).types.isNullish(selectedType)) {
     return sourceCarrier;
   }
-  const operation = walk.context.records.targetOperation.get(expression) ??
-    walk.context.records.targetOperation.get(expression);
+  const operation = walk.context.records.targetOperation.get(expression);
   if (operation?.kind === "provider-operation" &&
     operation.sourceResultCarrier !== undefined) {
     return operation.sourceResultCarrier;

@@ -20,7 +20,6 @@ import { rustCarrierProvidesErrorObservation } from "../../../target-model/types
 import { effectiveMemberResultCarrier } from "./special.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 
-
 export function planRustBuiltinErrorProperty(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "builtin-error-property" }>,

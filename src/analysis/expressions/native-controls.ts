@@ -9,7 +9,6 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { rustNamedTargetType, rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 
 interface RustNativeControl extends RustLanguageCall {

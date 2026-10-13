@@ -12,9 +12,6 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 
-
-
-
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import type { RustDeferredProducerChannel } from "../../target-model/records/deferred-producer-effects.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";

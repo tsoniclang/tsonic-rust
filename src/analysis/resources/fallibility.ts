@@ -13,10 +13,6 @@ import {
   sourceEnclosingCallable,
 } from "@tsonic/target-api/source";
 
-
-
-
-
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
@@ -154,8 +150,7 @@ function collectFallibilityFacts(
   }
   for (const expression of walk.objectLiteralMethodExpressions) {
     budget.step();
-    const adapters = walk.context.records.objectLiteralMethodAdapter.get(expression) ??
-      walk.context.records.objectLiteralMethodAdapter.get(expression);
+    const adapters = walk.context.records.objectLiteralMethodAdapter.get(expression);
     for (const dispatch of adapters?.dispatches ?? []) {
       budget.step();
       if (dispatch.adapterFallible) {
@@ -172,8 +167,7 @@ function collectFallibilityFacts(
   }
   for (const expression of walk.objectLiteralMethodSpreadExpressions) {
     budget.step();
-    const operation = walk.context.records.targetOperation.get(expression) ??
-      walk.context.records.targetOperation.get(expression);
+    const operation = walk.context.records.targetOperation.get(expression);
     if (operation?.kind !== "record-literal") {
       continue;
     }
@@ -189,8 +183,7 @@ function collectFallibilityFacts(
     }
   }
   const selectedProjectDeclaration = (node: Node): Node | undefined => {
-    const selected = walk.context.records.selectedCall.get(node) ??
-      walk.context.records.selectedCall.get(node);
+    const selected = walk.context.records.selectedCall.get(node);
     const declaration = asSourceNode(
       selected?.sourceDeclaration,
       walk.context.ast,
@@ -201,11 +194,9 @@ function collectFallibilityFacts(
     return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };
   const operationIsFallible = (node: Node): boolean => {
-    const operation = walk.context.records.targetOperation.get(node) ??
-      walk.context.records.targetOperation.get(node);
-    const bindingProjection = walk.context.records.bindingProjection.get(node) ??
-      walk.context.records.bindingProjection.get(node);
-    const contextualConversion = walk.context.records.contextualValueConversion.get(node) ?? walk.context.records.contextualValueConversion.get(node);
+    const operation = walk.context.records.targetOperation.get(node);
+    const bindingProjection = walk.context.records.bindingProjection.get(node);
+    const contextualConversion = walk.context.records.contextualValueConversion.get(node);
     const projection = bindingProjection?.projection;
     const bindingProjectionIsFallible = bindingProjection === undefined
       ? false
@@ -234,13 +225,11 @@ function collectFallibilityFacts(
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
     const projected = rustPropertyProjectionGetters(node, walk.context);
-    const operation = walk.context.records.targetOperation.get(node) ??
-      walk.context.records.targetOperation.get(node);
+    const operation = walk.context.records.targetOperation.get(node);
     if (operation?.kind !== "source-accessor") {
       return projected;
     }
-    const selected = walk.context.records.selectedOperation.get(node) ??
-      walk.context.records.selectedOperation.get(node);
+    const selected = walk.context.records.selectedOperation.get(node);
     return [
       ...projected,
       asSourceNode(
@@ -569,8 +558,7 @@ function collectFallibilityFacts(
       walk.context.diagnostics.push(rustPolicyTargetDiagnostic(finalized.diagnostic));
       continue;
     }
-    const operation = walk.context.records.targetOperation.get(call) ??
-      walk.context.records.targetOperation.get(call);
+    const operation = walk.context.records.targetOperation.get(call);
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
@@ -617,8 +605,7 @@ function collectFallibilityFacts(
       budget.step();
       const kind = ast.kindName(node);
       if (kind === "KindArrowFunction" || kind === KindFunctionExpression) {
-        const operation = walk.context.records.targetOperation.get(node) ??
-          walk.context.records.targetOperation.get(node);
+        const operation = walk.context.records.targetOperation.get(node);
         const body = ast.body(node);
         const effects = body === undefined ? undefined : expressionRegionEffects(body);
         if (operation?.kind === "closure" && effects !== undefined && rustErrorEffectsAreFallible(effects)) {
@@ -638,10 +625,8 @@ function collectFallibilityFacts(
           }
         }
       } else if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
-        const operation = walk.context.records.targetOperation.get(node) ??
-          walk.context.records.targetOperation.get(node);
-        const selected = walk.context.records.selectedOperation.get(node) ??
-          walk.context.records.selectedOperation.get(node);
+        const operation = walk.context.records.targetOperation.get(node);
+        const selected = walk.context.records.selectedOperation.get(node);
         if (operation?.kind === "source-accessor") {
           const readDeclaration = asSourceNode(
             selected?.provenance?.sourceSelectedReadDeclaration,
@@ -661,8 +646,7 @@ function collectFallibilityFacts(
           }, [{ message: "rust finalized selected project accessor effects" }]);
         }
       } else if (kind === KindCallExpression || kind === KindNewExpression) {
-        const operation = walk.context.records.targetOperation.get(node) ??
-          walk.context.records.targetOperation.get(node);
+        const operation = walk.context.records.targetOperation.get(node);
         if (operation?.kind === "source-call") {
           const declaration = selectedProjectDeclaration(node);
           const nativeCallable = operation.target.form === "callable" &&

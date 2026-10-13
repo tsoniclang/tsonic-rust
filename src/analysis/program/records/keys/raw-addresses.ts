@@ -2,7 +2,6 @@ import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustRawAddressPlan } from "../../../../target-model/records/raw-addresses.js";
 
-
 export const rustRawAddressPlanKey = defineRustPlanKey<RustRawAddressPlan>("rawAddressPlan", (left, right) =>
   left.method === right.method && ("width" in left ? "width" in right && left.width === right.width : !("width" in right)) &&
   rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&

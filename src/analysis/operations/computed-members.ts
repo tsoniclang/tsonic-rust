@@ -2,7 +2,6 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { ResolvedSourceCallInfo } from "@tsonic/target-api/source";
 import type { RustProgramRecordWriter } from "../program/records/model.js";
 
-
 export function recordRustComputedCallEvaluation(
   ast: AstReader, records: RustProgramRecordWriter, source: ResolvedSourceCallInfo | undefined,
   callee: Node, evaluateReceiver: boolean,

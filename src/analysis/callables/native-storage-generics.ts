@@ -8,8 +8,6 @@ import { rustTargetGenericBindingsForArguments } from "../../target-model/types/
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 
-
-
 import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
 
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";

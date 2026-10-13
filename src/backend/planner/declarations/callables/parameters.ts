@@ -9,7 +9,6 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 
-
 import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import {

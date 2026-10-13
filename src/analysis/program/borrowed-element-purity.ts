@@ -1,7 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 
-
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { isRustCopyCarrier, isRustStringCarrier, rustOptionTargetType } from "../../target-model/types/index.js";
 import { isRustStringViewCarrier } from "../../target-model/types/carriers/native.js";

@@ -6,7 +6,6 @@ import { diagnosticInput, type RustPlanContext } from "../program/plan-context.j
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { planExpression } from "./entry.js";
 
-
 export function rustValueDestinationContext(
   expression: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
 ): RustPlanContext {

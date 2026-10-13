@@ -6,11 +6,8 @@ import type { Node, Type } from "@tsonic/tsts";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
 import type { RustOperationsProviderOptions } from "./model.js";
-
-
 
 export function resolveRustProjectAccessor(
   selection: {

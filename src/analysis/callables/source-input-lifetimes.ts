@@ -5,7 +5,6 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
 import type { RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 
-
 export function rustCallableImplicitLifetimeParameters(
   declaration: Node,
   ast: AstReader,

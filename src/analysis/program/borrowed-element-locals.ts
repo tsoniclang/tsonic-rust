@@ -4,7 +4,6 @@ import {
   VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
 
-
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";

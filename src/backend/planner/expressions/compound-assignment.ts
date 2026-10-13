@@ -28,7 +28,6 @@ import { planRustDirectStorage } from "./updates/target.js";
 import { directStorageRemainsSelected } from "./updates/direct-storage.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
 
-
 export function planCompoundAssignmentExpression(
   node: Node,
   fact: RustAssignmentOperationFact,

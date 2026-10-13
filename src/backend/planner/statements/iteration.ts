@@ -28,7 +28,6 @@ import { planBlockLike } from "./core.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 
-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/operations/finalized-operation/validation.js";
 

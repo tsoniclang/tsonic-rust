@@ -4,7 +4,6 @@ import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/ca
 import { rustOptionElementCarrier, rustAbsenceTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 

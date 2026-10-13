@@ -20,8 +20,6 @@ import {
   sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 
-
-
 import {
   rustSourceOptionalTargetType,
   rustOptionElementCarrier,
@@ -191,8 +189,7 @@ export function resolveFunctionExpressionCarrier(
       (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
       return undefined;
     }
-    const finalizedAbi = walk.context.records.sourceParameterAbi.get(parameter) ??
-      walk.context.records.sourceParameterAbi.get(parameter);
+    const finalizedAbi = walk.context.records.sourceParameterAbi.get(parameter);
     const parameterAbi = finalizedAbi ?? resolveRustContextualParameterAbi(
       parameter,
       targetParameterCarrier,

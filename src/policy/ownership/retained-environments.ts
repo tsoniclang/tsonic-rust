@@ -8,8 +8,6 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../types/storage/owned-storage.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
-
-
 export type RustRetainedEnvironmentSelection =
   | { readonly kind: "none" }
   | { readonly kind: "selected"; readonly environment: RustRetainedEnvironment }

@@ -2,7 +2,6 @@ import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-
 import type { RustSuspendedCallableStorage } from "../../target-model/records/callables-and-resources.js";
 
 export function rustRetainedCallableStorage(

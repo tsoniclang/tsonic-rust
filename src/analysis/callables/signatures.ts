@@ -21,8 +21,6 @@ import {
   sourceDeclarationIsModuleScoped,
 } from "@tsonic/target-api/source";
 
-
-
 import {
   isRustUnitCarrier,
   isRustNeverCarrier,
@@ -90,8 +88,6 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
   }
   return contextual;
 }
-
-
 
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
   const { ast } = walk.context;
@@ -223,8 +219,7 @@ function finalizedNativeCallableValue(
   const parameterAbis = walk.context.ast.parameters(callableDeclaration).map((parameter) =>
     parameter === undefined
       ? undefined
-      : walk.context.records.sourceParameterAbi.get(parameter) ??
-        walk.context.records.sourceParameterAbi.get(parameter));
+      : walk.context.records.sourceParameterAbi.get(parameter));
   const resultCarrier = rustCallableInvocationResult(walk.context.records, callableDeclaration);
   if (valueName === undefined || resultCarrier === undefined ||
     parameterAbis.some((abi) => abi === undefined)) {
@@ -249,10 +244,8 @@ function nativeModuleFunctionAbiIsFinalized(
   return isDenseDataArray(parameters) &&
     parameters.every((parameter) =>
       parameter !== undefined &&
-      (walk.context.records.sourceParameterAbi.get(parameter) ??
-        walk.context.records.sourceParameterAbi.get(parameter)) !== undefined) &&
-    (walk.context.records.sourceCallableReturn.get(callableDeclaration) ??
-      walk.context.records.sourceCallableReturn.get(callableDeclaration)) !== undefined;
+      (walk.context.records.sourceParameterAbi.get(parameter)) !== undefined) &&
+    (walk.context.records.sourceCallableReturn.get(callableDeclaration)) !== undefined;
 }
 
 function recordCallableValueSignaturesForStatements(

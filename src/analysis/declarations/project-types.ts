@@ -8,8 +8,6 @@ import {
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 
-
-
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";

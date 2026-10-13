@@ -79,8 +79,7 @@ export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFi
         for (const declaration of declarations) {
           const binding = declaration === undefined
             ? undefined
-            : walk.context.records.moduleBinding.get(declaration) ??
-              walk.context.records.moduleBinding.get(declaration);
+            : walk.context.records.moduleBinding.get(declaration);
           if (binding?.storage === "native-callable") {
             addRegion(
               binding.callableDeclaration,
@@ -93,8 +92,7 @@ export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFi
   }
   for (const sourceFile of projectSourceFiles) {
     const visitCallableDeclarations = (node: Node): void => {
-      const operation = walk.context.records.targetOperation.get(node) ??
-        walk.context.records.targetOperation.get(node);
+      const operation = walk.context.records.targetOperation.get(node);
       if (ast.kindName(node) === KindFunctionDeclaration || operation?.kind === "closure" ||
         walk.context.sourceCallables.directLexicalBinding(node) !== undefined) {
         registerCallableDeclaration(node);

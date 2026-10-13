@@ -2,7 +2,6 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
-
 export function isRustBorrowedValueRead(node: Node, ast: AstReader, records: RustProgramRecords): boolean {
   let current = node;
   for (;;) {

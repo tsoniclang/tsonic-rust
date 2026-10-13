@@ -11,7 +11,6 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations.js";
 
-
 import { acceptRustPolicy, rejectRustPolicy } from "../../../policy/operations/contracts.js";
 import {
   asNode,
@@ -91,8 +90,7 @@ export function selectedMemberReceiverCarrier(
     return undefined;
   }
   if (sourceCarrier !== undefined) selectRustGuardedValueCarrier(receiver, sourceCarrier, context, options);
-  const flowRead = context.records.flowReadProjection.get(receiver) ??
-    context.records.flowReadProjection.get(receiver);
+  const flowRead = context.records.flowReadProjection.get(receiver);
   const guardedCarrier = request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
   if (flowRead !== undefined && !rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier) &&
     !rustTargetTypeRefEquals(guardedCarrier, flowRead.sourceCarrier)) {
@@ -505,7 +503,6 @@ export function providerIdentityText(identity: ProviderDeclarationIdentity): str
     .filter((part) => part !== undefined)
     .join("::");
 }
-
 
 export function normalizeSelectedOperationInputCarrier(
   subject: ExtensionFactSubject | undefined,

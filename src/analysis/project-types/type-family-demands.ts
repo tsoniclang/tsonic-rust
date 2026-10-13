@@ -2,7 +2,6 @@ import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 
-
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";

@@ -9,8 +9,6 @@ import { rustBindingStorageForDeclaration } from "../expressions/typed-locations
 
 import { nativeRustArrayType } from "../expressions/native-arrays.js";
 
-
-
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, resourceDisposalReceiverMode } from "./resources.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";

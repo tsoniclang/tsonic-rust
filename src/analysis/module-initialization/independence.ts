@@ -13,7 +13,6 @@ import {
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 
-
 type Input = Pick<RustAnalysisContext, "ast" | "source" | "records">;
 
 export function rustModuleInitializationIsStateIndependent(

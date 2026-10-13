@@ -3,14 +3,11 @@ import type { Node } from "@tsonic/tsts";
 import { rustCallableConversionMatches } from "../../target-model/conversions/callable.js";
 import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
 
-
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import { selectRustInlineModuleCallableAliases } from "./module-aliases.js";
 
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-
-
 
 export function recordRustModuleCallableStorage(walk: RustFactWalk): void {
   const { ast, records, source } = walk.context;

@@ -5,7 +5,6 @@ import { rustFinalizedSourceInputs } from "../operations/finalized-operation/con
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import { providerSourceInputKey, providerSourceInputNode } from "../operations/provider-source-inputs.js";
 
-
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";

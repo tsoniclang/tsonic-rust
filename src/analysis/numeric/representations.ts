@@ -5,7 +5,6 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
-
 export interface RustNumericRepresentations {
   usesInt32Remainder(expression: Node): boolean;
 }

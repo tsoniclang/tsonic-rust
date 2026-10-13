@@ -16,7 +16,6 @@ import { rustIndexedLocationContract } from "../../../analysis/operations/indexe
 import { planFinalizedTargetInput } from "./conversions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
-
 import {
   isRustStringCarrier,
   rustLocationTargetType,
@@ -784,7 +783,6 @@ function rustPromotedStorageMethods(node: Node, context: RustPlanContext): RustB
   return rustBindingStorageOperations(storage === "cell" || storage === "borrow-cell" ? storage : "location");
 }
 
-
 export function findRustLocationStorageRoot(
   expression: Node,
   context: RustPlanContext,
@@ -814,9 +812,6 @@ export function findRustLocationStorageRoot(
     ? undefined
     : { expression: root, declaration: storage.declaration };
 }
-
-
-
 
 function rejectLocationStorage(
   node: Node,

@@ -5,7 +5,6 @@ import type { RustProjectStructuralView } from "./project-structural-views.js";
 import type { RustReceiverFieldCapture } from "../../target-model/records/receiver-captures.js";
 import type { RustReceiverFieldCaptureQueries } from "../project-types/receiver-captures.js";
 
-
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";

@@ -10,7 +10,6 @@ import { rustOptionElementCarrier } from "../../target-model/types/carriers/opti
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
-
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";

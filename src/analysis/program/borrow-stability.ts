@@ -3,7 +3,6 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Op
   sourceBindingHasMutableExposure } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
-
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

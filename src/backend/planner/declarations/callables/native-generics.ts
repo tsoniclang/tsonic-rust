@@ -9,9 +9,7 @@ import { rustTargetTypeChildren } from "../../../../target-model/types/carriers/
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 
-
 import { rustNativeCallableInputPhysicalSignature } from "../../../../analysis/callables/native-conversions.js";
-
 
 export function planRustNativeCallableGenerics(
   declaration: Node,

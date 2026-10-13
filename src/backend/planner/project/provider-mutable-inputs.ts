@@ -3,7 +3,6 @@ import { ElementAccessExpression_ArgumentExpression, Node_Expression, type Sourc
 import { rustFinalizedSourceInputs } from "../../../analysis/operations/finalized-operation/conversions.js";
 import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
 
-
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { rustTargetOperationIsDirectLocation } from "../../../analysis/operations/target-operation.js";
 import { rustNativeStorageRoot } from "../../../analysis/storage/native-paths.js";

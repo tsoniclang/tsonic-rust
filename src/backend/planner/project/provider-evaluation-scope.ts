@@ -7,7 +7,6 @@ import type { RustFinalizedSourceInput } from "../../../target-model/records/fin
 import { rustFinalizedSourceInputs } from "../../../analysis/operations/finalized-operation/conversions.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys } from "./provider-source-inputs.js";
 import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";

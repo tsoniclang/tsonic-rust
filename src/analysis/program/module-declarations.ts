@@ -7,7 +7,6 @@ import {
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 
-
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustFactWalk } from "./walk.js";

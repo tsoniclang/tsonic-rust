@@ -435,7 +435,6 @@ export function selectRustCheckedCall(
   );
 }
 
-
 function acceptRuntimeCallableCall(
   request: RustCheckedCallSelectionInput,
   context: RustOperationAnalysisContext,

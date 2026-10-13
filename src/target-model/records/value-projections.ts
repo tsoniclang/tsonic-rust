@@ -138,7 +138,6 @@ export type RustBindingProjection =
   | { readonly kind: "vec-rest"; readonly start: number }
   | { readonly kind: "js-array-rest"; readonly start: number };
 
-
 export interface RustBindingProjectionFact {
   readonly sourceCarrier: TargetTypeRef;
   readonly projectedCarrier: TargetTypeRef;

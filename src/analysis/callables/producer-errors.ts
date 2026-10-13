@@ -12,7 +12,6 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 
-
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 
 export interface RustProducerErrorContext {

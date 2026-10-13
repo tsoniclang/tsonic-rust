@@ -14,8 +14,6 @@ import {
   sourceBindingCapturedBeforeInitialization,
 } from "@tsonic/target-api/source";
 
-
-
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 
 import { flowStateFactKey } from "@tsonic/tsts";
@@ -42,8 +40,7 @@ import { resolveRustContextualParameterAbi } from "../../policy/ownership/source
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) return undefined;
-  const existing = walk.context.records.runtimeCarrier.get(typeNode) ??
-    walk.context.records.runtimeCarrier.get(typeNode);
+  const existing = walk.context.records.runtimeCarrier.get(typeNode);
   if (existing !== undefined) return existing.carrier;
   const carrier = resolveRustTargetTypeRef(typeNode, rustResolutionContext(walk, typeNode), walk.operationOptions);
   return carrier === undefined ? undefined : setCarrierFact(walk, typeNode, carrier);
@@ -63,8 +60,7 @@ export function resolveRustDeclaredBindingStorage(
   const context = rustResolutionContext(walk, declaration);
   const authored = Node_Type(walk.context.ast, declaration);
   const finalized = authored === undefined
-    ? walk.context.records.runtimeCarrier.get(declaration) ??
-      walk.context.records.runtimeCarrier.get(declaration)
+    ? walk.context.records.runtimeCarrier.get(declaration)
     : undefined;
   if (finalized !== undefined) return finalized.carrier;
   const selected = authored === undefined && sourceBindingCapturedBeforeInitialization(

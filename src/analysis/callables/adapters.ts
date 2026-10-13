@@ -3,7 +3,6 @@ import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 
-
 import { rustCallableInvocationResult } from "./results.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -25,8 +24,7 @@ export function sourceCallableParameterAbis(
     return undefined;
   }
   const abis = (parameters as readonly Node[]).map((parameter) => {
-    const abi = input.records.sourceParameterAbi.get(parameter) ??
-      input.records.sourceParameterAbi.get(parameter);
+    const abi = input.records.sourceParameterAbi.get(parameter);
     return abi === undefined ? undefined : substituteRustCallableParameterAbi(abi, substitutions);
   });
   return abis.some((abi) => abi === undefined)
@@ -41,8 +39,7 @@ export function sourceCallableReturnCarrier(
 ): TargetTypeRef | undefined {
   const retainedResult = rustCallableInvocationResult(input.records, callable);
   const operation = retainedResult === undefined
-    ? input.records.targetOperation.get(callable) ??
-      input.records.targetOperation.get(callable)
+    ? input.records.targetOperation.get(callable)
     : undefined;
   const operationReturn = operation?.kind === "closure"
     ? rustClosureProtocol(operation.resultCarrier)?.result ??

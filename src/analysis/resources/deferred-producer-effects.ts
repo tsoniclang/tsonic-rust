@@ -1,9 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { asSourceNode } from "@tsonic/target-api/source";
 
-
-
-
 import type { RustDeferredProducerEffectsFact } from "../../target-model/records/deferred-producer-effects.js";
 import { mergeRustDeferredProducerChannels } from "../callables/deferred-producer-effects.js";
 import type { RustDeferredProducerChannel } from "../../target-model/records/deferred-producer-effects.js";

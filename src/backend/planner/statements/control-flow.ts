@@ -38,7 +38,6 @@ import { planVariableStatement } from "./variable-declarations.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 
-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
@@ -240,7 +239,6 @@ export function planLabeledStatement(
     }
   }
 }
-
 
 export function planWhileStatement(
   node: Node,
@@ -561,8 +559,6 @@ export function withRustControlTarget(
 function planIncrementor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   return planExpressionAsStatement(node, context);
 }
-
-
 
 export function isConstLiteralInitializer(node: Node, context: RustPlanContext): boolean {
   const kind = context.input.program.source.ast.kindName(node);

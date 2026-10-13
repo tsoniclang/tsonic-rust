@@ -20,8 +20,6 @@ import { rustCallableConversionErrorArities } from "../../../target-model/conver
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
 import type { RustCallableValueAdapter } from "../../../target-model/records/callable-adapters.js";
 
-
-
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
   itemsFor(fileName: string): readonly RustItem[];

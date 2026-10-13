@@ -45,7 +45,6 @@ import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index
 import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
 
-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { canRequireSourceClone } from "./clone-requirements.js";

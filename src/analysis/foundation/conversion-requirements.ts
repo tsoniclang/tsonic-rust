@@ -318,7 +318,6 @@ function rustFoundationForProviderOperationForm(
   return foundation;
 }
 
-
 function rustFoundationForGenericArgument(
   argument: RustTargetGenericArgument,
 ): RustFoundation {

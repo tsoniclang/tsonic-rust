@@ -3,8 +3,6 @@ import { sourceMayReadBeforeInitialization } from "@tsonic/target-api/source";
 import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-
-
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import type { RustFactWalk } from "../program/walk.js";
 

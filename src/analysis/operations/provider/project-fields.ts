@@ -10,8 +10,6 @@ import { rustProjectObjectField } from "../../project-types/object-layout.js";
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 
-
-
 export function resolveRustProjectField(
   declaration: Node,
   receiverCarrier: TargetTypeRef,

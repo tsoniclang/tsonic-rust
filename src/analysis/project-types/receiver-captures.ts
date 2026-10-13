@@ -5,10 +5,6 @@ import type { SourceProgramNavigation, SourceProgramSemantics } from "@tsonic/ta
 import { rustProjectObjectField } from "./object-layout.js";
 import type { RustProjectTypePolicy } from "./type-policy.js";
 
-
-
-
-
 export interface RustReceiverFieldCaptureQueries {
   readonly issues: readonly { readonly node: Node; readonly reason: string }[];
   readonly fields: readonly Node[];

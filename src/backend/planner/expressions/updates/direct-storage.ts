@@ -8,7 +8,6 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 
-
 import { rustTargetOperationIsDirectLocation } from "../../../../analysis/operations/target-operation.js";
 import {
   rustDirectProjectFieldStoragePath,

@@ -4,9 +4,6 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { isRustVecCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-
-
-
 export interface RustLocalStorageAliasPlan {
   owner(declaration: Node): Node | undefined;
   requiresMutableOwner(declaration: Node): boolean;

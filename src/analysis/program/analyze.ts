@@ -6,7 +6,6 @@ import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
-
 import { rustCallableInvocationResult } from "../callables/results.js";
 import { rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";

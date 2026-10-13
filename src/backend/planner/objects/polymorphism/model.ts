@@ -7,7 +7,6 @@ import {
 } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
-
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import {
   isRustUnitCarrier,

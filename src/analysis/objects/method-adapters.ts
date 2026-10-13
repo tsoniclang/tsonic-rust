@@ -4,7 +4,6 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-
 import type { RustObjectLiteralMethodAdapterFact } from "../../target-model/records/object-methods.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustCallableParameterAbi } from "../../target-model/records/callable-adapters.js";
@@ -33,8 +32,7 @@ export function recordRustObjectLiteralMethodAdapterFacts(input: {
 }): readonly RustObjectLiteralMethodAdapterIssue[] {
   const issues: RustObjectLiteralMethodAdapterIssue[] = [];
   for (const expression of input.expressions) {
-    const operation = input.records.targetOperation.get(expression) ??
-      input.records.targetOperation.get(expression);
+    const operation = input.records.targetOperation.get(expression);
     if (operation?.kind !== "record-literal") {
       issues.push({
         expression,
@@ -236,7 +234,6 @@ function sourceCallableTypeParameterIdentities(
   }
   return Object.freeze(identities);
 }
-
 
 function inferObjectLiteralImplementationSubstitutions(
   sourceTypeParameterIdentities: readonly string[],

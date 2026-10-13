@@ -3,7 +3,6 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 
-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";

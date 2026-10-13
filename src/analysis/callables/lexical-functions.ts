@@ -4,7 +4,6 @@ import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChil
   type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
-
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { rustFinalizedTargetInputMayMutateSource } from "../operations/finalized-operation/conversions.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
@@ -196,7 +195,6 @@ export function createRustLexicalFunctionEnvironmentPlan(
     valueDeclarationsAt: (statement: Node) => scheduled.get(statement) ?? empty,
     declarations: Object.freeze(declarations), genericNodesFor: (declaration: Node) => genericNodes.get(declaration) ?? empty,
     calleesFor: (declaration: Node) => callees.get(declaration) ?? empty });
-
 
   function exhausted(reason = "Lexical function capture analysis exceeded its finite resource budget."): RustLexicalFunctionEnvironmentPlan {
     const selection: RustLexicalFunctionEnvironmentSelection = Object.freeze({

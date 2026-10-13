@@ -1,7 +1,6 @@
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 
-
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustCopyCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";

@@ -5,7 +5,6 @@ import { rustEnclosingStorageContract, selectRustCallableStorageLifetime, select
 import { rustLifetimeOutlives, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { sourceLexicalEnvironment } from "@tsonic/target-api/source";
 
-
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSuspendedOwnedReceiver } from "../../target-model/records/callables-and-resources.js";
@@ -13,7 +12,6 @@ import type { RustSuspendedOwnedReceiver } from "../../target-model/records/call
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "../../policy/ownership/retained-environments.js";
-
 
 export type RustSuspendedCallableStorageResolution =
   | {

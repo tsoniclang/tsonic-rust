@@ -3,7 +3,6 @@ import { sourceClassFieldIsTypeOnly, VariableDeclarationList_Declarations, Varia
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 
-
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const { ast, source, typeFamilies, records } = walk.context;
   const families = new Set(typeFamilies.families().flatMap(family =>

@@ -56,7 +56,6 @@ import {
 } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";
 
-
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -134,8 +133,7 @@ export function resolveBinaryOperandCarriers(
   }
   const selectedAssignmentValueCarrier = operatorKind === KindEqualsToken
     ? rustSelectedAssignmentValueCarrier(
-        walk.context.records.targetOperation.get(expression) ??
-          walk.context.records.targetOperation.get(expression),
+        walk.context.records.targetOperation.get(expression),
       )
     : undefined;
   if (rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)) {
@@ -361,10 +359,8 @@ export function resolvePostCheckBinaryCarrier(
   }
   const { left, right, leftNode, rightNode, operatorKind } = operands;
   const location = operatorKind === KindQuestionQuestionEqualsToken ? assignmentTarget(walk.context.ast, leftNode) : leftNode;
-  const selectedLeftOperation = walk.context.records.selectedOperation.get(location) ??
-    walk.context.records.selectedOperation.get(location);
-  const selectedLeftFact = walk.context.records.targetOperation.get(location) ??
-    walk.context.records.targetOperation.get(location);
+  const selectedLeftOperation = walk.context.records.selectedOperation.get(location);
+  const selectedLeftFact = walk.context.records.targetOperation.get(location);
   const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
     operatorKind === KindExclamationEqualsEqualsToken;
   const leftComparisonCarrier = strictEquality
@@ -765,8 +761,7 @@ function selectEquivalentBindingAssignment(
     targetReference.declaration !== valueReference.declaration) {
     return undefined;
   }
-  const valueFact = walk.context.records.targetOperation.get(value) ??
-    walk.context.records.targetOperation.get(value);
+  const valueFact = walk.context.records.targetOperation.get(value);
   return valueFact?.kind === "operator-token"
     ? selectRustEquivalentAssignment(valueFact.operator, targetCarrier, valueFact.resultCarrier)
     : undefined;

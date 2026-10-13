@@ -20,7 +20,6 @@ import type {
 } from "../program/plan-context.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 
-
 export type RustExplicitSafetyExpressionPlan =
   | { readonly handled: false }
   | { readonly handled: true; readonly expression?: RustExpr };

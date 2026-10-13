@@ -43,8 +43,6 @@ import { selectRustIntegerTruncationConversion } from "../../policy/conversions/
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
 
-
-
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
@@ -107,10 +105,8 @@ export function resolveExpressionCarrier(
         ? applyFlowReadLane(walk, expression, carrier)
         : carrier);
     }
-    const selectedOperation = records.selectedOperation.get(expression) ??
-      records.selectedOperation.get(expression);
-    const targetOperation = records.targetOperation.get(expression) ??
-      records.targetOperation.get(expression);
+    const selectedOperation = records.selectedOperation.get(expression);
+    const targetOperation = records.targetOperation.get(expression);
     const selectedOperationOwnsResult = selectedOperation !== undefined || targetOperation !== undefined;
     const flowCarrier = selectedOperationOwnsResult &&
         (rustTargetTypeRefEquals(carrier, expected) ||
@@ -282,7 +278,6 @@ function expressionIsPlainAssignment(ast: AstReader, expression: Node): boolean 
   const operator = BinaryExpression_OperatorToken(ast, expression);
   return operator !== undefined && ast.kindName(operator) === KindEqualsToken;
 }
-
 
 function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): void {
   const { ast } = walk.context;

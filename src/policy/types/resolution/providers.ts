@@ -257,7 +257,6 @@ export function instantiateProviderTargetType(
   );
 }
 
-
 function substituteGenericArgument(
   argument: RustTargetGenericArgument,
   types: ReadonlyMap<string, TargetTypeRef>,
