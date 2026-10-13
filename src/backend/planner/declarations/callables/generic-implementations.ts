@@ -90,9 +90,10 @@ function planImplementation(
   if (!validateRustCapturedReceiverFields(implementation.declaration, implementation.receiverFields, context) ||
     !validateRustCapturedReceivers(implementation.declaration, implementation.receivers, context)) return undefined;
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext);
-  const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
-    implementation.functionName, true, bodyContext);
-  if (helper?.kind !== "function") return undefined;
+  const helper = implementation.creation === "declaration" ? undefined
+    : planNativeModuleFunction(implementation.declaration, implementation.declaration,
+        implementation.functionName, true, bodyContext);
+  if (implementation.creation !== "declaration" && helper?.kind !== "function") return undefined;
   const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
   if (contract === undefined) return undefined;
   const generics = rustGenericCallableEnvironmentGenerics(arguments_, helperContext);
@@ -125,10 +126,10 @@ function planImplementation(
   return [{ kind: "struct", name: implementation.stateName, visibility: "public",
     generics, fields,
   }, ...(implementation.storage === "value" ? genericCallableCopyStateItems(state, generics) : []),
-  { ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],
+  ...(helper?.kind !== "function" ? [] : [{ ...helper, generics: rustGenericsWithAssociatedBounds([...parameters, ...helper.generics.parameters],
     helper.generics.wherePredicates),
     params: [...ownerParams, ...helper.params],
-  }];
+  }])];
 }
 
 function planDefinition(definition: RustGenericCallablePhysicalDefinition, context: RustPlanContext): readonly RustItem[] | undefined {

@@ -18,8 +18,9 @@ import {
 } from "../../target-model/types/index.js";
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { visitRustTargetTypeParameters } from "../../target-model/types/carriers/generic-references.js";
-import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
-import { inferRustTargetTypeParameterBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { substituteRustTargetTypeParameters, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustStructuralGenericCarrier } from "./structural-generic-carrier.js";
 import type {
   RustSourceObjectShape,
@@ -448,29 +449,37 @@ function instantiateStructuralDefinition(
   }
   const parameters = new Set(definition.genericParameters.flatMap(parameter =>
     parameter.kind === "type" ? [parameter.identity] : []));
+  const lifetimes = new Set(definition.genericParameters.flatMap(parameter =>
+    parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
   const shape = rustStructuralObjectCarrierValue(carrier);
   const aligned = shape === undefined ? carrier : rustStructuralObjectTargetType(definition.ownerFileName, shape.fields, shape.representation, shape.construction, shape.bases);
-  const bindings = inferRustTargetTypeParameterBindings(definition.carrier, aligned, parameters);
-  if (bindings === undefined || bindings.size !== parameters.size ||
-    !rustTargetTypeRefEquals(substituteRustTargetTypeParameters(definition.carrier, bindings), aligned)) {
+  const bindings = inferRustTargetGenericBindings(definition.carrier, aligned, {
+    typeIdentities: parameters, lifetimeIdentities: lifetimes, constIdentities: new Set(),
+  });
+  const substitute = (type: TargetTypeRef) => bindings === undefined ? type :
+    substituteRustTargetGenerics(type, bindings.types, bindings.lifetimes, bindings.consts);
+  if (bindings === undefined || bindings.types.size !== parameters.size || bindings.lifetimes.size !== lifetimes.size ||
+    !rustTargetTypeRefEquals(substitute(definition.carrier), aligned)) {
     return undefined;
   }
   return Object.freeze({
     ...definition,
     carrier,
     genericArguments: Object.freeze(definition.genericArguments.map(argument => {
+      if (argument.kind === "lifetime") return Object.freeze({ kind: "lifetime" as const,
+        lifetime: bindings.lifetimes.get(rustLifetimeKey(argument.lifetime)) ?? argument.lifetime });
       if (argument.kind !== "type") return argument;
-      return Object.freeze({ kind: "type" as const, type: substituteRustTargetTypeParameters(argument.type, bindings) });
+      return Object.freeze({ kind: "type" as const, type: substitute(argument.type) });
     })),
     fields: Object.freeze(definition.fields.map(field => Object.freeze({
       ...field,
-      carrier: substituteRustTargetTypeParameters(field.carrier, bindings),
+      carrier: substitute(field.carrier),
       ...(field.methodStorageCarrier === undefined ? {} : {
-        methodStorageCarrier: substituteRustTargetTypeParameters(field.methodStorageCarrier, bindings),
+        methodStorageCarrier: substitute(field.methodStorageCarrier),
       }),
     }))),
     ...(definition.construction === undefined ? {} : { construction: Object.freeze({
-      ...definition.construction, carrier: substituteRustTargetTypeParameters(definition.construction.carrier, bindings),
+      ...definition.construction, carrier: substitute(definition.construction.carrier),
     }) }),
   });
 }

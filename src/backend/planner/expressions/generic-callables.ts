@@ -56,7 +56,8 @@ export function planRustGenericCallableValue(
     fields.push({ name: "marker", value: { kind: "path", path: "core::marker::PhantomData" } });
   }
   const state: RustExpr = { kind: "struct-literal", path, fields };
-  return rustValueBlock(receiverBindings, { kind: "associated-call", owner, method: member.variantName,
+  const value: RustExpr = { kind: "associated-call", owner, method: member.variantName,
     args: [implementation.storage === "shared" ? { kind: "call", path: "alloc::rc::Rc::new", args: [state] } : state],
-  });
+  };
+  return receiverBindings.length === 0 ? value : rustValueBlock(receiverBindings, value);
 }

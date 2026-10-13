@@ -59,6 +59,7 @@ export function createRustSourceTypeRegistry(
   const carriersByDeclaration = new WeakMap<Node, TargetTypeRef>();
   const variantsByDeclaration = new Map<Node, readonly RustSourceEnumVariant[]>();
   const structuralObjectsByType = new WeakMap<Type, RustSourceObjectShape[]>();
+  const structuralTemplatesByType = new WeakMap<Type, RustSourceObjectShape[]>();
   const structuralObjects: RustSourceObjectShape[] = [];
   const structuralObjectsByCarrier = new Map<string, RustSourceObjectShape[]>();
   const structuralCarriersByAlias = new WeakMap<Node, Map<string, TargetTypeRef>>();
@@ -272,6 +273,11 @@ export function createRustSourceTypeRegistry(
       const aliasTemplateKey = aliasTemplate === undefined ? undefined : structuralCarrierKey(aliasTemplate);
       if (aliasTemplate !== undefined && (aliasTemplateKey === undefined || !structuralObjectsByCarrier.has(aliasTemplateKey))) return false;
       const retainInstantiation = (): void => {
+        if (template === undefined) {
+          const templates = structuralTemplatesByType.get(normalized.sourceType) ?? [];
+          if (!templates.some(candidate => sourceObjectShapeEquals(candidate, normalized)))
+            structuralTemplatesByType.set(normalized.sourceType, [...templates, normalized]);
+        }
         if (templateShape !== undefined) retainStructuralInstantiation(templateShape.carrier, normalized.carrier);
         if (normalized.sourceAlias === undefined) return;
         const instances = structuralCarriersByAlias.get(normalized.sourceAlias) ?? new Map<string, TargetTypeRef>();
@@ -378,7 +384,8 @@ export function createRustSourceTypeRegistry(
       return Object.freeze([...structuralFieldImplementations]);
     },
     structuralObjectForType(type, carrier) {
-      const candidates = (structuralObjectsByType.get(type) ?? []).filter((shape) =>
+      const selected = carrier === undefined ? structuralTemplatesByType : structuralObjectsByType;
+      const candidates = (selected.get(type) ?? []).filter((shape) =>
         carrier === undefined || rustTargetTypeRefEquals(shape.carrier, carrier));
       const first = candidates[0];
       return first !== undefined && candidates.every((candidate) =>

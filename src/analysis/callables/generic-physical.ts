@@ -33,9 +33,12 @@ export interface RustGenericCallablePhysicalPlan {
   environmentFor(implementation: RustGenericCallableImplementation): RustGenericCallableEnvironment | undefined;
   definitionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalDefinition | undefined;
   argumentsFor(carrier: TargetTypeRef): readonly RustTargetGenericArgument[] | undefined;
-  conversionFor(source: TargetTypeRef, target: TargetTypeRef): readonly {
-    readonly source: RustGenericCallablePhysicalMember; readonly target: RustGenericCallablePhysicalMember;
-  }[] | undefined;
+  conversionFor(source: TargetTypeRef, target: TargetTypeRef):
+    | { readonly kind: "identity" }
+    | { readonly kind: "variants"; readonly members: readonly {
+        readonly source: RustGenericCallablePhysicalMember; readonly target: RustGenericCallablePhysicalMember;
+      }[] }
+    | undefined;
   carrierFor(carrier: TargetTypeRef, ownerFileName: string, producers: readonly SourceStorageProducer[]):
     { readonly carrier: TargetTypeRef; readonly inputs: readonly RustNativeCallableInput[] } | undefined;
 }
@@ -149,6 +152,8 @@ export function createRustGenericCallablePhysicalPlan(
       const from = select(source);
       const into = select(target);
       if (from === undefined || into === undefined || from.definition.familyIdentity !== into.definition.familyIdentity) return undefined;
+      if (from.definition === into.definition && closedMetadataEquals(from.arguments, into.arguments))
+        return Object.freeze({ kind: "identity" as const });
       const sourceValue = rustGenericCallableValue(source)!;
       const targetValue = rustGenericCallableValue(target)!;
       const argumentsFor = (value: typeof sourceValue, index: number): readonly RustTargetGenericArgument[] =>
@@ -161,7 +166,7 @@ export function createRustGenericCallablePhysicalPlan(
         if (candidate === undefined) return undefined;
         transitions.push(Object.freeze({ source: member, target: candidate }));
       }
-      return Object.freeze(transitions);
+      return Object.freeze({ kind: "variants" as const, members: Object.freeze(transitions) });
     },
     carrierFor(carrier: TargetTypeRef, ownerFileName: string, producers: readonly SourceStorageProducer[]) {
       const value = rustGenericCallableValue(carrier);

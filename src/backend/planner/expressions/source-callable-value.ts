@@ -17,6 +17,8 @@ import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustLexicalFunctionArguments } from "../declarations/callables/lexical-functions.js";
 import { rustValueBlock } from "../../target-ast/value-block.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
+import { planRustGenericCallableValue } from "./generic-callables.js";
 
 export function planRustSourceCallableValue(
   value: RustSourceCallableValueFact,
@@ -46,6 +48,7 @@ export function planRustSourceCallableValueConstruction(
   value: RustSourceCallableValueFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
+  if (rustGenericCallableValue(value.carrier) !== undefined) return planRustGenericCallableValue(value.sourceDeclaration, value.carrier, context);
   if (context.syntheticNames === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, value.sourceDeclaration),

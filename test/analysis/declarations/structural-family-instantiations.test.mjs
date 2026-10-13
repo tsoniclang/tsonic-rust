@@ -8,6 +8,7 @@ import { rustGenericsWithAssociatedBounds } from "../../../dist/backend/planner/
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 import { selectRustStructuralFieldProjection } from "../../../dist/policy/types/structural-fields.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const scalar = { kind: "source-primitive", name: "int32" };
 const parameter = { kind: "type-parameter", identity: "T", name: "T" };
@@ -16,6 +17,26 @@ const projection = identity => ({ kind: "associated-type", owner: parameter, nam
     sourceItem: { fileName: "/source.ts", typeName: identity }, genericArguments: [], associatedConstraints: [] } });
 const field = (name, type) => ({ sourceName: name, type, presence: "required", readonly: false });
 const carrier = types => rustStructuralObjectTargetType("/source.ts", types.map((type, index) => field(`field${index}`, type)));
+
+test("physical instances do not replace or ambiguate the checked logical type template", () => {
+  const sourceType = {};
+  const registry = createRustSourceTypeRegistry();
+  const template = carrier([parameter]);
+  const instance = carrier([scalar]);
+  const shape = selectedCarrier => ({ sourceType, carrier: selectedCarrier, storage: "structural-object",
+    fields: rustStructuralObjectCarrierValue(selectedCarrier).fields.map((entry, storageIndex) => ({
+      ...entry, declarations: [], symbols: [], sourceType: {}, resultCarrier: entry.type, storageIndex,
+    })) });
+  assert.equal(registry.registerStructuralObject(shape(template)), true);
+  assert.equal(registry.registerStructuralObject(shape(instance), template), true);
+  assert.equal(registry.registerStructuralObject(shape(instance), template), true);
+  assert.equal(rustTargetTypeRefEquals(registry.structuralObjectForType(sourceType).carrier, template), true);
+  assert.equal(rustTargetTypeRefEquals(registry.structuralObjectForType(sourceType, instance).carrier, instance), true);
+  assert.equal(registry.structuralObjectForType({}, instance), undefined);
+  assert.equal(registry.structuralInstantiations().length, 1);
+  assert.equal(registry.registerStructuralObject(shape(carrier([{ kind: "source-primitive", name: "uint32" }]))), true);
+  assert.equal(registry.structuralObjectForType(sourceType), undefined);
+});
 
 test("dependent generic bounds occupy one location without changing bound-lifetime predicates", () => {
   const clone = { kind: "trait", path: "Clone" };

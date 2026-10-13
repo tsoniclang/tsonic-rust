@@ -26,7 +26,6 @@ import {
 import {
   rustOptionElementCarrier,
   rustCallableProtocol,
-  rustCallableTargetType,
   rustNativeCallableProtocol,
   rustSourcePrimitiveTargetType,
   rustUnitTargetType,
@@ -50,14 +49,14 @@ import {
 import { resolveRustExactNullishValueCarrier, resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../target-model/facts/selections.js";
-import { resolveRustContextualParameterAbi, rustSourceParameterContractCarrier } from "../../policy/ownership/source-callable-abi.js";
+import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveRustDeclaredBindingStorage, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceBindingFact, RustTargetOperationFact } from "../facts/keys.js";
-import { rustHigherRankedNativeFunctionCarrier } from "../callables/higher-ranked-function.js";
+import { rustSourceFunctionValueCarrier } from "../callables/function-values.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { readRustSourceRawAddress } from "../../policy/operations/pointers/raw-addresses.js";
 import { readRustRawLocation } from "../../policy/operations/pointers/native-memory.js";
@@ -149,15 +148,8 @@ export function resolveIdentifierCarrier(
       if (name !== undefined && parameterAbis.every((abi) => abi !== undefined) &&
         returnCarrier !== undefined && targetName !== undefined) {
         const closedParameterAbis = parameterAbis as import("../facts/keys.js").RustSourceParameterAbiFact[];
-        const callableCarrier = rustHigherRankedNativeFunctionCarrier(
-          walk,
-          declaration,
-          closedParameterAbis,
-          returnCarrier,
-        ) ?? rustCallableTargetType(
-            closedParameterAbis.map(rustSourceParameterContractCarrier),
-            returnCarrier,
-          );
+        const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
+        if (callableCarrier === undefined) return undefined;
         walk.context.facts.set(identifier, rustSourceCallableValueFactKey, {
           form: "function",
           sourceDeclaration: declaration,

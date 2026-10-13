@@ -330,12 +330,16 @@ export function createRustNativeStoragePlan(input: {
       if (rustGenericCallableValue(current) !== undefined) {
         const origins = input.storage.boundOriginsFor(selectedSubject, bindings);
         if (origins.kind === "unresolved") return fail(origins.reason);
-        if (rustGenericCallableValue(current) !== undefined && origins.subjects.every(origin => !inputs.has(origin))) {
+        const materialized = (origin: SourceStorageSubject): boolean => origin.kind !== "return" || origin.projection.length !== 0 ||
+          !isRustNeverCarrier(input.facts.getFact(origin.node, rustSourceCallableReturnFactKey)?.returnCarrier);
+        const values = origins.subjects.filter(materialized);
+        if (values.every(origin => !inputs.has(origin))) {
           const producers = input.storage.storageProducersFor(selectedSubject, bindings);
           if (producers.kind !== "complete") return fail(producers.kind === "unresolved" ? producers.reason
             : "A generic callable physical environment requires its exact closed source producers.");
-          const present = producers.producers.filter(producer => !permitsAbsence || producer.subject.projection.length !== 0 ||
-            !isRustAbsenceCarrier(input.facts.getFact(producer.subject.node, rustRuntimeCarrierKey)?.carrier));
+          const present = producers.producers.filter(producer => materialized(producer.subject) &&
+            (!permitsAbsence || producer.subject.projection.length !== 0 ||
+              !isRustAbsenceCarrier(input.facts.getFact(producer.subject.node, rustRuntimeCarrierKey)?.carrier)));
           const ownerFileName = input.ast.getFileName(input.ast.getSourceFile(selectedSubject.node));
           const physical = input.generic.physical.carrierFor(current, ownerFileName, present);
           if (physical === undefined) return fail("A generic callable producer lacks its exact bound physical capture environment.");
@@ -343,7 +347,7 @@ export function createRustNativeStoragePlan(input: {
           return physical.carrier;
         }
         let physical: TargetTypeRef | undefined;
-        for (const origin of origins.subjects) {
+        for (const origin of values) {
           if (!step(depth)) return undefined;
           const candidate = inputs.get(origin);
           let candidatePhysical: TargetTypeRef | undefined;

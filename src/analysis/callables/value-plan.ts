@@ -219,7 +219,7 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
   for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
-    facts: input.facts, generic, native, nativeStorage });
+    facts: input.facts, generic, native, nativeStorage, definitions: input.typeDefinitions });
   const genericDispatch = createRustGenericCallableDispatchPlan({ ...input,
     nodes: input.sourceStorage.nodes, generic, nativeStorage, nativeGenericProducers });
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });

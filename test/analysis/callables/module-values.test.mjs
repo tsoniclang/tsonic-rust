@@ -22,7 +22,7 @@ function classify({ exported = false, kind = "first-class", direct = source, con
     ])],
   ]);
   recordRustModuleCallableStorage({ context: {
-    ast: { forEachChild() {} }, sourceFiles: [declaration],
+    ast: { forEachChild() {}, is: { IsFunctionDeclaration() { return false; } } }, sourceFiles: [declaration],
     source: { navigation: { declarationUseSummary() { return { exported }; },
       expressionValueFlow() { return { aliasDeclarations: [] }; },
       declarationUses() { return [{ kind, reference }]; } } },

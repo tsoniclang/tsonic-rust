@@ -182,6 +182,10 @@ export function selectedMemberReceiverCarrier(
   ) {
     return sourceCarrier;
   }
+  if (sourceCarrier !== undefined && options.sourceTypes.structuralObjectForType(
+    request.sourceReceiverType, sourceCarrier) !== undefined) {
+    return request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
+  }
   if (selectedCarrier === undefined) {
     if (sourceCarrier !== undefined && request.sourceSelectedSymbol !== undefined) {
       const selectedDeclarations = context.currentSemantics.declarations

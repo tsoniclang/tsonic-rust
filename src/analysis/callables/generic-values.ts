@@ -12,7 +12,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustContextualValueConversionFactKey } from "../facts/keys.js";
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import { sourceCallableDefinitionIsDiscarded, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceCallableDefinitionIsDiscarded, sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../facts/keys.js";
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
@@ -31,6 +31,7 @@ export interface RustGenericCallableImplementation {
   readonly stateName: string;
   readonly functionName: string;
   readonly storage: "value" | "shared";
+  readonly creation: "declaration" | "activation";
   readonly captures: readonly (RustClosureCaptureFact["captures"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly receiverFields: readonly (RustClosureCaptureFact["receiverFields"][number] & { readonly storageCarrier: TargetTypeRef })[];
   readonly receivers: readonly (RustClosureCaptureFact["receivers"][number] & { readonly storageCarrier: TargetTypeRef })[];
@@ -78,7 +79,7 @@ export function createRustGenericCallablePlan(
     const operation = facts.getFact(node, rustTargetOperationFactKey);
     return operation?.kind === "closure"
       ? facts.getFact(node, rustReceiverIndependentMethodFactKey)?.carrier ?? operation.resultCarrier
-      : undefined;
+      : ast.is.IsFunctionDeclaration(node) ? facts.getRuntimeCarrierFact(node)?.carrier : undefined;
   };
   const visit = (node: Node): void => {
     if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
@@ -87,7 +88,11 @@ export function createRustGenericCallablePlan(
       if (name !== undefined) usedNames.add(name);
     }
     const operation = facts.getFact(node, rustTargetOperationFactKey);
-    if (operation?.kind === "closure") closures.push(node);
+    const observedDeclaration = ast.is.IsFunctionDeclaration(node) &&
+      (navigation.declarationUseSummary(node).uses.some(use => use.kind === "first-class") ||
+        !closedSourceFiles.has(ast.getSourceFile(node)!) && navigation.declarationUseSummary(node).exported);
+    if (operation?.kind === "closure" || observedDeclaration && ast.body(node) !== undefined &&
+      rustGenericCallableValue(closureCarrier(node)) !== undefined) closures.push(node);
     if (operation?.kind === "operator-token" && (operation.operator === "==" || operation.operator === "!=")) {
       const expression = ast.as.AsBinaryExpression(node);
       for (const operand of [expression?.Left, expression?.Right]) {
@@ -153,11 +158,20 @@ export function createRustGenericCallablePlan(
           rustTargetTypeParameterIdentities(selected.storageCarrier).some(identity => !value.signature.environmentParameters.some(parameter => parameter.identity === identity)))) {
         issues.push({ subject: node, message: "A generic callable environment has no exact closed capture contract; recursive or hidden existential captures are not erased." });
       } else {
+        const creation = ast.is.IsFunctionDeclaration(node) && sourceDeclarationIsModuleScoped(node, ast)
+          ? "declaration" as const : "activation" as const;
+        const functionName = creation === "declaration" ? names.functionNameForDeclaration(node)
+          : allocateRustGeneratedName(usedNames, `call_generic_${implementationIdentity.slice(0, 12)}`);
+        if (functionName === undefined) {
+          issues.push({ subject: node, message: "A declaration-owned generic callable has no exact native implementation name." });
+          continue;
+        }
         const implementation = Object.freeze({ declaration: node, carrier, sourceFileName,
           variantName: allocateRustGeneratedName(usedNames, `Implementation${implementationIdentity.slice(0, 12)}`),
           stateName: allocateRustGeneratedName(usedNames, `CallableEnvironment${implementationIdentity.slice(0, 12)}`),
-          functionName: allocateRustGeneratedName(usedNames, `call_generic_${implementationIdentity.slice(0, 12)}`),
-          storage: !identityFamilies.has(identity) &&
+          functionName,
+          creation,
+          storage: (!identityFamilies.has(identity) || creation === "declaration") &&
             (facts.getFact(node, rustAsyncFunctionFactKey) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined ||
               captures.length === 0 && receiverFields.length === 0 && receivers.length === 0) &&
             facts.getFact(node, rustGeneratorFactKey) === undefined &&

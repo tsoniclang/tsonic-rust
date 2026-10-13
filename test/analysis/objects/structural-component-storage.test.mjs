@@ -3,6 +3,7 @@ import test from "node:test";
 import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 test("structural storage unifies exact component contracts without erasing other differences", () => {
   const primitive = name => ({ kind: "source-primitive", name });
@@ -32,6 +33,27 @@ test("structural storage unifies exact component contracts without erasing other
     assert.equal(plan.sharesStorage(shapes[0].carrier, other.carrier), false);
   }
   assert.equal(plan.sharesStorage(shapes[0].carrier, primitive("int32")), false);
+});
+
+test("structural stored callable lifetimes instantiate through exact generic layout evidence", () => {
+  const integer = { kind: "source-primitive", name: "int64" };
+  const floating = { kind: "source-primitive", name: "float64" };
+  const carrier = (lifetime, value = integer, readonly = false) => rustStructuralObjectTargetType("/source.ts", [{
+    sourceName: "callback", type: rustCallableTargetType([value], value, lifetime), presence: "required", readonly,
+  }]);
+  const template = carrier({ kind: "placeholder" });
+  const owned = carrier({ kind: "static" });
+  const borrowed = carrier({ kind: "parameter", identity: "input", name: "input" });
+  const plan = createRustStructuralShapePlan([template, owned, borrowed].map(carrier => ({ carrier })), [],
+    () => "source", [], [ { template, instance: owned }, { template, instance: borrowed } ]);
+  assert.equal(plan.definitions.length, 1);
+  assert.deepEqual(plan.definitionForCarrier(owned).genericArguments, [{ kind: "lifetime", lifetime: { kind: "static" } }]);
+  assert.deepEqual(plan.definitionForCarrier(borrowed).genericArguments, [{ kind: "lifetime",
+    lifetime: { kind: "parameter", identity: "input", name: "input" } }]);
+  assert.equal(plan.sharesStorage(owned, borrowed), false);
+  assert.equal(plan.definitionForCarrier(carrier({ kind: "static" }, floating)), undefined);
+  assert.equal(plan.definitionForCarrier(carrier({ kind: "static" }, integer, true)), undefined);
+  assert.ok(Object.isFrozen(plan.definitionForCarrier(owned)));
 });
 
 test("physical structural templates unify lifted generic terms while retaining exact logical selections", () => {

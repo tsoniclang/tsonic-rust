@@ -27,7 +27,6 @@ export function genericCallableStorageItems(
   }] }];
   if (definition.copy) {
     items.push({ kind: "impl", trait: { kind: "named", path: "Copy" }, target, generics, members: [] });
-    return items;
   }
   if (!definition.identityObserved) return items;
   const equality: RustExpr = { kind: "match", expression: { kind: "tuple-literal", elements: [
@@ -36,10 +35,13 @@ export function genericCallableStorageItems(
     ...definition.members.map(member => ({
       pattern: { kind: "tuple" as const, elements: ["left", "right"].map(name => ({
         kind: "tuple-variant" as const, path: `Self::${member.variantName}`,
-        elements: [{ kind: "binding" as const, name }],
+        elements: [member.implementation.creation === "declaration"
+          ? { kind: "wildcard" as const } : { kind: "binding" as const, name }],
       })) },
-      expression: { kind: "call" as const, path: "alloc::rc::Rc::ptr_eq",
-        args: ["left", "right"].map(path => ({ kind: "path" as const, path })) },
+      expression: member.implementation.creation === "declaration"
+        ? { kind: "bool-literal" as const, value: true }
+        : { kind: "call" as const, path: "alloc::rc::Rc::ptr_eq",
+          args: ["left", "right"].map(path => ({ kind: "path" as const, path })) },
     })),
     ...(definition.members.length > 1 ? [{ pattern: { kind: "wildcard" as const },
       expression: { kind: "bool-literal" as const, value: false } }] : []),

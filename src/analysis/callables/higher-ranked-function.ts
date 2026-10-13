@@ -7,6 +7,7 @@ import {
   rustLifetimeKey,
 } from "../../target-model/lifetimes/index.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/index.js";
+import { rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 
 export function rustHigherRankedNativeFunctionCarrier(
   walk: RustFactWalk,
@@ -14,6 +15,7 @@ export function rustHigherRankedNativeFunctionCarrier(
   parameters: readonly RustSourceParameterAbi[],
   result: TargetTypeRef,
 ): TargetTypeRef | undefined {
+  if (rustNativeFutureCallableResult(result) !== undefined) return undefined;
   const contract = walk.context.sourceLifetimes.contractFor(declaration);
   const lifetimeParameters = contract?.parameters.filter((parameter): parameter is Extract<
     typeof parameter,

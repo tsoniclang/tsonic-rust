@@ -123,10 +123,11 @@ test("physical family conversion moves only exact producer and capture argument 
     carriers.push(selected.carrier);
     const conversion = physical.conversionFor(selected.carrier, target.carrier);
     assert.equal(conversion !== undefined, true, ast.text(ast.arguments(call)[0]));
-    assert.equal(conversion.length, 1);
-    assert.equal(conversion[0].source.implementation === conversion[0].target.implementation, true);
-    assert.equal(Object.isFrozen(conversion) && Object.isFrozen(conversion[0]), true);
-    variants.add(conversion[0].target.variantName);
+    assert.equal(conversion.kind, "variants");
+    assert.equal(conversion.members.length, 1);
+    assert.equal(conversion.members[0].source.implementation === conversion.members[0].target.implementation, true);
+    assert.equal(Object.isFrozen(conversion) && Object.isFrozen(conversion.members) && Object.isFrozen(conversion.members[0]), true);
+    variants.add(conversion.members[0].target.variantName);
     assert.equal(physical.conversionFor(target.carrier, selected.carrier) === undefined, true,
       "a joined carrier cannot discard the other captured input");
   }

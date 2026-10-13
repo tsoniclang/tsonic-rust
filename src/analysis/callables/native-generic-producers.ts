@@ -6,6 +6,9 @@ import { closedMetadataEquals, closedMetadataKey } from "../../target-model/meta
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
@@ -41,6 +44,7 @@ export function createRustNativeGenericProducerPlan(input: {
   readonly generic: RustGenericCallablePlan;
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
+  readonly definitions: RustTypeDefinitions;
 }): RustNativeGenericProducerPlan {
   const nativeInputs = new Map(input.native.inputs.map(selected => [selected.subject, selected]));
   const bindings = new Map<RustNativeCallableProtocol, Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>>();
@@ -103,7 +107,9 @@ export function createRustNativeGenericProducerPlan(input: {
       }
       if (hasGenericProducer) {
         const physical = input.nativeStorage.invocationInputFor(selected, invocation, owner);
-        const definition = physical.kind === "unresolved" ? undefined : input.generic.physical.definitionFor(physical.carrier);
+        const payload = physical.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(selected.carrier, physical.carrier,
+          rustOptionElementCarrier(selected.carrier) ?? selected.carrier, input.definitions);
+        const definition = payload === undefined ? undefined : input.generic.physical.definitionFor(payload);
         if (definition === undefined) {
           reject(invocation, selected, physical.kind === "unresolved" ? physical.reason
             : "An exact generic producer invocation lacks a selected physical family.");

@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
+import { sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
 import { rustBindingStorageFactKey, rustClosureCaptureFactKey } from "../facts/keys.js";
@@ -10,6 +11,9 @@ import { rustRetainedCallableStorage } from "../facts/callable-results.js";
 export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: RustLexicalFunctionEnvironments): void {
   const { ast, source, facts } = walk.context;
   const visit = (node: Node): void => {
+    if (ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined && sourceDeclarationIsModuleScoped(node, ast)) {
+      facts.set(node, rustClosureCaptureFactKey, { receivers: [], receiverFields: [], captures: [] });
+    }
     const selection = lexical.forDeclaration(node);
     const retained = rustRetainedCallableStorage(facts, node) !== undefined;
     if (selection?.kind === "resolved" && (selection.valueObserved || retained)) {

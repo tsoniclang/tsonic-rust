@@ -35,7 +35,6 @@ import {
   rustSourceOptionalTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
-  rustCallableTargetType,
   rustGeneratorStorageTargetType,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -50,13 +49,13 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
-import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
+import { rustSourceFunctionValueCarrier } from "./function-values.js";
 import { selectRustPointerReturnContract } from "../../policy/operations/pointers/return.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callable-origins.js";
 import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
-import { closeRustRetainedResult } from "../../policy/types/retained-result.js";
+import { resolveRustRetainedResult } from "../../policy/types/resolution/retained-results.js";
 import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
@@ -236,19 +235,11 @@ function finalizedNativeCallableValue(
     return undefined;
   }
   const closed = parameterAbis as import("../facts/keys.js").RustSourceParameterAbiFact[];
-  const higherRankedCarrier = rustHigherRankedNativeFunctionCarrier(
-    walk,
-    callableDeclaration,
-    closed,
-    resultCarrier,
-  );
+  const carrier = rustSourceFunctionValueCarrier(walk, callableDeclaration, closed, resultCarrier);
+  if (carrier === undefined) return undefined;
   return {
     name: valueName,
-    carrier: higherRankedCarrier ?? rustCallableTargetType(
-      closed.map((abi) => abi.parameterCarrier),
-      resultCarrier,
-      { kind: "static" },
-    ),
+    carrier,
     parameterCarriers: closed.map((abi) => abi.parameterCarrier),
     resultCarrier,
   };
@@ -530,7 +521,8 @@ export function recordCallableReturnFact(
   const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
     parameter === undefined ? undefined : walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
   const retained = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
-    : closeRustRetainedResult(declaration, rawCarrier, parameterCarriers, walk.context);
+    : resolveRustRetainedResult(declaration, sourceReturn, rawCarrier, parameterCarriers,
+        rustResolutionContext(walk, declaration), walk.operationOptions);
   const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
   if (retained?.environment !== undefined) walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
     retained.environment, [{ message: "rust returned owned environment" }]);
