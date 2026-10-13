@@ -20,6 +20,7 @@ interface RustGenericCallableInvocationInput {
 
 export interface RustGenericCallableDispatchPlan {
   requiredFor(definition: RustGenericCallablePhysicalDefinition): boolean;
+  usesDeclarationBody(declaration: Node): boolean;
 }
 
 export function selectRustGenericCallableInvocationStorage(
@@ -50,6 +51,12 @@ export function createRustGenericCallableDispatchPlan(input: RustGenericCallable
     const selected = selectRustGenericCallableInvocationStorage(node, input);
     if (selected !== undefined) invoked.add(selected.definition);
   }
-  return Object.freeze({ requiredFor: (definition: RustGenericCallablePhysicalDefinition) =>
-    !closed.has(definition.ownerFileName) || invoked.has(definition) });
+  const requiredFor = (definition: RustGenericCallablePhysicalDefinition): boolean =>
+    !closed.has(definition.ownerFileName) || invoked.has(definition);
+  const bodies = new Set<Node>();
+  for (const definition of input.generic.physical.definitions()) {
+    if (!requiredFor(definition)) continue;
+    for (const member of definition.members) bodies.add(member.implementation.declaration);
+  }
+  return Object.freeze({ requiredFor, usesDeclarationBody: (declaration: Node) => bodies.has(declaration) });
 }

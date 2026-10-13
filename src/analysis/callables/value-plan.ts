@@ -31,6 +31,7 @@ import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPl
 import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
 import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
+import { createRustGenericCallableIdentityPlan, type RustGenericCallableIdentityPlan } from "./generic-identities.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPlan } from "./native-dispatch.js";
 import type { RustStructuralStorageLookup } from "../facts/target-operation.js";
@@ -47,6 +48,7 @@ export interface RustCallableValuePlan {
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
   readonly genericDispatch: RustGenericCallableDispatchPlan;
+  readonly genericIdentities: RustGenericCallableIdentityPlan;
   readonly nativeDispatch: RustNativeCallableDispatchPlan;
   readonly genericCompletions: RustGenericCallableCompletionPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
@@ -110,6 +112,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get nativeProducers() { return requireCurrent().nativeProducers; },
     get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
     get genericDispatch() { return requireCurrent().genericDispatch; },
+    get genericIdentities() { return requireCurrent().genericIdentities; },
     get nativeDispatch() { return requireCurrent().nativeDispatch; },
     get genericCompletions() { return requireCompletions(); },
     get issues() { return requireCurrent().issues; },
@@ -220,10 +223,12 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
     facts: input.facts, generic, native, nativeStorage, definitions: input.typeDefinitions });
+  const genericIdentities = createRustGenericCallableIdentityPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
+    facts: input.facts, nativeStorage, physical: generic.physical });
   const genericDispatch = createRustGenericCallableDispatchPlan({ ...input,
     nodes: input.sourceStorage.nodes, generic, nativeStorage, nativeGenericProducers });
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
   return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
-    genericDispatch, nativeDispatch, get genericCompletions() { return completions(); },
-    issues: Object.freeze([...generic.issues, ...nativeStorage.issues, ...suspended.issues, ...frames.issues]) });
+    genericDispatch, genericIdentities, nativeDispatch, get genericCompletions() { return completions(); },
+    issues: Object.freeze([...generic.issues, ...nativeStorage.issues, ...suspended.issues, ...frames.issues, ...genericIdentities.issues]) });
 }

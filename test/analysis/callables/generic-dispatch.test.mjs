@@ -7,9 +7,15 @@ import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selectio
 
 function fixture() {
   const source = Object.freeze({ fileName: "/project/index.ts" });
-  const called = Object.freeze({ ownerFileName: source.fileName });
-  const transported = Object.freeze({ ownerFileName: source.fileName });
-  const bridged = Object.freeze({ ownerFileName: source.fileName });
+  const calledDeclaration = Object.freeze({});
+  const transportedDeclaration = Object.freeze({});
+  const bridgedDeclaration = Object.freeze({});
+  const called = Object.freeze({ ownerFileName: source.fileName,
+    members: [{ implementation: { declaration: calledDeclaration } }] });
+  const transported = Object.freeze({ ownerFileName: source.fileName,
+    members: [{ implementation: { declaration: transportedDeclaration } }] });
+  const bridged = Object.freeze({ ownerFileName: source.fileName,
+    members: [{ implementation: { declaration: bridgedDeclaration } }] });
   const published = Object.freeze({ ownerFileName: "/library/index.ts" });
   const carrier = Object.freeze({ kind: "target-named", id: "callable" });
   const callee = Object.freeze({ kind: "Identifier" });
@@ -29,7 +35,8 @@ function fixture() {
       getTargetConversionFact: () => undefined,
       getRuntimeCarrierFact: node => node === callee ? { carrier } : undefined },
     generic: { definitionFor: selected => selected === carrier ? called : undefined,
-      physical: { definitionFor: selected => selected === carrier ? called : undefined } },
+      physical: { definitionFor: selected => selected === carrier ? called : undefined,
+        definitions: () => [called, transported, bridged] } },
     structuralShapes: { field: () => undefined },
     nativeStorage: { invocationCallableFor(node) {
       storageReads++;
@@ -52,6 +59,10 @@ test("generic dispatch retains direct calls, native bridges and published bounda
   assert.equal(plan.requiredFor(current.bridged), true);
   assert.equal(plan.requiredFor(current.published), true);
   assert.equal(plan.requiredFor(current.transported), false);
+  assert.equal(plan.usesDeclarationBody(current.called.members[0].implementation.declaration), true);
+  assert.equal(plan.usesDeclarationBody(current.bridged.members[0].implementation.declaration), true);
+  assert.equal(plan.usesDeclarationBody(current.transported.members[0].implementation.declaration), false);
+  assert.equal(plan.usesDeclarationBody({}), false, "foreign declarations have no body-use proof");
   for (let count = 0; count < 128; count++) {
     assert.equal(plan.requiredFor(current.called), true);
     assert.equal(plan.requiredFor(current.transported), false);
@@ -59,6 +70,7 @@ test("generic dispatch retains direct calls, native bridges and published bounda
   assert.equal(current.storageReads(), 1, "the immutable demand plan never rescans at each emitted family");
   const published = createRustGenericCallableDispatchPlan({ ...current.input, closedSourceFiles: new Set() });
   assert.equal(published.requiredFor(current.transported), true, "a separately consumed library retains its callable API");
+  assert.equal(published.usesDeclarationBody(current.transported.members[0].implementation.declaration), true);
 });
 
 test("generic invocation storage is exact and does not manufacture a family from absent evidence", () => {

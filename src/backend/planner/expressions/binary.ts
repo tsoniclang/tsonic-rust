@@ -39,6 +39,7 @@ import { planCompoundAssignmentExpression } from "./compound-assignment.js";
 import { planRustProgramErrorEquality, planRustProgramErrorTypeTest } from "./error-operations.js";
 import { rustErrorFieldComparisonView, rustErrorFieldOptionalView } from "./error-field-borrows.js";
 import { planRustOptionEquality } from "./option-equality.js";
+import { planRustGenericCallableIdentity } from "./generic-callable-identities.js";
 import { planRustClosedTypeTest } from "./type-tests.js";
 import {
   planRustProjectTypeTest,
@@ -381,6 +382,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
   }
   const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
   const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
+  const genericIdentity = context.input.program.callableValues.genericIdentities.forComparison(node);
+  if (genericIdentity !== undefined) return planRustGenericCallableIdentity(node, genericIdentity, context);
   if (leftNode !== undefined && rightNode !== undefined && fact.kind === "operator-token") {
     const scoped = planRustScopedStringComparison(leftNode, rightNode, fact, context);
     if (scoped !== undefined) return scoped;
