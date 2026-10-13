@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from
-  "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { finalizeProviderOperationFact } from
   "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";

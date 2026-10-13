@@ -6,7 +6,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectRustNumericConstraintComparison } from "../../policy/operations/numeric/union.js";
-import { rustGenericNumericOperandsKey } from "../facts/generic-numeric.js";
+
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/model.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 
@@ -56,6 +56,6 @@ export function selectRustGenericNumericOperation(
   );
   if (!valid(leftNode, left) || !valid(rightNode, right)) return undefined;
   const selected = selectRustNumericConstraintComparison(operator);
-  if (selected !== undefined) walk.context.facts.set(node, rustGenericNumericOperandsKey, Object.freeze([left, right]));
+  if (selected !== undefined) walk.context.records.genericNumericOperands.set(node, Object.freeze([left, right]));
   return selected;
 }

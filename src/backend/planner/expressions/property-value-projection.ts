@@ -2,8 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import { rustPropertyProjectionFactKey } from "../../../analysis/facts/property-projections.js";
-import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
+
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
@@ -24,7 +24,7 @@ export function planRustPropertyValueProjection(
   node: Node | undefined,
   convert: (conversion: RustValueConversionContract, source: RustExpr) => RustExpr | undefined,
 ): RustExpr | undefined {
-  const fact = node === undefined ? undefined : context.input.program.facts.getFact(node, rustPropertyProjectionFactKey);
+  const fact = node === undefined ? undefined : context.input.program.records.propertyProjection.get(node);
   const candidates = fact?.cases.filter(projection => rustTargetTypeRefEquals(projection.source, contract.source));
   const projection = candidates?.length === 1 ? candidates[0] : undefined;
   const selected = projection === undefined ? undefined : rustValueConversionContract(projection.conversion, context.input.program.typeDefinitions);
@@ -55,7 +55,7 @@ export function planRustPropertyValueProjection(
         : planRustSourceAccessorCall(node, read, "read", [], context, receiver, contract.source);
       value = raw === undefined || selectedRead === undefined ? undefined
         : finishRustSourceAccessorEffect(node, selectedRead.declaration, raw, context,
-          context.input.program.facts.getFact(selectedRead.declaration, rustFallibleFactKey)?.fallible === true ? "fallible" : "infallible");
+          context.input.program.records.fallible.get(selectedRead.declaration)?.fallible === true ? "fallible" : "infallible");
     } else if (read.dispatch !== undefined) {
       const plan = read.declaration === undefined ? undefined : context.input.program.projectFieldDispatch.planFor(read.declaration);
       const role = plan === undefined ? undefined : planRustProjectFieldDispatchRole(plan, "read", context);

@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { contextualConditionalArgumentMatches } from "../../../dist/analysis/operations/provider/calls/contextual-conditionals.js";
@@ -24,11 +25,8 @@ function selection(expression, relationship = () => ({ kind: "related", targetTy
         AsSatisfiesExpression: node => node,
       },
     },
-    facts: {
-      getFact: () => undefined,
-      getTargetConversionFact: () => undefined,
-      getRuntimeCarrierFact: node => { carrierReads++; return { carrier: node.carrier }; },
-    },
+    records: createRustRecordFixture({conversion: { get: () => undefined },
+runtimeCarrier: { get: (node) => { carrierReads++; return { carrier: node.carrier }; } }}),
     typeDefinitions: emptyRustTypeDefinitions,
   };
   const options = { projectTypes: { definitionForCarrier: () => ({ kind: "class" }), relationship } };

@@ -1,5 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
+import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import {
   Node_Expression,

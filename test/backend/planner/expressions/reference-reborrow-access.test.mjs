@@ -1,9 +1,10 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planExpression } from "../../../../dist/backend/planner/expressions/entry.js";
 import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
-import { rustContextualValueConversionFactKey } from "../../../../dist/analysis/facts/keys.js";
-import { rustValueReferenceReborrow } from "../../../../dist/analysis/facts/value-carrier-queries.js";
+
+import { rustValueReferenceReborrow } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 
 const node = {};
@@ -14,10 +15,11 @@ const expression = { kind: "reference", expr: { kind: "path", path: "proof::STAT
 function context(selectedSource = source, selectedTarget = integer) {
   const conversion = { kind: "reference-reborrow", source: selectedSource, target: selectedTarget };
   const fact = { sourceCarrier: selectedSource, targetCarrier: selectedTarget, conversion };
-  const facts = { getFact: (_subject, key) => key === rustContextualValueConversionFactKey ? fact : undefined,
-    getRuntimeCarrierFact: () => ({ carrier: selectedSource }), getTargetConversionFact: () => undefined };
+  const records = createRustRecordFixture({contextualValueConversion: { get: (_subject) => fact },
+runtimeCarrier: { get: () => ({ carrier: selectedSource }) },
+conversion: { get: () => undefined }});
   return { diagnostics: [], expressionOverrides: new Map([[node, { expression, carrier: selectedSource }]]),
-    input: { program: { facts, typeDefinitions: emptyRustTypeDefinitions, source: { ast: { kindName: () => "KindIdentifier" } } } } };
+    input: { program: { records, typeDefinitions: emptyRustTypeDefinitions, source: { ast: { kindName: () => "KindIdentifier" } } } } };
 }
 
 test("shared expression access retains an exact native reference reborrow once", () => {
@@ -39,15 +41,15 @@ test("shared expression access retains an exact native reference reborrow once",
 
 test("reference reborrow evidence rejects unrelated or contradictory carriers", () => {
   const selected = context();
-  const fact = selected.input.program.facts.getFact(node, rustContextualValueConversionFactKey);
+  const fact = selected.input.program.records.contextualValueConversion.get(node);
   for (const replacement of [
     undefined,
     { ...fact, sourceCarrier: integer },
     { ...fact, targetCarrier: source },
     { ...fact, conversion: { ...fact.conversion, source: { ...source, referent: source } } },
   ]) {
-    const facts = { ...selected.input.program.facts, getFact: () => replacement };
-    assert.equal(rustValueReferenceReborrow(facts, node, emptyRustTypeDefinitions) === undefined, true);
+    const records = { ...selected.input.program.records, contextualValueConversion: { get: () => replacement } };
+    assert.equal(rustValueReferenceReborrow(records, node, emptyRustTypeDefinitions) === undefined, true);
   }
   const immutable = context();
   const input = { source: { kind: "argument", sourceIndex: 0 }, sourceCarrier: integer,

@@ -11,7 +11,7 @@ import {
   substituteRustTargetTypeParameters,
 } from "../../target-model/types/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 export interface RustSourceCallableSpecializationVariant {
   readonly declaration: Node;
@@ -67,7 +67,7 @@ export interface RustSourceCallableSpecializationPlanRegistry
   initialize(input: {
     readonly navigation: SourceProgramNavigation;
     readonly sourceFiles: readonly SourceFile[];
-    readonly facts: RustPlanQueries;
+    readonly records: RustProgramRecords;
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
@@ -189,7 +189,7 @@ function createRustSourceCallableSpecializationPlan(
   input: {
     readonly navigation: SourceProgramNavigation;
     readonly sourceFiles: readonly SourceFile[];
-    readonly facts: RustPlanQueries;
+    readonly records: RustProgramRecords;
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;

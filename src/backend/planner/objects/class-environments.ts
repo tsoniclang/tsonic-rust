@@ -3,7 +3,7 @@ import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustClassValueDefinition } from "../../../analysis/objects/class-values.js";
-import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
+
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath, sourceModuleItemPath, rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
 import { emptyRustGenerics, type RustCallGenericArgument, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/syntax/nodes.js";
@@ -106,7 +106,7 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
     value: { kind: "call", path: "core::cell::OnceCell::new", args: [] } });
   const bindings: { name: string; value: RustExpr }[] = [];
   for (const capture of environment.captures) {
-    const binding = context.input.program.facts.getFact(capture.reference, rustSourceBindingFactKey);
+    const binding = context.input.program.records.sourceBinding.get(capture.reference);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     if (path === undefined) return undefined;
     const name = allocateRustSyntheticName(context.syntheticNames, "class_capture");

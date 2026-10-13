@@ -11,7 +11,7 @@ import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { rustClassValueFactKey } from "../facts/class-values.js";
+
 import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import { finalizeRustClassValueCallable, selectRustClassValueCallable, selectRustClassValueCallablePlan,
@@ -20,7 +20,7 @@ import { selectRustProjectStructuralView,
   type RustProjectStructuralView, type RustProjectStructuralViewImplementation } from "./project-structural-views.js";
 import { rustProjectViewMatches, selectRustProjectViewImplementations } from "./view-implementations.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
-import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
+import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { rustCallableAdapterValues } from "../callables/adapter-values.js";
 import { selectRustCallableValueAdapter } from "../callables/adapters.js";
 
@@ -251,7 +251,7 @@ export function resolveRustClassValue(
   expression: Node,
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  const existing = walk.context.facts.getFact(expression, rustClassValueFactKey);
+  const existing = walk.context.records.classValue.get(expression);
   if (existing !== undefined) return existing.carrier;
   const { ast } = walk.context;
   const declaration = ast.kindName(expression) === "KindClassExpression" ? expression
@@ -274,11 +274,11 @@ export function resolveRustClassValue(
       return setCarrierFact(walk, expression, native);
     }
     walk.context.classValues.recordConstructorValue(declaration, "value");
-    walk.context.facts.set(expression, rustClassValueFactKey, { declaration, sourceCarrier: instance, carrier: native });
+    walk.context.records.classValue.set(expression, { declaration, sourceCarrier: instance, carrier: native });
     return setCarrierFact(walk, expression, native);
   }
   if (carrier === undefined || !selectRustClassValueView(walk, expression, declaration, carrier)) return undefined;
-  walk.context.facts.set(expression, rustClassValueFactKey, { declaration, sourceCarrier: instance, carrier });
+  walk.context.records.classValue.set(expression, { declaration, sourceCarrier: instance, carrier });
   return setCarrierFact(walk, expression, carrier);
 }
 
@@ -361,7 +361,7 @@ export function selectRustClassValueView(
     const storage = rustProjectStaticFieldStorage(sourceDeclaration, ast,
       walk.context.projectTypes.memberSlotName(sourceDeclaration, "static"));
     const fieldType = Node_Type(ast, sourceDeclaration);
-    const fieldCarrier = walk.context.facts.getRuntimeCarrierFact(sourceDeclaration)?.carrier ?? resolveRustTargetTypeRef(
+    const fieldCarrier = walk.context.records.runtimeCarrier.get(sourceDeclaration)?.carrier ?? resolveRustTargetTypeRef(
       fieldType ?? pair.source.property.type, rustResolutionContext(walk, sourceDeclaration), walk.operationOptions);
     if (storage === undefined || !rustTargetTypeRefEquals(fieldCarrier, field.resultCarrier)) { reject(); return false; }
     if (!walk.sourceTypes.registerStructuralFieldImplementation({ carrier, storageIndex: field.storageIndex, kind: "dispatch" })) { reject(); return false; }

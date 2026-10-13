@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustSourceErrorPropagation } from "../../../../dist/backend/planner/expressions/calls/source-errors.js";
-import { rustErrorEffectsFactKey } from "../../../../dist/analysis/facts/error-effects.js";
+
 import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { rustNativeFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { nativeProducerFixture } from "../../../helpers/native-producer-bridges.mjs";
@@ -27,8 +28,7 @@ function fixture(joined = false) {
     getSourceFile: () => context.sourceFile, getFileName: () => "/index.ts", getSourceText: () => "",
     kindName: () => "KindCallExpression", pos: () => 0, end: () => 0,
   } };
-  context.input.program.facts = { getFact: (selected, key) =>
-    selected === declaration && key === rustErrorEffectsFactKey ? sourceEffects : undefined };
+  context.input.program.records = createRustRecordFixture({errorEffects: { get: (selected) => selected === declaration ? sourceEffects : undefined }});
   return { context, node, edge, expression: { kind: "call", path: "invoke", args: [] } };
 }
 

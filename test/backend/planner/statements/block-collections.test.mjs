@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planBlockLike } from "../../../../dist/backend/planner/statements/core.js";
@@ -18,7 +19,7 @@ function context(children) {
     captureStorage: { deferredForScope: () => [] },
     lexicalFunctions: { valueDeclarationsAt: () => [] },
     borrowedElementReads: { forStatement: () => undefined, endingAt: () => [] },
-    facts: { getFact: () => undefined },
+    records: createRustRecordFixture({}),
   } } };
 }
 

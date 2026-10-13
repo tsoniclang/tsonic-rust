@@ -1,6 +1,7 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustClosureCaptureFactKey } from "../../../../dist/analysis/facts/operations/keys.js";
+
 import { rustCallableTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustRecursiveReceiverFieldContext, validateRustRecursiveReceiverField } from "../../../../dist/backend/planner/expressions/receiver-captures.js";
 import { planRustConstructionBody } from "../../../../dist/backend/planner/declarations/classes/construction-body.js";
@@ -19,27 +20,28 @@ const fact = { captures: [], receivers: [], receiverFields: [], recursiveDeclara
 function context({ selected = field, carriers = new Map(references.map(reference => [reference, carrier])) } = {}) {
   return { sourceFile, diagnostics: [], input: { program: {
     source: { ast: fakeAstReader([sourceFile]) },
-    facts: { getRuntimeCarrierFact: reference => {
-      const selectedCarrier = carriers.get(reference);
-      return selectedCarrier === undefined ? undefined : { carrier: selectedCarrier };
-    } },
+    records: createRustRecordFixture({closureCapture: { get: () => fact },
+runtimeCarrier: { get: (reference) => {
+    const selectedCarrier = carriers.get(reference);
+    return selectedCarrier === undefined ? undefined : { carrier: selectedCarrier };
+} }}),
     objectRepresentations: { receiverCaptures: { fixedSelfFor: node => node === callable ? selected : undefined } },
   } } };
 }
 
 test("fixed field self facts carry one exact dense relation without competing field storage", () => {
-  assert.equal(rustClosureCaptureFactKey.equals(fact, { ...fact, recursiveField: { ...field } }), true);
+  assert.equal("closureCapture".equals(fact, { ...fact, recursiveField: { ...field } }), true);
   for (const changed of [
     { ...field, declaration: {} }, { ...field, receiver: {} }, { ...field, reference: {} },
     { ...field, references: [] }, { ...field, references: [references[0], {}] },
     { ...field, references: Array(2) }, { ...field, references: [...references].reverse() },
     { ...field, carrier: stringCarrier }, { ...field, unchecked: true },
-  ]) assert.equal(rustClosureCaptureFactKey.equals(fact, { ...fact, recursiveField: changed }), false);
+  ]) assert.equal("closureCapture".equals(fact, { ...fact, recursiveField: changed }), false);
   for (const changed of [
     { ...fact, recursiveDeclaration: {} }, { ...fact, recursiveField: undefined },
     { ...fact, recursiveField: { ...field, declaration: undefined }, recursiveDeclaration: undefined },
     { ...fact, receiverFields: [{ ...field, storage: { kind: "shared", initialization: "deferred" } }] },
-  ]) assert.equal(rustClosureCaptureFactKey.equals(fact, changed), false);
+  ]) assert.equal("closureCapture".equals(fact, changed), false);
 });
 
 test("fixed self schema rejects accessors without reading their hidden values", () => {
@@ -47,7 +49,7 @@ test("fixed self schema rejects accessors without reading their hidden values", 
   for (const key of ["declaration", "receiver", "reference", "references", "carrier"]) {
     const changed = { ...field };
     Object.defineProperty(changed, key, { enumerable: true, get() { reads += 1; return field[key]; } });
-    assert.equal(rustClosureCaptureFactKey.equals(fact, { ...fact, recursiveField: changed }), false);
+    assert.equal("closureCapture".equals(fact, { ...fact, recursiveField: changed }), false);
   }
   assert.equal(reads, 0, "metadata validation never executes a getter");
 });
@@ -90,7 +92,7 @@ function construction(expression, issues = []) {
   selected.input.program.callableValues = { frames: {
     definitionForOwner: () => undefined, bindingFor: () => undefined,
   } };
-  selected.input.program.facts.getFact = () => undefined;
+  selected.input.program.records = { ...selected.input.program.records, closureCapture: { get: () => undefined } };
   selected.input.program.objectRepresentations.receiverCaptures = {
     fixedSelfForReference: reference => references.includes(reference) ? field : undefined,
     isCaptured: () => false,

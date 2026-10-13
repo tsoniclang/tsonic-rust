@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
-import { rustFinalizedSourceInputs } from "../../../analysis/facts/finalized-operation-abi.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { rustFinalizedSourceInputs } from "../../../analysis/operations/finalized-operation/conversions.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
-import { providerSourceInputKey } from "../../../analysis/facts/provider-source-inputs.js";
+import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
 
 export function sourceRuntimeSlots(
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,

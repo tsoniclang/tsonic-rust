@@ -2,7 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
+
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
@@ -14,7 +14,7 @@ export function recordRustInterfaceRepresentationAliases(
   walk: RustFactWalk,
   sourceFiles: readonly SourceFile[],
 ): void {
-  const { ast, source, facts } = walk.context;
+  const { ast, source, records } = walk.context;
   const visiting = new Set<Node>();
   const visited = new Set<Node>();
   const rejected = new Set<Node>();
@@ -46,7 +46,7 @@ export function recordRustInterfaceRepresentationAliases(
     const declarations = symbol === undefined ? undefined : semantics.declarations.symbolDeclarations(symbol);
     const callable = sourceCallableInterface(declaredType, semantics, ast);
     if (callable !== undefined && declarations !== undefined) {
-      for (const merged of declarations) facts.set(merged, rustTypeOnlyDeclarationFactKey, { reason: "representation-alias" });
+      for (const merged of declarations) records.typeOnlyDeclaration.set(merged, { reason: "representation-alias" });
       return true;
     }
     if (declaredType !== undefined && declarations !== undefined && declarations.length > 0 &&
@@ -65,7 +65,7 @@ export function recordRustInterfaceRepresentationAliases(
             "Merged interfaces require one exact native representation.", merged, []);
           return false;
         }
-        facts.set(merged, rustTypeOnlyDeclarationFactKey, { reason: "representation-alias" });
+        records.typeOnlyDeclaration.set(merged, { reason: "representation-alias" });
       }
       return true;
     }
@@ -73,7 +73,7 @@ export function recordRustInterfaceRepresentationAliases(
     if (edge === undefined || declarations === undefined) return true;
     if (edge.target.project) {
       if (!visit(edge.target.declaration)) return false;
-      if (facts.getFact(edge.target.declaration, rustTypeOnlyDeclarationFactKey)?.reason !== "representation-alias") return true;
+      if (records.typeOnlyDeclaration.get(edge.target.declaration)?.reason !== "representation-alias") return true;
     }
     const logicalContext = { ...rustResolutionContext(walk, edge.heritage), callableRepresentation: "signature" as const };
     const initialCarrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
@@ -82,7 +82,7 @@ export function recordRustInterfaceRepresentationAliases(
     const carrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
     if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) return false;
     for (const merged of declarations) {
-      facts.set(merged, rustTypeOnlyDeclarationFactKey, { reason: "representation-alias" });
+      records.typeOnlyDeclaration.set(merged, { reason: "representation-alias" });
     }
     return true;
   }

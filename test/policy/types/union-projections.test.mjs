@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
@@ -52,7 +53,7 @@ test("nested union payload paths are exact, immutable and independently checked"
   assert.deepEqual(constructed, [[nested, "Variant1"], [inner, "Variant0"]]);
   const node = fakeStatement({ kindName: "KindIdentifier" });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", statements: [node] });
-  const context = { input: { program: { typeDefinitions: definitions, facts: { getFact: () => undefined },
+  const context = { input: { program: { typeDefinitions: definitions, records: createRustRecordFixture({}),
     names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" },
     source: { ast: fakeAstReader([sourceFile]) } } }, moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(), diagnostics: [] };

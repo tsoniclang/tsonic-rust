@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustClosureCaptureFact } from "../../../analysis/facts/operations/keys.js";
-import { rustClosureCaptureFactKey } from "../../../analysis/facts/operations/keys.js";
+import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
+import { rustClosureCaptureEquals } from "../../../target-model/records/equality.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -30,7 +30,7 @@ export function validateRustCapturedReceivers(
       source.owner === capture.owner && source.reference === capture.reference &&
       source.references.length === capture.references.length && source.references.every((reference, offset) =>
         reference === capture.references[offset] &&
-        rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(reference)?.carrier, capture.carrier));
+        rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(reference)?.carrier, capture.carrier));
   });
   if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
     "rust.backend.receiver-capture", "A retained native receiver differs from its sealed owner, source references or carrier."));
@@ -42,7 +42,7 @@ export function validateRustRecursiveReceiverField(
   context: RustPlanContext,
 ): boolean {
   const selected = context.input.program.objectRepresentations.receiverCaptures.fixedSelfFor(node);
-  const shapeValid = rustClosureCaptureFactKey.equals(capture, capture);
+  const shapeValid = rustClosureCaptureEquals(capture, capture);
   const field = shapeValid ? capture.recursiveField : undefined;
   const valid = shapeValid && (selected === undefined ? field === undefined : field !== undefined &&
     selected.declaration === field.declaration && capture.recursiveDeclaration === field.declaration &&
@@ -50,7 +50,7 @@ export function validateRustRecursiveReceiverField(
     selected.reference === field.reference && selected.receiver === field.receiver &&
     rustTargetTypeRefEquals(field.carrier, carrier) && selected.references.length === field.references.length &&
     selected.references.every((reference, index) => reference === field.references[index] &&
-      rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(reference)?.carrier, field.carrier)));
+      rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(reference)?.carrier, field.carrier)));
   if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
     "rust.backend.fixed-field-self", "A fixed field self differs from its sealed origin, source references or exact callable carrier."));
   return valid;
@@ -139,7 +139,7 @@ export function validateRustCapturedReceiverFields(
     return capture !== undefined && source.declaration === capture.declaration && source.receiver === capture.receiver &&
       source.reference === capture.reference && source.references.length === capture.references.length &&
       source.references.every((reference, offset) => reference === capture.references[offset] &&
-        rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(reference)?.carrier, capture.carrier)) &&
+        rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(reference)?.carrier, capture.carrier)) &&
       closedMetadataEquals(rustCapturedFieldStorage(capture.declaration, context), capture.storage);
   });
   if (!valid) context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),

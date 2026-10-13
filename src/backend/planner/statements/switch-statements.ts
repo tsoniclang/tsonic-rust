@@ -4,8 +4,8 @@ import { CaseBlock_Clauses, CaseOrDefaultClause_Expression, CaseOrDefaultClause_
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
-import { rustSwitchComparisonMatches } from "../../../analysis/facts/operations/switch.js";
+
+import { rustSwitchComparisonMatches } from "../../../analysis/operations/contracts/switch.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
@@ -23,7 +23,7 @@ export function planSwitchStatement(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input.program.source;
-  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const fact = context.input.program.records.targetOperation.get(node);
   const discriminantNode = SwitchStatement_Expression(ast, node);
   const clauseNodes = CaseBlock_Clauses(ast, SwitchStatement_CaseBlock(ast, node));
   if (fact?.kind !== "switch" || fact.operationId !== "tsonic.rust.control.switch.strict-equality" ||

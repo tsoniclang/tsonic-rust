@@ -6,14 +6,11 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 import { rustBindingStorageForDeclaration } from "../expressions/typed-locations.js";
-import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
+
 import { nativeRustArrayType } from "../expressions/native-arrays.js";
-import {
-  rustMutatedBindingFactKey,
-  rustMutatedReferentFactKey,
-  rustResourceManagementFactKey,
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
+
+
+
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, resourceDisposalReceiverMode } from "./resources.js";
 import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
@@ -30,7 +27,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
+
 import { planRustLocalBindingStorage } from "../bindings/local-storage.js";
 import { planRustBorrowedInitializer } from "../bindings/borrowed-initializers.js";
 import { rustSelectedValueDestinationContext } from "../expressions/value-destinations.js";
@@ -60,7 +57,7 @@ function planVariableDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  if (context.input.program.facts.getFact(declaration, rustCompileTimeSourceKey)) return [];
+  if (context.input.program.records.compileTimeSource.get(declaration)) return [];
   const storageOwner = context.input.program.localStorageAliases.owner(declaration);
   if (storageOwner !== undefined && storageOwner !== declaration) return [];
   const { ast } = context.input.program.source;
@@ -93,7 +90,7 @@ function planVariableDeclaration(
   const initializerContext = initializer === undefined ? context
     : rustSelectedValueDestinationContext(initializer, physical, context);
   if (initializerContext === undefined) return undefined;
-  const nativeArray = context.input.program.facts.getFact(declaration, rustNativeArrayStorageKey);
+  const nativeArray = context.input.program.records.nativeArrayStorage.get(declaration);
   const locationStorage = nativeArray === undefined ? rustBindingStorageForDeclaration(declaration, context) : undefined;
   const initializerPlan = initializer === undefined ? undefined : planRustBorrowedInitializer(initializer, initializerContext);
   const sourceInitializer = initializerPlan?.value;
@@ -103,7 +100,7 @@ function planVariableDeclaration(
   const typeNode = Node_Type(context.input.program.source.ast, declaration);
   const annotatedCarrier = typeNode === undefined
     ? undefined
-    : context.input.program.facts.getRuntimeCarrierFact(typeNode)?.carrier;
+    : context.input.program.records.runtimeCarrier.get(typeNode)?.carrier;
   if (typeNode !== undefined && annotatedCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, typeNode),
@@ -112,7 +109,7 @@ function planVariableDeclaration(
     ));
     return undefined;
   }
-  const declarationCarrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const declarationCarrier = context.input.program.records.runtimeCarrier.get(declaration)?.carrier;
   if (declarationCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),
@@ -146,7 +143,7 @@ function planVariableDeclaration(
     rustType = nativeRustArrayType(declaration, context);
     if (rustType === undefined) return undefined;
   }
-  const resourceFact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
+  const resourceFact = context.input.program.records.resourceManagement.get(declaration);
   const sourceUseSummary = context.input.program.sourceNavigation.declarationUseSummary(declaration);
   const objectRepresentation = context.input.program.objectRepresentations.representationFor(
     context.input.program.projectTypes.definitionForCarrier(declarationCarrier),
@@ -159,10 +156,10 @@ function planVariableDeclaration(
     });
   const mutable = nativeArray !== undefined ? sourceUseSummary.bindingWritten : locationStorage?.iterationScope !== undefined || locationStorage === undefined &&
     (context.input.program.localStorageAliases.requiresMutableOwner(declaration) || sourceUseSummary.bindingWritten ||
-      context.input.program.facts.getFact(declaration, rustMutatedBindingFactKey) !== undefined ||
+      context.input.program.records.mutatedBinding.get(declaration) !== undefined ||
       (objectRepresentation?.kind === "value" && objectRepresentation.mutable && sourceUseSummary.memberWritten) ||
       (ownedBinding && referentMutationRequiresMutableBinding &&
-        context.input.program.facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined) ||
+        context.input.program.records.mutatedReferent.get(declaration) !== undefined) ||
       resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref");
   const storage = planRustLocalBindingStorage(declaration, name, declarationCarrier, rustType, planned, locationStorage, context);
   if (storage === undefined) return undefined;
@@ -173,7 +170,7 @@ function planVariableDeclaration(
     return undefined;
   }
   const initializerOperation = initializer === undefined ? undefined
-    : context.input.program.facts.getFact(initializer, rustTargetOperationFactKey);
+    : context.input.program.records.targetOperation.get(initializer);
   const selfTypedCallable = locationStorage === undefined && initializerOperation?.kind === "closure" &&
     rustCallableProtocol(declarationCarrier) !== undefined &&
     rustTargetTypeRefEquals(initializerOperation.resultCarrier, declarationCarrier);
@@ -192,7 +189,7 @@ function planBindingVariableDeclaration(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   const initializer = Node_Initializer(context.input.program.source.ast, declaration);
-  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const sourceCarrier = context.input.program.records.runtimeCarrier.get(declaration)?.carrier;
   if (initializer === undefined || sourceCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),

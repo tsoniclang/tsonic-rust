@@ -1,10 +1,5 @@
-import type {
-  RustCheckedElementSelectionInput,
-  RustCheckedPropertySelectionInput,
-  RustCheckedOperationSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
+import type { RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustNumberArrayUnion } from "../../../target-model/types/carriers/array-unions.js";
@@ -17,7 +12,7 @@ import { acceptRustMemberOperation, elementProvenance, rejectSelectedOperation }
 export function selectRustNumberArrayUnionMember(
   request: RustCheckedPropertySelectionInput | RustCheckedElementSelectionInput,
   receiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   if (!isRustNumberArrayUnion(receiverCarrier, context.typeDefinitions)) return undefined;

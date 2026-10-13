@@ -1,16 +1,17 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
+
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
-import { rustEffectiveValueCarrier } from "../../../facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 
 export function contextualConditionalArgumentMatches(
   expression: Node,
   expected: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): boolean {
   const pending = [expression];
@@ -33,7 +34,7 @@ export function contextualConditionalArgumentMatches(
       continue;
     }
     if (!conditional) return false;
-    const carrier = rustEffectiveValueCarrier(context.facts, node) ??
+    const carrier = rustEffectiveValueCarrier(context.records, node) ??
       resolveRustTargetTypeRef(node, context, options);
     if (carrier === undefined || !rustTargetTypeRefEquals(carrier, expected) &&
       selectRustValueCarrierReconciliation(carrier, expected, options.projectTypes,

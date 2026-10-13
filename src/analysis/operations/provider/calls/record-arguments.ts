@@ -1,5 +1,6 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import type { Type } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
+
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -19,7 +20,7 @@ export function selectProviderRecordArgument(
   destinationType: Type | undefined,
   source: TargetTypeRef,
   target: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustProviderRecordCopy | undefined {
   if (sourceType === undefined || destinationType === undefined ||

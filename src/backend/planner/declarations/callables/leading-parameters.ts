@@ -3,14 +3,14 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { rustReceiverIndependentMethodFactKey } from "../../../../analysis/facts/operations/keys.js";
+
 
 export function planRustCallableLeadingParameters(
   declaration: Node,
   leading: readonly { readonly kind: "this" | "receiver"; readonly carrier: TargetTypeRef }[],
   context: RustPlanContext,
 ) {
-  const selected = context.input.program.facts.getFact(declaration, rustReceiverIndependentMethodFactKey) === undefined
+  const selected = context.input.program.records.receiverIndependentMethod.get(declaration) === undefined
     ? leading : leading.filter(parameter => parameter.kind !== "this");
   if (selected.length > 0 && context.syntheticNames === undefined) return undefined;
   const parameters = selected.map(parameter => ({ ...parameter, name: allocateRustSyntheticName(
@@ -23,7 +23,7 @@ export function planRustCallableLeadingParameters(
     const visit = (node: Node): void => {
       const kind = ast.kindName(node);
       if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-        const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+        const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
         if (rustTargetTypeRefEquals(carrier, parameter.carrier)) expressionOverrides.set(node, {
           carrier: parameter.carrier, valueForm: "value", expression: { kind: "path", path: parameter.name },
         });

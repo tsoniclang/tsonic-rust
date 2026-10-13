@@ -1,12 +1,10 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import {
-  rustFutureValueFactKey,
-  rustResourceManagementFactKey,
-  rustTargetOperationFactKey,
-} from "../facts/keys.js";
+
+
+
 import type { RustBinaryHookPlan } from "../project/index.js";
 import type { RustProviderBinaryHookRow, RustProviderOperationRow } from "../../providers/packages/model.js";
 import type { RustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
@@ -36,7 +34,7 @@ export function collectRustDeclaredProviderErrorCarriers(
 export function analyzeRustProviderErrorCarriers(
   ast: AstReader,
   sourceFiles: readonly SourceFile[],
-  facts: RustPlanQueries,
+  records: RustProgramRecords,
   binaryHooks: readonly RustBinaryHookPlan[],
 ): readonly TargetTypeRef[] {
   const carriers: TargetTypeRef[] = [];
@@ -49,7 +47,7 @@ export function analyzeRustProviderErrorCarriers(
     } else if (route.kind === "runtime" && route.boundary === "provider-native") add(carrier);
   };
   const visit = (node: Node): void => {
-    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(node);
     if (operation?.kind === "provider-operation") {
       for (const carrier of operation.abi.effects.nativeErrorCarriers ?? []) add(carrier);
     }
@@ -65,11 +63,11 @@ export function analyzeRustProviderErrorCarriers(
       operation.abi.target.bootstrap.errorBoundary === "provider-native") {
       add(operation.abi.target.bootstrap.errorCarrier);
     }
-    const future = facts.getFact(node, rustFutureValueFactKey);
+    const future = records.futureValue.get(node);
     if (future?.errorBoundary === "provider-native") {
       add(future.errorCarrier);
     }
-    const resource = facts.getFact(node, rustResourceManagementFactKey);
+    const resource = records.resourceManagement.get(node);
     if (resource?.disposal.errorBoundary === "provider-native") {
       add(resource.disposal.errorCarrier);
     }

@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram, sourceBindingHasSingleCaptureOwner } from "@tsonic/target-api/source";
 import { rustCapturedBindingStorage } from "../../../dist/analysis/callables/capture-storage.js";
-import { rustBindingStorageFactKey, rustMutatedBindingFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustArgumentPassingKey } from "../../../dist/target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/operations/keys.js";
+
+
+
+
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustBorrowedStrTargetType } from "../../../dist/target-model/types/index.js";
 
@@ -45,7 +47,7 @@ test("single captured native strings retain inline storage through exact pure bo
     };
     visit(current.owner);
     assert.equal(property !== undefined, true, label);
-    if (operation !== undefined) current.facts.set(property, rustTargetOperationFactKey, operation);
+    if (operation !== undefined) current.records.targetOperation.set(property, operation);
     assert.equal(current.select()?.storage, expected, label);
   }
 });
@@ -74,9 +76,9 @@ test("loop activation identities distinguish immutable values, live lexical stor
     if (selected?.iterationScope !== undefined) {
       assert.equal(current.source.ast.kindName(selected.iterationScope), "KindForStatement");
       const fact = { storage: selected.storage, valueCarrier: scalarCarrier, iterationScope: selected.iterationScope };
-      assert.equal(rustBindingStorageFactKey.equals(fact, { ...fact }), true);
-      assert.equal(rustBindingStorageFactKey.equals(fact, { ...fact, iterationScope: {} }), false);
-      assert.equal(rustBindingStorageFactKey.equals(fact, { storage: selected.storage, valueCarrier: scalarCarrier }), false);
+      assert.equal("bindingStorage".equals(fact, { ...fact }), true);
+      assert.equal("bindingStorage".equals(fact, { ...fact, iterationScope: {} }), false);
+      assert.equal("bindingStorage".equals(fact, { storage: selected.storage, valueCarrier: scalarCarrier }), false);
     }
   }
 });
@@ -118,12 +120,12 @@ test("binding activation facts reject incomplete, accessor-backed and competing 
   const fact = { storage: "location", valueCarrier: scalarCarrier, iterationScope: scope };
   for (const changed of [{ ...fact, unrelated: true }, { ...fact, valueCarrier: undefined },
     { ...fact, storage: "cell" }, { ...fact, initialization: "unchecked" }, { ...fact, iterationScope: null }]) {
-    assert.equal(rustBindingStorageFactKey.equals(fact, changed), false, "exact sealed native activation");
+    assert.equal("bindingStorage".equals(fact, changed), false, "exact sealed native activation");
   }
   let reads = 0;
   const accessor = { ...fact };
   Object.defineProperty(accessor, "iterationScope", { get() { reads++; return scope; }, enumerable: true });
-  assert.equal(rustBindingStorageFactKey.equals(fact, accessor), false);
+  assert.equal("bindingStorage".equals(fact, accessor), false);
   assert.equal(reads, 0, "evidence validation never evaluates a metadata accessor");
 });
 
@@ -154,15 +156,12 @@ function fixture(text, options = {}) {
   const summary = source.navigation.declarationUseSummary(declaration);
   const reference = summary.uses.find(use => use.kind !== "type-only")?.reference;
   assert.equal(reference !== undefined, true, "exact retained reference");
-  const storedFacts = new Map();
-  const facts = {
-    get: (node, key) => storedFacts.get(node)?.get(key),
-    set(node, key, value) {
-      const rows = storedFacts.get(node) ?? new Map();
-      rows.set(key, value);
-      storedFacts.set(node, rows);
-    },
-  };
+  const records = createRustRecordFixture({
+    bindingStorage: new WeakMap(),
+    mutatedBinding: new WeakMap(),
+    argumentPassing: new WeakMap(),
+    targetOperation: new WeakMap(),
+  });
   const navigation = options.summary === undefined ? source.navigation : {
     ...source.navigation,
     declarationUseSummary: selected => {
@@ -171,14 +170,14 @@ function fixture(text, options = {}) {
     },
   };
   const walk = {
-    context: { ast: source.ast, source: { ...source, navigation }, facts },
+    context: { ast: source.ast, source: { ...source, navigation }, records },
     capturedBindingStorage: new Map(),
   };
   const select = (settings = {}) => rustCapturedBindingStorage(walk, declaration,
     settings.reference ?? reference, owner,
     Object.hasOwn(settings, "carrier") ? settings.carrier : options.carrier ?? scalarCarrier,
     settings.permitSingleOwner ?? true, settings.nativeCallTrait, settings.roots ?? [owner]);
-  return { source, declaration, declarations, owner, reference, summary, walk, facts, select };
+  return { source, declaration, declarations, owner, reference, summary, walk, records, select };
 }
 
 for (const [name, text, carrier, storage] of [
@@ -337,9 +336,9 @@ test("native call argument evidence must prove ownership rather than an address-
     `);
     const argument = current.summary.uses.find(use => use.role === "argument")?.reference;
     assert.equal(argument !== undefined, true, "exact selected argument");
-    if (mode !== undefined) current.facts.set(argument, rustArgumentPassingKey, { mode });
+    if (mode !== undefined) current.records.argumentPassing.set(argument, { mode });
     if (operation !== undefined)
-      current.facts.set(current.source.ast.parent(argument), rustTargetOperationFactKey, operation);
+      current.records.targetOperation.set(current.source.ast.parent(argument), operation);
     assert.deepEqual(current.select(), { storage });
   }
 });
@@ -408,7 +407,7 @@ test("native callable traits, existing shared locations and mutation facts retai
   assert.deepEqual(fixture(text, { carrier: stringCarrier }).select({ nativeCallTrait: "Fn" }), { storage: "borrow-cell" });
   assert.deepEqual(fixture(text, { carrier: stringCarrier }).select({ permitSingleOwner: false }), { storage: "location" });
   const shared = fixture(text, { carrier: stringCarrier });
-  shared.facts.set(shared.declaration, rustBindingStorageFactKey, { storage: "location", valueCarrier: stringCarrier });
+  shared.records.bindingStorage.set(shared.declaration, { storage: "location", valueCarrier: stringCarrier });
   assert.deepEqual(shared.select({ nativeCallTrait: "FnMut" }), { storage: "location" });
   const immutable = fixture(`
     export function outer(seed: number) {
@@ -423,6 +422,6 @@ test("native callable traits, existing shared locations and mutation facts retai
       return callback;
     }
   `);
-  mutated.facts.set(mutated.declaration, rustMutatedBindingFactKey, { mutated: true });
+  mutated.records.mutatedBinding.set(mutated.declaration, { mutated: true });
   assert.deepEqual(mutated.select(), { storage: "cell" });
 });

@@ -16,7 +16,7 @@ export function planRustGenericCallableIdentity(
   const rightType = rustTypeFromCarrierInContext(selected.rightCarrier, context);
   if (leftType?.kind !== "named" || rightType?.kind !== "named" ||
     context.input.program.callableValues.genericIdentities.forComparison(node) !== selected ||
-    context.input.program.facts.getSelectedTargetOperator(node)?.operationId !== selected.operation.operationId) {
+    context.input.program.records.selectedOperation.get(node)?.operationId !== selected.operation.operationId) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.generic-callable-identity", "Native callable comparison requires its sealed identity selection and native type paths."));
     return undefined;

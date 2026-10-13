@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustBorrowedElementRead } from "../../../dist/analysis/program/borrowed-element-purity.js";
 
 test("borrowed indexed reads require their own exact pure operation, not owned Clone purity", () => {
@@ -18,12 +19,12 @@ test("borrowed indexed reads require their own exact pure operation, not owned C
   program.sourceFiles.forEach(visit);
   assert.ok(receiver);
   assert.ok(element);
-  const operation = program.facts.getFact(element, rustTargetOperationFactKey);
+  const operation = program.records.targetOperation.get(element);
   assert.equal(operation?.kind, "provider-operation");
   assert.equal(operation.abi.effects.evaluation, "observable");
   assert.deepEqual(operation.borrowedIndexOperation, { method: "borrow_number_element", evaluation: "pure" });
   assert.ok(Object.isFrozen(operation.borrowedIndexOperation));
-  assert.equal(rustBorrowedElementRead(receiver, source.ast, program.facts)?.method, "borrow_number_element");
+  assert.equal(rustBorrowedElementRead(receiver, source.ast, program.records)?.method, "borrow_number_element");
   for (const replacement of [
     { ...operation, borrowedIndexOperation: undefined },
     { ...operation, borrowedIndexOperation: { evaluation: "pure" } },
@@ -35,10 +36,11 @@ test("borrowed indexed reads require their own exact pure operation, not owned C
       abi: { ...operation.abi, effects: { ...operation.abi.effects, ...effects } } })),
     { ...operation, abi: { ...operation.abi, result: { ...operation.abi.result, kind: "async" } } },
   ]) {
-    const facts = { ...program.facts, getFact(subject, key) {
-      return subject === element && key === rustTargetOperationFactKey
-        ? replacement : program.facts.getFact(subject, key);
-    } };
-    assert.equal(rustBorrowedElementRead(receiver, source.ast, facts), undefined);
+    const records = createRustRecordFixture({...program.records,
+targetOperation: { get: (subject) => {
+    return subject === element
+        ? replacement : program.records.targetOperation.get(subject);
+} }});
+    assert.equal(rustBorrowedElementRead(receiver, source.ast, records), undefined);
   }
 });

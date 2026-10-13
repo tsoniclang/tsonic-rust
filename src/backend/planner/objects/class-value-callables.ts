@@ -1,6 +1,6 @@
 import type { RustClassValueCallable } from "../../../analysis/objects/class-value-callables.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
-import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
+
 import type { RustExpr, RustFunctionParam, RustImplFunction } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorType, sourceModuleItemPath } from "../program/plan-context.js";
@@ -43,7 +43,7 @@ export function planRustClassValueForwarder(
     if (path === undefined) return undefined;
     invocation = { kind: "call", path, args: [...contextArgument, ...arguments_.adaptedArguments] };
   }
-  if (context.input.program.facts.getFact(callable.declaration, rustFallibleFactKey) !== undefined) {
+  if (context.input.program.records.fallible.get(callable.declaration) !== undefined) {
     const operand = rustErrorBoundaryForProjectMember(callable.declaration, context);
     if (operand === undefined) return undefined;
     invocation = { kind: "try", expr: invocation, resultErrorType: rustErrorType(boundary), operandErrorType: rustErrorType(operand) };

@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -9,7 +10,7 @@ import { planRustProgramErrorModule } from "../../../../dist/backend/planner/pro
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph } from "../../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
-import { rustRuntimeCarrierKey } from "../../../../dist/target-model/facts/selections.js";
+
 import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/carriers/source-error.js";
 
 function classify(dependencies, errors, views = []) {
@@ -26,8 +27,8 @@ function classify(dependencies, errors, views = []) {
     callableValues: { generic: { definitions: [], definitionFor: () => undefined,
       physical: { definitions: () => [], definitionFor: () => undefined } } },
     errorStorageDemands: { nativeConstructors: [], retainedBoundaries: [], storageFor: () => ({ kind: "readonly" }) },
-    facts: { get: (node, key) => key === rustRuntimeCarrierKey && views.includes(node.fileName.split("/")[1])
-      ? { carrier: rustSourceErrorTargetType() } : undefined, getFact: () => undefined },
+    records: createRustRecordFixture({runtimeCarrier: { get: (node) => views.includes(node.fileName.split("/")[1])
+    ? { carrier: rustSourceErrorTargetType() } : undefined }}),
     projectTypes: { programErrorDefinitions: definitions, programErrorVariant: definition => definition.sourceName },
   };
   const classified = analyzeRustSourcePackageComponents(context, "bin");

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import { rustFallibleFactKey } from "../../../../analysis/facts/keys.js";
+
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
@@ -53,7 +53,7 @@ export function planProjectClassConstructor(
   const environmentParameter = environment === undefined ? undefined
     : rustClassEnvironmentParameter(definition.declaration, context, "owned");
   if (environment !== undefined && environmentParameter === undefined) return undefined;
-  const fallible = context.input.program.facts.getFact(safetyDeclaration, rustFallibleFactKey) !== undefined;
+  const fallible = context.input.program.records.fallible.get(safetyDeclaration) !== undefined;
   const boundary = fallible ? rustErrorBoundaryForDeclaration(safetyDeclaration, context) : undefined;
   if (fallible && boundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, safetyDeclaration),

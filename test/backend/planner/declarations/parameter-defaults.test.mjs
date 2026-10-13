@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustSourceParameterAbiFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planRustCallableParameters, planRustCallableParameterPrelude } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
@@ -15,20 +16,19 @@ test("destructured defaults consume the sealed initialized value and reject conf
   const callable = ast.statements(sourceFile).find(node => node !== undefined && ast.is.IsFunctionDeclaration(node));
   assert.equal(callable !== undefined, true, "exact authored callable");
   const parameter = ast.parameters(callable)[0];
-  const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+  const abi = program.records.sourceParameterAbi.get(parameter);
   assert.equal(abi.form, "default");
   assert.equal(abi.valueCarrier.kind, "tuple");
   assert.equal(abi.parameterCarrier.kind, "target-named");
   const plan = (selectedAbi, sourceCarrier = abi.valueCarrier) => {
-    const facts = { ...program.facts,
-      getFact: (subject, key) => subject === parameter && key === rustSourceParameterAbiFactKey
-        ? selectedAbi : program.facts.getFact(subject, key),
-      getRuntimeCarrierFact: subject => subject === parameter
-        ? sourceCarrier === undefined ? undefined : { carrier: sourceCarrier }
-        : program.facts.getRuntimeCarrierFact(subject),
-    };
+    const records = createRustRecordFixture({...program.records,
+sourceParameterAbi: { get: (subject) => subject === parameter
+    ? selectedAbi : program.records.sourceParameterAbi.get(subject) },
+runtimeCarrier: { get: (subject) => subject === parameter
+    ? sourceCarrier === undefined ? undefined : { carrier: sourceCarrier }
+    : program.records.runtimeCarrier.get(subject) }});
     const names = createRustSyntheticNameState(ast, callable, []);
-    const context = { input: { program: { ...program, facts } }, sourceFile,
+    const context = { input: { program: { ...program, records } }, sourceFile,
       diagnostics: [], usedAliases: new Set(), syntheticNames: names,
       moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+
 
 test("provider sequence arguments retain collection and element ABI independently", () => {
   for (const element of ["number", "uint8"]) {
@@ -17,7 +17,7 @@ export function text(values: ${element}[]): string { return String.fromCharCode(
     const visit = node => {
       if (source.ast.is.IsCallExpression(node)) {
         calls += 1;
-        const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+        const fact = program.records.targetOperation.get(node);
         assert.equal(fact?.kind, "provider-operation");
         assert.equal(fact.abi.sourceArguments[0].form, "spread-sequence");
         assert.equal(fact.abi.sourceArguments[0].carrier.id, "rust.js.JsArray");
@@ -48,7 +48,7 @@ export function text(value: uint8): string { return String.fromCharCode(value); 
   const visit = node => {
     if (source.ast.is.IsCallExpression(node)) {
       calls += 1;
-      const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+      const fact = program.records.targetOperation.get(node);
       assert.equal(fact?.kind, "provider-operation");
       assert.equal(fact.abi.sourceArguments[0].form, "value");
       assert.deepEqual(fact.abi.sourceArguments[0].carrier, { kind: "source-primitive", name: "uint8" });

@@ -1,20 +1,21 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { selectRustPointerReturnCarrier } from "../../../../policy/operations/pointers/return.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, substituteRustTargetGenerics } from "../../../../target-model/types/index.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import type { RustSelectedUnionMethod, RustSelectedUnionMethodIdentity, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
-import { rustProjectCallableTargetName } from "../../../facts/source-member-name.js";
+import { rustProjectCallableTargetName } from "../../../names/source-member-name.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import { selectedCallCalleeSymbol } from "../operators.js";
-import { rustCallableInvocationResult } from "../../../facts/callable-results.js";
+import { rustCallableInvocationResult } from "../../../callables/results.js";
 
 export function selectRustUnionMethods(
   request: RustCheckedCallSelectionInput,
   receiver: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly RustSelectedUnionMethodIdentity[] | undefined {
   const value = rustSourceUnionCarrierValue(receiver);
@@ -48,7 +49,7 @@ export function resolveRustUnionMethodContracts(
   selectedDeclaration: Node,
   selectedParameters: RustCheckedCallSelectionInput["source"]["sourceSelectedSignatureParameters"],
   parameters: readonly RustTargetMember["parameters"][number][],
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): { readonly result: TargetTypeRef; readonly methods: readonly RustSelectedUnionMethod[] } | undefined {
   const resolved = methods.map(method => {
@@ -71,7 +72,7 @@ export function resolveRustUnionMethodContracts(
         rustTargetTypeRefEquals(parameter.type, instantiate(declaration, abi.parameterCarrier));
     });
     const annotation = context.ast.typeNode(method.declaration);
-    const returnType = rustCallableInvocationResult(context.facts, method.declaration) ??
+    const returnType = rustCallableInvocationResult(context.records, method.declaration) ??
       selectRustPointerReturnCarrier(method.declaration, context, options) ??
       (annotation === undefined ? undefined : resolveRustTargetTypeRef(annotation, context, options));
     const instantiated = returnType === undefined ? undefined : instantiate(method.declaration, returnType);
@@ -93,7 +94,7 @@ export function resolveRustUnionMethodContracts(
 function unionMethodGenericNormalization(
   declaration: Node,
   selectedDeclaration: Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): ((carrier: TargetTypeRef) => TargetTypeRef) | undefined {
   const declared = context.sourceLifetimes.contractFor(declaration)?.parameters ?? [];
   const selected = context.sourceLifetimes.contractFor(selectedDeclaration)?.parameters ?? [];

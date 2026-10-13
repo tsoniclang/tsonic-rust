@@ -1,6 +1,6 @@
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   isRustProgramErrorCarrier,
@@ -12,8 +12,8 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, rustCurrentErrorBoundary, type RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
 import { planExpressionBeforeValueProjections } from "./entry.js";
-import { rustFlowReadProjectionFactKey } from "../../../analysis/facts/value-projections.js";
-import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read-projections.js";
+
+import { rustFlowReadProjectionMatches } from "../../../analysis/control-flow/flow-read-projections.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
 import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
 import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
@@ -27,7 +27,7 @@ export function planRustBuiltinErrorProperty(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const receiverNode = Node_Expression(context.input.program.source.ast, node);
-  const projection = receiverNode === undefined ? undefined : context.input.program.facts.getFact(receiverNode, rustFlowReadProjectionFactKey);
+  const projection = receiverNode === undefined ? undefined : context.input.program.records.flowReadProjection.get(receiverNode);
   const borrowedProgramError = projection?.kind === "builtin-error" &&
     (isRustProgramErrorCarrier(projection.sourceCarrier) || isRustClosedValueCarrier(projection.sourceCarrier)) &&
     rustTargetTypeRefEquals(projection.selectedCarrier, fact.receiverCarrier) &&
@@ -46,7 +46,7 @@ export function planRustBuiltinErrorProperty(
     selectedResultCarrier === undefined ||
     !requireExpressionCarrier(node, selectedResultCarrier, context, "rust.backend.builtin-error-property-carrier") ||
     !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetProperty(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId, "property", selectedResultCarrier,
     )) {
     context.diagnostics.push(missingFactDiagnostic(

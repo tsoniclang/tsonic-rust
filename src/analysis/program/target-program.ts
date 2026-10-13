@@ -23,8 +23,8 @@ import { analyzeRustDeclarationGenericRequirements } from "../declarations/gener
 import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
-import { rustCallArgumentIsOwned, rustCallArgumentMode } from "../facts/parameter-passing.js";
-import { rustRetainedCallableStorage } from "../facts/callable-results.js";
+import { rustCallArgumentIsOwned, rustCallArgumentMode } from "../callables/parameter-passing.js";
+import { rustRetainedCallableStorage } from "../callables/results.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
 import { analyzeRustBorrowStability } from "./borrow-stability.js";
 import {
@@ -53,9 +53,9 @@ import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustBindingStorageFactKey,
-  rustSourceCallEffectsFactKey, rustSourceAccessorEffectsFactKey } from "../facts/keys.js";
-import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
+
+
+import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
@@ -126,7 +126,7 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(sourcePackageComponents.diagnostics);
   }
   context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
-    facts: context.facts, physical: context.callableValues.generic.physical,
+    records: context.records, physical: context.callableValues.generic.physical,
     producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
     components: sourcePackageComponents.plan });
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
@@ -137,7 +137,7 @@ export function analyzeRustTargetProgram(
   const foundation = analyzeRustFoundation({
     selected: configuration.foundation,
     factRequirement: context.typeDefinitions.definitionCarriers().map(rustFoundationForCarrier)
-      .reduce(maximumRustFoundation, context.facts.minimumFoundation()),
+      .reduce(maximumRustFoundation, context.records.minimumFoundation()),
     runtimeReferenceRequirement: [...runtimeReferences.plan.minimumFoundationByCrate.values()]
       .reduce(maximumRustFoundation, "core"),
     moduleInitializationRequirement: moduleInitialization.minimumFoundation(),
@@ -148,7 +148,7 @@ export function analyzeRustTargetProgram(
   if (foundation.plan === undefined) {
     return rejectedTargetStage(foundation.diagnostics);
   }
-  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, facts: context.facts,
+  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records: context.records,
     navigation: context.source.navigation, nodes: context.sourceStorage.nodes });
   for (const node of context.sourceStorage.nodes) {
     const selection = providerMutableInputs.forOperation(node);
@@ -158,25 +158,25 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
-  const retainedCallableInputs = analyzeRustRetainedCallableInputs({ ast: context.ast, facts: context.facts,
+  const retainedCallableInputs = analyzeRustRetainedCallableInputs({ ast: context.ast, records: context.records,
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents.plan });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
-  const facts = context.facts.seal();
-  const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, facts,
+  const records = context.records.seal();
+  const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     typeDefinitions: context.typeDefinitions,
     projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
     receiverCaptures: objectRepresentations.receiverCaptures,
     mayThrow(node) {
-      const accessor = facts.getFact(node, rustSourceAccessorEffectsFactKey);
-      return facts.getFact(node, rustSourceCallEffectsFactKey)?.invocation === "fallible" ||
+      const accessor = records.sourceAccessorEffects.get(node);
+      return records.sourceCallEffects.get(node)?.invocation === "fallible" ||
         accessor?.read === "fallible" || accessor?.write === "fallible" ||
-        rustTargetOperationIsFallible(facts.getFact(node, rustTargetOperationFactKey), context.structuralShapes,
+        rustTargetOperationIsFallible(records.targetOperation.get(node), context.structuralShapes,
           context.projectFieldDispatch, context.frozenDataWrites, context.typeDefinitions);
     },
   });
   const dispatchContextDemand = analyzeRustDispatchContextDemand(
-    context.ast, context.sourceFiles, facts, sourcePackageComponents.plan, dispatchContexts.plan,
+    context.ast, context.sourceFiles, records, sourcePackageComponents.plan, dispatchContexts.plan,
   );
   if (dispatchContextDemand.kind === "rejected") return rejectedTargetStage(dispatchContextDemand.diagnostics);
   const binaryDispatchDemand = analyzeRustBinaryDispatchDemand(
@@ -187,28 +187,28 @@ export function analyzeRustTargetProgram(
     ast: context.ast,
     sourceFiles: context.sourceFiles,
     navigation: context.source.navigation,
-    isOwnedString: (declaration) => isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
+    isOwnedString: (declaration) => isRustStringCarrier(records.runtimeCarrier.get(declaration)?.carrier),
     isInstanceFieldUse: (reference, declaration) => {
-      const operation = facts.getFact(reference, rustTargetOperationFactKey);
+      const operation = records.targetOperation.get(reference);
       return operation?.kind === "source-field" && operation.declaration === declaration;
     },
-    hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier),
+    hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(records.runtimeCarrier.get(declaration)?.carrier),
     mayBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
-      rustCallArgumentMode(argument, context.ast, facts) !== "value",
+      rustCallArgumentMode(argument, context.ast, records) !== "value",
     isOwnedCallArgument: (argument) => projectConstructions.ownsExternalArgument(argument) ||
-      rustCallArgumentIsOwned(argument, context.ast, facts),
+      rustCallArgumentIsOwned(argument, context.ast, records),
     isSharedBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
-      rustCallArgumentMode(argument, context.ast, facts) === "ref",
+      rustCallArgumentMode(argument, context.ast, records) === "ref",
     capturesFor: (closure) => {
-      const existing = facts.getFact(closure, rustClosureCaptureFactKey);
+      const existing = records.closureCapture.get(closure);
       if (existing !== undefined) return existing;
       const selection = lexicalFunctions.forDeclaration(closure);
       if (selection?.kind !== "resolved") return undefined;
-      const captures: import("../facts/operations/keys.js").RustClosureCaptureFact["captures"][number][] = [];
+      const captures: import("../../target-model/records/operation-selections.js").RustClosureCaptureFact["captures"][number][] = [];
       for (const capture of selection.captures) {
-        const carrier = facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
-          facts.getRuntimeCarrierFact(capture.reference)?.carrier;
-        const storage = facts.getFact(capture.declaration, rustBindingStorageFactKey)?.storage ?? "value";
+        const carrier = records.runtimeCarrier.get(capture.declaration)?.carrier ??
+          records.runtimeCarrier.get(capture.reference)?.carrier;
+        const storage = records.bindingStorage.get(capture.declaration)?.storage ?? "value";
         if (carrier === undefined) return undefined;
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage });
       }
@@ -221,10 +221,10 @@ export function analyzeRustTargetProgram(
     ownsCaptureEnvironment: closure => {
       const selection = lexicalFunctions.forDeclaration(closure);
       return selection?.kind === "resolved" && (selection.valueObserved || selection.singleInvocation &&
-        rustRetainedCallableStorage(facts, closure) !== undefined);
+        rustRetainedCallableStorage(records, closure) !== undefined);
     },
     isOnceCallable: (closure) => {
-      const carrier = facts.getRuntimeCarrierFact(closure)?.carrier;
+      const carrier = records.runtimeCarrier.get(closure)?.carrier;
       const selection = lexicalFunctions.forDeclaration(closure);
       return carrier?.kind === "closure" && carrier.callTrait === "FnOnce" ||
         selection?.kind === "resolved" && selection.captureRoots.every(root => {
@@ -233,15 +233,15 @@ export function analyzeRustTargetProgram(
         });
     },
     isOwnedOperationResult: (expression) => {
-      const operation = facts.getFact(expression, rustTargetOperationFactKey);
+      const operation = records.targetOperation.get(expression);
       return operation?.kind === "provider-operation" &&
         (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
           operation.abi.target.form === "receiver-method" || operation.abi.target.form === "associated-call") &&
         operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
-        rustTargetTypeRefEquals(operation.abi.result.carrier, facts.getRuntimeCarrierFact(expression)?.carrier);
+        rustTargetTypeRefEquals(operation.abi.result.carrier, records.runtimeCarrier.get(expression)?.carrier);
     },
     canMoveStoredField: (field) => {
-      const selected = facts.getFact(field, rustTargetOperationFactKey);
+      const selected = records.targetOperation.get(field);
       if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
         selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
       const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
@@ -249,13 +249,13 @@ export function analyzeRustTargetProgram(
         objectRepresentations.representationFor(definition)?.kind !== "value") return false;
       const receiver = Node_Expression(context.ast, field);
       const declaration = receiver === undefined ? undefined : context.source.navigation.sourceReferenceFor(receiver)?.declaration;
-      return declaration !== undefined && facts.getFact(declaration, rustBindingStorageFactKey) === undefined;
+      return declaration !== undefined && records.bindingStorage.get(declaration) === undefined;
     },
   });
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,
-    facts,
+    records,
     context.names,
     context.sourceLifetimes,
     context.typeFamilies,
@@ -275,7 +275,7 @@ export function analyzeRustTargetProgram(
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
     sourceFiles: context.sourceFiles,
-    facts,
+    records,
     outputType: configuration.outputType,
   });
   if (sourceModuleConstructions.issues.length > 0) {
@@ -288,9 +288,10 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.backend.source-module-construction"],
     })));
   }
-  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, facts, context.source.navigation);
+  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, records, context.source.navigation);
   const borrowStability = analyzeRustBorrowStability({
-    ast: context.ast, sourceFiles: context.sourceFiles, facts, navigation: context.source.navigation,
+    sourceFacts: context.source.sourceFacts,
+    ast: context.ast, sourceFiles: context.sourceFiles, records, navigation: context.source.navigation,
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
     structuralShapes: context.structuralShapes,
   });
@@ -302,17 +303,17 @@ export function analyzeRustTargetProgram(
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
   const genericCallableErrors = analyzeRustGenericCallableErrors({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
-    effectsFor: declaration => facts.getFact(declaration, rustSourceCallEffectsFactKey) });
+    effectsFor: declaration => records.sourceCallEffects.get(declaration) });
   if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
   const program: RustTargetProgram = Object.freeze({
     genericCallableErrors: genericCallableErrors.value,
-    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, facts }),
+    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
-      navigation: context.source.navigation, sourceFiles: context.sourceFiles, facts }),
+      navigation: context.source.navigation, sourceFiles: context.sourceFiles, records }),
     numericRepresentations: analyzeRustNumericRepresentations({ source: context.source,
-      sourceFiles: context.sourceFiles, facts }),
+      sourceFiles: context.sourceFiles, records }),
     host: Object.freeze({
       paths: Object.freeze({ ...input.paths }),
       entryPoint: input.project.entryPoint,
@@ -322,7 +323,7 @@ export function analyzeRustTargetProgram(
     source: targetSourceSyntaxProgram(context.source),
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
-    facts,
+    records,
     typeFamilies: context.typeFamilies.seal(),
     typeDefinitions,
     projectTypes,
@@ -339,7 +340,7 @@ export function analyzeRustTargetProgram(
     declarationGenericRequirements: declarationGenericRequirements.index,
     valueLifetimes,
     borrowedElementReads,
-    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, facts),
+    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, records),
     borrowStability: borrowStability.plan,
     providerMutableInputs,
     retainedCallableInputs: retainedCallableInputs.value,
@@ -355,7 +356,7 @@ export function analyzeRustTargetProgram(
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
       context.ast,
       context.sourceFiles,
-      facts,
+      records,
       binaryHooks,
     ),
     safetyApplications: context.safetyApplications,
@@ -371,13 +372,13 @@ export function analyzeRustTargetProgram(
       ast: context.ast,
       sourceFiles: context.sourceFiles,
       navigation: context.source.navigation,
-      facts,
+      records,
       borrowedElementReads,
     }),
     projectFlowReadSelections: analyzeRustProjectFlowReadSelections({
       ast: context.ast,
       sourceFiles: context.sourceFiles,
-      facts,
+      records,
     }),
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),

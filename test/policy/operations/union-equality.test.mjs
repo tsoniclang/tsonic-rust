@@ -5,7 +5,7 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { rustAbsenceTargetType, rustOptionTargetType, rustSourceUnionTargetType,
   rustSourcePrimitiveTargetType, rustSourceTypeCarrier, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
-import { rustUnionEqualityFactMatches } from "../../../dist/analysis/facts/operations/union-equality.js";
+import { rustUnionEqualityFactMatches } from "../../../dist/analysis/operations/contracts/union-equality.js";
 
 test("union equality covers nested leaf pairs without inventing operations for opaque or recursive types", () => {
   const integer = rustSourcePrimitiveTargetType("int64");

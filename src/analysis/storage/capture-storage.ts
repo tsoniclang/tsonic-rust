@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustBindingStorageFactKey } from "../facts/keys.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+
 
 export interface RustCaptureStoragePlan {
   deferredForScope(scope: Node): readonly Node[];
@@ -11,12 +11,12 @@ export interface RustCaptureStoragePlan {
 export function analyzeRustCaptureStorage(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
 }): RustCaptureStoragePlan {
   const scopes = new Map<Node, Node[]>();
   const iterations = new Map<Node, Node[]>();
   const visit = (node: Node): void => {
-    const fact = input.facts.getFact(node, rustBindingStorageFactKey);
+    const fact = input.records.bindingStorage.get(node);
     if (fact?.initialization === "deferred") {
       const scope = sourceBindingScope(node, input.ast);
       if (scope === undefined) throw new Error("Deferred capture storage requires an exact activation scope.");

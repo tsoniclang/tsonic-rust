@@ -21,7 +21,7 @@ export function planRustBorrowedElementRead(
   const bindings = borrowedElementBindings(read, elementName, context);
   if (bindings === undefined) return undefined;
   const overrides = new Map(context.expressionOverrides ?? []);
-  const append = rustBorrowedStringAppend(node, context.input.program.source.ast, context.input.program.facts);
+  const append = rustBorrowedStringAppend(node, context.input.program.source.ast, context.input.program.records);
   overrides.set(read.receiver, {
     expression: append ? { kind: "reference", expr: { kind: "path", path: elementName } }
       : { kind: "dereference", pointer: { kind: "path", path: elementName } },

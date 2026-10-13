@@ -1,12 +1,14 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustAsyncFunctionFactKey, rustFallibleFactKey, rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
+
+
+
 import { rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../../target-model/types/index.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -22,7 +24,7 @@ export function planRustNativeControl(
   const actual = context.input.program.source.ast.arguments(call);
   if (actual.length !== operands.length || operands.length !== (fact.kind === "native-range" ? 2 : 1) ||
     operands.some((operand, index) => operand !== actual[index] ||
-      !rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(operand)?.carrier, expected))) {
+      !rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(operand)?.carrier, expected))) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, call),
       "rust.backend.native-control", "Native control operands conflict with the sealed operation."));
     return undefined;
@@ -33,8 +35,8 @@ export function planRustNativeControl(
     return { kind: "range", start: values[0]!, end: values[1]! };
   }
   const callableReturn = context.callableDeclaration === undefined ? undefined :
-    context.input.program.facts.getFact(context.callableDeclaration, rustAsyncFunctionFactKey)?.outputCarrier ??
-    context.input.program.facts.getFact(context.callableDeclaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+    context.input.program.records.asyncFunction.get(context.callableDeclaration)?.outputCarrier ??
+    context.input.program.records.sourceCallableReturn.get(context.callableDeclaration)?.returnCarrier;
   const operand = rustNamedTypeCarrierValue(fact.operandCarrier);
   const target = rustNamedTypeCarrierValue(callableReturn);
   const operandArguments = operand === undefined ? [] : rustTargetGenericTypeArguments(operand.genericArguments);
@@ -57,7 +59,7 @@ export function planRustNativeControl(
     return undefined;
   }
   const sourceFallible = context.callableDeclaration !== undefined &&
-    context.input.program.facts.getFact(context.callableDeclaration, rustFallibleFactKey) !== undefined;
+    context.input.program.records.fallible.get(context.callableDeclaration) !== undefined;
   if (context.completionBoundary === undefined && !sourceFallible) {
     return { kind: "try", expr: values[0]!, nativeReturn: true, operandErrorType, resultErrorType };
   }

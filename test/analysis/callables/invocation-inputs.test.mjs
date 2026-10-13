@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/index.js";
 
 for (const surfaces of [[], ["js"]]) {
@@ -30,7 +30,7 @@ export function main(): void {
       if (ast.is.IsParameterDeclaration(node)) {
         const name = ast.text(ast.name(node));
         if (["direct", "owned", "capture", "mutable", "observedInput", "closureInput", "defaultInput", "optionalInput"].includes(name)) {
-          const abi = program.facts.getFact(node, rustSourceParameterAbiFactKey);
+          const abi = program.records.sourceParameterAbi.get(node);
           assert.equal(abi !== undefined, true, `exact ${name} ABI`);
           assert.equal(rustCallableInputProtocol(abi.valueCarrier) !== undefined, name === "direct");
           if (name === "direct") {

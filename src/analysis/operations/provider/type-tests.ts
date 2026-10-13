@@ -1,6 +1,5 @@
-import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionResult,
-  RustCheckedCallSelectionInput, RustCheckedCallSelectionResult,
-  RustOperationPolicyContext, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
+import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionResult, RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -10,14 +9,14 @@ import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index
 import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
 import { acceptRustOperation, rejectSelectedOperation } from "./result.js";
 import { selectedValueCarrier } from "../selected-values.js";
-import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../../facts/keys.js";
+
+
 import { selectedRustCallSignature } from "./calls/signatures.js";
 import { selectRustArrayTypeGuard } from "../../../policy/operations/source-profiles/js/type-tests.js";
 
 export function selectRustArrayTypeTest(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const argument = request.source.sourceArguments[0];
@@ -38,24 +37,24 @@ export function selectRustArrayTypeTest(
     id: operationId, sourceName: "isArray", targetName: "closed-type-test", kind: "method", static: true,
     parameters: [{ name: "value", type: sourceCarrier, passingMode: "borrow-shared" }], returnType: resultCarrier,
   });
-  context.facts.set(request.source.call, rustTargetOperationFactKey, {
+  context.records.targetOperation.set(request.source.call, {
     kind: "closed-type-test", operationId, sourceCarrier, predicate, resultCarrier, test,
   }, evidence);
-  context.facts.set(request.source.call, rustSelectedOperationKey, {
+  context.records.selectedOperation.set(request.source.call, {
     operationId, operationKind: "method", targetOperation: "closed-type-test", resultType: resultCarrier,
     provenance: { sourceExpression: request.source.call, sourceReceiver: argument.expression,
       sourceCallee: request.source.sourceCallee.expression, sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration },
   }, evidence);
-  context.facts.set(argument.expression, rustArgumentPassingKey, { mode: "borrow-shared", storageExpression: argument.expression }, evidence);
-  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.records.argumentPassing.set(argument.expression, { mode: "borrow-shared", storageExpression: argument.expression }, evidence);
+  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
 export function selectRustClosedTypeTest(
   request: RustCheckedOperatorSelectionInput,
   sourceCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const targetCarrier = request.right === undefined ? undefined : resolveRustInstanceType(

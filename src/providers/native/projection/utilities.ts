@@ -275,7 +275,7 @@ function genericParameterName(parameter: RustCompilerGenericParameter): string {
 
 function compilerArgumentForParameter(
   parameter: RustCompilerGenericParameter,
-  substitutions: import("../model/rustdoc-types.js").RustCompilerSubstitutions,
+  substitutions: import("../model/types/substitution.js").RustCompilerSubstitutions,
 ): RustCompilerGenericArgument {
   if (parameter.kind === "lifetime") {
     if (parameter.lifetime.kind !== "parameter") {

@@ -1,15 +1,16 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
+import type { RustProjectAccessorSelection } from "../../../target-model/records/project-accessors.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import type { Node, Type } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
-import type { RustTargetOperationFact } from "../../facts/keys.js";
+
+
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 
-export type RustProjectAccessorSelection = Omit<Extract<RustTargetOperationFact,
-  { readonly kind: "source-accessor" }>, "operationId" | "accessMode">;
+
 
 export function resolveRustProjectAccessor(
   selection: {
@@ -18,7 +19,7 @@ export function resolveRustProjectAccessor(
     readonly sourceReceiverType?: Type;
     readonly sourceReadType?: Type;
     readonly sourceWriteType?: Type;
-  }, receiverCarrier: TargetTypeRef | undefined, context: RustOperationPolicyContext, options: RustOperationsProviderOptions,
+  }, receiverCarrier: TargetTypeRef | undefined, context: RustOperationAnalysisContext, options: RustOperationsProviderOptions,
 ): RustProjectAccessorSelection | undefined {
   const { readDeclaration, writeDeclaration } = selection;
   const declarations = [readDeclaration, writeDeclaration].filter(declaration => declaration !== undefined);
@@ -35,7 +36,7 @@ export function resolveRustProjectAccessor(
     carrier === undefined || staticAccess ? carrier : receiverCarrier === undefined ? undefined :
       instantiateRustSelectedMemberCarrier(declaration, receiverCarrier, selection.sourceReceiverType, carrier, context, options);
   const readCarrier = readDeclaration === undefined ? undefined : instantiate(readDeclaration,
-    context.facts.get(readDeclaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
+    context.records.sourceCallableReturn.get(readDeclaration)?.returnCarrier ??
     resolveRustTargetTypeRef(Node_Type(context.ast, readDeclaration) ?? selection.sourceReadType, context, options));
   const parameters = writeDeclaration === undefined ? [] : context.ast.parameters(writeDeclaration);
   const writeCarrier = writeDeclaration === undefined || parameters.length !== 1 ? undefined : instantiate(writeDeclaration,

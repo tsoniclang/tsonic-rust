@@ -1,26 +1,26 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
+import type { RustProjectFieldSelection } from "../../../target-model/records/project-fields.js";
 import type { Node, Type } from "@tsonic/tsts";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
-import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustProjectObjectField } from "../../project-types/object-layout.js";
-import type { RustTargetOperationFact } from "../../facts/keys.js";
+
 import { instantiateRustSelectedMemberCarrier } from "./member-carriers.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 
-export type RustProjectFieldSelection = Omit<
-  Extract<RustTargetOperationFact, { readonly kind: "source-field" }>, "operationId" | "accessMode"
->;
+
 
 export function resolveRustProjectField(
   declaration: Node,
   receiverCarrier: TargetTypeRef,
   receiverType: Type | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustProjectFieldSelection | undefined {
   const field = rustProjectObjectField(declaration, context.ast);
-  const declared = context.facts.getRuntimeCarrierFact(declaration)?.carrier ??
+  const declared = context.records.runtimeCarrier.get(declaration)?.carrier ??
     resolveRustTargetTypeRef(declaration, context, options);
   const resultCarrier = declared === undefined ? undefined : instantiateRustSelectedMemberCarrier(
     declaration, receiverCarrier, receiverType, declared, context, options);

@@ -12,7 +12,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
 import { rustClassStaticCallGenericArguments, rustClassStaticEnvironmentForCall, rustOwnedClassEnvironmentForCall } from "../../objects/class-environments.js";
-import { rustSourceCallArgumentCarriers } from "../../../../analysis/facts/source-call-lifetimes.js";
+import { rustSourceCallArgumentCarriers } from "../../../../analysis/callables/source-call-lifetimes.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -39,7 +39,7 @@ import {
   planRustExactProjectMethodCall,
   planRustVirtualProjectMethodCall,
 } from "../../objects/project-method-dispatch.js";
-import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
+
 import {
   rustTargetCallGenericArgumentToAstInContext,
   rustTypeFromCarrierInContext,
@@ -47,13 +47,13 @@ import {
 import type { Node } from "@tsonic/tsts";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import { planRustUnionMethodCall } from "./union-methods.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableInvocationFactKey } from "../../../../analysis/facts/generic-callable-effects.js";
+
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { planRustGenericCallableErrorPropagation } from "./generic-errors.js";
-import { rustSourceCallCallableStorageCarrier } from "../../../../analysis/facts/target-operation.js";
+import { rustSourceCallCallableStorageCarrier } from "../../../../analysis/operations/target-operation.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustExpressionReferencesPath } from "../../../target-ast/inspection/source-usage.js";
 import { propagateRustBottomOperand } from "../bottom-operands.js";
@@ -62,16 +62,16 @@ import { rustLintAttributes } from "../../../target-ast/normalization/lint-polic
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { planRustNativeInputInvocation, planRustNativeInputPropagation, rustNativeInputEffectsMatch } from "./native-input.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
-import { rustSourceErrorEffectsFactKey } from "../../../../analysis/facts/source-error-effects.js";
+
 import { planRustSourceErrorPropagation } from "./source-errors.js";
-import { rustRetainedCallSubstitutions } from "../../../../analysis/facts/retained-environments.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../../../analysis/facts/value-carrier-queries.js";
+import { rustRetainedCallSubstitutions } from "../../../../analysis/callables/retained-call-lifetimes.js";
+import { rustValueCarrierBeforeContextualConversion } from "../../../../analysis/conversions/value-carrier-queries.js";
 import { rustNativeCallableCompletion } from "../../../../target-model/types/callable-completions.js";
 import type { RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
 
 export function sourceCallEffectsMatch(
   fact: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
-  effects: import("../../../../analysis/facts/keys.js").RustSourceCallEffectsFact | undefined,
+  effects: import("../../../../target-model/records/object-methods.js").RustSourceCallEffectsFact | undefined,
   definitions: RustTypeDefinitions,
   nativeInput?: import("../../../../analysis/callables/native-inputs.js").RustNativeCallableCall,
 ): boolean {
@@ -116,16 +116,16 @@ export function planSelectedSourceCall(
   context: RustPlanContext,
   borrowedInputs: ReadonlyMap<Node, RustExpr>,
 ): RustExpr | undefined {
-  const selected = context.input.program.facts.getSelectedTargetCall(node);
+  const selected = context.input.program.records.selectedCall.get(node);
   const selectedMatches = selected !== undefined && sourceCallSelectedMemberMatches(
     fact,
     selected,
     selected.member.returnType,
     context.input.program.typeFamilies.normalize,
     context.input.program.projectTypes,
-    rustSourceCallArgumentCarriers(node, context.input.program.source.ast, context.input.program.facts),
+    rustSourceCallArgumentCarriers(node, context.input.program.source.ast, context.input.program.records),
     context.input.program.typeDefinitions,
-    rustRetainedCallSubstitutions(context.input.program.facts, node),
+    rustRetainedCallSubstitutions(context.input.program.records, node),
   );
   if (!selectedMatches) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -498,7 +498,7 @@ export function planSelectedSourceCall(
   }
   if (classBindings.length > 0) planned = rustValueBlock(classBindings.map(binding =>
     rustExpressionReferencesPath(planned!, binding.name) ? binding : { ...binding, name: `_${binding.name}` }), planned);
-  const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
+  const effects = context.input.program.records.sourceCallEffects.get(node);
   if (effects === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -508,7 +508,7 @@ export function planSelectedSourceCall(
     return undefined;
   }
   const callableCarrier = rustSourceCallCallableStorageCarrier(fact, context.input.program.structuralShapes);
-  const genericInvocation = context.input.program.facts.getFact(node, rustGenericCallableInvocationFactKey);
+  const genericInvocation = context.input.program.records.genericCallableInvocation.get(node);
   if (nativeInput !== undefined && !rustNativeInputEffectsMatch(nativeInput, effects)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.native-callable-effects", "Native invocation effects conflict with the sealed input implementation contract."));
@@ -532,9 +532,9 @@ export function planSelectedSourceCall(
       ? rustBottomAfterEffect(result, "fallible never call returned") : result;
   }
   if (fact.target.form === "callable" && rustCallableProtocol(fact.target.carrier) !== undefined && callee !== undefined) {
-    const source = rustValueCarrierBeforeContextualConversion(context.input.program.facts, callee);
+    const source = rustValueCarrierBeforeContextualConversion(context.input.program.records, callee);
     const physical = source === undefined ? undefined : rustNativeCallableOperand(source, callee, {
-      facts: context.input.program.facts, storage: context.input.program.callableValues.nativeStorage,
+      records: context.input.program.records, storage: context.input.program.callableValues.nativeStorage,
       producers: context.input.program.callableValues.nativeProducers, definitions: context.input.program.typeDefinitions,
     });
     const error = physical === undefined ? undefined : rustTypeFromCarrierInContext(physical.signature.error, context);
@@ -551,7 +551,7 @@ export function planSelectedSourceCall(
     return result === undefined ? undefined : isRustNeverCarrier(fact.resultCarrier)
       ? rustBottomAfterEffect(result, "fallible never call returned") : result;
   }
-  const sourceErrors = context.input.program.facts.getFact(node, rustSourceErrorEffectsFactKey);
+  const sourceErrors = context.input.program.records.sourceErrorEffects.get(node);
   if (selectedDeclaration !== undefined && fact.target.form !== "callable" &&
     fact.target.form !== "structural-method" && fact.target.form !== "constructor-value") {
     const edges = sourceErrors?.edges.filter(edge => edge.kind === "invoke" && edge.declaration === selectedDeclaration) ?? [];

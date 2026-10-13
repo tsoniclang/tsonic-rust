@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { jsRegExpSourceProfileIdentity } from "@tsonic/js-source-profile";
 import {
   rustCallableProtocol,
@@ -19,12 +20,7 @@ import {
   selectedSourceValueCarrier,
 } from "./operators.js";
 import { rejectSelectedOperation } from "./result.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedCallSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustSourceObjectField } from "../../project-types/source-type-registry.js";
 import type {
@@ -51,7 +47,7 @@ export function mapSelectedStringRegExpProtocolCall(
   request: RustCheckedCallSelectionInput,
   ownerName: string,
   memberName: string,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const selection = selectedRegExpProtocol(ownerName, memberName);
@@ -214,7 +210,7 @@ export function mapSelectedStringRegExpProtocolCall(
 function fieldSelectsProtocolSymbol(
   field: RustSourceObjectField,
   symbol: RegExpProtocolSymbol,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): boolean {
   return field.declarations.some((declaration) => {
     const name = context.ast.name(declaration);

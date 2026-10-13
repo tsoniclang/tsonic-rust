@@ -1,7 +1,8 @@
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
+
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
@@ -25,7 +26,7 @@ interface FamilyDemandTask {
 
 export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: readonly SourceFile[]): void {
   if (walk.context.typeFamilies.families().length === 0) return;
-  const { ast, facts } = walk.context;
+  const { ast, records } = walk.context;
   const tasks: FamilyDemandTask[] = [];
   const seen = new WeakMap<Node, Set<string>>();
   const typeIds = new WeakMap<Type, number>();
@@ -59,7 +60,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
     tasks.push({ declaration, context });
   };
   const visitCall = (node: Node, parent: FamilyDemandContext): void => {
-    const selected = facts.getSelectedTargetCall(node);
+    const selected = records.selectedCall.get(node);
     if (selected?.sourceDeclaration === undefined ||
       !walk.context.source.navigation.isProjectDeclaration(selected.sourceDeclaration)) return;
     const implementation = walk.context.source.navigation.callableImplementation(selected.sourceDeclaration);
@@ -67,7 +68,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
     const contract = walk.context.sourceLifetimes.contractFor(declaration);
     if (contract === undefined) return;
     const arguments_ = selected.sourceSelectedMethodTypeArguments ?? [];
-    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(node);
     const targetArguments = (operation?.kind === "source-call" ? operation.targetGenericArguments : undefined) ??
       selected.targetGenericArguments ?? [];
     if (arguments_.length !== contract.parameters.length || targetArguments.length !== arguments_.length) return;
@@ -180,11 +181,11 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
     const task = tasks[index]!;
     const visit = (node: Node): void => {
       if (node !== task.declaration && createsGenericScope(ast.kindName(node))) return;
-      const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+      const carrier = records.runtimeCarrier.get(node)?.carrier;
       if (carrier !== undefined) visitCarrier(carrier, node, task.context);
-      const field = facts.getFact(node, rustTargetOperationFactKey);
+      const field = records.targetOperation.get(node);
       if (field?.kind === "source-indexed-field") visitCarrier(field.projection, node, task.context);
-      const parameter = facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier;
+      const parameter = records.sourceParameterAbi.get(node)?.parameterCarrier;
       if (parameter !== undefined) visitCarrier(parameter, node, task.context);
       visitCall(node, task.context);
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

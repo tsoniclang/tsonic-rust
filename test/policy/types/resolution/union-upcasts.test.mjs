@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { selectRustValueCarrierReconciliation, selectRustFlowReadProjection } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
-import { rustFlowReadProjectionMatches } from "../../../../dist/analysis/facts/flow-read-projections.js";
-import { rustFlowReadProjectionFactKey } from "../../../../dist/analysis/facts/value-projections.js";
+import { rustFlowReadProjectionMatches } from "../../../../dist/analysis/control-flow/flow-read-projections.js";
+
 import { selectRustCallableValueAdapter } from "../../../../dist/analysis/callables/adapters.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../../dist/analysis/facts/value-carrier-queries.js";
-import { rustProjectUpcastFactKey, rustContextualValueConversionFactKey } from "../../../../dist/analysis/facts/keys.js";
+import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
+
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
@@ -36,11 +37,17 @@ test("native upcasts precede exact union injection in expression and callable co
       payloadCarrier: base, payloadConversion: null } });
   const written = new Map();
   const subject = {};
-  const facts = { set: (_, key, value) => written.set(key, value), getFact: (_, key) => written.get(key),
-    getTargetConversionFact() {}, getRuntimeCarrierFact: () => ({ carrier: derived }) };
-  recordRustValueCarrierReconciliation(facts, subject, selected);
-  assert.deepEqual([...written.keys()], [rustProjectUpcastFactKey, rustContextualValueConversionFactKey]);
-  assert.deepEqual(rustEffectiveValueCarrier(facts, subject), union);
+  const records = createRustRecordFixture({
+    runtimeCarrier: { get: node => node === subject ? { carrier: derived } : undefined },
+    projectUpcast: { get: node => node === subject ? written.get("projectUpcast") : undefined,
+      set: (node, value) => { assert.equal(node === subject, true); written.set("projectUpcast", value); } },
+    contextualValueConversion: { get: node => node === subject ? written.get("contextualValueConversion") : undefined,
+      set: (node, value) => { assert.equal(node === subject, true); written.set("contextualValueConversion", value); } },
+  });
+  recordRustValueCarrierReconciliation(records, subject, selected);
+  assert.deepEqual([...written.keys()], ["projectUpcast", "contextualValueConversion"]);
+  assert.deepEqual(rustEffectiveValueCarrier(records, subject), union);
+  assert.equal(rustEffectiveValueCarrier(records, {}) === undefined, true, "foreign source subjects have no evidence");
   const adapter = selectRustCallableValueAdapter(derived, union, projectTypes, definitions);
   assert.deepEqual(adapter.upcast, selected.upcast);
   assert.deepEqual(adapter.conversion, selected.fact.conversion);
@@ -90,7 +97,7 @@ test("union flow retains exact nominal payload refinement and rejects forged or 
       { ...selected.fact, project: { ...selected.fact.project, projection: { kind: "closed", slot: "forged" } } },
     ]) {
       assert.equal(rustFlowReadProjectionMatches(changed, projectTypes, definitions), false);
-      assert.equal(rustFlowReadProjectionFactKey.equals(selected.fact, changed), false);
+      assert.equal("flowReadProjection".equals(selected.fact, changed), false);
     }
   }
   const duplicate = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => carrier === union

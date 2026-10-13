@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -216,9 +217,7 @@ test("facade planning ignores valid package exports outside the checked closure"
         moduleExports: () => [],
       },
     },
-    facts: {
-      getFact: () => undefined,
-    },
+    records: createRustRecordFixture({}),
     names: {
       functionNameForDeclaration: () => undefined,
       nameForDeclaration: () => undefined,

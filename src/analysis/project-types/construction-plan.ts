@@ -1,8 +1,8 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../facts/native-control-flow.js";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+
+
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustOptionCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
 import { rustInheritedProjectConstructor, type RustProjectConstructorSignature, type RustProjectTypeDefinition,
@@ -54,7 +54,7 @@ export interface RustProjectConstructionQueries {
 
 export interface RustConstructionAnalysisInput {
   readonly ast: AstReader;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly projectTypes: RustProjectTypePolicy;
   readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
@@ -97,7 +97,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
         const baseCall = call !== undefined && input.ast.is.IsCallExpression(call) &&
           callee !== undefined && input.ast.kindName(callee) === "KindSuperKeyword" ? call : undefined;
         if (external !== undefined && baseCall !== undefined) {
-          const initialization = selectRustExternalInitialization(external, baseCall, input.ast, input.facts, input.typeDefinitions);
+          const initialization = selectRustExternalInitialization(external, baseCall, input.ast, input.records, input.typeDefinitions);
           if (initialization === undefined) issues.push(Object.freeze({ node: baseCall,
             reason: "External field initialization has no exact selected native input contract." }));
           else {
@@ -115,7 +115,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
         for (const field of input.projectTypes.objectLayoutForDefinition(owner)?.fields ?? []) {
           if (input.ast.hasModifierKind(field.declaration, "abstract") ||
             input.receiverFieldAliases.aliasFor(field.declaration) !== undefined) continue;
-          const carrier = input.facts.getRuntimeCarrierFact(field.declaration)?.carrier;
+          const carrier = input.records.runtimeCarrier.get(field.declaration)?.carrier;
           const initializer = sourceParameterIsProperty(input.ast, field.declaration)
             ? input.ast.name(field.declaration) : Node_Initializer(input.ast, field.declaration);
           if (carrier === undefined) {
@@ -134,7 +134,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
             reason: "Native inheritance requires its exact checked super(...) constructor call as the first statement." }));
         if (base !== undefined) {
           const inherited = constructor === undefined ? rustInheritedProjectConstructor(input.projectTypes, owner, selected) : undefined;
-          const fact = baseCall === undefined ? undefined : input.facts.getFact(baseCall, rustTargetOperationFactKey);
+          const fact = baseCall === undefined ? undefined : input.records.targetOperation.get(baseCall);
           selected = inherited?.base === base.target ? inherited.constructor
             : fact?.kind === "source-call" && fact.target.form === "constructor"
               ? input.projectTypes.constructorForTargetName(base.target, fact.target.name) : undefined;
@@ -163,13 +163,13 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
       layers: layers.map(layer => ({ ...layer, fields: layer.fields.map(field => ({ ...field,
         declaration: physicalDeclaration(field.declaration) })) })), fields,
       selectedField(node) {
-        const fact = input.facts.getFact(node, rustTargetOperationFactKey);
+        const fact = input.records.targetOperation.get(node);
         return fact?.kind === "source-field" && fact.storage === "project-object" &&
           fact.valueSemantics.kind === "stored" && fact.declaration !== undefined
           ? { declaration: physicalDeclaration(fact.declaration), accessMode: fact.accessMode } : undefined;
       },
-      guardResult: node => input.facts.getFact(node, rustNativeGuardResultFactKey),
-      unreachable: node => input.facts.getFact(node, rustNativeUnreachableFactKey) === true,
+      guardResult: node => input.records.nativeGuardResult.get(node),
+      unreachable: node => input.records.nativeUnreachable.get(node) === true,
       mayThrow: input.mayThrow,
     });
     plans.set(definition, Object.freeze({ definition, layers: Object.freeze(layers), fields,

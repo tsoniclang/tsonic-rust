@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
@@ -9,13 +9,15 @@ import { rustInfallibleTargetId } from "../../target-model/types/carriers/source
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { rustErrorEffectsFactKey, type RustErrorEffectsFact } from "../facts/error-effects.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
+
+import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+
+
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 
 export interface RustProducerErrorContext {
   readonly producers: RustNativeCallableProducerPlan;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
 }
 
@@ -53,13 +55,13 @@ export function selectRustProducerError(
     if (previous !== undefined && !rustTargetGenericArgumentEquals(previous, argument)) return undefined;
     argumentsByIdentity.set(identity, argument);
   }
-  const asynchronous = input.facts.getFact(producer.declaration, rustAsyncFunctionFactKey);
-  const suspended = asynchronous !== undefined || input.facts.getFact(producer.declaration, rustGeneratorFactKey) !== undefined;
+  const asynchronous = input.records.asyncFunction.get(producer.declaration);
+  const suspended = asynchronous !== undefined || input.records.generator.get(producer.declaration) !== undefined;
   if (reference.channel === "invoke" && suspended) return Object.freeze({ kind: "carrier",
     carrier: Object.freeze({ kind: "target-named", id: rustInfallibleTargetId }) });
   if (reference.channel !== "invoke") {
     const result = asynchronous?.futureCarrier ??
-      input.facts.getFact(producer.declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+      input.records.sourceCallableReturn.get(producer.declaration)?.returnCarrier;
     const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, input.definitions);
     if (completion?.futures[reference.channel] === undefined) return undefined;
     if (asynchronous === undefined) {
@@ -68,7 +70,7 @@ export function selectRustProducerError(
         carrier: substituteRustTargetGenerics(error, types, lifetimes, consts) });
     }
   }
-  const effects = input.facts.getFact(producer.declaration, rustErrorEffectsFactKey);
+  const effects = input.records.errorEffects.get(producer.declaration);
   return effects === undefined ? undefined : Object.freeze({ kind: "region", declaration: producer.declaration,
     effects: Object.freeze({ localErrors: effects.localErrors,
       nativeErrors: Object.freeze(effects.nativeErrors.map(source => Object.freeze({ ...source,

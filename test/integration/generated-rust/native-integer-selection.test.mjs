@@ -3,7 +3,7 @@ import test from "node:test";
 import { nativeIntegerSelectionSource } from "../../../../tsonic/test/fixtures/native-integer-selection.mjs";
 import { analyzeRust, artifactText, compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustSourceCallableReturnFactKey } from "../../../dist/analysis/facts/keys.js";
+
 
 test("numeric analysis seals integer joins and native counters while retaining explicit and fractional numbers", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": nativeIntegerSelectionSource } });
@@ -11,10 +11,10 @@ test("numeric analysis seals integer joins and native counters while retaining e
   const counters = [];
   const visit = node => {
     if (source.ast.is.IsFunctionDeclaration(node)) {
-      returns.set(source.ast.text(source.ast.name(node)), program.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier);
+      returns.set(source.ast.text(source.ast.name(node)), program.records.sourceCallableReturn.get(node)?.returnCarrier);
     }
     if (source.ast.is.IsVariableDeclaration(node) && source.ast.text(source.ast.name(node)) === "index") {
-      counters.push(program.facts.getRuntimeCarrierFact(node)?.carrier?.name);
+      counters.push(program.records.runtimeCarrier.get(node)?.carrier?.name);
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

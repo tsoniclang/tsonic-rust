@@ -1,12 +1,12 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 
-export function isRustBorrowedValueRead(node: Node, ast: AstReader, facts: RustPlanQueries): boolean {
+
+export function isRustBorrowedValueRead(node: Node, ast: AstReader, records: RustProgramRecords): boolean {
   let current = node;
   for (;;) {
-    const passing = facts.getArgumentPassingFact(current);
+    const passing = records.argumentPassing.get(current);
     if (passing !== undefined && passing.mode !== "by-value") return true;
     const parent = ast.parent(current);
     if (parent === undefined || Node_Expression(ast, parent) !== current) return false;
@@ -71,7 +71,7 @@ export function isRustIndependentCallable(ast: AstReader, node: Node): boolean {
 export function isRustDeclarationPathUse(
   node: Node,
   ast: AstReader,
-  facts: RustPlanQueries,
+  records: RustProgramRecords,
 ): boolean {
   let current = node;
   let throughMember = false;
@@ -83,7 +83,7 @@ export function isRustDeclarationPathUse(
       current = parent;
       continue;
     }
-    const operation = facts.getFact(parent, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(parent);
     if (kind === "KindPropertyAccessExpression" || kind === "KindElementAccessExpression") {
       if (operation?.kind === "source-static-field" ||
         operation?.kind === "source-accessor" && operation.receiver.kind === "static") return true;
@@ -93,7 +93,7 @@ export function isRustDeclarationPathUse(
     }
     if (operation?.kind !== "source-call" || operation.target.form === "callable" ||
       operation.target.form === "structural-method" || operation.target.form === "constructor-value" || operation.target.form === "union-method") return false;
-    const selected = facts.getSelectedTargetCall(parent);
+    const selected = records.selectedCall.get(parent);
     return selected?.sourceDeclaration !== undefined &&
       (!throughMember || operation.target.form === "function" || operation.target.form === "static-method" ||
         selected.member.static === true || selected.member.kind === "constructor");

@@ -107,8 +107,8 @@ function retentionFixture() {
   };
   const semantics = { types, declarations: { typeSymbol: () => undefined, symbolDeclarations: () => [] } };
   const context = { currentSemantics: semantics, currentSourceFile: declaration,
-    source: { navigation: { isProjectDeclaration: node => node === declaration } },
-    sourceLifetimes: { contractFor: () => ({ parameters: [] }) }, facts: { get: () => undefined },
+    source: { navigation: { isProjectDeclaration: node => node === declaration }, sourceFacts: { getFact: () => undefined } },
+    sourceLifetimes: { contractFor: () => ({ parameters: [] }) },
     sourceUnionInstantiationPath: [{ sourceType, carrier: source.carrier }] };
   return { declaration, sourceType, members, template, sourceTypes, semantics, context, registrations,
     retain() { return retainRustSourceUnionInstantiation(sourceType, template, source.carrier, context, { sourceTypes }, declaration); } };

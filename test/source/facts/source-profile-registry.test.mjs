@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
+import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
 import { rustSourceProfileOwnerId } from "../../../dist/source/profiles/declarations.js";
 
 function sourceFile(fileName) {

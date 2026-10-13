@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "../expressions/fundamentals.js";
 import { effectiveMemberResultCarrier } from "../expressions/special.js";
 import type { planExpression as planRustExpression } from "../expressions/entry.js";
@@ -28,8 +28,8 @@ export function sourceIndexSelectedOperationMatches(node: Node, fact: SourceInde
   const property = context.input.program.source.ast.is.IsPropertyAccessExpression(node);
   const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
   return resultCarrier !== undefined && selectedOperationMatches(property
-    ? context.input.program.facts.getSelectedTargetProperty(node)
-    : context.input.program.facts.getSelectedTargetElementAccess(node), fact.operationId, "indexer", resultCarrier);
+    ? context.input.program.records.selectedOperation.get(node)
+    : context.input.program.records.selectedOperation.get(node), fact.operationId, "indexer", resultCarrier);
 }
 
 export function planRustSourceIndexKey(

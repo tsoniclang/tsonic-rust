@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { isRustStringCarrier } from "../../../dist/target-model/types/index.js";
 
@@ -27,13 +27,13 @@ for (const order of ["callee-first", "caller-first"]) {
     program.sourceFiles.forEach(visit);
     for (const name of ["measureInput", "measuredInline"]) {
       const parameter = ast.parameters(declarations.get(name))[0];
-      const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+      const abi = program.records.sourceParameterAbi.get(parameter);
       assert.equal(abi?.mode === "ref" && abi.parameterCarrier.kind === "reference" &&
         !abi.parameterCarrier.mutable && isRustStringCarrier(abi.parameterCarrier.referent), true,
       `${name} publishes the identical immutable native string borrow`);
     }
     const callbackParameter = ast.parameters(declarations.get("measureInput"))[1];
-    const callback = program.facts.getFact(callbackParameter, rustSourceParameterAbiFactKey);
+    const callback = program.records.sourceParameterAbi.get(callbackParameter);
     const protocol = rustCallableInputProtocol(callback?.valueCarrier);
     assert.equal(protocol?.parameters[0]?.kind === "reference" && isRustStringCarrier(protocol.parameters[0].referent), true,
       "the callback argument owner, not the enclosing string's origins, supplies the invocation protocol");

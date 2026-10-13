@@ -19,7 +19,7 @@ import {
 import { cyclicSourceFiles } from "./module-graph.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAnalysisContext } from "./context.js";
-import type { RustModuleBindingFact } from "../facts/keys.js";
+import type { RustModuleBindingFact } from "../../target-model/records/operation-selections.js";
 
 export interface RustModuleBindingPolicy {
   nativeCallable(declaration: Node): RustNativeModuleCallable | undefined;
@@ -110,8 +110,8 @@ function moduleStringCanUseStaticStorage(declaration: Node, context: RustAnalysi
   const summary = context.source.navigation.declarationUseSummary(declaration);
   if (summary.exported || summary.bindingWritten) return false;
   return summary.uses.every(use =>
-    context.facts.resolve(use.reference, flowStateFactKey) === undefined &&
-    context.facts.get(use.reference, flowStateFactKey) === undefined);
+    context.source.sourceFacts.getFact(use.reference, flowStateFactKey) === undefined &&
+    context.source.sourceFacts.getFact(use.reference, flowStateFactKey) === undefined);
 }
 
 function collectNativeCallableCandidates(

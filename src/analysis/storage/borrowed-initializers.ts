@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -16,7 +16,7 @@ export interface RustBorrowedInitializerQueries {
 }
 
 export function analyzeRustBorrowedInitializers(
-  ast: AstReader, files: readonly SourceFile[], facts: RustPlanQueries,
+  ast: AstReader, files: readonly SourceFile[], records: RustProgramRecords,
 ): RustBorrowedInitializerQueries {
   const selections = new WeakMap<Node, RustBorrowedInitializer>();
   const select = (expression: Node): void => {
@@ -27,7 +27,7 @@ export function analyzeRustBorrowedInitializers(
       if (inner === undefined) return;
       source = inner;
     }
-    const operation = facts.getFact(source, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(source);
     const abi = operation?.kind === "provider-operation" ? operation.abi : undefined;
     const input = abi?.targetReceiver.kind === "input" ? abi.targetReceiver.input : undefined;
     const receiver = ast.is.IsCallExpression(source)

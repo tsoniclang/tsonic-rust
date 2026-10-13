@@ -24,14 +24,14 @@ import { readRustSourceStaticField } from "../declarations/classes/static-field-
 import { readRustStoredObjectField, rustStoredObjectFieldSupportsBorrowedRead } from "../objects/project-storage.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";
-import { rustFallibleFactKey, rustSourceAccessorEffectsFactKey } from "../../../analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustBorrowedElementRead } from "./borrowed-element-reads.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustComputedMemberExpression } from "./computed-members.js";
 import { planRustUnionProperty } from "./union-properties.js";
@@ -118,7 +118,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     if (!selectedOperationMatches(
-        context.input.program.facts.getSelectedTargetProperty(node),
+        context.input.program.records.selectedOperation.get(node),
         fact.operationId,
         "property",
         resultCarrier,
@@ -207,7 +207,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return undefined;
     }
     if (!selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetProperty(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "property",
       resultCarrier,
@@ -246,7 +246,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetProperty(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "property",
     selectedResult,
@@ -303,7 +303,7 @@ function planRustSourceMethodPropertyRead(
       context,
       "rust.backend.source-method-property-carrier",
     ) || !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetProperty(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "property",
       resultCarrier,
@@ -415,13 +415,7 @@ export function planRustBoundProjectMethodCallable(
         method: targetName!,
         args: argumentsList,
       };
-  const fallible = context.input.program.facts.getFact(
-    implementationDeclaration,
-    rustFallibleFactKey,
-  ) !== undefined || context.input.program.facts.getFact(
-    declaration,
-    rustFallibleFactKey,
-  ) !== undefined;
+  const fallible = context.input.program.records.fallible.get(implementationDeclaration) !== undefined || context.input.program.records.fallible.get(declaration) !== undefined;
   context.usedAliases?.add("rt");
   return {
     kind: "associated-call",
@@ -455,7 +449,7 @@ function planRustSourceUnionFieldRead(
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetProperty(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "property",
     resultCarrier,
@@ -501,7 +495,7 @@ export function sourceFieldSelectedOperationMatches(
   const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
   if (resultCarrier === undefined) return false;
   return selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetProperty(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "property",
     resultCarrier,
@@ -514,7 +508,7 @@ export function sourceMethodPropertySelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetProperty(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -527,7 +521,7 @@ export function sourceStaticFieldSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetProperty(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -540,7 +534,7 @@ export function sourceAccessorSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetProperty(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "property",
     fact.resultCarrier,
@@ -621,7 +615,7 @@ export function finishRustSourceAccessorCall(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const effects = context.input.program.facts.getFact(node, rustSourceAccessorEffectsFactKey);
+  const effects = context.input.program.records.sourceAccessorEffects.get(node);
   const effect = effects?.[role];
   if (effect === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -671,7 +665,7 @@ export function sourceUnionFieldSelectedOperationMatches(
   context: RustPlanContext,
 ): boolean {
   return selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetProperty(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "property",
     fact.resultCarrier,

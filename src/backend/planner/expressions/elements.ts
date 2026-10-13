@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planNativeRustArrayAccess } from "./native-arrays.js";
-import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
+
 import { diagnosticInput } from "../program/plan-context.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "./special.js";
 import { expressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
@@ -16,7 +16,7 @@ import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue, planRustValueRead } from "./typed-locations.js";
 import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
-import { rustOptionalChainFactKey } from "../../../analysis/facts/keys.js";
+
 import { planRustComputedMemberExpression } from "./computed-members.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRustIndexedFieldRead } from "./indexed-fields.js";
@@ -26,7 +26,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 
 export function planElementAccess(node: Node, context: RustPlanContext): RustExpr | undefined {
-  if (context.input.program.facts.getSelectedTargetElementAccess(node)?.operationKind === "property") {
+  if (context.input.program.records.selectedOperation.get(node)?.operationKind === "property") {
     return planPropertyAccess(node, context);
   }
   return planOptionalChainExpression(
@@ -39,7 +39,7 @@ export function planElementAccess(node: Node, context: RustPlanContext): RustExp
 }
 
 function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr | undefined {
-  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "element") {
+  if (context.input.program.records.nativeArrayStorage.get(node)?.kind === "element") {
     return planNativeRustArrayAccess(node, context, planExpression, "load");
   }
   const fact = rustOperationFact(node, context);
@@ -48,7 +48,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     return planRustSourceIndexRead(node, fact, context, planExpression);
   }
   if (fact !== undefined && fact.kind === "fixed-index") {
-    const optional = context.input.program.facts.getFact(node, rustOptionalChainFactKey);
+    const optional = context.input.program.records.optionalChain.get(node);
     const innerResult = optional?.innerResultCarrier ?? expressionCarrier(node, context);
     const selectedResult = innerResult === undefined
       ? undefined
@@ -59,7 +59,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       context,
       "rust.backend.fixed-index-carrier",
     ) || !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetElementAccess(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "indexer",
       selectedResult,
@@ -101,7 +101,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
       return undefined;
     }
     if (!selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetElementAccess(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "indexer",
       resultCarrier,
@@ -133,7 +133,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetElementAccess(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "indexer",
     selectedResult,

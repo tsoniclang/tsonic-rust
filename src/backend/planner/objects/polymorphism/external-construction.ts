@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProjectConstructorSignature } from "../../../../target-model/types/project-types.js";
 import type { RustExternalProjectBase } from "../../../../target-model/types/external-project-types.js";
-import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustSourceOptionalTargetType, rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
@@ -37,7 +37,7 @@ function inheritedMessage(
 ): RustExpr | undefined {
   const parameter = signature.parameters[0];
   const abi = parameter === undefined ? undefined
-    : context.input.program.facts.getFact(parameter.parameterDeclaration, rustSourceParameterAbiFactKey);
+    : context.input.program.records.sourceParameterAbi.get(parameter.parameterDeclaration);
   if (!signature.implicit || signature.declaration === undefined ||
     !base.constructorDeclarations.includes(signature.declaration) || signature.parameters.length !== 1 ||
     parameter === undefined || !parameter.acceptsOmission || parameter.rest || abi?.form !== "optional" ||

@@ -69,10 +69,10 @@ export function load(path: string): string {
   };
   visit(sourceFile);
 
-  const selected = program.facts.getSelectedTargetCall(callNode);
+  const selected = program.records.selectedCall.get(callNode);
   assert.equal(selected.member.id, "tsonic.rust.provider.10:acme-files47:tsonic.rust.provider-package.acme-files.binding5:1.0.010:acme.files11:@acme/files21:@acme/files::readText");
   assert.equal(selected.providerDeclaration.exportId, "@acme/files::readText");
-  const operation = program.facts.getSelectedTargetOperation(callNode);
+  const operation = program.records.selectedOperation.get(callNode);
   assert.equal(operation.operationId, selected.member.id);
   assert.equal(operation.operationKind, "method");
   assert.equal(operation.targetOperation, "acme_files::read_text");
@@ -101,11 +101,11 @@ export function modes(value: Vector, factor: int32): int32 {
   const modes = new Map();
   const visit = (node) => {
     if (ast.kindName(node) === "KindCallExpression") {
-      const selection = program.facts.getSelectedTargetCall(node);
+      const selection = program.records.selectedCall.get(node);
       const exportId = selection?.providerDeclaration?.exportId;
       if (exportId !== undefined) {
         modes.set(exportId, ast.arguments(node).map((argument) =>
-          argument === undefined ? undefined : program.facts.getArgumentPassingFact(argument)?.mode));
+          argument === undefined ? undefined : program.records.argumentPassing.get(argument)?.mode));
       }
     }
     ast.forEachChild(node, (child) => child && visit(child));

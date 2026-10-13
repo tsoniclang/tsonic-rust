@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
-import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
+
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustAssignmentOperationPlan } from "./core.js";
 import type { RustStmt } from "../../target-ast/syntax/nodes.js";
@@ -14,7 +14,7 @@ export function planRustCompoundRuntimeWrite(
   expression: Node, left: Node, right: Node, assignment: RustAssignmentOperationPlan,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const write = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);
+  const write = context.input.program.records.compoundWrite.get(expression);
   const receiverNode = Node_Expression(context.input.program.source.ast, left);
   const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, left);
   if (write === undefined || receiverNode === undefined || indexNode === undefined || context.syntheticNames === undefined) return undefined;

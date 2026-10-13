@@ -1,9 +1,6 @@
-import {
-  rustFlowReadProjectionFactKey,
-  rustOptionalChainFactKey,
-  rustSourceAccessorEffectsFactKey,
-  rustSourceCallEffectsFactKey,
-} from "../../../analysis/facts/keys.js";
+
+
+
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustFallibleResultExpression, rustExpressionUsesTryInCurrentRegion } from "../types/fallible-shape.js";
 import { diagnosticInput, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
@@ -21,11 +18,11 @@ import { planRustNonConsumingValue } from "./typed-locations.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../../target-model/types/index.js";
-import { rustTargetOperationIsFallible } from "../../../analysis/facts/target-operation.js";
+import { rustTargetOperationIsFallible } from "../../../analysis/operations/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import type { RustOptionalChainFact } from "../../../analysis/facts/keys.js";
+import type { RustOptionalChainFact } from "../../../target-model/operations/model.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planCallExpression } from "./calls/basic.js";
@@ -133,7 +130,7 @@ export function effectiveMemberResultCarrier(
   innerResultCarrier: TargetTypeRef,
   context: RustPlanContext,
 ): TargetTypeRef | undefined {
-  const optional = context.input.program.facts.getFact(node, rustOptionalChainFactKey);
+  const optional = context.input.program.records.optionalChain.get(node);
   if (optional === undefined) {
     return innerResultCarrier;
   }
@@ -154,7 +151,7 @@ export function planOptionalChainExpression(
   expectedKind: RustOptionalChainFact["operationKind"],
   planInner: (context: RustPlanContext) => RustExpr | undefined,
 ): RustExpr | undefined {
-  const fact = context.input.program.facts.getFact(node, rustOptionalChainFactKey);
+  const fact = context.input.program.records.optionalChain.get(node);
   if (fact === undefined) {
     return planInner(context);
   }
@@ -190,10 +187,7 @@ export function planOptionalChainExpression(
     ));
     return undefined;
   }
-  const guardFlowRead = context.input.program.facts.getFact(
-    fact.guard,
-    rustFlowReadProjectionFactKey,
-  );
+  const guardFlowRead = context.input.program.records.flowReadProjection.get(fact.guard);
   if (structuralMethodGuard === undefined && guardFlowRead !== undefined &&
     !rustTargetTypeRefEquals(guardFlowRead.sourceCarrier, fact.selectedGuardCarrier) &&
     !(guardFlowRead.kind === "option-value" &&
@@ -224,11 +218,8 @@ export function planOptionalChainExpression(
   if (body === undefined) {
     return undefined;
   }
-  const sourceCallEffects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
-  const sourceAccessorEffects = context.input.program.facts.getFact(
-    node,
-    rustSourceAccessorEffectsFactKey,
-  );
+  const sourceCallEffects = context.input.program.records.sourceCallEffects.get(node);
+  const sourceAccessorEffects = context.input.program.records.sourceAccessorEffects.get(node);
   const innerFallible = rustTargetOperationIsFallible(
     rustOperationFact(node, context),
     context.input.program.structuralShapes,

@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { AnalyzeRustDispatchContextResult, RustDispatchContextCatalog, RustDispatchContextComposition } from "./dispatch-contexts.js";
@@ -12,7 +12,7 @@ export interface RustDispatchContextDemandPlan {
 export function analyzeRustDispatchContextDemand(
   ast: AstReader,
   sourceFiles: readonly SourceFile[],
-  facts: RustPlanQueries,
+  records: RustProgramRecords,
   components: RustSourcePackageComponentClassifications,
   catalog: RustDispatchContextCatalog,
 ): AnalyzeRustDispatchContextResult<RustDispatchContextDemandPlan> {
@@ -23,7 +23,7 @@ export function analyzeRustDispatchContextDemand(
     const pending: Node[] = [sourceFile];
     while (pending.length > 0) {
       const node = pending.pop()!;
-      const operation = facts.getFact(node, rustTargetOperationFactKey);
+      const operation = records.targetOperation.get(node);
       if (operation?.kind === "provider-operation") {
         for (const input of operation.abi.dispatchInputs) {
           const selected = catalog.resolveInput({

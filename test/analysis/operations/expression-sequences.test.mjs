@@ -1,10 +1,11 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustTargetOperationResultCarrier } from "../../../dist/analysis/facts/operations/facts.js";
-import { rustEffectiveValueCarrier } from "../../../dist/analysis/facts/value-carrier-queries.js";
+import { rustTargetOperationResultCarrier } from "../../../dist/target-model/records/operations.js";
+import { rustEffectiveValueCarrier } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { planBinaryExpression } from "../../../dist/backend/planner/expressions/binary.js";
 import { nativeExpressionSequencesSource } from "../../../../tsonic/test/fixtures/native-expression-sequences.mjs";
@@ -15,14 +16,14 @@ test("checked value sequences seal independent operand carriers and the exact fi
   let sequences = 0;
   const visit = node => {
     if (ast.is.IsBinaryExpression(node) && ast.operatorKindName(node) === "KindCommaToken") {
-      const operation = program.facts.getFact(node, rustTargetOperationFactKey);
+      const operation = program.records.targetOperation.get(node);
       assert.equal(operation?.kind, "sequence");
       const expression = ast.as.AsBinaryExpression(node);
-      const right = rustEffectiveValueCarrier(program.facts, expression.Right);
+      const right = rustEffectiveValueCarrier(program.records, expression.Right);
       assert.equal(rustTargetTypeRefEquals(operation.rightCarrier, right), true);
       assert.equal(rustTargetTypeRefEquals(operation.resultCarrier, operation.rightCarrier), true);
       assert.equal(rustTargetTypeRefEquals(rustTargetOperationResultCarrier(operation), right), true);
-      const selected = program.facts.getSelectedTargetOperator(node);
+      const selected = program.records.selectedOperation.get(node);
       assert.equal(selected.operationId, operation.operationId);
       assert.equal(selected.operationKind, "operator");
       assert.equal(rustTargetTypeRefEquals(selected.resultType, right), true);
@@ -48,8 +49,8 @@ export function read(value: int32): int32 { return (effect(), value); }
   };
   program.sourceFiles.forEach(visit);
   assert.ok(subject);
-  const original = program.facts.getFact(subject, rustTargetOperationFactKey);
-  const selected = program.facts.getSelectedTargetOperator(subject);
+  const original = program.records.targetOperation.get(subject);
+  const selected = program.records.selectedOperation.get(subject);
   const changed = rustSourcePrimitiveTargetType("uint64");
   for (const [label, operation, selection] of [
     ["left", { ...original, leftCarrier: changed }, selected],
@@ -60,12 +61,11 @@ export function read(value: int32): int32 { return (effect(), value); }
     ["selection identity", original, { ...selected, operationId: "invalid" }],
     ["selection completion", original, { ...selected, resultType: changed }],
   ]) {
-    const facts = { ...program.facts,
-      getFact: (node, key) => node === subject && key === rustTargetOperationFactKey
-        ? operation : program.facts.getFact(node, key),
-      getSelectedTargetOperator: node => node === subject ? selection : program.facts.getSelectedTargetOperator(node),
-    };
-    const context = { input: { program: { ...program, facts } }, diagnostics: [], sourceFile: ast.getSourceFile(subject) };
+    const records = createRustRecordFixture({...program.records,
+targetOperation: { get: (node) => node === subject
+    ? operation : program.records.targetOperation.get(node) },
+selectedOperation: { get: (node) => node === subject ? selection : program.records.selectedOperation.get(node) }});
+    const context = { input: { program: { ...program, records } }, diagnostics: [], sourceFile: ast.getSourceFile(subject) };
     assert.equal(planBinaryExpression(subject, context) === undefined, true, label);
     assert.ok(context.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"), label);
   }

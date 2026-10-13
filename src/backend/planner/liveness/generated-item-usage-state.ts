@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
-import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
+
 import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
-import type { RustProjectUpcastFact } from "../../../target-model/types/value-projections.js";
+import type { RustProjectUpcastFact } from "../../../target-model/records/value-projections.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { rustStructuralUsageKey, structuralFieldKey } from "./generated-item-usage-helpers.js";
@@ -16,10 +16,10 @@ export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageI
     const kind = input.ast.kindName(declaration);
     if (kind !== "KindEnumDeclaration" && kind !== "KindTypeAliasDeclaration") continue;
     if (kind === "KindTypeAliasDeclaration" &&
-      input.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind === "erased") {
+      input.records.typeAliasDeclaration.get(declaration)?.kind === "erased") {
       continue;
     }
-    const carrier = input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+    const carrier = input.records.runtimeCarrier.get(declaration)?.carrier;
     if (carrier === undefined) continue;
     carriersByDeclaration.set(declaration, storageOwnerKey(carrier));
   }

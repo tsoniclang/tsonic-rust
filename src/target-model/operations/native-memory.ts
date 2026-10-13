@@ -1,7 +1,8 @@
-import type { Node } from "@tsonic/tsts";
+
+
 import type { TargetTypeRef } from "../types/model.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
-import { defineRustPlanKey } from "../facts/keys.js";
+
 
 interface RustNativeMemoryDimensions {
   readonly pointeeCarrier: TargetTypeRef;
@@ -31,15 +32,9 @@ export interface RustNativeObjectField {
   readonly layout: RustNativeMemoryLayout;
 }
 
-export type RustNativeArrayStorage = {
-  readonly layout: RustNativeMemoryLayout;
-  readonly stride: number;
-} & ({ readonly kind: "element"; readonly declaration: Node } |
-  { readonly kind: "binding" | "reference" | "literal" });
 
-export const rustNativeArrayStorageKey = defineRustPlanKey<RustNativeArrayStorage>("nativeArrayStorage", (left, right) =>
-  left.kind === right.kind && (left.kind !== "element" || right.kind === "element" && left.declaration === right.declaration) && left.stride === right.stride &&
-  rustNativeMemoryLayoutsEqual(left.layout, right.layout));
+
+
 
 export function rustNativeMemoryLayoutsEqual(left: RustNativeMemoryLayout, right: RustNativeMemoryLayout): boolean {
   const pending = [[left, right] as const];
@@ -72,16 +67,3 @@ export function rustNativeMemoryLayoutsEqual(left: RustNativeMemoryLayout, right
   }
   return true;
 }
-
-export const rustNativeBackingKey = defineRustPlanKey<RustNativeMemoryLayout>("nativeBacking", rustNativeMemoryLayoutsEqual);
-
-export interface RustRawLocationPlan {
-  readonly operation: "to-raw" | "reinterpret";
-  readonly expression: Node;
-  readonly inputCarrier: TargetTypeRef;
-  readonly layout: RustNativeMemoryLayout;
-}
-
-export const rustRawLocationPlanKey = defineRustPlanKey<RustRawLocationPlan>("rawLocation", (left, right) =>
-  left.operation === right.operation && left.expression === right.expression &&
-  rustTargetTypeRefEquals(left.inputCarrier, right.inputCarrier) && rustNativeMemoryLayoutsEqual(left.layout, right.layout));

@@ -84,7 +84,7 @@ export function resolveSourcePrimitive(
 ): TargetTypeRef | undefined {
   const node = asNode(subject, context);
   if (node !== undefined) {
-    const direct = context.facts.get(node, sourcePrimitiveFactKey);
+    const direct = context.source.sourceFacts.getFact(node, sourcePrimitiveFactKey);
     return direct === undefined ? undefined : rustSourcePrimitiveTargetType(direct.kind);
   }
   const type = subject as Type;
@@ -93,7 +93,7 @@ export function resolveSourcePrimitive(
   if (symbol === undefined) {
     return undefined;
   }
-  const symbolFact = context.facts.get(symbol, sourcePrimitiveFactKey);
+  const symbolFact = context.source.sourceFacts.getFact(symbol, sourcePrimitiveFactKey);
   if (symbolFact !== undefined) {
     return rustSourcePrimitiveTargetType(symbolFact.kind);
   }
@@ -104,7 +104,7 @@ export function resolveSourcePrimitive(
     return undefined;
   }
   for (const declaration of declarations) {
-    const declarationFact = context.facts.get(declaration, sourcePrimitiveFactKey);
+    const declarationFact = context.source.sourceFacts.getFact(declaration, sourcePrimitiveFactKey);
     if (declarationFact !== undefined) {
       return rustSourcePrimitiveTargetType(declarationFact.kind);
     }

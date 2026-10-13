@@ -94,9 +94,9 @@ export function resolveRustTargetTypeRef(
     const pointee = resolveRustTargetTypeRef(typeNode ?? binding.pointeeType, context, options);
     return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
   }
-  const sourceField = context.facts.resolve(subject, fieldFactKey) ?? context.facts.get(subject, fieldFactKey);
+  const sourceField = context.source.sourceFacts.getFact(subject, fieldFactKey);
   if (sourceField !== undefined) return resolveRustTargetTypeRef(sourceField.type, context, options);
-  const valueStruct = context.facts.resolve(subject, structFactKey) ?? context.facts.get(subject, structFactKey);
+  const valueStruct = context.source.sourceFacts.getFact(subject, structFactKey);
   if (valueStruct !== undefined) {
     const node = asNode(subject, context);
     if (node === undefined) return undefined;
@@ -119,13 +119,11 @@ export function resolveRustTargetTypeRef(
   if (resolveRustSourceMarker(subject, context) === "js-string") {
     return rustJsStringTargetType();
   }
-  const fixedArray = context.facts.resolve(subject, tsonicFixedArrayFactKey) ??
-    context.facts.get(subject, tsonicFixedArrayFactKey);
+  const fixedArray = context.source.sourceFacts.getFact(subject, tsonicFixedArrayFactKey);
   if (fixedArray !== undefined) {
     return resolveRustFixedArrayTargetType(fixedArray, context, options, new Set<object>());
   }
-  const functionPointer = context.facts.resolve(subject, functionPointerFactKey) ??
-    context.facts.get(subject, functionPointerFactKey);
+  const functionPointer = context.source.sourceFacts.getFact(subject, functionPointerFactKey);
   if (functionPointer !== undefined) {
     const parameters = functionPointer.parameters.map((parameter) =>
       resolveRustTargetTypeRef(parameter, context, options));
@@ -139,8 +137,7 @@ export function resolveRustTargetTypeRef(
           ...(functionPointer.abi.length === 0 ? {} : { abi: functionPointer.abi }),
         };
   }
-  const pointer = context.facts.resolve(subject, pointerFactKey) ??
-    context.facts.get(subject, pointerFactKey);
+  const pointer = context.source.sourceFacts.getFact(subject, pointerFactKey);
   if (pointer !== undefined) {
     const pointee = resolveRustTargetTypeRef(pointer.pointee, context, options);
     return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);
@@ -165,7 +162,7 @@ export function resolveRustTargetTypeRef(
     const contextual = expected === undefined ? undefined : resolveRustContextualLiteralCarrier(context, node, expected);
     if (contextual !== undefined) return contextual;
   }
-  const existing = context.facts.getRuntimeCarrierFact(node)?.carrier;
+  const existing = context.records.runtimeCarrier.get(node)?.carrier;
   if (existing !== undefined) {
     return existing;
   }
@@ -173,11 +170,11 @@ export function resolveRustTargetTypeRef(
     context.ast.properties(node).length === 0) {
     return rustEmptyObjectTargetType();
   }
-  const operationResult = context.facts.getSelectedTargetOperator(subject)?.resultType;
+  const operationResult = context.records.selectedOperation.get(subject)?.resultType;
   if (operationResult !== undefined) {
     return operationResult;
   }
-  const selectedCall = context.facts.getSelectedTargetCall(subject);
+  const selectedCall = context.records.selectedCall.get(subject);
   if (selectedCall !== undefined) return resolveRustSelectedSourceCallResult(selectedCall, context, options);
   if (node !== undefined && (context.ast.is.IsPropertyDeclaration(node) || context.ast.is.IsPropertySignatureDeclaration(node))) {
     const typeNode = Node_Type(context.ast, node);
@@ -244,9 +241,9 @@ export function resolveRustTargetTypeSyntax(
   if (context.ast.is.IsTypeQueryNode(node)) {
     const expression = context.ast.as.AsTypeQueryNode(node)?.ExprName;
     const declaration = context.source.navigation.referenceFor(expression)?.declaration;
-    if (declaration !== undefined && context.facts.get(declaration, structFactKey) !== undefined) {
+    if (declaration !== undefined && context.source.sourceFacts.getFact(declaration, structFactKey) !== undefined) {
       if (resolving.has(declaration)) return undefined;
-      const existing = context.facts.getRuntimeCarrierFact(declaration)?.carrier;
+      const existing = context.records.runtimeCarrier.get(declaration)?.carrier;
       if (existing !== undefined) return existing;
       resolving.add(declaration);
       try {
@@ -255,13 +252,13 @@ export function resolveRustTargetTypeSyntax(
         return type === undefined ? undefined : resolveStructuralObjectType(type, {
           ...context,
           currentSemantics: semantics,
-        }, options, resolving, declaration, context.facts.get(declaration, structFactKey));
+        }, options, resolving, declaration, context.source.sourceFacts.getFact(declaration, structFactKey));
       } finally {
         resolving.delete(declaration);
       }
     }
   }
-  const valueStruct = context.facts.resolve(node, structFactKey) ?? context.facts.get(node, structFactKey);
+  const valueStruct = context.source.sourceFacts.getFact(node, structFactKey);
   if (valueStruct !== undefined) {
     const semantics = context.semanticsFor(node);
     const type = semantics.types.expressionType(node);
@@ -287,13 +284,11 @@ export function resolveRustTargetTypeSyntax(
       resolveRustAuthoredTargetType,
     );
   }
-  const fixedArray = context.facts.resolve(node, tsonicFixedArrayFactKey) ??
-    context.facts.get(node, tsonicFixedArrayFactKey);
+  const fixedArray = context.source.sourceFacts.getFact(node, tsonicFixedArrayFactKey);
   if (fixedArray !== undefined) {
     return resolveRustFixedArrayTargetType(fixedArray, context, options, resolving);
   }
-  const functionPointer = context.facts.resolve(node, functionPointerFactKey) ??
-    context.facts.get(node, functionPointerFactKey);
+  const functionPointer = context.source.sourceFacts.getFact(node, functionPointerFactKey);
   if (functionPointer !== undefined) {
     const parameters = functionPointer.parameters.map((parameter) =>
       resolveRustAuthoredTargetType(parameter, context, options, resolving));
@@ -308,8 +303,7 @@ export function resolveRustTargetTypeSyntax(
         };
   }
   if (isRustSourceRawPointer(node, context)) return rustRawPointerTargetType();
-  const pointer = context.facts.resolve(node, pointerFactKey) ??
-    context.facts.get(node, pointerFactKey);
+  const pointer = context.source.sourceFacts.getFact(node, pointerFactKey);
   if (pointer !== undefined) {
     const pointee = resolveRustAuthoredTargetType(pointer.pointee, context, options, resolving);
     return pointee === undefined ? undefined : rustSourceLocationTargetType(pointee);

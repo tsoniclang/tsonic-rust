@@ -21,8 +21,9 @@ import {
   rustRuntimeUnionProjection,
 } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
-import { rustFlowReadProjectionFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
+
+
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -74,8 +75,8 @@ export function applyFlowReadLane(
   if (access?.optionalChain === true && access.receiver.expression === receiver) {
     return sourceCarrier;
   }
-  const existing = walk.context.facts.get(expression, rustFlowReadProjectionFactKey) ??
-    walk.context.facts.resolve(expression, rustFlowReadProjectionFactKey);
+  const existing = walk.context.records.flowReadProjection.get(expression) ??
+    walk.context.records.flowReadProjection.get(expression);
   if (existing !== undefined) {
     if (!rustTargetTypeRefEquals(existing.sourceCarrier, sourceCarrier)) {
       appendRustDiagnostic(
@@ -91,7 +92,7 @@ export function applyFlowReadLane(
   }
   const entryCarrier = rustGuardedArrayEntryCarrier(walk, expression, sourceCarrier);
   if (entryCarrier !== undefined) {
-    recordRustFlowReadProjection(walk.context.facts, expression, {
+    recordRustFlowReadProjection(walk.context.records, expression, {
       kind: "option-value", sourceCarrier, selectedCarrier: entryCarrier,
     });
     return entryCarrier;
@@ -154,7 +155,7 @@ export function applyFlowReadLane(
     return undefined;
   }
   recordRustFlowReadProjection(
-    walk.context.facts,
+    walk.context.records,
     expression,
     selection.fact,
   );
@@ -328,8 +329,8 @@ function resolveSelectedFlowReadCarrier(
     walk.context.semanticsFor(expression).types.isNullish(selectedType)) {
     return sourceCarrier;
   }
-  const operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+  const operation = walk.context.records.targetOperation.get(expression) ??
+    walk.context.records.targetOperation.get(expression);
   if (operation?.kind === "provider-operation" &&
     operation.sourceResultCarrier !== undefined) {
     return operation.sourceResultCarrier;

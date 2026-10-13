@@ -10,12 +10,12 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustCallableConstructionType } from "./fundamentals.js";
-import { rustDirectCallableReferenceFactKey } from "../../../analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planRustSourceCallableValue } from "./source-callable-value.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
-import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
+
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { rustNativeCallableOperand, type RustNativeCallablePhysicalSource } from "../../../analysis/callables/native-conversions.js";
@@ -27,8 +27,8 @@ export function planRustCallableInputProducer(
   expression: RustExpr, source: TargetTypeRef, context: RustPlanContext,
   node?: Node,
 ): RustExpr | undefined {
-  const reference = node === undefined ? undefined : context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
-  if (reference !== undefined && context.input.program.facts.getFact(reference.sourceDeclaration, rustModuleCallableStorageFactKey)?.kind === "inline") {
+  const reference = node === undefined ? undefined : context.input.program.records.directCallableReference.get(node);
+  if (reference !== undefined && context.input.program.records.moduleCallableStorage.get(reference.sourceDeclaration)?.kind === "inline") {
     if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
     const selected = planRustSourceCallableValue(reference, context);
     if (selected === undefined) return undefined;
@@ -48,7 +48,7 @@ export function planRustCallableConversion(
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const reference = context.input.program.facts.getFact(node, rustDirectCallableReferenceFactKey);
+  const reference = context.input.program.records.directCallableReference.get(node);
   if (reference !== undefined && !rustTargetTypeRefEquals(reference.carrier, conversion.source)) return undefined;
   const selected = reference === undefined ? expression : planRustSourceCallableValue(reference, context);
   const source = physicalCallableSource(conversion.source, node, context);
@@ -172,7 +172,7 @@ function physicalCallableSource(
   context: RustPlanContext,
 ): RustNativeCallablePhysicalSource | undefined {
   const program = context.input.program;
-  return rustNativeCallableOperand(source, node, { facts: program.facts,
+  return rustNativeCallableOperand(source, node, { records: program.records,
     storage: program.callableValues.nativeStorage, producers: program.callableValues.nativeProducers,
     definitions: program.typeDefinitions });
 }

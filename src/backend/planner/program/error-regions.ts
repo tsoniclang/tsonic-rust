@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
-import { rustErrorEffectsFactKey, type RustErrorEffectsFact } from "../../../analysis/facts/error-effects.js";
+
+import type { RustErrorEffectsFact } from "../../../target-model/records/error-effects.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
@@ -10,16 +11,16 @@ import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
 import { rustErrorBoundaryForDeclaration, type RustPlanContext } from "./plan-context.js";
 import type { RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustContextualValueConversionFactKey } from "../../../analysis/facts/keys.js";
+
 import { normalizeRustErrorType } from "../../../analysis/program/error-types.js";
 import { rustProducerErrorTargetType } from "../../../target-model/types/carriers/producer-errors.js";
 import type { RustType } from "../../target-ast/syntax/nodes.js";
 import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
 import { rustCallableConversionErrorArities } from "../../../target-model/conversions/callable-physical.js";
 import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
-import type { RustCallableValueAdapter } from "../../../analysis/facts/callable-adapters.js";
-import { rustProjectCallableAdaptersKey } from "../../../analysis/facts/project-callable-adapters.js";
-import { rustAsyncFunctionFactKey } from "../../../analysis/facts/keys.js";
+import type { RustCallableValueAdapter } from "../../../target-model/records/callable-adapters.js";
+
+
 
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
@@ -52,15 +53,15 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
     const visit = (node: Node): void => {
       for (const name of [program.names.nameForDeclaration(node), program.names.functionNameForDeclaration(node),
         program.names.callableValueNameForDeclaration(node)]) if (name !== undefined) usedNames.add(name);
-      const effects = program.facts.getFact(node, rustErrorEffectsFactKey);
+      const effects = program.records.errorEffects.get(node);
       if (effects !== undefined && effects.nativeErrors.length > 0) {
         const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);
         if (arity > 1) arities.add(arity);
-        if (program.facts.getFact(node, rustAsyncFunctionFactKey)?.kind === "js-promise") clonedArities.add(arity);
+        if (program.records.asyncFunction.get(node)?.kind === "js-promise") clonedArities.add(arity);
       }
-      const conversion = program.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
+      const conversion = program.records.contextualValueConversion.get(node)?.conversion;
       if (conversion?.kind === "callable-adapter") registerConversion(conversion);
-      for (const adapter of program.facts.getFact(node, rustProjectCallableAdaptersKey) ?? []) {
+      for (const adapter of program.records.projectCallableAdapters.get(node) ?? []) {
         registerAdapter(adapter.resultAdapter);
         for (const parameter of adapter.parameterAdapters) {
           if (parameter.kind === "runtime-value" || parameter.kind === "logical-value" || parameter.kind === "rest-element")
@@ -117,7 +118,7 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
     producerErrorType(reference: RustProducerErrorReference, _context: RustTypeRenderingContext,
       render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
       const selected = normalizeRustErrorType(rustProducerErrorTargetType(reference), {
-        producers: program.callableValues.nativeProducers, facts: program.facts, definitions: program.typeDefinitions,
+        producers: program.callableValues.nativeProducers, records: program.records, definitions: program.typeDefinitions,
         ast, components: program.sourcePackageComponents,
       });
       return selected === undefined ? undefined : render(selected);
@@ -129,7 +130,7 @@ export function planRustErrorRegion(
   declaration: Node,
   context: RustPlanContext,
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
-  const effects = context.input.program.facts.getFact(declaration, rustErrorEffectsFactKey);
+  const effects = context.input.program.records.errorEffects.get(declaration);
   if (effects === undefined) return undefined;
   return planRustSelectedErrorRegion(declaration, effects, context);
 }

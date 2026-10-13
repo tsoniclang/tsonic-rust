@@ -40,6 +40,7 @@ export function collectRustMutableProjectStorageRequirements(
   const mutableDeclarations = new Set<Node>();
   const valueWrites = new Set<Node>();
   const referenceDeclarations = new Set<Node>();
+  const sourceFact = context.source.sourceFacts.getFact.bind(context.source.sourceFacts);
   const collectStructural = createRustStructuralStorageCollector(context, projectTypes, referenceDeclarations, mutableDeclarations);
   const collectStoragePath = (node: Node | undefined): void => {
     if (node === undefined) {
@@ -47,7 +48,7 @@ export function collectRustMutableProjectStorageRequirements(
     }
     const { ast } = context;
     const kind = ast.kindName(node);
-    const flow = context.facts.get(node, flowStateFactKey);
+    const flow = context.source.sourceFacts.getFact(node, flowStateFactKey);
     if (flow?.state === "borrowed-mut" && kind === KindCallExpression) {
       const arguments_ = ast.arguments(node);
       if (arguments_.length === 1) {
@@ -85,12 +86,12 @@ export function collectRustMutableProjectStorageRequirements(
     collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);
-    const address = selectRustAddressOfSourceOperation(node, context.facts.resolve, context.facts.get);
+    const address = selectRustAddressOfSourceOperation(node, sourceFact, sourceFact);
     if (address?.storageDeclaration !== undefined && rustProjectObjectField(address.storageDeclaration, ast) !== undefined) {
       const definition = projectTypes.definitionContainingDeclaration(address.storageDeclaration);
       if (definition?.kind === "class") referenceDeclarations.add(definition.declaration);
     }
-    const pointer = selectRustBindPointerSourceOperation(node, context.facts.resolve, context.facts.get);
+    const pointer = selectRustBindPointerSourceOperation(node, sourceFact, sourceFact);
     if (pointer !== undefined) {
       const semantics = context.semantics(sourceFile);
       const identityType = semantics.types.expressionType(pointer.identityExpression);

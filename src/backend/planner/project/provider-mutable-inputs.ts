@@ -1,15 +1,18 @@
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression, type SourceExpressionEffects } from "@tsonic/target-api/source";
-import { rustFinalizedSourceInputs, type RustFinalizedSourceInput } from "../../../analysis/facts/finalized-operation-abi.js";
-import { rustTargetOperationFactKey, rustSourceBindingFactKey, type RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustTargetOperationIsDirectLocation } from "../../../analysis/facts/target-operation.js";
-import { rustNativeStorageRoot } from "../../../analysis/facts/native-storage-paths.js";
+import { rustFinalizedSourceInputs } from "../../../analysis/operations/finalized-operation/conversions.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
+
+
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import { rustTargetOperationIsDirectLocation } from "../../../analysis/operations/target-operation.js";
+import { rustNativeStorageRoot } from "../../../analysis/storage/native-paths.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath, type RustPlanContext } from "../program/plan-context.js";
 import { planRustPromotedStorageLocation, type RustExpressionPlanner } from "../expressions/typed-locations.js";
 import { rustDirectProjectFieldStoragePath, rustProjectObjectRepresentation } from "../objects/project-storage.js";
-import { providerSourceInputNode, providerSourceInputKey } from "../../../analysis/facts/provider-source-inputs.js";
+import { providerSourceInputNode, providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
 
 export type MutableProviderInput =
   | {
@@ -101,7 +104,7 @@ export function collectMutableInputs(
         const direct = projectField === undefined && providerMutableInputIsDirect(node, context);
         const rootDeclaration = projectField?.rootDeclaration ??
           (direct ? rustNativeStorageRoot(node, { ast: context.input.program.source.ast,
-            facts: context.input.program.facts, navigation: context.input.program.sourceNavigation }) : undefined);
+            records: context.input.program.records, navigation: context.input.program.sourceNavigation }) : undefined);
         mutableInputs.set(
           key,
           projectField !== undefined
@@ -160,7 +163,7 @@ function providerMutableInputIsDirect(
 ): boolean {
   const { ast } = context.input.program.source;
   if (ast.is.IsIdentifier(node)) {
-    const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
+    const binding = context.input.program.records.sourceBinding.get(node);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     return path !== undefined && isValidRustIdentifier(path);
   }
@@ -168,7 +171,7 @@ function providerMutableInputIsDirect(
   if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
     return true;
   }
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   return rustTargetOperationIsDirectLocation(operation) ||
     operation?.kind === "source-field" &&
       operation.storage === "project-object" &&
@@ -185,7 +188,7 @@ function providerMutableProjectField(
   readonly storagePath: readonly string[];
   readonly rootDeclaration?: Node;
 } | undefined {
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   if (operation?.kind !== "source-field" || operation.storage !== "project-object" ||
     operation.valueSemantics.kind !== "stored" || operation.dispatch !== undefined) {
     return undefined;
@@ -203,7 +206,7 @@ function providerMutableProjectField(
     return undefined;
   }
   const rootDeclaration = rustNativeStorageRoot(receiverNode, { ast: context.input.program.source.ast,
-    facts: context.input.program.facts, navigation: context.input.program.sourceNavigation });
+    records: context.input.program.records, navigation: context.input.program.sourceNavigation });
   return {
     receiverNode,
     storagePath,
@@ -227,7 +230,7 @@ export function providerMutableStorageEffects(
     kind === "KindThisKeyword") {
     return noSourceExpressionEffects;
   }
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   const receiver = Node_Expression(ast, node);
   if (receiver === undefined) {
     return context.input.program.sourceNavigation.expressionEffects(node);
@@ -273,10 +276,7 @@ function providerMutableLocationNode(
   sourceNode: Node,
   context: RustPlanContext,
 ): Node | undefined {
-  const operation = context.input.program.facts.getFact(
-    sourceNode,
-    rustTargetOperationFactKey,
-  );
+  const operation = context.input.program.records.targetOperation.get(sourceNode);
   if (operation?.kind !== "flow-marker") {
     return sourceNode;
   }

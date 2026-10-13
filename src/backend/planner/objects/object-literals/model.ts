@@ -1,14 +1,14 @@
 import { createImplementationPlan } from "./registry.js";
-import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
+
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
-import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../analysis/facts/keys.js";
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../target-model/records/callable-adapters.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { createStructuralLiteralImplementation, type RustStructuralLiteralImplementation } from "./structural.js";
-import { rustObjectReferenceViewKey } from "../../../../analysis/facts/object-reference-views.js";
+
 
 export type RustObjectLiteralMethodImplementationPlan = {
   readonly kind: "authored";
@@ -95,7 +95,7 @@ export interface RustObjectLiteralImplementationRegistry {
 }
 
 export type RustRecordLiteralFact = Extract<
-  import("../../../../analysis/facts/keys.js").RustTargetOperationFact,
+  import("../../../../target-model/records/operations.js").RustTargetOperationFact,
   { readonly kind: "record-literal" }
 >;
 
@@ -124,7 +124,7 @@ export function createRustObjectLiteralImplementationRegistry(
   const referenceViews = new Map<Node, RustStructuralLiteralImplementation>();
   const items: RustItem[] = [];
   const visit = (node: Node): void => {
-    const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = context.input.program.records.targetOperation.get(node);
     if (fact?.kind === "record-literal" &&
       rustObjectLiteralRequiresDispatchImplementation(fact, context)) {
       const plan = fact.storage === "structural-object"
@@ -136,7 +136,7 @@ export function createRustObjectLiteralImplementationRegistry(
         items.push(...plan.items);
       }
     }
-    const view = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
+    const view = context.input.program.records.objectReferenceView.get(node);
     if (view?.kind === "structural" && context.input.program.structuralShapes.definitionForCarrier(view.targetCarrier)?.dispatchName !== undefined) {
       const plan = createStructuralLiteralImplementation(node, view.targetCarrier, new Set(view.fields.map(field => field.destinationIndex)), context, names);
       if (plan !== undefined) {

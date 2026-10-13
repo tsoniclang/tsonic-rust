@@ -1,12 +1,15 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right,
   ElementAccessExpression_ArgumentExpression, asSourceNode } from "@tsonic/target-api/source";
-import { rustFinalizedSourceInputs, type RustFinalizedSourceInput } from "../facts/finalized-operation-abi.js";
-import { providerSourceInputKey, providerSourceInputNode } from "../facts/provider-source-inputs.js";
-import { rustTargetOperationFactKey, rustSourceBindingFactKey, type RustTargetOperationFact } from "../facts/keys.js";
-import { rustTargetOperationIsDirectLocation } from "../facts/target-operation.js";
-import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot,
-  type RustNativeStoragePathInput, type RustNativeStorageProjection } from "../facts/native-storage-paths.js";
+import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
+import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
+import { providerSourceInputKey, providerSourceInputNode } from "../operations/provider-source-inputs.js";
+
+
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
+import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";
+import type { RustNativeStoragePathInput, RustNativeStorageProjection } from "./native-paths.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
@@ -25,7 +28,7 @@ export function createRustProviderMutableInputPlan(input: RustNativeStoragePathI
 }): RustProviderMutableInputPlan {
   const selections = new Map<Node, RustProviderMutableInputSelection>();
   for (const node of input.nodes) {
-    const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = input.records.targetOperation.get(node);
     if (operation?.kind !== "provider-operation") continue;
     const selected = selectRustProviderMutableInputs(node, operation, input);
     if (selected !== undefined) selections.set(node, selected);
@@ -36,13 +39,13 @@ export function createRustProviderMutableInputPlan(input: RustNativeStoragePathI
 export function selectRustProviderMutableInputs(
   operationNode: Node, operation: ProviderOperation, input: RustNativeStoragePathInput,
 ): RustProviderMutableInputSelection | undefined {
-  if (input.facts.getFact(operationNode, rustTargetOperationFactKey) !== operation)
+  if (input.records.targetOperation.get(operationNode) !== operation)
     return Object.freeze({ kind: "rejected", node: operationNode,
       reason: "Mutable provider admission requires its exact owned operation fact." });
   const mutable = rustFinalizedSourceInputs(operation.abi).filter(value => value.mode === "mut-ref");
   if (mutable.length === 0) return undefined;
   const kind = input.ast.kindName(operationNode);
-  const selectedReceiver = input.facts.getSelectedTargetOperation(operationNode)?.provenance?.sourceReceiver;
+  const selectedReceiver = input.records.selectedOperation.get(operationNode)?.provenance?.sourceReceiver;
   const callee = kind === "KindCallExpression" || kind === "KindNewExpression" ? Node_Expression(input.ast, operationNode) : undefined;
   const receiver = asSourceNode(selectedReceiver, input.ast) ?? rustMemberAccessReceiver(input.ast, callee ?? operationNode);
   let arguments_: readonly (Node | undefined)[] = [...input.ast.arguments(operationNode)];
@@ -65,7 +68,7 @@ export function selectRustProviderMutableInputs(
     if (keys.has(key)) return reject(source, "One source value cannot supply multiple mutable inputs to one Rust provider operation.");
     keys.add(key);
     let node = source;
-    const marker = input.facts.getFact(source, rustTargetOperationFactKey);
+    const marker = input.records.targetOperation.get(source);
     if (marker?.kind === "flow-marker") {
       const operands = [...input.ast.arguments(source)];
       if (marker.state !== "borrowed-mut" || operands.length !== 1 || operands[0] === undefined)
@@ -75,8 +78,8 @@ export function selectRustProviderMutableInputs(
     if (value.conversion.kind !== "identity") return reject(node, "Mutable provider input requires one exact identity conversion.");
     selected.push({ input: value, key, node });
     if (mutable.length <= 1) continue;
-    const fact = input.facts.getFact(node, rustTargetOperationFactKey);
-    const direct = input.ast.is.IsIdentifier(node) && input.facts.getFact(node, rustSourceBindingFactKey) !== undefined ||
+    const fact = input.records.targetOperation.get(node);
+    const direct = input.ast.is.IsIdentifier(node) && input.records.sourceBinding.get(node) !== undefined ||
       ["KindThisExpression", "KindThisKeyword"].includes(input.ast.kindName(node)) || rustTargetOperationIsDirectLocation(fact) ||
       fact?.kind === "source-field" && fact.valueSemantics.kind === "stored" && fact.dispatch === undefined;
     if (!direct) continue;

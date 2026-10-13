@@ -9,7 +9,8 @@ import { rustUnionLeaves } from "../../../dist/target-model/types/union-relation
 import { rustValueConversionContract, rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { selectRustSourceValueConversion, selectRustProjectedValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 import { materializeProviderOperationRow } from "../../../dist/providers/packages/materialization.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";

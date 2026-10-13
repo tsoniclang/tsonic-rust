@@ -6,8 +6,8 @@ import { rustSourceUnionMemberDeclarationIsOwned } from "../../../dist/policy/id
 test("native union member ownership requires an exact classified provider identity", () => {
   const declaration = {};
   const identity = { providerId: "acme.native", providerModuleId: "acme", moduleSpecifier: "@acme/native", exportId: "Value", memberId: "Value.read" };
-  const selected = fact => ({ source: { navigation: { isProjectDeclaration: () => false } },
-    facts: { get: (node, key) => node === declaration && key === providerVirtualDeclarationFactKey ? fact : undefined } });
+  const selected = fact => ({ source: { navigation: { isProjectDeclaration: () => false },
+    sourceFacts: { getFact: (node, key) => node === declaration && key === providerVirtualDeclarationFactKey ? fact : undefined } } });
   const options = { jsEnabled: false };
   assert.equal(rustSourceUnionMemberDeclarationIsOwned(declaration, selected(identity), options), true);
   assert.equal(rustSourceUnionMemberDeclarationIsOwned(declaration, selected(undefined), options), false);

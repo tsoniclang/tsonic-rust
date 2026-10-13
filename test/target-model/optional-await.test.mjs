@@ -4,7 +4,7 @@ import { rustAwaitCarrier, rustCallableTargetType, rustJsPromiseTargetType, rust
   rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../dist/target-model/types/index.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
-import { rustFutureValueMatchesCarrier } from "../../dist/analysis/facts/future-values.js";
+import { rustFutureValueMatchesCarrier } from "../../dist/analysis/callables/future-values.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
 

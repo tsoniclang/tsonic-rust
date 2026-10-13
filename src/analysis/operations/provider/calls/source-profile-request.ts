@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -9,14 +10,14 @@ import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replace
 import { canRequireSourceClone } from "../clone-requirements.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import { rustEnclosingStorageContract } from "../../../../policy/ownership/suspended-storage.js";
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { JsOperationRequest } from "../../../../policy/operations/source-profiles/js/model.js";
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 
 export function createRustJsCallRequest(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): JsOperationRequest | undefined {
   const selectedSourceMember = resolveSelectedSourceProfileMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
@@ -104,7 +105,7 @@ export function createRustJsCallRequest(
 
 export function selectedSoleArgumentNumberKind(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): "number" | "non-number" | undefined {
   const argument = request.source.sourceArguments[0];
   if (request.source.sourceArguments.length !== 1 || argument === undefined) return undefined;

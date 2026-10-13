@@ -3,23 +3,17 @@ import type { Node } from "@tsonic/tsts";
 import {
   type SourceExpressionEffects,
 } from "@tsonic/target-api/source";
-import type {
-  RustFinalizedSourceInput,
-} from "../../../analysis/facts/finalized-operation-abi.js";
-import { rustFinalizedSourceInputs } from "../../../analysis/facts/finalized-operation-abi.js";
-import type {
-  RustTargetOperationFact,
-} from "../../../analysis/facts/keys.js";
-import {
-  rustSourceParameterAbiFactKey,
-  rustContextualValueConversionFactKey,
-} from "../../../analysis/facts/keys.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
+import { rustFinalizedSourceInputs } from "../../../analysis/operations/finalized-operation/conversions.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys } from "./provider-source-inputs.js";
-import { providerSourceInputKey } from "../../../analysis/facts/provider-source-inputs.js";
+import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
 import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
 import { rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import {
   missingFactDiagnostic,
@@ -44,7 +38,7 @@ import {
   enterRustProjectObjectMutableState,
 } from "../objects/project-objects.js";
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldHasGuardedBorrow } from "../expressions/error-field-borrows.js";
-import { rustProviderInputBorrowMode } from "../../../analysis/facts/provider-borrows.js";
+import { rustProviderInputBorrowMode } from "../../../analysis/storage/provider-borrows.js";
 import { collectMutableInputs, mutableRootsAreDisjoint, noSourceExpressionEffects,
   providerMutableStorageEffects, type MutableProviderInput } from "./provider-mutable-inputs.js";
 
@@ -229,14 +223,14 @@ export function planRustProviderEvaluationScope(
     if (!stabilizationKeys.has(slot.key)) {
       continue;
     }
-    const contextual = context.input.program.facts.getFact(slot.node, rustContextualValueConversionFactKey);
+    const contextual = context.input.program.records.contextualValueConversion.get(slot.node);
     const contract = contextual === undefined ? undefined : rustContextualRuntimeConversionContract(
       contextual.conversion, context.input.program.typeDefinitions);
     let valueContext = context;
     if (slot.evaluationOnly === undefined && contract?.category === "ownership" &&
       contract.sourceMode === "ref" && !contract.fallible &&
       contract.target.kind === "reference" && !contract.target.mutable) {
-      const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, slot.node);
+      const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.records, slot.node);
       if (!rustTargetTypeRefEquals(carrier, contract.source) ||
         !rustTargetTypeRefEquals(contextual?.sourceCarrier, contract.source) ||
         !rustTargetTypeRefEquals(contextual?.targetCarrier, contract.target)) {
@@ -436,13 +430,13 @@ function providerInputUsesExistingBorrow(
   }
   if (input.mode === "value" && input.conversion.kind === "identity" &&
     input.sourceCarrier.kind === "reference" && !input.sourceCarrier.mutable &&
-    rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(node)?.carrier, input.sourceCarrier)) {
+    rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(node)?.carrier, input.sourceCarrier)) {
     return true;
   }
   if (rustProviderInputBorrowMode(input) === "ref" && context.input.program.valueLifetimes.canBorrowStableValue(node)) {
     return true;
   }
-  const sourceParameter = context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
+  const sourceParameter = context.input.program.records.sourceParameterAbi.get(node);
   if (sourceParameter?.mode === "ref" && rustProviderInputBorrowMode(input) === "ref" &&
     sourceParameter.entryConversion === undefined && sourceParameter.parameterCarrier.kind === "reference" &&
     !sourceParameter.parameterCarrier.mutable &&

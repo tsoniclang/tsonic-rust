@@ -31,12 +31,12 @@ test("empty provider argument producers retain the exact checked native element 
   };
   program.sourceFiles.forEach(visit);
   assert.equal(literals.length, 1);
-  const selected = program.facts.getRuntimeCarrierFact(literals[0]);
+  const selected = program.records.runtimeCarrier.get(literals[0]);
   assert.equal(rustTargetTypeRefEquals(rustJsArrayLikeElementTargetType(selected?.carrier), rustStringTargetType()), true,
     "the source producer retains the selected string element, not an uninhabited fallback");
-  assert.equal(program.facts.getRuntimeCarrierFact(literals[0]) === selected, true,
+  assert.equal(program.records.runtimeCarrier.get(literals[0]) === selected, true,
     "repeated consumers read the same sealed producer evidence");
-  assert.equal("set" in program.facts, false, "consumers cannot replace sealed producer selections");
+  assert.equal("set" in program.records, false, "consumers cannot replace sealed producer selections");
 });
 
 test("compiler subprocess options preserve child state and binary results", { timeout: 300_000 }, async () => {

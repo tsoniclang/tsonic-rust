@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
+
 
 const source = `
 class Base<T> {
@@ -35,7 +35,7 @@ test("exact rest dispatch has one immutable runtime-value identity adapter", () 
   for (const name of ["Child", "Override"]) {
     const definition = program.projectTypes.definitions.find(entry => entry.sourceName === name);
     assert.ok(definition);
-    const adapters = program.facts.getFact(definition.declaration, rustProjectCallableAdaptersKey);
+    const adapters = program.records.projectCallableAdapters.get(definition.declaration);
     assert.ok(adapters.length > 0);
     for (const adapter of adapters) {
       assert.equal(adapter.parameterAdapters.length, 1);

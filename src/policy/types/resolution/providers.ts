@@ -97,11 +97,11 @@ export type RustProviderObjectLiteralConstructionSelection =
 
 export function resolveProviderTypeIdentity(
   subjects: readonly ExtensionFactSubject[],
-  context: Pick<RustSourcePolicyContext, "facts">,
+  context: Pick<RustSourcePolicyContext, "source">,
 ): ProviderDeclarationIdentity | undefined {
   let selected: ProviderDeclarationIdentity | undefined;
   for (const subject of subjects) {
-    const fact = context.facts.get(subject, providerVirtualDeclarationFactKey);
+    const fact = context.source.sourceFacts.getFact(subject, providerVirtualDeclarationFactKey);
     if (fact === undefined) {
       continue;
     }
@@ -214,7 +214,7 @@ export function instantiateProviderTargetType(
     return undefined;
   }
   const typeSubstitutions = new Map<string, TargetTypeRef>();
-  const lifetimeSubstitutions = new Map<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>();
+  const lifetimeSubstitutions = new Map<string, import("../../../target-model/lifetimes/model.js").RustLifetimeRef>();
   const constSubstitutions = new Map<string, import("../../../target-model/types/model.js").RustTargetConstArgument>();
   for (const [index, parameter] of parameters.entries()) {
     const authored = arguments_[index];
@@ -261,7 +261,7 @@ export function instantiateProviderTargetType(
 function substituteGenericArgument(
   argument: RustTargetGenericArgument,
   types: ReadonlyMap<string, TargetTypeRef>,
-  lifetimes: ReadonlyMap<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>,
+  lifetimes: ReadonlyMap<string, import("../../../target-model/lifetimes/model.js").RustLifetimeRef>,
   consts: ReadonlyMap<string, import("../../../target-model/types/model.js").RustTargetConstArgument>,
 ): RustTargetGenericArgument {
   if (argument.kind === "type") {

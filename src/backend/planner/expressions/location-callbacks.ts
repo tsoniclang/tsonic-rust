@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import { rustSelectedCallKey } from "../../../target-model/facts/selections.js";
+
 import { rustCallableProtocol, rustClosureProtocol } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -14,14 +14,14 @@ export function planRustLocationCallback(
   value: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const selected = context.input.program.facts.getFact(call, rustSelectedCallKey);
+  const selected = context.input.program.records.selectedCall.get(call);
   const carrier = selected?.member.parameters[argumentIndex]?.type;
   if (rustClosureProtocol(carrier)?.fallible === true) return value;
   const callable = rustCallableProtocol(carrier);
   if (callable === undefined || context.syntheticNames === undefined) return undefined;
   const node = context.input.program.source.ast.arguments(call)[argumentIndex];
   const source = node === undefined || carrier === undefined ? undefined : rustNativeCallableOperand(carrier, node, {
-    facts: context.input.program.facts, storage: context.input.program.callableValues.nativeStorage,
+    records: context.input.program.records, storage: context.input.program.callableValues.nativeStorage,
     producers: context.input.program.callableValues.nativeProducers, definitions: context.input.program.typeDefinitions,
   });
   if (source === undefined) return undefined;

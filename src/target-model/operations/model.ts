@@ -553,7 +553,7 @@ export interface RustSourceCallParameterPlan {
   readonly valueCarrier: TargetTypeRef;
   readonly parameterCarrier: TargetTypeRef;
   readonly mode: RustArgumentMode;
-  readonly inputLifetime?: Extract<import("../lifetimes/index.js").RustLifetimeRef, { readonly kind: "parameter" }>;
+  readonly inputLifetime?: Extract<import("../lifetimes/model.js").RustLifetimeRef, { readonly kind: "parameter" }>;
   readonly inputs: readonly {
     readonly sourceArgumentIndex: number;
     readonly sourceForm: "value" | "spread-element" | "spread-sequence";

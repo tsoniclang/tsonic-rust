@@ -4,7 +4,7 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { readRustStoredObjectField, readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { planRustBoundProjectMethodCallable } from "./properties.js";
 import { planRustOptionBranch } from "./option-branch.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustObjectLiteralMethodImplementationPlan } from "../objects/object-literal-implementations.js";

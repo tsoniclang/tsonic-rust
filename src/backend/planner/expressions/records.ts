@@ -36,15 +36,15 @@ import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/obje
 import { constructRustStructuralLiteral } from "../objects/object-literals/structural.js";
 import { rustProjectStateMarker, rustProjectStateType } from "../objects/polymorphism/names.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { tupleRustClosureArguments } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
+
 import { planRustClosedRecordLiteral } from "./closed-records.js";
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
@@ -191,7 +191,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         field?.method !== true) {
         return undefined;
       }
-      const independent = context.input.program.facts.getFact(contribution.expression, rustReceiverIndependentMethodFactKey);
+      const independent = context.input.program.records.receiverIndependentMethod.get(contribution.expression);
       const storageCarrier = independent?.carrier ?? context.input.program.structuralShapes.field(
         fact.resultCarrier, field.storageIndex,
       )?.methodStorageCarrier;
@@ -569,7 +569,7 @@ function planProviderRecordLiteral(
   }
   const fields = fact.fields.map((field) => {
     const carrier = rustEffectiveValueCarrier(
-      context.input.program.facts,
+      context.input.program.records,
       field.expression,
     );
     const value = planExpression(field.expression, context);

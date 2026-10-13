@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "../expressions/entry.js";
@@ -17,7 +17,7 @@ export interface RustAccessorReceiverEvaluation {
 }
 
 export function rustSourceAccessorHasValueReceiver(node: Node, context: RustPlanContext): boolean {
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   const receiver = Node_Expression(context.input.program.source.ast, node);
   const carrier = receiver === undefined ? undefined : effectivePlannedExpressionCarrier(receiver, context);
   return operation?.kind === "source-accessor" && operation.receiver.kind === "instance" &&

@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustCallableInputLifetimeParameters } from "../../../dist/analysis/facts/source-input-lifetimes.js";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustCallableInputLifetimeParameters } from "../../../dist/analysis/callables/source-input-lifetimes.js";
+
 import { rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
@@ -14,8 +15,8 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
   const carrier = rustCallableInputTargetType([integer], integer, lifetime);
   const ast = { parameters: declaration => declaration === owner ? [parameter] : [] };
   let selected = { parameterCarrier: carrier, inputLifetime: lifetime };
-  const facts = { getFact: (node, key) => node === parameter && key === rustSourceParameterAbiFactKey ? selected : undefined };
-  const contract = rustCallableInputLifetimeParameters(owner, ast, facts);
+  const records = createRustRecordFixture({sourceParameterAbi: { get: (node) => node === parameter ? selected : undefined }});
+  const contract = rustCallableInputLifetimeParameters(owner, ast, records);
   assert.equal(contract.length, 1);
   assert.equal(contract[0].declaration === parameter, true);
   assert.equal(contract[0].lifetime === lifetime, true);
@@ -24,8 +25,8 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
   assert.deepEqual(contract[0].outlives, []);
   const otherParameter = {};
   const sharedAst = { parameters: () => [parameter, otherParameter] };
-  const sharedFacts = { getFact: (node, key) => (node === parameter || node === otherParameter) &&
-    key === rustSourceParameterAbiFactKey ? selected : undefined };
+  const sharedFacts = createRustRecordFixture({sourceParameterAbi: { get: (node) => (node === parameter || node === otherParameter)
+    ? selected : undefined }});
   assert.equal(rustCallableInputLifetimeParameters(owner, sharedAst, sharedFacts).length, 1,
     "one shared physical lifetime contributes one native generic binder");
   for (const mutation of [undefined, { parameterCarrier: carrier },
@@ -33,7 +34,7 @@ test("physical callback lifetimes come only from matching sealed parameter ABI e
     { parameterCarrier: { ...carrier, referent: integer }, inputLifetime: lifetime },
     { parameterCarrier: carrier, inputLifetime: { ...lifetime, identity: "foreign/input" } }]) {
     selected = mutation;
-    assert.equal(rustCallableInputLifetimeParameters(owner, ast, facts).length, 0);
+    assert.equal(rustCallableInputLifetimeParameters(owner, ast, records).length, 0);
   }
 });
 
@@ -53,8 +54,8 @@ export async function invoke<Value>(callback: () => Promise<Value>): Promise<Val
   assert.equal(owners.length, 1);
   const owner = owners[0];
   const parameter = ast.parameters(owner)[0];
-  const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
-  const contract = rustCallableInputLifetimeParameters(owner, ast, program.facts);
+  const abi = program.records.sourceParameterAbi.get(parameter);
+  const contract = rustCallableInputLifetimeParameters(owner, ast, program.records);
   assert.equal(contract.length, 0);
   assert.equal(abi.inputLifetime === undefined, true, "owning a callback does not borrow its caller's storage");
   assert.equal(abi.parameterCarrier.kind === "reference", false);

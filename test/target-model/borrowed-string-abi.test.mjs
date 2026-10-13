@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustBorrowedStrTargetType, rustStrTargetType, rustStringTargetType,
   rustSourceOptionalTargetType } from "../../dist/target-model/types/index.js";
 import { rustValueConversionContract } from "../../dist/target-model/conversions/contracts.js";
-import { finalizeValueConversion, finalizedConversionIsValid } from "../../dist/analysis/facts/finalized-operation/conversions.js";
+import { finalizeValueConversion, finalizedConversionIsValid } from "../../dist/analysis/operations/finalized-operation/conversions.js";
 
 test("owned, borrowed and optional string conversions share the exact native str carrier", () => {
   const string = rustStringTargetType();

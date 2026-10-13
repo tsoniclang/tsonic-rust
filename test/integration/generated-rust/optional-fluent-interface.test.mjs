@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustSourceCallableReturnFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
@@ -41,7 +41,7 @@ for (const surface of ["native", "js"]) {
     for (const member of ast.members(definition.declaration)) {
       assert.equal(member !== undefined, true, "RoutingHost member");
       const name = ast.text(ast.name(member));
-      const returnCarrier = program.facts.getFact(member, rustSourceCallableReturnFactKey)?.returnCarrier;
+      const returnCarrier = program.records.sourceCallableReturn.get(member)?.returnCarrier;
       assert.equal(returnCarrier !== undefined, true, `${name}: finalized return carrier`);
       if (name === "route") {
         const selected = rustSourceTypeCarrierValue(returnCarrier);

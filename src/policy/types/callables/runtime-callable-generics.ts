@@ -1,4 +1,5 @@
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../operations/contracts.js";
+import type { RustOperationPolicyContext } from "../../model/operation-context.js";
+import type { RustCheckedCallSelectionInput } from "../../operations/contracts.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
 import { asNode } from "../../identities/selected-source.js";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";

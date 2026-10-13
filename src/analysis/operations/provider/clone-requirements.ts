@@ -1,5 +1,6 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSourceTypeFamilyRegistry } from "../../../target-model/types/type-families.js";
 import { createRustOptionalStorageCollector } from "../../declarations/type-projections.js";
@@ -10,7 +11,7 @@ import type { RustGenericRequirement } from "../../declarations/generic-requirem
 export function canRequireSourceClone(
   carrier: TargetTypeRef,
   expression: Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   families: RustSourceTypeFamilyRegistry,
 ): boolean {
   const parameters = new Set<string>();

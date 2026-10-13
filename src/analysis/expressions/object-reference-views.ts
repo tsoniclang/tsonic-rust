@@ -3,7 +3,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustObjectReferenceViewKey, type RustObjectReferenceView } from "../facts/object-reference-views.js";
+
+import type { RustObjectReferenceView } from "../../target-model/records/object-reference-views.js";
 import { selectRustStructuralFieldProjection } from "../../policy/types/objects/structural-fields.js";
 import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
@@ -20,7 +21,7 @@ export function recordRustObjectReferenceView(
   if (instance !== undefined) {
     const definition = walk.context.projectTypes.definitionForCarrier(instance);
     if (definition?.kind !== "class" || !selectRustClassValueView(walk, expression, definition.declaration, targetCarrier)) return false;
-    walk.context.facts.set(expression, rustObjectReferenceViewKey, {
+    walk.context.records.objectReferenceView.set(expression, {
       kind: "constructor", declaration: definition.declaration, sourceCarrier, targetCarrier,
     });
     return true;
@@ -34,7 +35,7 @@ export function recordRustObjectReferenceView(
   if (sourceType === undefined) return false;
   if (project !== undefined) {
     if (!selectRustProjectStructuralView(walk, project.declaration, sourceCarrier, targetCarrier, semantics, sourceType)) return false;
-    walk.context.facts.set(expression, rustObjectReferenceViewKey, {
+    walk.context.records.objectReferenceView.set(expression, {
       kind: "project", declaration: project.declaration, sourceCarrier, targetCarrier,
     }, [{ message: "rust exact class-to-structural native root projection" }]);
     return true;
@@ -66,7 +67,6 @@ export function recordRustObjectReferenceView(
     if (!walk.sourceTypes.registerStructuralFieldImplementation({carrier: targetCarrier,
       storageIndex: field.destinationIndex, kind: "accessor"})) return false;
   }
-  walk.context.facts.set(expression, rustObjectReferenceViewKey,
-    {kind: "structural", sourceCarrier, targetCarrier, fields: Object.freeze(fields)}, [{message: "rust exact identity-preserving structural view"}]);
+  walk.context.records.objectReferenceView.set(expression, {kind: "structural", sourceCarrier, targetCarrier, fields: Object.freeze(fields)}, [{message: "rust exact identity-preserving structural view"}]);
   return true;
 }

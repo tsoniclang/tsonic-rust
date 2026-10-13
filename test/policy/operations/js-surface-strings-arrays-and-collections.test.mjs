@@ -1,13 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  artifactText,
-  assertRustTargetRejection,
-  compileRust,
-  createRustSession,
-  rustSourceDiagnostics,
-} from "../../helpers/rust-session.mjs";
+import { artifactText, assertRustTargetRejection, compileRust } from "../../helpers/rust-session.mjs";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
 import { rustBorrowedStrTargetType } from "../../../dist/target-model/types/carriers/native.js";

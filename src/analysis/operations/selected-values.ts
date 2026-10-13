@@ -1,11 +1,13 @@
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+
 import type { ExtensionFactSubject } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
+
 import { resolveRustTargetTypeRef, type RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
 import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "../expressions/absence-use.js";
@@ -14,7 +16,7 @@ import { rustOptionElementCarrier, rustSourceOptionalElementCarrier } from "../.
 export function selectedValueCarrier(
   expression: ExtensionFactSubject,
   selectedType: ExtensionFactSubject,
-  operationContext: RustOperationPolicyContext,
+  operationContext: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions & { readonly projectTypes: RustProjectTypePolicy },
 ): TargetTypeRef | undefined {
   const reference = rustPolicyNode(operationContext, expression);
@@ -24,7 +26,7 @@ export function selectedValueCarrier(
   const absenceUse = reference === undefined ? undefined : rustSourceAbsenceUse(reference, context);
   if (stored !== undefined && reference !== undefined &&
     rustOptionElementCarrier(stored) !== undefined && absenceUse === "comparison") return stored;
-  const effective = rustSourceAbsenceReadCarrier(stored, rustEffectiveValueCarrier(context.facts, expression), absenceUse);
+  const effective = rustSourceAbsenceReadCarrier(stored, rustEffectiveValueCarrier(context.records, expression), absenceUse);
   const present = rustSourceOptionalElementCarrier(effective);
   if (absenceUse === undefined && effective !== undefined && present !== undefined && reference !== undefined) {
     const types = context.semanticsFor(reference).types;
@@ -34,7 +36,7 @@ export function selectedValueCarrier(
       !types.isNullish(member) && !types.isVoidLike(member) && !types.couldContainTypeVariables(member))) {
       const projection = selectRustFlowReadProjection(effective, present, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
-        recordRustFlowReadProjection(context.facts, expression, projection.fact);
+        recordRustFlowReadProjection(context.records, expression, projection.fact);
         return present;
       }
     }
@@ -52,7 +54,7 @@ export function selectedValueCarrier(
   }
   const flowRead = selectRustFlowReadProjection(stored, selected, options.projectTypes, context.typeDefinitions);
   if (flowRead.kind === "projection") {
-    recordRustFlowReadProjection(context.facts, expression, flowRead.fact);
+    recordRustFlowReadProjection(context.records, expression, flowRead.fact);
     return selected;
   }
   if (stored.kind === "reference" && rustTargetTypeRefEquals(stored.referent, selected)) {

@@ -1,5 +1,6 @@
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
-import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../facts/keys.js";
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
+import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import { rustFixedArrayCarrierValue, rustTargetConstInteger } from "../../../../target-model/types/index.js";
@@ -11,7 +12,7 @@ export function selectedCallSourceParameterCarriers(
   request: RustCheckedCallSelectionInput,
   fact: RustProviderOperationTemplate,
   declared: readonly (TargetTypeRef | undefined)[] | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): ReadonlyMap<number, TargetTypeRef | undefined> | undefined {
   const evaluationOnlyIndexes = new Set(fact.evaluationOnlySourceArgumentIndexes ?? []);

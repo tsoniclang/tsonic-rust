@@ -1,7 +1,10 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { recordRustModuleCallableStorage, rustModuleCallableStorageFactKey } from "../../../dist/analysis/callables/module-values.js";
-import { rustContextualValueConversionFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "../../../dist/analysis/facts/keys.js";
+import { recordRustModuleCallableStorage } from "../../../dist/analysis/callables/module-values.js";
+
+
+
 import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/index.js";
 import { createRustModuleInitializationPlan } from "../../../dist/analysis/module-initialization/analyze.js";
@@ -14,10 +17,10 @@ function classify({ exported = false, kind = "first-class", direct = source, con
   const declaration = {};
   const reference = {};
   const values = new Map([
-    [declaration, new Map([[rustModuleBindingFactKey, { storage: "native-callable", value: { carrier: source } }]])],
+    [declaration, new Map([["moduleBinding", { storage: "native-callable", value: { carrier: source } }]])],
     [reference, new Map([
-      [rustDirectCallableReferenceFactKey, direct === null ? undefined : { carrier: direct }],
-      [rustContextualValueConversionFactKey, conversion ? { targetCarrier: target,
+      ["directCallableReference", direct === null ? undefined : { carrier: direct }],
+      ["contextualValueConversion", conversion ? { targetCarrier: target,
         conversion: selectRustCallableConversion(source, target, () => undefined) } : undefined],
     ])],
   ]);
@@ -26,10 +29,17 @@ function classify({ exported = false, kind = "first-class", direct = source, con
     source: { navigation: { declarationUseSummary() { return { exported }; },
       expressionValueFlow() { return { aliasDeclarations: [] }; },
       declarationUses() { return [{ kind, reference }]; } } },
-    facts: { get(node, key) { return values.get(node)?.get(key); },
-      set(node, key, value) { values.get(node).set(key, value); } },
+    records: createRustRecordFixture({
+      moduleBinding: { get: node => values.get(node)?.get("moduleBinding") },
+      directCallableReference: { get: node => values.get(node)?.get("directCallableReference") },
+      contextualValueConversion: { get: node => values.get(node)?.get("contextualValueConversion") },
+      moduleCallableStorage: {
+        get: node => values.get(node)?.get("moduleCallableStorage"),
+        set: (node, value) => values.get(node).set("moduleCallableStorage", value),
+      },
+    }),
   } });
-  return values.get(declaration).get(rustModuleCallableStorageFactKey);
+  return values.get(declaration).get("moduleCallableStorage");
 }
 
 test("private immutable native adapters need no unused cached callable storage", () => {
@@ -58,12 +68,16 @@ test("module initialization consumes the same sealed callable storage decision",
         forEachChild(node, visit) { if (node === statement) visit(declaration); } },
       sourceFiles: [sourceFile],
       source: { navigation: { moduleDependencies() { return []; } } },
-      facts: { getFact(node, key) {
-        if (node !== declaration) return undefined;
-        if (key === rustModuleBindingFactKey) return { storage: "native-callable", value: { carrier: source } };
-        if (key === rustModuleCallableStorageFactKey) return storage;
+      records: createRustRecordFixture({moduleBinding: { get: (node) => {
+    if (node !== declaration)
         return undefined;
-      } },
+    return { storage: "native-callable", value: { carrier: source } };
+} },
+moduleCallableStorage: { get: (node) => {
+    if (node !== declaration)
+        return undefined;
+    return storage;
+} }}),
     }, {});
     assert.equal(plan.requirementFor(sourceFile).kind, expected);
     assert.equal(plan.minimumFoundation(), expected === "required" ? "std" : "core");

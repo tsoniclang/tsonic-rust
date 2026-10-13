@@ -4,12 +4,8 @@ import type {
 import {
   rustTargetTypeRefEquals,
 } from "../../../target-model/types/equality.js";
-import type {
-  RustTargetOperationFact,
-} from "../../../analysis/facts/keys.js";
-import {
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+
 import type {
   RustExpr,
 } from "../../target-ast/syntax/nodes.js";
@@ -23,7 +19,7 @@ import type {
   RustPlanContext,
 } from "../program/plan-context.js";
 import { tryPlanRustRawAddress } from "./raw-addresses.js";
-import { rustMemoryLayoutObservationKey } from "../../../target-model/operations/memory-layout.js";
+
 import { tryPlanRustRawLocation } from "./native-memory.js";
 import { tryPlanRustMemoryBinding } from "./memory-bindings.js";
 
@@ -40,11 +36,11 @@ export function tryPlanRustNativePointerOperation(
   const memoryBinding = tryPlanRustMemoryBinding(node, context, planExpression);
   if (memoryBinding.handled) return memoryBinding;
   if (rawLocation.handled) return { handled: true, expression: rawLocation.expression };
-  const layout = context.input.program.facts.getFact(node, rustMemoryLayoutObservationKey);
+  const layout = context.input.program.records.memoryLayoutObservation.get(node);
   if (layout !== undefined) return { handled: true, expression: { kind: "int-literal", text: `${layout.value}usize` } };
   const rawAddress = tryPlanRustRawAddress(node, context, planExpression);
   if (rawAddress.handled) return { handled: true, expression: rawAddress.expression };
-  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const fact = context.input.program.records.targetOperation.get(node);
   if (fact?.kind !== "native-pointer") {
     return { handled: false };
   }
@@ -117,9 +113,7 @@ function nativePointerFactIsClosed(
   fact: Extract<RustTargetOperationFact, { readonly kind: "native-pointer" }>,
   context: RustPlanContext,
 ): boolean {
-  const pointerCarrier = context.input.program.facts.getRuntimeCarrierFact(
-    fact.pointerExpression,
-  )?.carrier;
+  const pointerCarrier = context.input.program.records.runtimeCarrier.get(fact.pointerExpression)?.carrier;
   if (!rustTargetTypeRefEquals(pointerCarrier, fact.pointerCarrier) ||
     !rustTargetTypeRefEquals(fact.pointerCarrier.pointee, fact.pointeeCarrier)) {
     return false;
@@ -130,7 +124,7 @@ function nativePointerFactIsClosed(
   if (fact.operation === "store") {
     const valueCarrier = fact.valueExpression === undefined
       ? undefined
-      : context.input.program.facts.getRuntimeCarrierFact(fact.valueExpression)?.carrier;
+      : context.input.program.records.runtimeCarrier.get(fact.valueExpression)?.carrier;
     return fact.pointerCarrier.mutability === "mut" &&
       rustTargetTypeRefEquals(fact.valueCarrier, fact.pointeeCarrier) &&
       rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier) &&
@@ -139,7 +133,7 @@ function nativePointerFactIsClosed(
   }
   const offsetCarrier = fact.offsetExpression === undefined
     ? undefined
-    : context.input.program.facts.getRuntimeCarrierFact(fact.offsetExpression)?.carrier;
+    : context.input.program.records.runtimeCarrier.get(fact.offsetExpression)?.carrier;
   return rustTargetTypeRefEquals(offsetCarrier, fact.offsetCarrier) &&
     fact.offsetCarrier?.kind === "source-primitive" &&
     fact.offsetCarrier.name === "native-int" &&

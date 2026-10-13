@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { isValidRustIdentifier, sourceModuleItemPath } from "../../program/plan-context.js";
 import { rustModuleCellAccess } from "../../project/module-storage.js";

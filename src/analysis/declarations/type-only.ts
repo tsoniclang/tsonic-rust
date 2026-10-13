@@ -2,10 +2,10 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { sourceClassFieldIsTypeOnly, VariableDeclarationList_Declarations, VariableStatement_DeclarationList } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
+
 
 export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
-  const { ast, source, typeFamilies, facts } = walk.context;
+  const { ast, source, typeFamilies, records } = walk.context;
   const families = new Set(typeFamilies.families().flatMap(family =>
     family.kind === "conditional" ? [family.declaration] : []));
   const belongsToFamily = (node: Node): boolean => {
@@ -26,7 +26,7 @@ export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: 
     for (const statement of ast.statements(sourceFile)) {
       if (statement === undefined) throw new Error("Type-only declaration analysis received an incomplete checked source file.");
       if (ast.is.IsVariableStatement(statement) && ast.hasModifierKind(statement, "ambient")) {
-        facts.set(statement, rustTypeOnlyDeclarationFactKey, { reason: "ambient" });
+        records.typeOnlyDeclaration.set(statement, { reason: "ambient" });
         const declarations = VariableDeclarationList_Declarations(ast, VariableStatement_DeclarationList(ast, statement));
         if (declarations === undefined || declarations.some(declaration => declaration === undefined)) {
           throw new Error("Ambient declaration analysis received an incomplete checked declaration list.");
@@ -38,7 +38,7 @@ export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: 
               "A runtime read of an authored ambient variable requires an exact native implementation.", use.reference,
               ["target.capability=rust.ambient-value.implementation"]);
           }
-          facts.set(declaration, rustTypeOnlyDeclarationFactKey, { reason: "ambient" });
+          records.typeOnlyDeclaration.set(declaration, { reason: "ambient" });
         }
         continue;
       }
@@ -50,7 +50,7 @@ export function recordRustTypeOnlyDeclarations(walk: RustFactWalk, sourceFiles: 
       const uses = source.navigation.declarationUses(statement);
       if (!uses.some(use => belongsToFamily(use.reference)) ||
         uses.some(use => use.kind !== "source-linkage" && !belongsToFamily(use.reference))) continue;
-      facts.set(statement, rustTypeOnlyDeclarationFactKey, { reason: "type-family-predicate" });
+      records.typeOnlyDeclaration.set(statement, { reason: "type-family-predicate" });
     }
   }
 }

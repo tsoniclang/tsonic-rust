@@ -1,6 +1,6 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
+
 import {
   allocateRustComponentSupportModuleName,
   type RustSourceFileOutputIdentity,
@@ -105,7 +105,7 @@ export function planRustSourcePackageInitializers(
       implementationFunctionName: rustModuleInitializerFunctionName(input, sourceFile),
       facadeModuleName,
       asynchronous: input.program.sourceNavigation.moduleHasTopLevelAwait(sourceFile),
-      fallible: input.program.facts.getFact(sourceFile, rustFallibleFactKey) !== undefined,
+      fallible: input.program.records.fallible.get(sourceFile) !== undefined,
     });
   }
   if (diagnostics.length > 0) {

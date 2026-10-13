@@ -22,15 +22,10 @@ import {
 } from "@tsonic/target-api/source";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
-import {
-  rustAsyncFunctionFactKey,
-  rustClosureCaptureFactKey,
-  rustGeneratorFactKey,
-  rustMutatedBindingFactKey,
-  rustMutatedReferentFactKey,
-  rustSourceCallableReturnFactKey,
-  rustSourceParameterAbiFactKey,
-} from "../../../analysis/facts/keys.js";
+
+
+
+
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../target-ast/normalization/block-flow.js";
 import { planRustReturnExit } from "../statements/completion-exits.js";
@@ -50,7 +45,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";
+
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import { rustCallableInputProtocol } from "../../../target-model/types/carriers/callables.js";
@@ -61,7 +56,7 @@ import { wrapRustJsPromiseBody } from "../declarations/callables/async-promise.j
 import { planRustSuspendedCallableConstruction } from "./suspended-callables.js";
 import { planRustParameterEntryConversion } from "../declarations/callables/parameter-entry-conversion.js";
 import { planRustCallableLeadingParameters } from "../declarations/callables/leading-parameters.js";
-import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
+import { finalizedConversionIsValid } from "../../../analysis/operations/finalized-operation/conversions.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers, rustRecursiveReceiverFieldContext,
   validateRustRecursiveReceiverField } from "./receiver-captures.js";
@@ -72,7 +67,7 @@ export function planCallableExpression(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
-  return resultUse !== "discarded" && context.input.program.facts.getFact(node, rustClosureCaptureFactKey)?.invocationOwner === "shared-state"
+  return resultUse !== "discarded" && context.input.program.records.closureCapture.get(node)?.invocationOwner === "shared-state"
     ? planRustSuspendedCallableConstruction(node, context)
     : planRustCallableExpressionBody(node, context, resultUse);
 }
@@ -95,7 +90,7 @@ export function planRustCallableExpressionBody(
   if (!requireExpressionCarrier(node, closureFact.resultCarrier, context, "rust.backend.closure-carrier")) {
     return undefined;
   }
-  const captureFact = context.input.program.facts.getFact(node, rustClosureCaptureFactKey);
+  const captureFact = context.input.program.records.closureCapture.get(node);
   if (captureFact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -106,7 +101,7 @@ export function planRustCallableExpressionBody(
   }
   if (!validateRustRecursiveReceiverField(node, captureFact, closureFact.resultCarrier, context)) return undefined;
   if (resultUse === "discarded") return { kind: "tuple-literal", elements: [] };
-  const independent = context.input.program.facts.getFact(node, rustReceiverIndependentMethodFactKey);
+  const independent = context.input.program.records.receiverIndependentMethod.get(node);
   const frameAlternative = rustIndependentFrameConstruction(node, closureFact.resultCarrier, context);
   const constructionCarrier = frameAlternative?.carrier ?? independent?.carrier ?? closureFact.resultCarrier;
   if (rustFrameCallableValue(constructionCarrier) !== undefined)
@@ -212,7 +207,7 @@ export function planRustCallableExpressionBody(
       return undefined;
     }
     const parameterCarrier = parameterCarriers[index];
-    const parameterAbi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+    const parameterAbi = context.input.program.records.sourceParameterAbi.get(parameter);
     if (parameterCarrier === undefined || parameterAbi === undefined ||
       !rustTargetTypeRefEquals(parameterCarrier, parameterAbi.parameterCarrier) ||
       (callableProtocol === undefined && closureFact.parameterForms === "required-only" &&
@@ -236,9 +231,9 @@ export function planRustCallableExpressionBody(
       form: parameterAbi.form,
       byRefCopy,
       mutable: bindingPattern === undefined &&
-        (context.input.program.facts.getFact(parameter, rustMutatedBindingFactKey) !== undefined ||
+        (context.input.program.records.mutatedBinding.get(parameter) !== undefined ||
           ownedBinding && referentMutationRequiresMutableBinding &&
-            context.input.program.facts.getFact(parameter, rustMutatedReferentFactKey) !== undefined),
+            context.input.program.records.mutatedReferent.get(parameter) !== undefined),
     });
     if (bindingPattern !== undefined) {
       if (byRefCopy) {
@@ -267,8 +262,8 @@ export function planRustCallableExpressionBody(
     return undefined;
   }
   const fallible = errorRegion.boundary !== undefined;
-  const generator = context.input.program.facts.getFact(node, rustGeneratorFactKey);
-  const asynchronous = context.input.program.facts.getFact(node, rustAsyncFunctionFactKey);
+  const generator = context.input.program.records.generator.get(node);
+  const asynchronous = context.input.program.records.asyncFunction.get(node);
   const suspended = generator !== undefined || asynchronous !== undefined;
   const bodyResultCarrier = generator?.returnType ?? asynchronous?.outputCarrier ?? resultCarrier;
   if (ast.hasModifierKind(node, "async") && !suspended) {
@@ -421,7 +416,7 @@ export function planRustCallableExpressionBody(
       })),
       ...sourceParameterPlans.map((parameter) => ({
         name: parameter.name,
-        mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined,
+        mutable: parameter.mutable && context.input.program.records.sourceParameterAbi.get(parameter.parameter)?.entryConversion === undefined,
         byRefCopy: parameter.byRefCopy,
       })),
       ...closureFact.ignoredParameterCarriers.map(() => ({ name: "_", mutable: false })),
@@ -473,7 +468,7 @@ export function planRustCallableExpressionBody(
       bindingStatements.push({
         kind: "let",
         name: parameter.name,
-        mutable: parameter.mutable && context.input.program.facts.getFact(parameter.parameter, rustSourceParameterAbiFactKey)?.entryConversion === undefined,
+        mutable: parameter.mutable && context.input.program.records.sourceParameterAbi.get(parameter.parameter)?.entryConversion === undefined,
         init: initializer,
       });
     }
@@ -505,7 +500,7 @@ export function planRustCallableExpressionBody(
     ));
     return undefined;
   }
-  const sourceReturn = context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey);
+  const sourceReturn = context.input.program.records.sourceCallableReturn.get(node);
   const bodyContext: RustPlanContext = {
     ...callableClosureContext,
     functionReturnType: resultType,

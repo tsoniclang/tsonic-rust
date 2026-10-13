@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { isRustJsArrayCarrier, isRustNumericCarrier, rustStringTargetType } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import {
@@ -13,10 +14,10 @@ import { rustOptionElementCarrier, rustOptionTargetType } from "../../../target-
 import { Node_Type } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./result.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
-import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
-import { rustProjectCallableTargetName } from "../../facts/source-member-name.js";
-import { rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../facts/keys.js";
-import { rustCallableInvocationResult } from "../../facts/callable-results.js";
+
+import { rustProjectCallableTargetName } from "../../names/source-member-name.js";
+
+import { rustCallableInvocationResult } from "../../callables/results.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
@@ -30,17 +31,11 @@ import {
   selectObjectShapeProjectionFields,
 } from "./object-shape-fields.js";
 import type { SelectedObjectShapeProjection } from "./object-shape-fields.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedCallSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-  RustTargetOperationSelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustTargetMember, TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointers/return.js";
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
@@ -55,7 +50,7 @@ export function mapSelectedJsSpecialCall(
   request: RustCheckedCallSelectionInput,
   ownerName: string,
   memberName: string,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const objectProjection = selectedObjectShapeProjection(
@@ -130,7 +125,7 @@ function selectedObjectShapeProjection(
 function mapSelectedObjectShapeProjection(
   request: RustCheckedCallSelectionInput,
   selection: SelectedObjectShapeProjection,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const sourceArguments = request.source.sourceArguments;
@@ -355,7 +350,7 @@ function mapSelectedObjectShapeProjection(
       : "by-value" as const);
   for (const [index, argument] of sourceArguments.entries()) {
     const mode = parameterModes[index]!;
-    context.facts.set(argument.expression, rustArgumentPassingKey, {
+    context.records.argumentPassing.set(argument.expression, {
       mode,
       ...(mode === "borrow-shared"
         ? { storageExpression: argument.expression }
@@ -394,24 +389,19 @@ function mapSelectedObjectShapeProjection(
     ...selectedRustCallSignature(request, member),
     ...(!selection.static ? { sourceSelectedReceiverCarrier: sourceValueCarrier } : {}),
   };
-  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
+  context.records.targetOperation.set(request.source.call, fact, evidence);
   if (optionalResult.fact !== undefined) {
-    context.facts.set(
-      request.source.call,
-      rustOptionalChainFactKey,
-      optionalResult.fact,
-      [{ message: `rust optional Object.${selection.sourceName} projection` }],
-    );
+    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional Object.${selection.sourceName} projection` }]);
   }
-  context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
-  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.records.selectedOperation.set(request.source.call, operation, evidence);
+  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
 export function acceptProjectSourceCall(
   request: RustCheckedCallSelectionInput,
   selectedDeclaration: Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const { ast } = context;
@@ -635,7 +625,7 @@ export function acceptProjectSourceCall(
     returnType = ownerCarrier;
   } else {
     const sourceReturn = Node_Type(ast, callableDeclaration) ?? request.source.sourceResultType;
-    const declaredReturnType = rustCallableInvocationResult(context.facts, callableDeclaration) ??
+    const declaredReturnType = rustCallableInvocationResult(context.records, callableDeclaration) ??
       selectRustPointerReturnCarrier(callableDeclaration, context, options) ?? rustGenericCallableValueOwner(ast, callableDeclaration, (sourceReturn === undefined
       ? undefined
       : resolveRustTargetTypeRef(sourceReturn, context, options)));
@@ -750,14 +740,9 @@ export function acceptProjectSourceCall(
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
   };
   if (optionalResult.fact !== undefined) {
-    context.facts.set(
-      request.source.call,
-      rustOptionalChainFactKey,
-      optionalResult.fact,
-      [{ message: `rust optional call ${optionalResult.fact.lowering}` }],
-    );
+    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
   }
-  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature);
+  context.records.selectedCall.set(request.source.call, selectedSignature);
   return acceptRustPolicy({
     selectedSignature,
   }, [{ message: `rust selected project-source call ${member.id}` }]);

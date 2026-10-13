@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { suspendedProjectContractsSource } from "../../../../tsonic/test/fixtures/suspended-project-contracts.mjs";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustAsyncFunctionFactKey, rustSourceCallableReturnFactKey, rustSourceCallEffectsFactKey, rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustCallableInvocationResult } from "../../../dist/analysis/facts/callable-results.js";
-import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
+
+
+
+import { rustCallableInvocationResult } from "../../../dist/analysis/callables/results.js";
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 test("suspended interface results consume sealed parameters and preserve exact physical effects", () => {
@@ -21,26 +23,26 @@ test("suspended interface results consume sealed parameters and preserve exact p
     const declaration = member(owner, name);
     const selectedParameters = ast.parameters(declaration);
     assert.equal(selectedParameters.length, parameters);
-    assert.equal(selectedParameters.every(parameter => program.facts.getFact(parameter, rustSourceParameterAbiFactKey) !== undefined), true);
-    const invocation = rustCallableInvocationResult(program.facts, declaration);
+    assert.equal(selectedParameters.every(parameter => program.records.sourceParameterAbi.get(parameter) !== undefined), true);
+    const invocation = rustCallableInvocationResult(program.records, declaration);
     assert.equal(invocation !== undefined, true, owner + " physical result");
     assert.equal(invocation.id, "rust.js.JsPromise");
-    assert.equal(program.facts.getFact(declaration, rustSourceCallableReturnFactKey) !== undefined, true);
+    assert.equal(program.records.sourceCallableReturn.get(declaration) !== undefined, true);
   }
   for (const [owner, name, invocation] of [
     ["Writer", "save", "infallible"], ["Completion", "finish", "infallible"],
     ["Failure", "fail", "fallible"], ["ImmediateFailure", "fail", "fallible"],
     ["DeferredFailure", "fail", "infallible"],
-  ]) assert.equal(program.facts.getFact(member(owner, name), rustSourceCallEffectsFactKey)?.invocation, invocation, owner);
+  ]) assert.equal(program.records.sourceCallEffects.get(member(owner, name))?.invocation, invocation, owner);
   for (const [owner, name] of [["AsyncWriter", "save"], ["DeferredFailure", "fail"]]) {
-    assert.equal(program.facts.getFact(member(owner, name), rustAsyncFunctionFactKey)?.kind, "js-promise", owner);
+    assert.equal(program.records.asyncFunction.get(member(owner, name))?.kind, "js-promise", owner);
   }
   for (const owner of ["AsyncWriter", "DerivedWriter", "EmptyCompletion", "ImmediateFailure", "DeferredFailure"]) {
     const definition = program.projectTypes.definitions.find(candidate => candidate.sourceName === owner);
-    const adapters = program.facts.getFact(definition.declaration, rustProjectCallableAdaptersKey);
+    const adapters = program.records.projectCallableAdapters.get(definition.declaration);
     assert.equal(adapters !== undefined && adapters.length > 0, true, owner + " adapters");
     assert.equal(Object.isFrozen(adapters), true);
     assert.equal(adapters.every(adapter => rustTargetTypeRefEquals(adapter.implementationReturnCarrier,
-      rustCallableInvocationResult(program.facts, adapter.implementation))), true, owner + " invocation ABI");
+      rustCallableInvocationResult(program.records, adapter.implementation))), true, owner + " invocation ABI");
   }
 });

@@ -9,7 +9,7 @@ import type {
   TargetSourceProgram,
 } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TsonicPointerReturnQueries, TsonicMemoryBindingIndex } from "@tsonic/source-core/facts";
@@ -29,7 +29,7 @@ export interface RustSourcePolicyContext {
   readonly memoryBindings: TsonicMemoryBindingIndex;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly diagnostics: TargetDiagnostic[];

@@ -32,10 +32,10 @@ import { checkRustDataWrite } from "../data-writes.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 
 export function planContractImplementation(
-  contract: import("../../../../analysis/project-types/type-policy.js").RustProjectInstanceContract,
+  contract: import("../../../../target-model/types/project-types.js").RustProjectInstanceContract,
   rootType: RustType,
   wrapperType: RustType,
-  contracts: readonly import("../../../../analysis/project-types/type-policy.js").RustProjectInstanceContract[],
+  contracts: readonly import("../../../../target-model/types/project-types.js").RustProjectInstanceContract[],
   stateFields: readonly RustObjectLiteralImplementationPlan["stateFields"][number][],
   accessors: readonly RustObjectLiteralAccessorImplementationPlan[],
   methods: readonly RustObjectLiteralMethodDispatchPlan[],

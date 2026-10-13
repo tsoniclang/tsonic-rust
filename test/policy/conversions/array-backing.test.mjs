@@ -4,7 +4,8 @@ import { selectRustSourceValueConversion } from "../../../dist/policy/conversion
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { rustContextualRuntimeConversionContract } from "../../../dist/target-model/conversions/contextual.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { rustJsArrayTargetType, rustJsArrayValueTargetType, rustJsValueTargetType, rustJsErrorTargetType, rustOptionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 const broad = rustJsValueTargetType();

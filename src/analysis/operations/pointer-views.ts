@@ -1,10 +1,7 @@
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+
 import { selectTsonicPointerView } from "@tsonic/source-core/facts";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedCallSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
@@ -21,7 +18,7 @@ import { rejectSelectedOperation } from "./provider/result.js";
 
 export function selectRustPointerViewCall(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const selected = selectTsonicPointerView(context.ast, context.source.sourceFacts, request.source.call);

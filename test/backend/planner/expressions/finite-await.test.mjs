@@ -1,10 +1,11 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
-import { rustAwaitValueFactKey } from "../../../../dist/analysis/facts/await-values.js";
+
+
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustAwaitExpression } from "../../../../dist/backend/planner/expressions/await.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
@@ -14,9 +15,9 @@ function awaitProgram(source) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
   const operations = [];
   const visit = node => {
-    const operation = program.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "await-op") operations.push({ node, operation,
-      fact: program.facts.getFact(node, rustAwaitValueFactKey) });
+      fact: program.records.awaitValue.get(node) });
     for (const child of program.source.ast.children(node)) visit(child);
   };
   for (const sourceFile of program.sourceFiles) visit(sourceFile);
@@ -24,9 +25,9 @@ function awaitProgram(source) {
   return { program, ...operations[0] };
 }
 
-function contextFor(program, node, facts = program.facts) {
+function contextFor(program, node, records = program.records) {
   const { ast } = program.source;
-  return { input: { program: { ...program, facts } }, diagnostics: [],
+  return { input: { program: { ...program, records } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
@@ -109,9 +110,10 @@ export async function read(value: uint64 | Promise<uint64>): Promise<uint64> { r
           future: { ...alternative.selection.value.future, errorBoundary: "none" } } } }) } },
   ];
   for (const mutation of mutations) {
-    const facts = { ...program.facts, getFact: (subject, key) => subject === node && key === rustAwaitValueFactKey
-      ? mutation : program.facts.getFact(subject, key) };
-    const selected = contextFor(program, node, facts);
+    const records = createRustRecordFixture({...program.records,
+awaitValue: { get: (subject) => subject === node
+    ? mutation : program.records.awaitValue.get(subject) }});
+    const selected = contextFor(program, node, records);
     assert.equal(planRustAwaitExpression(node, selected, () => {
       assert.fail("an invalid await contract must not reach operand planning");
     }), undefined);

@@ -1,0 +1,148 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
+import { rustSelectedTargetSignatureEquals } from "../../../../dist/target-model/types/equality.js";
+
+const integer = { kind: "source-primitive", name: "int32" };
+const text = { kind: "target-named", id: "rust.std.String" };
+const first = Object.create(null);
+const second = Object.create(null);
+Object.defineProperty(first, "Parent", { get() { throw new Error("AST traversal is forbidden"); } });
+Object.defineProperty(second, "Parent", { get() { throw new Error("AST traversal is forbidden"); } });
+const sourceNodes = new Set([first, second]);
+
+test("selected callable identity includes the exact generic owner independently of its receiver", () => {
+  const signature = {
+    member: { id: "owner.read", sourceName: "read", targetName: "read", kind: "method", parameters: [], returnType: integer },
+    sourceSelectedOwnerCarrier: integer,
+    sourceSelectedReceiverCarrier: text,
+  };
+  assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true);
+  assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: text }), false);
+  assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: undefined }), false);
+});
+
+function copyMetadata(value, replace = undefined) {
+  if (sourceNodes.has(value)) return replace?.(value) ?? value;
+  if (Array.isArray(value)) return value.map(item => copyMetadata(item, replace));
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, copyMetadata(item, replace)]));
+  }
+  return value;
+}
+
+const facts = [
+  { kind: "closed-record-literal", fields: [{ property: first, expression: second, sourceName: "value" }] },
+  { kind: "template-string", substitutions: [{ expression: first, carrier: text }] },
+  { kind: "switch", discriminantCarrier: text, clauses: [
+    { clause: first, expression: second, carrier: text }, { clause: second },
+  ] },
+  { kind: "object-shape-projection", sourceValue: first, keyExpression: second, assignmentSource: first },
+  { kind: "source-field", declaration: first, accessMode: "read", storageIndex: 0 },
+  { kind: "source-method-property", declaration: first },
+  { kind: "source-static-field", declaration: first, classReceiver: second },
+  { kind: "source-accessor", read: { declaration: first, method: "read", resultCarrier: integer },
+    write: { declaration: second, method: "write", valueCarrier: integer } },
+  { kind: "source-union-field", variants: [
+    { name: "Present", carrier: integer, field: { declaration: first } },
+    { name: "Absent", carrier: text },
+  ] },
+  ...["function", "static-method", "constructor"].map(form =>
+    ({ kind: "source-call", target: { form, classReceiver: first } })),
+  { kind: "source-call", target: { form: "union-method", variants: [
+    { declaration: first, carrier: integer }, { declaration: second, carrier: text },
+  ] } },
+  { kind: "provider-record-literal", fields: [{ property: first, expression: second, storageCarrier: integer }] },
+  { kind: "record-literal", fields: [
+    { implementationDeclaration: first, contractDeclarations: [first, second], carrier: integer },
+  ], contributions: [
+    { kind: "property", property: first, sourceName: "count", targetStorageIndex: 0 },
+    { kind: "accessor", property: second, sourceName: "next", role: "get" },
+    { kind: "structural-method", property: first, expression: second },
+    { kind: "method", property: first, expression: second, contractDeclarations: [first, second] },
+    { kind: "spread", property: first, expression: second, methods: [
+      { contractDeclaration: first, sourceDeclaration: second, callableCarrier: integer },
+    ] },
+  ] },
+  { kind: "record-index-literal", contributions: [
+    { kind: "property", property: first, expression: second },
+    { kind: "spread", property: second, expression: first },
+  ] },
+  { kind: "throw-op", error: { kind: "conversion", expression: first, conversion: {
+    kind: "program-error", source: integer, target: text, route: { kind: "runtime", boundary: "target-runtime" },
+  } } },
+  { kind: "throw-op", error: { kind: "program", expression: second, carrier: text } },
+  ...["shared-reference", "mutable-reference", "load"].map(operation =>
+    ({ kind: "reference-operation", operation, operandExpression: first })),
+  { kind: "reference-operation", operation: "store", operandExpression: first, valueExpression: second,
+    writeStrategy: { kind: "compound-assignment", operator: "+=", readExpression: first, rightExpression: second } },
+  { kind: "native-pointer", pointerExpression: first, valueExpression: second, offsetExpression: first },
+].map(fact => ({ ...fact, operationId: `test.${fact.kind}`, resultCarrier: integer }));
+
+test("every node-bearing operation compares exact opaque identities and closed metadata separately", () => {
+  for (const fact of facts) {
+    const equivalent = copyMetadata(fact);
+    assert.equal("targetOperation".equals(fact, equivalent), true, fact.operationId);
+    assert.equal("targetOperation".equals(fact,
+      copyMetadata(fact, node => node === first ? second : first)), false, fact.operationId);
+    assert.equal("targetOperation".equals(fact, { ...equivalent, operationId: "changed" }), false);
+    assert.equal("targetOperation".equals(fact, { ...equivalent, resultCarrier: text }), false);
+    assert.equal("targetOperation".equals(fact, { ...equivalent, extra: Number.NaN }), false);
+    const cycle = {};
+    cycle.self = cycle;
+    assert.equal("targetOperation".equals(fact, { ...equivalent, extra: cycle }), false);
+  }
+});
+
+test("runtime throw equality retains the independently selected native error boundary", () => {
+  const fact = facts.find(item => item.kind === "throw-op");
+  assert.equal("targetOperation".equals(fact,
+    { ...fact, error: { ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } } }), false);
+  assert.equal("targetOperation".equals(fact,
+    { ...fact, error: { ...fact.error, conversion: { ...fact.error.conversion, route: undefined } } }), false);
+});
+
+test("optional chain selection preserves exact opaque source identities", () => {
+  const fact = {
+    expression: first, guard: second, operationKind: "property",
+    sourceGuardCarrier: { kind: "target-named", id: "rust.core.Option", typeArguments: [text] },
+    selectedGuardCarrier: text, guardDepth: 1, innerResultCarrier: integer,
+    resultCarrier: { kind: "target-named", id: "rust.core.Option", typeArguments: [integer] },
+    lowering: "map",
+  };
+  const model = createRustProgramRecordBuilder();
+  model.optionalChain.set(first, fact);
+  model.optionalChain.set(first, copyMetadata(fact));
+  for (const mutation of [
+    { expression: second }, { guard: first }, { operationKind: "method" },
+    { guardDepth: 2 }, { selectedGuardCarrier: integer },
+    { innerResultCarrier: text }, { lowering: "and-then" },
+  ]) {
+    assert.throws(() => model.optionalChain.set(first, { ...fact, ...mutation }),
+      /Conflicting Rust semantic plan/u);
+  }
+});
+
+test("repeated switch selection retains one contract and rejects every clause mutation", () => {
+  const model = createRustProgramRecordBuilder();
+  const subject = {};
+  const fact = facts.find(item => item.kind === "switch");
+  model.targetOperation.set(subject, fact);
+  model.targetOperation.set(subject, copyMetadata(fact));
+  const clauses = fact.clauses;
+  for (const mutation of [
+    { clauses: [...clauses].reverse() },
+    { clauses: clauses.slice(1) },
+    { clauses: [{ ...clauses[0], clause: second }, clauses[1]] },
+    { clauses: [{ ...clauses[0], expression: first }, clauses[1]] },
+    { clauses: [{ ...clauses[0], carrier: integer }, clauses[1]] },
+    { clauses: [clauses[0], { ...clauses[1], expression: first, carrier: text }] },
+    { discriminantCarrier: integer },
+  ]) {
+    assert.throws(() => model.targetOperation.set(subject, { ...fact, ...mutation }),
+      /Conflicting Rust semantic plan/u);
+  }
+  assert.equal(model.seal().targetOperation.get(subject), fact);
+  assert.throws(() => model.targetOperation.set(subject, fact), /sealed/u);
+});

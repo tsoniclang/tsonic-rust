@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { analyzeRust } from "./rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../dist/analysis/facts/keys.js";
-import { rustErrorEffectsFactKey } from "../../dist/analysis/facts/error-effects.js";
-import { rustRuntimeCarrierKey } from "../../dist/target-model/facts/selections.js";
+
 import { createRustErrorRegionCatalog } from "../../dist/backend/planner/program/error-regions.js";
 import { rustPackageFallibleBoundary } from "../../dist/backend/planner/program/fallible-boundaries.js";
 import { rustRuntimeErrorTypeIdentity } from "../../dist/target-model/operations/error-boundary.js";
@@ -11,7 +9,7 @@ import { planRustCallableExpressionBody } from "../../dist/backend/planner/expre
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";
 
 export function nativeClosureProducerFixture({ asynchronous = false, surfaces = [], source,
-  selectFacts = (_node, _key, value) => value, selectProducers = value => value,
+  selectRecords = records => records, selectProducers = value => value,
   body = () => ({ kind: "int-literal", text: "3" }),
 } = {}) {
   const output = asynchronous ? "Promise<int32>" : "int32";
@@ -25,17 +23,14 @@ export function create(): () => ${output} {
   const { ast } = original.source;
   const closures = [];
   const visit = node => {
-    if (original.facts.getFact(node, rustTargetOperationFactKey)?.kind === "closure") closures.push(node);
+    if (original.records.targetOperation.get(node)?.kind === "closure") closures.push(node);
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   original.sourceFiles.forEach(visit);
   assert.equal(closures.length, 1, "one checked closure producer");
   const node = closures[0];
-  const facts = { ...original.facts,
-    getFact: (subject, key) => selectFacts(subject, key, original.facts.getFact(subject, key), node),
-    getRuntimeCarrierFact: subject => selectFacts(subject, rustRuntimeCarrierKey, original.facts.getRuntimeCarrierFact(subject), node),
-  };
-  const program = { ...original, facts, callableValues: { ...original.callableValues,
+  const records = selectRecords(original.records, node);
+  const program = { ...original, records, callableValues: { ...original.callableValues,
     nativeProducers: selectProducers(original.callableValues.nativeProducers),
   } };
   const fileNames = program.sourceFiles.map(file => ast.getFileName(file));
@@ -70,9 +65,12 @@ export function create(): () => ${output} {
   };
 }
 
-export function nativeClosureProducerErrorFacts(errorType) {
-  return (node, key, value, producer) => node === producer && key === rustErrorEffectsFactKey
-    ? { localErrors: false, nativeErrors: [{ identity: "fixture:failure", errorType }] } : value;
+export function nativeClosureProducerErrorRecords(errorType) {
+  return (records, producer) => ({ ...records, errorEffects: {
+    get: node => node === producer
+      ? { localErrors: false, nativeErrors: [{ identity: "fixture:failure", errorType }] }
+      : records.errorEffects.get(node),
+  } });
 }
 
 export function printNativeClosureProducer(fixture) {

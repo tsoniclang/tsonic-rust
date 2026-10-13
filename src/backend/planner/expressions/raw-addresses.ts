@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustRawAddressPlanKey } from "../../../target-model/operations/raw-addresses.js";
+
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -9,7 +9,7 @@ export function tryPlanRustRawAddress(
   node: Node, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): { readonly handled: boolean; readonly expression?: RustExpr } {
-  const plan = context.input.program.facts.getFact(node, rustRawAddressPlanKey);
+  const plan = context.input.program.records.rawAddressPlan.get(node);
   if (plan === undefined) return { handled: false };
   const args: RustExpr[] = [];
   for (const argument of plan.arguments) {

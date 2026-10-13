@@ -9,7 +9,7 @@ import {
 import { allocateMemberFieldName, planContractImplementation } from "./contracts.js";
 import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
-import { rustFallibleFactKey, rustObjectLiteralMethodAdapterFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
@@ -55,10 +55,7 @@ export function createImplementationPlan(
   if (contracts === undefined) {
     return undefined;
   }
-  const adapterFact = context.input.program.facts.getFact(
-    expression,
-    rustObjectLiteralMethodAdapterFactKey,
-  );
+  const adapterFact = context.input.program.records.objectLiteralMethodAdapter.get(expression);
   const hasAuthoredMethods = fact.contributions.some((contribution) =>
     contribution.kind === "method");
   if (hasAuthoredMethods && adapterFact === undefined) {
@@ -183,10 +180,7 @@ export function createImplementationPlan(
     if (parameterTypes.some((type) => type === undefined) || resultType === undefined) {
       return undefined;
     }
-    const fallible = context.input.program.facts.getFact(
-      implementation.sourceCallable,
-      rustFallibleFactKey,
-    ) !== undefined;
+    const fallible = context.input.program.records.fallible.get(implementation.sourceCallable) !== undefined;
     const errorBoundary = fallible
       ? rustErrorBoundaryForDeclaration(implementation.sourceCallable, context)
       : undefined;

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { instantiateRustNativeCompletion, rustNativeCallableCompletion, rustNativeFutureOutputType }
@@ -8,9 +8,12 @@ import { rustJsPromiseTargetTypeWithLifetime } from "../../target-model/types/ca
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
-import { rustAsyncFunctionFactKey, rustErrorEffectsFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
+
+
+
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustErrorEffectsAreFallible } from "../facts/error-effects.js";
+import { rustErrorEffectsAreFallible } from "../errors/error-effects.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 
 export interface RustNativeOutwardResults {
@@ -19,7 +22,7 @@ export interface RustNativeOutwardResults {
 }
 
 export function createRustNativeOutwardResults(input: {
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
   readonly producers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor" | "deferredFor">;
   readonly returnCarrierFor: (declaration: Node) => TargetTypeRef | undefined;
@@ -30,11 +33,11 @@ export function createRustNativeOutwardResults(input: {
     if (producer === undefined || resolving.has(declaration) || resolving.size >= 128) return undefined;
     resolving.add(declaration);
     try {
-      const source = input.facts.getFact(declaration, rustSourceCallableReturnFactKey);
+      const source = input.records.sourceCallableReturn.get(declaration);
       if (source === undefined) return undefined;
       const physical = input.returnCarrierFor(declaration);
       if (physical === undefined) return undefined;
-      const asynchronous = input.facts.getFact(declaration, rustAsyncFunctionFactKey);
+      const asynchronous = input.records.asyncFunction.get(declaration);
       if (invocation && asynchronous !== undefined) {
         const error = input.producers.errorFor(declaration, 0);
         if (error === undefined) return undefined;
@@ -43,7 +46,7 @@ export function createRustNativeOutwardResults(input: {
             ? asynchronous.futureCarrier.genericArguments?.[0] : undefined;
           if (lifetime?.kind !== "lifetime") return undefined;
           const result = rustJsPromiseTargetTypeWithLifetime(physical, lifetime.lifetime, error);
-          const operation = input.facts.getFact(declaration, rustTargetOperationFactKey);
+          const operation = input.records.targetOperation.get(declaration);
           const conversion = operation?.kind === "closure" ? operation.invocationResult : undefined;
           if (conversion === undefined) return result;
           if (!rustTargetTypeRefEquals(conversion.sourceCarrier, asynchronous.futureCarrier)) return undefined;
@@ -52,7 +55,7 @@ export function createRustNativeOutwardResults(input: {
             future => rustTargetTypeRefEquals(future.carrier, asynchronous.futureCarrier) ? result : undefined,
             input.definitions);
         }
-        const effects = input.facts.getFact(declaration, rustErrorEffectsFactKey);
+        const effects = input.records.errorEffects.get(declaration);
         if (effects === undefined) return undefined;
         const output = rustErrorEffectsAreFallible(effects)
           ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([physical, error])) : physical;

@@ -2,10 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type {
-  RustFlowReadProjectionFact,
-  RustTargetOperationFact,
-} from "../../../analysis/facts/keys.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";

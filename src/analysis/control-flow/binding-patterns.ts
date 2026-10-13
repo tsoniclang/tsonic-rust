@@ -15,10 +15,8 @@ import {
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import {
-  rustBindingProjectionFactKey,
-  type RustBindingProjection,
-} from "../facts/keys.js";
+
+import type { RustBindingProjection } from "../../target-model/records/value-projections.js";
 import {
   isRustJsArrayCarrier,
   rustJsArrayLikeElementTargetType,
@@ -46,7 +44,7 @@ import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.j
 
 export interface RustBindingPatternFactContext {
   readonly ast: AstReader;
-  readonly facts: RustAnalysisContext["facts"];
+  readonly records: RustAnalysisContext["records"];
   readonly navigation: RustAnalysisContext["source"]["navigation"];
   readonly semanticsFor: RustAnalysisContext["semanticsFor"];
   readonly sourceTypes: RustSourceTypeRegistry;
@@ -112,7 +110,7 @@ export function recordRustBindingPatternFacts(
       selected.projectedCarrier, defaultCarrier, selected.checkedArrayElement);
     if (normalized === undefined) return false;
     const { bindingCarrier } = normalized;
-    context.facts.set(element, rustBindingProjectionFactKey, {
+    context.records.bindingProjection.set(element, {
       sourceCarrier,
       projectedCarrier: selected.projectedCarrier,
       storageCarrier: normalized.storageCarrier,

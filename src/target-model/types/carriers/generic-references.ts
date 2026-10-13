@@ -165,7 +165,7 @@ function collectRustTargetGenericReferences(
   }
 
   function nestedBoundLifetimes(
-    binder: import("../../lifetimes/index.js").RustLifetimeBinder | undefined,
+    binder: import("../../lifetimes/model.js").RustLifetimeBinder | undefined,
     outer: ReadonlySet<string>,
   ): ReadonlySet<string> {
     if (binder === undefined) return outer;

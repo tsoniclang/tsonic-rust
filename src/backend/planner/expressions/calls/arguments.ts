@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { rustGenericCallableProtocol } from "../../../../target-model/types/carriers/generic-callables.js";
-import { rustSourceCallArgumentCarriers, rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../../analysis/facts/source-call-lifetimes.js";
+import { rustSourceCallArgumentCarriers, rustSourceCallGenericLifetimeArguments, rustSourceCallResultWithInputLifetimes } from "../../../../analysis/callables/source-call-lifetimes.js";
 import {
   isRustCopyCarrier,
   isRustVecCarrier,
@@ -29,32 +29,30 @@ import {
 } from "../input-shaping.js";
 import { planExpression } from "../entry.js";
 import { planRustNonConsumingValue } from "../typed-locations.js";
-import { rustArgumentPassingMode } from "../../../../analysis/facts/parameter-passing.js";
-import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/facts/target-operation.js";
-import {
-  rustSourceParameterAbiFactKey,
-  rustTargetOperationFactKey,
-} from "../../../../analysis/facts/keys.js";
+import { rustArgumentPassingMode } from "../../../../analysis/callables/parameter-passing.js";
+import { rustFinalizedCarrierTransitionMatches } from "../../../../analysis/operations/target-operation.js";
+
+
 import {
   rustTargetGenericArgumentEquals,
   rustTargetTypeRefEquals,
 } from "../../../../target-model/types/equality.js";
-import { rustValueCarrierTransitionTarget } from "../../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierTransitionTarget } from "../../../../analysis/conversions/value-carrier-queries.js";
 import { rustSpreadElementCarrier } from "../../../../target-model/operations/rest-assembly.js";
 import { planRustRestAssembly } from "./rest-assembly.js";
 import { planRustSourceCallArgumentValue } from "./singleton-slices.js";
 import { rustValueDestinationContext } from "../value-destinations.js";
-import { validateRustFinalizedOperationAbi } from "../../../../analysis/facts/finalized-operation-abi.js";
+import { validateRustFinalizedOperationAbi } from "../../../../analysis/operations/finalized-operation/validation.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../optional-storage.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSelectedTargetSignature as SelectedTargetSignatureFact, TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { RustProjectTypePolicy } from "../../../../target-model/types/project-types.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../target-model/types/source-union-definitions.js";
-import { rustSourceCallResultProjectionMatches } from "../../../../analysis/facts/source-call-results.js";
-import { rustRetainedCallSubstitutions } from "../../../../analysis/facts/retained-environments.js";
+import { rustSourceCallResultProjectionMatches } from "../../../../analysis/callables/source-call-results.js";
+import { rustRetainedCallSubstitutions } from "../../../../analysis/callables/retained-call-lifetimes.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 
 export function shapeRustSourceCallParameters(
@@ -134,7 +132,7 @@ export function shapeRustSourceCallParameters(
 
 function shapeRustRestSequenceInputs(
   parameterIndex: number,
-  parameter: import("../../../../analysis/facts/keys.js").RustSourceCallParameterPlan,
+  parameter: import("../../../../target-model/operations/model.js").RustSourceCallParameterPlan,
   argumentNodes: readonly Node[],
   arguments_: readonly RustExpr[],
   context: RustPlanContext,
@@ -244,8 +242,8 @@ export function planRustSelectedSourceCallArguments(
   call: Node,
   context: RustPlanContext,
 ): readonly RustExpr[] | undefined {
-  const fact = context.input.program.facts.getFact(call, rustTargetOperationFactKey);
-  const selected = context.input.program.facts.getSelectedTargetCall(call);
+  const fact = context.input.program.records.targetOperation.get(call);
+  const selected = context.input.program.records.selectedCall.get(call);
   if (fact?.kind !== "source-call" || selected === undefined ||
     !sourceCallSelectedMemberMatches(
       fact,
@@ -253,9 +251,9 @@ export function planRustSelectedSourceCallArguments(
       selected.member.returnType,
       context.input.program.typeFamilies.normalize,
       context.input.program.projectTypes,
-      rustSourceCallArgumentCarriers(call, context.input.program.source.ast, context.input.program.facts),
+      rustSourceCallArgumentCarriers(call, context.input.program.source.ast, context.input.program.records),
       context.input.program.typeDefinitions,
-      rustRetainedCallSubstitutions(context.input.program.facts, call),
+      rustRetainedCallSubstitutions(context.input.program.records, call),
     )) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, call),
@@ -292,8 +290,8 @@ export function planRustSelectedSourceCallArguments(
 
 function shapeRustSourceCallInput(
   parameterIndex: number,
-  parameter: import("../../../../analysis/facts/keys.js").RustSourceCallParameterPlan,
-  input: import("../../../../analysis/facts/keys.js").RustSourceCallParameterPlan["inputs"][number],
+  parameter: import("../../../../target-model/operations/model.js").RustSourceCallParameterPlan,
+  input: import("../../../../target-model/operations/model.js").RustSourceCallParameterPlan["inputs"][number],
   argumentNodes: readonly Node[],
   arguments_: readonly RustExpr[],
   context: RustPlanContext,
@@ -304,7 +302,7 @@ function shapeRustSourceCallInput(
   if (argumentNode === undefined || argument === undefined) {
     return undefined;
   }
-  const passing = context.input.program.facts.getArgumentPassingFact(argumentNode);
+  const passing = context.input.program.records.argumentPassing.get(argumentNode);
   const expectedPassing = rustArgumentPassingMode(parameter.mode);
   if (passing?.mode !== expectedPassing) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -314,9 +312,9 @@ function shapeRustSourceCallInput(
     ));
     return undefined;
   }
-  const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(argumentNode)?.carrier;
+  const sourceCarrier = context.input.program.records.runtimeCarrier.get(argumentNode)?.carrier;
   const convertedCarrier = rustValueCarrierTransitionTarget(
-    context.input.program.facts,
+    context.input.program.records,
     argumentNode,
   );
   const selectedInput = resolveFinalizedRustSpreadInput(
@@ -347,7 +345,7 @@ function shapeRustSourceCallInput(
     return undefined;
   }
   const mutable = parameter.mode === "mut-ref";
-  const sourceParameterAbi = context.input.program.facts.getFact(argumentNode, rustSourceParameterAbiFactKey);
+  const sourceParameterAbi = context.input.program.records.sourceParameterAbi.get(argumentNode);
   if (borrowedInputs.get(argumentNode) === selectedInput) return selectedInput;
   const nonConsumingInput = planRustNonConsumingValue(argumentNode, selectedInput, context);
   return sourceParameterAbi?.mode === parameter.mode &&
@@ -361,7 +359,7 @@ function shapeRustSourceCallInput(
 }
 
 function resolveFinalizedRustSpreadInput(
-  input: import("../../../../analysis/facts/keys.js").RustSourceCallParameterPlan["inputs"][number],
+  input: import("../../../../target-model/operations/model.js").RustSourceCallParameterPlan["inputs"][number],
   sourceCarrier: TargetTypeRef | undefined,
   convertedCarrier: TargetTypeRef | undefined,
   sourceExpression: RustExpr,
@@ -602,7 +600,7 @@ export function requireProviderArgumentPassingFacts(
     }
     if (requiresSelectedParameterPassingFact) {
       const expected = rustArgumentPassingMode(sourceArgument.mode);
-      const actual = context.input.program.facts.getArgumentPassingFact(argument);
+      const actual = context.input.program.records.argumentPassing.get(argument);
       if (actual === undefined) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, argument),

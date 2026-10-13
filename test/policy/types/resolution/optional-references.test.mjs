@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -20,7 +21,7 @@ test("optional exclusive-reference projection is a native reborrow, never a Clon
   for (const canMove of [false, true]) {
     const context = { input: { program: {
       source: { ast: fakeAstReader([sourceFile]) },
-      facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+      records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
       valueLifetimes: { canMove: () => canMove }, projectTypes, configuration: { edition: "2024" },
     } }, sourceFile, diagnostics: [] };
     const expression = { kind: "path", path: "selected" };
@@ -51,7 +52,7 @@ test("optional non-Clone payloads may move or borrow but cannot acquire a clone 
   for (const [canMove, borrowed] of [[true, false], [false, true], [false, false]]) {
     const context = { input: { program: {
       source: { ast: fakeAstReader([sourceFile]) },
-      facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+      records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
       valueLifetimes: { canMove: () => canMove }, projectTypes, typeDefinitions: emptyRustTypeDefinitions,
       configuration: { edition: "2024" },
     } }, sourceFile, diagnostics: [] };

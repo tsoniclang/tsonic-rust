@@ -43,10 +43,8 @@ function selfReference({ generic = false, optional = true } = {}) {
     currentSemantics: semantics,
     semanticsFor: () => semantics,
     source: { navigation: { isProjectDeclaration: node => node === declaration },
-      sourceFacts: { getFact: () => undefined } },
+      sourceFacts: { getFact: (subject, key) => subject === argumentSymbol && key === sourcePrimitiveFactKey ? { kind: "uint32" } : undefined } },
     sourceLifetimes: { contractFor: () => ({ parameters }) },
-    facts: { get: (subject, key) => subject === argumentSymbol && key === sourcePrimitiveFactKey ? { kind: "uint32" } : undefined,
-      getFact: () => undefined },
     ast: {
       kind: () => undefined,
       kindName: node => node === declaration ? "KindInterfaceDeclaration" : node === method ? "KindMethodSignature" : undefined,

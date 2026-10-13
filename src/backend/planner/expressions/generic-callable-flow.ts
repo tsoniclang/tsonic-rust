@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustPhysicalPayloadFor } from "../../../target-model/types/physical-payloads.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -20,7 +20,7 @@ export function planRustGenericCallableFlow(
   const demanded = context.valueDestinations?.get(node);
   const selected = demanded === undefined ? storage.valueFor(node) : { kind: "identity" as const, carrier: demanded };
   if (selected.kind === "unresolved") return undefined;
-  const logical = rustEffectiveValueCarrier(context.input.program.facts, node);
+  const logical = rustEffectiveValueCarrier(context.input.program.records, node);
   const destination = logical === undefined ? undefined : rustPhysicalPayloadFor(logical, selected.carrier,
     conversion.target, context.input.program.typeDefinitions);
   if (destination === undefined) {

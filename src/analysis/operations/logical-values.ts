@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircuitBranch } from "@tsonic/target-api/source";
-import { finalizeValueConversion } from "../facts/finalized-operation/conversions.js";
-import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { finalizeValueConversion } from "./finalized-operation/conversions.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -16,8 +16,8 @@ export function recordRustLogicalValueFact(walk: RustFactWalk, expression: Node)
   const leftNode = BinaryExpression_Left(ast, expression);
   const rightNode = BinaryExpression_Right(ast, expression);
   if (leftNode === undefined || rightNode === undefined) return false;
-  const left = rustEffectiveValueCarrier(walk.context.facts, leftNode);
-  const right = rustEffectiveValueCarrier(walk.context.facts, rightNode);
+  const left = rustEffectiveValueCarrier(walk.context.records, leftNode);
+  const right = rustEffectiveValueCarrier(walk.context.records, rightNode);
   if (!isRustBoolCarrier(left) || right === undefined || isRustBoolCarrier(right)) return false;
   const branch = sourceBooleanShortCircuitBranch(ast, leftNode, operator === "KindAmpersandAmpersandToken" ? "&&" : "||");
   const result = branch === "left" ? left : branch === "right" ? right : resolveRustBranchUnion(expression,

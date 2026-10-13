@@ -18,20 +18,12 @@ import {
   compilerProviderModuleId,
   projectRustCompilerModule,
 } from "../../../../dist/providers/native/projection/projection.js";
-import {
-  rustCompilerProviderProtocolVersion,
-} from "../../../../dist/providers/native/model/model.js";
+
 import {
   rustNamedTypeCarrierValue,
 } from "../../../../dist/target-model/types/index.js";
-import {
-  verifyRustCompilerStandardLibraryMetadata,
-} from "../../../../dist/providers/native/acquisition/cargo-snapshot.js";
-import {
-  compileRustThroughTargetPack,
-  createRustSession,
-  rustSourceDiagnostics,
-} from "../../../helpers/rust-session.mjs";
+
+
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const fixtureCrate = resolve(repositoryRoot, "test/fixtures/crates/acme_widget");

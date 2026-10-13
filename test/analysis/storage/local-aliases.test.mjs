@@ -1,8 +1,10 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustLocalStorageAliases } from "../../../dist/analysis/storage/local-aliases.js";
-import { rustBindingStorageFactKey, rustMutatedReferentFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustNativeArrayStorageKey } from "../../../dist/target-model/operations/native-memory.js";
+
+
+
 
 function fixture() {
   const callable = { kind: "function" };
@@ -31,10 +33,13 @@ function fixture() {
   }, as: { AsVariableDeclaration: node => node.kind === "variable" ? node : undefined },
   typeNode: node => node.Type, kindName: node => node.kind, parent: node => node.parent,
   forEachChild: (node, visit) => { for (const child of node.children ?? []) visit(child); } };
-  const facts = { getRuntimeCarrierFact: node => ({ carrier: carriers.get(node) }),
-    getFact: (node, key) => promoted.get(node)?.get(key),
-    getArgumentPassingFact: node => modes.has(node) ? { mode: modes.get(node) } : undefined };
-  const input = { ast, facts, sourceFiles: [{ children: [owner, alias] }],
+  const records = createRustRecordFixture({
+    bindingStorage: { get: node => promoted.get(node)?.get("bindingStorage") },
+    mutatedReferent: { get: node => promoted.get(node)?.get("mutatedReferent") },
+    nativeArrayStorage: { get: node => promoted.get(node)?.get("nativeArrayStorage") },
+    runtimeCarrier: { get: (node) => ({ carrier: carriers.get(node) }) },
+argumentPassing: { get: (node) => modes.has(node) ? { mode: modes.get(node) } : undefined }});
+  const input = { ast, records, sourceFiles: [{ children: [owner, alias] }],
     navigation: { expressionValueFlow: () => flow, declarationUseSummary: node => summaries.get(node) } };
   return { input, owner, alias, flow, summaries, carriers, modes, promoted, callable, argument };
 }
@@ -48,7 +53,7 @@ test("proven local aliases share one native owner and aggregate referent mutatio
   assert.equal(plan.requiresMutableOwner(current.alias), false);
   assert.equal(plan.owner({}), undefined);
   current.summaries.get(current.alias).memberWritten = false;
-  current.promoted.set(current.alias, new Map([[rustMutatedReferentFactKey, true]]));
+  current.promoted.set(current.alias, new Map([["mutatedReferent", true]]));
   assert.equal(analyzeRustLocalStorageAliases(current.input).requiresMutableOwner(current.owner), true);
 });
 
@@ -67,7 +72,7 @@ test("local coalescing does not guess through escapes, rebinding or foreign stor
     current => { current.carriers.set(current.alias, { kind: "array", element: { kind: "source-primitive", name: "uint64" } }); },
     current => { current.modes.set(current.argument, "by-value"); },
     current => { current.modes.clear(); },
-    ...[rustBindingStorageFactKey, rustNativeArrayStorageKey].map(key =>
+    ...["bindingStorage", "nativeArrayStorage"].map(key =>
       current => { current.promoted.set(current.alias, new Map([[key, {}]])); }),
   ];
   for (const [index, change] of controls.entries()) {

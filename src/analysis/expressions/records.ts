@@ -33,15 +33,15 @@ import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation } from "../facts/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { projectRecordMemberImplementation, selectedProjectMethodContracts } from "../objects/record-member-contracts.js";
 import { resolveProviderRecordLiteral } from "./provider-records.js";
@@ -186,7 +186,7 @@ export function resolveRecordLiteralCarrier(
     });
     const carrier = setCarrierFact(walk, expression, selectedExpected);
     if (carrier !== undefined && contextualReconciliation !== undefined) {
-      recordRustValueCarrierReconciliation(walk.context.facts, expression, contextualReconciliation);
+      recordRustValueCarrierReconciliation(walk.context.records, expression, contextualReconciliation);
     }
     return carrier;
   }
@@ -277,7 +277,7 @@ export function resolveRecordLiteralCarrier(
           definition,
           field.declaration,
         );
-        const declared = walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
+        const declared = walk.context.records.runtimeCarrier.get(field.declaration)?.carrier ??
           resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
         const carrier = declared === undefined
           ? undefined
@@ -882,7 +882,7 @@ export function resolveRecordLiteralCarrier(
   const finalizedCarrier = setCarrierFact(walk, expression, resultCarrier);
   if (finalizedCarrier !== undefined && contextualReconciliation !== undefined) {
     recordRustValueCarrierReconciliation(
-      walk.context.facts,
+      walk.context.records,
       expression,
       contextualReconciliation,
     );

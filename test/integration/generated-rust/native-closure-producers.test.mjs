@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerErrorFacts }
+import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerErrorRecords }
   from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -25,13 +25,13 @@ function fixtureSource() {
   const pureFixture = nativeClosureProducerFixture();
   const pure = printNativeClosureProducer(pureFixture);
   const throws = printNativeClosureProducer(nativeClosureProducerFixture({
-    selectFacts: nativeClosureProducerErrorFacts(failure),
+    selectRecords: nativeClosureProducerErrorRecords(failure),
     body: context => ({ kind: "try", expr: { kind: "call", path: "fail", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   }));
   const pending = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"] }));
   const rejected = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"],
-    selectFacts: nativeClosureProducerErrorFacts(promiseFailure),
+    selectRecords: nativeClosureProducerErrorRecords(promiseFailure),
     body: context => ({ kind: "try", expr: { kind: "call", path: "reject", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   }));

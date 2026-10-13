@@ -15,12 +15,9 @@ import {
   TemplateSpan_Expression,
   TemplateSpan_Literal,
 } from "@tsonic/target-api/source";
-import {
-  rustPostCheckOperationKind,
-  rustProjectDowncastFactKey,
-  rustProjectUpcastFactKey,
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
+import { rustPostCheckOperationKind } from "../../../target-model/operations/model.js";
+
+
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { applyRustValueConversion } from "./value-conversions.js";
@@ -37,15 +34,15 @@ import { planExpression } from "./entry.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
-import { rustArgumentPassingMode } from "../../../analysis/facts/parameter-passing.js";
-import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustArgumentPassingMode } from "../../../analysis/callables/parameter-passing.js";
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
+import { validateRustFinalizedOperationAbi } from "../../../analysis/operations/finalized-operation/validation.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustSelectedTargetOperation as TargetOperationFact, TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
 export function rustCallableConstructionType(
   carrier: TargetTypeRef,
@@ -155,7 +152,7 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     const substitution = fact.substitutions[index];
     const actualCarrier = expression === undefined
       ? undefined
-      : rustEffectiveValueCarrier(context.input.program.facts, expression);
+      : rustEffectiveValueCarrier(context.input.program.records, expression);
     if (expression === undefined || literal === undefined || substitution === undefined ||
       substitution.expression !== expression || actualCarrier === undefined ||
       !rustTargetTypeRefEquals(actualCarrier, substitution.carrier)) {
@@ -198,7 +195,7 @@ export function planDeleteExpression(node: Node, context: RustPlanContext): Rust
     receiver === undefined || index === undefined ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.delete-carrier") ||
     !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetOperator(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "indexer",
       fact.resultCarrier,
@@ -225,7 +222,7 @@ export function planDeleteExpression(node: Node, context: RustPlanContext): Rust
 
 export function expressionCarrier(node: Node, context: RustPlanContext): TargetTypeRef | undefined {
   return context.expressionOverrides?.get(node)?.carrier ??
-    context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+    context.input.program.records.runtimeCarrier.get(node)?.carrier;
 }
 
 function rustPartialComparison(left: RustExpr, right: RustExpr): RustExpr {
@@ -331,7 +328,7 @@ export function effectivePlannedExpressionCarrier(
   context: RustPlanContext,
 ): TargetTypeRef | undefined {
   return context.expressionOverrides?.get(node)?.carrier ??
-    rustEffectiveValueCarrier(context.input.program.facts, node);
+    rustEffectiveValueCarrier(context.input.program.records, node);
 }
 
 export function requireExpressionCarrier(
@@ -353,7 +350,7 @@ export function requireExpressionCarrier(
 }
 
 export function rustOperationFact(node: Node, context: RustPlanContext): RustTargetOperationFact | undefined {
-  return context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  return context.input.program.records.targetOperation.get(node);
 }
 
 export function selectedOperationMatches(
@@ -384,7 +381,7 @@ export function providerSelectedCallMatches(
   if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
     return false;
   }
-  const selected = context.input.program.facts.getSelectedTargetCall(node);
+  const selected = context.input.program.records.selectedCall.get(node);
   const expectedMemberKind = fact.abi.operationKind === "constructor" ? "constructor" : "method";
   return selected !== undefined && selected.member.id === fact.operationId &&
     selected.member.kind === expectedMemberKind && selected.member.returnType !== undefined &&
@@ -415,13 +412,13 @@ export function planSourceConversion(
     return undefined;
   }
   if (!selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetOperator(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
-      context.input.program.facts.getFact(node, rustProjectUpcastFactKey) !== undefined
+      context.input.program.records.projectUpcast.get(node) !== undefined
         ? "project-upcast"
-        : context.input.program.facts.getFact(node, rustProjectDowncastFactKey) !== undefined
+        : context.input.program.records.projectDowncast.get(node) !== undefined
           ? "project-downcast"
         : fact.conversion === undefined ? "identity" : "runtime-conversion",
     )) {
@@ -444,7 +441,7 @@ export function planSourceConversion(
 }
 
 export function planNumericLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, node);
+  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.records, node);
   if (carrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -457,7 +454,7 @@ export function planNumericLiteral(node: Node, context: RustPlanContext): RustEx
 }
 
 export function planBigIntLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.facts, node);
+  const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.records, node);
   const value = parseSourceBigIntLiteral(context.input.program.source.ast.text(node));
   if (value !== undefined && carrier !== undefined && isRustIntegerCarrier(carrier)) {
     return nativeIntegerLiteral(value, carrier);

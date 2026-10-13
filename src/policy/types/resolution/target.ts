@@ -291,7 +291,7 @@ export function resolveStructuralObjectType(
   if (selectedContext === undefined) return undefined;
   context = selectedContext;
   const semantics = context.currentSemantics;
-  const struct = valueStruct ?? context.facts.resolve(type, structFactKey) ?? context.facts.get(type, structFactKey);
+  const struct = valueStruct ?? context.source.sourceFacts.getFact(type, structFactKey) ?? context.source.sourceFacts.getFact(type, structFactKey);
   if (struct !== undefined && (struct.valueType !== true || struct.fields === undefined)) return undefined;
   const representation = struct === undefined ? "reference" : "value";
   if (semantics.types.indexInfos(type).length !== 0) {
@@ -400,7 +400,7 @@ export function resolveStructuralObjectType(
           const kind = context.ast.kindName(declaration);
           const value = kind === "KindPropertyAssignment" || kind === "KindShorthandPropertyAssignment"
             ? ObjectLiteralProperty_Value(context.ast, declaration) : undefined;
-          return value === undefined ? undefined : context.facts.getRuntimeCarrierFact(value)?.carrier;
+          return value === undefined ? undefined : context.records.runtimeCarrier.get(value)?.carrier;
         })
       : [];
     const inferredCarrier = initializerCarriers.length > 0 && initializerCarriers.every(carrier =>

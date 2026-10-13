@@ -1,16 +1,14 @@
+import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+
 import { rustCallableProtocol, rustCallableTargetType, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../types/storage/owned-storage.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 
-export interface RustRetainedEnvironment {
-  readonly lifetime: Extract<RustLifetimeRef, { readonly kind: "parameter" }>;
-  readonly parameters: readonly Node[];
-}
+
 
 export type RustRetainedEnvironmentSelection =
   | { readonly kind: "none" }

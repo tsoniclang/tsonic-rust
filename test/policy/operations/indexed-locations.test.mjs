@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
 import { finalizeProviderOperationFact } from "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
-import { rustIndexedLocationContract } from "../../../dist/analysis/facts/indexed-location.js";
+import { rustIndexedLocationContract } from "../../../dist/analysis/operations/indexed-location.js";
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustSourceOptionalTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 
 const element = rustSourcePrimitiveTargetType("int32");

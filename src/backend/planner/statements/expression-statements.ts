@@ -27,9 +27,7 @@ import {
   planRustModuleBindingStore,
   rustLocationStorageForReference,
 } from "../expressions/typed-locations.js";
-import {
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
+
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, rustActiveErrorType } from "../program/plan-context.js";
 import { applyRustFallibleResultExpression } from "../types/fallible-shape.js";
@@ -54,11 +52,11 @@ import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact, RustAssignmentOperationPlan } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
+
 import { planRustValueFieldInput, planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import { planRustFieldProjectionAssignment } from "./field-projection-assignment.js";
 import { planRustCompoundRuntimeWrite } from "./compound-runtime-write.js";
-import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
+
 import { prepareRustComputedMemberEvaluation } from "../expressions/computed-members.js";
 import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 import { planRustBorrowedElementRead } from "../expressions/borrowed-element-reads.js";
@@ -74,8 +72,8 @@ export function planExpressionAsStatement(
   expression: Node,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  if (context.input.program.facts.getFact(expression, rustCompileTimeSourceKey)) return [];
-  if (context.input.program.facts.getFact(expression, rustTargetOperationFactKey)?.kind === "nullish-assignment") {
+  if (context.input.program.records.compileTimeSource.get(expression)) return [];
+  if (context.input.program.records.targetOperation.get(expression)?.kind === "nullish-assignment") {
     const planned = planExpression(expression, context, "discarded");
     return planned === undefined ? undefined : [{ kind: "expr", expr: planned }];
   }
@@ -109,7 +107,7 @@ export function planExpressionAsStatement(
     ];
     let selectedAssignmentFact: RustAssignmentOperationFact | undefined;
     if (operatorKind === KindEqualsToken) {
-      const assignment = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+      const assignment = context.input.program.records.targetOperation.get(expression);
       if (assignment !== undefined && assignment.kind === "runtime-set") {
         return planRuntimeSetStatement(expression, assignment, context);
       }
@@ -139,7 +137,7 @@ export function planExpressionAsStatement(
         return undefined;
       }
       const fact = selectedAssignmentFact ??
-        context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+        context.input.program.records.targetOperation.get(expression);
       if (fact === undefined || (fact.kind !== "operator-token" && fact.kind !== "operator-call")) {
         context.diagnostics.push(missingFactDiagnostic(
           diagnosticInput(context, expression),
@@ -188,7 +186,7 @@ export function planExpressionAsStatement(
     expressionKind === KindVoidExpression) {
     const discarded = planRustDiscardedValue(expression, context);
     const planned = discarded?.expression;
-    const fact = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+    const fact = context.input.program.records.targetOperation.get(expression);
     if (planned !== undefined && fact?.kind === "provider-operation" &&
       fact.abi.target.form === "numeric-cast") {
       return [{ kind: "let", name: "_", mutable: false, init: planned }];
@@ -243,7 +241,7 @@ export function planRustAssignmentWrite(
     ));
     return undefined;
   }
-  const sourceField = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
+  const sourceField = context.input.program.records.targetOperation.get(left);
   const borrowedWrite = context.input.program.borrowStability.borrowedWriteFor(expression);
   if (borrowedWrite !== undefined && context.expressionOverrides?.has(borrowedWrite.receiver) !== true) {
     if (borrowedWrite.target !== left || borrowedWrite.value !== valueNode ||
@@ -295,7 +293,7 @@ export function planRustAssignmentWrite(
       : { kind: "try", expr: selected, resultErrorType: errorType, operandErrorType: errorType } }];
   }
   if (sourceField?.kind === "builtin-error-property") return planRustBuiltinErrorAssignment(left, valueNode, sourceField, fact, context);
-  const compoundWrite = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);
+  const compoundWrite = context.input.program.records.compoundWrite.get(expression);
   if (compoundWrite !== undefined) {
     return operator === "="
       ? planRuntimeSetStatement(expression, compoundWrite, context, { target: left, value: valueNode })

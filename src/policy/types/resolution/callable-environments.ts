@@ -5,7 +5,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetType } from "./target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
-import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
+
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
@@ -20,7 +20,7 @@ export function resolveRustCallableEnvironment(
   if (lexical.kind === "unresolved") return undefined;
   const parameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
   for (const reference of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration) &&
-    context.facts.getFact(capture.declaration, rustCompileTimeSourceKey) !== true)
+    context.records.compileTimeSource.get(capture.declaration) !== true)
     .flatMap(capture => capture.references.slice(0, 1)),
     ...lexical.receivers.filter(receiver => !excludedCaptures.has(receiver.owner))
       .flatMap(receiver => receiver.references.slice(0, 1))]) {
@@ -31,7 +31,7 @@ export function resolveRustCallableEnvironment(
     const selected = context.sourceStorage.subjectFor(reference);
     if (selected.kind === "unresolved") return undefined;
     const storageCarrier = selected.subject.kind === "value" && selected.subject.projection.length === 0
-      ? context.facts.getRuntimeCarrierFact(selected.subject.node)?.carrier : undefined;
+      ? context.records.runtimeCarrier.get(selected.subject.node)?.carrier : undefined;
     const carrier = storageCarrier ?? resolveRustTargetType(type, { ...context, currentSemantics: semantics,
       sourceStorageSubject: selected.subject,
       sourceTypeParameterSubstitutions: new Map() }, options, resolving);

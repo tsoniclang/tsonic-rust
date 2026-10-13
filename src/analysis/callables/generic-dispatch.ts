@@ -1,18 +1,20 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustTargetOperationFactKey, type RustTargetOperationFact } from "../facts/keys.js";
+
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeGenericProducerPlan } from "./native-generic-producers.js";
-import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
-import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup } from "../facts/target-operation.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
+import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
 
 interface RustGenericCallableInvocationInput {
   readonly ast: AstReader;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly generic: RustGenericCallablePlan;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationCallableFor">;
   readonly structuralShapes: RustStructuralStorageLookup;
@@ -27,12 +29,12 @@ export function selectRustGenericCallableInvocationStorage(
   node: Node, input: RustGenericCallableInvocationInput,
 ): { readonly operation: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>;
   readonly carrier: TargetTypeRef; readonly definition: RustGenericCallablePhysicalDefinition } | undefined {
-  const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = input.records.targetOperation.get(node);
   if (operation?.kind !== "source-call") return undefined;
   const callee = Node_Expression(input.ast, node);
   const logical = operation.target.form === "structural-method"
     ? rustSourceCallCallableStorageCarrier(operation, input.structuralShapes)
-    : rustEffectiveValueCarrier(input.facts, callee);
+    : rustEffectiveValueCarrier(input.records, callee);
   if (callee === undefined || logical === undefined || input.generic.definitionFor(logical) === undefined) return undefined;
   const storage = input.nativeStorage.invocationCallableFor(node);
   if (storage === undefined || storage.kind === "unresolved") return undefined;

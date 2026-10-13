@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { rustAsyncFunctionFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey,
-  rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
+
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -12,7 +13,7 @@ import { Node_Expression } from "@tsonic/target-api/source";
 
 function fixture(text, surfaces) {
   const context = analyzeRustErrorEffects(text, { surfaces });
-  const { ast, facts } = context;
+  const { ast, records } = context;
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
   context.sourceFiles.forEach(visit);
@@ -21,7 +22,7 @@ function fixture(text, surfaces) {
     assert.equal(selected.length, 1, name);
     return selected[0];
   };
-  return { context, ast, facts, nodes, declaration };
+  return { context, ast, records, nodes, declaration };
 }
 
 for (const surfaces of [[], ["js"]]) {
@@ -35,7 +36,7 @@ for (const surfaces of [[], ["js"]]) {
     for (const name of ["source", "retain", "consumer"]) {
       const owner = current.declaration(name);
       const parameter = current.ast.parameters(owner)[0];
-      const abi = current.facts.get(parameter, rustSourceParameterAbiFactKey);
+      const abi = current.records.sourceParameterAbi.get(parameter);
       assert.equal(abi !== undefined, true, name);
       assert.equal(abi.parameterCarrier.kind === "reference", false, `${name} owns its exact callback`);
       assert.equal(abi.inputLifetime === undefined, true, `${name} cannot retain a borrow of a local callback`);
@@ -47,13 +48,13 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(rustTargetGenericReferences(physical.carrier).lifetimes.length, 0,
         "the physical C parameter does not manufacture a reference lifetime");
     }
-    const observation = current.facts.get(current.ast.parameters(current.declaration("observed"))[0], rustSourceParameterAbiFactKey);
+    const observation = current.records.sourceParameterAbi.get(current.ast.parameters(current.declaration("observed"))[0]);
     assert.equal(rustCallableInputProtocol(observation.parameterCarrier) !== undefined, true,
       "nonretaining synchronous observations keep the existing native borrow optimization");
     const call = current.nodes.find(node => current.ast.is.IsCallExpression(node) &&
       current.ast.text(Node_Expression(current.ast, node)) === "source");
-    const returned = current.facts.get(current.declaration("retain"), rustSourceCallableReturnFactKey).returnCarrier;
-    const selected = current.facts.get(call, rustTargetOperationFactKey).resultCarrier;
+    const returned = current.records.sourceCallableReturn.get(current.declaration("retain")).returnCarrier;
+    const selected = current.records.targetOperation.get(call).resultCarrier;
     assert.equal(rustTargetTypeRefEquals(returned, selected), true, "forwarded storage retains the producer's exact carrier");
   });
 
@@ -68,11 +69,11 @@ for (const surfaces of [[], ["js"]]) {
     `, surfaces);
     const owner = current.declaration("borrowed");
     const [value, callback] = current.ast.parameters(owner).map(parameter =>
-      current.facts.get(parameter, rustSourceParameterAbiFactKey));
+      current.records.sourceParameterAbi.get(parameter));
     assert.equal(value.parameterCarrier.kind, "reference");
     assert.equal(value.parameterCarrier.lifetime.kind, "parameter");
     assert.equal(callback.parameterCarrier.kind === "reference", false);
-    const asynchronous = current.facts.get(owner, rustAsyncFunctionFactKey);
+    const asynchronous = current.records.asyncFunction.get(owner);
     assert.equal(asynchronous !== undefined, true);
     if (surfaces.length !== 0) {
       assert.equal(asynchronous.storage.kind, "lifetime");

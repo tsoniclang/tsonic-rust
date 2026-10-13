@@ -8,7 +8,7 @@ import { rustCallableValueConversionMatches } from "../../target-model/conversio
 import type { RustTargetGenericBindings, RustTargetGenericParameterSet } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceObjectShape } from "../project-types/source-type-registry.js";
-import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../facts/callable-adapters.js";
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { callableRestElement, selectRustCallableValueAdapter } from "../callables/adapters.js";
 import type { RustProjectStructuralView } from "./project-structural-views.js";
 import { selectRustProjectStructuralViewFields, selectRustProjectStructuralViewSources,

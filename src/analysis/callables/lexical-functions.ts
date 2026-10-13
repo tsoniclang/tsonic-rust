@@ -2,19 +2,20 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped,
   sourceLexicalEnvironment, sourceLexicalFunctionValueCreation, sourceLexicalFunctionValueOrder,
   type TargetSourceProgram } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+
+
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
-import { rustFinalizedTargetInputMayMutateSource } from "../facts/finalized-operation/conversions.js";
+import { rustFinalizedTargetInputMayMutateSource } from "../operations/finalized-operation/conversions.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import type { RustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
-import { rustCallableImplicitLifetimeParameters } from "../facts/source-input-lifetimes.js";
-import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
+import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
+
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 
@@ -58,7 +59,7 @@ const maximumLexicalCaptureSteps = 4_194_304;
 export function createRustLexicalFunctionEnvironmentPlan(
   source: TargetSourceProgram,
   sourceFiles: readonly SourceFile[],
-  facts: RustPlanQueries,
+  records: RustProgramRecords,
   runtimeValueUses: RustRuntimeValueUsePlan,
   sourceCallables: RustSourceCallableQueries,
 ): RustLexicalFunctionEnvironmentPlan {
@@ -88,7 +89,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
         return initializer === undefined ? [] : [initializer];
       })] : [declaration];
     const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation,
-      (use, referencedDeclaration) => facts.getFact(use.reference, rustCompileTimeSourceKey) !== true &&
+      (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (selected.kind === "unresolved") return exhausted(selected.reason);
     const evaluated = new Set<Node>();
@@ -105,9 +106,9 @@ export function createRustLexicalFunctionEnvironmentPlan(
       const node = evaluatedPending.pop()!;
       if (evaluated.has(node)) continue;
       evaluated.add(node);
-      const passing = facts.getArgumentPassingFact(node);
+      const passing = records.argumentPassing.get(node);
       if (passing?.mode === "borrow-mut") mutate(passing.storageExpression ?? node);
-      const operation = facts.getFact(node, rustTargetOperationFactKey);
+      const operation = records.targetOperation.get(node);
       const mutatesReceiver = operation?.kind === "source-call"
         ? operation.target.form === "method" && operation.target.mutatesSelf ||
           operation.target.form === "union-method" && operation.target.variants.some(variant => variant.mutatesSelf)
@@ -155,7 +156,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
   const singleInvocation = createSourceSingleInvocationQuery(ast, navigation);
   for (const declaration of declarations) {
     const creation = sourceLexicalFunctionValueCreation(declaration, ast, navigation,
-      (use, referencedDeclaration) => facts.getFact(use.reference, rustCompileTimeSourceKey) !== true &&
+      (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (creation.kind === "unresolved") {
       selections.set(declaration, Object.freeze({ kind: "unresolved", reason: creation.reason }));
@@ -186,7 +187,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
   const scheduled = new Map<Node, readonly Node[]>();
   for (const [statement, values] of valueDeclarations) {
     const ordered = sourceLexicalFunctionValueOrder(values, ast, navigation,
-      (use, referencedDeclaration) => facts.getFact(use.reference, rustCompileTimeSourceKey) !== true &&
+      (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (ordered.kind === "resolved") scheduled.set(statement, ordered.declarations);
     else for (const declaration of values) selections.set(declaration, Object.freeze(ordered));
@@ -212,7 +213,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
 export function finalizeRustLexicalFunctionQueries(
   environments: RustLexicalFunctionEnvironmentPlan,
   source: TargetSourceProgram,
-  facts: RustPlanQueries,
+  records: RustProgramRecords,
   lifetimes: RustLifetimeIndex,
   nativeStorage: RustNativeStoragePlan,
   native: RustNativeCallableInputPlan,
@@ -222,18 +223,18 @@ export function finalizeRustLexicalFunctionQueries(
   const failures = new Map<Node, string>();
   const nativeIdentities = new Set(native.inputs.map(input => input.implementation.identity));
   const parametersFor = (owner: Node): readonly RustSourceGenericParameterContract[] =>
-    [...lifetimes.contractFor(owner)?.parameters ?? [], ...rustCallableImplicitLifetimeParameters(owner, ast, facts)];
+    [...lifetimes.contractFor(owner)?.parameters ?? [], ...rustCallableImplicitLifetimeParameters(owner, ast, records)];
   let steps = 0;
   for (const declaration of environments.declarations) {
     const references = new Set<string>();
     for (const node of environments.genericNodesFor(declaration)) {
       if (++steps > maximumLexicalCaptureSteps) return exhausted();
-      const parameter = ast.is.IsParameterDeclaration(node) ? facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier : undefined;
-      const carrier = parameter ?? facts.getRuntimeCarrierFact(node)?.carrier ??
-        facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier;
+      const parameter = ast.is.IsParameterDeclaration(node) ? records.sourceParameterAbi.get(node)?.parameterCarrier : undefined;
+      const carrier = parameter ?? records.runtimeCarrier.get(node)?.carrier ??
+        records.sourceCallableReturn.get(node)?.returnCarrier;
       if (carrier === undefined) continue;
       const selected = parameter !== undefined ? nativeStorage.parameterFor(node, parameter)
-        : facts.getFact(node, rustSourceCallableReturnFactKey) !== undefined ? nativeStorage.returnFor(node)
+        : records.sourceCallableReturn.get(node) !== undefined ? nativeStorage.returnFor(node)
         : nativeStorage.valueFor(node);
       if (selected.kind === "unresolved") { failures.set(declaration, selected.reason); continue; }
       const generic = rustTargetGenericReferences(selected.carrier);

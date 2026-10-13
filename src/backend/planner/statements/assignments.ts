@@ -32,7 +32,7 @@ import type { RustAssignmentOperationPlan } from "./core.js";
 import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target-model/syntax/tokens.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";
 import { applyRustValueConversion } from "../expressions/value-conversions.js";
 import { effectivePlannedExpressionCarrier, selectedOperationMatches } from "../expressions/fundamentals.js";
@@ -51,7 +51,7 @@ export function planRustBuiltinErrorAssignment(
   if (receiverNode === undefined || property.accessMode === "read" ||
     !rustCarrierProvidesErrorMutation(property.receiverCarrier, context.input.program.typeDefinitions) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(receiverNode, context), property.receiverCarrier) ||
-    !selectedOperationMatches(context.input.program.facts.getSelectedTargetProperty(left),
+    !selectedOperationMatches(context.input.program.records.selectedOperation.get(left),
       property.operationId, "property", property.resultCarrier) || context.syntheticNames === undefined) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, left),
       "rust.backend.error-write-storage", "Error mutation requires exact selected physical writable storage and member evidence."));

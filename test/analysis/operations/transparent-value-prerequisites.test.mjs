@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustFlowReadProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustOptionElementCarrier, isRustStringCarrier } from "../../../dist/target-model/types/index.js";
 
 test("transparent call prerequisites preserve the raw optional carrier until destination selection", () => {
@@ -18,9 +18,9 @@ test("transparent call prerequisites preserve the raw optional carrier until des
     const wrapped = source.ast.is.IsParenthesizedExpression(node) || source.ast.is.IsSatisfiesExpression(node);
     const indexed = source.ast.is.IsElementAccessExpression(node);
     if (wrapped || indexed) {
-      const carrier = program.facts.getRuntimeCarrierFact(node)?.carrier;
+      const carrier = program.records.runtimeCarrier.get(node)?.carrier;
       assert.equal(isRustStringCarrier(rustOptionElementCarrier(carrier)), true, source.ast.kindName(node));
-      assert.equal(program.facts.getFact(node, rustFlowReadProjectionFactKey), undefined);
+      assert.equal(program.records.flowReadProjection.get(node), undefined);
       if (wrapped) wrappers++;
       if (indexed) indexedReads++;
     }

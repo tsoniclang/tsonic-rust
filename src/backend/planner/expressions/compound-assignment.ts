@@ -8,8 +8,8 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
-import { rustTargetOperationIsDirectLocation } from "../../../analysis/facts/target-operation.js";
+
+import { rustTargetOperationIsDirectLocation } from "../../../analysis/operations/target-operation.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -27,7 +27,7 @@ import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpression
 import { planRustDirectStorage } from "./updates/target.js";
 import { directStorageRemainsSelected } from "./updates/direct-storage.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
-import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
+
 
 export function planCompoundAssignmentExpression(
   node: Node,
@@ -61,11 +61,11 @@ export function planCompoundAssignmentExpression(
   if (location !== undefined) {
     bindings.push(...location.bindings);
   } else {
-    const target = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
+    const target = context.input.program.records.targetOperation.get(left);
     const staticReceiver = target?.kind === "source-static-field" ||
       target?.kind === "source-accessor" && target.receiver.kind === "static";
     const receiver = staticReceiver ? undefined : Node_Expression(ast, left);
-    const index = context.input.program.facts.getFact(left, rustComputedMemberFactKey) === undefined &&
+    const index = context.input.program.records.computedMember.get(left) === undefined &&
       ast.kindName(left) === KindElementAccessExpression
       ? ElementAccessExpression_ArgumentExpression(ast, left) : undefined;
     for (const operand of [receiver, index]) {

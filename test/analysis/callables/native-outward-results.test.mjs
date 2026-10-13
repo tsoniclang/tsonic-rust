@@ -1,8 +1,11 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native-outward-results.js";
-import { rustAsyncFunctionFactKey, rustErrorEffectsFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
+
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
@@ -49,7 +52,7 @@ test("native outward results distinguish pure async T from fallible Result<T,pro
 test("JS outward results retain exact Promise error and lifetime independently of native output normalization", () => {
   const current = fixture(`export async function pure(): Promise<string> { return "value"; }`, ["js"]);
   const declaration = current.declaration("pure");
-  const asynchronous = current.context.facts.get(declaration, rustAsyncFunctionFactKey);
+  const asynchronous = current.context.records.asyncFunction.get(declaration);
   const value = current.producers.invocationResultFor(declaration);
   assert.equal(value?.id, "rust.js.JsPromise");
   assert.deepEqual(value.genericArguments[0], asynchronous.futureCarrier.genericArguments[0]);
@@ -64,7 +67,7 @@ test("contextual async physical invocation preserves the finalized optional unio
     export function make(): () => Completion { return async () => 3; }`, ["js"]);
   const declaration = current.producers.producers.find(producer => current.context.ast.is.IsArrowFunction(producer.declaration))?.declaration;
   assert.equal(declaration !== undefined, true, "one authored async implementation");
-  const operation = current.context.facts.get(declaration, rustTargetOperationFactKey);
+  const operation = current.context.records.targetOperation.get(declaration);
   assert.equal(operation.invocationResult !== undefined, true, "one finalized contextual conversion");
   const result = current.producers.invocationResultFor(declaration);
   const completion = rustNativeCallableCompletion(result, current.context.typeDefinitions);
@@ -76,11 +79,12 @@ test("contextual async physical invocation preserves the finalized optional unio
   assert.equal(rustTargetTypeRefEquals(signature?.result, result), true, "one physical invocation result owner");
   const invalid = createRustNativeOutwardResults({ definitions: current.context.typeDefinitions,
     producers: current.producers, returnCarrierFor: current.producers.outwardReturnFor,
-    facts: { getFact(node, key) {
-      const selected = current.context.facts.getFact(node, key);
-      return node === declaration && key === rustTargetOperationFactKey ? { ...selected,
+    records: createRustRecordFixture({...current.context.records,
+targetOperation: { get: (node) => {
+    const selected = current.context.records.targetOperation.get(node);
+    return node === declaration ? { ...selected,
         invocationResult: { ...selected.invocationResult, sourceCarrier: { kind: "source-primitive", name: "int32" } } } : selected;
-    } },
+} }}),
   });
   assert.equal(invalid.invocationFor(declaration) === undefined, true, "foreign conversion sources reject");
 });
@@ -88,10 +92,11 @@ test("contextual async physical invocation preserves the finalized optional unio
 test("outward carrier queries fail closed before finalized native effects and do not cache that incomplete phase", () => {
   const current = fixture(`export async function pure(): Promise<string> { return "value"; }`);
   const declaration = current.declaration("pure");
-  const facts = current.context.facts;
+  const records = current.context.records;
   let finalized = false;
   const selected = createRustNativeOutwardResults({
-    facts: { getFact(node, key) { return !finalized && key === rustErrorEffectsFactKey ? undefined : facts.getFact(node, key); } },
+    records: createRustRecordFixture({...records,
+errorEffects: { get: (node) => { return !finalized ? undefined : records.errorEffects.get(node); } }}),
     definitions: current.context.typeDefinitions, producers: current.producers,
     returnCarrierFor(node) {
       const result = current.context.callableValues.nativeStorage.returnFor(node);
@@ -107,7 +112,7 @@ test("outward carrier queries fail closed before finalized native effects and do
 test("sync JS Promise output retains a resolvable producer error reference before deferred-effect sealing", () => {
   const current = fixture(`export function forward(callback: () => Promise<string>): Promise<string> { return callback(); }`, ["js"]);
   const declaration = current.declaration("forward");
-  const selected = createRustNativeOutwardResults({ facts: current.context.facts,
+  const selected = createRustNativeOutwardResults({ records: current.context.records,
     definitions: current.context.typeDefinitions, producers: {
       forDeclaration: current.producers.forDeclaration, errorFor: current.producers.errorFor,
       deferredFor() { throw new Error("JS output shape must not query unfinished deferred effects"); },
@@ -130,7 +135,7 @@ test("sync JS Promise output retains a resolvable producer error reference befor
 test("outward result recursion is bounded at the producer owner", () => {
   const current = fixture(`export function pure(): string { return "value"; }`);
   const declaration = current.declaration("pure");
-  const selected = createRustNativeOutwardResults({ facts: current.context.facts,
+  const selected = createRustNativeOutwardResults({ records: current.context.records,
     definitions: current.context.typeDefinitions, producers: current.producers,
     returnCarrierFor(node) { return selected.returnFor(node); },
   });
@@ -166,7 +171,7 @@ test("callback Future physical storage reuses canonical protocol completion incl
   const { native, nativeStorage } = current.context.callableValues;
   assert.equal(native.calls.length, 3);
   for (const call of native.calls) {
-    const operation = current.context.facts.get(call.node, rustTargetOperationFactKey);
+    const operation = current.context.records.targetOperation.get(call.node);
     const arguments_ = rustNativeCallableInvocationArguments(call.input, operation);
     assert.equal(arguments_ !== undefined, true);
     const signature = rustNativeCallableInputPhysicalSignature(call.input, arguments_, current.context.typeDefinitions);

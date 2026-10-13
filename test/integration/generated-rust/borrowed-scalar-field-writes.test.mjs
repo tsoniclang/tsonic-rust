@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustSourceCallEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { borrowedScalarFieldWritesSource, borrowedScalarFieldFreezeSource, ordinaryScalarFieldWritesSource,
   ownedFieldSnapshotSource, ownedFieldSnapshotRunSource } from "../../../../tsonic/test/fixtures/borrowed-scalar-field-writes.mjs";
 import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/receiver-field-capture-edges.mjs";
@@ -20,7 +20,7 @@ function unwrapSuffix(program, name) {
   const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
     ast.is.IsFunctionDeclaration(node) && ast.name(node) !== undefined && ast.text(ast.name(node)) === name);
   assert.equal(declaration !== undefined, true, name);
-  const effect = program.facts.getFact(declaration, rustSourceCallEffectsFactKey);
+  const effect = program.records.sourceCallEffects.get(declaration);
   assert.equal(effect !== undefined, true, name + " invocation");
   return effect.invocation === "fallible" ? ".unwrap()" : "";
 }

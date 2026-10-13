@@ -55,15 +55,10 @@ import {
   rustTsValueTargetType,
 } from "../../target-model/types/index.js";
 import { rustOptionalStorageValue, rustOptionalStorageNestingDepth } from "../../target-model/types/projections.js";
-import {
-  rustModuleBindingFactKey,
-  rustMutatedBindingFactKey,
-  rustBindingStorageFactKey,
-  rustPostCheckUnaryMinusOperationId,
-  rustPostCheckUnaryPlusOperationId,
-  rustTargetOperationFactKey,
-  rustTargetOperationResultCarrier,
-} from "../facts/keys.js";
+
+
+import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
+import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { parseSourceBigIntLiteral } from "../../target-model/syntax/literals.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
@@ -72,11 +67,11 @@ import {
   resolveExpressionCarrierBeforeFlowReadProjection,
 } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { rustSelectedOperationKey } from "../../target-model/facts/selections.js";
-import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../facts/target-operation.js";
+
+import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "./target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
-import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustNumericPromotionConversion } from "../../policy/operations/numeric/promotion.js";
@@ -84,7 +79,7 @@ import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function resolveBinaryOperandCarriers(
@@ -123,7 +118,7 @@ export function resolveBinaryOperandCarriers(
   if (operatorKind === KindQuestionQuestionEqualsToken) {
     const target = assignmentTarget(walk.context.ast, leftNode);
     const left = resolveExpressionCarrierBeforeFlowReadProjection(walk, target, sourceFile, undefined);
-    const location = walk.context.facts.getFact(target, rustTargetOperationFactKey);
+    const location = walk.context.records.targetOperation.get(target);
     const storage = location?.kind === "source-accessor" ? location.write?.valueCarrier : left;
     const right = resolveExpressionCarrier(walk, rightNode, sourceFile, storage);
     return { left, right, leftNode, rightNode, operatorKind };
@@ -139,8 +134,8 @@ export function resolveBinaryOperandCarriers(
   }
   const selectedAssignmentValueCarrier = operatorKind === KindEqualsToken
     ? rustSelectedAssignmentValueCarrier(
-        walk.context.facts.get(expression, rustTargetOperationFactKey) ??
-          walk.context.facts.resolve(expression, rustTargetOperationFactKey),
+        walk.context.records.targetOperation.get(expression) ??
+          walk.context.records.targetOperation.get(expression),
       )
     : undefined;
   if (rustBinaryResultCarrierIsIndependentOfOperands(operatorKind)) {
@@ -366,17 +361,17 @@ export function resolvePostCheckBinaryCarrier(
   }
   const { left, right, leftNode, rightNode, operatorKind } = operands;
   const location = operatorKind === KindQuestionQuestionEqualsToken ? assignmentTarget(walk.context.ast, leftNode) : leftNode;
-  const selectedLeftOperation = walk.context.facts.get(location, rustSelectedOperationKey) ??
-    walk.context.facts.resolve(location, rustSelectedOperationKey);
-  const selectedLeftFact = walk.context.facts.get(location, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(location, rustTargetOperationFactKey);
+  const selectedLeftOperation = walk.context.records.selectedOperation.get(location) ??
+    walk.context.records.selectedOperation.get(location);
+  const selectedLeftFact = walk.context.records.targetOperation.get(location) ??
+    walk.context.records.targetOperation.get(location);
   const strictEquality = operatorKind === KindEqualsEqualsEqualsToken ||
     operatorKind === KindExclamationEqualsEqualsToken;
   const leftComparisonCarrier = strictEquality
-    ? rustStrictEqualityOperandCarrier(walk.context.facts, operands.leftNode)
+    ? rustStrictEqualityOperandCarrier(walk.context.records, operands.leftNode)
     : left;
   const rightComparisonCarrier = strictEquality
-    ? rustStrictEqualityOperandCarrier(walk.context.facts, operands.rightNode)
+    ? rustStrictEqualityOperandCarrier(walk.context.records, operands.rightNode)
     : right;
   const optionNullishRelationship = selectedOptionNullishRelationship(
     leftComparisonCarrier,
@@ -421,7 +416,7 @@ export function resolvePostCheckBinaryCarrier(
     (selectedLeftOperation === undefined || rustTargetOperationSupportsAssignment(selectedLeftFact, walk.context.typeDefinitions))) {
     const projected = rustOptionalStorageValue(left);
     const rightValue = projected === undefined
-      ? rustValueCarrierBeforeContextualConversion(walk.context.facts, rightNode) : right;
+      ? rustValueCarrierBeforeContextualConversion(walk.context.records, rightNode) : right;
     const inner = projected ?? rustOptionElementCarrier(left);
     const storage = selectedLeftFact?.kind === "source-accessor" ? selectedLeftFact.write?.valueCarrier : left;
     const presentResult = inner !== undefined && rustTargetTypeRefEquals(inner, rightValue)
@@ -469,7 +464,7 @@ export function resolvePostCheckBinaryCarrier(
       };
     } else if (inner !== undefined && right !== undefined && leftOptionDepth !== undefined &&
       isRustOptionCarrier(right) && rustTargetTypeRefEquals(inner, rustOptionValueCarrier(right))) {
-      const rawRight = walk.context.facts.getRuntimeCarrierFact(rightNode)?.carrier;
+      const rawRight = walk.context.records.runtimeCarrier.get(rightNode)?.carrier;
       const rawDepth = isRustOptionCarrier(rawRight) ? rustOptionNestingDepth(rawRight, inner) : undefined;
       fact = {
         kind: "option-coalesce",
@@ -585,7 +580,7 @@ export function resolvePostCheckBinaryCarrier(
         ? `tsonic.rust.operator.=.${rustOperatorCarrierKey(right)}`
         : `tsonic.rust.operator.${equivalentOperator}.equivalent.${rustOperatorCarrierKey(right)}`,
       operator: equivalentOperator ?? "=",
-      resultCarrier: rustValueCarrierBeforeOptionProjection(walk.context.facts, operands.rightNode) ?? right,
+      resultCarrier: rustValueCarrierBeforeOptionProjection(walk.context.records, operands.rightNode) ?? right,
     };
   } else {
     const compound = selectRustCompoundAssignment(operatorKind, left, right,
@@ -656,12 +651,7 @@ export function resolvePostCheckBinaryCarrier(
     : undefined;
   if (inPlaceStringAppend !== undefined && fact?.kind === "operator-token") {
     fact = { ...fact, writeStrategy: inPlaceStringAppend.writeStrategy };
-    walk.context.facts.set(
-      inPlaceStringAppend.declaration,
-      rustMutatedBindingFactKey,
-      { mutated: true },
-      [{ message: "rust in-place string append requires mutable local storage" }],
-    );
+    walk.context.records.mutatedBinding.set(inPlaceStringAppend.declaration, { mutated: true }, [{ message: "rust in-place string append requires mutable local storage" }]);
   }
   if (fact === undefined) {
     walk.postCheckOperations.delete(expression);
@@ -738,10 +728,10 @@ function inPlaceStringAppendDeclarationFor(
   const effects = walk.context.source.navigation.expressionEffects(value);
   const pure = !effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow;
   if (reference === undefined || reference.symbol === undefined ||
-    walk.context.facts.get(reference.declaration, rustModuleBindingFactKey) !== undefined ||
-    walk.context.facts.resolve(reference.declaration, rustModuleBindingFactKey) !== undefined ||
-    walk.context.facts.get(reference.declaration, rustBindingStorageFactKey) !== undefined ||
-    walk.context.facts.resolve(reference.declaration, rustBindingStorageFactKey) !== undefined ||
+    walk.context.records.moduleBinding.get(reference.declaration) !== undefined ||
+    walk.context.records.moduleBinding.get(reference.declaration) !== undefined ||
+    walk.context.records.bindingStorage.get(reference.declaration) !== undefined ||
+    walk.context.records.bindingStorage.get(reference.declaration) !== undefined ||
     walk.context.source.navigation.declarationUseSummary(reference.declaration).captured && !pure ||
     walk.context.source.navigation.referencesWithin(reference.symbol, value).length !== 0) {
     return undefined;
@@ -775,8 +765,8 @@ function selectEquivalentBindingAssignment(
     targetReference.declaration !== valueReference.declaration) {
     return undefined;
   }
-  const valueFact = walk.context.facts.get(value, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(value, rustTargetOperationFactKey);
+  const valueFact = walk.context.records.targetOperation.get(value) ??
+    walk.context.records.targetOperation.get(value);
   return valueFact?.kind === "operator-token"
     ? selectRustEquivalentAssignment(valueFact.operator, targetCarrier, valueFact.resultCarrier)
     : undefined;
@@ -832,7 +822,7 @@ export function recordFinalizedOperatorSelection(
   fact: RustTargetOperationFact,
   resultType: TargetTypeRef,
 ): void {
-  walk.context.facts.set(expression, rustSelectedOperationKey, {
+  walk.context.records.selectedOperation.set(expression, {
     operationId: fact.operationId,
     operationKind: "operator",
     targetOperation: rustTargetOperationText(fact),

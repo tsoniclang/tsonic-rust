@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
+
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustGenericCallableImplementationPath } from "../declarations/callables/generic-implementations.js";
@@ -35,7 +35,7 @@ export function planRustGenericCallableValue(
   }
   const fields: { name: string; value: RustExpr }[] = [];
   for (const [index, capture] of implementation.captures.entries()) {
-    const binding = context.input.program.facts.getFact(capture.reference, rustSourceBindingFactKey);
+    const binding = context.input.program.records.sourceBinding.get(capture.reference);
     const source = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     const move = context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
     if (source === undefined || !requireRustCarrierRequirements(capture.carrier,

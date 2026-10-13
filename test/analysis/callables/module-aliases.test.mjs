@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { selectRustInlineModuleCallableAliases } from "../../../dist/analysis/callables/module-aliases.js";
-import { rustContextualValueConversionFactKey, rustDirectCallableReferenceFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
+
+
+
 import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 function fixture() {
@@ -34,14 +36,18 @@ function fixture() {
   const producer = { form: "function", sourceDeclaration: owner, carrier };
   const values = new Map();
   for (const node of [...declarations, ...flow.uses.map(use => use.reference)]) {
-    values.set(node, new Map([[rustRuntimeCarrierKey, { carrier }]]));
+    values.set(node, new Map([["runtimeCarrier", { carrier }]]));
   }
   for (const use of flow.uses) if (use.role === "argument") {
-    values.get(use.reference).set(rustContextualValueConversionFactKey,
+    values.get(use.reference).set("contextualValueConversion",
       { targetCarrier: target, conversion: { kind: "callable-input", source: carrier, target } });
   }
   return { source, expression, producer, flow, declarations, values,
-    walk: { context: { ast: source.ast, source, facts: { get: (node, key) => values.get(node)?.get(key) } } } };
+    walk: { context: { ast: source.ast, source, records: createRustRecordFixture({
+      runtimeCarrier: { get: node => values.get(node)?.get("runtimeCarrier") },
+      contextualValueConversion: { get: node => values.get(node)?.get("contextualValueConversion") },
+      directCallableReference: { get: node => values.get(node)?.get("directCallableReference") },
+    }) } } };
 }
 
 test("unobserved immutable callable aliases select one exact stack producer through all aliases", () => {
@@ -73,9 +79,9 @@ test("callable alias erasure requires exact carrier, input conversion and declar
     const current = fixture();
     const use = current.flow.uses.find(value => value.role === "argument");
     const values = current.values.get(use.reference);
-    if (mutation === "carrier") values.delete(rustRuntimeCarrierKey);
-    if (mutation === "conversion") values.delete(rustContextualValueConversionFactKey);
-    if (mutation === "declaration") values.set(rustDirectCallableReferenceFactKey, { ...current.producer, sourceDeclaration: {} });
+    if (mutation === "carrier") values.delete("runtimeCarrier");
+    if (mutation === "conversion") values.delete("contextualValueConversion");
+    if (mutation === "declaration") values.set("directCallableReference", { ...current.producer, sourceDeclaration: {} });
     assert.equal(selectRustInlineModuleCallableAliases(current.walk, current.expression, current.producer) === undefined, true, mutation);
   }
 });

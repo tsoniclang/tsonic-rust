@@ -8,11 +8,8 @@ import {
   Node_Initializer,
   Node_Name,
 } from "@tsonic/target-api/source";
-import {
-  rustMutatedBindingFactKey,
-  rustMutatedReferentFactKey,
-  rustSourceParameterAbiFactKey,
-} from "../../../../analysis/facts/keys.js";
+
+
 import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import {
@@ -32,7 +29,7 @@ import {
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 import { rustBindingStorageForDeclaration } from "../../expressions/typed-locations.js";
 import { planRustNativeAllocation } from "../../expressions/native-memory.js";
-import { rustNativeBackingKey } from "../../../../target-model/operations/native-memory.js";
+
 import type { RustBindingExpressionPlanner } from "../../bindings/patterns.js";
 import { rustOptionDefaultValue } from "../../expressions/option-default.js";
 import { rustCarrierReferentMutationRequiresMutableBinding } from "../../../../target-model/types/index.js";
@@ -84,7 +81,7 @@ export function planRustCallableParameters(
         (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern)
       ? nameNode
       : undefined;
-    const abi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+    const abi = context.input.program.records.sourceParameterAbi.get(parameter);
     const native = context.input.program.callableValues.native;
     const requiresImplementation = native.inputsFor(callable).some(input => input.subject.node === parameter);
     const physical = abi === undefined || !requiresImplementation ? undefined
@@ -108,7 +105,7 @@ export function planRustCallableParameters(
       !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
       return undefined;
     }
-    const sourceCarrier = context.input.program.facts.getRuntimeCarrierFact(parameter)?.carrier;
+    const sourceCarrier = context.input.program.records.runtimeCarrier.get(parameter)?.carrier;
     const locationStorage = rustBindingStorageForDeclaration(parameter, context);
     if (pattern !== undefined &&
       (abi?.mode !== "value" || sourceCarrier === undefined || abi.valueCarrier === undefined ||
@@ -142,15 +139,9 @@ export function planRustCallableParameters(
     const mutable = pattern === undefined &&
       locationStorage === undefined &&
       (
-        context.input.program.facts.getFact(
-          parameter,
-          rustMutatedBindingFactKey,
-        ) !== undefined ||
+        context.input.program.records.mutatedBinding.get(parameter) !== undefined ||
         ownedBinding && referentMutationRequiresMutableBinding &&
-          context.input.program.facts.getFact(
-            parameter,
-            rustMutatedReferentFactKey,
-          ) !== undefined
+          context.input.program.records.mutatedReferent.get(parameter) !== undefined
       );
     params.push({
       name: parameterName,
@@ -198,7 +189,7 @@ export function planRustCallableParameters(
     }
     context.usedAliases?.add("rt");
     const initial: RustExpr = { kind: "path", path: parameterName };
-    const allocation: RustExpr | undefined = context.input.program.facts.getFact(parameter, rustNativeBackingKey) === undefined
+    const allocation: RustExpr | undefined = context.input.program.records.nativeBacking.get(parameter) === undefined
       ? { kind: "call", path: "rt::Location::allocate", args: [initial] }
       : planRustNativeAllocation(parameter, initial, context);
     if (allocation === undefined) return undefined;

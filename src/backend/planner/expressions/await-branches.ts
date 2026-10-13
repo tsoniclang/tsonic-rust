@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../analysis/facts/await-values.js";
-import { rustAwaitValueRequirements } from "../../../analysis/facts/await-values.js";
-import { rustAwaitSourceErrorEffectsFactKey } from "../../../analysis/facts/await-source-error-effects.js";
+import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../target-model/records/await-values.js";
+import { rustAwaitValueRequirements } from "../../../analysis/callables/await-values.js";
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
 import { rustJsPromiseTargetId, isRustNeverCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
@@ -51,7 +51,7 @@ export function planRustAwaitBranches(
         }
         const operandError = rustTypeFromCarrierInContext(future.errorCarrier, context);
         const sourceBranches = future.errorBoundary === "source-program"
-          ? context.input.program.facts.getFact(node, rustAwaitSourceErrorEffectsFactKey)?.branches
+          ? context.input.program.records.awaitSourceErrorEffects.get(node)?.branches
             .filter(branch => rustTargetTypeRefEquals(branch.carrier, selected.carrier)) : undefined;
         const propagated = future.errorBoundary === "source-program"
           ? sourceBranches?.length !== 1 ? undefined

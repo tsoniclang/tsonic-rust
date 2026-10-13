@@ -2,13 +2,13 @@ import type { Node } from "@tsonic/tsts";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { rustJsValueTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { requireExpressionCarrier } from "./fundamentals.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { planExpression } from "./entry.js";
 
 export function planRustClosedRecordLiteral(
@@ -35,7 +35,7 @@ export function planRustClosedRecordLiteral(
       !ast.is.IsPropertyAssignment(property) && !ast.is.IsShorthandPropertyAssignment(property) ||
       name === undefined || ast.is.IsComputedPropertyName(name) || ast.text(name) !== field.sourceName ||
       ObjectLiteralProperty_Value(ast, property) !== field.expression ||
-      !rustTargetTypeRefEquals(rustEffectiveValueCarrier(context.input.program.facts, field.expression),
+      !rustTargetTypeRefEquals(rustEffectiveValueCarrier(context.input.program.records, field.expression),
         fact.resultCarrier)) return invalid();
     const value = planExpression(field.expression, context);
     if (value === undefined) return undefined;

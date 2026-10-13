@@ -1,7 +1,9 @@
+import { createRustRecordFixture } from "../../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustDirectStorageCore } from "../../../../../dist/backend/planner/expressions/updates/direct-storage.js";
-import { rustBindingStorageFactKey, rustModuleBindingFactKey, rustSourceBindingFactKey } from "../../../../../dist/analysis/facts/keys.js";
+
+
 import { rustStringTargetType } from "../../../../../dist/target-model/types/index.js";
 import { fakeAstReader } from "../../../../helpers/fake-compile-input.mjs";
 
@@ -14,10 +16,18 @@ function fixture(storage, module = false) {
       IsParenthesizedExpression: selected => selected.kindName === "KindParenthesizedExpression" },
       as: { AsParenthesizedExpression: selected => selected.kindName === "KindParenthesizedExpression" ? selected : undefined } } },
     sourceNavigation: { sourceReferenceFor: () => undefined },
-    facts: { getFact: (selected, key) => selected === node && key === rustSourceBindingFactKey
-      ? { sourceDeclaration: declaration, scope: module ? "module" : "lexical", fileName: "/index.ts" }
-      : selected === declaration && key === (module ? rustModuleBindingFactKey : rustBindingStorageFactKey) && storage !== undefined
+    records: createRustRecordFixture({sourceBinding: { get: (selected) => selected === node
+    ? { sourceDeclaration: declaration, scope: module ? "module" : "lexical", fileName: "/index.ts" }
+    : selected === declaration && "sourceBinding" === (module ? "moduleBinding" : "bindingStorage") && storage !== undefined
         ? { storage, valueCarrier: carrier } : undefined },
+moduleBinding: { get: (selected) => selected === node && false
+    ? { sourceDeclaration: declaration, scope: module ? "module" : "lexical", fileName: "/index.ts" }
+    : selected === declaration && "moduleBinding" === (module ? "moduleBinding" : "bindingStorage") && storage !== undefined
+        ? { storage, valueCarrier: carrier } : undefined },
+bindingStorage: { get: (selected) => selected === node && false
+    ? { sourceDeclaration: declaration, scope: module ? "module" : "lexical", fileName: "/index.ts" }
+    : selected === declaration && "bindingStorage" === (module ? "moduleBinding" : "bindingStorage") && storage !== undefined
+        ? { storage, valueCarrier: carrier } : undefined }}),
     names: { nameForDeclaration: () => "value" }, localStorageAliases: { owner: () => undefined },
   } }, moduleName: "index", crateName: "app", moduleNameByFileName: new Map([["/index.ts", "index"]]),
     externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map() };

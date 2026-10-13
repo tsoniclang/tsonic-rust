@@ -94,7 +94,7 @@ function run(value: string | Pattern | string[]): void {
 test("nominal constructor policy rejects unclassified native declarations and open project binders", () => {
   const declaration = {};
   const constructor = {};
-  const context = { facts: { get: () => undefined }, source: { sourceFacts: { getFact: () => undefined } },
+  const context = { source: { sourceFacts: { getFact: () => undefined } },
     ast: { kind: () => 1, getSourceFile: () => undefined } };
   const options = { projectTypes: { definitionForDeclaration: () => undefined },
     sourceProfiles: { profileForNode: () => undefined } };

@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
@@ -43,27 +44,22 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
-import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../../facts/operations/keys.js";
+
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { canRequireSourceClone } from "./clone-requirements.js";
-import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-profiles/js/member-reads.js";
 import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
 import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
-import type {
-  RustCheckedElementSelectionInput,
-  RustCheckedIterationSelectionInput,
-  RustCheckedOperationSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedElementSelectionInput, RustCheckedIterationSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
+import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { selectedRustForInKeys } from "./for-in-keys.js";
@@ -75,7 +71,7 @@ import { rustRecordCarrierValue } from "../../../target-model/types/carriers/rec
 
 export function selectRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const selectedReceiverCarrier = selectedMemberReceiverCarrier(request, context, options);
@@ -126,14 +122,14 @@ export function selectRustCheckedElementAccess(
         ...(selectedMember?.setters.length === 1 ? { sourceSelectedWriteDeclaration: selectedMember.setters[0]! } : {}),
       }, context, options);
       if (result.kind === "accept") {
-        const selected = context.facts.resolve(request.expression, rustTargetOperationFactKey);
+        const selected = context.records.targetOperation.get(request.expression);
         if (selected === undefined) return rejectSelectedOperation(request.expression, context,
           "RUST_COMPUTED_MEMBER_OPERATION_NOT_CLOSED",
           "Computed project member requires its exact sealed target operation.");
         const evaluateReceiver = selected.kind === "source-static-field" ? selected.classReceiver !== undefined
           : selected.kind !== "source-accessor" || selected.receiver.kind !== "static" ||
             request.sourceReceiverValueDeclaration !== options.projectTypes.definitionContainingDeclaration(request.sourceSelectedDeclaration)?.declaration;
-        recordRustComputedMemberEvaluation(context.ast, context.facts, request.expression,
+        recordRustComputedMemberEvaluation(context.ast, context.records, request.expression,
           request.receiver, request.argument, request.accessMode, evaluateReceiver);
       }
       return result;
@@ -349,12 +345,12 @@ export function selectRustCheckedElementAccess(
 
 export function selectRustCheckedIteration(
   request: RustCheckedIterationSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const source = request.source;
   if (source.iterationKind === "for-in") {
-    const iterable = rustEffectiveValueCarrier(context.facts, request.expression) ??
+    const iterable = rustEffectiveValueCarrier(context.records, request.expression) ??
       resolveRustTargetTypeRef(request.expression, context, options);
     const elementCarrier = resolveRustTargetTypeRef(source.sourceElementType, context, options);
     if (elementCarrier === undefined || !isRustStringCarrier(elementCarrier)) {
@@ -388,7 +384,7 @@ export function selectRustCheckedIteration(
       sourceResultType: source.sourceElementType,
     }, elementCarrier);
   }
-  const iterable = rustEffectiveValueCarrier(context.facts, request.expression) ??
+  const iterable = rustEffectiveValueCarrier(context.records, request.expression) ??
     resolveRustTargetTypeRef(request.expression, context, options);
   const targetIteration = rustIterableTargetPolicy(iterable, context.typeDefinitions);
   if (targetIteration === undefined) {
@@ -434,7 +430,7 @@ type RustPropertyKeyIterationLowering = Extract<
 function rustPropertyKeyIterationLowering(
   iterable: TargetTypeRef | undefined,
   expression: Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPropertyKeyIterationLowering | undefined {
   if (iterable?.kind === "array" ||
@@ -624,21 +620,21 @@ function isFreshRustIterationValue(
 function recordIterationInitializerCarrier(
   initializer: ExtensionFactSubject | undefined,
   carrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): void {
   const root = asNode(initializer, context);
   if (root === undefined) {
     return;
   }
   const evidence = [{ message: "rust selected iteration binding carrier" }];
-  context.facts.set(root, rustRuntimeCarrierKey, { carrier }, evidence);
+  context.records.runtimeCarrier.set(root, { carrier }, evidence);
   const declarations = VariableDeclarationList_Declarations(context.ast, root);
   if (declarations === undefined || !isDenseDataArray(declarations)) {
     return;
   }
   for (const declaration of declarations) {
     if (declaration !== undefined && context.ast.kindName(declaration) === "KindVariableDeclaration") {
-      context.facts.set(declaration, rustRuntimeCarrierKey, { carrier }, evidence);
+      context.records.runtimeCarrier.set(declaration, { carrier }, evidence);
     }
   }
 }

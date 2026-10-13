@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustBroadSourceValueTargetType } from "../../../dist/policy/types/resolution/broad-values.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
@@ -20,7 +20,7 @@ export function run(value: Value): void {
     let checked = 0;
     const visit = node => {
       if (ast.is.IsObjectLiteralExpression(node)) {
-        const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+        const fact = program.records.targetOperation.get(node);
         assert.equal(fact?.kind, "record-literal");
         const field = fact.fields.find(field => field.sourceName === "value");
         if (field !== undefined) {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectedValueCarrier } from "../../../dist/analysis/operations/selected-values.js";
-import { rustFlowReadProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustEmptyObjectTargetType, rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
@@ -40,10 +40,11 @@ function selected(carrier, sourceType, use) {
     semanticsFor: () => semantics,
     semantics: () => semantics,
     typeDefinitions: emptyRustTypeDefinitions,
-    facts: { getFact: () => undefined, get: () => undefined, resolve: () => undefined,
-      getTargetConversionFact: () => undefined,
-      getRuntimeCarrierFact: () => ({ carrier }),
-      set: (subject, key, fact) => writes.push({ subject, key, fact }) },
+    records: createRustRecordFixture({
+      runtimeCarrier: { get: () => ({ carrier }) },
+      flowReadProjection: { get: () => undefined,
+        set: (subject, fact) => writes.push({ subject, family: "flowReadProjection", fact }) },
+    }),
   };
   return { carrier: selectedValueCarrier(expression, selectedType, context, { projectTypes: {} }), writes, expression };
 }
@@ -56,7 +57,7 @@ test("required present source reads select the exact physical payload and one ch
       assert.equal(result.carrier === payload, true, "retain exact physical native payload");
       assert.equal(result.writes.length, 1, "one checked projection, not a conversion layer");
       assert.equal(result.writes[0].subject === result.expression, true, "exact operand owner");
-      assert.equal(result.writes[0].key === rustFlowReadProjectionFactKey, true, "existing sealed fact owner");
+      assert.equal(result.writes[0].family, "flowReadProjection", "existing sealed record owner");
       assert.equal(result.writes[0].fact.kind, "option-value");
       assert.equal(result.writes[0].fact.sourceCarrier === storage, true);
       assert.equal(result.writes[0].fact.selectedCarrier === payload, true);

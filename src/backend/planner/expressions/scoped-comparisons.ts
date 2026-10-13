@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { rustBorrowValueIsUnprojected } from "../../../analysis/program/borrowed-element-purity.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
@@ -21,7 +21,7 @@ export function planRustScopedStringComparison(
   const literal = (node: Node): boolean => ast.is.IsStringLiteral(node) || ast.is.IsNoSubstitutionTemplateLiteral(node);
   const selected = literal(right) ? { field: left, literal: right, reversed: false }
     : literal(left) ? { field: right, literal: left, reversed: true } : undefined;
-  if (selected === undefined || !rustBorrowValueIsUnprojected(selected.field, context.input.program.facts) ||
+  if (selected === undefined || !rustBorrowValueIsUnprojected(selected.field, context.input.program.records) ||
     !isRustStringCarrier(expressionCarrier(selected.field, context)) ||
     !isRustStringCarrier(expressionCarrier(selected.literal, context))) return undefined;
   if (!rustSourceFieldHasValueReceiver(selected.field, context)) return undefined;

@@ -1,6 +1,7 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, orderEnumerableOwnStringProperties } from "@tsonic/target-api/source";
-import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -9,7 +10,7 @@ import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index
 export function selectedRustForInKeys(
   expression: Node,
   carrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly string[] | undefined {
   const { ast } = context;

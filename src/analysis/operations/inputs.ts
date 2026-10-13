@@ -47,19 +47,20 @@ import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
 import { resolveRustTargetTypeRef, resolveRustTupleElementTargetType } from "../../policy/types/resolution/index.js";
 import { resolveRustInferredUnion } from "../../policy/types/resolution/inferred-unions.js";
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../../policy/types/resolution/source-unions.js";
-import { rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
+
 import { rustSelectedAssignmentValueCarrier } from "./operators.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustCheckedIteration } from "./provider/index.js";
 import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustRawAddressPlanKey } from "../../target-model/operations/raw-addresses.js";
-import { rustMemoryLayoutObservationKey } from "../../target-model/operations/memory-layout.js";
-import { rustRawLocationPlanKey } from "../../target-model/operations/native-memory.js";
-import { rustMemoryBindingPlanKey } from "../../target-model/operations/memory-bindings.js";
+
+
+
+
 import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { resolveRustArrayElementStorage } from "../expressions/array-storage.js";
@@ -70,19 +71,19 @@ export function recordSelectedOperationInputs(
   sourceFile: SourceFile,
   fact: RustTargetOperationFact | undefined,
 ): void {
-  if (walk.context.facts.get(expression, rustMemoryLayoutObservationKey) !== undefined) return;
-  const memoryBinding = walk.context.facts.get(expression, rustMemoryBindingPlanKey);
+  if (walk.context.records.memoryLayoutObservation.get(expression) !== undefined) return;
+  const memoryBinding = walk.context.records.memoryBindingPlan.get(expression);
   if (memoryBinding !== undefined) {
     if (memoryBinding.kind === "field") resolveExpressionCarrier(walk, memoryBinding.expression, sourceFile, memoryBinding.carrier);
     else for (const field of memoryBinding.fields) resolveExpressionCarrier(walk, field.expression, sourceFile, field.carrier);
     return;
   }
-  const rawLocation = walk.context.facts.get(expression, rustRawLocationPlanKey);
+  const rawLocation = walk.context.records.rawLocationPlan.get(expression);
   if (rawLocation !== undefined) {
     resolveExpressionCarrier(walk, rawLocation.expression, sourceFile, rawLocation.inputCarrier);
     return;
   }
-  const rawAddress = walk.context.facts.get(expression, rustRawAddressPlanKey);
+  const rawAddress = walk.context.records.rawAddressPlan.get(expression);
   if (rawAddress !== undefined) {
     for (const input of rawAddress.arguments) resolveExpressionCarrier(walk, input.expression, sourceFile, input.carrier);
     return;
@@ -185,7 +186,7 @@ export function recordSelectedOperationInputs(
       }
     }
     const callArguments = ast.arguments(expression);
-    const selectedCall = walk.context.facts.getSelectedTargetCall(expression);
+    const selectedCall = walk.context.records.selectedCall.get(expression);
     for (const [index, argument] of callArguments.entries()) {
       if (argument === undefined) {
         continue;
@@ -537,14 +538,14 @@ export function recordForOfFacts(
       source,
     }, rustOperationContext(walk, statement), walk.operationOptions));
   }
-  const selected = walk.context.facts.get(statement, rustTargetOperationFactKey);
+  const selected = walk.context.records.targetOperation.get(statement);
   if (selected?.kind === "iteration") {
     const initializer = ForInOrOfStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
       if (walk.context.ast.kindName(initializer) === KindIdentifier) {
         const declaration = recordProjectSourceBinding(walk, initializer)?.sourceDeclaration;
         if (declaration !== undefined) {
-          walk.context.facts.set(declaration, rustMutatedBindingFactKey, { mutated: true }, [
+          walk.context.records.mutatedBinding.set(declaration, { mutated: true }, [
             { message: "rust selected iteration assignment writes the existing binding" },
           ]);
         }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustFinalizedSourceInputs } from "../../../../dist/analysis/facts/finalized-operation-abi.js";
+import { rustFinalizedSourceInputs } from "../../../../dist/analysis/operations/finalized-operation/conversions.js";
 import { providerTargetRuntimeSlotKeys, sourceRuntimeSlots } from "../../../../dist/backend/planner/project/provider-source-inputs.js";
 
 test("provider runtime slot keys consume the single finalized source-input order without removing repetitions", () => {

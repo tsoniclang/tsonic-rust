@@ -1,8 +1,10 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustSourceParameterAbiFactKey, rustSourceBindingFactKey } from "../../../../dist/analysis/facts/keys.js";
+
+
 import { planRustSharedReceiver } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { lowerRustValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
 import { rustValueConversionContract } from "../../../../dist/target-model/conversions/contracts.js";
@@ -26,10 +28,9 @@ function context(parameter, override, capture) {
       storage: "value", valueCarrier: stringCarrier, borrowed: capture }],
     input: { program: { typeDefinitions: emptyRustTypeDefinitions,
       callableValues: { generic: { definitionFor: () => undefined } },
-      facts: { getFact: (_node, key) =>
-      key === rustSourceParameterAbiFactKey ? parameter : key === rustSourceBindingFactKey
-        ? { sourceDeclaration: declaration } : undefined,
-      getRuntimeCarrierFact: () => ({ carrier: stringCarrier }) },
+      records: createRustRecordFixture({sourceParameterAbi: { get: (_node) => parameter },
+sourceBinding: { get: (_node) => ({ sourceDeclaration: declaration }) },
+runtimeCarrier: { get: () => ({ carrier: stringCarrier }) }}),
       source: { ast: { kindName: () => "KindIdentifier", is: {
         IsIdentifier: () => true, IsElementAccessExpression: () => false,
         IsParenthesizedExpression: () => false, IsAsExpression: () => false, IsSatisfiesExpression: () => false,

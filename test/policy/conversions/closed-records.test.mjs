@@ -10,7 +10,8 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { selectRustSourceValueConversion, selectRustProjectedValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 import { jsValueProjectionsAreValid } from "../../../dist/policy/operations/source-profiles/js/model.js";

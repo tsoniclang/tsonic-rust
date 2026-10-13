@@ -26,9 +26,9 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isUnannotatedRustNumericLiteral, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustSpreadElementCarrier } from "../../target-model/operations/rest-assembly.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
-import { rustSourceCallGenericLifetimeArguments } from "../facts/source-call-lifetimes.js";
+import { rustSourceCallGenericLifetimeArguments } from "../callables/source-call-lifetimes.js";
 import { selectRustIndexedCallKeys } from "./indexed-call-keys.js";
-import { rustIndexedFieldKeyArgument } from "../facts/indexed-field-keys.js";
+
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
@@ -166,7 +166,7 @@ function reconcileProjectSourceArgumentTypeParameters(
     if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) continue;
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
-    const actual = walk.context.facts.getFact(argument, rustIndexedFieldKeyArgument)?.carrier ??
+    const actual = walk.context.records.indexedFieldKeyArgument.get(argument)?.carrier ??
       resolveProjectSourceInferenceCarrier(walk, argument);
     if (matches.length === 0) continue;
     for (const binding of matches) {
@@ -340,10 +340,10 @@ function resolveProjectSourceInferenceCarrier(
       : resolveProjectSourceInferenceCarrier(walk, inner);
   }
   if (kind === KindArrayLiteralExpression || kind === KindObjectLiteralExpression) {
-    return walk.context.facts.getRuntimeCarrierFact(argument)?.carrier;
+    return walk.context.records.runtimeCarrier.get(argument)?.carrier;
   }
   if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) {
-    return walk.context.facts.getRuntimeCarrierFact(argument)?.carrier;
+    return walk.context.records.runtimeCarrier.get(argument)?.carrier;
   }
   const file = walk.context.ast.getSourceFile(argument);
   return file === undefined ? undefined : resolveExpressionCarrier(walk, argument, file, undefined);

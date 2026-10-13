@@ -17,11 +17,11 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planStatementSequence } from "./core.js";
 import { planVariableStatement } from "./variable-declarations.js";
-import { rustResourceManagementFactKey } from "../../../analysis/facts/keys.js";
+
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustCompletionBoundary, RustControlTarget, RustPlanContext } from "../program/plan-context.js";
-import type { RustResourceManagementFact } from "../../../analysis/facts/keys.js";
+import type { RustResourceManagementFact } from "../../../target-model/records/callables-and-resources.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
 import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
@@ -86,7 +86,7 @@ export function resourceFactForPlanning(
   declaration: Node,
   context: RustPlanContext,
 ): RustResourceManagementFact | undefined {
-  const fact = context.input.program.facts.getFact(declaration, rustResourceManagementFactKey);
+  const fact = context.input.program.records.resourceManagement.get(declaration);
   if (fact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, declaration),

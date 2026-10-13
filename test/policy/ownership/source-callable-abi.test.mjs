@@ -3,7 +3,7 @@ import test from "node:test";
 import { createRustSourceCallableAbiResolver } from "../../../dist/policy/ownership/source-callable-abi.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { borrowedCallbackInputSource } from "../../../../tsonic/test/fixtures/borrowed-callback-inputs.mjs";
 
 test("published native parameter ABI supersedes a pre-finalization missing cache entry", () => {
@@ -30,7 +30,7 @@ test("selected native callable inputs retain logical arrays and exact physical m
   const selected = [];
   const visit = node => {
     if (ast.is.IsCallExpression(node)) {
-      const operation = program.facts.getFact(node, rustTargetOperationFactKey);
+      const operation = program.records.targetOperation.get(node);
       if (operation?.kind === "source-call" && operation.target.form === "callable") {
         selected.push(operation);
       }

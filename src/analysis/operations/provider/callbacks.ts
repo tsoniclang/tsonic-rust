@@ -1,9 +1,6 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type {
-  RustCallbackOperationTemplate,
-  RustProviderOperationTemplate,
-} from "../../facts/keys.js";
+import type { RustCallbackOperationTemplate, RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import {
   rustCallableProtocol,
   rustFutureOutputCarrier,

@@ -1,14 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  acmeTestingPackage,
-  acmeVectorsPackage,
-  artifactText,
-  assertRustTargetRejection,
-  compileRust,
-  createRustSession,
-} from "../../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { artifactText, compileRust } from "../../../helpers/rust-session.mjs";
+
 
 const counterSource = `
 import type { int32 } from "@tsonic/core/types.js";

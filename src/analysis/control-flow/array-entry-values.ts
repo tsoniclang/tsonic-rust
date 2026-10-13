@@ -3,12 +3,13 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_In
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
 import { rustOptionElementCarrier, rustAbsenceTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustBindingProjectionFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
+
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function rustArrayEntryBinding(walk: RustFactWalk, expression: Node): Node | undefined {
-  const { ast, source, facts } = walk.context;
+  const { ast, source, records } = walk.context;
   const seen = new Set<Node>();
   let node = expression;
   for (;;) {
@@ -30,7 +31,7 @@ export function rustArrayEntryBinding(walk: RustFactWalk, expression: Node): Nod
       continue;
     }
     if (ast.kindName(declaration) !== "KindBindingElement" || Node_Initializer(ast, declaration) !== undefined) return undefined;
-    const projection = facts.getFact(declaration, rustBindingProjectionFactKey);
+    const projection = records.bindingProjection.get(declaration);
     if (projection?.projection.kind !== "tuple-element" || projection.projection.index !== 1 ||
       projection.normalization !== "identity") return undefined;
     const pattern = ast.parent(declaration);
@@ -38,9 +39,9 @@ export function rustArrayEntryBinding(walk: RustFactWalk, expression: Node): Nod
     const list = binding === undefined ? undefined : ast.parent(binding);
     const loop = list === undefined ? undefined : ast.parent(list);
     if (loop === undefined || ast.kindName(loop) !== "KindForOfStatement") return undefined;
-    const iteration = facts.getFact(loop, rustTargetOperationFactKey);
+    const iteration = records.targetOperation.get(loop);
     const iterable = Node_Expression(ast, loop);
-    const element = iterable === undefined ? undefined : rustJsArrayEntriesElementTargetType(facts.getRuntimeCarrierFact(iterable)?.carrier);
+    const element = iterable === undefined ? undefined : rustJsArrayEntriesElementTargetType(records.runtimeCarrier.get(iterable)?.carrier);
     return iteration?.kind === "iteration" && iteration.iterationKind === "for-of" &&
       iteration.lowering.kind === "receiver-method" && iteration.lowering.name === "clone" && element !== undefined &&
       rustTargetTypeRefEquals(element, rustOptionElementCarrier(projection.bindingCarrier))
@@ -57,7 +58,7 @@ export function rustGuardedArrayEntryCarrier(
   if (element === undefined) return undefined;
   const declaration = rustArrayEntryBinding(walk, expression);
   if (declaration === undefined) return undefined;
-  const { ast, facts } = walk.context;
+  const { ast, records } = walk.context;
   let child = expression;
   for (let parent = ast.parent(child); parent !== undefined; child = parent, parent = ast.parent(parent)) {
     const kind = ast.kindName(parent);
@@ -66,7 +67,7 @@ export function rustGuardedArrayEntryCarrier(
     const statement = ast.as.AsIfStatement(parent);
     const condition = statement?.Expression;
     if (statement === undefined || condition === undefined) continue;
-    const selected = facts.getFact(condition, rustTargetOperationFactKey);
+    const selected = records.targetOperation.get(condition);
     if (selected?.kind !== "option-check" || !rustTargetTypeRefEquals(selected.nullishCarrier, rustAbsenceTargetType()) ||
       selected.nullishDepths.length !== 1 || selected.nullishDepths[0] !== 0 ||
       !rustTargetTypeRefEquals(selected.optionCarrier, sourceCarrier)) continue;

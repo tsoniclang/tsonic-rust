@@ -4,7 +4,7 @@ import test from "node:test";
 import { multipleArrayRefinementSource } from "../../../../../tsonic/test/fixtures/recursive-array-refinement.mjs";
 import { nativeUnionProjectionMutations } from "../../../../../tsonic/test/fixtures/native-union-projection-mutations.mjs";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planRustNativeUnionProjection } from "../../../../dist/backend/planner/expressions/union-projections.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
@@ -14,7 +14,7 @@ test("native union projection proves every carrier and selection without copying
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "union-property") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };

@@ -1,5 +1,5 @@
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "../../../../analysis/callables/generic-physical.js";
-import type { RustGenericCallableEffectsFact } from "../../../../analysis/facts/generic-callable-effects.js";
+import type { RustGenericCallableEffectsFact } from "../../../../target-model/records/generic-callable-effects.js";
 import type { RustExpr, RustGenericArgument, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustNativeFutureType } from "../../types/native-futures.js";

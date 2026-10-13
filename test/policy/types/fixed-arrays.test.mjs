@@ -9,8 +9,8 @@ import {
   tsonicFixedArrayFactKey,
   tsonicFixedArrayProviderIds,
 } from "@tsonic/source-core/facts";
-import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
-import { rustBindingProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
+
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
 import { resolveArrayLiteralCarrier } from "../../../dist/analysis/operations/inputs.js";
 import { selectRustFixedArrayElementAccess, selectRustFixedArrayLengthProperty } from "../../../dist/analysis/operations/provider/structural-properties.js";
@@ -59,10 +59,10 @@ test("binding defaults select the projected native context once before sealing n
     for (const sourceCarrier of [rustVecTargetType(value), rustJsArrayTargetType(value),
       rustFixedArrayTargetType(value, 1), rustTupleTargetType([rustOptionTargetType(value)])]) {
       for (const admitsDefault of [true, false]) {
-        const facts = createRustPlanBuilder({ getFact: () => undefined });
+        const records = createRustProgramRecordBuilder();
         let resolutions = 0;
         const recorded = recordRustBindingPatternFacts(pattern, sourceCarrier, {
-          ast, facts, setCarrier: () => {},
+          ast, records, setCarrier: () => {},
           resolveCarrier: () => assert.fail("binding defaults must not select an uncontextualized initializer type"),
           resolveExpressionCarrier: (selected, expected) => {
             resolutions++;
@@ -73,7 +73,7 @@ test("binding defaults select the projected native context once before sealing n
         });
         assert.equal(recorded, admitsDefault);
         assert.equal(resolutions, 1, "one contextual initializer resolution");
-        const projection = facts.getFact(binding, rustBindingProjectionFactKey);
+        const projection = records.bindingProjection.get(binding);
         assert.equal(projection !== undefined, admitsDefault, "rejected defaults cannot publish projection facts");
         if (admitsDefault) assert.equal(rustTargetTypeRefEquals(projection.bindingCarrier, value), true);
       }
@@ -95,10 +95,10 @@ test("pure-absence binding defaults infer one present initializer without an abs
   for (const value of [rustSourcePrimitiveTargetType("int64"),
     rustCallableTargetType([], rustSourcePrimitiveTargetType("int32"))]) {
     for (const admitsDefault of [true, false]) {
-      const facts = createRustPlanBuilder({ getFact: () => undefined });
+      const records = createRustProgramRecordBuilder();
       let resolutions = 0;
       const recorded = recordRustBindingPatternFacts(pattern, rustTupleTargetType([rustAbsenceTargetType()]), {
-        ast, facts, setCarrier: () => {},
+        ast, records, setCarrier: () => {},
         resolveCarrier: () => assert.fail("the exact initializer must resolve only once"),
         resolveExpressionCarrier: (selected, expected) => {
           resolutions++;
@@ -109,7 +109,7 @@ test("pure-absence binding defaults infer one present initializer without an abs
       });
       assert.equal(recorded, admitsDefault);
       assert.equal(resolutions, 1);
-      const projection = facts.getFact(binding, rustBindingProjectionFactKey);
+      const projection = records.bindingProjection.get(binding);
       assert.equal(projection !== undefined, admitsDefault);
       if (admitsDefault) assert.equal(rustTargetTypeRefEquals(projection.bindingCarrier, value), true);
     }
@@ -144,7 +144,7 @@ function fixedArraySourceFixture() {
       IsTypeQueryNode: () => false, IsIndexedAccessTypeNode: () => false,
     } },
     source: { sourceFacts },
-    facts: createRustPlanBuilder(sourceFacts),
+    records: createRustProgramRecordBuilder(),
     extensionId: "tsonic.rust.policy",
     currentSemantics: {
       facts: { typeSubjects: () => [] },
@@ -224,16 +224,16 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
     as: { AsBindingElement: node => node === rest ? { DotDotDotToken: {} } : {} },
   };
   for (const length of [3n, 9007199254740992n, 9007199254740993n]) {
-    const facts = createRustPlanBuilder({ getFact: () => undefined });
+    const records = createRustProgramRecordBuilder();
     const carriers = new Map();
     const sourceCarrier = rustFixedArrayTargetType(element, integer(length));
     const remainder = rustFixedArrayTargetType(element, integer(length - 1n));
     assert.equal(recordRustBindingPatternFacts(pattern, sourceCarrier, {
-      ast, facts, setCarrier: (subject, carrier) => carriers.set(subject, carrier),
+      ast, records, setCarrier: (subject, carrier) => carriers.set(subject, carrier),
     }), true);
     assert.deepEqual(carriers.get(firstName), element);
     assert.deepEqual(carriers.get(restName), remainder);
-    assert.deepEqual(facts.getFact(rest, rustBindingProjectionFactKey), {
+    assert.deepEqual(records.bindingProjection.get(rest), {
       sourceCarrier, projectedCarrier: remainder, storageCarrier: remainder, bindingCarrier: remainder,
       projection: { kind: "fixed-array-rest", start: 1 }, normalization: "identity",
     });
@@ -242,7 +242,7 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
     const statements = planRustBindingPattern(pattern, source, sourceCarrier, {
       diagnostics,
       input: { program: {
-        source: { ast }, facts: facts.seal(),
+        source: { ast }, records: records.seal(),
         names: { nameForDeclaration: node => node === first ? "first" : "rest" },
       } },
     }, () => assert.fail("fixed-array rest must not reconstruct a source expression"));
@@ -309,12 +309,12 @@ test("fixed-array literal cardinality rejects exact mismatches without extent ex
     }]);
   }
   const diagnostics = [];
-  const facts = createRustPlanBuilder({ getFact: () => undefined });
+  const records = createRustProgramRecordBuilder();
   const zero = rustFixedArrayTargetType(element, integer(0n));
-  assert.deepEqual(resolveArrayLiteralCarrier({ context: { ast: { elements: () => [] }, diagnostics, facts } },
+  assert.deepEqual(resolveArrayLiteralCarrier({ context: { ast: { elements: () => [] }, diagnostics, records } },
     expression, {}, zero), zero);
   assertNoTargetDiagnostics(diagnostics);
-  assert.deepEqual(facts.getRuntimeCarrierFact(expression)?.carrier, zero);
+  assert.deepEqual(records.runtimeCarrier.get(expression)?.carrier, zero);
 });
 
 test("fixed-array length fails closed on missing, contradictory or writable selected evidence", () => {

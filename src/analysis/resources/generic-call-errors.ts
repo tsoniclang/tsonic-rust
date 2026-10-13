@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustGenericCallableInvocationFact } from "../facts/generic-callable-effects.js";
-import type { RustSourceCallEffectsFact } from "../facts/object-methods.js";
+import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
+import type { RustSourceCallEffectsFact } from "../../target-model/records/object-methods.js";
 import { selectRustGenericCallableInvocationStorage } from "../callables/generic-dispatch.js";
 import { rustGenericCallableInvocationBindings } from "../callables/generic-bindings.js";
 import { selectRustGenericCallableErrors } from "../callables/generic-errors.js";
@@ -13,7 +13,7 @@ export function selectRustGenericCallableInvocation(
   effectsFor: (declaration: Node) => RustSourceCallEffectsFact | undefined,
 ): RustGenericCallableInvocationFact | undefined {
   const storage = selectRustGenericCallableInvocationStorage(node, {
-    ast: context.ast, facts: context.facts, generic: context.callableValues.generic,
+    ast: context.ast, records: context.records, generic: context.callableValues.generic,
     nativeStorage: context.callableValues.nativeStorage,
     structuralShapes: context.structuralShapes,
   });

@@ -1,18 +1,20 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
-import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustContextualValueConversionFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 import { createRustGenericCallableFlowIndex } from "../../../dist/analysis/callables/generic-callable-flow.js";
 import { rustGenericCallableConversionMatches } from "../../../dist/target-model/conversions/generic-callable.js";
 import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/callables/value-plan.js";
-import { rustObjectLiteralMethodAdapterFactKey } from "../../../dist/analysis/facts/object-methods.js";
-import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
-import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
-import { rustReceiverIndependentMethodFactKey } from "../../../dist/analysis/facts/operations/keys.js";
+
+
+
+
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
-import { rustObjectReferenceViewKey } from "../../../dist/analysis/facts/object-reference-views.js";
-import { rustBindingProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
 
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
@@ -36,27 +38,54 @@ function input() {
     parent: node => node.file,
     as: { AsBinaryExpression: node => node.binary },
   };
-  const facts = { getFact: (node, key) => {
-    if (key === rustRuntimeCarrierKey && node.carrier !== undefined) return { carrier: node.carrier };
-    if (key === rustTargetOperationFactKey && node.operation !== undefined) return node.operation;
-    if (key === rustObjectLiteralMethodAdapterFactKey) return node.objectAdapters;
-    if (key === rustProjectCallableAdaptersKey) return node.projectAdapters;
-    if (key === rustReceiverIndependentMethodFactKey) return node.independent;
-    if (key === rustObjectReferenceViewKey) return node.referenceView;
-    if (key === rustBindingProjectionFactKey) return node.binding;
-    if (key === rustContextualValueConversionFactKey && node.conversion !== undefined) return { conversion: node.conversion };
-    if (!closures.includes(node)) return undefined;
-    if (key === rustTargetOperationFactKey) return { kind: "closure", resultCarrier: node.carrier };
-    if (key === rustClosureCaptureFactKey) return { receivers: node.receivers ?? [], receiverFields: [], captures: node.captures ?? [] };
+  const records = createRustRecordFixture({runtimeCarrier: { get: (node) => {
+    if (node.carrier !== undefined)
+        return { carrier: node.carrier };
+    if (!closures.includes(node))
+        return undefined;
     return undefined;
-  } };
+} },
+targetOperation: { get: (node) => {
+    if (node.operation !== undefined)
+        return node.operation;
+    if (!closures.includes(node))
+        return undefined;
+    return { kind: "closure", resultCarrier: node.carrier };
+} },
+objectLiteralMethodAdapter: { get: (node) => {
+    return node.objectAdapters;
+} },
+projectCallableAdapters: { get: (node) => {
+    return node.projectAdapters;
+} },
+receiverIndependentMethod: { get: (node) => {
+    return node.independent;
+} },
+objectReferenceView: { get: (node) => {
+    return node.referenceView;
+} },
+bindingProjection: { get: (node) => {
+    return node.binding;
+} },
+contextualValueConversion: { get: (node) => {
+    if (node.conversion !== undefined)
+        return { conversion: node.conversion };
+    if (!closures.includes(node))
+        return undefined;
+    return undefined;
+} },
+closureCapture: { get: (node) => {
+    if (!closures.includes(node))
+        return undefined;
+    return { receivers: node.receivers ?? [], receiverFields: [], captures: node.captures ?? [] };
+} }});
   const names = { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined };
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
-  return { closures, planInput: { ast, sourceFiles: files, facts, names, navigation,
+  return { closures, planInput: { ast, sourceFiles: files, records, names, navigation,
     lifetimes: { contractFor: () => undefined }, classValueAdapters: [], closedSourceFiles: new Set(),
     ownership: { components: [], activations: [], failureReason: () => undefined } },
-    create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, facts, names, navigation, [], closed) };
+    create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names, navigation, [], closed) };
 }
 
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {

@@ -1,8 +1,9 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, acmeVectorsPackage } from "../../helpers/rust-session.mjs";
 import { selectRustProviderMutableInputs } from "../../../dist/analysis/storage/provider-mutable-inputs.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 
 function fixture() {
   const { program } = analyzeRust({ packages: [acmeVectorsPackage()], files: { "index.ts": `
@@ -25,14 +26,14 @@ export function main(): void {
   };
   for (const file of program.sourceFiles) visit(file);
   assert.equal(calls.length, 3, "independent variables, disjoint fields and independently owned temporary values");
-  return { program, input: { ast, facts: program.facts, navigation: program.sourceNavigation }, calls };
+  return { program, input: { ast, records: program.records, navigation: program.sourceNavigation }, calls };
 }
 
 test("native mutable admission is sealed and retains exact operation and source-input ownership", () => {
   const current = fixture();
   for (const { node, proof } of current.calls) {
     assert.equal(Object.isFrozen(proof) && Object.isFrozen(proof.inputs), true);
-    assert.equal(proof.operation === current.program.facts.getFact(node, rustTargetOperationFactKey), true);
+    assert.equal(proof.operation === current.program.records.targetOperation.get(node), true);
     assert.equal(selectRustProviderMutableInputs(node, proof.operation, current.input).kind, "proved");
     assert.equal(selectRustProviderMutableInputs(node, { ...proof.operation }, current.input).kind, "rejected",
       "foreign operation evidence cannot carry a valid admission");
@@ -73,9 +74,9 @@ test("repeated native mutable slots and missing exact argument syntax fail befor
   const { node, proof } = current.calls[0];
   const repeated = { ...proof.operation, abi: { ...proof.operation.abi,
     targetArguments: [proof.operation.abi.targetArguments[0], proof.operation.abi.targetArguments[0]] } };
-  const repeatedInput = { ...current.input, facts: { ...current.input.facts,
-    getFact: (subject, key) => subject === node && key === rustTargetOperationFactKey ? repeated
-      : current.input.facts.getFact(subject, key) } };
+  const repeatedInput = { ...current.input, records: createRustRecordFixture({...current.input.records,
+targetOperation: { get: (subject) => subject === node ? repeated
+    : current.input.records.targetOperation.get(subject) }}) };
   const selected = selectRustProviderMutableInputs(node, repeated, repeatedInput);
   assert.equal(selected.kind, "rejected");
   assert.equal(/multiple mutable inputs/.test(selected.reason), true);

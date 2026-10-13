@@ -13,8 +13,7 @@ export function resolveRustSourceMarker(
     : [node];
   const markers = new Set<string>();
   for (const candidate of subjects) {
-    const marker = context.facts.resolve(candidate, sourceMarkerFactKey) ??
-      context.facts.get(candidate, sourceMarkerFactKey);
+    const marker = context.source.sourceFacts.getFact(candidate, sourceMarkerFactKey);
     if (marker !== undefined) markers.add(marker.marker);
   }
   return markers.size === 1 ? markers.values().next().value : undefined;

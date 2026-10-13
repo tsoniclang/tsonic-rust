@@ -532,7 +532,7 @@ export interface RustTypeRenderingContext {
       readonly errorRegions: import("../program/error-regions.js").RustErrorRegionCatalog;
       readonly program: {
         readonly source: import("@tsonic/target-api/analysis").TargetSourceSyntaxProgram;
-        readonly facts: import("../../../target-model/facts/selections.js").RustPlanQueries;
+        readonly records: import("../../../target-model/records/program.js").RustProgramRecords;
         readonly typeDefinitions: import("../../../target-model/types/source-union-definitions.js").RustTypeDefinitions;
         readonly names: import("../../../target-model/names/model.js").RustNamePlan;
         readonly structuralShapes: import("../../../analysis/objects/structural-shape-plan.js").RustStructuralShapePlan;
@@ -540,7 +540,7 @@ export interface RustTypeRenderingContext {
         readonly callableValues: import("../../../analysis/callables/value-plan.js").RustCallableValuePlan;
         readonly classValues: import("../../../analysis/objects/class-values.js").RustClassValuePlan;
         readonly declarationGenericRequirements: import("../../../analysis/declarations/generic-requirements.js").RustDeclarationGenericRequirementIndex;
-        readonly projectTypes: import("../../../analysis/project-types/type-policy.js").RustProjectTypePolicy;
+        readonly projectTypes: import("../../../target-model/types/project-types.js").RustProjectTypePolicy;
         readonly objectRepresentations: import("../../../analysis/project-types/object-representation.js").RustObjectRepresentationPlan;
         readonly typeFamilies: import("../../../target-model/types/type-families.js").RustSourceTypeFamilyPlan;
       };

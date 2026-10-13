@@ -1,6 +1,7 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { Node, Type, TypeIndexedAccessSelection } from "@tsonic/tsts";
 import { selectedSourceIndexedDeclarations } from "@tsonic/target-api/source";
-import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+
 import type { RustOperationsProviderOptions } from "./model.js";
 import { resolveSelectedSourceProfileMembers } from "../../../policy/identities/selected-source.js";
 import { selectRustGuardedSourceValueTypes } from "../native-flow-refinement.js";
@@ -12,7 +13,7 @@ export function selectRustSourceProfileIndexMembers(
     readonly sourceReceiverType?: Type;
     readonly sourceArgumentType?: Type;
   },
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   selectedIndex?: TypeIndexedAccessSelection,
 ) {

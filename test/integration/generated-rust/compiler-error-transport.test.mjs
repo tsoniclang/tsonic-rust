@@ -1,10 +1,11 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustJsErrorTargetType, rustProgramErrorTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { planThrowStatement } from "../../../dist/backend/planner/statements/errors.js";
@@ -126,7 +127,7 @@ test("builtin catch projections require the exact sealed selected carrier", () =
     const diagnostics = [];
     const node = {};
     assert.equal(planRustValueProjection(node, { kind: "path", path: "caught" }, selected.fact, {
-      input: { program: { facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+      input: { program: { records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
         projectTypes: { ...policy, sourceErrorCarrier: () => unavailableCarrier },
         source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1,
           end: () => -1, kindName: () => "KindIdentifier" } } } },
@@ -146,7 +147,7 @@ export function fail(error: Error): void { throw error; }
   const declaration = declarations.find(node => ast.text(ast.name(node)) === "fail");
   assert.equal(declaration !== undefined, true, "selected source function declaration exists");
   const statement = ast.statements(ast.body(declaration))[0];
-  const fact = program.facts.getFact(statement, rustTargetOperationFactKey);
+  const fact = program.records.targetOperation.get(statement);
   assert.equal(fact.kind, "throw-op");
   assert.equal(fact.error.kind, "conversion");
   assert.deepEqual(fact.error.conversion.route, { kind: "runtime", boundary: "target-runtime" });
@@ -160,13 +161,11 @@ export function fail(error: Error): void { throw error; }
     [{ ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } }, "Program error construction requires an exact carrier and error domain."],
   ]) {
     const diagnostics = [];
-    const facts = {
-      ...program.facts,
-      getFact: (subject, key) => subject === statement && key === rustTargetOperationFactKey
-        ? { ...fact, error } : program.facts.getFact(subject, key),
-    };
+    const records = createRustRecordFixture({...program.records,
+targetOperation: { get: (subject) => subject === statement
+    ? { ...fact, error } : program.records.targetOperation.get(subject) }});
     assert.equal(planThrowStatement(statement, {
-      input: { program: { ...program, facts } },
+      input: { program: { ...program, records } },
       sourceFile: ast.getSourceFile(statement), diagnostics,
       fallibleBoundary: { componentId: "source", errorDomain: "runtime", errorTypePath: "rt::TsonicError" },
     }), undefined);

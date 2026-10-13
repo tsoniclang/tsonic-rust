@@ -1,14 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+
+
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustNativeLayout } from "./native-memory.js";
 import { planFinalizedTargetInput } from "./conversions.js";
 
 export function nativeRustArrayType(node: Node, context: RustPlanContext): RustType | undefined {
-  const storage = context.input.program.facts.getFact(node, rustNativeArrayStorageKey);
+  const storage = context.input.program.records.nativeArrayStorage.get(node);
   const type = storage === undefined ? undefined : rustTypeFromCarrierInContext(storage.layout.pointeeCarrier, context);
   if (type === undefined) return undefined;
   context.usedAliases?.add("rt");
@@ -16,7 +16,7 @@ export function nativeRustArrayType(node: Node, context: RustPlanContext): RustT
 }
 
 export function planNativeRustArray(node: Node, values: RustExpr, context: RustPlanContext): RustExpr | undefined {
-  const storage = context.input.program.facts.getFact(node, rustNativeArrayStorageKey);
+  const storage = context.input.program.records.nativeArrayStorage.get(node);
   const type = nativeRustArrayType(node, context);
   const layout = storage === undefined ? undefined : planRustNativeLayout(storage.layout, context);
   return storage === undefined || type === undefined || layout === undefined ? undefined : {
@@ -28,8 +28,8 @@ export function planNativeRustArray(node: Node, values: RustExpr, context: RustP
 export function planNativeRustArrayAccess(node: Node, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
   method: "load" | "location_at"): RustExpr | undefined {
-  const storage = context.input.program.facts.getFact(node, rustNativeArrayStorageKey);
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const storage = context.input.program.records.nativeArrayStorage.get(node);
+  const operation = context.input.program.records.targetOperation.get(node);
   const element = context.input.program.source.ast.as.AsElementAccessExpression(node);
   if (storage?.kind !== "element" || operation?.kind !== "provider-operation" || operation.abi.target.form !== "index" ||
     operation.abi.targetArguments.length !== 1 || element?.Expression === undefined || element.ArgumentExpression === undefined) return undefined;

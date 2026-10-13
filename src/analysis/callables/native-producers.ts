@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustProducerErrorTargetType } from "../../target-model/types/carriers/producer-errors.js";
@@ -11,10 +11,12 @@ import { rustNativeCallableCompletion } from "../../target-model/types/callable-
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey,
-  rustTargetOperationFactKey, rustDeferredProducerEffectsFactKey } from "../facts/keys.js";
+
+
+
+
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
-import type { RustDeferredProducerChannel } from "../facts/deferred-producer-effects.js";
+import type { RustDeferredProducerChannel } from "../../target-model/records/deferred-producer-effects.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeOutwardResults } from "./native-outward-results.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
@@ -41,7 +43,7 @@ export interface RustNativeCallableProducerPlan {
 export function createRustNativeCallableProducerPlan(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly native: RustNativeCallableInputPlan;
   readonly definitions: RustTypeDefinitions;
   readonly returnCarrierFor: (declaration: Node) => TargetTypeRef | undefined;
@@ -50,15 +52,15 @@ export function createRustNativeCallableProducerPlan(input: {
   const byIdentity = new Map<string, RustNativeCallableProducer>();
   for (const declaration of input.nodes) {
     if (input.ast.body(declaration) === undefined) continue;
-    const result = input.facts.getFact(declaration, rustSourceCallableReturnFactKey);
+    const result = input.records.sourceCallableReturn.get(declaration);
     if (result === undefined) continue;
     const identity = sourceNodeIdentity(input.ast, declaration);
     const file = input.ast.getSourceFile(declaration);
     if (identity === undefined || file === undefined) continue;
     const fileName = input.ast.getFileName(file);
-    const captures = input.facts.getFact(declaration, rustClosureCaptureFactKey);
-    const operation = input.facts.getFact(declaration, rustTargetOperationFactKey);
-    const asynchronous = input.facts.getFact(declaration, rustAsyncFunctionFactKey);
+    const captures = input.records.closureCapture.get(declaration);
+    const operation = input.records.targetOperation.get(declaration);
+    const asynchronous = input.records.asyncFunction.get(declaration);
     const parameters = input.ast.parameters(declaration);
     if (parameters.some(parameter => parameter === undefined)) continue;
     const inputs = input.native.inputsFor(declaration);
@@ -68,7 +70,7 @@ export function createRustNativeCallableProducerPlan(input: {
     });
     const carriers = [result.returnCarrier,
       ...(parameters as readonly Node[]).flatMap(parameter => {
-        const carrier = input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier;
+        const carrier = input.records.sourceParameterAbi.get(parameter)?.parameterCarrier;
         return carrier === undefined ? [] : [physicalInput(parameter, carrier)];
       }),
       ...[...captures?.captures ?? [], ...captures?.receiverFields ?? [], ...captures?.receivers ?? []].map(capture => capture.carrier),
@@ -98,9 +100,9 @@ export function createRustNativeCallableProducerPlan(input: {
     errorCarrier: Object.freeze({ kind: "target-named", id: rustInfallibleTargetId }) });
   const deferredFor = (declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined => {
     if (!byDeclaration.has(declaration) || !Number.isSafeInteger(ordinal) || ordinal < 0) return undefined;
-    const selected = input.facts.getFact(declaration, rustDeferredProducerEffectsFactKey);
+    const selected = input.records.deferredProducerEffects.get(declaration);
     if (selected?.kind !== "no-future") return selected?.channels[ordinal];
-    const result = input.facts.getFact(declaration, rustSourceCallableReturnFactKey);
+    const result = input.records.sourceCallableReturn.get(declaration);
     if (result === undefined) return undefined;
     const completion = rustNativeCallableCompletion(result.returnCarrier, input.definitions);
     return ordinal < Math.max(1, completion?.futures.length ?? 0) ? noFuture : undefined;
@@ -120,13 +122,13 @@ export function createRustNativeCallableProducerPlan(input: {
       const signature = rustCallableProtocol(carrier);
       const error = errorFor(declaration, "invoke");
       if (producer === undefined || signature === undefined || error === undefined) return undefined;
-      const operation = input.facts.getFact(declaration, rustTargetOperationFactKey);
+      const operation = input.records.targetOperation.get(declaration);
       const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(operation.resultCarrier) : undefined;
-      const asynchronous = input.facts.getFact(declaration, rustAsyncFunctionFactKey);
+      const asynchronous = input.records.asyncFunction.get(declaration);
       const expectedParameters = sourceSignature?.parameters ?? input.ast.parameters(declaration).map(parameter =>
-        input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
+        input.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
       const expectedResult = sourceSignature?.result ?? asynchronous?.futureCarrier ??
-        input.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+        input.records.sourceCallableReturn.get(declaration)?.returnCarrier;
       if (expectedParameters.length !== signature.parameters.length ||
         !expectedParameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, signature.parameters[index])) ||
         !rustTargetTypeRefEquals(expectedResult, signature.result)) return undefined;

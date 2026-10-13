@@ -4,7 +4,7 @@ import { selectJsSurfaceMemberRead, selectJsSurfaceMemberWrite } from "../../../
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { finalizeProviderOperationFact } from "../../../dist/analysis/operations/provider/calls/template-instantiation.js";
-import { rustIndexedLocationContract } from "../../../dist/analysis/facts/indexed-location.js";
+import { rustIndexedLocationContract } from "../../../dist/analysis/operations/indexed-location.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const element = rustStringTargetType();

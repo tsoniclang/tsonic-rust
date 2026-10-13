@@ -1,6 +1,6 @@
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustContextualValueConversionFact } from "../../../analysis/facts/keys.js";
+import type { RustContextualValueConversionFact } from "../../../target-model/records/value-projections.js";
 import { rustIntegerTruncationConversionMatches } from "../../../target-model/conversions/integer-truncation.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 

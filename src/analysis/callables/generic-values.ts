@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustCallableOrigin, RustCallableSignature } from "../../target-model/types/carriers/callable-signatures.js";
 import { rustGenericCallableValue, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -9,17 +9,18 @@ import { substituteRustTargetTypeParameters } from "../../target-model/types/car
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import { rustClosureCaptureFactKey, rustTargetOperationFactKey, rustContextualValueConversionFactKey } from "../facts/keys.js";
-import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
+
+
+import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { sourceCallableDefinitionIsDiscarded, sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../facts/keys.js";
+
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustReceiverIndependentMethodFactKey } from "../facts/operations/keys.js";
+
 import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalInput,
   type RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 
@@ -63,7 +64,7 @@ export interface RustGenericCallableRegistry extends RustGenericCallablePlan {
 }
 
 export function createRustGenericCallablePlan(
-  ast: AstReader, sourceFiles: readonly SourceFile[], facts: RustPlanQueries, names: RustNamePlan,
+  ast: AstReader, sourceFiles: readonly SourceFile[], records: RustProgramRecords, names: RustNamePlan,
   navigation: SourceProgramNavigation,
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
   closedSourceFiles: ReadonlySet<SourceFile> = new Set(),
@@ -76,10 +77,10 @@ export function createRustGenericCallablePlan(
   const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [...adapterFlows];
   const identityCarriers: TargetTypeRef[] = [];
   const closureCarrier = (node: Node): TargetTypeRef | undefined => {
-    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(node);
     return operation?.kind === "closure"
-      ? facts.getFact(node, rustReceiverIndependentMethodFactKey)?.carrier ?? operation.resultCarrier
-      : ast.is.IsFunctionDeclaration(node) ? facts.getRuntimeCarrierFact(node)?.carrier : undefined;
+      ? records.receiverIndependentMethod.get(node)?.carrier ?? operation.resultCarrier
+      : ast.is.IsFunctionDeclaration(node) ? records.runtimeCarrier.get(node)?.carrier : undefined;
   };
   const visit = (node: Node): void => {
     if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
@@ -87,7 +88,7 @@ export function createRustGenericCallablePlan(
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
     }
-    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(node);
     const observedDeclaration = ast.is.IsFunctionDeclaration(node) &&
       (navigation.declarationUseSummary(node).uses.some(use => use.kind === "first-class") ||
         !closedSourceFiles.has(ast.getSourceFile(node)!) && navigation.declarationUseSummary(node).exported);
@@ -96,7 +97,7 @@ export function createRustGenericCallablePlan(
     if (operation?.kind === "operator-token" && (operation.operator === "==" || operation.operator === "!=")) {
       const expression = ast.as.AsBinaryExpression(node);
       for (const operand of [expression?.Left, expression?.Right]) {
-        const carrier = operand === undefined ? undefined : facts.getFact(operand, rustRuntimeCarrierKey)?.carrier;
+        const carrier = operand === undefined ? undefined : records.runtimeCarrier.get(operand)?.carrier;
         if (carrier !== undefined) identityCarriers.push(carrier);
       }
     }
@@ -105,7 +106,7 @@ export function createRustGenericCallablePlan(
         if (argument.disposition === "runtime") identityCarriers.push(argument.carrier);
       }
     }
-    const conversion = facts.getFact(node, rustContextualValueConversionFactKey)?.conversion;
+    const conversion = records.contextualValueConversion.get(node)?.conversion;
     if (conversion?.kind === "generic-callable-flow") flows.push({ subject: node, conversion });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
@@ -134,7 +135,7 @@ export function createRustGenericCallablePlan(
     const carrier = closureCarrier(node);
     const value = rustGenericCallableValue(carrier);
     if (carrier !== undefined && value !== undefined) {
-      const capture = facts.getFact(node, rustClosureCaptureFactKey);
+      const capture = records.closureCapture.get(node);
       const signatureKey = closedMetadataKey(value.signature);
       const identity = flow.familyFor(carrier)!;
       const sourceFileName = ast.getFileName(ast.getSourceFile(node));
@@ -172,9 +173,9 @@ export function createRustGenericCallablePlan(
           functionName,
           creation,
           storage: (!identityFamilies.has(identity) || creation === "declaration") &&
-            (facts.getFact(node, rustAsyncFunctionFactKey) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined ||
+            (records.asyncFunction.get(node) === undefined || rustNativeFutureCallableResult(value.signature.result) !== undefined ||
               captures.length === 0 && receiverFields.length === 0 && receivers.length === 0) &&
-            facts.getFact(node, rustGeneratorFactKey) === undefined &&
+            records.generator.get(node) === undefined &&
             receiverFields.length === 0 && receivers.length === 0 && captures.every(selected => selected.storage === "value" && isRustCopyCarrier(selected.storageCarrier))
               ? "value" as const : "shared" as const,
           captures: Object.freeze(captures), receiverFields: Object.freeze(receiverFields), receivers: Object.freeze(receivers), substitutions: snapshotClosedMetadata([...substitutions]),

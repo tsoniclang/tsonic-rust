@@ -4,8 +4,7 @@ import { rustValueConversionContract } from "../../dist/target-model/conversions
 import { rustNativeRepresentationMatches } from "../../dist/target-model/conversions/native-representation.js";
 import { rustAbsenceTargetType, rustUnitTargetType, rustJsPromiseTargetTypeWithLifetime,
   rustProgramErrorTargetType, rustJsErrorTargetType, rustSourcePrimitiveTargetType } from "../../dist/target-model/types/index.js";
-import { rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier,
-  transportRustFutureValue } from "../../dist/analysis/facts/future-values.js";
+import { rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../../dist/analysis/callables/future-values.js";
 
 test("native representation transport preserves native type, error and lifetime boundaries", () => {
   const lifetime = { kind: "parameter", identity: "owner::lifetime", name: "scope" };

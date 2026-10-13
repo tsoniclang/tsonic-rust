@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -19,7 +19,7 @@ export function planRustUnionProperty(
 ): RustExpr | undefined {
   const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
   if (resultCarrier === undefined || !requireExpressionCarrier(node, resultCarrier, context, "rust.backend.union-property") ||
-    !selectedOperationMatches(context.input.program.facts.getSelectedTargetProperty(node), fact.operationId, "property", resultCarrier)) {
+    !selectedOperationMatches(context.input.program.records.selectedOperation.get(node), fact.operationId, "property", resultCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.union-property",
       "Native union property conflicts with its exact selected operation evidence."));
     return undefined;

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { providerIndexedPolicyFixture } from "../../../../tsonic/test/fixtures/provider-indexed-policy.mjs";
 import { resolveRustProviderIndexedAccess } from "../../../dist/policy/types/resolution/indexed-access.js";
@@ -33,11 +34,11 @@ function fixture(options = {}) {
   });
   const get = (subject, key) => key === providerVirtualDeclarationFactKey && !options.unowned ? facts.get(subject) : undefined;
   const context = {
-    ast: selected.source.ast, source: selected.source, currentSemantics: selected.semantics,
+    ast: selected.source.ast, source: { ...selected.source, sourceFacts: { getFact: get } }, currentSemantics: selected.semantics,
     sourceStorage: { storageSubjectFor: () => ({ kind: "unresolved" }) },
     semantics: file => selected.source.semantics.forFile(file), semanticsFor: () => selected.semantics,
-    facts: { get, resolve: get, getRuntimeCarrierFact: node => node === selected.evidence.owner ? { carrier: options.missingGeneric
-      ? rustNamedTargetType("native.box", "native::Box") : carrier } : undefined },
+    records: createRustRecordFixture({ runtimeCarrier: { get: node => node === selected.evidence.owner ? { carrier: options.missingGeneric
+      ? rustNamedTargetType("native.box", "native::Box") : carrier } : undefined } }),
   };
   return resolveRustProviderIndexedAccess(selected.node, context, {
     providerTypes: [{ ...owner, targetCarrier: options.wrongOwner ? rustNamedTargetType("native.other", "native::Other") : generic, genericParameters: parameters }],

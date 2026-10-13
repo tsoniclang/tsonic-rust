@@ -8,8 +8,8 @@ import { isRustBoolCarrier } from "../../../target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustUnionEqualityFactMatches } from "../../../analysis/facts/operations/union-equality.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import { rustUnionEqualityFactMatches } from "../../../analysis/operations/contracts/union-equality.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustUnionPattern } from "./union-patterns.js";
@@ -35,7 +35,7 @@ export function planRustUnionEquality(
     !rustUnionEqualityFactMatches(fact, operator, effectivePlannedExpressionCarrier(leftNode, context),
       effectivePlannedExpressionCarrier(rightNode, context), context.input.program.typeDefinitions) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.union-equality-result") ||
-    !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
+    !selectedOperationMatches(context.input.program.records.selectedOperation.get(node),
       fact.operationId, "operator", fact.resultCarrier, fact.operationId)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.union-equality", "Union comparison requires exact sealed native operands, variants and equality operations."));

@@ -8,7 +8,7 @@ import { rustAbsenceTargetType, rustUnitTargetType, rustOptionTargetType, rustFu
   rustStrTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
-import { finalizeValueConversion, finalizedConversionIsValid } from "../../../dist/analysis/facts/finalized-operation/conversions.js";
+import { finalizeValueConversion, finalizedConversionIsValid } from "../../../dist/analysis/operations/finalized-operation/conversions.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 

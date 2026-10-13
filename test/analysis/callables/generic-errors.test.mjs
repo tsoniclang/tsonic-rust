@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustGenericCallableInvocationFactKey } from "../../../dist/analysis/facts/generic-callable-effects.js";
-import { rustErrorEffectsFactKey } from "../../../dist/analysis/facts/error-effects.js";
-import { rustSourceCallEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
+
 import { rustGenericCallableInvocationBindings } from "../../../dist/analysis/callables/generic-bindings.js";
 import { selectRustGenericCallableErrors } from "../../../dist/analysis/callables/generic-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
@@ -21,7 +21,7 @@ function fixture(source) {
   const invocation = name => {
     const node = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === name);
     assert.equal(node !== undefined, true, `selected call ${name}`);
-    const fact = program.facts.getFact(node, rustGenericCallableInvocationFactKey);
+    const fact = program.records.genericCallableInvocation.get(node);
     assert.equal(fact !== undefined, true, `physical invocation ${name}`);
     return { node, fact, definition: program.callableValues.generic.physical.definitionFor(fact.carrier) };
   };
@@ -54,7 +54,7 @@ test("generic invocation errors belong to selected physical members, not every l
     assert.equal(selected.fact.effects.awaiting, "not-applicable");
     assert.equal(selected.fact.awaiting.length, 0);
     assert.equal(rustTargetGenericReferences(selected.fact.invocation[0].errorType).typeIdentities.length, 0);
-    const effects = current.program.facts.getFact(selected.node, rustErrorEffectsFactKey);
+    const effects = current.program.records.errorEffects.get(selected.node);
     assert.equal(effects.localErrors, false);
     assert.equal(effects.nativeErrors.length, 1);
     assert.equal(effects.nativeErrors[0].identity, selected.fact.invocation[0].identity);
@@ -78,7 +78,7 @@ test("two exact activations of one generic closure retain both independent error
   assert.equal(definition.members[0].implementation === definition.members[1].implementation, true);
   assert.equal(fact.invocation.length, 2);
   assert.equal(new Set(fact.invocation.map(source => source.identity)).size, 2);
-  assert.equal(current.program.facts.getFact(node, rustErrorEffectsFactKey).nativeErrors.length, 2);
+  assert.equal(current.program.records.errorEffects.get(node).nativeErrors.length, 2);
 });
 
 test("physical generic invocation bindings reject foreign definitions and wrong method arity", () => {
@@ -97,7 +97,7 @@ test("generic error selection rejects unavailable effects or exact producer erro
   const { definition } = invocation("left");
   const input = { ast: program.source.ast, sourceLifetimes: program.sourceLifetimes,
     physical: program.callableValues.generic.physical, producers: program.callableValues.nativeProducers,
-    effectsFor: declaration => program.facts.getFact(declaration, rustSourceCallEffectsFactKey) };
+    effectsFor: declaration => program.records.sourceCallEffects.get(declaration) };
   assert.equal(selectRustGenericCallableErrors(definition, input) !== undefined, true);
   assert.equal(selectRustGenericCallableErrors(definition, { ...input, effectsFor: () => undefined }) === undefined, true);
   assert.equal(selectRustGenericCallableErrors(definition, { ...input,

@@ -6,7 +6,8 @@ import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustCallableT
   rustCarrierSupportsClone, rustCarrierSupportsTrait, rustJsArrayTargetType } from "../../../dist/target-model/types/index.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { recursiveSourceUnionFiles, recursiveCollectionUnionFiles, recursiveCollectionUnionIdentitySource,

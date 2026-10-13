@@ -1,8 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import { asSourceNode } from "@tsonic/target-api/source";
-import { rustAsyncFunctionFactKey, rustDeferredProducerEffectsFactKey, rustSourceCallableReturnFactKey,
-  rustTargetOperationFactKey, type RustDeferredProducerEffectsFact } from "../facts/keys.js";
-import { mergeRustDeferredProducerChannels, type RustDeferredProducerChannel } from "../facts/deferred-producer-effects.js";
+
+
+
+
+import type { RustDeferredProducerEffectsFact } from "../../target-model/records/deferred-producer-effects.js";
+import { mergeRustDeferredProducerChannels } from "../callables/deferred-producer-effects.js";
+import type { RustDeferredProducerChannel } from "../../target-model/records/deferred-producer-effects.js";
 import { appendRustDiagnostic, type RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
@@ -22,7 +26,7 @@ const noFuture: RustDeferredProducerEffectsFact = Object.freeze({ kind: "no-futu
 const noFutureChannel: RustDeferredProducerChannel = Object.freeze({ awaiting: "infallible", errorCarrier: infallible });
 
 export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
-  const { facts, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
+  const { records, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
   const completed = new Map<Node, RustDeferredProducerEffectsFact>();
   const inputs = new Map(callableValues.native.inputs.map(input => [input.implementation.identity, input]));
   const budget = createRustEffectsWorkBudget();
@@ -30,8 +34,8 @@ export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
     for (const producer of callableValues.nativeProducers.producers) {
       budget.step();
       const declaration = producer.declaration;
-      if (facts.get(declaration, rustAsyncFunctionFactKey) !== undefined) continue;
-      const result = facts.get(declaration, rustSourceCallableReturnFactKey);
+      if (records.asyncFunction.get(declaration) !== undefined) continue;
+      const result = records.sourceCallableReturn.get(declaration);
       if (result === undefined) continue;
       if (result.implementationCompletion !== undefined) { completed.set(declaration, noFuture); continue; }
       budget.metadata(result.returnCarrier);
@@ -76,8 +80,7 @@ export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
       ["target.capability=rust.async.exact-deferred-producer"]);
     return;
   }
-  for (const [declaration, fact] of completed) facts.set(declaration, rustDeferredProducerEffectsFactKey, fact,
-    [{ message: "rust exact deferred producer channel" }]);
+  for (const [declaration, fact] of completed) records.deferredProducerEffects.set(declaration, fact, [{ message: "rust exact deferred producer channel" }]);
 }
 
 function errorForStoredFuture(walk: RustFactWalk, selected: RustStoredFutureValue,
@@ -87,15 +90,15 @@ function errorForStoredFuture(walk: RustFactWalk, selected: RustStoredFutureValu
   if (value.errorBoundary === "provider-native" || value.errorBoundary === "source-native") return value.errorCarrier;
   if (value.errorBoundary === "target-runtime") return rustRuntimeErrorTargetType();
   if (value.errorBoundary !== "source-program") return undefined;
-  const { facts, ast, source, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
+  const { records, ast, source, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
   const node = selected.producer.subject.node;
-  const operation = facts.get(node, rustTargetOperationFactKey);
-  const signature = facts.getSelectedTargetCall(node);
+  const operation = records.targetOperation.get(node);
+  const signature = records.selectedCall.get(node);
   const declaration = asSourceNode(signature?.sourceDeclaration, ast);
   const implementation = declaration === undefined ? undefined : source.navigation.callableImplementation(declaration);
   if (operation?.kind !== "source-call" || signature === undefined || implementation?.kind !== "resolved") return undefined;
   const owner = implementation.implementation.declaration;
-  const asynchronous = facts.get(owner, rustAsyncFunctionFactKey);
+  const asynchronous = records.asyncFunction.get(owner);
   const producer = callableValues.nativeProducers.forDeclaration(owner);
   const arguments_ = rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], operation.targetGenericArguments ?? []);
   if (asynchronous === undefined || producer === undefined || arguments_ === undefined) return undefined;

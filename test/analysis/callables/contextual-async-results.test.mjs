@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { contextualAsyncResultSource, inlineContextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { rustAsyncFunctionFactKey, rustClosureCaptureFactKey, rustGeneratorFactKey, rustModuleBindingFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
+
 import { recordCallableReturnFact } from "../../../dist/analysis/callables/signatures.js";
-import { rustCallableInvocationResult } from "../../../dist/analysis/facts/callable-results.js";
+import { rustCallableInvocationResult } from "../../../dist/analysis/callables/results.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { finalizedConversionIsValid } from "../../../dist/analysis/facts/finalized-operation/conversions.js";
+import { finalizedConversionIsValid } from "../../../dist/analysis/operations/finalized-operation/conversions.js";
 
 for (const surfaces of [[], ["js"]]) {
   test(`module suspension return facts use their exact generator or async protocol in ${surfaces[0] ?? "native"}`, () => {
@@ -27,7 +30,7 @@ export const asyncValues = async function* (seed: number): AsyncGenerator<number
     const bindings = [];
     const visit = node => {
       if (ast.is.IsVariableDeclaration(node)) {
-        const binding = program.facts.getFact(node, rustModuleBindingFactKey);
+        const binding = program.records.moduleBinding.get(node);
         if (binding?.callableDeclaration !== undefined) bindings.push(binding);
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
@@ -37,14 +40,14 @@ export const asyncValues = async function* (seed: number): AsyncGenerator<number
     let generators = 0;
     for (const binding of bindings) {
       const declaration = binding.callableDeclaration;
-      const generator = program.facts.getFact(declaration, rustGeneratorFactKey);
-      const asynchronous = program.facts.getFact(declaration, rustAsyncFunctionFactKey);
+      const generator = program.records.generator.get(declaration);
+      const asynchronous = program.records.asyncFunction.get(declaration);
       assert.equal(generator !== undefined || asynchronous !== undefined, true, "one exact suspension protocol");
       if (generator !== undefined) {
         generators += 1;
         assert.equal(asynchronous === undefined, true, "async generators are not ordinary async functions");
       }
-      assert.equal(rustTargetTypeRefEquals(program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier,
+      assert.equal(rustTargetTypeRefEquals(program.records.sourceCallableReturn.get(declaration)?.returnCarrier,
         generator?.resultCarrier ?? asynchronous?.outputCarrier), true, "the selected suspension protocol owns the body return");
     }
     assert.equal(generators, 2);
@@ -56,7 +59,7 @@ test("suspended return publication rejects missing generator and ordinary async 
     ["ordinary async", true, false], ["generator", false, true], ["async generator", true, true],
   ]) {
     const walk = { context: {
-      facts: { get: () => undefined },
+      records: createRustRecordFixture(),
       ast: { hasModifierKind: () => asynchronous },
       semanticsFor: () => ({ operations: { generator: () => generator ? {} : undefined } }),
     } };
@@ -77,18 +80,18 @@ test("contextual async literals seal the selected output before recording body a
   let closureCount = 0;
   let nativeFunctionCount = 0;
   for (const [index, literal] of literals.entries()) {
-    const asynchronous = program.facts.getFact(literal, rustAsyncFunctionFactKey);
-    const closure = program.facts.getFact(literal, rustClosureCaptureFactKey);
-    const operation = program.facts.getFact(literal, rustTargetOperationFactKey);
+    const asynchronous = program.records.asyncFunction.get(literal);
+    const closure = program.records.closureCapture.get(literal);
+    const operation = program.records.targetOperation.get(literal);
     const declaration = ast.parent(literal);
-    const binding = declaration === undefined ? undefined : program.facts.getFact(declaration, rustModuleBindingFactKey);
+    const binding = declaration === undefined ? undefined : program.records.moduleBinding.get(declaration);
     const label = `async literal ${index}`;
     assert.equal(asynchronous?.kind, "js-promise", label);
     assert.equal(asynchronous.storage.kind, "static", label);
     assert.equal(rustOptionElementCarrier(asynchronous.outputCarrier) !== undefined, true, label);
-    assert.equal(rustTargetTypeRefEquals(program.facts.getFact(literal, rustSourceCallableReturnFactKey)?.returnCarrier,
+    assert.equal(rustTargetTypeRefEquals(program.records.sourceCallableReturn.get(literal)?.returnCarrier,
       asynchronous.outputCarrier), true, `${label} body return`);
-    assert.equal(rustTargetTypeRefEquals(rustCallableInvocationResult(program.facts, literal), asynchronous.futureCarrier), true, label);
+    assert.equal(rustTargetTypeRefEquals(rustCallableInvocationResult(program.records, literal), asynchronous.futureCarrier), true, label);
     assert.equal(asynchronous.futureCarrier.genericArguments[0].lifetime.kind, "static", label);
     assert.equal(asynchronous.futureCarrier.genericArguments[2].type.id, "rust.program.TsonicError", label);
     if (binding?.storage === "native-callable") {
@@ -125,7 +128,7 @@ for (const surfaces of [[], ["js"]]) {
     const { ast } = program.source;
     const visit = node => {
       if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && ast.hasModifierKind(node, "async")) {
-        const selected = program.facts.getFact(node, rustAsyncFunctionFactKey);
+        const selected = program.records.asyncFunction.get(node);
         assert.equal(selected !== undefined, true, "async integer literal");
         assert.equal(selected.kind, surfaces.length === 0 ? "native-future" : "js-promise");
         assert.equal(selected.outputCarrier.kind, "source-primitive");

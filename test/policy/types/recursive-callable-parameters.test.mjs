@@ -1,11 +1,12 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust, checkRustSession, createRustSession } from "../../helpers/rust-session.mjs";
-import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
+import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { resolveRustTargetTypeRef } from "../../../dist/policy/types/resolution/source.js";
 import { resolveRustCallableStorageCarrier } from "../../../dist/policy/types/resolution/source-evidence.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
@@ -30,13 +31,13 @@ function policyFixture(text) {
   const selection = storage.subject(parameter, "value");
   assert.equal(selection.kind, "resolved");
   const sourceTypes = createRustSourceTypeRegistry();
-  const facts = { get: (subject, key) => source.sourceFacts.getFact(subject, key),
-    getFact: (subject, key) => source.sourceFacts.getFact(subject, key), resolve: () => undefined,
-    getRuntimeCarrierFact: () => undefined, getSelectedTargetOperator: () => undefined,
-    getSelectedTargetCall: () => undefined };
+  const records = createRustRecordFixture({
+runtimeCarrier: { get: () => undefined },
+selectedOperation: { get: () => undefined },
+selectedCall: { get: () => undefined }});
   const context = { source, ast, sourceStorage: storage, sourceStorageSubject: selection.subject,
     currentSourceFile: ast.getSourceFile(parameter), currentSemantics: source.semantics.forNode(parameter),
-    semanticsFor: source.semantics.forNode, semantics: source.semantics.forFile, facts,
+    semanticsFor: source.semantics.forNode, semantics: source.semantics.forFile, records,
     typeDefinitions: sourceTypes, callableRepresentation: "storage", sourceLifetimes: emptyRustLifetimeIndex,
     pointerReturns: { resolve: () => undefined } };
   let selections = 0;
@@ -109,7 +110,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(declarations.length, owners.length);
     for (const declaration of declarations) {
       const parameter = ast.parameters(declaration)[0];
-      const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+      const abi = program.records.sourceParameterAbi.get(parameter);
       assert.equal(abi !== undefined, true);
       const protocol = rustCallableProtocol(abi.parameterCarrier);
       assert.equal(protocol !== undefined, true);

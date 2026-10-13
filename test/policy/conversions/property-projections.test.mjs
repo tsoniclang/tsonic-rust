@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { rustValueConversionContract, rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
@@ -78,7 +79,8 @@ test("property planning rejects absent or carrier-conflicting sealed native read
     { ...fact, cases: [{ ...projection, reads: [{ ...read, resultCarrier: rustSourcePrimitiveTargetType("int64") }] }] },
     { ...fact, cases: [{ ...projection, reads: [{ ...read, receiverCarrier: input.scalar }] }] },
   ]) {
-    const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, facts: { getFact: () => selected } } }, sourceFile,
+    const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) },
+      records: createRustRecordFixture({ propertyProjection: { get: () => selected } }) } }, sourceFile,
       syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() }, diagnostics: [] };
     assert.equal(planRustPropertyValueProjection(contract, { kind: "path", path: "input" }, context, node,
       () => assert.fail("conflicting native reads must reject before conversion planning")) === undefined, true);

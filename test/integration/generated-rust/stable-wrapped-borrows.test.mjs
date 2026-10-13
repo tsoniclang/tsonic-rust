@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -20,7 +20,7 @@ test("stable-value queries follow exact transparent operands without admitting m
     if (source.ast.is.IsFunctionDeclaration(node)) {
       const name = source.ast.text(source.ast.name(node));
       const parameter = source.ast.parameters(node)[0];
-      if (parameter !== undefined) parameters.set(name, program.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.mode);
+      if (parameter !== undefined) parameters.set(name, program.records.sourceParameterAbi.get(parameter)?.mode);
     }
     if (source.ast.is.IsCallExpression(node) &&
       source.ast.text(source.ast.as.AsCallExpression(node)?.Expression) === "parseInt") {

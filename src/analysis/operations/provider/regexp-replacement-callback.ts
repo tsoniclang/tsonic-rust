@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import {
   rustClosureTargetType,
   rustJsArrayTargetType,
@@ -7,10 +8,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustOperationPolicyContext,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type {
   RustProviderOperationForm,
@@ -39,7 +37,7 @@ export function selectedRustRegExpReplacementCallbackEvidence(
   request: RustCheckedCallSelectionInput,
   sourceArgumentIndex: number,
   lane: "native" | "exact",
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustRegExpReplacementCallbackEvidence | undefined {
   const selectedParameter = request.source.sourceSelectedSignatureParameters[sourceArgumentIndex];
@@ -109,7 +107,7 @@ export function applyRustRegExpReplacementCallbackConversion(
 function replacementCallbackEvidence(
   sourceType: Type,
   lane: "native" | "exact",
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustRegExpReplacementCallbackEvidence | undefined {
   const callable = context.currentSemantics.types.callable(sourceType);
@@ -156,7 +154,7 @@ function replacementCallbackEvidence(
 function isCanonicalReplacementCallback(
   type: Type,
   expectedString: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): boolean {
   const callable = context.currentSemantics.types.callable(type);
@@ -180,13 +178,13 @@ function stringCarrier(lane: "native" | "exact"): TargetTypeRef {
   return lane === "native" ? rustStringTargetType() : rustJsStringTargetType();
 }
 
-function isDynamic(type: Type | undefined, context: RustOperationPolicyContext): boolean {
+function isDynamic(type: Type | undefined, context: RustOperationAnalysisContext): boolean {
   return type !== undefined &&
     (context.currentSemantics.types.isAny(type) ||
       context.currentSemantics.types.isUnknown(type));
 }
 
-function isDynamicArray(type: Type | undefined, context: RustOperationPolicyContext): boolean {
+function isDynamicArray(type: Type | undefined, context: RustOperationAnalysisContext): boolean {
   if (type === undefined || !context.currentSemantics.types.isArrayLike(type)) {
     return false;
   }

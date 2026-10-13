@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -5,7 +6,7 @@ import { compileRust, acmeTestingPackage } from "../../../helpers/rust-session.m
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 import { selectRustFlowReadProjection } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { planRustFlowReadProjection } from "../../../../dist/backend/planner/expressions/flow-reads.js";
-import { rustFlowReadProjectionFactKey } from "../../../../dist/analysis/facts/value-projections.js";
+
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
@@ -32,7 +33,7 @@ test("union flow projections retain exact optional dispatch and reject altered e
     for (const canMove of [false, true]) {
       const context = { input: { program: {
         source: { ast: fakeAstReader([sourceFile]) },
-        facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+        records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
         names: { nameForSourceType: (_file, name) => name },
         valueLifetimes: { canMove: () => canMove },
         projectTypes, typeDefinitions: definitions, configuration: { edition: "2024" },
@@ -54,7 +55,7 @@ test("union flow projections retain exact optional dispatch and reject altered e
         { ...selected.fact, variant: "Missing" }, { ...selected.fact, selectedCarrier: boolean },
         ...(!optional ? [{ ...selected.fact, selectedCarrier: rustOptionTargetType(integer) }] : [])]) {
         context.diagnostics.length = 0;
-        assert.equal(rustFlowReadProjectionFactKey.equals(selected.fact, changed), false);
+        assert.equal("flowReadProjection".equals(selected.fact, changed), false);
         assert.equal(planRustFlowReadProjection(node, input, changed, context), undefined);
         assert.equal(context.diagnostics.length, 1);
       }

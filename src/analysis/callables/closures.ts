@@ -1,5 +1,5 @@
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
-import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
+
 import { appendRustDiagnostic } from "../program/walk.js";
 import {
   KindBlock,
@@ -19,14 +19,9 @@ import {
   sourceLexicalEnvironment,
   sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
-import {
-  rustAsyncFunctionFactKey,
-  rustClosureCaptureFactKey,
-  rustGeneratorFactKey,
-  rustBindingStorageFactKey,
-  rustSourceCallableReturnFactKey,
-  rustSourceParameterAbiFactKey,
-} from "../facts/keys.js";
+
+
+
 import {
   rustSourceOptionalTargetType,
   rustOptionElementCarrier,
@@ -42,7 +37,7 @@ import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressio
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -54,9 +49,9 @@ import { recordCallableReturnFact, recordCallableSuspensionFacts, selectedSource
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-import { finalizeValueConversion } from "../facts/finalized-operation/conversions.js";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
-import { rustCallableInvocationResult } from "../facts/callable-results.js";
+import { finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
+
+import { rustCallableInvocationResult } from "./results.js";
 import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
@@ -79,7 +74,7 @@ export function resolveFunctionExpressionSignature(
     ? { parameters: sourceSelected.args, result: sourceSelected.result }
     : rustGenericCallableProtocol(sourceSelected, genericParameters) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
   const sourceResult = sourceProtocol === undefined ? undefined
-    : rustCallableInvocationResult(walk.context.facts, expression) ??
+    : rustCallableInvocationResult(walk.context.records, expression) ??
       (ast.hasModifierKind(expression, "async") ? sourceProtocol.result
         : selectRustInferredReturn(walk, expression, sourceProtocol.result));
   if (sourceSelected === undefined || sourceProtocol === undefined || sourceResult === undefined) return undefined;
@@ -196,8 +191,8 @@ export function resolveFunctionExpressionCarrier(
       (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
       return undefined;
     }
-    const finalizedAbi = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
-      walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey);
+    const finalizedAbi = walk.context.records.sourceParameterAbi.get(parameter) ??
+      walk.context.records.sourceParameterAbi.get(parameter);
     const parameterAbi = finalizedAbi ?? resolveRustContextualParameterAbi(
       parameter,
       targetParameterCarrier,
@@ -247,15 +242,15 @@ export function resolveFunctionExpressionCarrier(
   }
   const receiver = leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
   recordCallableSuspensionFacts(walk, expression, receiver?.kind === "reference" ? undefined : receiver, selectedResult);
-  const generator = walk.context.facts.get(expression, rustGeneratorFactKey);
-  const asynchronous = walk.context.facts.get(expression, rustAsyncFunctionFactKey);
+  const generator = walk.context.records.generator.get(expression);
+  const asynchronous = walk.context.records.asyncFunction.get(expression);
   if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined
     ? generator === undefined
     : ast.hasModifierKind(expression, "async") && asynchronous === undefined) {
     return undefined;
   }
-  const finalizedReturn = walk.context.facts.get(expression, rustSourceCallableReturnFactKey)?.returnCarrier ??
-    walk.context.facts.resolve(expression, rustSourceCallableReturnFactKey)?.returnCarrier;
+  const finalizedReturn = walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier ??
+    walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier;
   const selectedResultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
     ? selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
         (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
@@ -362,7 +357,7 @@ export function resolveFunctionExpressionCarrier(
   const closureCarrier = resolveRustCallableStorageCarrier(logicalCarrier,
     rustResolutionContext(walk, expression, "value"), walk.operationOptions, new Set());
   if (closureCarrier === undefined) return undefined;
-  walk.context.facts.set(expression, rustClosureCaptureFactKey, {
+  walk.context.records.closureCapture.set(expression, {
     ...captures,
     ...((generator !== undefined || asynchronous !== undefined) &&
         rustFrameCallableValue(closureCarrier) === undefined &&
@@ -393,7 +388,7 @@ export function collectRustLexicalCaptures(
   roots: readonly Node[],
   permitSingleOwner = false,
   nativeCallTrait?: "Fn" | "FnMut" | "FnOnce",
-): import("../facts/keys.js").RustClosureCaptureFact | undefined {
+): import("../../target-model/records/operation-selections.js").RustClosureCaptureFact | undefined {
   const { ast } = walk.context;
   const captures = new Map<Node, {
     readonly declaration: Node;
@@ -403,38 +398,38 @@ export function collectRustLexicalCaptures(
     readonly mutable?: true;
   }>();
   let recursiveDeclaration: Node | undefined;
-  let recursiveField: import("../facts/keys.js").RustClosureCaptureFact["recursiveField"];
+  let recursiveField: import("../../target-model/records/operation-selections.js").RustClosureCaptureFact["recursiveField"];
   const valueDeclaration = callableExpressionValueDeclaration(expression, ast);
   const selected = sourceLexicalEnvironment(expression, roots, ast, walk.context.source.navigation,
-    (use, declaration) => walk.context.facts.get(use.reference, rustCompileTimeSourceKey) !== true &&
+    (use, declaration) => walk.context.records.compileTimeSource.get(use.reference) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(declaration, use.reference));
   if (selected.kind === "unresolved") return undefined;
-  const receiverFields: import("../facts/keys.js").RustClosureCaptureFact["receiverFields"][number][] = [];
+  const receiverFields: import("../../target-model/records/operation-selections.js").RustClosureCaptureFact["receiverFields"][number][] = [];
   const fieldCaptures = walk.context.objectRepresentations.receiverCaptures.capturesFor(expression);
   const fixedField = walk.context.objectRepresentations.receiverCaptures.fixedSelfFor(expression);
   if (fixedField !== undefined) {
-    const carrier = walk.context.facts.get(fixedField.reference, rustRuntimeCarrierKey)?.carrier ??
-      walk.context.facts.resolve(fixedField.reference, rustRuntimeCarrierKey)?.carrier;
+    const carrier = walk.context.records.runtimeCarrier.get(fixedField.reference)?.carrier ??
+      walk.context.records.runtimeCarrier.get(fixedField.reference)?.carrier;
     if (carrier === undefined || !fixedField.references.every(reference => rustTargetTypeRefEquals(
-      walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier ??
-        walk.context.facts.resolve(reference, rustRuntimeCarrierKey)?.carrier, carrier))) return undefined;
+      walk.context.records.runtimeCarrier.get(reference)?.carrier ??
+        walk.context.records.runtimeCarrier.get(reference)?.carrier, carrier))) return undefined;
     recursiveDeclaration = fixedField.declaration;
     recursiveField = { ...fixedField, carrier };
   }
   for (const capture of fieldCaptures) {
-    const storage = walk.context.facts.get(capture.declaration, rustCapturedFieldStorageFactKey);
-    const carrier = walk.context.facts.get(capture.reference, rustRuntimeCarrierKey)?.carrier;
+    const storage = walk.context.records.capturedFieldStorage.get(capture.declaration);
+    const carrier = walk.context.records.runtimeCarrier.get(capture.reference)?.carrier;
     if (storage === undefined || carrier === undefined) return undefined;
     receiverFields.push({ ...capture, storage: storage.storage, carrier });
   }
-  const receivers: import("../facts/keys.js").RustClosureCaptureFact["receivers"][number][] = [];
+  const receivers: import("../../target-model/records/operation-selections.js").RustClosureCaptureFact["receivers"][number][] = [];
   for (const receiver of walk.context.objectRepresentations.receiverCaptures.receiversFor(expression)) {
-    const carrier = walk.context.facts.get(receiver.reference, rustRuntimeCarrierKey)?.carrier;
+    const carrier = walk.context.records.runtimeCarrier.get(receiver.reference)?.carrier;
     const definition = carrier === undefined ? undefined : walk.context.projectTypes.definitionForCarrier(carrier);
     const representation = walk.context.objectRepresentations.representationFor(definition);
     if (carrier === undefined || representation === undefined || representation.kind === "value" ||
       !receiver.references.every(reference => rustTargetTypeRefEquals(
-        walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier, carrier))) {
+        walk.context.records.runtimeCarrier.get(reference)?.carrier, carrier))) {
       appendRustDiagnostic(walk, "RUST_RECEIVER_CAPTURE_NOT_CLOSED",
         "A whole native receiver capture requires its exact retained native owner and selected carrier.", expression,
         ["target.capability=rust.callable.receiver-owner"]);
@@ -446,7 +441,7 @@ export function collectRustLexicalCaptures(
     ast.kindName(expression) !== "KindClassExpression") recursiveDeclaration = expression;
   for (const capture of selected.captures) {
     const declaration = capture.declaration;
-    if (walk.context.facts.get(declaration, rustCompileTimeSourceKey) === true) continue;
+    if (walk.context.records.compileTimeSource.get(declaration) === true) continue;
     if (declaration === valueDeclaration &&
       !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {
       recursiveDeclaration = declaration;
@@ -457,14 +452,14 @@ export function collectRustLexicalCaptures(
       kind !== "KindFunctionDeclaration" && kind !== KindFunctionExpression) continue;
     const reference = capture.references[capture.references.length - 1];
     if (reference === undefined) return undefined;
-    const carrier = walk.context.facts.get(reference, rustRuntimeCarrierKey)?.carrier ??
-      walk.context.facts.resolve(reference, rustRuntimeCarrierKey)?.carrier ??
-      walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
-      walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+    const carrier = walk.context.records.runtimeCarrier.get(reference)?.carrier ??
+      walk.context.records.runtimeCarrier.get(reference)?.carrier ??
+      walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
+      walk.context.records.runtimeCarrier.get(declaration)?.carrier;
     const selectedStorage = rustCapturedBindingStorage(walk, declaration, reference, expression, carrier, permitSingleOwner,
       nativeCallTrait, selected.callableRoots);
     if (carrier === undefined || selectedStorage === undefined) return undefined;
-    if (selectedStorage.storage !== "value") walk.context.facts.set(declaration, rustBindingStorageFactKey, {
+    if (selectedStorage.storage !== "value") walk.context.records.bindingStorage.set(declaration, {
       storage: selectedStorage.storage,
       valueCarrier: carrier,
       ...(selectedStorage.initialization === undefined ? {} : { initialization: selectedStorage.initialization }),

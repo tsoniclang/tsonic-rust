@@ -6,8 +6,8 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProjectTypeDefinition } from "./type-policy.js";
 import { instantiateRustProjectMethodDispatchArguments } from "./method-dispatch.js";
 import type { RustProjectMethodDispatchVariant } from "./method-dispatch.js";
-import type { RustProjectCallableAdapter } from "../facts/project-callable-adapters.js";
-import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
+import type { RustProjectCallableAdapter } from "../../target-model/records/project-callable-adapters.js";
+
 import {
   projectOwnerTypeSubstitutions,
   sourceCallableParameterAbis,
@@ -59,7 +59,7 @@ export function recordRustProjectCallableAdapterFacts(walk: RustFactWalk): void 
         }
       }
     }
-    walk.context.facts.set(concrete.declaration, rustProjectCallableAdaptersKey, Object.freeze(adapters));
+    walk.context.records.projectCallableAdapters.set(concrete.declaration, Object.freeze(adapters));
 
     function record(contract: Node, implementation: Node, slot: string, variant?: RustProjectMethodDispatchVariant): void {
       const adapter = classifyAdapter(walk, receiver, contract, implementation, slot, variant);
@@ -80,14 +80,14 @@ function classifyAdapter(
   slot: string,
   variant: RustProjectMethodDispatchVariant | undefined,
 ): RustProjectCallableAdapter | undefined {
-  const { ast, projectTypes, facts } = walk.context;
+  const { ast, projectTypes, records } = walk.context;
   const contractOwner = projectTypes.definitionContainingDeclaration(contract);
   const implementationOwner = projectTypes.definitionContainingDeclaration(implementation);
   if (contractOwner === undefined || implementationOwner === undefined) return undefined;
   const contractSubstitutions = substitutions(contractOwner, contract);
   const implementationSubstitutions = substitutions(implementationOwner, implementation);
   if (contractSubstitutions === undefined || implementationSubstitutions === undefined) return undefined;
-  const input = { ast, facts };
+  const input = { ast, records };
   const parameters = sourceCallableParameterAbis(input, contract, contractSubstitutions);
   const implementationParameters = sourceCallableParameterAbis(input, implementation, implementationSubstitutions);
   const returnCarrier = sourceCallableReturnCarrier(input, contract, contractSubstitutions);

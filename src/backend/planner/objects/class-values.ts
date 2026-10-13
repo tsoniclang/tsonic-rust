@@ -3,14 +3,14 @@ import type { RustExpr, RustItem, RustStmt } from "../../target-ast/syntax/nodes
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
 import { planRustModuleCell } from "../project/module-storage.js";
-import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
+
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustClassEnvironmentValue, rustClassEnvironmentForCall } from "./class-environments.js";
 import { rustClassEnvironmentHandleType } from "./class-environment-types.js";
 
 export function planRustClassValueRead(node: Node, context: RustPlanContext): RustExpr | undefined {
-  const fact = context.input.program.facts.getFact(node, rustClassValueFactKey);
+  const fact = context.input.program.records.classValue.get(node);
   if (fact === undefined) return undefined;
   const environment = context.input.program.classValues.forDeclaration(fact.declaration)?.environment;
   if (environment === undefined) return undefined;

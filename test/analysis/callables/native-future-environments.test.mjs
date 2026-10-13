@@ -1,11 +1,12 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { createRustNativeFutureInputPlan } from "../../../dist/analysis/callables/native-future-inputs.js";
-import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 
 const sourceText = `import type { int32 } from "@tsonic/core/types.js";
   import type { Ref, Life } from "@tsonic/rust/types.js";
@@ -27,7 +28,7 @@ function fixture() {
     bindings.set(declaration, result);
     return result;
   };
-  const input = { ast, storage, facts: program.facts, definitions: program.typeDefinitions,
+  const input = { ast, storage, records: program.records, definitions: program.typeDefinitions,
     lexicalFunctions: program.lexicalFunctions, bindingsFor };
   const outer = storage.nodes.find(node => ast.is.IsFunctionDeclaration(node));
   const closure = storage.nodes.find(node => ast.is.IsArrowFunction(node));
@@ -93,12 +94,11 @@ test("Future capture discovery preserves unresolved checked provenance instead o
 test("Future capture environments reject malformed carrier facts and foreign capture references", () => {
   const current = fixture();
   const capture = current.program.lexicalFunctions.forDeclaration(current.closure).captures[0];
-  const malformed = createRustNativeFutureInputPlan({ ...current.input, facts: {
-    getFact(node, key) {
-      return key === rustRuntimeCarrierKey && (node === capture.declaration || node === capture.reference)
-        ? { carrier: { kind: "invalid" } } : current.input.facts.getFact(node, key);
-    },
-  } });
+  const malformed = createRustNativeFutureInputPlan({ ...current.input, records: createRustRecordFixture({...current.input.records,
+runtimeCarrier: { get: (node) => {
+    return (node === capture.declaration || node === capture.reference)
+        ? { carrier: { kind: "invalid" } } : current.input.records.runtimeCarrier.get(node);
+} }}) });
   rejected(malformed.forDeclaration(current.closure), /valid finalized carrier/u);
   const other = fixture();
   const foreignCapture = other.program.lexicalFunctions.forDeclaration(other.closure).captures[0];
@@ -146,7 +146,7 @@ test("owned bodyless callable contracts retain environments without requiring an
     assert.equal(environment.inputs.length, name === "future" ? 1 : 0, name);
     if (!ast.is.IsMethodSignatureDeclaration(declaration) && name !== "future") {
       for (const parameter of ast.parameters(declaration)) {
-        const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+        const abi = program.records.sourceParameterAbi.get(parameter);
         assert.equal(abi !== undefined, true, name);
         const physical = program.callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
         assert.equal(physical.kind, "identity", `${name}: ${physical.reason ?? "ordinary native parameter"}`);

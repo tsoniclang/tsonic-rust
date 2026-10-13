@@ -6,7 +6,7 @@ import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/
 import { resolveRustConstructSignature } from "../../../dist/policy/types/resolution/constructors.js";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 
 for (const surfaces of [[], ["js"]]) {
   test(`only the complete declared parameter can select invocation-only storage in ${surfaces[0] ?? "native"}`, () => {
@@ -23,7 +23,7 @@ for (const surfaces of [[], ["js"]]) {
     program.sourceFiles.forEach(visit);
     assert.equal(parameters.length, 2);
     const borrowed = parameters.map(parameter => rustCallableInputProtocol(
-      program.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier) !== undefined);
+      program.records.sourceParameterAbi.get(parameter)?.parameterCarrier) !== undefined);
     assert.deepEqual(borrowed, [true, false], "a narrowed union arm cannot replace the entire formal parameter ABI");
   });
 }
@@ -43,9 +43,8 @@ function fixture(purpose) {
     sourceStorageSubject: subject,
     currentSemantics: semantics,
     ast: { kind: () => undefined, as: { AsParameterDeclaration: () => undefined } },
-    source: { sourceFacts: { getFact: () => undefined } },
+    source: { sourceFacts: { getFact: (selected, key) => selected === symbol && key === sourcePrimitiveFactKey ? { kind: "float64" } : undefined } },
     sourceLifetimes: { contractFor: () => undefined },
-    facts: { get: (selected, key) => selected === symbol && key === sourcePrimitiveFactKey ? { kind: "float64" } : undefined },
   };
   const options = {
     jsEnabled: true,

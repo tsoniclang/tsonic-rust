@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -40,7 +41,7 @@ test("optional native associated values move or borrow without inventing Clone, 
     const diagnostics = [];
     const result = planRustFlowReadProjection(node, { kind: "path", path: "value" }, fact, {
       input: { program: {
-        facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+        records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
         valueLifetimes: { canMove: () => canMove }, typeDefinitions: emptyRustTypeDefinitions,
         source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1, end: () => -1, kindName: () => "KindIdentifier" } },
       } }, diagnostics, syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() },

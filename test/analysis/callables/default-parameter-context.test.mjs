@@ -3,7 +3,7 @@ import test from "node:test";
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
-import { rustClosureCaptureFactKey } from "../../../dist/analysis/facts/keys.js";
+
 
 for (const surfaces of [[], ["js"]]) {
   test(`default receiver expressions retain their exact native owner on ${surfaces[0] ?? "native"}`, () => {
@@ -28,7 +28,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(defaults.length, 1, "one authored default initializer");
     const receiver = Node_Expression(ast, defaults[0]);
     assert.equal(receiver !== undefined, true, "exact default receiver expression");
-    const carrier = program.facts.getRuntimeCarrierFact(receiver)?.carrier;
+    const carrier = program.records.runtimeCarrier.get(receiver)?.carrier;
     assert.equal(rustSourceTypeCarrierValue(carrier)?.typeName, "Base", "declaring receiver, not derived request owner");
     const definition = program.projectTypes.definitionForCarrier(carrier);
     assert.equal(definition !== undefined, true, "receiver resolves its exact native declaration");
@@ -51,7 +51,7 @@ for (const surfaces of [[], ["js"]]) {
     };
     for (const file of program.sourceFiles) if (ast.getFileName(file).endsWith("/index.ts")) visit(file);
     assert.equal(callables.length, 1);
-    const capture = program.facts.getFact(callables[0], rustClosureCaptureFactKey);
+    const capture = program.records.closureCapture.get(callables[0]);
     assert.equal(capture !== undefined, true, "sealed exact capture environment");
     assert.equal(capture.captures.length, 1, "the default-only reference is retained");
     assert.equal(ast.text(ast.name(capture.captures[0].declaration)), "captured");

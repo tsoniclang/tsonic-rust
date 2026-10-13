@@ -3,8 +3,8 @@ import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeOutwardResults } from "../../../dist/analysis/callables/native-outward-results.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
-import { rustErrorEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustErrorEffectsAreFallible } from "../../../dist/analysis/facts/error-effects.js";
+
+import { rustErrorEffectsAreFallible } from "../../../dist/analysis/errors/error-effects.js";
 
 test("synchronous JS Future output preserves producer error identity before deferred-effect selection", () => {
   const context = analyzeRustErrorEffects(`
@@ -14,7 +14,7 @@ test("synchronous JS Future output preserves producer error identity before defe
     export function forwardFailure(): Promise<string> { return failed(); }
   `);
   const producers = context.callableValues.nativeProducers;
-  const selected = createRustNativeOutwardResults({ facts: context.facts,
+  const selected = createRustNativeOutwardResults({ records: context.records,
     definitions: context.typeDefinitions, producers: {
       forDeclaration: producers.forDeclaration, errorFor: producers.errorFor,
       deferredFor() { throw new Error("JS output shape cannot depend on unfinished deferred-effect selection"); },
@@ -34,7 +34,7 @@ test("synchronous JS Future output preserves producer error identity before defe
     assert.equal(error?.channel, 0, forward);
     assert.equal(producers.forIdentity(error.identity)?.declaration === owner, true, forward);
     const deferred = producers.deferredErrorFor(owner, error.channel);
-    const effects = context.facts.get(declaration(origin), rustErrorEffectsFactKey);
+    const effects = context.records.errorEffects.get(declaration(origin));
     assert.equal(deferred !== undefined && effects !== undefined, true, "final channel proof remains required");
     assert.equal(deferred.kind === "target-named" && deferred.id === "rust.core.Infallible",
       !rustErrorEffectsAreFallible(effects), "transport retains actual producer fallibility");

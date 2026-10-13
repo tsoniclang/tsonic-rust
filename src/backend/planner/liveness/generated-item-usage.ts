@@ -1,32 +1,18 @@
 import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
-import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
-import { rustPropertyProjectionFactKey } from "../../../analysis/facts/property-projections.js";
+
+
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import {
-  rustFlowReadProjectionFactKey,
-  rustContextualValueConversionFactKey,
-  rustBindingProjectionFactKey,
-  rustProjectDowncastFactKey,
-  rustProjectUpcastFactKey,
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/operations/facts.js";
-import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
-import { rustProjectCallableAdaptersKey } from "../../../analysis/facts/project-callable-adapters.js";
-import type { RustCallableValueAdapter } from "../../../analysis/facts/callable-adapters.js";
+
+
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+
+
+import type { RustCallableValueAdapter } from "../../../target-model/records/callable-adapters.js";
 import type { RustContextualValueConversion } from "../../../target-model/conversions/contextual.js";
-import { rustMemoryBindingPlanKey } from "../../../target-model/operations/memory-bindings.js";
-import {
-  isRustFinalizedArrayInput,
-  isRustFinalizedSliceInput,
-  isRustFinalizedSourceInput,
-  isRustFinalizedTaggedArrayInput,
-} from "../../../analysis/facts/finalized-operation-abi.js";
-import type {
-  RustFinalizedTargetInput,
-  RustFinalizedValueConversion,
-} from "../../../analysis/facts/finalized-operation-abi.js";
+
+import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../../analysis/operations/finalized-operation/conversions.js";
+import type { RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../../target-model/records/finalized-operation.js";
 import {
   rustValueConversionContract,
 } from "../../../target-model/conversions/contracts.js";
@@ -90,20 +76,20 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
     }
     if (parent !== undefined && input.ast.is.IsTypeOfExpression(parent) &&
       Node_Expression(input.ast, parent) === operand) return;
-    const binding = input.facts.getFact(node, rustBindingProjectionFactKey);
+    const binding = input.records.bindingProjection.get(node);
     if (binding?.projection.kind === "object-rest") {
       markStructuralShapeConstructed(binding.bindingCarrier);
     }
-    const upcast = input.facts.getFact(node, rustProjectUpcastFactKey);
+    const upcast = input.records.projectUpcast.get(node);
     if (upcast !== undefined) markProjectUpcastUsed(upcast);
-    const downcast = input.facts.getFact(node, rustProjectDowncastFactKey);
+    const downcast = input.records.projectDowncast.get(node);
     if (downcast !== undefined) {
       markProjectCarrierFieldUsed(downcast.dispatchCarrier, "wrapper-identity");
       markProjectCarrierFieldUsed(downcast.dispatchCarrier, "wrapper-dispatch");
       markProjectTypeConstructed(downcast.targetCarrier);
       markProjectionUsed(downcast.dispatchCarrier, downcast.targetCarrier, downcast.projection);
     }
-    const flow = input.facts.getFact(node, rustFlowReadProjectionFactKey);
+    const flow = input.records.flowReadProjection.get(node);
     if (flow?.kind === "union-map") {
       for (const arm of flow.arms) {
         for (const step of arm.source) markVariantRead(step.union, step.variant.name);
@@ -274,7 +260,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
             .some(capture => capture.references.includes(node));
           if (captured) markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "capture");
           else if (fact.resultCarrier.kind === "array" && fact.valueSemantics.kind === "stored" &&
-              isRustArrayFieldContentAssignment(node, input.ast, input.facts)) {
+              isRustArrayFieldContentAssignment(node, input.ast, input.records)) {
             markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "content");
           } else if (fact.accessMode !== "write") {
             markProjectMemberUsed(fact.receiverCarrier, fact.declaration, "read");
@@ -315,7 +301,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
       case "source-call":
         if (isRustPreconstructionThisOperation(input.ast, node)) return;
         {
-          const declaration = input.facts.getSelectedTargetCall(node)?.sourceDeclaration;
+          const declaration = input.records.selectedCall.get(node)?.sourceDeclaration;
           if (declaration === undefined || !input.sourceCallableSpecializations.requiresSpecialization(declaration)) {
             for (const argument of fact.targetGenericArguments ?? []) {
               if (argument.kind === "type") markProjectTypeReified(argument.type);
@@ -337,7 +323,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
               method.dispatchOwner === undefined ? "method-exact" : "method-virtual");
           }
         } else if (fact.target.form === "method" && fact.target.dispatch !== undefined) {
-          const selected = input.facts.getSelectedTargetCall(node);
+          const selected = input.records.selectedCall.get(node);
           const receiverCarrier = selected?.sourceSelectedReceiverCarrier ??
             fact.target.dispatch.ownerCarrier;
           if (fact.target.dispatch.selected === "virtual") {
@@ -425,7 +411,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
         } else {
           const expression = Node_Expression(input.ast, node);
           const receiverCarrier = selectedReceiver ?? (fact.receiver.kind === "static" ? fact.receiver.typeCarrier :
-            expression === undefined ? undefined : input.facts.getRuntimeCarrierFact(expression)?.carrier);
+            expression === undefined ? undefined : input.records.runtimeCarrier.get(expression)?.carrier);
           if (receiverCarrier !== undefined) {
             if (fact.accessMode !== "write") markProjectMemberUsed(receiverCarrier, fact.read?.declaration, "read");
             if (fact.accessMode !== "read") markProjectMemberUsed(receiverCarrier, fact.write?.declaration, "write");
@@ -508,16 +494,16 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
         input.ast.kindName(node) === "KindTypeAliasDeclaration";
       if (!insideTypeAlias && !declarationNames.has(node) &&
         input.projectTypes.definitionForDeclaration(node) === undefined) {
-        markProjectTypeUsed(input.facts.getRuntimeCarrierFact(node)?.carrier);
+        markProjectTypeUsed(input.records.runtimeCarrier.get(node)?.carrier);
       }
-      const fact = input.facts.getFact(node, rustTargetOperationFactKey);
-      const propertyProjection = input.facts.getFact(node, rustPropertyProjectionFactKey);
+      const fact = input.records.targetOperation.get(node);
+      const propertyProjection = input.records.propertyProjection.get(node);
       for (const projection of propertyProjection?.cases ?? []) {
         for (const read of projection.reads) {
           visitFact(node, { ...read, operationId: "selected-property-projection", accessMode: "read" }, projection.source);
         }
       }
-      const classValue = input.facts.getFact(node, rustClassValueFactKey);
+      const classValue = input.records.classValue.get(node);
       if (classValue !== undefined) {
         markStructuralShapeConstructed(classValue.carrier);
         const view = input.classValues.viewFor(classValue.declaration, classValue.sourceCarrier, classValue.carrier);
@@ -528,17 +514,17 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
           visitCallableAdapter(callable.resultAdapter);
         }
       }
-      const memoryBinding = input.facts.getFact(node, rustMemoryBindingPlanKey);
+      const memoryBinding = input.records.memoryBindingPlan.get(node);
       if (memoryBinding?.kind === "record") markStructuralShapeConstructed(memoryBinding.carrier);
       visitProjectProjectionFacts(node);
-      const objectView = input.facts.getFact(node, rustObjectReferenceViewKey);
+      const objectView = input.records.objectReferenceView.get(node);
       if (objectView !== undefined) {
         markStructuralShapeConstructed(objectView.targetCarrier);
         markProjectIdentityUsed(objectView.sourceCarrier);
         for (const field of objectView.kind === "structural" ? objectView.fields : []) visitFact(node, { ...field.source, operationId: "object-reference-view",
           accessMode: field.writable ? "read-write" : "read" });
       }
-      visitContextualConversion(input.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion);
+      visitContextualConversion(input.records.contextualValueConversion.get(node)?.conversion);
       if (fact !== undefined) visitFact(node, fact);
       input.ast.forEachChild(node, (child) => {
         if (child !== undefined) pending.push({ node: child, insideTypeAlias });
@@ -547,7 +533,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
   }
 
   for (const declaration of input.declarations) {
-    const carrier = rustProjectRootThisCarrier(declaration, input.ast, input.facts, input.projectTypes);
+    const carrier = rustProjectRootThisCarrier(declaration, input.ast, input.records, input.projectTypes);
     if (carrier !== undefined) markProjectTypeConstructed(carrier);
   }
 
@@ -577,7 +563,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
   }
 
   for (const definition of input.projectTypes.definitions) {
-    for (const adapter of input.facts.getFact(definition.declaration, rustProjectCallableAdaptersKey) ?? []) {
+    for (const adapter of input.records.projectCallableAdapters.get(definition.declaration) ?? []) {
       visitCallableAdapter(adapter.resultAdapter);
       for (const parameter of adapter.parameterAdapters) {
         if (parameter.kind === "rest") {

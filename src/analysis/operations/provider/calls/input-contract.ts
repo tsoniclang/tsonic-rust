@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { resolveRustTypeComponentEvidence } from "../../../../policy/types/resolution/source-evidence.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
@@ -7,14 +8,14 @@ import { providerOperationFact } from "../result.js";
 import { checkedCallIsConstruction, instantiateSelectedCallTemplate } from "./instantiation.js";
 import { selectedCallSourceParameterCarriers } from "./source-sequences.js";
 import { createRustJsCallRequest } from "./source-profile-request.js";
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function selectedRustCheckedCallInputCarrier(
   request: RustCheckedCallSelectionInput,
   argumentIndex: number,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   if (checkedCallIsConstruction(request, context)) return undefined;

@@ -1,12 +1,14 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey, rustContextualValueConversionFactKey, rustOptionProjectionFactKey } from "../../../../dist/analysis/facts/keys.js";
+
+
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustEffectiveValueCarrier } from "../../../../dist/analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { printRustExpr } from "../../../../dist/print/source/index.js";
 import { crossFileBranchUnionFiles } from "../../../../../tsonic/test/fixtures/cross-file-branch-unions.mjs";
@@ -16,8 +18,9 @@ import { rustSourceOptionalElementCarrier } from "../../../../dist/target-model/
 function planningContext(program, node, selected) {
   const { ast } = program.source;
   return { input: { program: { ...program,
-    facts: { ...program.facts, getFact: (subject, key) => subject === node && key === rustTargetOperationFactKey
-      ? selected : program.facts.getFact(subject, key) } } }, diagnostics: [],
+    records: createRustRecordFixture({...program.records,
+targetOperation: { get: (subject) => subject === node
+    ? selected : program.records.targetOperation.get(subject) }}) } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
@@ -38,12 +41,12 @@ test("inferred cross-file optional unions retain absence and compare literals wi
     const node = pending.pop();
     const binary = ast.as.AsBinaryExpression(node);
     if (binary?.Right !== undefined && ast.is.IsStringLiteral(binary.Right)) {
-      const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+      const fact = program.records.targetOperation.get(node);
       if (fact?.kind === "union-equality") {
         comparisons++;
         assert.equal(rustSourceOptionalElementCarrier(fact.leftCarrier) !== undefined, true, "checked inferred source absence survives");
         assert.equal(rustTargetTypeRefEquals(fact.rightCarrier, rustStringTargetType()), true, "literal stays native string");
-        assert.equal(program.facts.getFact(binary.Right, rustContextualValueConversionFactKey) === undefined, true,
+        assert.equal(program.records.contextualValueConversion.get(binary.Right) === undefined, true,
           "comparison does not manufacture a complete enum payload");
       }
     }
@@ -60,7 +63,7 @@ export function same(value: string | Token): boolean { return value === "a"; }
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "union-equality") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
@@ -102,7 +105,7 @@ export function reversed(right: Entry, left: OptionalValue): boolean { return ri
     const { ast } = program.source;
     const operations = [];
     const visit = node => {
-      const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+      const fact = program.records.targetOperation.get(node);
       if (fact?.kind === "union-equality") operations.push({ node, fact });
       for (const child of ast.children(node)) visit(child);
     };
@@ -111,10 +114,10 @@ export function reversed(right: Entry, left: OptionalValue): boolean { return ri
     for (const { node, fact } of operations) {
       const binary = ast.as.AsBinaryExpression(node);
       for (const [operand, selected] of [[binary.Left, fact.leftCarrier], [binary.Right, fact.rightCarrier]]) {
-        assert.ok(rustTargetTypeRefEquals(program.facts.getRuntimeCarrierFact(operand)?.carrier, selected));
-        assert.ok(rustTargetTypeRefEquals(rustEffectiveValueCarrier(program.facts, operand), selected));
-        assert.equal(program.facts.getFact(operand, rustContextualValueConversionFactKey), undefined);
-        assert.equal(program.facts.getFact(operand, rustOptionProjectionFactKey), undefined);
+        assert.ok(rustTargetTypeRefEquals(program.records.runtimeCarrier.get(operand)?.carrier, selected));
+        assert.ok(rustTargetTypeRefEquals(rustEffectiveValueCarrier(program.records, operand), selected));
+        assert.equal(program.records.contextualValueConversion.get(operand), undefined);
+        assert.equal(program.records.optionProjection.get(operand), undefined);
       }
       const nativeContext = planningContext(program, node, fact);
       const native = planBinaryExpression(node, nativeContext);

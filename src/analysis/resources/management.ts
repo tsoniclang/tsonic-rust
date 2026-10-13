@@ -1,16 +1,15 @@
+import type { RustOperationPolicyContext } from "../../policy/model/operation-context.js";
+
 import type {
   Node,
   ResolvedSourceResourceManagementInfo,
 } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
+
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { Node_Type } from "@tsonic/target-api/source";
-import type {
-  RustResourceDisposalTarget,
-  RustResourceManagementFact,
-} from "../facts/keys.js";
+import type { RustResourceDisposalTarget, RustResourceManagementFact } from "../../target-model/records/callables-and-resources.js";
 import {
   isRustUnitCarrier,
   rustFutureOutputCarrier,
@@ -23,7 +22,7 @@ import {
 } from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
+import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 
 export interface RustProjectDisposerEffects {
   readonly selfMode: { readonly mode: "ref" | "mut-ref" };
@@ -77,7 +76,7 @@ export function selectRustResourceManagement(
       !resourceDisposalTargetsEqual(alternative.disposal.target, first.disposal.target))) {
     return rejected("Rust resource alternatives must resolve to one identical carrier and disposal operation.");
   }
-  const storageCarrier = context.facts.getRuntimeCarrierFact(declaration)?.carrier;
+  const storageCarrier = context.records.runtimeCarrier.get(declaration)?.carrier;
   if (storageCarrier === undefined) {
     return rejected("The exact selected resource has no closed Rust storage carrier.");
   }

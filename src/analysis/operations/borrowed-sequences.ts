@@ -1,6 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { sourceSequenceInputChoice, sourceSequenceInputIsEmpty } from "@tsonic/target-api/source";
-import type { RustBorrowedSequenceInput } from "../facts/operations/borrowed-sequences.js";
+import type { RustBorrowedSequenceInput } from "../../target-model/records/borrowed-sequences.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { createRustCarrierProbe } from "../expressions/carrier-probe.js";

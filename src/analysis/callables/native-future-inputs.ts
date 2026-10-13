@@ -1,8 +1,8 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
@@ -10,7 +10,8 @@ import { rustOptionElementCarrier } from "../../target-model/types/carriers/opti
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
-import { rustClosureCaptureFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
+
+
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 
 export interface RustNativeFutureInput {
@@ -33,7 +34,7 @@ export interface RustNativeFutureInputPlan {
 export function createRustNativeFutureInputPlan(input: {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly bindingsFor: (declaration: Node) => SourceStorageBindings | undefined;
@@ -140,7 +141,7 @@ export function createRustNativeFutureInputPlan(input: {
   };
   for (const node of input.storage.nodes) {
     if (!input.ast.is.IsParameterDeclaration(node)) continue;
-    const carrier = input.facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier;
+    const carrier = input.records.sourceParameterAbi.get(node)?.parameterCarrier;
     if (carrier === undefined) continue;
     const owner = input.ast.parent(node);
     if (owner === undefined || !input.ast.parameters(owner).includes(node)) continue;
@@ -153,13 +154,13 @@ export function createRustNativeFutureInputPlan(input: {
     else fail(owner, subject.reason);
   }
   for (const declaration of input.storage.nodes) {
-    const fact = input.facts.getFact(declaration, rustClosureCaptureFactKey);
+    const fact = input.records.closureCapture.get(declaration);
     const lexical = input.lexicalFunctions.forDeclaration(declaration);
     if (lexical?.kind === "unresolved") { fail(declaration, lexical.reason); continue; }
     const selected = [...fact?.captures ?? [], ...fact?.receiverFields ?? [], ...fact?.receivers ?? [],
       ...lexical?.captures.map(capture => ({ reference: capture.reference,
-        carrier: input.facts.getFact(capture.declaration, rustRuntimeCarrierKey)?.carrier ??
-          input.facts.getFact(capture.reference, rustRuntimeCarrierKey)?.carrier })) ?? []];
+        carrier: input.records.runtimeCarrier.get(capture.declaration)?.carrier ??
+          input.records.runtimeCarrier.get(capture.reference)?.carrier })) ?? []];
     for (const capture of selected) {
       if (!nodes.has(capture.reference) || !isRustTargetTypeRef(capture.carrier)) {
         fail(declaration, "Native Future capture requires its exact owned reference and valid finalized carrier.");

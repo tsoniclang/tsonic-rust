@@ -6,7 +6,7 @@ import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
-import { rustIndexedFieldKeyArgument } from "../facts/indexed-field-keys.js";
+
 
 export function selectRustIndexedCallKeys(
   walk: RustFactWalk,
@@ -52,7 +52,7 @@ export function selectRustIndexedCallKeys(
     if (carrier === undefined || carrier.kind === "type-parameter") continue;
     if (argument === undefined || binding.sourceForm !== "value") return false;
     const kind = walk.context.ast.kindName(argument);
-    walk.context.facts.set(argument, rustIndexedFieldKeyArgument, {
+    walk.context.records.indexedFieldKeyArgument.set(argument, {
       carrier, evaluate: kind !== "KindStringLiteral" && kind !== "KindNoSubstitutionTemplateLiteral",
     }, [{ message: "rust exact checker-selected indexed field key argument" }]);
   }

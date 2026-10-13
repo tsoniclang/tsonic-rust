@@ -7,12 +7,12 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { rustModuleBindingFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 import { planRustReferenceOperationCall } from "../../../dist/backend/planner/expressions/reference-operations.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
+
 
 test("owned exits, static text, direct helpers and scoped array reads execute without extra owners", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -108,7 +108,7 @@ test("local receiver field results do not force shared object storage", () => {
       assert.equal(captures[0].references.length, 1, "one checked position read");
       assert.equal(program.objectRepresentations.receiverCaptures.receiversFor(callable).length, 0,
         "field-only closure has no whole receiver owner");
-      const storage = program.facts.getFact(field, rustCapturedFieldStorageFactKey);
+      const storage = program.records.capturedFieldStorage.get(field);
       assert.equal(storage !== undefined, true, "sealed live field storage");
       assert.equal(storage.storage.kind, "cell", "mutable field retains its native Cell owner");
       assert.equal(storage.storage.initialization, "ready", "field initializer precedes retention");
@@ -185,7 +185,7 @@ export function read(value: Ref<string>): string { return load(value); }
   let call;
   let fact;
   const visit = node => {
-    const selected = program.facts.getFact(node, rustTargetOperationFactKey);
+    const selected = program.records.targetOperation.get(node);
     if (selected?.kind === "reference-operation" && selected.operation === "load") { call = node; fact = selected; }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
@@ -381,7 +381,7 @@ test("static string selection preserves exported bindings and deferred default r
     };
     program.sourceFiles.forEach(visit);
     assert.notEqual(declaration, undefined);
-    assert.equal(program.facts.getFact(declaration, rustModuleBindingFactKey)?.storage, storage, source);
+    assert.equal(program.records.moduleBinding.get(declaration)?.storage, storage, source);
   }
   assert.throws(() => analyzeRust({ surfaces: ["js"], files: { "index.ts":
     'import { addressof } from "@tsonic/core/lang.js"; const value = "ready"; export const pointer = addressof(value);',

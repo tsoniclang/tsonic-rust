@@ -1,10 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import {
-  rustFlowReadProjectionFactKey,
-  rustSourceBindingFactKey,
-} from "../facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export interface RustProjectFlowReadSelectionQuery {
@@ -36,12 +33,12 @@ const noProjectFlowReads: readonly Node[] = Object.freeze([]);
 export function analyzeRustProjectFlowReadSelections(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
 }): RustProjectFlowReadSelectionIndex {
   const readsByDeclaration = new Map<Node, RustReadsBySourceFile>();
   const visit = (node: Node, sourceFile: SourceFile, scope: Node): void => {
-    const binding = input.facts.getFact(node, rustSourceBindingFactKey);
-    const flow = input.facts.getFact(node, rustFlowReadProjectionFactKey);
+    const binding = input.records.sourceBinding.get(node);
+    const flow = input.records.flowReadProjection.get(node);
     if (binding !== undefined && flow?.kind === "project-downcast") {
       const bySourceFile = readsByDeclaration.get(binding.sourceDeclaration) ?? new Map();
       const byScope = bySourceFile.get(sourceFile) ?? new Map();

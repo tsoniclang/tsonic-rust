@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -12,8 +13,8 @@ function contextFor(text, kindName, carrier) {
   const literals = { ...ast, is: { ...ast.is, IsPrefixUnaryExpression: () => false },
     authoredRange: () => ({ kind: "authored", start: 0, end: text.length }) };
   return { node, context: { input: { program: { source: { ast: literals },
-    facts: { getFact: () => undefined, getTargetConversionFact: () => undefined,
-      getRuntimeCarrierFact: () => ({ carrier }) } } }, sourceFile, diagnostics: [] } };
+    records: createRustRecordFixture({conversion: { get: () => undefined },
+runtimeCarrier: { get: () => ({ carrier }) }}) } }, sourceFile, diagnostics: [] } };
 }
 
 test("numeric literal producers preserve each exact native width independently of contextual inference", () => {

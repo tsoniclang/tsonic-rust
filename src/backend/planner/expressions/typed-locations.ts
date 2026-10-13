@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
-import type { RustBindingStorageFact } from "../../../analysis/facts/operations/keys.js";
+import type { RustBindingStorageFact } from "../../../target-model/records/operation-selections.js";
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
 import type {
@@ -12,15 +12,11 @@ import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustIndexedLocationContract } from "../../../analysis/facts/indexed-location.js";
+import { rustIndexedLocationContract } from "../../../analysis/operations/indexed-location.js";
 import { planFinalizedTargetInput } from "./conversions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import {
-  rustBindingStorageFactKey,
-  rustModuleBindingFactKey,
-  rustSourceBindingFactKey,
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
+
+
 import {
   isRustStringCarrier,
   rustLocationTargetType,
@@ -54,7 +50,7 @@ import {
   writeRustStoredObjectField,
 } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustNativeArrayStorageKey } from "../../../target-model/operations/native-memory.js";
+
 import { planNativeRustArrayAccess } from "./native-arrays.js";
 import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/record-fields.js";
 import { rustExpressionHasReferenceObjectField, planRustReferenceObjectFieldLocation } from "./object-field-locations.js";
@@ -82,16 +78,16 @@ export function planRustIdentifierValue(
 ): RustExpr {
   const prepared = rustPreparedValueLocation(node, context);
   if (prepared !== undefined) return prepared.read;
-  const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
+  const binding = context.input.program.records.sourceBinding.get(node);
   const module = binding === undefined ? undefined
-    : context.input.program.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey);
+    : context.input.program.records.moduleBinding.get(binding.sourceDeclaration);
   if (module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier)) {
     return { kind: "owned-string-from-borrowed-str", expression: { kind: "path", path } };
   }
   const captured = rustCapturedBinding(node, context);
   const storage = rustLocationStorageForReference(node, context);
   const value: RustExpr = captured?.expression ?? { kind: "path", path };
-  if (context.input.program.facts.getFact(node, rustNativeArrayStorageKey)?.kind === "reference") {
+  if (context.input.program.records.nativeArrayStorage.get(node)?.kind === "reference") {
     return cloneRustExpression(value);
   }
   const bindingStorage = captured !== undefined && captured.storage !== "value" ? captured.storage
@@ -126,7 +122,7 @@ export function planRustValueRead(
   value: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
       !context.input.program.valueLifetimes.canMove(node)
     ? cloneRustExpression(value)
@@ -149,7 +145,7 @@ export function planRustCaptureValue(
   }
   if (move && captured?.borrowed === undefined) return capturedValue;
   const value = planRustIdentifierValue(node, path, context);
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
   return rustReadRequiresClone(carrier, context) &&
       !(value.kind === "method-call" && value.method === "clone" && value.args.length === 0)
     ? cloneRustExpression(value)
@@ -181,7 +177,7 @@ export function rustExpressionReadsStorage(node: Node, context: RustPlanContext)
     if (inner === undefined) return false;
     source = inner;
   }
-  const operation = context.input.program.facts.getFact(source, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(source);
   const kind = ast.kindName(source);
   return ast.is.IsIdentifier(source) || ast.is.IsElementAccessExpression(source) ||
     kind === "KindThisExpression" || kind === "KindThisKeyword" ||
@@ -219,7 +215,7 @@ export function planRustLoadedSharedReference(
   value: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   if (operation?.kind !== "reference-operation" || operation.operation !== "load" || operation.operandCarrier.mutable) {
     return undefined;
   }
@@ -259,7 +255,7 @@ export function rustLocationStorageForReference(
   readonly storage: "local-location" | "module-cell" | "cell" | "borrow-cell";
   readonly valueCarrier: TargetTypeRef;
 } | undefined {
-  const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)
+  const declaration = context.input.program.records.sourceBinding.get(node)
     ?.sourceDeclaration;
   const captured = declaration === undefined
     ? undefined
@@ -275,7 +271,7 @@ export function rustLocationStorageForReference(
   }
   const localStorage = declaration === undefined
     ? undefined
-    : context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
+    : context.input.program.records.bindingStorage.get(declaration);
   if (declaration !== undefined && localStorage !== undefined) {
     return {
       declaration,
@@ -285,7 +281,7 @@ export function rustLocationStorageForReference(
   }
   const moduleBinding = declaration === undefined
     ? undefined
-    : context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
+    : context.input.program.records.moduleBinding.get(declaration);
   const valueCarrier = moduleBinding?.storage === "module-cell"
     ? moduleBinding.valueCarrier
     : moduleBinding?.storage === "native-callable"
@@ -300,7 +296,7 @@ export function rustBindingStorageForDeclaration(
   declaration: Node,
   context: RustPlanContext,
 ): RustBindingStorageFact | undefined {
-  return context.input.program.facts.getFact(declaration, rustBindingStorageFactKey);
+  return context.input.program.records.bindingStorage.get(declaration);
 }
 
 export function rustRawLocationRoot(
@@ -313,10 +309,7 @@ export function rustRawLocationRoot(
     const address = prepared.address(undefined, context);
     return address?.kind === "infallible" ? address.value : undefined;
   }
-  const binding = context.input.program.facts.getFact(
-    expression,
-    rustSourceBindingFactKey,
-  );
+  const binding = context.input.program.records.sourceBinding.get(expression);
   if (binding === undefined) {
     return undefined;
   }
@@ -344,7 +337,7 @@ export function planRustModuleBindingStore(
     target = inner;
   }
   if (ast.kindName(target) !== "KindIdentifier") return undefined;
-  const binding = context.input.program.facts.getFact(target, rustSourceBindingFactKey);
+  const binding = context.input.program.records.sourceBinding.get(target);
   if (binding === undefined || rustLocationStorageForReference(target, context)?.storage !== "module-cell") {
     return undefined;
   }
@@ -358,7 +351,7 @@ export function rustCapturedBinding(
   node: Node,
   context: RustPlanContext,
 ): import("../program/plan-context.js").RustCapturedBinding | undefined {
-  const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)
+  const declaration = context.input.program.records.sourceBinding.get(node)
     ?.sourceDeclaration ?? context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
   return declaration === undefined
     ? undefined
@@ -539,7 +532,7 @@ function assignmentBinaryOperator(
 }
 
 export function rustExpressionHasBoundRecordField(expression: Node, context: RustPlanContext): boolean {
-  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(expression);
   return operation?.kind === "source-field" && operation.storage === "structural-object" &&
     context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex)?.storage === "bound";
 }
@@ -548,7 +541,7 @@ export function planRustSourceLocationStorage(
   expression: Node, rootExpression: Node, context: RustPlanContext, planExpression: RustExpressionPlanner,
   cloneRoot = true,
 ): RustExpr | undefined {
-  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(expression);
   const prepared = rustPreparedValueLocation(expression, context);
   if (prepared?.address !== undefined) {
     const address = prepared.address(operation?.kind === "source-field" ? operation.operationId : undefined, context);
@@ -593,10 +586,10 @@ export function planRustLocationStorage(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
-  if (context.input.program.facts.getFact(expression, rustNativeArrayStorageKey)?.kind === "element") {
+  if (context.input.program.records.nativeArrayStorage.get(expression)?.kind === "element") {
     return planNativeRustArrayAccess(expression, context, planExpression, "location_at");
   }
-  const fieldOperation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  const fieldOperation = context.input.program.records.targetOperation.get(expression);
   if (fieldOperation?.kind === "source-field" && fieldOperation.storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(fieldOperation.receiverCarrier, fieldOperation.storageIndex);
     if (field?.nativeLayout !== undefined) {
@@ -643,7 +636,7 @@ export function planRustLocationStorage(
     );
   }
   const kind = context.input.program.source.ast.kindName(expression);
-  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(expression);
   if (kind === "KindElementAccessExpression" && operation?.kind === "provider-operation" &&
       operation.indexedLocationMethod !== undefined) {
     const contract = rustIndexedLocationContract(operation, context.input.program.typeDefinitions);
@@ -798,7 +791,7 @@ export function findRustLocationStorageRoot(
 ): { readonly expression: Node; readonly declaration: Node } | undefined {
   let root = expression;
   while (true) {
-    const native = context.input.program.facts.getFact(root, rustNativeArrayStorageKey);
+    const native = context.input.program.records.nativeArrayStorage.get(root);
     if (native?.kind === "element") return { expression: root, declaration: native.declaration };
     if (native !== undefined) return undefined;
     const kind = context.input.program.source.ast.kindName(root);

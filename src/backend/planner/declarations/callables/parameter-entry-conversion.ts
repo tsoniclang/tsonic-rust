@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustSourceParameterAbiFact } from "../../../../analysis/facts/keys.js";
-import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
+import type { RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
+
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustExpr, RustStmt } from "../../../target-ast/syntax/nodes.js";
@@ -15,7 +15,7 @@ export function planRustParameterEntryConversion(
   mutable: boolean,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const abi = context.input.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+  const abi = context.input.program.records.sourceParameterAbi.get(parameter);
   if (abi?.entryConversion === undefined) return [];
   const type = rustTypeFromCarrierInContext(abi.valueCarrier, context);
   const init = planRustParameterEntryValue(abi, { kind: "path", path: name }, parameter, context);

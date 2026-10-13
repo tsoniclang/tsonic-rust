@@ -1,17 +1,7 @@
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustContextualRuntimeConversionContract, type RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
-import type {
-  RustFinalizedOperationAbi,
-  RustFinalizedTargetInput,
-  RustFinalizedValueConversion,
-} from "../facts/finalized-operation-abi.js";
-import {
-  isRustFinalizedArrayInput,
-  isRustFinalizedDispatchContextInput,
-  isRustFinalizedSliceInput,
-  isRustFinalizedSourceInput,
-  isRustFinalizedTaggedArrayInput,
-} from "../facts/finalized-operation-abi.js";
+import type { RustFinalizedOperationAbi, RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
+import { isRustFinalizedArrayInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../operations/finalized-operation/conversions.js";
 import type {
   RustProviderOperationForm,
   RustValueConversion,

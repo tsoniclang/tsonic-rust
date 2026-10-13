@@ -4,7 +4,7 @@ import {
   KindBinaryExpression,
   KindIdentifier,
 } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { appendRustDiagnostic } from "../program/walk.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -21,7 +21,7 @@ import { readRustLanguageCall } from "./native-language-call.js";
 import type { Node, ProviderDeclarationIdentity, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
 type RustSourceReferenceOperationKind =
   | "shared-reference"
@@ -271,10 +271,10 @@ function referenceStoreWriteStrategy(
   if (readExpression === undefined || rightExpression === undefined) {
     return {};
   }
-  const readFact = walk.context.facts.get(readExpression, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(readExpression, rustTargetOperationFactKey);
-  const valueFact = walk.context.facts.get(valueExpression, rustTargetOperationFactKey) ??
-    walk.context.facts.resolve(valueExpression, rustTargetOperationFactKey);
+  const readFact = walk.context.records.targetOperation.get(readExpression) ??
+    walk.context.records.targetOperation.get(readExpression);
+  const valueFact = walk.context.records.targetOperation.get(valueExpression) ??
+    walk.context.records.targetOperation.get(valueExpression);
   if (readFact?.kind !== "reference-operation" || readFact.operation !== "load" ||
     ast.kindName(readFact.operandExpression) !== KindIdentifier ||
     valueFact?.kind !== "operator-token" || valueFact.leftConversion !== undefined ||

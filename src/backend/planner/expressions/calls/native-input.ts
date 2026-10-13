@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import type { RustSourceCallEffectsFact } from "../../../../analysis/facts/keys.js";
+import type { RustSourceCallEffectsFact } from "../../../../target-model/records/object-methods.js";
 import type { RustNativeCallableCall, RustNativeCallableInput } from "../../../../analysis/callables/native-inputs.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";

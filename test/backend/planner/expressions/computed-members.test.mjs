@@ -1,8 +1,9 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { prepareRustComputedMemberEvaluation } from "../../../../dist/backend/planner/expressions/computed-members.js";
-import { rustComputedMemberFactKey, rustTargetOperationFactKey } from "../../../../dist/analysis/facts/operations/keys.js";
+
 
 for (const [form, source] of [
   ["method", `class Value { read(): number { return 3; } }
@@ -19,7 +20,7 @@ ${source}
     const visit = node => {
       if (ast.is.IsElementAccessExpression(node)) {
         const parent = ast.parent(node);
-        if (parent !== undefined && program.facts.getFact(parent, rustTargetOperationFactKey)?.kind === "source-call") {
+        if (parent !== undefined && program.records.targetOperation.get(parent)?.kind === "source-call") {
           selected = node;
         }
       }
@@ -27,16 +28,14 @@ ${source}
     };
     program.sourceFiles.forEach(visit);
     assert.equal(selected !== undefined, true, "one exact computed native call");
-    const original = program.facts.getFact(selected, rustComputedMemberFactKey);
+    const original = program.records.computedMember.get(selected);
     assert.equal(original !== undefined, true, "analysis owns the evaluation evidence");
     const changed = mutation === "missing" ? undefined
       : { ...original, [mutation]: selected };
     const context = {
-      input: { program: { ...program, facts: {
-        ...program.facts,
-        getFact: (node, key) => node === selected && key === rustComputedMemberFactKey
-          ? changed : program.facts.getFact(node, key),
-      } } },
+      input: { program: { ...program, records: createRustRecordFixture({...program.records,
+computedMember: { get: (node) => node === selected
+    ? changed : program.records.computedMember.get(node) }}) } },
       sourceFile: ast.getSourceFile(selected), diagnostics: [],
     };
     assert.equal(prepareRustComputedMemberEvaluation(selected, context) === undefined, true,
@@ -62,8 +61,8 @@ export function main(): number { const values: number[] = [3]; return accept(val
   program.sourceFiles.forEach(visit);
   assert.equal(selected !== undefined, true, "one exact indexed argument");
   const parent = ast.parent(selected);
-  assert.equal(program.facts.getFact(parent, rustTargetOperationFactKey)?.kind, "source-call");
-  assert.equal(program.facts.getFact(selected, rustComputedMemberFactKey) === undefined, true);
+  assert.equal(program.records.targetOperation.get(parent)?.kind, "source-call");
+  assert.equal(program.records.computedMember.get(selected) === undefined, true);
   const context = { input: { program }, diagnostics: [] };
   const evaluation = prepareRustComputedMemberEvaluation(selected, context);
   assert.equal(evaluation?.context === context && evaluation.bindings.length === 0, true);
@@ -74,8 +73,8 @@ test("computed member fact identity retains both evaluation decisions", () => {
   const receiver = {};
   const key = {};
   const original = { receiver, key, accessMode: "read", evaluateReceiver: true, evaluateKey: true };
-  assert.equal(rustComputedMemberFactKey.equals(original, { ...original }), true);
+  assert.equal("computedMember".equals(original, { ...original }), true);
   for (const field of ["evaluateReceiver", "evaluateKey"]) {
-    assert.equal(rustComputedMemberFactKey.equals(original, { ...original, [field]: false }), false, field);
+    assert.equal("computedMember".equals(original, { ...original, [field]: false }), false, field);
   }
 });

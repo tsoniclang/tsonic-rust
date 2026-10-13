@@ -1,11 +1,11 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
-import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
+
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceUnionDefinitionIdentity } from "../../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
+
 import {
   analyzeRustGeneratedItemUsage,
 } from "./generated-item-usage.js";
@@ -93,7 +93,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
     ast,
     sourceFiles: program.sourceFiles,
     declarations,
-    facts: program.facts,
+    records: program.records,
     projectTypes: program.projectTypes,
     classValues: program.classValues,
     sourceCallableSpecializations: program.sourceCallableSpecializations,
@@ -246,16 +246,16 @@ function declarationParticipatesInRustLiveness(
   declaration: Node,
   program: RustTargetProgram,
 ): boolean {
-  if (program.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey) !== undefined) return false;
+  if (program.records.typeOnlyDeclaration.get(declaration) !== undefined) return false;
   return program.source.ast.kindName(declaration) !== "KindTypeAliasDeclaration" ||
-    program.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind !== "erased";
+    program.records.typeAliasDeclaration.get(declaration)?.kind !== "erased";
 }
 
 function runtimeUnionUsesDeclaration(owner: Node, target: Node, program: RustTargetProgram): boolean {
-  const fact = program.facts.getFact(owner, rustTypeAliasDeclarationFactKey);
-  const targetFact = program.facts.getFact(target, rustTypeAliasDeclarationFactKey);
+  const fact = program.records.typeAliasDeclaration.get(owner);
+  const targetFact = program.records.typeAliasDeclaration.get(target);
   if (fact?.kind !== "runtime" || targetFact?.kind !== "runtime") return true;
-  const carrier = program.facts.getRuntimeCarrierFact(target)?.carrier;
+  const carrier = program.records.runtimeCarrier.get(target)?.carrier;
   const identity = carrier === undefined ? undefined : rustSourceUnionDefinitionIdentity(carrier);
   if (identity === undefined) return true;
   const pending = fact.variants.map(variant => variant.carrier);

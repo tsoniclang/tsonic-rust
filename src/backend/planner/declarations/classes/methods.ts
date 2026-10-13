@@ -1,11 +1,8 @@
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
-import {
-  rustAsyncFunctionFactKey,
-  rustFallibleFactKey,
-  rustGeneratorFactKey,
-  rustSelfModeFactKey,
-  rustSourceCallableReturnFactKey,
-} from "../../../../analysis/facts/keys.js";
+
+
+
+
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { applyRustTailShape, rustBlockTerminates, retainRustCheckedCompletion } from "../../../target-ast/normalization/block-flow.js";
@@ -95,9 +92,9 @@ export function planProjectMethod(
     return undefined;
   }
   context = genericPlan.context;
-  const generatorFact = context.input.program.facts.getFact(member, rustGeneratorFactKey);
+  const generatorFact = context.input.program.records.generator.get(member);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
-  const asyncFact = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
+  const asyncFact = context.input.program.records.asyncFunction.get(member);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
     ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
         asyncFact?.kind === "js-promise" && asyncFact.storage.kind === "static"
@@ -126,7 +123,7 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const sourceReturn = context.input.program.facts.getFact(member, rustSourceCallableReturnFactKey);
+  const sourceReturn = context.input.program.records.sourceCallableReturn.get(member);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ?? sourceReturn?.returnCarrier;
   if (returnCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -267,7 +264,7 @@ export function planProjectMethod(
     ));
     return undefined;
   }
-  const selfMode = isStatic ? undefined : context.input.program.facts.getFact(member, rustSelfModeFactKey);
+  const selfMode = isStatic ? undefined : context.input.program.records.selfMode.get(member);
   if (!isStatic && selfMode === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, member),
@@ -394,7 +391,7 @@ function planDirectProjectMethodOverridePrelude(
   const representation = context.input.program.objectRepresentations.representationFor(owner);
   if (owner?.kind !== "class" || targetName === undefined ||
     representation === undefined ||
-    context.input.program.facts.getFact(member, rustFallibleFactKey) === undefined ||
+    context.input.program.records.fallible.get(member) === undefined ||
     syntheticNames === undefined) {
     return undefined;
   }

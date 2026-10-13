@@ -1,8 +1,9 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustOptionalChainFactKey, rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { planOptionalChainExpression } from "../../../../dist/backend/planner/expressions/special.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
@@ -17,7 +18,7 @@ export function missing(values: (number | undefined)[]): boolean {
   const operations = [];
   const visit = node => {
     if (node === undefined) return;
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "option-check") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
@@ -26,21 +27,21 @@ export function missing(values: (number | undefined)[]): boolean {
   const { node, fact } = operations[0];
   assert.deepEqual(fact.nullishDepths, [0]);
   assert.ok(Object.isFrozen(fact.nullishDepths));
-  const context = facts => ({
-    input: { program: { ...program, facts } }, diagnostics: [],
+  const context = records => ({
+    input: { program: { ...program, records } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
   });
-  const valid = context(program.facts);
+  const valid = context(program.records);
   assert.ok(planBinaryExpression(node, valid));
   assertNoTargetDiagnostics(valid.diagnostics);
   for (const nullishDepths of [undefined, [], [-1], [0.5], [NaN], [Infinity], [2], [0, 0], [1, 0]]) {
-    const selected = context({ ...program.facts, getFact: (subject, key) =>
-      subject === node && key === rustTargetOperationFactKey
-        ? { ...fact, nullishDepths } : program.facts.getFact(subject, key) });
+    const selected = context(createRustRecordFixture({...program.records,
+targetOperation: { get: (subject) => subject === node
+    ? { ...fact, nullishDepths } : program.records.targetOperation.get(subject) }}));
     assert.equal(planBinaryExpression(node, selected), undefined);
     assert.equal(selected.diagnostics.length, 1);
     assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
@@ -58,7 +59,7 @@ export function read(values: (string | undefined)[]): void {
   const operations = [];
   const visit = node => {
     if (node === undefined) return;
-    const fact = program.facts.getFact(node, rustOptionalChainFactKey);
+    const fact = program.records.optionalChain.get(node);
     if (fact !== undefined) operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
@@ -67,10 +68,10 @@ export function read(values: (string | undefined)[]): void {
   const { node, fact } = operations[0];
   assert.equal(fact.guardDepth, 1);
   for (const guardDepth of [undefined, 0, -1, 2, 3, 0.5, NaN, Infinity]) {
-    const facts = { ...program.facts, getFact: (subject, key) =>
-      subject === node && key === rustOptionalChainFactKey
-        ? { ...fact, guardDepth } : program.facts.getFact(subject, key) };
-    const context = { input: { program: { ...program, facts } }, diagnostics: [],
+    const records = createRustRecordFixture({...program.records,
+optionalChain: { get: (subject) => subject === node
+    ? { ...fact, guardDepth } : program.records.optionalChain.get(subject) }});
+    const context = { input: { program: { ...program, records } }, diagnostics: [],
       sourceFile: ast.getSourceFile(node) };
     const result = planOptionalChainExpression(node, context, "property", () => {
       assert.fail("invalid guard cannot reach inner operation planning");
@@ -91,7 +92,7 @@ export function read(values: (string | undefined)[]): string {
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "option-coalesce") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
@@ -100,15 +101,15 @@ export function read(values: (string | undefined)[]): string {
   const { node, fact } = operations[0];
   assert.equal(fact.leftOptionDepth, 1);
   assert.equal(fact.rightOptionDepth, 0);
-  const context = facts => ({
-    input: { program: { ...program, facts } }, diagnostics: [],
+  const context = records => ({
+    input: { program: { ...program, records } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map(), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
   });
-  const valid = context(program.facts);
+  const valid = context(program.records);
   const planned = planBinaryExpression(node, valid);
   assert.equal(planned?.kind, "match");
   assert.deepEqual(planned?.arms.map(arm => arm.pattern.kind), ["tuple-variant", "path"]);
@@ -121,9 +122,9 @@ export function read(values: (string | undefined)[]): string {
     { leftConversion: { kind: "numeric-promotion", source: "int32", target: "int64" } },
   ];
   for (const mutation of mutations) {
-    const selected = context({ ...program.facts, getFact: (subject, key) =>
-      subject === node && key === rustTargetOperationFactKey
-        ? { ...fact, ...mutation } : program.facts.getFact(subject, key) });
+    const selected = context(createRustRecordFixture({...program.records,
+targetOperation: { get: (subject) => subject === node
+    ? { ...fact, ...mutation } : program.records.targetOperation.get(subject) }}));
     assert.equal(planBinaryExpression(node, selected), undefined);
     assert.equal(selected.diagnostics.length, 1);
     assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");

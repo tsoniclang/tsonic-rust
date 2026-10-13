@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceEnclosingCallable, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { rustAwaitSourceErrorEffectsFactKey, rustSourceErrorEffectsFactKey, rustErrorEffectsFactKey,
-  rustAwaitValueFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
+
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
-import { rustErrorEffectsEqual } from "../../../dist/analysis/facts/error-effects.js";
+import { rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { selectRustAwaitSourceErrors } from "../../../dist/analysis/resources/await-source-effects.js";
@@ -34,7 +36,7 @@ function fixture(text, options) {
     return matches[0];
   };
   const fact = name => {
-    const selected = context.facts.get(awaited(name), rustAwaitSourceErrorEffectsFactKey);
+    const selected = context.records.awaitSourceErrorEffects.get(awaited(name));
     assert.equal(selected !== undefined, true, `exact await edge: ${name}`);
     assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.branches), true);
     return selected;
@@ -59,13 +61,13 @@ test("await branches retain the exact original source edge instead of adding an 
   assert.equal(edge.nativeErrors.length, 2);
   const input = current.context.callableValues.native.inputsFor(current.declaration("consumer"))[0];
   assert.equal(edge.effects.nativeErrors.every(error => error.errorType.owner.identity === input.implementation.identity), true);
-  const value = current.context.facts.get(current.awaited("consumer"), rustAwaitValueFactKey);
+  const value = current.context.records.awaitValue.get(current.awaited("consumer"));
   assert.equal(rustAwaitSelectionLeaves(value.selection).some(leaf => rustTargetTypeRefEquals(leaf.carrier, carrier)), true);
   const calls = current.nodes.filter(node => current.ast.is.IsCallExpression(node));
-  const original = calls.map(call => current.context.facts.get(call, rustSourceErrorEffectsFactKey))
+  const original = calls.map(call => current.context.records.sourceErrorEffects.get(call))
     .flatMap(fact => fact?.edges ?? []).find(candidate => candidate === edge);
   assert.equal(original === edge, true, "the await fact reuses the actual selected source edge");
-  assert.equal(rustErrorEffectsEqual(current.context.facts.get(current.awaited("consumer"), rustErrorEffectsFactKey), edge.effects), true);
+  assert.equal(rustErrorEffectsEqual(current.context.records.errorEffects.get(current.awaited("consumer")), edge.effects), true);
 });
 
 test("stored async source results preserve original generic channels through synchronous return activations", () => {
@@ -78,7 +80,7 @@ test("stored async source results preserve original generic channels through syn
   assert.equal(edge.declaration === current.declaration("source"), true);
   assert.equal(edge.effects.localErrors, false);
   const input = current.context.callableValues.native.inputsFor(current.declaration("consumer"))[0];
-  const sourceEffects = current.context.facts.get(current.declaration("source"), rustErrorEffectsFactKey);
+  const sourceEffects = current.context.records.errorEffects.get(current.declaration("source"));
   assert.equal(edge.nativeErrors.length, sourceEffects.nativeErrors.length);
   for (const route of edge.nativeErrors) {
     assert.equal(sourceEffects.nativeErrors.some(source => source.identity === route.source.identity), true);
@@ -100,7 +102,7 @@ test("stored source awaits rebind the original activation without overwriting th
   assert.equal(edge.nativeErrors.every(route => route.target.errorType.owner.identity === input.implementation.identity), true);
   const original = current.nodes.find(node => current.ast.is.IsCallExpression(node) &&
     current.ast.text(Node_Expression(current.ast, node)) === "source");
-  const originalEdges = current.context.facts.get(original, rustSourceErrorEffectsFactKey)?.edges ?? [];
+  const originalEdges = current.context.records.sourceErrorEffects.get(original)?.edges ?? [];
   assert.equal(originalEdges.some(candidate => candidate.nativeErrors.some(route =>
     route.target.errorType.owner?.identity === input.implementation.identity)), false,
   "the retained call's physical input cannot be replaced by its receiving consumer's unrelated input binder");
@@ -119,7 +121,7 @@ test("await-source selection rejects an unrelated exact Future branch", () => {
     const budget = createRustEffectsWorkBudget();
     const failure = budget.run(() => {
       result = selectRustAwaitSourceErrors(walk, operand, branches,
-        declaration => current.context.facts.get(declaration, rustErrorEffectsFactKey),
+        declaration => current.context.records.errorEffects.get(declaration),
         createRustSourceErrorEffectSelection(walk), budget);
     });
     assert.equal(failure === undefined, true);
@@ -144,9 +146,9 @@ test("pure source awaits stay pure while caught source errors retain inner corre
   assert.equal(success.branches.length, 1);
   assert.deepEqual(success.branches[0].edge.effects, { localErrors: false, nativeErrors: [] });
   assert.equal(current.fact("caught").branches[0].edge.nativeErrors.length, 2);
-  assert.deepEqual(current.context.facts.get(current.declaration("caught"), rustErrorEffectsFactKey),
+  assert.deepEqual(current.context.records.errorEffects.get(current.declaration("caught")),
     { localErrors: false, nativeErrors: [] });
-  assert.equal(current.context.facts.get(current.awaited("caught"), rustErrorEffectsFactKey).nativeErrors.length, 2);
+  assert.equal(current.context.records.errorEffects.get(current.awaited("caught")).nativeErrors.length, 2);
 });
 
 test("awaiting a source package Future retains its actual RootFailure owner", () => {
@@ -166,7 +168,7 @@ test("awaiting a source package Future retains its actual RootFailure owner", ()
   const current = fixture("", { files, sourcePackages: sourcePackageCallbackErrorGraph });
   assert.equal(current.fact("rootConsumer").branches.length, 0,
     "a callback input remains its selected native channel rather than acquiring a guessed source-program edge");
-  const value = current.context.facts.get(current.awaited("rootConsumer"), rustAwaitValueFactKey);
+  const value = current.context.records.awaitValue.get(current.awaited("rootConsumer"));
   const future = rustAwaitSelectionLeaves(value.selection)[0].future;
   assert.equal(future.errorBoundary, "source-native");
   const reference = rustProducerErrorReference(future.errorCarrier);
@@ -174,7 +176,7 @@ test("awaiting a source package Future retains its actual RootFailure owner", ()
   const producer = current.context.callableValues.nativeProducers.forDeclaration(current.declaration("rootFailure"));
   assert.equal(reference.identity, producer.identity);
   assert.equal(reference.channel, 0);
-  const effects = current.context.facts.get(current.awaited("rootConsumer"), rustErrorEffectsFactKey);
+  const effects = current.context.records.errorEffects.get(current.awaited("rootConsumer"));
   assert.equal(effects.localErrors, false);
   assert.equal(effects.nativeErrors.length, 1);
   assert.equal(effects.nativeErrors[0].identity, future.errorSource);
@@ -187,7 +189,7 @@ test("direct native callback awaits keep native identities and do not manufactur
   `);
   assert.equal(current.fact("consumer").branches.length, 0);
   const native = current.context.callableValues.native.calls[0];
-  const effects = current.context.facts.get(current.awaited("consumer"), rustErrorEffectsFactKey);
+  const effects = current.context.records.errorEffects.get(current.awaited("consumer"));
   assert.equal(effects.localErrors, false);
   assert.equal(effects.nativeErrors.length, 1);
   assert.equal(effects.nativeErrors[0].identity, native.awaitErrorSources[0]);
@@ -199,9 +201,9 @@ for (const surfaces of [[], ["js"]]) {
     const awaited = current.nodes.filter(node => current.ast.kindName(node) === "KindAwaitExpression");
     assert.equal(awaited.length > 0, true);
     for (const expression of awaited) {
-      assert.equal(current.context.facts.get(expression, rustAwaitSourceErrorEffectsFactKey) !== undefined, true,
+      assert.equal(current.context.records.awaitSourceErrorEffects.get(expression) !== undefined, true,
         "every original await has an exact source-edge selection, possibly the empty native-input set");
-      assert.equal(current.context.facts.get(expression, rustAwaitValueFactKey) !== undefined, true,
+      assert.equal(current.context.records.awaitValue.get(expression) !== undefined, true,
         "the full physical await contract remains required");
     }
   });

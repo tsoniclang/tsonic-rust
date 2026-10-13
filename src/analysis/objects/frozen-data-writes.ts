@@ -1,5 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProjectStructuralView } from "./project-structural-views.js";
 import { analyzeRustFrozenReceiverCaptures } from "./frozen-receiver-captures.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -25,7 +25,7 @@ export interface RustFrozenDataWriteRegistry extends RustFrozenDataWritePlan {
     readonly representations: RustObjectRepresentationPlan;
     readonly structuralShapes: RustStructuralShapePlan;
     readonly sourceFiles: readonly SourceFile[];
-    readonly facts: RustPlanQueries;
+    readonly records: RustProgramRecords;
     readonly views: readonly RustProjectStructuralView[];
     readonly typeDefinitions: RustTypeDefinitions;
   }): void;

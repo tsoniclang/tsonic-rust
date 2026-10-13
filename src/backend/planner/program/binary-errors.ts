@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
-import { rustErrorEffectsFactKey } from "../../../analysis/facts/error-effects.js";
+
 import { planRustSelectedErrorRegion } from "./error-regions.js";
 import { rustRuntimeAliasUseItems } from "./plan-context.js";
 import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
@@ -16,7 +16,7 @@ export function planRustBinaryEntryError(
   context: RustTypeRenderingContext,
   programModuleName: string | undefined,
 ): { readonly errorType?: RustType; readonly libraryItems: readonly RustItem[] } | undefined {
-  const effects = context.input.program.facts.getFact(declaration, rustErrorEffectsFactKey);
+  const effects = context.input.program.records.errorEffects.get(declaration);
   const aliases = new Set<string>();
   const selected = effects === undefined ? undefined : planRustSelectedErrorRegion(declaration, effects, { ...context, usedAliases: aliases });
   if (selected === undefined) return undefined;

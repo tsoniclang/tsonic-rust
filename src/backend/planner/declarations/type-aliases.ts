@@ -3,7 +3,7 @@ import { planRustTypeFamilyDeclaration } from "./type-families.js";
 import { diagnosticInput, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition } from "../liveness/directives.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
+
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
@@ -14,11 +14,11 @@ import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloa
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 
 export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
-  const fact = context.input.program.facts.getRuntimeCarrierFact(node) === undefined
-    ? undefined : context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey);
+  const fact = context.input.program.records.runtimeCarrier.get(node) === undefined
+    ? undefined : context.input.program.records.typeAliasDeclaration.get(node);
   if (fact?.kind === "family") return planRustTypeFamilyDeclaration(node, context);
   const { ast } = context.input.program.source;
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
   const aliasName = context.input.program.names.nameForDeclaration(node) ?? "";
   if (carrier === undefined || fact === undefined || !isValidRustIdentifier(aliasName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(

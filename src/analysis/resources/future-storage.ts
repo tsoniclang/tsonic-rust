@@ -2,19 +2,22 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustAsyncFunctionFactKey, rustFutureValueFactKey, rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import type { RustFutureValueFact } from "../facts/keys.js";
-import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeFutureValueForSourceCallBranch } from "../facts/future-values.js";
+
+
+
+import type { RustFutureValueFact } from "../../target-model/records/object-methods.js";
+import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeFutureValueForSourceCallBranch } from "../callables/future-values.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { createRustSourceErrorEffectSelection, type RustSourceErrorBindings } from "./source-error-effects.js";
-import type { RustFinalizedValueConversion } from "../facts/finalized-operation/model.js";
-import { finalizedConversionIsValid } from "../facts/finalized-operation/conversions.js";
+import type { RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
+import { finalizedConversionIsValid } from "../operations/finalized-operation/conversions.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustAwaitCarrier } from "../../target-model/types/index.js";
-import { rustErrorEffectsFactKey, rustErrorEffectsAreFallible } from "../facts/error-effects.js";
+
+import { rustErrorEffectsAreFallible } from "../errors/error-effects.js";
 
 export function rustFutureValueForStoredBranch(
   walk: RustFactWalk,
@@ -51,7 +54,7 @@ export function rustStoredFutureValues(
   branch: TargetTypeRef,
   bindings: SourceStorageBindings,
 ): readonly RustStoredFutureValue[] | undefined {
-  const { facts, sourceStorage: storage, typeDefinitions: definitions, ast } = walk.context;
+  const { records, sourceStorage: storage, typeDefinitions: definitions, ast } = walk.context;
   const sources = storage.storageProducersFor(subject, bindings);
   if (sources.kind === "unresolved") return undefined;
   if (sources.kind === "open" && sources.boundaries.some(boundary => boundary.kind !== "opaque-result" ||
@@ -62,9 +65,9 @@ export function rustStoredFutureValues(
   for (const source of sources.producers) {
     if (source.subject.kind !== "value" || source.subject.projection.length !== 0) return undefined;
     const producer = source.subject.node;
-    const operation = facts.get(producer, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(producer);
     const topology = rustAwaitSelection(operation?.kind === "source-call" ? operation.resultCarrier
-      : facts.getRuntimeCarrierFact(producer)?.carrier, definitions);
+      : records.runtimeCarrier.get(producer)?.carrier, definitions);
     if (topology === undefined) return undefined;
     let candidate: RustFutureValueFact | undefined;
     for (const leaf of rustAwaitSelectionLeaves(topology)) {
@@ -126,9 +129,9 @@ function substituteFutureConversion(
 }
 
 function futureForProducer(walk: RustFactWalk, producer: Node, branch: TargetTypeRef): RustFutureValueFact | undefined {
-  const { facts, typeDefinitions: definitions } = walk.context;
-  const operation = facts.get(producer, rustTargetOperationFactKey);
-  const effects = facts.get(producer, rustSourceCallEffectsFactKey);
+  const { records, typeDefinitions: definitions } = walk.context;
+  const operation = records.targetOperation.get(producer);
+  const effects = records.sourceCallEffects.get(producer);
   const native = rustNativeFutureValueForSourceCallBranch(operation, effects, branch, definitions);
   if (native !== undefined) return native;
   let infallible = false;
@@ -138,13 +141,13 @@ function futureForProducer(walk: RustFactWalk, producer: Node, branch: TargetTyp
     if (bindings === undefined) return undefined;
     const implementations = walk.context.sourceStorage.invocationImplementationsFor(producer, bindings);
     if (implementations.kind !== "resolved" || !implementations.exact ||
-      !implementations.nodes.some(declaration => facts.get(declaration, rustAsyncFunctionFactKey) !== undefined)) return undefined;
+      !implementations.nodes.some(declaration => records.asyncFunction.get(declaration) !== undefined)) return undefined;
     infallible = implementations.nodes.every(declaration => {
-      const effects = facts.get(declaration, rustErrorEffectsFactKey);
-      return facts.get(declaration, rustAsyncFunctionFactKey) !== undefined && effects !== undefined && !rustErrorEffectsAreFallible(effects);
+      const effects = records.errorEffects.get(declaration);
+      return records.asyncFunction.get(declaration) !== undefined && effects !== undefined && !rustErrorEffectsAreFallible(effects);
     });
   }
-  const selected = facts.get(producer, rustFutureValueFactKey) ??
+  const selected = records.futureValue.get(producer) ??
     rustFutureValueForOperation(operation, effects, definitions, branch);
   if (selected === undefined || !rustFutureValueMatchesCarrier(selected, branch, definitions)) return undefined;
   return selected.errorBoundary === "source-program" && infallible

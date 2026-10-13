@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
-import { rustBindingStorageFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
+
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -12,7 +13,7 @@ import { rustTargetGenericReferences } from "../../../dist/target-model/types/ca
 import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 import { awaitOperandCallableSource, nativeAwaitOperandCallableSource } from "../../../../tsonic/test/fixtures/await-operand-callables.mjs";
 import { dispatchProviderPackage } from "../../helpers/rust-session/provider-dispatch-contexts.mjs";
-import { rustAsyncFunctionFactKey, rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 
 const source = `
 export function escaped(seed: number): (count: number) => number {
@@ -38,7 +39,7 @@ export async function combine(first: () => int32, pending: () => int32 | Promise
   const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
     node !== undefined && ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "combine");
   assert.equal(declaration !== undefined, true, "exact authored suspended function");
-  const inputs = ast.parameters(declaration).map(node => program.facts.getFact(node, rustSourceParameterAbiFactKey));
+  const inputs = ast.parameters(declaration).map(node => program.records.sourceParameterAbi.get(node));
   assert.equal(inputs.length, 4);
   for (const input of inputs) {
     assert.equal(input?.mode, "value", "the Future owns its callback input");
@@ -46,7 +47,7 @@ export async function combine(first: () => int32, pending: () => int32 | Promise
     assert.equal(input.inputLifetime === undefined, true, "no manufactured callback loan");
     assert.equal(rustCallableProtocol(input.parameterCarrier) !== undefined, true, "exact callback protocol retained");
   }
-  const selected = program.facts.getFact(declaration, rustAsyncFunctionFactKey);
+  const selected = program.records.asyncFunction.get(declaration);
   assert.equal(selected?.kind === "js-promise", true, "one exact selected async operation");
   assert.equal(selected.capturedParameters.length, 4, "all owned callback inputs remain in the suspended frame");
   assert.equal(selected.storage.kind, "static", "these logical callback signatures contain no borrowed payloads");
@@ -124,7 +125,7 @@ for (const jsEnabled of [false, true]) {
       assert.equal(value !== undefined, true, "addressed seed has one frame binding");
       const lexical = name === "addressed-lexical-frame";
       assert.equal(value.storage, lexical ? "location" : "value");
-      const physical = program.facts.getFact(value.declaration, rustBindingStorageFactKey);
+      const physical = program.records.bindingStorage.get(value.declaration);
       assert.equal(lexical ? physical?.storage === "location" : physical === undefined, true,
         "stored constructor field never promotes its formal parameter");
       assert.equal(frame.entries.every(entry => frame.bindings.filter(binding => binding.entry === entry)
@@ -184,8 +185,8 @@ export function escaped${generic ? "<U>(seed: U)" : "()"}: (count: number) => nu
         ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
       }
       assert.equal(factory !== undefined && retained !== undefined, true, "exact authored factory and retained callback");
-      const returned = program.facts.getFact(factory, rustSourceCallableReturnFactKey)?.returnCarrier;
-      const local = program.facts.getFact(retained, rustRuntimeCarrierKey)?.carrier;
+      const returned = program.records.sourceCallableReturn.get(factory)?.returnCarrier;
+      const local = program.records.runtimeCarrier.get(retained)?.carrier;
       assert.equal(rustFrameCallableValue(returned) !== undefined, true, "physical owner remains a closed frame");
       assert.equal(rustTargetTypeRefEquals(returned, local), true, "return preserves the selected instance's owner arguments");
       const references = rustTargetGenericReferences(returned).typeParameters;
@@ -239,11 +240,11 @@ for (const jsEnabled of [false, true]) {
     const before = named.get("before");
     for (const [label, node] of [["escaped", escaped], ["ordinary", ordinary], ["selected", selected], ["before", before]])
       assert.equal(node !== undefined, true, label);
-    const returned = program.facts.getFact(escaped, rustSourceCallableReturnFactKey)?.returnCarrier;
+    const returned = program.records.sourceCallableReturn.get(escaped)?.returnCarrier;
     const frame = rustFrameCallableValue(returned);
     assert.equal(frame !== undefined, true, "returned callback uses its exact activation frame");
     for (const node of [selected, before]) {
-      const carrier = program.facts.getFact(node, rustRuntimeCarrierKey)?.carrier;
+      const carrier = program.records.runtimeCarrier.get(node)?.carrier;
       assert.equal(rustTargetTypeRefEquals(carrier, returned), true, "slot and alias share the finalized physical ABI");
     }
     for (const node of arrows.filter(node => {
@@ -251,14 +252,14 @@ for (const jsEnabled of [false, true]) {
       while (parent !== undefined && !ast.is.IsFunctionDeclaration(parent)) parent = ast.parent(parent);
       return parent === escaped;
     })) {
-      const carrier = program.facts.getFact(node, rustTargetOperationFactKey)?.resultCarrier;
+      const carrier = program.records.targetOperation.get(node)?.resultCarrier;
       assert.equal(rustTargetTypeRefEquals(carrier, returned), true, "every entry retains the same owning activation");
     }
     const logical = rustCallableProtocol(returned);
     assert.equal(logical?.parameters.length, 1);
     assert.equal(rustTargetTypeRefEquals(logical?.parameters[0], rustSourcePrimitiveTargetType("float64")), true);
     assert.equal(rustTargetTypeRefEquals(logical?.result, rustSourcePrimitiveTargetType("float64")), true);
-    const ordinaryResult = program.facts.getFact(ordinary, rustSourceCallableReturnFactKey)?.returnCarrier;
+    const ordinaryResult = program.records.sourceCallableReturn.get(ordinary)?.returnCarrier;
     assert.equal(rustFrameCallableValue(ordinaryResult) === undefined, true, "ordinary callbacks acquire no frame ABI");
     assert.equal(rustCallableProtocol(ordinaryResult)?.parameters.length, 1);
     const definition = program.callableValues.frames.definitionFor(returned);

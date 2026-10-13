@@ -1,8 +1,9 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
-import type { RustGeneratorFact, RustSourceBindingFact } from "../../../analysis/facts/keys.js";
-import { rustModuleBindingFactKey } from "../../../analysis/facts/keys.js";
+import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
+import type { RustSourceBindingFact } from "../../../target-model/records/value-projections.js";
+
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
 import type { RustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
@@ -139,7 +140,7 @@ export interface RustPlanContext {
   readonly typeParameterNames?: ReadonlyMap<string, string>;
   readonly lifetimeSubstitutions?: ReadonlyMap<
     string,
-    import("../../../target-model/lifetimes/index.js").RustLifetimeRef
+    import("../../../target-model/lifetimes/model.js").RustLifetimeRef
   >;
 }
 
@@ -277,7 +278,7 @@ export function rustSourceBindingPath(
     ? context.input.program.localStorageAliases.owner(binding.sourceDeclaration) ?? binding.sourceDeclaration
     : binding.sourceDeclaration;
   const moduleBinding = binding.scope === "module"
-    ? context.input.program.facts.getFact(binding.sourceDeclaration, rustModuleBindingFactKey)
+    ? context.input.program.records.moduleBinding.get(binding.sourceDeclaration)
     : undefined;
   const name = moduleBinding?.storage === "native-callable" && moduleBinding.value !== undefined
     ? moduleBinding.value.name

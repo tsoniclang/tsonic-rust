@@ -34,13 +34,13 @@ import { planThrowStatement, planTryStatement } from "./errors.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+
 import { planRustBorrowedElementLocal } from "../expressions/borrowed-element-reads.js";
 import { rustBlockTerminates } from "../../target-ast/normalization/block-flow.js";
 import { planRustClassEnvironmentValue } from "../objects/class-environments.js";
 import { planRustAbsentValue } from "../expressions/optional-storage.js";
-import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "../../../analysis/facts/native-control-flow.js";
+
 import { planFunctionDeclarations } from "../declarations/callables/functions.js";
 import { planRustDeferredCaptureStorage } from "../bindings/capture-storage.js";
 import { planRustLexicalFunctionValues } from "../declarations/callables/lexical-values.js";
@@ -73,7 +73,7 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
 }
 
 function planStatementInner(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  if (context.input.program.facts.getFact(node, rustNativeUnreachableFactKey) === true) return [];
+  if (context.input.program.records.nativeUnreachable.get(node) === true) return [];
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
@@ -91,7 +91,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return value === undefined ? undefined : [{ kind: "let", name: environment.bindingName, mutable: false, init: value }];
     }
     case "KindTypeAliasDeclaration": {
-      return context.input.program.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased"
+      return context.input.program.records.typeAliasDeclaration.get(node)?.kind === "erased"
         ? [] : undefined;
     }
     case KindVariableStatement: {
@@ -133,7 +133,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
     case KindIfStatement: {
       const statement = ast.as.AsIfStatement(node);
       const result = statement?.Expression === undefined ? undefined
-        : context.input.program.facts.getFact(statement.Expression, rustNativeGuardResultFactKey);
+        : context.input.program.records.nativeGuardResult.get(statement.Expression);
       if (result !== undefined) {
         const branch = result ? statement?.ThenStatement : statement?.ElseStatement;
         if (branch === undefined) return [];

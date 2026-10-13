@@ -12,10 +12,11 @@ import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
-import { rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
+
+
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustResolutionContext } from "../program/walk.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -37,11 +38,11 @@ export function resolveProjectMethodPropertyCarrier(
   if (relationship?.kind !== "related" || parameters === undefined ||
     walk.context.ast.typeParameters(declaration).length !== 0 ||
     walk.context.ast.hasModifierKind(declaration, "async") ||
-    walk.context.facts.get(declaration, rustGeneratorFactKey) !== undefined) {
+    walk.context.records.generator.get(declaration) !== undefined) {
     return undefined;
   }
   const parameterCarriers = parameters.map((parameter) => {
-    const abi = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey);
+    const abi = walk.context.records.sourceParameterAbi.get(parameter);
     return abi?.form === "required" && abi.mode === "value"
       ? walk.context.projectTypes.instantiateMemberCarrier(
           parameter,
@@ -50,10 +51,7 @@ export function resolveProjectMethodPropertyCarrier(
         )
       : undefined;
   });
-  const returnCarrier = walk.context.facts.get(
-    declaration,
-    rustSourceCallableReturnFactKey,
-  )?.returnCarrier;
+  const returnCarrier = walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
   const resultCarrier = returnCarrier === undefined
     ? undefined
     : walk.context.projectTypes.instantiateMemberCarrier(
@@ -145,7 +143,7 @@ export function resolveRustRecordShape(
       return undefined;
     }
     const fields = layout.fields.map((field) => {
-      const declared = walk.context.facts.get(field.declaration, rustRuntimeCarrierKey)?.carrier ??
+      const declared = walk.context.records.runtimeCarrier.get(field.declaration)?.carrier ??
         resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
       const instantiated = declared === undefined
         ? undefined

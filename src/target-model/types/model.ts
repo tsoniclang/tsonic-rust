@@ -14,7 +14,7 @@ import type {
   RustLifetimeRef,
 } from "../lifetimes/index.js";
 import type { RustValueConversion } from "../operations/model.js";
-import type { RustFlowReadProjectionFact } from "./value-projections.js";
+import type { RustFlowReadProjectionFact } from "../records/value-projections.js";
 
 export type RustTargetConstArgument =
   | { readonly kind: "integer"; readonly value: string }

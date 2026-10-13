@@ -1,9 +1,10 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { RustPlanBuilder } from "../facts/plan-store.js";
+import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment, RustCallableValueAdapter } from "../facts/callable-adapters.js";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustCallableInvocationResult } from "../facts/callable-results.js";
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment, RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+
+
+import { rustCallableInvocationResult } from "./results.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -15,7 +16,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../target
 import { isRustUnitCarrier } from "../../target-model/types/index.js";
 
 export function sourceCallableParameterAbis(
-  input: { readonly ast: AstReader; readonly facts: RustPlanBuilder },
+  input: { readonly ast: AstReader; readonly records: RustProgramRecordBuilder },
   callable: Node,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
 ): RustCallableParameterAbi[] | undefined {
@@ -24,8 +25,8 @@ export function sourceCallableParameterAbis(
     return undefined;
   }
   const abis = (parameters as readonly Node[]).map((parameter) => {
-    const abi = input.facts.get(parameter, rustSourceParameterAbiFactKey) ??
-      input.facts.resolve(parameter, rustSourceParameterAbiFactKey);
+    const abi = input.records.sourceParameterAbi.get(parameter) ??
+      input.records.sourceParameterAbi.get(parameter);
     return abi === undefined ? undefined : substituteRustCallableParameterAbi(abi, substitutions);
   });
   return abis.some((abi) => abi === undefined)
@@ -34,14 +35,14 @@ export function sourceCallableParameterAbis(
 }
 
 export function sourceCallableReturnCarrier(
-  input: { readonly facts: RustPlanBuilder },
+  input: { readonly records: RustProgramRecordBuilder },
   callable: Node,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
 ): TargetTypeRef | undefined {
-  const retainedResult = rustCallableInvocationResult(input.facts, callable);
+  const retainedResult = rustCallableInvocationResult(input.records, callable);
   const operation = retainedResult === undefined
-    ? input.facts.get(callable, rustTargetOperationFactKey) ??
-      input.facts.resolve(callable, rustTargetOperationFactKey)
+    ? input.records.targetOperation.get(callable) ??
+      input.records.targetOperation.get(callable)
     : undefined;
   const operationReturn = operation?.kind === "closure"
     ? rustClosureProtocol(operation.resultCarrier)?.result ??

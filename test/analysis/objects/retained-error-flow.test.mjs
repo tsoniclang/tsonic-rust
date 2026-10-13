@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust, nodejsCapability } from "../../helpers/rust-session.mjs";
-import { rustFlowReadProjectionFactKey, rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 import { rustJsErrorTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/index.js";
 import { rustSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { nativeRetainedErrorFlowSource } from "../../../../tsonic/test/fixtures/native-retained-errors.mjs";
@@ -19,9 +20,9 @@ test("retained-provider catch reads select exact readonly Error flow and observa
   const properties = [];
   const equalities = [];
   const visit = node => {
-    const projection = program.facts.getFact(node, rustFlowReadProjectionFactKey);
+    const projection = program.records.flowReadProjection.get(node);
     if (ast.is.IsIdentifier(node) && ast.text(node) === "failure" && projection !== undefined) projections.push(projection);
-    const operation = program.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = program.records.targetOperation.get(node);
     if (operation?.kind === "builtin-error-property" &&
       ast.text(Node_Expression(ast, node)) === "failure") properties.push(operation);
     if (operation?.kind === "program-error-equality") equalities.push(operation);

@@ -1,8 +1,9 @@
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustCheckedPropertySelectionInput, RustOperationPolicyContext, RustCheckedOperationSelectionResult,
-  RustPolicySelection } from "../../policy/operations/contracts.js";
+import type { RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { selectRustGuardedValueMembers } from "./native-flow-refinement.js";
 import { resolveSelectedSourceProfilePropertyMembers } from "../../policy/identities/selected-source.js";
 import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/index.js";
@@ -14,7 +15,7 @@ import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js
 export function selectRustUnionProperty(
   request: RustCheckedPropertySelectionInput,
   receiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const union = receiverCarrier === undefined ? undefined : options.sourceTypes.sourceUnionForCarrier(receiverCarrier);

@@ -1,8 +1,9 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/program/borrowed-element-reads.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 
 for (const expression of ["values[0]", "values[0]!"]) {
   test(`indexed String input ${expression} retains its native str borrow`, () => {
@@ -21,7 +22,7 @@ export function read(values: string[]): number { return parseInt(${expression}, 
     const selected = program.borrowedElementReads.forExpression(call);
     assert.equal(selected !== undefined, true);
     assert.equal(program.borrowedElementReads.forRead(selected.element) === selected, true);
-    const operation = program.facts.getFact(call, rustTargetOperationFactKey);
+    const operation = program.records.targetOperation.get(call);
     assert.equal(operation.abi.sourceArguments[0].carrier.kind, "reference");
     const altered = [
       { ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "observable" } } },
@@ -29,10 +30,11 @@ export function read(values: string[]): number { return parseInt(${expression}, 
         index === 0 ? { ...input, parameterCarrier: { kind: "source-primitive", name: "int32" } } : input) } },
     ];
     for (const [index, replacement] of altered.entries()) {
-      const facts = { ...program.facts, getFact(node, key) {
-        return node === call && key === rustTargetOperationFactKey ? replacement : program.facts.getFact(node, key);
-      } };
-      const reads = analyzeRustBorrowedElementReads(ast, program.sourceFiles, facts, program.sourceNavigation);
+      const records = createRustRecordFixture({...program.records,
+targetOperation: { get: (node) => {
+    return node === call ? replacement : program.records.targetOperation.get(node);
+} }});
+      const reads = analyzeRustBorrowedElementReads(ast, program.sourceFiles, records, program.sourceNavigation);
       assert.equal(reads.forExpression(call) === undefined, true, `invalid native input contract ${index}`);
     }
     const { result } = compileRust(options);

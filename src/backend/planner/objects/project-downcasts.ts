@@ -3,15 +3,13 @@ import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import { planRustClosedNativeProjection } from "./closed-native-values.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustSelectedProjectDowncast } from "../../../analysis/facts/value-projections.js";
+import { rustSelectedProjectDowncast } from "../../../analysis/control-flow/project-downcasts.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProjectDowncastRoute } from "../../../analysis/project-types/type-policy.js";
 import type { RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
-import type {
-  RustProjectDowncastFact,
-} from "../../../analysis/facts/keys.js";
+import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import {
   isRustCopyCarrier,
   rustCarrierSupportsClone,
@@ -44,7 +42,7 @@ export function planRustProjectDowncast(
   fact: RustProjectDowncastFact,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const selected = rustSelectedProjectDowncast(context.input.program.facts, node);
+  const selected = rustSelectedProjectDowncast(context.input.program.records, node);
   if (!closedMetadataEquals(selected, fact)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.project-downcast", "Project downcast conflicts with its finalized cast or flow evidence."));
@@ -137,7 +135,7 @@ function planRustNonConsumingProjectValue(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
   return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier, context.input.program.typeDefinitions) &&
       expression.kind === "method-call" && expression.method === "clone" &&
       expression.args.length === 0

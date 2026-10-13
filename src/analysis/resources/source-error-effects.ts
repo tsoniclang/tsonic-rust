@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../facts/error-effects.js";
-import { mergeRustErrorEffects } from "../facts/error-effects.js";
-import type { RustSourceErrorEffectEdge } from "../facts/source-error-effects.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
+import { mergeRustErrorEffects } from "../errors/error-effects.js";
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
+
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics, substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
@@ -22,7 +22,7 @@ import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-m
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
-import { rustRetainedCallSubstitutions } from "../facts/retained-environments.js";
+import { rustRetainedCallSubstitutions } from "../callables/retained-call-lifetimes.js";
 import type { RustTargetConstArgument } from "../../target-model/types/model.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 
@@ -61,8 +61,8 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
       throw new Error("Native input error channels require one exact identity and carrier.");
   }
   const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, storageBindings) => {
-    const signature = walk.context.facts.getSelectedTargetCall(node);
-    const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
+    const signature = walk.context.records.selectedCall.get(node);
+    const operation = walk.context.records.targetOperation.get(node);
     const activation = storageBindings === undefined ? undefined
       : walk.context.callableValues.nativeStorage.genericBindingsFor(declaration, storageBindings);
     if (activation?.kind === "unresolved") return undefined;
@@ -73,7 +73,7 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
     const available = new Set(caller === undefined ? [] : [...native.inputsFor(caller), ...native.capturesFor(caller)]);
     const types = new Map(generics.types);
     const lifetimes = new Map<string, RustLifetimeRef>(activation === undefined ? [...generics.lifetimes,
-      ...rustRetainedCallSubstitutions(walk.context.facts, node)] : generics.lifetimes);
+      ...rustRetainedCallSubstitutions(walk.context.records, node)] : generics.lifetimes);
     const consts = new Map<string, RustTargetConstArgument>(generics.consts);
     const bindSignature = (pattern: TargetTypeRef, actual: TargetTypeRef): boolean => {
       const formalCarrier = rustOptionElementCarrier(pattern) ?? pattern;
@@ -160,15 +160,15 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
           if (storageBindings !== undefined && !bindSignature(input.carrier, parameter.carrier)) return undefined;
         } else {
           if (rustOptionElementCarrier(input.carrier) !== undefined && subject.projection.length === 0 &&
-            isRustAbsenceCarrier(walk.context.facts.getRuntimeCarrierFact(subject.node)?.carrier)) continue;
+            isRustAbsenceCarrier(walk.context.records.runtimeCarrier.get(subject.node)?.carrier)) continue;
           const candidate = subject.projection.length === 0
             ? walk.context.callableValues.nativeProducers.forDeclaration(subject.node) : undefined;
           if (candidate === undefined || actual !== undefined || producer !== undefined && candidate !== producer) return undefined;
           producer = candidate;
           if (storageBindings !== undefined) {
-            const operation = walk.context.facts.get(subject.node, rustTargetOperationFactKey);
+            const operation = walk.context.records.targetOperation.get(subject.node);
             const carrier = operation?.kind === "closure" ? operation.resultCarrier
-              : walk.context.facts.getRuntimeCarrierFact(subject.node)?.carrier;
+              : walk.context.records.runtimeCarrier.get(subject.node)?.carrier;
             if (carrier === undefined || !bindSignature(input.carrier, carrier)) return undefined;
           }
         }

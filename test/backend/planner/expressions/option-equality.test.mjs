@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
@@ -7,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createTestWorkspace } from "../../../../../tsonic/test/scripts/test-workspaces.mjs";
 import { nativeOwnershipCostSupport } from "../../../helpers/native-ownership-cost.mjs";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planBinaryExpression } from "../../../../dist/backend/planner/expressions/binary.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustOptionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
@@ -24,7 +25,7 @@ test("optional equality rejects forged native carriers, borrowed views, presence
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "option-equality") operations.push({ node, fact });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
@@ -32,8 +33,9 @@ test("optional equality rejects forged native carriers, borrowed views, presence
   assert.equal(operations.length, 3);
   for (const { node, fact } of operations) {
     const context = selected => ({ input: { program: { ...program,
-      facts: { ...program.facts, getFact: (subject, key) => subject === node && key === rustTargetOperationFactKey
-        ? selected : program.facts.getFact(subject, key) } } }, diagnostics: [],
+      records: createRustRecordFixture({...program.records,
+targetOperation: { get: (subject) => subject === node
+    ? selected : program.records.targetOperation.get(subject) }}) } }, diagnostics: [],
       sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
       syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),

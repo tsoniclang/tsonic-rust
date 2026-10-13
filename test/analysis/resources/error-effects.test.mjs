@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual,
-  rustPureErrorEffects, rustLocalErrorEffects } from "../../../dist/analysis/facts/error-effects.js";
+import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustPureErrorEffects, rustLocalErrorEffects } from "../../../dist/analysis/errors/error-effects.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { planRustNonConsumingValue } from "../../../../dist/backend/planner/expressions/typed-locations.js";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 
 function context(kind, semantics = "stored") {
   return { input: { program: { source: { ast: {
@@ -10,10 +11,10 @@ function context(kind, semantics = "stored") {
       IsTypeAssertion: () => false, IsIdentifier: () => kind === "KindIdentifier",
       IsElementAccessExpression: () => kind === "KindElementAccessExpression" },
     kindName: () => kind,
-  } }, facts: { getFact(_node, key) {
-    return key === rustTargetOperationFactKey && kind === "KindPropertyAccessExpression"
-      ? { kind: "source-field", valueSemantics: { kind: semantics } } : undefined;
-  } } } } };
+  } }, records: createRustRecordFixture({targetOperation: { get: (_node) => {
+    return kind === "KindPropertyAccessExpression"
+        ? { kind: "source-field", valueSemantics: { kind: semantics } } : undefined;
+} }}) } } };
 }
 
 test("native storage borrows remove implicit whole-owner clones without requiring Clone on an unread payload", () => {

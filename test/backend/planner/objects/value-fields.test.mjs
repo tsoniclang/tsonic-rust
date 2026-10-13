@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planRustValueFieldLocation } from "../../../../dist/backend/planner/objects/value-fields.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
@@ -17,7 +18,7 @@ export function run(): number { const value = new Value(4); return value.count; 
   const { ast } = program.source;
   const fields = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "source-field") fields.push({ node, fact });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
@@ -26,8 +27,8 @@ export function run(): number { const value = new Value(4); return value.count; 
   const storage = { kind: "path", path: "prepared_field" };
   const value = { kind: "int-literal", text: "9" };
   for (const { node, fact } of fields) {
-    const context = (override, facts = program.facts) => ({
-      input: { program: { ...program, facts } }, diagnostics: [], sourceFile: ast.getSourceFile(node),
+    const context = (override, records = program.records) => ({
+      input: { program: { ...program, records } }, diagnostics: [], sourceFile: ast.getSourceFile(node),
       syntheticNames: createRustSyntheticNameState(ast, node, []),
       expressionOverrides: new Map([[node, override]]),
     });
@@ -51,7 +52,8 @@ export function run(): number { const value = new Value(4); return value.count; 
       assert.equal(planRustValueFieldLocation(node, rejected, "write") === undefined, true, changed.valueForm);
       assert.equal(rejected.diagnostics.some(row => row.code === "RUST_MISSING_TARGET_FACT"), true);
     }
-    const missing = context(override, { ...program.facts, getSelectedTargetProperty: () => undefined });
+    const missing = context(override, createRustRecordFixture({...program.records,
+selectedOperation: { get: () => undefined }}));
     assert.equal(planRustValueFieldLocation(node, missing, "write") === undefined, true, "selected property evidence is required");
   }
 });

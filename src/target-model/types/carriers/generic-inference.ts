@@ -188,8 +188,8 @@ export function inferRustTargetGenericBindings(
   }
 
   function matchBinder(
-    left: import("../../lifetimes/index.js").RustLifetimeBinder | undefined,
-    right: import("../../lifetimes/index.js").RustLifetimeBinder | undefined,
+    left: import("../../lifetimes/model.js").RustLifetimeBinder | undefined,
+    right: import("../../lifetimes/model.js").RustLifetimeBinder | undefined,
     parent: LifetimeInferenceContext,
   ): LifetimeInferenceContext | undefined {
     if (left === undefined || right === undefined) {

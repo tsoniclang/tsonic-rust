@@ -1,4 +1,5 @@
-import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedDeleteSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustOperationPolicyContext, RustPolicySelection } from "../../../policy/operations/contracts.js";
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustCheckedDeleteSelectionInput, RustCheckedElementSelectionInput, RustCheckedPropertySelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
@@ -8,7 +9,7 @@ import { acceptRustMemberOperation, acceptRustOperation, elementProvenance, reje
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { isRustStringCarrier, rustJsArrayTargetType, rustSourcePrimitiveTargetType, rustTupleTargetType } from "../../../target-model/types/index.js";
 import type { SelectedObjectShapeProjection } from "./object-shape-fields.js";
-import type { RustProviderOperationTemplate } from "../../facts/keys.js";
+import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import { acceptSelectedCall } from "./calls/instantiation.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
@@ -16,7 +17,7 @@ import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index
 export function selectRustRecordElement(
   request: RustCheckedElementSelectionInput,
   receiver: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const record = rustRecordCarrierValue(receiver);
@@ -41,7 +42,7 @@ export function selectRustRecordElement(
 export function selectRustRecordProperty(
   request: RustCheckedPropertySelectionInput,
   receiver: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const index = request.sourceSelectedIndex;
@@ -67,7 +68,7 @@ export function selectRustRecordProperty(
 export function selectRustRecordObjectCall(
   request: RustCheckedCallSelectionInput,
   projection: SelectedObjectShapeProjection,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const source = projection.sourceValue === "receiver" ? request.source.sourceReceiver : request.source.sourceArguments[0];
@@ -97,7 +98,7 @@ export function selectRustRecordObjectCall(
 
 export function selectRustRecordDelete(
   request: RustCheckedDeleteSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const receiver = resolveRustTargetTypeRef(request.receiver, context, options);

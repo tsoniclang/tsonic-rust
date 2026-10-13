@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nativeClosureProducerFixture, nativeClosureProducerErrorFacts } from "../../../helpers/native-closure-producers.mjs";
+import { nativeClosureProducerFixture, nativeClosureProducerErrorRecords } from "../../../helpers/native-closure-producers.mjs";
 import { planRustCallableInputProducer, planRustCallableConversion }
   from "../../../../dist/backend/planner/expressions/callable-conversions.js";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../../dist/target-model/conversions/callable.js";
@@ -34,8 +34,8 @@ for (const retained of [false, true]) {
 }
 
 function fixture(throwing = false) {
-  const current = nativeClosureProducerFixture(throwing ? { selectFacts: nativeClosureProducerErrorFacts(failure) } : {});
-  const source = current.program.facts.getFact(current.node, rustTargetOperationFactKey).resultCarrier;
+  const current = nativeClosureProducerFixture(throwing ? { selectRecords: nativeClosureProducerErrorRecords(failure) } : {});
+  const source = current.program.records.targetOperation.get(current.node).resultCarrier;
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "exact source producer plans");
   return { ...current, source, expression };

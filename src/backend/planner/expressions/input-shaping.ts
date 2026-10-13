@@ -1,12 +1,10 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustFinalizedSourceInput } from "../../../analysis/facts/finalized-operation-abi.js";
-import {
-  rustSourceParameterAbiFactKey,
-  type RustArgumentMode,
-  type RustSourceParameterAbiFact,
-} from "../../../analysis/facts/keys.js";
+import type { RustFinalizedSourceInput } from "../../../target-model/records/finalized-operation.js";
+
+import type { RustArgumentMode } from "../../../target-model/operations/model.js";
+import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustValueReferenceReborrow } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueReferenceReborrow } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustBorrowedStringView } from "../../target-ast/syntax/expressions.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -52,7 +50,7 @@ export function applyRustArgumentMode(
   if (mode === "mut-ref") {
     const sourceParameterAbi = node === undefined
       ? undefined
-      : context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
+      : context.input.program.records.sourceParameterAbi.get(node);
     return sourceParameterAbi?.mode === "mut-ref"
       ? argument
       : createRustMutableReferenceArgument(argument);
@@ -80,10 +78,7 @@ export function applyFinalizedRustArgumentMode(
   if (input.mode === "value") {
     return expression;
   }
-  const sourceParameterAbi = context.input.program.facts.getFact(
-    sourceNode,
-    rustSourceParameterAbiFactKey,
-  );
+  const sourceParameterAbi = context.input.program.records.sourceParameterAbi.get(sourceNode);
   if (sourceParameterMatches(input, sourceParameterAbi)) {
     return expression;
   }
@@ -111,7 +106,7 @@ function sourceReferenceReborrowMatches(
   sourceNode: Node,
   input: RustFinalizedSourceInput,
 ): boolean {
-  const conversion = rustValueReferenceReborrow(context.input.program.facts, sourceNode,
+  const conversion = rustValueReferenceReborrow(context.input.program.records, sourceNode,
     context.input.program.typeDefinitions);
   return conversion !== undefined &&
     rustTargetTypeRefEquals(conversion.target, input.sourceCarrier) &&
@@ -145,7 +140,7 @@ export function createRustSharedReferenceArgument(
   }
   const sourceParameterAbi = node === undefined
     ? undefined
-    : context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey);
+    : context.input.program.records.sourceParameterAbi.get(node);
   if (sourceParameterAbi?.mode === "ref" || sourceParameterAbi?.mode === "mut-ref") {
     return argument;
   }

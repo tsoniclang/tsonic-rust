@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type {
   AstReader,
   Node,
@@ -11,17 +12,8 @@ import {
   acceptRustPolicy,
   rejectRustPolicy,
 } from "../../policy/operations/contracts.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedCallSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../policy/operations/contracts.js";
-import {
-  rustArgumentPassingKey,
-  rustSelectedCallKey,
-  rustSelectedOperationKey,
-} from "../../target-model/facts/selections.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
+
 import type {
   RustSelectedTargetSignature,
   RustTargetMember,
@@ -31,15 +23,8 @@ import {
   Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
-import {
-  rustBindingStorageFactKey,
-  rustModuleBindingFactKey,
-  rustTargetOperationFactKey,
-  rustTypedLocationPlanKey,
-} from "../facts/keys.js";
-import type {
-  RustTypedLocationPlan,
-} from "../facts/keys.js";
+
+import type { RustTypedLocationPlan } from "../../target-model/records/operations.js";
 import {
   rustSourceLocationTargetType,
   rustOptionalLocationPointeeCarrier,
@@ -92,14 +77,14 @@ export function selectRustTypedLocationCall(
   request: RustCheckedCallSelectionInput,
   provider: ProviderDeclarationIdentity,
   marker: SourceCallMarkerKind,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   const selection = selectRustTypedLocationSourceOperation(
     request.source.call,
     marker,
-    (subject, key) => context.facts.resolve(subject, key),
-    (subject, key) => context.facts.get(subject, key),
+    (subject, key) => context.source.sourceFacts.getFact(subject, key),
+    (subject, key) => context.source.sourceFacts.getFact(subject, key),
   );
   if (selection.kind === "not-typed-location") {
     return undefined;
@@ -125,7 +110,7 @@ function acceptRustTypedLocationCall(
   request: RustCheckedCallSelectionInput,
   provider: ProviderDeclarationIdentity,
   sourceOperation: RustTypedLocationSourceFact,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   if (!rustTypedLocationArgumentsMatch(request, sourceOperation)) {
@@ -217,7 +202,7 @@ export function recordRustTypedLocationCall(
   parameterCarriers: readonly TargetTypeRef[],
   resultCarrier: TargetTypeRef,
   genericCarriers: readonly TargetTypeRef[],
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   provider?: ProviderDeclarationIdentity,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const { pointeeCarrier, locationCarrier } = plan;
@@ -230,8 +215,8 @@ export function recordRustTypedLocationCall(
   const evidence = [{
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
   }];
-  context.facts.set(request.source.call, rustTypedLocationPlanKey, plan, evidence);
-  context.facts.set(request.source.call, rustTargetOperationFactKey, {
+  context.records.typedLocationPlan.set(request.source.call, plan, evidence);
+  context.records.targetOperation.set(request.source.call, {
     kind: "typed-location",
     operationId,
     operation: sourceOperation.operation,
@@ -239,7 +224,7 @@ export function recordRustTypedLocationCall(
     locationCarrier,
     resultCarrier,
   }, evidence);
-  context.facts.set(request.source.call, rustSelectedOperationKey, {
+  context.records.selectedOperation.set(request.source.call, {
     operationId,
     operationKind: "method",
     targetOperation: sourceOperation.operation,
@@ -255,7 +240,7 @@ export function recordRustTypedLocationCall(
     },
   }, evidence);
   for (const argument of typedLocationCallArguments(request)) {
-    context.facts.set(argument, rustArgumentPassingKey, {
+    context.records.argumentPassing.set(argument, {
       mode: "by-value",
     }, evidence);
   }
@@ -305,13 +290,13 @@ export function recordRustTypedLocationCall(
         }),
     targetGenericArguments: genericCarriers.map(type => ({ kind: "type", type })),
   };
-  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
 function resolveRustTypedLocationPointee(
   operation: RustTypedLocationSourceFact,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   if (operation.explicitPointeeTypeNode !== undefined) {
@@ -382,7 +367,7 @@ function resolveRustTypedLocationPointee(
 
 function sourceCallback(
   operation: Extract<RustTypedLocationSourceFact, { operation: "bind-pointer" | "project-pointer" }>,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions,
 ): TargetTypeRef | undefined {
   return resolveRustTargetTypeRef(operation.operation === "bind-pointer"
@@ -423,7 +408,7 @@ function rustTypedLocationPlan(
   operation: RustTypedLocationSourceFact,
   pointeeCarrier: TargetTypeRef,
   locationCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions,
 ): RustTypedLocationPlanSelection {
   const base = {
@@ -491,7 +476,7 @@ function rustTypedLocationPlan(
         };
       }
       if (root.storage === "local-location") {
-        context.facts.set(root.declaration, rustBindingStorageFactKey, {
+        context.records.bindingStorage.set(root.declaration, {
           storage: "location",
           valueCarrier: rootCarrier,
         }, [{ message: "rust selected canonical typed-location storage root" }]);
@@ -553,7 +538,7 @@ function rustTypedLocationPlan(
 
 function rustTypedLocationStorageRoot(
   storage: Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions,
 ): {
   readonly expression: Node;
@@ -561,7 +546,7 @@ function rustTypedLocationStorageRoot(
   readonly storage: "local-location" | "module-cell" | "object-field";
   readonly carrier?: TargetTypeRef;
 } | undefined {
-  const field = context.facts.get(storage, rustTargetOperationFactKey);
+  const field = context.records.targetOperation.get(storage);
   if (field?.kind === "source-field" && field.storage === "project-object" &&
     field.declaration !== undefined && field.valueSemantics.kind === "stored") {
     return { expression: storage, declaration: field.declaration, storage: "object-field", carrier: field.resultCarrier };
@@ -601,7 +586,7 @@ function rustTypedLocationStorageRoot(
     return undefined;
   }
   if (moduleBinding) {
-    const binding = context.facts.get(declaration, rustModuleBindingFactKey);
+    const binding = context.records.moduleBinding.get(declaration);
     if (binding?.storage !== "module-cell" &&
       !(binding?.storage === "native-callable" && binding.value !== undefined)) {
       return undefined;
@@ -649,7 +634,7 @@ export function rustTypedLocationStorageRootReference(
 
 function rejectRustTypedLocation<T>(
   node: Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   extensionCode: string,
   message: string,
 ): RustPolicySelection<T> {

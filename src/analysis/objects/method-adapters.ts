@@ -1,11 +1,13 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { closedMetadataKey, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustPlanBuilder } from "../facts/plan-store.js";
+import type { RustProgramRecordBuilder } from "../program/records/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustObjectLiteralMethodAdapterFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import type { RustObjectLiteralMethodAdapterFact, RustTargetOperationFact } from "../facts/keys.js";
-import type { RustCallableParameterAbi } from "../facts/callable-adapters.js";
+
+
+import type { RustObjectLiteralMethodAdapterFact } from "../../target-model/records/object-methods.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustCallableParameterAbi } from "../../target-model/records/callable-adapters.js";
 import { inferRustTargetTypeParameterBindings, rustTargetTypeContainsTypeParameter, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import type { RustProjectMethodDispatchPlan } from "../project-types/method-dispatch.js";
 import { instantiateRustProjectMethodDispatchArguments } from "../project-types/method-dispatch.js";
@@ -23,7 +25,7 @@ export interface RustObjectLiteralMethodAdapterIssue {
 export function recordRustObjectLiteralMethodAdapterFacts(input: {
   readonly ast: AstReader;
   readonly sourceLifetimes: RustLifetimeIndex;
-  readonly facts: RustPlanBuilder;
+  readonly records: RustProgramRecordBuilder;
   readonly projectTypes: RustProjectTypePolicy;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
@@ -31,8 +33,8 @@ export function recordRustObjectLiteralMethodAdapterFacts(input: {
 }): readonly RustObjectLiteralMethodAdapterIssue[] {
   const issues: RustObjectLiteralMethodAdapterIssue[] = [];
   for (const expression of input.expressions) {
-    const operation = input.facts.get(expression, rustTargetOperationFactKey) ??
-      input.facts.resolve(expression, rustTargetOperationFactKey);
+    const operation = input.records.targetOperation.get(expression) ??
+      input.records.targetOperation.get(expression);
     if (operation?.kind !== "record-literal") {
       issues.push({
         expression,
@@ -45,7 +47,7 @@ export function recordRustObjectLiteralMethodAdapterFacts(input: {
     if (fact === undefined) {
       continue;
     }
-    input.facts.set(expression, rustObjectLiteralMethodAdapterFactKey, fact, [
+    input.records.objectLiteralMethodAdapter.set(expression, fact, [
       { message: "rust exact object-literal method implementation and dispatch adapters" },
     ]);
   }
@@ -56,7 +58,7 @@ function createObjectLiteralMethodAdapterFact(
   input: {
     readonly ast: AstReader;
     readonly sourceLifetimes: RustLifetimeIndex;
-    readonly facts: RustPlanBuilder;
+    readonly records: RustProgramRecordBuilder;
     readonly projectTypes: RustProjectTypePolicy;
     readonly typeDefinitions: RustTypeDefinitions;
     readonly projectMethodDispatch: RustProjectMethodDispatchPlan;

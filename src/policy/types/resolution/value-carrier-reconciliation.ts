@@ -1,12 +1,7 @@
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves } from "../../../target-model/types/union-relations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type {
-  RustCallScopedLifetimeReconciliationFact,
-  RustContextualValueConversionFact,
-  RustFlowReadProjectionFact,
-  RustProjectUpcastFact,
-} from "../../../target-model/types/value-projections.js";
+import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../../target-model/records/value-projections.js";
 import {
   isRustProgramErrorCarrier,
   rustJsErrorTargetType,

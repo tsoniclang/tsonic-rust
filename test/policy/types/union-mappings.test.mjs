@@ -7,7 +7,8 @@ import { rustValueConversionContract } from "../../../dist/target-model/conversi
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { planRustUnionMapping, planRustUnionProjection } from "../../../dist/backend/planner/expressions/union-mappings.js";
 import { selectRustSourceAssertionConversion, selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";

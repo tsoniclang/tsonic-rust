@@ -1,12 +1,13 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { rustBindingProjectionFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustReceiverIndependentMethodFactKey } from "../facts/operations/keys.js";
+
+
+
 import { structuralStorageKey } from "./structural-shape-plan.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
+
 import { rustCopiedMethodReceiverIsPreserved } from "../../policy/ownership/copied-methods.js";
 
 export function finalizeRustCopiedMethods(
@@ -17,7 +18,7 @@ export function finalizeRustCopiedMethods(
   const incoming = new Map<string, Set<string>>();
   const key = (carrier: TargetTypeRef, index: number): string => `${structuralStorageKey(carrier, componentForFile)}#${index}`;
   const visit = (node: Node): void => {
-    const binding = walk.context.facts.getFact(node, rustBindingProjectionFactKey);
+    const binding = walk.context.records.bindingProjection.get(node);
     if (binding?.projection.kind === "object-rest") {
       const shape = rustStructuralObjectCarrierValue(binding.sourceCarrier);
       for (const field of binding.projection.fields) {
@@ -32,7 +33,7 @@ export function finalizeRustCopiedMethods(
         }
       }
     }
-    const view = walk.context.facts.getFact(node, rustObjectReferenceViewKey);
+    const view = walk.context.records.objectReferenceView.get(node);
     if (view?.kind === "structural") {
       const shape = rustStructuralObjectCarrierValue(view.targetCarrier);
       for (const field of view.fields) {
@@ -44,7 +45,7 @@ export function finalizeRustCopiedMethods(
         demands.set(target, node);
       }
     }
-    const operation = walk.context.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = walk.context.records.targetOperation.get(node);
     if (operation?.kind === "source-field" && operation.storage === "structural-object" && operation.valueSemantics.kind === "method") {
       demands.set(key(operation.receiverCarrier, operation.storageIndex), node);
     }
@@ -109,8 +110,7 @@ export function finalizeRustCopiedMethods(
       continue;
     }
     for (const method of methods) {
-      walk.context.facts.set(method.node, rustReceiverIndependentMethodFactKey, { carrier: method.carrier },
-        [{ message: "rust copied method has a proven receiver-independent callable ABI" }]);
+      walk.context.records.receiverIndependentMethod.set(method.node, { carrier: method.carrier }, [{ message: "rust copied method has a proven receiver-independent callable ABI" }]);
     }
   }
   return proven;

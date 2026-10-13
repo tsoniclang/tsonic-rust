@@ -1,9 +1,10 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
+
 import { selectRustCallableParameterAdapters } from "../../../dist/analysis/callables/adapters.js";
 import { planRootCallableForwarder } from "../../../dist/backend/planner/objects/polymorphism/callable-adapters.js";
 import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
@@ -59,7 +60,7 @@ test("override adapters retain exact cross-file owners and immutable parameter c
   const { ast } = program.source;
   const derived = program.projectTypes.definitions.find(definition => definition.sourceName === "PointerSlice");
   assert.ok(derived);
-  const adapters = program.facts.getFact(derived.declaration, rustProjectCallableAdaptersKey);
+  const adapters = program.records.projectCallableAdapters.get(derived.declaration);
   assert.ok(Object.isFrozen(adapters));
   const setAdapter = adapters.find(adapter => ast.text(ast.name(adapter.contract)) === "set" &&
     program.projectTypes.definitionContainingDeclaration(adapter.contract).sourceName === "Slice" &&
@@ -97,7 +98,7 @@ export function main(): void { const value: Base = new Derived(); value.value(3)
   });
   const definition = program.projectTypes.definitions.find(entry => entry.sourceName === "Derived");
   const carrier = program.projectTypes.openCarrier(definition);
-  const adapters = program.facts.getFact(definition.declaration, rustProjectCallableAdaptersKey);
+  const adapters = program.records.projectCallableAdapters.get(definition.declaration);
   const adapter = adapters.find(entry => entry.contract !== entry.implementation);
   assert.ok(adapter);
   const context = {
@@ -130,10 +131,10 @@ export function main(): void { const value: Base = new Derived(); value.value(3)
     [{ ...adapter, implementationParameters: [] }],
   ]) {
     const diagnostics = [];
-    const facts = { ...program.facts, getFact: (subject, key) =>
-      subject === definition.declaration && key === rustProjectCallableAdaptersKey
-        ? replacement : program.facts.getFact(subject, key) };
-    assert.equal(plan({ ...context, diagnostics, input: { program: { ...program, facts } } }), undefined);
+    const records = createRustRecordFixture({...program.records,
+projectCallableAdapters: { get: (subject) => subject === definition.declaration
+    ? replacement : program.records.projectCallableAdapters.get(subject) }});
+    assert.equal(plan({ ...context, diagnostics, input: { program: { ...program, records } } }), undefined);
     assert.equal(diagnostics.length, 1);
     assert.equal(diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
   }
@@ -146,7 +147,7 @@ class Derived extends Base { read(first: number, ...rest: number[]): number { re
 export function main(): void { const value: Base = new Derived(); value.read(1, 2); }
 ` } });
   const definition = program.projectTypes.definitions.find(entry => entry.sourceName === "Derived");
-  const adapters = program.facts.getFact(definition.declaration, rustProjectCallableAdaptersKey);
+  const adapters = program.records.projectCallableAdapters.get(definition.declaration);
   const adapter = adapters.find(entry => entry.contract !== entry.implementation);
   assert.ok(adapter);
   const context = {

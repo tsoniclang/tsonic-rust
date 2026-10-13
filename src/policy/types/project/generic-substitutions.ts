@@ -6,12 +6,12 @@ export function projectGenericSubstitutions(
   arguments_: readonly import("../../../target-model/types/model.js").RustTargetGenericArgument[] | undefined,
 ): {
   readonly types: ReadonlyMap<string, TargetTypeRef>;
-  readonly lifetimes: ReadonlyMap<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>;
+  readonly lifetimes: ReadonlyMap<string, import("../../../target-model/lifetimes/model.js").RustLifetimeRef>;
 } | undefined {
   const values = arguments_ ?? [];
   if (values.length !== definition.genericParameters.length) return undefined;
   const types = new Map<string, TargetTypeRef>();
-  const lifetimes = new Map<string, import("../../../target-model/lifetimes/index.js").RustLifetimeRef>();
+  const lifetimes = new Map<string, import("../../../target-model/lifetimes/model.js").RustLifetimeRef>();
   for (const [index, parameter] of definition.genericParameters.entries()) {
     const argument = values[index];
     if (parameter.kind === "lifetime") {
