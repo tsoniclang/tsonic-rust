@@ -1,5 +1,5 @@
 import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustNativeRepresentationMatches } from "../../../target-model/conversions/native-representation.js";
@@ -10,7 +10,7 @@ import { rustUnionAlternatives } from "../../../target-model/types/union-relatio
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
 import { bindRustCallableResultTypeParameters, bindRustCallableTypeParameters, bindRustSelectedCallTypeArguments, rustSelectedCallTypeParameters } from "./generic-arguments.js";
-import { rustSourceCallableReturnFactKey } from "../../../target-model/facts/source-declarations.js";
+
 import { retainRustStructuralInstantiation } from "./structural-instantiations.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
@@ -43,7 +43,7 @@ export function retainRustSelectedCallableResultTemplate(
     parameters.length !== selectedGenerics.length || selectedGenerics.some((parameter, index) =>
       parameter.kind !== "type" || parameter.targetIdentity !== parameters[index]?.identity)) return false;
   const captured = callable.environment.length !== 0;
-  const sourceTemplate = captured ? context.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier : template.result;
+  const sourceTemplate = captured ? context.records.sourceCallableReturn.get(declaration)?.returnCarrier : template.result;
   const selectedContext = sourceTemplate === undefined ? undefined : captured
     ? bindRustCallableResultTypeParameters(declaration, sourceTemplate, rebound.result, storageContext) : storageContext;
   return sourceTemplate !== undefined && selectedContext !== undefined && retainRustStructuralInstantiation(sourceReturn, sourceTemplate, rebound.result,

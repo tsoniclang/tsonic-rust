@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import {
   acmeTestingPackage,
   analyzeRust,
@@ -155,7 +155,7 @@ export function namespaced<A extends RustTypes.Life>(
   for (const sourceFile of source.sourceFiles) {
     if (ast.isDeclarationFile(sourceFile)) continue;
     const visit = (node) => {
-      const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+      const fact = program.records.targetOperation.get(node);
       if (fact?.kind === "reference-operation") selected.push(fact);
       ast.forEachChild(node, (child) => child && visit(child));
     };

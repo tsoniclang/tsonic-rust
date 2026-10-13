@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustCallableGenericPlan } from "./generics.js";
-import { rustRetainedEnvironmentFactKey } from "../../../../analysis/facts/retained-environments.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
@@ -12,20 +11,20 @@ import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js"
 
 export function planRustRetainedGenerics(declaration: Node, source: RustCallableGenericPlan): RustCallableGenericPlan | undefined {
   const { context } = source;
-  const { facts, callableValues } = context.input.program;
-  const retained = facts.getFact(declaration, rustRetainedEnvironmentFactKey);
+  const { records, callableValues } = context.input.program;
+  const retained = records.retainedEnvironment.get(declaration);
   if (retained === undefined) return source;
   const lifetime = rustLifetimeToAst(context.lifetimeSubstitutions?.get(rustLifetimeKey(retained.lifetime)) ?? retained.lifetime);
   const carriers: TargetTypeRef[] = [];
   for (const parameter of retained.parameters) {
-    const abi = facts.getFact(parameter, rustSourceParameterAbiFactKey);
+    const abi = records.sourceParameterAbi.get(parameter);
     if (abi === undefined) return undefined;
     const physical = callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
     if (physical.kind === "unresolved") return undefined;
     carriers.push(physical.carrier);
   }
-  const asynchronous = facts.getFact(declaration, rustAsyncFunctionFactKey);
-  const generator = facts.getFact(declaration, rustGeneratorFactKey);
+  const asynchronous = records.asyncFunction.get(declaration);
+  const generator = records.generator.get(declaration);
   if (asynchronous?.kind === "js-promise") {
     const output = callableValues.nativeStorage.returnFor(declaration);
     const error = callableValues.nativeProducers.errorFor(declaration, 0);

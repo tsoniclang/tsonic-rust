@@ -1,21 +1,18 @@
 import type { Node } from "@tsonic/tsts";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+
 import type {
   TargetSourcePackage,
 } from "@tsonic/target-api";
 import type {
   TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
-import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
+
 import {
   isValidRustIdentifier,
   rustModuleSegmentName,
   rustPackageModuleName,
 } from "../../target-model/names/identifiers.js";
-import {
-  rustModuleBindingFactKey,
-  rustTypeAliasDeclarationFactKey,
-} from "../facts/keys.js";
+
 import type {
   RustAnalysisContext,
 } from "./context.js";
@@ -225,8 +222,8 @@ function rustDeclarationItemNames(
   context: RustAnalysisContext,
   declaration: Node,
 ): readonly string[] {
-  if (context.facts.getFact(declaration, rustCompileTimeSourceKey)) return emptyNames;
-  if (context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey) !== undefined) return emptyNames;
+  if (context.records.compileTimeSource.get(declaration)) return emptyNames;
+  if (context.records.typeOnlyDeclaration.get(declaration) !== undefined) return emptyNames;
   if (context.ast.is.IsFunctionDeclaration(declaration) &&
     context.sourceCallableSpecializations.requiresSpecialization(declaration)) {
     return Object.freeze(context.sourceCallableSpecializations.variantsForCallable(declaration)
@@ -234,12 +231,12 @@ function rustDeclarationItemNames(
   }
   if (
     context.ast.kindName(declaration) === "KindTypeAliasDeclaration" &&
-    context.facts.getFact(declaration, rustTypeAliasDeclarationFactKey)?.kind ===
+    context.records.typeAliasDeclaration.get(declaration)?.kind ===
       "erased"
   ) {
     return emptyNames;
   }
-  const binding = context.facts.getFact(declaration, rustModuleBindingFactKey);
+  const binding = context.records.moduleBinding.get(declaration);
   const candidates = binding?.storage === "native-callable"
     ? [binding.value?.name ?? binding.name]
     : context.ast.is.IsFunctionDeclaration(declaration)

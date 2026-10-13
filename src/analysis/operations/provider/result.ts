@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import {
   isRustAbsenceCarrier,
   isRustProgramErrorCarrier,
@@ -8,13 +9,8 @@ import {
   isRustJsArrayCarrier,
   isRustVecCarrier,
 } from "../../../target-model/types/index.js";
-import {
-  rustTargetOperationResultCarrier,
-  rustTargetOperationFactKey,
-  rustPreparedOperationResultFactKey,
-  rustFlowReadProjectionFactKey,
-  rustOptionalChainFactKey,
-} from "../../facts/keys.js";
+import { rustTargetOperationResultCarrier } from "../../../target-model/records/operations.js";
+
 import { acceptRustPolicy, rejectRustPolicy } from "../../../policy/operations/contracts.js";
 import {
   asNode,
@@ -23,33 +19,22 @@ import {
 import { selectRustFlowReadProjection } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
-import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
+import { recordRustFlowReadProjection } from "../../conversions/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
 import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
-import { rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
-import { rustTargetOperationText } from "../../facts/target-operation.js";
+
+import { rustTargetOperationText } from "../target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { normalizeSelectedLiteralCarrier, sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";
-import type {
-  RustCheckedElementSelectionInput,
-  RustCheckedOperationSelectionResult,
-  RustCheckedPropertySelectionInput,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-  RustTargetOperationSelection,
-} from "../../../policy/operations/contracts.js";
-import type {
-  RustProviderFactOperationKind,
-  RustProviderOperationTemplate,
-  RustRuntimeSetOperationKind,
-  RustTargetOperationFact,
-} from "../../facts/keys.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
+import type { RustProviderFactOperationKind, RustProviderOperationTemplate, RustRuntimeSetOperationKind } from "../../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationRow } from "../../../providers/packages/model.js";
@@ -58,12 +43,12 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 export function acceptRustOperation(
   subject: ExtensionFactSubject,
   fact: RustTargetOperationFact,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
   resultType: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const evidence = [{ message: `rust selected operation ${fact.operationId}` }];
-  context.facts.set(subject, rustTargetOperationFactKey, fact, evidence);
+  context.records.targetOperation.set(subject, fact, evidence);
   const operation: RustTargetOperationSelection = {
     operationId: fact.operationId,
     operationKind: genericOperationKind(fact),
@@ -71,7 +56,7 @@ export function acceptRustOperation(
     ...(resultType === undefined ? {} : { resultType }),
     provenance,
   };
-  context.facts.set(subject, rustSelectedOperationKey, operation, evidence);
+  context.records.selectedOperation.set(subject, operation, evidence);
   return acceptRustPolicy({
     operation,
     ...(resultType === undefined ? {} : { resultType }),
@@ -81,7 +66,7 @@ export function acceptRustOperation(
 
 export function selectedMemberReceiverCarrier(
   request: RustCheckedPropertySelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const receiver = asNode(request.receiver, context);
@@ -105,8 +90,7 @@ export function selectedMemberReceiverCarrier(
     return undefined;
   }
   if (sourceCarrier !== undefined) selectRustGuardedValueCarrier(receiver, sourceCarrier, context, options);
-  const flowRead = context.facts.get(receiver, rustFlowReadProjectionFactKey) ??
-    context.facts.resolve(receiver, rustFlowReadProjectionFactKey);
+  const flowRead = context.records.flowReadProjection.get(receiver);
   const guardedCarrier = request.optionalChain === true ? rustOptionValueCarrier(sourceCarrier) : sourceCarrier;
   if (flowRead !== undefined && !rustTargetTypeRefEquals(sourceCarrier, flowRead.sourceCarrier) &&
     !rustTargetTypeRefEquals(guardedCarrier, flowRead.sourceCarrier)) {
@@ -153,7 +137,7 @@ export function selectedMemberReceiverCarrier(
     if (selected !== undefined) {
       const projection = selectRustFlowReadProjection(refinedCarrier, selected, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
-        recordRustFlowReadProjection(context.facts, receiver, projection.fact);
+        recordRustFlowReadProjection(context.records, receiver, projection.fact);
         return selected;
       }
     }
@@ -234,7 +218,7 @@ export function selectedMemberReceiverCarrier(
   }
   const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
   if (flowProjection.kind === "projection") {
-    recordRustFlowReadProjection(context.facts, receiver, flowProjection.fact);
+    recordRustFlowReadProjection(context.records, receiver, flowProjection.fact);
     return selectedCarrier;
   }
   if (rustRuntimeUnionProjection(sourceCarrier, selectedCarrier) !== undefined) {
@@ -247,8 +231,8 @@ export function selectedMemberReceiverCarrier(
       ? selectedCarrier
       : undefined;
   }
-  const selectedOperation = context.facts.resolve(receiver, rustTargetOperationFactKey);
-  const preparedOperation = context.facts.resolve(receiver, rustPreparedOperationResultFactKey);
+  const selectedOperation = context.records.targetOperation.get(receiver);
+  const preparedOperation = context.records.preparedOperationResult.get(receiver);
   const selectedOperationResult = selectedOperation === undefined
     ? preparedOperation?.resultCarrier
     : rustTargetOperationResultCarrier(selectedOperation);
@@ -283,7 +267,7 @@ export function acceptRustMemberOperation(
   request: RustCheckedPropertySelectionInput,
   operationKind: "property" | "indexer",
   fact: RustTargetOperationFact,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
   innerResultCarrier: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
@@ -317,7 +301,7 @@ export function acceptRustMemberOperation(
       );
     }
     if (projection.kind === "projection") {
-      recordRustFlowReadProjection(context.facts, request.receiver, projection.fact);
+      recordRustFlowReadProjection(context.records, request.receiver, projection.fact);
     }
   }
   if (request.optionalChain !== true) {
@@ -361,12 +345,7 @@ export function acceptRustMemberOperation(
     provenance,
     selection.fact.resultCarrier,
   );
-  context.facts.set(
-    request.expression,
-    rustOptionalChainFactKey,
-    selection.fact,
-    [{ message: `rust optional chain ${selection.fact.lowering}` }],
-  );
+  context.records.optionalChain.set(request.expression, selection.fact, [{ message: `rust optional chain ${selection.fact.lowering}` }]);
   return accepted;
 }
 
@@ -380,7 +359,7 @@ export function acceptDeclarationOperation(
 
 export function rejectSelectedOperation<T>(
   nodeOrSpan: ExtensionFactSubject,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   extensionCode: string,
   message: string,
   evidence: readonly { readonly message: string }[] = [],
@@ -455,7 +434,7 @@ export function elementProvenance(request: RustCheckedElementSelectionInput): No
 }
 
 export function sourceOperationId(
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   declaration: Node,
   kind: string,
 ): string {
@@ -464,14 +443,14 @@ export function sourceOperationId(
   return `tsonic.rust.source.${kind}:${fileName}:${ast.pos(declaration)}:${ast.end(declaration)}`;
 }
 
-export function isDeclarationFileSubject(subject: ExtensionFactSubject, context: RustOperationPolicyContext): boolean {
+export function isDeclarationFileSubject(subject: ExtensionFactSubject, context: RustOperationAnalysisContext): boolean {
   const node = asNode(subject, context);
   return node !== undefined && context.ast.isDeclarationFile(context.ast.getSourceFile(node));
 }
 
 export function selectedDeclarationIsCallable(
   subject: ExtensionFactSubject | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): boolean {
   const declaration = asNode(subject, context);
   if (declaration === undefined) {
@@ -525,12 +504,11 @@ export function providerIdentityText(identity: ProviderDeclarationIdentity): str
     .join("::");
 }
 
-
 export function normalizeSelectedOperationInputCarrier(
   subject: ExtensionFactSubject | undefined,
   actual: TargetTypeRef | undefined,
   expected: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const node = asNode(subject, context);
@@ -572,7 +550,7 @@ export function normalizeSelectedArgumentCarrier(
   subject: ExtensionFactSubject | undefined,
   actual: TargetTypeRef | undefined,
   expected: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const node = asNode(subject, context);
@@ -602,7 +580,7 @@ export function normalizeSelectedArgumentCarrier(
 
 export function selectedArgumentMatchScore(
   subjects: readonly ExtensionFactSubject[],
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): NonNullable<Parameters<typeof selectJsSurfaceOperation>[0]["argumentMatchScore"]> {
   return (expected, actual, index) => {

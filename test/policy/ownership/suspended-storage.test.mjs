@@ -8,7 +8,7 @@ import { rustTargetGenericReferences } from "../../../dist/target-model/types/ca
 import { rustJsPromiseTargetTypeWithLifetime, rustUnitTargetType, rustAbsenceTargetType,
   rustSourcePrimitiveTargetType, rustJsErrorTargetType } from "../../../dist/target-model/types/index.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
-import { rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/facts/source-call-lifetimes.js";
+import { rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/callables/source-call-lifetimes.js";
 import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 const inferred = { kind: "placeholder" };

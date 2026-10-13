@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, nodejsCapability } from "../../helpers/rust-session.mjs";
 import { nativeRetainedErrorSourceFor } from "../../../../tsonic/test/fixtures/native-retained-errors.mjs";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
@@ -30,7 +30,7 @@ for (const [parameterForm, storage, ordering] of [
     };
     program.sourceFiles.forEach(visit);
     assert.equal(parameter !== undefined, true, "callback parameter exists");
-    const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+    const abi = program.records.sourceParameterAbi.get(parameter);
     assert.equal(abi !== undefined, true, "native parameter ABI is finalized");
     assert.equal(abi.form, "required");
     assert.equal(abi.mode, "value");
@@ -48,7 +48,7 @@ for (const [parameterForm, storage, ordering] of [
     "readonly native admission cannot fabricate writable authority");
     if (ordering === "captured") {
       assert.equal(listener !== undefined, true, "captured callback has its exact binding declaration");
-      const protocol = rustCallableProtocol(program.facts.getRuntimeCarrierFact(listener)?.carrier);
+      const protocol = rustCallableProtocol(program.records.runtimeCarrier.get(listener)?.carrier);
       assert.equal(protocol !== undefined, true, "binding consumes its finalized physical callback ABI");
       assert.equal(protocol.parameters.length, 1);
       assert.equal(rustTargetTypeRefEquals(protocol.parameters[0], abi.parameterCarrier), true,

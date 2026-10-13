@@ -18,7 +18,7 @@ import { setCarrierFact, setRustOperationFact } from "../operations/project-call
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export type ProviderRecordLiteralResolution =

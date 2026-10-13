@@ -42,7 +42,7 @@ export type RustSourceLifetimeTypeContract =
 
 export function rustSourceLifetimeTypeContract(
   node: Node,
-  context: Pick<RustSourcePolicyContext, "source" | "ast" | "facts" | "semanticsFor">,
+  context: Pick<RustSourcePolicyContext, "source" | "ast" | "records" | "semanticsFor">,
 ): RustSourceLifetimeTypeContract | undefined {
   if (context.ast.is.IsParenthesizedTypeNode(node)) {
     const inner = context.ast.as.AsParenthesizedTypeNode(node)?.Type;

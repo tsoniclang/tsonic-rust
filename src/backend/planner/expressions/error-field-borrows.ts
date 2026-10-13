@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { forEachSourceImmediateEvaluationChild, Node_Expression } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+
 import { rustBorrowPureOperation } from "../../../analysis/program/borrowed-element-purity.js";
 import { rustJsErrorTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -14,7 +14,7 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 
 export function rustErrorFieldHasGuardedBorrow(node: Node, context: RustPlanContext): boolean {
   node = errorReadNode(node, context);
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   return operation?.kind === "builtin-error-property" &&
     (operation.property === "stack" || !rustTargetTypeRefEquals(operation.receiverCarrier, rustJsErrorTargetType()));
 }
@@ -43,7 +43,7 @@ export function rustErrorFieldBorrowNeedsSnapshot(
     const pending = [expression];
     while (pending.length !== 0) {
       const selected = pending.pop()!;
-      if (rustBorrowPureOperation(selected, context.input.program.facts) !== undefined) pureInvocations.add(selected);
+      if (rustBorrowPureOperation(selected, context.input.program.records) !== undefined) pureInvocations.add(selected);
       forEachSourceImmediateEvaluationChild(context.input.program.source.ast, selected, child => pending.push(child));
     }
     const result = context.input.program.errorStorageDemands.invalidationFor(owner, expression, pureInvocations);
@@ -54,14 +54,14 @@ export function rustErrorFieldBorrowNeedsSnapshot(
 }
 
 export function rustErrorFieldSharedView(node: Node, expression: RustExpr, context: RustPlanContext): RustExpr | undefined {
-  const operation = context.input.program.facts.getFact(errorReadNode(node, context), rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(errorReadNode(node, context));
   return operation?.kind === "builtin-error-property" && operation.property !== "stack" &&
     !rustTargetTypeRefEquals(operation.receiverCarrier, rustJsErrorTargetType()) && expression.kind === "owned-string-from-borrowed-str"
     ? { kind: "reference", expr: { kind: "dereference", pointer: expression.expression } } : undefined;
 }
 
 export function rustErrorFieldOptionalView(node: Node, expression: RustExpr, context: RustPlanContext): RustExpr {
-  const operation = context.input.program.facts.getFact(errorReadNode(node, context), rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(errorReadNode(node, context));
   return operation?.kind === "builtin-error-property" && operation.property === "stack" &&
     expression.kind === "method-call" && expression.method === "map" && expression.args.length === 1 &&
     expression.args[0]?.kind === "path" && expression.args[0].path === "String::from" ? expression.receiver : expression;

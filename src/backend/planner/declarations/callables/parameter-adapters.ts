@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment } from "../../../../analysis/facts/callable-adapters.js";
+import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment } from "../../../../target-model/records/callable-adapters.js";
 import { callableRestElement, rustCallableParameterAdaptersMatch, rustCallableValueAdapterIsFallible } from "../../../../analysis/callables/adapters.js";
 import { isRustCopyCarrier, isRustJsArrayCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustOptionTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";

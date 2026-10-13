@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
 import assert from "node:assert/strict";
@@ -18,7 +19,7 @@ for (const edition of ["2021", "2024"]) {
     const context = {
       input: { program: {
         source: { ast: fakeAstReader([sourceFile]) },
-        facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }), getFact: () => undefined },
+        records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
         valueLifetimes: { canMove: () => true, canMoveCapture: () => false, canBorrowStableValue: () => false },
         configuration: { edition },
       } },

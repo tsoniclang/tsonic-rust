@@ -1,15 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  acmeTestingPackage,
-  artifactText,
-  assertRustTargetRejection,
-  compileRust,
-  createRustSession,
-  nodejsCapability,
-  rustSourceDiagnostics,
-} from "../../helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust, createRustSession, nodejsCapability, rustSourceDiagnostics } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("node path and os lower through provider rows to tsonic_rust_node", async () => {

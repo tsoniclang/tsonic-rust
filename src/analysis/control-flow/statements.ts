@@ -44,12 +44,7 @@ import {
 import { rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
-import {
-  rustAsyncFunctionFactKey,
-  rustGeneratorFactKey,
-  rustModuleBindingFactKey,
-  rustSourceCallableReturnFactKey,
-} from "../facts/keys.js";
+
 import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../program/walk.js";
 import { recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -59,21 +54,21 @@ import { recordCallableValueSignatureForDeclaration } from "../callables/signatu
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+
 import { recordRustNativeGuardResult, recordRustNativeUnreachable } from "./native-control-flow.js";
 
 export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
   const { ast } = walk.context;
-  const asyncFact = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
-  const generatorFact = walk.context.facts.get(declaration, rustGeneratorFactKey);
+  const asyncFact = walk.context.records.asyncFunction.get(declaration);
+  const generatorFact = walk.context.records.generator.get(declaration);
   const returnCarrier = generatorFact?.returnType ?? asyncFact?.outputCarrier ??
-    walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+    walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
   const body = ast.body(declaration);
   const previousCallable = walk.currentCallableDeclaration;
   const previousGenerator = walk.currentGeneratorDeclaration;
@@ -128,11 +123,10 @@ function recordVariableDeclarationListFacts(
     return;
   }
   for (const declaration of declarationSlots as readonly Node[]) {
-    if (walk.context.facts.get(declaration, rustCompileTimeSourceKey)) continue;
+    if (walk.context.records.compileTimeSource.get(declaration)) continue;
     recordCallableValueSignatureForDeclaration(walk, declaration);
     const nativeCallable = moduleLevel
-      ? walk.context.facts.get(declaration, rustModuleBindingFactKey) ??
-        walk.context.facts.resolve(declaration, rustModuleBindingFactKey)
+      ? walk.context.records.moduleBinding.get(declaration)
       : undefined;
     const initializer = Node_Initializer(walk.context.ast, declaration);
     const lexical = initializer !== undefined && walk.context.sourceCallables.directLexicalBinding(initializer) === declaration;
@@ -146,8 +140,8 @@ function recordVariableDeclarationListFacts(
     }
     const annotated = rustGenericCallableValueOwner(walk.context.ast, declaration,
       resolveRustDeclaredBindingStorage(walk, declaration));
-    const predeclared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
-      walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier;
+    const predeclared = walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
+      walk.context.records.runtimeCarrier.get(declaration)?.carrier;
     const induction = walk.context.ast.kindName(owner) === KindForStatement
       ? sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
           sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
@@ -186,12 +180,7 @@ function recordVariableDeclarationListFacts(
       const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
       if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
         const binding = walk.moduleBindings.classifyValue(declaration, declarationKind, effective);
-        if (binding !== undefined) walk.context.facts.set(
-          declaration,
-          rustModuleBindingFactKey,
-          binding,
-          [{ message: "rust finalized project module binding storage" }],
-        );
+        if (binding !== undefined) walk.context.records.moduleBinding.set(declaration, binding, [{ message: "rust finalized project module binding storage" }]);
       }
     }
   }
@@ -215,8 +204,7 @@ export function recordExportAssignmentFacts(
     );
     return undefined;
   }
-  const existing = walk.context.facts.get(declaration, rustRuntimeCarrierKey) ??
-    walk.context.facts.resolve(declaration, rustRuntimeCarrierKey);
+  const existing = walk.context.records.runtimeCarrier.get(declaration);
   const carrier = existing?.carrier ?? resolveExpressionCarrier(
     walk,
     assignment.Expression,
@@ -230,7 +218,7 @@ export function recordExportAssignmentFacts(
   if (finalized === undefined) {
     return undefined;
   }
-  walk.context.facts.set(declaration, rustModuleBindingFactKey, {
+  walk.context.records.moduleBinding.set(declaration, {
     declarationKind: "const",
     storage: "module-cell",
     initialization: "value",
@@ -309,7 +297,7 @@ export function recordStatementFacts(
     if (expression === undefined) {
       return;
     }
-    if (!walk.context.facts.get(expression, rustCompileTimeSourceKey)) resolveExpressionCarrier(walk, expression, sourceFile, undefined);
+    if (!walk.context.records.compileTimeSource.get(expression)) resolveExpressionCarrier(walk, expression, sourceFile, undefined);
     return;
   }
   if (kind === "KindThrowStatement") {

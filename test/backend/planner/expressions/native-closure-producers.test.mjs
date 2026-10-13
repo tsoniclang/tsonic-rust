@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerErrorFacts }
+import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerErrorRecords }
   from "../../../helpers/native-closure-producers.mjs";
-import { rustErrorEffectsFactKey } from "../../../../dist/analysis/facts/error-effects.js";
+
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
 import { printRustType } from "../../../../dist/print/source/types.js";
-import { rustTargetOperationFactKey, rustClosureCaptureFactKey } from "../../../../dist/analysis/facts/keys.js";
-import { rustRuntimeCarrierKey } from "../../../../dist/target-model/facts/selections.js";
+
+
 import { rustSourcePrimitiveTargetType, rustClosureTargetType, rustCallableInputProtocol, rustCallableInputTargetType }
   from "../../../../dist/target-model/types/index.js";
 import { rustGenericCallableValue } from "../../../../dist/target-model/types/carriers/generic-callables.js";
@@ -15,7 +15,15 @@ import { rustNativeCompletionFutureType } from "../../../../dist/target-model/ty
 import { rustTypeGenericArguments } from "../../../../dist/target-model/types/generic-arguments.js";
 
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
-const ownFailure = nativeClosureProducerErrorFacts(failure);
+const ownFailure = nativeClosureProducerErrorRecords(failure);
+
+function producerCarrierRecords(carrier) {
+  return (records, producer) => ({ ...records,
+    targetOperation: { get: node => node === producer
+      ? { ...records.targetOperation.get(node), resultCarrier: carrier } : records.targetOperation.get(node) },
+    runtimeCarrier: { get: node => node === producer ? { carrier } : records.runtimeCarrier.get(node) },
+  });
+}
 
 test("pure closure construction owns Infallible instead of inheriting the consumer's error", () => {
   const fixture = nativeClosureProducerFixture();
@@ -28,7 +36,7 @@ test("pure closure construction owns Infallible instead of inheriting the consum
 });
 
 test("fallible closure construction and body retain the producer's exact native error", () => {
-  const fixture = nativeClosureProducerFixture({ selectFacts: ownFailure });
+  const fixture = nativeClosureProducerFixture({ selectRecords: ownFailure });
   const text = printNativeClosureProducer(fixture);
   assert.match(text, /rt::Callable::<\(\), Result<i32, ProducerFailure>>::new/u);
   assert.match(text, /Ok::<_, ProducerFailure>\(3\)/u);
@@ -39,7 +47,7 @@ test("fallible closure construction and body retain the producer's exact native 
 for (const throwing of [false, true]) {
     test(`JS Promise creation separates pure invocation from ${throwing ? "fallible" : "pure"} body`, () => {
       const fixture = nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"],
-        ...(throwing ? { selectFacts: ownFailure } : {}),
+        ...(throwing ? { selectRecords: ownFailure } : {}),
       });
       const text = printNativeClosureProducer(fixture);
       const error = throwing ? "ProducerFailure" : "core::convert::Infallible";
@@ -55,7 +63,7 @@ for (const throwing of [false, true]) {
 
 test("native future closures remain delegated to their sealed generic implementation owner", () => {
   const fixture = nativeClosureProducerFixture({ asynchronous: true });
-  const operation = fixture.program.facts.getFact(fixture.node, rustTargetOperationFactKey);
+  const operation = fixture.program.records.targetOperation.get(fixture.node);
   assert.equal(rustGenericCallableValue(operation.resultCarrier) !== undefined, true);
   const implementation = fixture.program.callableValues.generic.implementationFor(fixture.node);
   assert.equal(implementation !== undefined, true);
@@ -67,12 +75,8 @@ test("native future closures remain delegated to their sealed generic implementa
 
 test("nonretaining closure inputs keep their borrowed native representation and exact pure result", () => {
   const carrier = rustCallableInputTargetType([], rustSourcePrimitiveTargetType("int32"));
-  const fixture = nativeClosureProducerFixture({ selectFacts: (node, key, value, producer) => {
-    if (node !== producer) return value;
-    return key === rustTargetOperationFactKey ? { ...value, resultCarrier: carrier }
-      : key === rustRuntimeCarrierKey ? { carrier } : value;
-  } });
-  const operation = fixture.program.facts.getFact(fixture.node, rustTargetOperationFactKey);
+  const fixture = nativeClosureProducerFixture({ selectRecords: producerCarrierRecords(carrier) });
+  const operation = fixture.program.records.targetOperation.get(fixture.node);
   assert.equal(rustCallableInputProtocol(operation.resultCarrier) !== undefined, true, "borrowed callable input selected");
   const text = printNativeClosureProducer(fixture);
   assert.match(text, /move \|_callable_arguments: \(\)\| Ok::<_, core::convert::Infallible>\(3\)/u);
@@ -86,7 +90,7 @@ export function create(value: int32): () => Promise<int32> {
   return async (): Promise<int32> => { return value; };
 }
 ` });
-  const capture = fixture.program.facts.getFact(fixture.node, rustClosureCaptureFactKey);
+  const capture = fixture.program.records.closureCapture.get(fixture.node);
   assert.equal(capture.invocationOwner, "shared-state");
   const expression = fixture.plan();
   assert.equal(expression !== undefined, true, fixture.context.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
@@ -97,14 +101,14 @@ export function create(value: int32): () => Promise<int32> {
 });
 
 test("recursive closure construction retains one recursive owner with the exact error channel", () => {
-  const fixture = nativeClosureProducerFixture({ selectFacts: ownFailure, source: `
+  const fixture = nativeClosureProducerFixture({ selectRecords: ownFailure, source: `
 import type { int32 } from "@tsonic/core/types.js";
 export function create(): () => int32 {
   const callback: () => int32 = (): int32 => { return callback(); };
   return callback;
 }
 ` });
-  const capture = fixture.program.facts.getFact(fixture.node, rustClosureCaptureFactKey);
+  const capture = fixture.program.records.closureCapture.get(fixture.node);
   assert.equal(capture.recursiveDeclaration !== undefined, true);
   const text = printNativeClosureProducer(fixture);
   assert.match(text, /rt::Callable::<\(\), Result<i32, ProducerFailure>>::recursive/u);
@@ -117,11 +121,7 @@ for (const [label, carrier, expected] of [
   ["explicit native fallible closure", rustClosureTargetType([], rustSourcePrimitiveTargetType("int32"), true), "|| Ok(3)"],
 ]) {
   test(`${label} keeps its native call ABI without a runtime storage wrapper`, () => {
-    const fixture = nativeClosureProducerFixture({ selectFacts: (node, key, value, producer) => {
-      if (node !== producer) return value;
-      return key === rustTargetOperationFactKey ? { ...value, resultCarrier: carrier }
-        : key === rustRuntimeCarrierKey ? { carrier } : value;
-    } });
+    const fixture = nativeClosureProducerFixture({ selectRecords: producerCarrierRecords(carrier) });
     const text = printNativeClosureProducer(fixture);
     assert.equal(text, expected);
     assert.doesNotMatch(text, /rt::|ConsumerFailure|Box|clone/u);
@@ -130,7 +130,9 @@ for (const [label, carrier, expected] of [
 
 test("closure construction rejects missing error evidence rather than selecting the ambient error", () => {
   const fixture = nativeClosureProducerFixture({
-    selectFacts: (node, key, value, producer) => node === producer && key === rustErrorEffectsFactKey ? undefined : value,
+    selectRecords: (records, producer) => ({ ...records, errorEffects: {
+      get: node => node === producer ? undefined : records.errorEffects.get(node),
+    } }),
   });
   assert.equal(fixture.plan() === undefined, true, "missing error fact rejects");
   assert.equal(fixture.bodyContexts.length, 0, "invalid producer never plans its body");

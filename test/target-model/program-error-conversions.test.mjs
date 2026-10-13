@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -7,7 +8,7 @@ import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveT
 import { selectRustValueCarrierReconciliation } from "../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { planRustProgramErrorConstruction } from "../../dist/backend/planner/expressions/program-errors.js";
 import { collectRustDeclaredProviderErrorCarriers, analyzeRustProviderErrorCarriers } from "../../dist/analysis/program/provider-errors.js";
-import { rustTargetOperationFactKey } from "../../dist/analysis/facts/keys.js";
+
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
 
 const source = rustSourceTypeCarrier("/failure.ts", "Failure", "object");
@@ -136,10 +137,8 @@ test("native throw carriers are declared once and transported by the used-error 
     [error, [native]], [{ ...error, conversion: { ...error.conversion, route: { kind: "runtime", boundary: "target-runtime" } } }, []],
     [{ kind: "program", expression: {}, carrier: target }, []],
   ]) {
-    const used = analyzeRustProviderErrorCarriers(ast, [statement], {
-      getFact: (node, key) => node === statement && key === rustTargetOperationFactKey
-        ? { kind: "throw-op", error: selected } : undefined,
-    }, []);
+    const used = analyzeRustProviderErrorCarriers(ast, [statement], createRustRecordFixture({targetOperation: { get: (node) => node === statement
+    ? { kind: "throw-op", error: selected } : undefined }}), []);
     assert.deepEqual(used, expected);
     assert.ok(Object.isFrozen(used));
   }
@@ -156,9 +155,7 @@ test("source-program native errors enter inventory only through selected operati
   for (const [selected, expected] of [[undefined, []],
     [{ kind: "provider-operation", abi: { target: { form: "call" }, effects: { nativeErrorCarriers: [native] } } }, [native]],
     [{ kind: "provider-operation", abi: { target: { form: "call" }, effects: {} } }, []]]) {
-    const used = analyzeRustProviderErrorCarriers({ forEachChild() {} }, [statement], {
-      getFact: (node, key) => node === statement && key === rustTargetOperationFactKey ? selected : undefined,
-    }, []);
+    const used = analyzeRustProviderErrorCarriers({ forEachChild() {} }, [statement], createRustRecordFixture({targetOperation: { get: (node) => node === statement ? selected : undefined }}), []);
     assert.deepEqual(used, expected);
     assert.equal(Object.isFrozen(used), true);
   }

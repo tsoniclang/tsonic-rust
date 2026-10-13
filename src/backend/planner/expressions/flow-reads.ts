@@ -1,7 +1,7 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read-projections.js";
+import { rustFlowReadProjectionMatches } from "../../../analysis/control-flow/flow-read-projections.js";
 import { rustUnionProjectionContract } from "../../../target-model/types/union-relations.js";
 import {
   isRustCopyCarrier,
@@ -10,7 +10,7 @@ import {
   rustCarrierSupportsClone,
   rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
-import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -40,7 +40,7 @@ export function planRustFlowReadProjection(
   borrowedResult = false,
 ): RustExpr | undefined {
   const sourceCarrier = context.expressionOverrides?.get(node)?.carrier ??
-    context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+    context.input.program.records.runtimeCarrier.get(node)?.carrier;
   if (sourceCarrier === undefined ||
     !rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(

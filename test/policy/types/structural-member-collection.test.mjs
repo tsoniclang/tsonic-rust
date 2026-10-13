@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { resolveStructuralObjectType } from "../../../dist/policy/types/resolution/target.js";
 
 function scenario(count) {
@@ -19,8 +20,8 @@ function scenario(count) {
   let publications = 0;
   const context = {
     ast: { kindName: node => node.kind },
-    source: { navigation: { isProjectDeclaration: () => true } },
-    facts: { resolve: () => undefined, get: () => undefined },
+    source: { navigation: { isProjectDeclaration: () => true }, sourceFacts: { getFact: () => undefined } },
+    records: createRustRecordFixture(),
     currentSemantics: {
       declarations: { symbolDeclarations: selected => declarations.get(selected) ?? [] },
       types: {

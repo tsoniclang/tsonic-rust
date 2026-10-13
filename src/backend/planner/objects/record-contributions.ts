@@ -1,4 +1,4 @@
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 

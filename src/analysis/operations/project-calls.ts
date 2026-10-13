@@ -13,22 +13,17 @@ import {
   KindSpreadElement,
   asSourceNode,
 } from "@tsonic/target-api/source";
-import {
-  rustModuleBindingFactKey,
-  rustOptionalChainFactKey,
-  rustSelfModeFactKey,
-  rustTargetOperationFactKey,
-} from "../facts/keys.js";
+
 import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
+import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { rustArgumentPassingKey, rustRuntimeCarrierKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
-import { rustArgumentPassingMode } from "../facts/parameter-passing.js";
-import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
+
+import { rustArgumentPassingMode } from "../callables/parameter-passing.js";
+import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { realizeRustSelectedTypeFamilies } from "./type-family-applications.js";
@@ -41,18 +36,18 @@ import { rustSpreadElementCarrier } from "../../target-model/operations/rest-ass
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { retainRustSelectedCallableResultTemplate, retainRustSelectedSourceCallResultStorage, selectRustSourceCallResult } from "../../policy/types/resolution/call-results.js";
-import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../facts/source-call-lifetimes.js";
+import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
 import { rustRetainedCallLifetimes, rustRetainedCallResult } from "../callables/retained-environments.js";
 import { rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
-import { rustRetainedCallLifetimesFactKey } from "../facts/retained-environments.js";
+
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
 
@@ -117,7 +112,7 @@ export function applySelectedProjectSourceCall(
       ["target.capability=rust.source-call.parameter-storage"]);
     return undefined;
   }
-  let parameters: import("../facts/keys.js").RustSourceCallParameterPlan[] = [];
+  let parameters: import("../../target-model/operations/model.js").RustSourceCallParameterPlan[] = [];
   for (const [index, targetParameter] of selectedMember.parameters.entries()) {
     const selectedParameter = selectedParameters[index];
     const parameterDeclaration = declarationParameters[index] ?? asSourceNode(
@@ -280,8 +275,7 @@ export function applySelectedProjectSourceCall(
       );
   const calleeModuleBinding = calleeReferenceDeclaration === undefined
     ? undefined
-    : walk.context.facts.get(calleeReferenceDeclaration, rustModuleBindingFactKey) ??
-      walk.context.facts.resolve(calleeReferenceDeclaration, rustModuleBindingFactKey);
+    : walk.context.records.moduleBinding.get(calleeReferenceDeclaration);
   const directModuleFunction = calleeModuleBinding?.storage === "native-callable" &&
     calleeModuleBinding.callableDeclaration === selectedDeclaration;
   const directCallableDeclaration = calleeReferenceDeclaration === selectedDeclaration ||
@@ -293,8 +287,7 @@ export function applySelectedProjectSourceCall(
     declarationKind === KindFunctionDeclaration && calleeReferenceDeclaration === selectedDeclaration
     ? undefined
     : resolveExpressionCarrier(walk, callee, sourceFile, undefined);
-  const optionalCall = walk.context.facts.get(expression, rustOptionalChainFactKey) ??
-    walk.context.facts.resolve(expression, rustOptionalChainFactKey);
+  const optionalCall = walk.context.records.optionalChain.get(expression);
   const selectedCallableCarrier = optionalCall?.selectedGuardCarrier ?? callableCalleeCarrier;
   const selectedNativeCallable = rustNativeCallableProtocol(selectedCallableCarrier);
   const selectedGenericCallable = rustGenericCallableProtocol(selectedCallableCarrier,
@@ -324,8 +317,8 @@ export function applySelectedProjectSourceCall(
     const receiverCarrier = resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
     if (!rustTargetTypeRefEquals(receiverCarrier, union.receiverCarrier)) return undefined;
     const variants = union.variants.map(variant => {
-      const selfMode = walk.context.facts.get(variant.declaration, rustSelfModeFactKey) ??
-        walk.context.facts.resolve(variant.declaration, rustSelfModeFactKey);
+      const selfMode = walk.context.records.selfMode.get(variant.declaration) ??
+        walk.context.records.selfMode.get(variant.declaration);
       const owner = walk.context.projectTypes.definitionContainingDeclaration(variant.declaration);
       const polymorphic = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner);
       const relationship = owner === undefined ? undefined : walk.context.projectTypes.relationship(variant.carrier, owner);
@@ -404,7 +397,7 @@ export function applySelectedProjectSourceCall(
         sourceFile,
         undefined,
       );
-      const rawReceiverCarrier = walk.context.facts.getRuntimeCarrierFact(receiver)?.carrier;
+      const rawReceiverCarrier = walk.context.records.runtimeCarrier.get(receiver)?.carrier;
       const selectedReceiverCarrier = selectedSignature.sourceSelectedReceiverCarrier;
       if (rawReceiverCarrier === undefined || selectedReceiverCarrier === undefined) {
         appendRustDiagnostic(
@@ -433,13 +426,12 @@ export function applySelectedProjectSourceCall(
       }
       if (receiverProjection.kind === "projection") {
         recordRustFlowReadProjection(
-          walk.context.facts,
+          walk.context.records,
           receiver,
           receiverProjection.fact,
         );
       }
-      const selfMode = walk.context.facts.get(selectedDeclaration, rustSelfModeFactKey) ??
-        walk.context.facts.resolve(selectedDeclaration, rustSelfModeFactKey);
+      const selfMode = walk.context.records.selfMode.get(selectedDeclaration);
       if (selfMode === undefined) {
         return undefined;
       }
@@ -586,7 +578,7 @@ export function applySelectedProjectSourceCall(
         );
         return undefined;
       }
-      parameters = callableParameters as import("../facts/keys.js").RustSourceCallParameterPlan[];
+      parameters = callableParameters as import("../../target-model/operations/model.js").RustSourceCallParameterPlan[];
     }
   }
   const invocationReferences = rustTargetGenericReferences({ kind: "tuple",
@@ -616,16 +608,14 @@ export function applySelectedProjectSourceCall(
       ["target.capability=rust.source-call.retained-environment"]);
     return undefined;
   }
-  if (retainedLifetimes.size !== 0) walk.context.facts.set(expression, rustRetainedCallLifetimesFactKey,
-    Object.freeze([...retainedLifetimes].map(([identity, lifetime]) => Object.freeze({ identity, lifetime }))),
-    [{ message: "rust exact retained call environment" }]);
+  if (retainedLifetimes.size !== 0) walk.context.records.retainedCallLifetimes.set(expression, Object.freeze([...retainedLifetimes].map(([identity, lifetime]) => Object.freeze({ identity, lifetime }))), [{ message: "rust exact retained call environment" }]);
   if (retainedLifetimes.size !== 0) parameters = parameters.map(parameter => ({ ...parameter,
     valueCarrier: rustRetainedCallResult(parameter.valueCarrier, retainedLifetimes),
     parameterCarrier: rustRetainedCallResult(parameter.parameterCarrier, retainedLifetimes),
     inputs: parameter.inputs.map(input => ({ ...input, carrier: rustRetainedCallResult(input.carrier, retainedLifetimes) })),
   }));
   if (!applySelectedSourceCallArguments(walk, callArguments as readonly Node[], sourceFile, parameters, bindings)) return undefined;
-  const actualArgumentCarriers = rustSourceCallArgumentCarriers(expression, ast, walk.context.facts);
+  const actualArgumentCarriers = rustSourceCallArgumentCarriers(expression, ast, walk.context.records);
   const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustRetainedCallResult(rustSourceCallResultWithInputLifetimes(
     carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, actualArgumentCarriers, parameters), retainedLifetimes);
   const nativeResultCarrier = instantiateResult(genericResultCarrier);
@@ -661,7 +651,7 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
-  const computedKey = recordRustComputedCallEvaluation(ast, walk.context.facts,
+  const computedKey = recordRustComputedCallEvaluation(ast, walk.context.records,
     walk.context.semanticsFor(expression).operations.call(expression), callee,
     target.form !== "function" && target.form !== "static-method" || target.classReceiver !== undefined);
   if (computedKey !== undefined &&
@@ -690,7 +680,7 @@ export function applySelectedSourceCallArguments(
   walk: RustFactWalk,
   callArguments: readonly Node[],
   sourceFile: SourceFile,
-  parameters: readonly import("../facts/keys.js").RustSourceCallParameterPlan[],
+  parameters: readonly import("../../target-model/operations/model.js").RustSourceCallParameterPlan[],
   bindings: readonly NonNullable<RustSelectedTargetSignature["sourceArgumentBindings"]>[number][],
 ): boolean {
   const { ast } = walk.context;
@@ -755,7 +745,7 @@ export function applySelectedSourceCallArguments(
     }
     const mode = modes[0]!;
     const passingMode = rustArgumentPassingMode(mode);
-    walk.context.facts.set(argument, rustArgumentPassingKey, {
+    walk.context.records.argumentPassing.set(argument, {
       mode: passingMode,
       ...(mode === "value" ? {} : { storageExpression: argument }),
     }, [{
@@ -771,7 +761,7 @@ export function applySelectedSourceCallArguments(
 
 function selectedSpreadArgumentMatches(
   sourceCarrier: TargetTypeRef,
-  inputs: readonly import("../facts/keys.js").RustSourceCallParameterPlan["inputs"][number][],
+  inputs: readonly import("../../target-model/operations/model.js").RustSourceCallParameterPlan["inputs"][number][],
 ): boolean {
   return inputs.length > 0 && inputs.every((input) => {
     const selectedCarrier = input.sourceForm === "spread-element"
@@ -794,24 +784,19 @@ export function recordTargetOperation(
   targetOperation: string,
   resultType: TargetTypeRef,
 ): void {
-  walk.context.facts.set(
-    expression,
-    rustSelectedOperationKey,
-    { operationId, operationKind, targetOperation, resultType },
-    [{ message: `rust target operation ${operationId}` }],
-  );
+  walk.context.records.selectedOperation.set(expression, { operationId, operationKind, targetOperation, resultType }, [{ message: `rust target operation ${operationId}` }]);
 }
 
 export function setRustOperationFact(walk: RustFactWalk, expression: Node, fact: RustTargetOperationFact): void {
-  walk.context.facts.set(expression, rustTargetOperationFactKey, fact, [
+  walk.context.records.targetOperation.set(expression, fact, [
     { message: `rust operation ${fact.operationId}` },
   ]);
 }
 
 export function setCarrierFact(walk: RustFactWalk, subject: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
-  const facts = walk.context.facts;
-  const existing = facts.get(subject, rustRuntimeCarrierKey) ??
-    walk.context.facts.resolve(subject, rustRuntimeCarrierKey);
+  const records = walk.context.records;
+  const existing = records.runtimeCarrier.get(subject) ??
+    walk.context.records.runtimeCarrier.get(subject);
   if (existing !== undefined) {
     if (!rustTargetTypeRefEquals(existing.carrier, carrier)) {
       appendRustDiagnostic(
@@ -829,6 +814,6 @@ export function setCarrierFact(walk: RustFactWalk, subject: Node, carrier: Targe
     }
     return existing.carrier;
   }
-  facts.set(subject, rustRuntimeCarrierKey, { carrier }, [{ message: "rust carrier" }]);
+  records.runtimeCarrier.set(subject, { carrier }, [{ message: "rust carrier" }]);
   return carrier;
 }

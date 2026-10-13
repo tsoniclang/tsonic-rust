@@ -8,13 +8,7 @@ import {
   rustStringTargetType,
   rustStringToBorrowedStrValueConversion,
 } from "../../../dist/public/provider.js";
-import {
-  collectRustProviderOperationRows,
-  collectRustProviderSemantics,
-  collectRustProviderSemanticsFromDefinitions,
-  createRustProviderPackageSourceProvider,
-  mergeRustProviderSemantics,
-} from "../../../dist/providers/packages/index.js";
+import { collectRustProviderSemanticsFromDefinitions, mergeRustProviderSemantics } from "../../../dist/providers/packages/index.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 import { captureRustProviderContributions } from "../../helpers/provider-contributions.mjs";
 

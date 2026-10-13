@@ -19,9 +19,6 @@ import type {
   RustPlanContext,
 } from "../program/plan-context.js";
 import { Node_Expression } from "@tsonic/target-api/source";
-import {
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
 
 export type RustExplicitSafetyExpressionPlan =
   | { readonly handled: false }
@@ -126,7 +123,7 @@ export function rustSelectedCallRequiresUnsafe(
   call: Node,
   input: RustPlanningContext,
 ): boolean {
-  const selected = input.program.facts.getSelectedTargetCall(call);
+  const selected = input.program.records.selectedCall.get(call);
   const declaration = selected?.sourceDeclaration;
   if (declaration === undefined) {
     return false;
@@ -144,7 +141,7 @@ export function rustSelectedAccessorRequiresUnsafe(
   role: "getter" | "setter",
   input: RustPlanningContext,
 ): boolean {
-  const selected = input.program.facts.getSelectedTargetProperty(access);
+  const selected = input.program.records.selectedOperation.get(access);
   const declaration = role === "getter"
     ? selected?.provenance?.sourceSelectedReadDeclaration
     : selected?.provenance?.sourceSelectedWriteDeclaration;
@@ -169,7 +166,7 @@ export function rustSafetyAttributesForDeclaration(
       hasUnusedExplicitUnsafeContext = true;
     }
     hasNativePointerOperation ||=
-      input.program.facts.getFact(node, rustTargetOperationFactKey)?.kind ===
+      input.program.records.targetOperation.get(node)?.kind ===
         "native-pointer";
   });
   return [
@@ -262,7 +259,7 @@ function nodeRequiresUnsafe(
   node: Node,
   input: RustPlanningContext,
 ): boolean {
-  const operation = input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = input.program.records.targetOperation.get(node);
   return operation?.kind === "native-pointer" ||
     (operation?.kind === "provider-operation" &&
       operation.abi.effects.safety === "requires-unsafe") ||

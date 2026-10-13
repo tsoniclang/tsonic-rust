@@ -15,7 +15,7 @@ import {
 } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { applyRustArgumentMode } from "./input-shaping.js";
@@ -26,9 +26,9 @@ import {
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustValueConversion } from "../../../analysis/facts/keys.js";
-import type { RustFinalizedValueConversion } from "../../../analysis/facts/finalized-operation-abi.js";
-import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
+import type { RustValueConversion } from "../../../target-model/operations/model.js";
+import type { RustFinalizedValueConversion } from "../../../target-model/records/finalized-operation.js";
+import { finalizedConversionIsValid } from "../../../analysis/operations/finalized-operation/conversions.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { lowerRustExactIntegerConversion } from "./exact-integer.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
@@ -67,7 +67,7 @@ export function applyRustValueConversion(
   if (validateSourceCarrier) {
     const sourceCarrier = node === undefined
       ? undefined
-      : rustEffectiveValueCarrier(context.input.program.facts, node);
+      : rustEffectiveValueCarrier(context.input.program.records, node);
     if (sourceCarrier === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node ?? context.sourceFile),

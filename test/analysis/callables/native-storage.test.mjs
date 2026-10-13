@@ -10,8 +10,8 @@ import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
-import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
@@ -22,8 +22,8 @@ function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const generic = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.facts, program.names, source.navigation);
-  const input = { ast: source.ast, storage, facts: program.facts, definitions: program.typeDefinitions,
+  const generic = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation);
+  const input = { ast: source.ast, storage, records: program.records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
@@ -209,7 +209,7 @@ test("physical member and array reads use exact projected owner identities", () 
     assert.equal(input !== undefined, true, `${name} has exact projected input`);
     selected(current.plan.valueFor(current.declaration(name)), input.implementation, name);
     const subject = current.exactSubject(current.initializer(name));
-    const carrier = current.program.facts.getFact(current.declaration(name), rustRuntimeCarrierKey).carrier;
+    const carrier = current.program.records.runtimeCarrier.get(current.declaration(name)).carrier;
     selected(current.plan.subjectFor(subject, carrier, owner), input.implementation, `${name} public subject query`);
     assert.equal(input.subject.projection[0].kind, index === 2 ? "array-element" : "member");
     if (index !== 2) assert.equal(input.subject.projection[0].declaration === current.declaration("callback"), true);
@@ -235,7 +235,7 @@ test("physical selection preserves optional topology and borrowed parameter life
   }
   const borrowedOwner = current.declaration("invoke");
   const parameter = current.source.ast.parameters(borrowedOwner)[0];
-  const abi = current.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+  const abi = current.program.records.sourceParameterAbi.get(parameter);
   const borrowed = current.plan.subjectFor(current.exactSubject(parameter, "input"), abi.parameterCarrier, borrowedOwner);
   assert.equal(borrowed.kind, "selected", borrowed.reason);
   assert.equal(borrowed.carrier.kind, abi.parameterCarrier.kind);
@@ -366,7 +366,7 @@ test("non-callable storage remains an exact identity without inspecting unrelate
   const owner = current.declaration("number");
   const value = plan.valueFor(current.declaration("selected"));
   assert.equal(value.kind, "identity");
-  assert.equal(value.carrier === current.program.facts.getFact(current.declaration("selected"), rustRuntimeCarrierKey).carrier, true);
+  assert.equal(value.carrier === current.program.records.runtimeCarrier.get(current.declaration("selected")).carrier, true);
   assert.equal(plan.returnFor(owner).kind, "identity");
   assert.equal(originQueries, 0);
 });

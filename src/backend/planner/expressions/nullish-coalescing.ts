@@ -1,7 +1,7 @@
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import { rustTargetOperationText } from "../../../analysis/operations/target-operation.js";
 import { isRustNeverCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
@@ -11,7 +11,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression, planExpressionBeforeOptionProjection, planExpressionBeforeValueProjections } from "./entry.js";
-import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/conversions/value-carrier-queries.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
@@ -39,7 +39,7 @@ export function planNullishCoalescing(
   if (left === undefined || right === undefined ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.option-coalesce-carrier") ||
     !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetOperator(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
@@ -50,7 +50,7 @@ export function planNullishCoalescing(
   const presentCarrier = fact.rightOptionDepth > 0
     ? rustOptionElementCarrier(fact.resultCarrier) : fact.resultCarrier;
   const rightCarrier = rightNode === undefined ? undefined : fact.rightValueForm === "raw"
-    ? context.input.program.facts.getRuntimeCarrierFact(rightNode)?.carrier
+    ? context.input.program.records.runtimeCarrier.get(rightNode)?.carrier
     : effectivePlannedExpressionCarrier(rightNode, context);
   const rightDepth = fact.rightValueForm === "value" && isRustNeverCarrier(rightCarrier)
     ? 0 : rustOptionNestingDepth(rightCarrier, presentCarrier);
@@ -65,7 +65,7 @@ export function planNullishCoalescing(
     !exactPresentValue || fact.rightValueForm !== "value" && fact.rightValueForm !== "raw" ||
     fact.rightValueForm === "raw" && fact.rightOptionDepth === 0 ||
     rustOptionalStorageNestingDepth(
-      rustValueCarrierBeforeOptionProjection(context.input.program.facts, leftNode),
+      rustValueCarrierBeforeOptionProjection(context.input.program.records, leftNode),
       fact.leftValueCarrier,
     ) !== fact.leftOptionDepth ||
     rightDepth !== fact.rightOptionDepth) {
@@ -89,7 +89,7 @@ export function planNullishCoalescing(
   const convertedPresent = fact.leftConversion === undefined ? undefined : applyRustValueConversion(context,
     { kind: "path", path: presentValueName }, fact.leftConversion, node, false);
   if (fact.leftConversion !== undefined && convertedPresent === undefined) return undefined;
-  const leftCarrier = context.input.program.facts.getRuntimeCarrierFact(leftNode)?.carrier;
+  const leftCarrier = context.input.program.records.runtimeCarrier.get(leftNode)?.carrier;
   if (leftCarrier === undefined) return undefined;
   const value: RustExpr = convertedPresent ?? { kind: "path", path: presentValueName };
   return planRustOptionBranch(left, leftCarrier, presentValueName,

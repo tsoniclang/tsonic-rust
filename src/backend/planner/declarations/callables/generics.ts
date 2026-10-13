@@ -19,7 +19,7 @@ import { rustDeclarationAssociatedPredicates } from "../../types/associated-boun
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
 import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
-import { rustCallableImplicitLifetimeParameters } from "../../../../analysis/facts/source-input-lifetimes.js";
+import { rustCallableImplicitLifetimeParameters } from "../../../../analysis/callables/source-input-lifetimes.js";
 import { planRustNativeCallableGenerics } from "./native-generics.js";
 import { planRustRetainedGenerics } from "./retained-generics.js";
 
@@ -31,7 +31,7 @@ export interface RustCallableGenericPlan {
 }
 
 export function rustSourceDeclarationGenerics(
-  contract: import("../../../../target-model/lifetimes/index.js").RustSourceGenericContract,
+  contract: import("../../../../target-model/lifetimes/model.js").RustSourceGenericContract,
 ): RustGenerics | undefined {
   if (contract.lifetimeBinder !== undefined) return undefined;
   const parameters: RustGenericParameter[] = [];
@@ -82,7 +82,7 @@ function planRustSourceCallableGenerics(
   capturedParameters: readonly RustSourceGenericParameterContract[] = [],
 ): RustCallableGenericPlan | undefined {
   capturedParameters = [...capturedParameters, ...rustCallableImplicitLifetimeParameters(
-    declaration, context.input.program.source.ast, context.input.program.facts)];
+    declaration, context.input.program.source.ast, context.input.program.records)];
   const sourceParameters = context.input.program.source.ast.typeParameters(declaration);
   if (sourceParameters.some((parameter) => parameter === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(

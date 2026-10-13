@@ -1,15 +1,7 @@
 import {
   providerVirtualDeclarationFactKey,
 } from "@tsonic/tsts";
-import type {
-  ExtensionFactSubject,
-  Node,
-  ProviderDeclarationIdentity,
-  ProviderMemberKey,
-  ReadonlySourceFactResolver,
-  Symbol,
-  Type,
-} from "@tsonic/tsts";
+import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity, ProviderMemberKey, Symbol, Type } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import { rustPolicyNode } from "../model/context.js";
 import type { RustSourceProfileRegistry } from "../types/model/source-profile.js";
@@ -40,14 +32,14 @@ export interface RustProviderDeclarationCorroboration {
 }
 
 export function resolveSelectedProviderDeclaration(
-  context: Pick<RustSourcePolicyContext, "facts">,
+  context: Pick<RustSourcePolicyContext, "source">,
   selectedSubject: ExtensionFactSubject | undefined,
   corroborations: readonly RustProviderDeclarationCorroboration[] = [],
 ): RustSelectedProviderDeclarationResolution {
   if (selectedSubject === undefined) {
     return { kind: "missing" };
   }
-  const selectedFact = context.facts.get(selectedSubject, providerVirtualDeclarationFactKey);
+  const selectedFact = context.source.sourceFacts.getFact(selectedSubject, providerVirtualDeclarationFactKey);
   if (selectedFact === undefined) {
     return { kind: "missing" };
   }
@@ -57,7 +49,7 @@ export function resolveSelectedProviderDeclaration(
   const identities: ProviderDeclarationIdentity[] = [selectedFact];
   let selected: ProviderDeclarationIdentity = selectedFact;
   for (const corroboration of corroborations) {
-    const fact = context.facts.get(corroboration.subject, providerVirtualDeclarationFactKey);
+    const fact = context.source.sourceFacts.getFact(corroboration.subject, providerVirtualDeclarationFactKey);
     if (fact === undefined) {
       continue;
     }
@@ -76,7 +68,7 @@ export function resolveSelectedProviderDeclaration(
 
 export function selectedCallProviderDeclaration(
   request: RustCheckedCallSelectionInput,
-  context: Pick<RustSourcePolicyContext, "facts">,
+  context: Pick<RustSourcePolicyContext, "source">,
 ): RustSelectedProviderDeclarationResolution {
   return resolveSelectedProviderDeclaration(context, request.sourceSelectedDeclaration, [
     { subject: request.source.selectedSignature, precision: "exact" },
@@ -198,14 +190,12 @@ export function resolveSelectedJsSourceMember(
 }
 
 export function resolveSelectedSourceProfileMember(
-  context: Pick<RustSourcePolicyContext, "ast" | "semanticsFor"> & {
-    readonly facts: { readonly get: ReadonlySourceFactResolver["getFact"] };
-  },
+  context: Pick<RustSourcePolicyContext, "ast" | "semanticsFor" | "source">,
   declarationSubject: ExtensionFactSubject | undefined,
   sourceProfiles: RustSourceProfileRegistry,
 ): RustSelectedSourceMemberIdentity | undefined {
   const declaration = rustPolicyNode(context, declarationSubject);
-  const provider = context.facts.get(
+  const provider = context.source.sourceFacts.getFact(
     declarationSubject,
     providerVirtualDeclarationFactKey,
   );
@@ -328,10 +318,7 @@ export function resolveSelectedJsSourceExportName(
   declarationSubject: ExtensionFactSubject | undefined,
   sourceProfiles: RustSourceProfileRegistry,
 ): string | undefined {
-  const provider = context.facts.get(
-    declarationSubject,
-    providerVirtualDeclarationFactKey,
-  );
+  const provider = context.source.sourceFacts.getFact(declarationSubject, providerVirtualDeclarationFactKey);
   if (provider?.providerId === jsSourceSemanticsIdentity.providerId) {
     return provider.exportName;
   }

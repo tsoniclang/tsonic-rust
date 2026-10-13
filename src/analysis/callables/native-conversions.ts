@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCallablePhysicalSignature, type RustCallablePhysicalSignature } from "../../target-model/conversions/callable-physical.js";
 import type { RustTargetGenericArgument, RustTargetGenericParameter, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -9,8 +9,8 @@ import { rustOnlyTypeGenericArguments, rustTargetGenericBindingsForArguments, ru
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustDirectCallableReferenceFactKey } from "../facts/keys.js";
-import { rustValueCarrierBeforeContextualConversion } from "../facts/value-carrier-queries.js";
+
+import { rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import type { RustNativeCallableInput } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
@@ -105,19 +105,19 @@ export function rustNativeCallableOperand(
   source: TargetTypeRef,
   node: Node,
   input: {
-    readonly facts: RustPlanQueries;
+    readonly records: RustProgramRecords;
     readonly storage: RustNativeStoragePlan;
     readonly producers: RustNativeCallableProducerPlan;
     readonly definitions: RustTypeDefinitions;
   },
 ): RustNativeCallablePhysicalSource | undefined {
-  const reference = input.facts.getFact(node, rustDirectCallableReferenceFactKey);
+  const reference = input.records.directCallableReference.get(node);
   if (reference !== undefined) {
     if (!rustTargetTypeRefEquals(reference.carrier, source)) return undefined;
     const carrier = input.producers.physicalFor(reference.sourceDeclaration, source);
     return carrier === undefined ? undefined
       : rustNativeCallablePhysicalSource(source, { kind: "identity", carrier }, input.definitions);
   }
-  if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(input.facts, node), source)) return undefined;
+  if (!rustTargetTypeRefEquals(rustValueCarrierBeforeContextualConversion(input.records, node), source)) return undefined;
   return rustNativeCallablePhysicalSource(source, input.storage.operandFor(node), input.definitions);
 }

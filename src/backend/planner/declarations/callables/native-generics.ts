@@ -4,13 +4,12 @@ import type { RustGenericParameter, RustGenerics, RustWherePredicate, RustTypeBo
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { RustCallableGenericPlan } from "./generics.js";
-import { rustErrorEffectsFactKey } from "../../../../analysis/facts/error-effects.js";
+
 import { rustTargetTypeChildren } from "../../../../target-model/types/carriers/children.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
-import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustNativeCallableInputPhysicalSignature } from "../../../../analysis/callables/native-conversions.js";
-import { rustAsyncFunctionFactKey } from "../../../../analysis/facts/keys.js";
 
 export function planRustNativeCallableGenerics(
   declaration: Node,
@@ -44,7 +43,7 @@ export function planRustNativeCallableGenerics(
       bounds.get(type.owner.identity)?.set(closedMetadataKey(type.trait), type.trait);
     for (const child of rustTargetTypeChildren(type)) collect(child);
   };
-  if (context.input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey) !== undefined) {
+  if (context.input.program.records.sourceCallableReturn.get(declaration) !== undefined) {
     const selected = nativeStorage.returnFor(declaration);
     if (selected.kind === "unresolved") return undefined;
     collect(selected.carrier);
@@ -52,9 +51,9 @@ export function planRustNativeCallableGenerics(
   let resolved = true;
   const visit = (node: Node): void => {
     if (!resolved) return;
-    for (const error of context.input.program.facts.getFact(node, rustErrorEffectsFactKey)?.nativeErrors ?? [])
+    for (const error of context.input.program.records.errorEffects.get(node)?.nativeErrors ?? [])
       collect(error.errorType);
-    if (context.input.program.facts.getFact(node, rustContextualValueConversionFactKey)?.conversion.kind === "callable-adapter") {
+    if (context.input.program.records.contextualValueConversion.get(node)?.conversion.kind === "callable-adapter") {
       const selected = nativeStorage.valueFor(node);
       if (selected.kind === "unresolved") { resolved = false; return; }
       collect(selected.carrier);
@@ -73,8 +72,8 @@ export function planRustNativeCallableGenerics(
   }
   const parameters: RustGenericParameter[] = [];
   const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
-  if (context.input.program.facts.getFact(declaration, rustAsyncFunctionFactKey)?.kind === "js-promise") {
-    const errors = context.input.program.facts.getFact(declaration, rustErrorEffectsFactKey)?.nativeErrors ?? [];
+  if (context.input.program.records.asyncFunction.get(declaration)?.kind === "js-promise") {
+    const errors = context.input.program.records.errorEffects.get(declaration)?.nativeErrors ?? [];
     const selected = new Map(errors.map(error => [closedMetadataKey(error.errorType), error.errorType]));
     for (const carrier of selected.values()) {
       const type = rustTypeFromCarrierInContext(carrier, context);

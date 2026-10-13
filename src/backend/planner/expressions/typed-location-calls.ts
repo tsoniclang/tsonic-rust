@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustTypedLocationPlanKey } from "../../../analysis/facts/keys.js";
-import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -25,7 +24,7 @@ export function planRustTypedLocationCall(
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
-  const plan = context.input.program.facts.getFact(node, rustTypedLocationPlanKey);
+  const plan = context.input.program.records.typedLocationPlan.get(node);
   if (plan === undefined || !typedLocationFactMatchesPlan(fact, plan)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -88,7 +87,7 @@ export function planRustTypedLocationCall(
     }
     case "allocate": {
       const initial = planExpression(plan.initialExpression, context);
-      if (context.input.program.facts.getFact(node, rustNativeBackingKey) !== undefined) {
+      if (context.input.program.records.nativeBacking.get(node) !== undefined) {
         return initial === undefined ? undefined : planRustNativeAllocation(node, initial, context, rustProgramErrorTargetType());
       }
       const owner = rustTypeFromCarrierInContext(fact.locationCarrier, context);

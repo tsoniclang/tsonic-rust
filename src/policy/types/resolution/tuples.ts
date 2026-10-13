@@ -11,7 +11,7 @@ import { resolveRustConditionalAlias } from "./type-families.js";
 import { resolveRustTypeComponentEvidence } from "./source-evidence.js";
 import { rustSliceMutRefTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
+
 import {
   sourceTransformedTypeFactEvidenceNodes,
   sourceTupleElementTypeEvidenceNodes,
@@ -133,7 +133,7 @@ export function resolveReferencedDeclarationType(
   const { ast } = context;
   const declaration = context.source.navigation.referenceFor(node)?.declaration;
   if (declaration !== undefined) {
-      const declarationCarrier = context.facts.getRuntimeCarrierFact(declaration)?.carrier;
+      const declarationCarrier = context.records.runtimeCarrier.get(declaration)?.carrier;
       if (declarationCarrier !== undefined) {
         return declarationCarrier;
       }
@@ -149,7 +149,7 @@ export function resolveReferencedDeclarationType(
       const initializer = Node_Initializer(ast, declaration);
       const selectedCall = initializer === undefined
         ? undefined
-        : context.facts.getSelectedTargetCall(initializer);
+        : context.records.selectedCall.get(initializer);
       if (selectedCall !== undefined) return resolveRustTargetTypeRef(initializer, context, options);
   }
   return undefined;
@@ -192,7 +192,7 @@ function sourceParameterTypeIsReadonlyArray(
     if (resolveOwnedSourceProfileTypeNameForDeclaration(declaration, context, options.sourceProfiles) === "ReadonlyArray") {
       return true;
     }
-    if (context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey)?.reason !== "representation-alias") return false;
+    if (context.records.typeOnlyDeclaration.get(declaration)?.reason !== "representation-alias") return false;
     const heritage = context.source.navigation.declaredHeritage(declaration);
     if (heritage.kind !== "resolved" || heritage.edges.length !== 1 || heritage.edges[0]?.kind !== "extends") return false;
     declaration = heritage.edges[0].target.declaration;

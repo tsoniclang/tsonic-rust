@@ -1,8 +1,9 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldComparisonView, rustErrorFieldHasGuardedBorrow,
   rustErrorFieldOptionalView, rustErrorFieldSharedView } from "../../../../dist/backend/planner/expressions/error-field-borrows.js";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { rustJsErrorTargetType, rustStringTargetType, rustOptionTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustStringComparisonView } from "../../../../dist/backend/planner/expressions/string-comparison-views.js";
 import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/carriers/source-error.js";
@@ -14,9 +15,7 @@ function scenario(carrier, property = "message") {
   const queries = [];
   const operations = new Map([[read, { kind: "builtin-error-property", accessMode: "read", receiverCarrier: carrier,
     property, resultCarrier: rustStringTargetType() }]]);
-  const context = { diagnostics: [], syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() }, input: { program: { facts: {
-    getFact: (node, key) => key === rustTargetOperationFactKey ? operations.get(node) : undefined,
-  }, errorStorageDemands: { invalidationFor: (subject, expression, pure) => {
+  const context = { diagnostics: [], syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() }, input: { program: { records: createRustRecordFixture({targetOperation: { get: (node) => operations.get(node) }}), errorStorageDemands: { invalidationFor: (subject, expression, pure) => {
     queries.push({ subject, expression, pure });
     return invalidations.get(expression) ?? { kind: "preserved" };
   } }, source: { ast: {

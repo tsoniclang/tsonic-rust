@@ -7,7 +7,7 @@ import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../..
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { retainedFieldFreezeOrigins, retainedFieldFreezeOriginSource, retainedFieldGenericFreezeSource } from "../../../../tsonic/test/fixtures/retained-field-freeze-origins.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";
-import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
+
 
 for (const { name, declarations, invocation } of retainedFieldFreezeOrigins)
   test(`retained direct writes observe ${name} freeze without guarding reads`, { timeout: 300_000 }, () => {
@@ -85,7 +85,7 @@ export function createShallow(): Shallow { return new Shallow(); }
       assert.equal(captures[0].declaration === field, true, `${name}.${callbackName} retains the checked field`);
       assert.equal(program.objectRepresentations.receiverCaptures.receiversFor(callable).length, 0,
         `${name}.${callbackName} does not retain the containing object`);
-      const storage = program.facts.getFact(field, rustCapturedFieldStorageFactKey);
+      const storage = program.records.capturedFieldStorage.get(field);
       assert.equal(storage !== undefined, true, `${name}.${fieldName} sealed physical storage`);
       assert.equal(storage.storage.kind, storageKind, `${name}.${fieldName} native storage kind`);
       assert.equal(storage.storage.initialization, "ready", `${name}.${fieldName} initialized field`);

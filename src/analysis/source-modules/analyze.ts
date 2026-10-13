@@ -1,7 +1,7 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustOutputType } from "../../target-model/project/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type {
@@ -14,7 +14,7 @@ import type {
 export function analyzeRustSourceModuleConstructions(input: {
   readonly source: TargetSourceProgram;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly outputType: RustOutputType;
 }): RustSourceModuleAnalysis {
   const entries: RustSourceModuleConstruction[] = [];
@@ -23,7 +23,7 @@ export function analyzeRustSourceModuleConstructions(input: {
     if (sourceFile.IsDeclarationFile) continue;
     visit(sourceFile, (node) => {
       if (input.source.ast.kindName(node) !== "KindNewExpression") return;
-      const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+      const operation = input.records.targetOperation.get(node);
       if (operation?.kind !== "provider-operation" ||
         operation.abi.target.form !== "source-module-construction") {
         return;

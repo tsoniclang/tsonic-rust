@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustFlowReadProjectionFactKey } from "../../../../dist/analysis/facts/value-projections.js";
+
 import { planRustValueProjection } from "../../../../dist/backend/planner/expressions/flow-reads.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
@@ -17,7 +17,7 @@ export function select(value: Base | undefined): Child | undefined {
   const { ast } = program.source;
   const projections = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustFlowReadProjectionFactKey);
+    const fact = program.records.flowReadProjection.get(node);
     if (fact?.kind === "project-downcast") projections.push({ node, fact });
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

@@ -1,5 +1,8 @@
+import type { RustOperationPolicyContext } from "../../policy/model/operation-context.js";
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+
 import type { Node, Type } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
+
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import type { RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
@@ -9,19 +12,19 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
-import { rustFlowReadProjectionFactKey } from "../facts/keys.js";
-import { rustFlowReadProjectionMatches } from "../facts/flow-read-projections.js";
+import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
+
+import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveRustInstanceType } from "../../policy/types/resolution/instance-tests.js";
 
 export function selectRustGuardedValueCarrier(
   reference: Node,
   sourceCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions & { readonly projectTypes: RustProjectTypePolicy },
 ): TargetTypeRef | undefined {
-  const existing = context.facts.getFact(reference, rustFlowReadProjectionFactKey);
+  const existing = context.records.flowReadProjection.get(reference);
   if (existing !== undefined) return rustTargetTypeRefEquals(existing.sourceCarrier, sourceCarrier) &&
     rustFlowReadProjectionMatches(existing, options.projectTypes, context.typeDefinitions) ? existing.selectedCarrier : undefined;
   const members = selectRustGuardedValueMembers(reference, sourceCarrier, context, options);
@@ -33,7 +36,7 @@ export function selectRustGuardedValueCarrier(
   if (selected === undefined) return undefined;
   const projection = selectRustFlowReadProjection(sourceCarrier, selected, options.projectTypes, context.typeDefinitions);
   if (projection.kind !== "projection") return undefined;
-  recordRustFlowReadProjection(context.facts, reference, projection.fact);
+  recordRustFlowReadProjection(context.records, reference, projection.fact);
   return selected;
 }
 

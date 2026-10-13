@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustClosureCaptureFact } from "../facts/keys.js";
+import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { collectRustLexicalCaptures } from "../callables/closures.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
@@ -8,12 +8,12 @@ import { rustSnakeCaseIdentifier } from "../../target-model/names/identifiers.js
 import { Node_Initializer, sourceClassFieldIsTypeOnly } from "@tsonic/target-api/source";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustSourceBindingFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
+
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { isRustDeclarationPathUse } from "../declarations/generic-reference-uses.js";
 
 export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
-  const { ast, facts, projectTypes, classValues } = walk.context;
+  const { ast, records, projectTypes, classValues } = walk.context;
   const visited = new Set<TargetTypeRef>();
   const record = (carrier: TargetTypeRef | undefined): void => {
     if (carrier === undefined || visited.has(carrier)) return;
@@ -28,10 +28,10 @@ export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
   const visit = (node: Node): void => {
     const parent = ast.parent(node);
     const declarationName = parent !== undefined && ast.name(parent) === node;
-    if (!ast.is.IsClassDeclaration(node) && !declarationName && !isRustDeclarationPathUse(node, ast, facts)) {
-      record(facts.getRuntimeCarrierFact(node)?.carrier);
+    if (!ast.is.IsClassDeclaration(node) && !declarationName && !isRustDeclarationPathUse(node, ast, records)) {
+      record(records.runtimeCarrier.get(node)?.carrier);
     }
-    record(facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier);
+    record(records.sourceCallableReturn.get(node)?.returnCarrier);
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of walk.context.sourceFiles) visit(sourceFile);
@@ -66,7 +66,7 @@ export type RustClassEnvironmentSelection =
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node): RustClassEnvironmentSelection {
-  const { ast, projectTypes, names, facts } = walk.context;
+  const { ast, projectTypes, names, records } = walk.context;
   const definition = projectTypes.definitionForDeclaration(declaration);
   if (definition?.kind !== "class") return { kind: "none" };
   const moduleClass = ast.parent(declaration) === ast.getSourceFile(declaration);
@@ -91,7 +91,7 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
     if (Node_Initializer(ast, member) === undefined) {
       return { kind: "unresolved", reason: "Local static fields require an exact authored initializer." };
     }
-    const carrier = facts.getRuntimeCarrierFact(member)?.carrier;
+    const carrier = records.runtimeCarrier.get(member)?.carrier;
     const name = names.nameForDeclaration(member);
     if (carrier === undefined || name === undefined) {
       return { kind: "unresolved", reason: "Class static storage requires a finalized carrier and declaration name." };
@@ -107,7 +107,7 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
     .filter(use => use.kind !== "type-only" && use.kind !== "source-linkage")
     .map(use => use.reference));
   const usesEnvironment = (node: Node): boolean => {
-    const binding = facts.getFact(node, rustSourceBindingFactKey);
+    const binding = records.sourceBinding.get(node);
     if (binding !== undefined && (capturedDeclarations.has(binding.sourceDeclaration) ||
       !moduleClass && constructorReferences.has(node))) return true;
     let used = false;
@@ -118,7 +118,7 @@ export function selectRustClassEnvironment(walk: RustFactWalk, declaration: Node
   for (const field of staticFields) {
     let selfReference = false;
     const visit = (node: Node): void => {
-      if (facts.getFact(node, rustSourceBindingFactKey)?.sourceDeclaration === declaration) selfReference = true;
+      if (records.sourceBinding.get(node)?.sourceDeclaration === declaration) selfReference = true;
       ast.forEachChild(node, child => { if (!selfReference && child !== undefined) visit(child); });
     };
     visit(Node_Initializer(ast, field.declaration)!);

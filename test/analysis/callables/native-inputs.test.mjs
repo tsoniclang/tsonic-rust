@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { nullishNeverSource } from "../../../../tsonic/test/fixtures/nullish-never.mjs";
 
@@ -37,7 +37,7 @@ test("native callable inputs preserve two equal-signature formals and alias corr
     assert.equal(selected.implementations.length, 0);
   }
   for (const [index, parameter] of ast.parameters(owner).entries()) {
-    const abi = program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+    const abi = program.records.sourceParameterAbi.get(parameter);
     const physical = program.callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
     assert.equal(physical.kind, "selected");
     const carrier = physical.carrier;

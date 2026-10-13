@@ -2,7 +2,7 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustMemoryBindingPlanKey } from "../../../target-model/operations/memory-bindings.js";
+
 import { createRustStructuralObjectFromCarrier } from "../objects/project-storage.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustEmptyObjectTargetType } from "../../../target-model/types/index.js";
@@ -12,7 +12,7 @@ export function tryPlanRustMemoryBinding(
   node: Node, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): { readonly handled: boolean; readonly expression?: RustExpr } {
-  const plan = context.input.program.facts.getFact(node, rustMemoryBindingPlanKey);
+  const plan = context.input.program.records.memoryBindingPlan.get(node);
   if (plan === undefined) return { handled: false };
   if (plan.kind === "field") return { handled: true, expression: planExpression(plan.expression, context) };
   if (rustTargetTypeRefEquals(plan.carrier, rustEmptyObjectTargetType())) {

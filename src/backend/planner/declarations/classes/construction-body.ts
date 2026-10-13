@@ -179,7 +179,7 @@ export function planRustConstructionBody(
       } else if (point.published || point.publishBefore) {
         const receiverNode = expression.kind === "receiver" ? expression.node : expression.receiver;
         if (receiverNode === undefined) return reject("Sealed construction projection has no exact receiver node.");
-        const selected = selectedContext.input.program.facts.getRuntimeCarrierFact(receiverNode)?.carrier;
+        const selected = selectedContext.input.program.records.runtimeCarrier.get(receiverNode)?.carrier;
         if (selected === undefined) return reject("Sealed construction receiver has no finalized native carrier.");
         const substituted = substituteRustTargetGenerics(selected, selectedContext.typeParameterSubstitutions ?? new Map(),
           selectedContext.lifetimeSubstitutions ?? new Map());

@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
-import type { RustObjectReferenceView } from "../../../analysis/facts/object-reference-views.js";
+import type { RustObjectReferenceView } from "../../../target-model/records/object-reference-views.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";

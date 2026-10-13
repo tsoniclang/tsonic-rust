@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
-import type { RustTargetOperationFact } from "../../../analysis/facts/operations/facts.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -10,7 +10,7 @@ import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustValueFieldLocation } from "../objects/value-fields.js";
-import { rustMutatedBindingFactKey, rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
+
 import { rustLocationStorageForReference, planRustNonConsumingValue } from "./typed-locations.js";
 
 export type RustIndexedFieldOperation = Extract<RustTargetOperationFact, { readonly kind: "source-indexed-field" }>;
@@ -25,9 +25,9 @@ export function planRustIndexedFieldLocation(
   const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const direct = receiverNode === undefined || plannedReceiver === undefined ? undefined
     : planRustNonConsumingValue(receiverNode, plannedReceiver, context);
-  const binding = receiverNode === undefined ? undefined : context.input.program.facts.getFact(receiverNode, rustSourceBindingFactKey);
+  const binding = receiverNode === undefined ? undefined : context.input.program.records.sourceBinding.get(receiverNode);
   const stable = (direct?.kind === "path" || direct?.kind === "reference") && binding !== undefined &&
-    context.input.program.facts.getFact(binding.sourceDeclaration, rustMutatedBindingFactKey) === undefined &&
+    context.input.program.records.mutatedBinding.get(binding.sourceDeclaration) === undefined &&
     rustLocationStorageForReference(receiverNode!, context) === undefined;
   const receiver = stable ? direct : plannedReceiver;
   const key = keyNode === undefined ? rustIndexedPropertyKey(fact, context) : planExpression(keyNode, context);

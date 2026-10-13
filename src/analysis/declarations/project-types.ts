@@ -7,25 +7,18 @@ import {
   sourceObjectMemberDeclarations,
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
-import {
-  rustAsyncFunctionFactKey,
-  rustGeneratorFactKey,
-  rustSelfModeFactKey,
-  rustSourceBindingFactKey,
-  rustSourceCallableReturnFactKey,
-  rustSourceParameterAbiFactKey,
-} from "../facts/keys.js";
+
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
-import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
+
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
 import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "./types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveTypeNodeCarrier } from "./types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
@@ -54,7 +47,7 @@ export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: reado
             ast.kindName(member) === "KindSetAccessor") &&
           !ast.hasModifierKind(member, "static")) {
           const mode = walk.context.objectRepresentations.methodSelfMode(member);
-          walk.context.facts.set(member, rustSelfModeFactKey, { mode }, [
+          walk.context.records.selfMode.set(member, { mode }, [
             { message: `rust ${mode} project object method self mode` },
           ]);
         }
@@ -87,7 +80,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
     }
     if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
       const fieldCarrier = sourceParameterIsProperty(ast, member)
-        ? walk.context.facts.get(member, rustRuntimeCarrierKey)?.carrier
+        ? walk.context.records.runtimeCarrier.get(member)?.carrier
         : resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions);
       if (fieldCarrier !== undefined) {
         const storage = closeRustSuspendedStorage(fieldCarrier, [classCarrier],
@@ -109,7 +102,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
                 ["target.capability=rust.field.capture-storage"]);
               continue;
             }
-            walk.context.facts.set(member, rustCapturedFieldStorageFactKey, {
+            walk.context.records.capturedFieldStorage.set(member, {
               storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member),
                 captures.storageImmutable(member)),
               valueCarrier: storage,
@@ -129,17 +122,17 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
         recordParameterAbiFacts(walk, parameter);
         if (sourceParameterIsProperty(ast, parameter)) {
           const name = ast.name(parameter);
-          const carrier = walk.context.facts.get(parameter, rustRuntimeCarrierKey)?.carrier;
+          const carrier = walk.context.records.runtimeCarrier.get(parameter)?.carrier;
           if (name !== undefined && carrier !== undefined) {
             setCarrierFact(walk, name, carrier);
-            walk.context.facts.set(name, rustSourceBindingFactKey, {
+            walk.context.records.sourceBinding.set(name, {
               scope: "lexical",
               sourceName: ast.text(name),
               sourceDeclaration: parameter,
             }, [{ message: "rust implicit parameter-property initializer binding" }]);
-            const abi = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey);
+            const abi = walk.context.records.sourceParameterAbi.get(parameter);
             if (abi !== undefined) {
-              walk.context.facts.set(name, rustSourceParameterAbiFactKey, abi, [
+              walk.context.records.sourceParameterAbi.set(name, abi, [
                 { message: "rust implicit parameter-property initializer ABI" },
               ]);
             }
@@ -150,8 +143,8 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
         recordCallableSuspensionFacts(walk, member);
         recordCallableReturnFact(walk, member);
         if (memberKind === "KindSetAccessor" &&
-          walk.context.facts.get(member, rustSourceCallableReturnFactKey) === undefined) {
-          walk.context.facts.set(member, rustSourceCallableReturnFactKey, {
+          walk.context.records.sourceCallableReturn.get(member) === undefined) {
+          walk.context.records.sourceCallableReturn.set(member, {
             returnCarrier: rustUnitTargetType(),
           }, [{ message: "rust setter unit return carrier" }]);
         }
@@ -212,7 +205,7 @@ export function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sour
     }
     if (memberKind === "KindPropertyDeclaration") {
       const initializer = Node_Initializer(ast, member);
-      const fieldCarrier = walk.context.facts.get(member, rustRuntimeCarrierKey)?.carrier ??
+      const fieldCarrier = walk.context.records.runtimeCarrier.get(member)?.carrier ??
         resolveTypeNodeCarrier(walk, Node_Type(ast, member));
       if (initializer !== undefined && fieldCarrier !== undefined) {
         resolveExpressionCarrier(walk, initializer, sourceFile, fieldCarrier);
@@ -221,11 +214,11 @@ export function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sour
     }
     if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration" ||
       memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
-      const asyncFact = walk.context.facts.get(member, rustAsyncFunctionFactKey);
-      const generatorFact = walk.context.facts.get(member, rustGeneratorFactKey);
+      const asyncFact = walk.context.records.asyncFunction.get(member);
+      const generatorFact = walk.context.records.generator.get(member);
       const returnCarrier = memberKind !== "KindConstructor"
         ? generatorFact?.returnType ?? asyncFact?.outputCarrier ??
-          walk.context.facts.get(member, rustSourceCallableReturnFactKey)?.returnCarrier
+          walk.context.records.sourceCallableReturn.get(member)?.returnCarrier
         : undefined;
       const previousMethod = walk.currentMethodDeclaration;
       const previousCallable = walk.currentCallableDeclaration;
@@ -300,7 +293,7 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       setCarrierFact(walk, keyParameter, keyCarrier);
       setCarrierFact(walk, member, valueCarrier);
     } else if (memberKind === "KindMethodSignature" || memberKind === "KindConstructSignature") {
-      if (memberKind === "KindMethodSignature") walk.context.facts.set(member, rustSelfModeFactKey, { mode: "ref" }, [
+      if (memberKind === "KindMethodSignature") walk.context.records.selfMode.set(member, { mode: "ref" }, [
         { message: "rust reference-backed project interface method self mode" },
       ]);
       const parameters = requireDenseSourceNodes(

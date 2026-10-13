@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustBorrowedIterationBinding } from "../../../dist/analysis/program/borrowed-iteration-bindings.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustBorrowedStrTargetType, rustStringTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 
 function fixture() {
@@ -55,18 +56,15 @@ function fixture() {
       "AwaitExpression", "NonNullExpression", "DeleteExpression", "VoidExpression", "TypeOfExpression", "YieldExpression",
       "SpreadElement", "ExportAssignment", "VariableDeclarationList", "BinaryExpression"].map(kind => [`Is${kind}`, node => node.kind === `Kind${kind}`])),
   };
-  const facts = {
-    getTargetConversionFact: () => undefined,
-    getFact(node, key) {
-      if (key !== rustTargetOperationFactKey) return undefined;
-      return node === loop ? iteration : node === append ? operation : node.operation;
-    },
-    getRuntimeCarrierFact(node) { return { carrier: node === input ? inputCarrier : string }; },
-  };
+  const records = createRustRecordFixture({targetOperation: { get: (node) => {
+    return node === loop ? iteration : node === append ? operation : node.operation;
+} },
+conversion: { get: () => undefined },
+runtimeCarrier: { get: (node) => { return { carrier: node === input ? inputCarrier : string }; } }});
   const navigation = { declarationUseSummary: () => summary,
     sourceReferenceFor: node => ({ declaration: node === reference ? declaration : node.declaration }) };
-  return { ast, facts, navigation, loop, body, append, reference, declaration, input, string,
-    select: () => selectRustBorrowedIterationBinding(loop, ast, facts, navigation),
+  return { ast, records, navigation, loop, body, append, reference, declaration, input, string,
+    select: () => selectRustBorrowedIterationBinding(loop, ast, records, navigation),
     setCarrier: carrier => { inputCarrier = carrier; },
     setIteration: value => { iteration = value; },
     setOperation: value => { operation = value; },

@@ -1,10 +1,10 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustAsyncFunctionFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import type { RustErrorEffectsFact } from "../facts/error-effects.js";
-import type { RustAwaitSourceErrorBranch } from "../facts/await-source-error-effects.js";
-import { rustSourceErrorEffectEdgeEquals } from "../facts/source-error-effects.js";
+
+import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
+import { rustSourceErrorEffectEdgeEquals } from "../errors/source-error-effects.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -24,7 +24,7 @@ export function selectRustAwaitSourceErrors(
   selection: RustSourceErrorEffectSelection,
   budget: RustEffectsWorkBudget,
 ): readonly RustAwaitSourceErrorSelection[] | undefined {
-  const { sourceStorage: storage, ast, facts, callableValues, typeDefinitions: definitions } = walk.context;
+  const { sourceStorage: storage, ast, records, callableValues, typeDefinitions: definitions } = walk.context;
   const subject = storage.subjectFor(operand);
   const owner = sourceEnclosingCallable(operand, ast);
   const bindings = owner === undefined ? storage.emptyBindings : callableValues.native.bindingsFor(owner);
@@ -38,13 +38,13 @@ export function selectRustAwaitSourceErrors(
     budget.step();
     if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0) continue;
     const invocation = producer.subject.node;
-    const operation = facts.get(invocation, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(invocation);
     if (operation?.kind !== "source-call" || callableValues.native.callFor(invocation) !== undefined) continue;
     const implementations = storage.invocationImplementationsFor(invocation, producer.bindings);
     if (implementations.kind !== "resolved" || !implementations.exact || implementations.nodes.length === 0) return undefined;
     for (const target of implementations.nodes) {
       budget.step();
-      const asynchronous = facts.get(target, rustAsyncFunctionFactKey);
+      const asynchronous = records.asyncFunction.get(target);
       if (asynchronous === undefined) continue;
       const topology = rustAwaitSelection(asynchronous.futureCarrier, definitions);
       const activation = storage.bindingsForInvocation(target, invocation, producer.bindings);

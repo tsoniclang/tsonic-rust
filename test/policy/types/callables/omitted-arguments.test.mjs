@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { materializeRustOmittedCallArguments } from "../../../../dist/policy/types/callables/omitted-arguments.js";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/validation.js";
 import { rustOptionTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { substituteProviderOperationForm } from "../../../../dist/analysis/operations/provider/calls/template-instantiation.js";
 

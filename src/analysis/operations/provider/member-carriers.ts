@@ -1,5 +1,6 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { Node, Type } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
@@ -13,7 +14,7 @@ import { rustSourceTypeCarrierValue } from "../../../target-model/types/carriers
 export function bindRustSelectedReceiverContext(
   receiverType: Type | undefined,
   receiver: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustTargetTypeResolutionContext | undefined {
   const definition = options.projectTypes.definitionForCarrier(receiver);
@@ -33,7 +34,7 @@ export function instantiateRustSelectedMemberCarrier(
   receiver: TargetTypeRef,
   receiverType: Type | undefined,
   declaredCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const result = options.projectTypes.instantiateMemberCarrier(declaration, receiver, declaredCarrier);

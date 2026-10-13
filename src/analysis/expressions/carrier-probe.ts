@@ -1,11 +1,11 @@
-import { createRustPlanBuilder } from "../facts/plan-store.js";
+import { createRustProgramRecordBuilder } from "../program/records/create.js";
 import type { RustFactWalk } from "../program/walk.js";
 
 export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
-  const facts = createRustPlanBuilder(walk.context.source.sourceFacts, walk.context.typeDefinitions, walk.context.facts);
+  const records = createRustProgramRecordBuilder(walk.context.typeDefinitions, walk.context.records);
   return {
     ...walk,
-    context: { ...walk.context, facts, diagnostics: [] },
+    context: { ...walk.context, records, diagnostics: [] },
     operationAttempts: new WeakSet(),
     postCheckOperations: new WeakMap(),
     rejectedExpressions: new WeakSet(),

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, Node_Initializer, sourceBindingScope, type SourceProgramNavigation } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCallableOrigin, RustCallableSignature } from "../../target-model/types/carriers/callable-signatures.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
@@ -11,11 +11,12 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
-import { rustBindingStorageFactKey, rustClosureCaptureFactKey, rustTargetOperationFactKey, type RustClosureCaptureFact } from "../facts/keys.js";
+
+import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import { validatedRustCapturedFieldStorageFact } from "../facts/receiver-captures.js";
+import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
 export interface RustFrameCallableImplementation {
@@ -78,7 +79,7 @@ export interface RustFrameCallablePlan {
 
 export function createRustFrameCallablePlan(input: {
   readonly ast: AstReader;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly ownership: RustCallableOwnershipPlan;
   readonly sourceStorage: SourceStorageQueries;
   readonly usedNames: ReadonlySet<string>;
@@ -134,8 +135,8 @@ export function createRustFrameCallablePlan(input: {
     const groups = new Map<string, { signature: RustCallableSignature; implementations: RustFrameCallableImplementation[] }>();
     const prefix = createHash("sha256").update(ownerKey(owner)).digest("hex").slice(0, 16);
     for (const declaration of activation.callableDeclarations) {
-      const operation = input.facts.getFact(declaration, rustTargetOperationFactKey);
-      const capture = input.facts.getFact(declaration, rustClosureCaptureFactKey);
+      const operation = input.records.targetOperation.get(declaration);
+      const capture = input.records.closureCapture.get(declaration);
       const carrier = operation?.kind === "closure" ? operation.resultCarrier : undefined;
       const value = rustFrameCallableValue(carrier);
       if (carrier === undefined || capture === undefined || value === undefined ||
@@ -183,7 +184,7 @@ export function createRustFrameCallablePlan(input: {
     const frameBindings: RustFrameCallableBinding[] = [];
     const declarations = frameDeclarations;
     for (const declaration of declarations) {
-      const carrier = input.facts.getRuntimeCarrierFact(declaration)?.carrier;
+      const carrier = input.records.runtimeCarrier.get(declaration)?.carrier;
       const key = carrier === undefined ? undefined : signatureKey(carrier);
       const entry = key === undefined ? undefined : entries.find(candidate => candidate.key === key);
       if (carrier === undefined || activation.slotDeclarations.includes(declaration) && entry === undefined) {
@@ -191,7 +192,7 @@ export function createRustFrameCallablePlan(input: {
         continue;
       }
       const classStorage = classDefinition === undefined ? undefined : validatedRustCapturedFieldStorageFact(declaration, input)?.storage;
-      const lexicalStorage = classDefinition === undefined ? input.facts.getFact(declaration, rustBindingStorageFactKey) : undefined;
+      const lexicalStorage = classDefinition === undefined ? input.records.bindingStorage.get(declaration) : undefined;
       if (lexicalStorage !== undefined && !rustTargetTypeRefEquals(lexicalStorage.valueCarrier, carrier)) {
         issue(declaration, "A native frame binding differs from its sealed physical storage carrier.");
         continue;

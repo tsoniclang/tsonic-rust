@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
@@ -90,7 +91,7 @@ function structuralFieldSelection({ callable = false, sourceParameter = type => 
         storageSubjectFor: () => ({ kind: "unresolved", reason: "The fixture has no runtime value subject." }),
         subject: () => ({ kind: "unresolved", reason: "The fixture has no runtime value subject." }),
       },
-      facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+      records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
       classValues: { instanceViewRequests() { assert.fail("selection must not depend on earlier requests"); } } } };
   const selectedSource = source(nativeText);
   const sources = selectRustProjectStructuralViewSources(walk, selectedSource, shape, semantics, sourceType);

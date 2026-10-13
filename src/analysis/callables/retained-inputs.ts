@@ -2,13 +2,13 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { asSourceNode } from "@tsonic/target-api/source";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustSelectedCallKey } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { rustOnlyTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
+
 import { selectRustPhysicalProgramErrorOwner } from "../program/error-types.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
@@ -27,7 +27,7 @@ export interface RustRetainedCallableInputPlan {
 
 export function analyzeRustRetainedCallableInputs(input: {
   readonly ast: AstReader;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
@@ -55,9 +55,9 @@ export function analyzeRustRetainedCallableInputs(input: {
     if (owned.size === 0) return;
     for (const node of input.storage.nodes) {
       budget.step();
-      const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+      const operation = input.records.targetOperation.get(node);
       if (operation?.kind !== "typed-location") continue;
-      const selected = input.facts.getFact(node, rustSelectedCallKey);
+      const selected = input.records.selectedCall.get(node);
       const owner = selectRustPhysicalProgramErrorOwner(node, input);
       const locationArguments = operation.locationCarrier.kind === "target-named"
         ? rustOnlyTypeGenericArguments(operation.locationCarrier.genericArguments) : undefined;
@@ -78,9 +78,9 @@ export function analyzeRustRetainedCallableInputs(input: {
     }
     for (const node of input.storage.invocations) {
       budget.step();
-      const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+      const operation = input.records.targetOperation.get(node);
       if (operation?.kind !== "source-call") continue;
-      const selected = input.facts.getFact(node, rustSelectedCallKey);
+      const selected = input.records.selectedCall.get(node);
       const declaration = asSourceNode(selected?.sourceDeclaration, input.ast);
       if (declaration === undefined) continue;
       const calls = invocations.get(declaration) ?? [];

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
-import { rustClosureCaptureFactKey } from "../../../dist/analysis/facts/operations/keys.js";
-import { rustCapturedFieldStorageFactKey } from "../../../dist/analysis/facts/receiver-captures.js";
+
+
 import { fixedFieldSelfSource } from "../../helpers/fixed-field-self.mjs";
 
 function recursiveFields(program) {
@@ -47,7 +47,7 @@ for (const surfaces of [[], ["js"]]) for (const [name, source] of [
   const { declaration, initializer } = fields[0];
   const captures = program.objectRepresentations.receiverCaptures;
   const selected = captures.fixedSelfFor(initializer);
-  const fact = program.facts.getFact(initializer, rustClosureCaptureFactKey);
+  const fact = program.records.closureCapture.get(initializer);
   assert.equal(selected !== undefined, true, "the exact source owner relation is proven");
   assert.equal(selected.declaration === declaration, true);
   assert.equal(fact?.recursiveDeclaration === declaration, true);
@@ -55,7 +55,7 @@ for (const surfaces of [[], ["js"]]) for (const [name, source] of [
   assert.equal(fact?.receiverFields.length, 0, "self is not retained as a separate physical owner");
   assert.equal(captures.capturesFor(initializer).length, 0);
   assert.equal(captures.isCaptured(declaration), false, "the removed edge does not demand a field box");
-  assert.equal(program.facts.getFact(declaration, rustCapturedFieldStorageFactKey) === undefined, true);
+  assert.equal(program.records.capturedFieldStorage.get(declaration) === undefined, true);
   assert.equal(selected.references.length > 0, true);
   for (const reference of selected.references) assert.equal(captures.fixedSelfForReference(reference) === selected, true);
 });
@@ -148,7 +148,7 @@ for (const [name, source] of [
   for (const initializer of arrows) {
     assert.equal(program.objectRepresentations.receiverCaptures.fixedSelfFor(initializer) === undefined, true,
       "the bounded proof must not admit an open or different owner relation");
-    assert.equal(program.facts.getFact(initializer, rustClosureCaptureFactKey)?.recursiveField === undefined, true);
+    assert.equal(program.records.closureCapture.get(initializer)?.recursiveField === undefined, true);
   }
 });
 
@@ -171,7 +171,7 @@ test("removing one self edge preserves an independent callback's exact field-sto
   assert.equal(captures.capturesFor(retained.initializer).length, 1, "the other callback keeps its actual field owner");
   assert.equal(captures.capturesFor(retained.initializer)[0].declaration === selected.declaration, true);
   assert.equal(captures.isCaptured(selected.declaration), true, "physical demand is recomputed across all remaining environments");
-  assert.equal(program.facts.getFact(selected.declaration, rustCapturedFieldStorageFactKey) !== undefined, true);
+  assert.equal(program.records.capturedFieldStorage.get(selected.declaration) !== undefined, true);
   const { result } = compileRust({ files: { "index.ts": source } });
   assert.equal(result.diagnostics.length, 0, "the demanded deferred slot remains constructible");
   const emitted = rustSourceText(result);

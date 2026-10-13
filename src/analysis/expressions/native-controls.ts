@@ -8,7 +8,7 @@ import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustAsyncFunctionFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
+
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 
 interface RustNativeControl extends RustLanguageCall {
@@ -61,8 +61,8 @@ export function resolveRustNativeControl(
   } else {
     const declaration = walk.currentCallableDeclaration;
     const returnCarrier = declaration === undefined ? undefined :
-      walk.context.facts.get(declaration, rustAsyncFunctionFactKey)?.outputCarrier ??
-      walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier ??
+      walk.context.records.asyncFunction.get(declaration)?.outputCarrier ??
+      walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier ??
       resolveRustTargetTypeRef(Node_Type(walk.context.ast, declaration), resolution, walk.operationOptions);
     const operandCarrier = carriers[0];
     const operand = rustNamedTypeCarrierValue(operandCarrier);

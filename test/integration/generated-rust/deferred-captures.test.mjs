@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deferredCapturesSource } from "../../../../tsonic/test/fixtures/deferred-captures.mjs";
 import { analyzeRust, compileRust, artifactText } from "../../helpers/rust-session.mjs";
-import { rustBindingStorageFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("deferred storage is sealed once per exact lexical activation", () => {
@@ -22,7 +22,7 @@ test("deferred storage is sealed once per exact lexical activation", () => {
   assert.equal(program.captureStorage.deferredForScope(scope) === declarations, true);
   assert.equal(program.captureStorage.deferredForScope(file).length, 0);
   for (const declaration of declarations) {
-    const fact = program.facts.getFact(declaration, rustBindingStorageFactKey);
+    const fact = program.records.bindingStorage.get(declaration);
     assert.equal(fact?.storage, "location");
     assert.equal(fact?.initialization, "deferred");
   }

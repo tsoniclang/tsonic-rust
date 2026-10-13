@@ -1,5 +1,5 @@
 import type { RustProjectConstructorSignature } from "../../../../analysis/project-types/type-policy.js";
-import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
@@ -15,7 +15,7 @@ export function planRustImplicitConstructorParameters(
 ): RustCallableParameterPlan | undefined {
   const params: RustFunctionParam[] = [];
   for (const parameter of signature.parameters) {
-    const abi = context.input.program.facts.getFact(parameter.parameterDeclaration, rustSourceParameterAbiFactKey);
+    const abi = context.input.program.records.sourceParameterAbi.get(parameter.parameterDeclaration);
     const carrier = abi === undefined ? undefined : context.input.program.projectTypes.instantiateMemberCarrier(
       parameter.parameterDeclaration, receiver, abi.parameterCarrier);
     const type = rustTypeFromCarrierInContext(carrier, context);

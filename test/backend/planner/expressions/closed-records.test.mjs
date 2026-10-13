@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planRustClosedRecordLiteral } from "../../../../dist/backend/planner/expressions/closed-records.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 
@@ -19,13 +20,13 @@ export function run(first: unknown, second: unknown): unknown {
   };
   for (const sourceFile of program.sourceFiles) visit(sourceFile);
   assert.equal(literal !== undefined, true);
-  const fact = program.facts.getFact(literal, rustTargetOperationFactKey);
+  const fact = program.records.targetOperation.get(literal);
   assert.equal(fact?.kind, "closed-record-literal");
   assert.equal(fact.fields.length, 2);
   const first = fact.fields[0];
   const second = fact.fields[1];
   const integer = rustSourcePrimitiveTargetType("int32");
-  const makeContext = facts => ({ input: { program: { ...program, facts } }, diagnostics: [],
+  const makeContext = records => ({ input: { program: { ...program, records } }, diagnostics: [],
     sourceFile: ast.getSourceFile(literal),
   });
   for (const mutation of [
@@ -38,13 +39,14 @@ export function run(first: unknown, second: unknown): unknown {
     { ...fact, fields: [{ ...first, sourceName: "changed" }, second] },
     { ...fact, fields: [first, { ...second, sourceName: first.sourceName }] },
   ]) {
-    const context = makeContext(program.facts);
+    const context = makeContext(program.records);
     assert.equal(planRustClosedRecordLiteral(literal, mutation, context) === undefined, true);
     assert.equal(context.diagnostics.length !== 0, true);
   }
   for (const subject of [literal, first.expression]) {
-    const context = makeContext({ ...program.facts, getRuntimeCarrierFact: node => node === subject
-      ? { carrier: integer } : program.facts.getRuntimeCarrierFact(node) });
+    const context = makeContext(createRustRecordFixture({...program.records,
+runtimeCarrier: { get: (node) => node === subject
+    ? { carrier: integer } : program.records.runtimeCarrier.get(node) }}));
     assert.equal(planRustClosedRecordLiteral(literal, fact, context) === undefined, true);
     assert.equal(context.diagnostics.length !== 0, true);
   }

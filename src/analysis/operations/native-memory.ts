@@ -4,10 +4,11 @@ import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { readRustRawLocation, selectRustNativeMemoryLayout } from "../../policy/operations/pointers/native-memory.js";
-import { rustNativeBackingKey, rustNativeMemoryLayoutsEqual, rustRawLocationPlanKey, rustNativeArrayStorageKey } from "../../target-model/operations/native-memory.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
+import { rustNativeMemoryLayoutsEqual } from "../../target-model/operations/native-memory.js";
+
 import type { RustNativeObjectField } from "../../target-model/operations/native-memory.js";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
 import { rustSourceLocationTargetType, rustOptionTargetType, rustRawPointerTargetType, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -35,7 +36,7 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
   const expected = selected.operation.operation === "to-raw" ? location : raw;
   const inputCarrier = resolveExpressionCarrier(walk, selected.expression, file, expected);
   if (inputCarrier === undefined) return reject("The raw conversion operand has no exact native carrier.");
-  context.facts.set(expression, rustRawLocationPlanKey, Object.freeze({
+  context.records.rawLocationPlan.set(expression, Object.freeze({
     operation: selected.operation.operation, expression: selected.expression, inputCarrier, layout,
   }));
   return { handled: true as const, carrier: setCarrierFact(walk, expression,
@@ -61,13 +62,13 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
       continue;
     }
     if (origin.operation === "reinterpret") {
-      const restored = context.facts.get(origin.call, rustRawLocationPlanKey);
+      const restored = context.records.rawLocationPlan.get(origin.call);
       if (restored === undefined || !rustNativeMemoryLayoutsEqual(layout, restored.layout)) {
         reject(origin.call, "The reinterpreted location does not prove the demanded physical layout.");
       }
       continue;
     }
-    const operation = context.facts.get(origin.call, rustTargetOperationFactKey);
+    const operation = context.records.targetOperation.get(origin.call);
     if (operation?.kind !== "typed-location" || !rustTargetTypeRefEquals(operation.pointeeCarrier, layout.pointeeCarrier)) {
       reject(origin.call, "The physical origin and layout have different exact Rust value types.");
       continue;
@@ -84,28 +85,27 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
           ...component.elements.map(element => [element.expression, "element"] as [Node, "element"]),
         ];
         const valid = component.declarations.every(node => {
-          const carrier = context.facts.get(node, rustRuntimeCarrierKey)?.carrier;
+          const carrier = context.records.runtimeCarrier.get(node)?.carrier;
           return carrier?.kind === "array" && rustTargetTypeRefEquals(carrier.element, layout.pointeeCarrier);
         }) && component.literals.every(node => {
-          const value = context.facts.get(node, rustTargetOperationFactKey);
+          const value = context.records.targetOperation.get(node);
           return value?.kind === "array-literal" && value.lane === "native";
         }) && component.elements.every(element => {
-          const value = context.facts.get(element.expression, rustTargetOperationFactKey);
-          const receiver = context.facts.get(element.receiver.expression, rustRuntimeCarrierKey)?.carrier;
+          const value = context.records.targetOperation.get(element.expression);
+          const receiver = context.records.runtimeCarrier.get(element.receiver.expression)?.carrier;
           return receiver?.kind === "array" && rustTargetTypeRefEquals(receiver.element, layout.pointeeCarrier) &&
             value?.kind === "provider-operation" && value.abi.target.form === "index" && value.abi.targetArguments.length === 1;
         }) && subjects.every(([node]) => {
-          const previous = context.facts.get(node, rustNativeArrayStorageKey);
+          const previous = context.records.nativeArrayStorage.get(node);
           return previous === undefined || previous.stride === descriptor.stride && rustNativeMemoryLayoutsEqual(previous.layout, layout);
         });
         if (!valid) { reject(origin.call, "Native array aliases require one exact element carrier, stride and layout."); continue; }
-        for (const [node, kind] of subjects) context.facts.set(node, rustNativeArrayStorageKey,
-          Object.freeze(kind === "element"
+        for (const [node, kind] of subjects) context.records.nativeArrayStorage.set(node, Object.freeze(kind === "element"
             ? { kind, declaration: component.declarations[0]!, layout, stride: descriptor.stride }
             : { kind, layout, stride: descriptor.stride }));
         continue;
       }
-      const field = context.facts.get(origin.storageExpression, rustTargetOperationFactKey);
+      const field = context.records.targetOperation.get(origin.storageExpression);
       if (field?.kind === "source-field" && field.storage === "structural-object") {
         const shape = rustStructuralObjectCarrierValue(field.receiverCarrier);
         const member = shape?.fields[field.storageIndex];
@@ -133,7 +133,7 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
       }
       if (context.ast.is.IsParameterDeclaration(declaration)) {
         const owner = context.ast.parent(declaration);
-        const abi = context.facts.get(declaration, rustSourceParameterAbiFactKey);
+        const abi = context.records.sourceParameterAbi.get(declaration);
         if (owner === undefined || (!context.ast.is.IsFunctionDeclaration(owner) && !context.ast.is.IsMethodDeclaration(owner)) ||
           context.ast.body(owner) === undefined || abi?.mode !== "value" ||
           !rustTargetTypeRefEquals(abi.valueCarrier, layout.pointeeCarrier)) {
@@ -153,10 +153,10 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
       }
       subject = declaration;
     }
-    const previous = context.facts.get(subject, rustNativeBackingKey);
+    const previous = context.records.nativeBacking.get(subject);
     if (previous !== undefined && !rustNativeMemoryLayoutsEqual(previous, layout)) {
       reject(origin.call, "One exact storage declaration has incompatible native layout requirements.");
-    } else context.facts.set(subject, rustNativeBackingKey, layout);
+    } else context.records.nativeBacking.set(subject, layout);
   }
   return Object.freeze(fields);
 }

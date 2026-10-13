@@ -4,8 +4,8 @@ import { rustAwaitSelection, rustAwaitSelectionLeaves, rustAwaitSelectionResultC
 import { rustAbsenceTargetType, rustFutureTargetType, rustJsPromiseTargetType,
   rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType,
   rustSourceUnionTargetType, rustUnitTargetType, rustJsPromiseTargetTypeWithLifetime } from "../../dist/target-model/types/index.js";
-import { finalizeRustAwaitValueFact, rustAwaitValueMatchesCarrier, rustAwaitValueRequirements } from "../../dist/analysis/facts/await-values.js";
-import { rustFutureValueForSourceStorage, rustFutureValuesForSourceStorage } from "../../dist/analysis/facts/future-values.js";
+import { finalizeRustAwaitValueFact, rustAwaitValueMatchesCarrier, rustAwaitValueRequirements } from "../../dist/analysis/callables/await-values.js";
+import { rustFutureValueForSourceStorage, rustFutureValuesForSourceStorage } from "../../dist/analysis/callables/future-values.js";
 import { selectRustSourceValueConversion } from "../../dist/policy/conversions/selection.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 

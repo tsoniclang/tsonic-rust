@@ -1,21 +1,19 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
-import type { RustCallableValueAdapter } from "../facts/callable-adapters.js";
-import { rustObjectLiteralMethodAdapterFactKey } from "../facts/object-methods.js";
-import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
+import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+
 import { createRustGenericCallablePlan, type RustGenericCallablePlan } from "./generic-values.js";
 import { createRustSuspendedCallablePlan, type RustSuspendedCallablePlan } from "./suspended-values.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { rustCallableAdapterValues } from "./adapter-values.js";
-import { rustTargetOperationFactKey, rustBindingProjectionFactKey, rustSourceCallableReturnFactKey } from "../facts/keys.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
+
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -34,7 +32,7 @@ import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatch
 import { createRustGenericCallableIdentityPlan, type RustGenericCallableIdentityPlan } from "./generic-identities.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPlan } from "./native-dispatch.js";
-import type { RustStructuralStorageLookup } from "../facts/target-operation.js";
+import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 
@@ -58,7 +56,7 @@ export interface RustCallableValuePlanInput {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourcePackages: TargetSourcePackageGraph;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
   readonly lifetimes: RustLifetimeIndex;
@@ -150,7 +148,7 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
       input.names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
     }
-    const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = input.records.targetOperation.get(node);
     if (operation?.kind === "record-literal") {
       const targets = new Map(operation.fields.map(field => [field.storageIndex, field.carrier]));
       for (const contribution of operation.contributions) {
@@ -160,29 +158,29 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
           targets.get(field.targetStorageIndex));
       }
     }
-    const view = input.facts.getFact(node, rustObjectReferenceViewKey);
+    const view = input.records.objectReferenceView.get(node);
     if (view?.kind === "structural") {
       const target = rustStructuralObjectCarrierValue(view.targetCarrier);
       for (const field of view.fields) recordField(node, field.source.resultCarrier,
         target?.fields[field.destinationIndex]?.type);
     }
-    const binding = input.facts.getFact(node, rustBindingProjectionFactKey);
+    const binding = input.records.bindingProjection.get(node);
     if (binding?.projection.kind === "object-rest") {
       const source = rustStructuralObjectCarrierValue(binding.sourceCarrier);
       const target = rustStructuralObjectCarrierValue(binding.bindingCarrier);
       for (const field of binding.projection.fields) recordField(node,
         source?.fields[field.sourceStorageIndex]?.type, target?.fields[field.targetStorageIndex]?.type);
     }
-    for (const dispatch of input.facts.getFact(node, rustObjectLiteralMethodAdapterFactKey)?.dispatches ?? []) {
+    for (const dispatch of input.records.objectLiteralMethodAdapter.get(node)?.dispatches ?? []) {
       for (const adapter of rustCallableAdapterValues(dispatch)) record(node, adapter);
     }
-    for (const dispatch of input.facts.getFact(node, rustProjectCallableAdaptersKey) ?? []) {
+    for (const dispatch of input.records.projectCallableAdapters.get(node) ?? []) {
       for (const adapter of rustCallableAdapterValues(dispatch)) record(node, adapter);
     }
     input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
-  const generic = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.navigation, flows, input.closedSourceFiles);
+  const generic = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.navigation, flows, input.closedSourceFiles);
   for (const definition of generic.definitions) {
     usedNames.add(definition.targetName);
     for (const implementation of definition.implementations) {
@@ -190,18 +188,18 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
       usedNames.add(implementation.stateName);
     }
   }
-  const native = createRustNativeCallableInputPlan({ ast: input.ast, facts: input.facts, sourcePackages: input.sourcePackages,
+  const native = createRustNativeCallableInputPlan({ ast: input.ast, records: input.records, sourcePackages: input.sourcePackages,
     storage: input.sourceStorage, definitions: input.typeDefinitions, usedNames });
-  const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, facts: input.facts,
+  const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
     nodes: input.sourceStorage.nodes, native, definitions: input.typeDefinitions,
     returnCarrierFor: declaration => {
       const selected = nativeStorage.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, facts: input.facts,
+  const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
-  const nativeCaptures = createRustNativeCapturePlan({ facts: input.facts, storage: input.sourceStorage, nativeStorage });
+  const nativeCaptures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage, nativeStorage });
   generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorage.boundSubjectFor(subject, carrier, bindings) });
   const genericCarriers = new Map<TargetTypeRef, boolean>();
@@ -215,16 +213,16 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
     return selected;
   };
   for (const node of input.sourceStorage.nodes) {
-    if (containsGeneric(input.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier)) nativeStorage.returnFor(node);
-    if (containsGeneric(input.facts.getFact(node, rustRuntimeCarrierKey)?.carrier)) nativeStorage.valueFor(node);
+    if (containsGeneric(input.records.sourceCallableReturn.get(node)?.returnCarrier)) nativeStorage.returnFor(node);
+    if (containsGeneric(input.records.runtimeCarrier.get(node)?.carrier)) nativeStorage.valueFor(node);
   }
-  const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.facts, input.names, input.lifetimes, nativeCaptures);
+  const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.lifetimes, nativeCaptures);
   for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
   const frames = createRustFrameCallablePlan({ ...input, usedNames });
   const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
-    facts: input.facts, generic, native, nativeStorage, definitions: input.typeDefinitions });
+    records: input.records, generic, native, nativeStorage, definitions: input.typeDefinitions });
   const genericIdentities = createRustGenericCallableIdentityPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
-    facts: input.facts, nativeStorage, physical: generic.physical });
+    records: input.records, nativeStorage, physical: generic.physical });
   const genericDispatch = createRustGenericCallableDispatchPlan({ ...input,
     nodes: input.sourceStorage.nodes, generic, nativeStorage, nativeGenericProducers });
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });

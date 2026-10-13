@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import { rustBindingStorageFactKey } from "../../../../analysis/facts/keys.js";
-import { rustRetainedCallableStorage } from "../../../../analysis/facts/callable-results.js";
+
+import { rustRetainedCallableStorage } from "../../../../analysis/callables/results.js";
 import type { RustLexicalFunctionCapture, RustLexicalFunctionSelection } from "../../../../analysis/callables/lexical-functions.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
@@ -25,12 +25,12 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
   const parameters: { name: string; type: RustType }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];
   for (const capture of selection.captures) {
-    const carrier = context.input.program.facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
-      context.input.program.facts.getRuntimeCarrierFact(capture.reference)?.carrier;
+    const carrier = context.input.program.records.runtimeCarrier.get(capture.declaration)?.carrier ??
+      context.input.program.records.runtimeCarrier.get(capture.reference)?.carrier;
     const physical = context.input.program.callableValues.nativeStorage.valueFor(capture.reference);
     const physicalCarrier = physical.kind === "unresolved" ? undefined : physical.carrier;
     const valueType = physicalCarrier === undefined ? undefined : rustTypeFromCarrierInContext(physicalCarrier, context);
-    const storage = context.input.program.facts.getFact(capture.declaration, rustBindingStorageFactKey);
+    const storage = context.input.program.records.bindingStorage.get(capture.declaration);
     if (valueType === undefined || carrier === undefined) return undefined;
     const physicalType: RustType = storage?.storage === "location"
       ? { kind: "named", path: "rt::Location", genericArguments: [{ kind: "type", type: valueType }] }
@@ -61,10 +61,10 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
   const arguments_: RustExpr[] = [];
   for (const capture of selection.captures) {
     const captured = [...(context.capturedBindings ?? [])].reverse().find(value => value.declaration === capture.declaration);
-    const storage = context.input.program.facts.getFact(capture.declaration, rustBindingStorageFactKey);
+    const storage = context.input.program.records.bindingStorage.get(capture.declaration);
     const mutable = storage === undefined && capture.mutable;
-    const carrier = context.input.program.facts.getRuntimeCarrierFact(capture.declaration)?.carrier ??
-      context.input.program.facts.getRuntimeCarrierFact(capture.reference)?.carrier;
+    const carrier = context.input.program.records.runtimeCarrier.get(capture.declaration)?.carrier ??
+      context.input.program.records.runtimeCarrier.get(capture.reference)?.carrier;
     if (carrier === undefined) return undefined;
     const owned = lexicalCaptureIsOwned(declaration, selection, capture, carrier, storage === undefined, context);
     if (owned) {
@@ -110,7 +110,7 @@ function lexicalCaptureIsOwned(
   plainStorage: boolean,
   context: RustPlanContext,
 ): boolean {
-  return rustRetainedCallableStorage(context.input.program.facts, declaration) !== undefined ||
+  return rustRetainedCallableStorage(context.input.program.records, declaration) !== undefined ||
     plainStorage && !capture.mutable && (rustCarrierHasCopyContract(carrier, context) ||
       !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
 }

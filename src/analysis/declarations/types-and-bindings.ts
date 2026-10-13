@@ -13,15 +13,9 @@ import {
   sourceTypeSyntaxRoot,
   sourceBindingCapturedBeforeInitialization,
 } from "@tsonic/target-api/source";
-import {
-  rustMutatedBindingFactKey,
-  rustMutatedReferentFactKey,
-  rustSourceParameterAbiFactKey,
-  rustTargetOperationFactKey,
-  rustTypeAliasDeclarationFactKey,
-} from "../facts/keys.js";
+
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { rustCompoundWriteFactKey } from "../facts/operations/keys.js";
+
 import { flowStateFactKey } from "@tsonic/tsts";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustBindingPatternFacts } from "../control-flow/binding-patterns.js";
@@ -41,13 +35,12 @@ import { rustSourceUnionMemberDeclarationIsOwned } from "../../policy/identities
 import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-unions.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) return undefined;
-  const existing = walk.context.facts.get(typeNode, rustRuntimeCarrierKey) ??
-    walk.context.facts.resolve(typeNode, rustRuntimeCarrierKey);
+  const existing = walk.context.records.runtimeCarrier.get(typeNode);
   if (existing !== undefined) return existing.carrier;
   const carrier = resolveRustTargetTypeRef(typeNode, rustResolutionContext(walk, typeNode), walk.operationOptions);
   return carrier === undefined ? undefined : setCarrierFact(walk, typeNode, carrier);
@@ -67,8 +60,7 @@ export function resolveRustDeclaredBindingStorage(
   const context = rustResolutionContext(walk, declaration);
   const authored = Node_Type(walk.context.ast, declaration);
   const finalized = authored === undefined
-    ? walk.context.facts.get(declaration, rustRuntimeCarrierKey) ??
-      walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)
+    ? walk.context.records.runtimeCarrier.get(declaration)
     : undefined;
   if (finalized !== undefined) return finalized.carrier;
   const selected = authored === undefined && sourceBindingCapturedBeforeInitialization(
@@ -113,7 +105,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       return;
     }
     setCarrierFact(walk, declaration, carrier);
-    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
+    walk.context.records.typeAliasDeclaration.set(declaration, {
       kind: "string-literal",
       variants,
     }, [{ message: "rust string-literal union declaration" }]);
@@ -158,9 +150,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
         const family = walk.context.typeFamilies.get(selectedFamily.trait.id);
         if (family?.kind !== "conditional") return;
         setCarrierFact(walk, declaration, carrier);
-        walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey,
-          { kind: family.declaration === declaration ? "family" : "erased" },
-          [{ message: "Rust checked conditional type family declaration ownership" }]);
+        walk.context.records.typeAliasDeclaration.set(declaration, { kind: family.declaration === declaration ? "family" : "erased" }, [{ message: "Rust checked conditional type family declaration ownership" }]);
       }
       return;
     }
@@ -180,7 +170,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     if (typeNode !== undefined) {
       setCarrierFact(walk, typeNode, carrier);
     }
-    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
+    walk.context.records.typeAliasDeclaration.set(declaration, {
       ...(lifetimeBearingAlias
         ? { kind: "native-alias" as const, target: carrier }
         : { kind: "erased" as const }),
@@ -203,7 +193,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       return;
     }
     setCarrierFact(walk, declaration, carrier);
-    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
+    walk.context.records.typeAliasDeclaration.set(declaration, {
       ...(lifetimeBearingAlias
         ? { kind: "native-alias" as const, target: carrier }
         : { kind: "erased" as const }),
@@ -243,7 +233,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
       return;
     }
     setCarrierFact(walk, declaration, carrier);
-    walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
+    walk.context.records.typeAliasDeclaration.set(declaration, {
       kind: "erased",
     }, [{ message: "rust representation-identical union declaration" }]);
     return;
@@ -298,7 +288,7 @@ export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
     return;
   }
   setCarrierFact(walk, declaration, reservedCarrier ?? carrier);
-  walk.context.facts.set(declaration, rustTypeAliasDeclarationFactKey, {
+  walk.context.records.typeAliasDeclaration.set(declaration, {
     kind: "runtime",
     variants: finalizedVariants.map((variant) => ({
       name: variant.name,
@@ -358,7 +348,7 @@ export function recordBindingPatternFacts(
 ): boolean {
   return recordRustBindingPatternFacts(pattern, sourceCarrier, {
     ast: walk.context.ast,
-    facts: walk.context.facts,
+    records: walk.context.records,
     navigation: walk.context.source.navigation,
     semanticsFor: walk.context.semanticsFor,
     sourceTypes: walk.sourceTypes,
@@ -398,7 +388,7 @@ export function setParameterAbiFact(
   parameter: Node,
   abi: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi,
 ): void {
-  walk.context.facts.set(parameter, rustSourceParameterAbiFactKey, {
+  walk.context.records.sourceParameterAbi.set(parameter, {
     form: abi.form,
     valueCarrier: abi.valueCarrier,
     parameterCarrier: abi.parameterCarrier,
@@ -411,13 +401,13 @@ export function setParameterAbiFact(
 }
 
 export function recordCallableDefaultParameterFacts(walk: RustFactWalk, declaration: Node): boolean {
-  const { ast, facts } = walk.context;
+  const { ast, records } = walk.context;
   const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration),
     "Default parameter analysis requires exact callable parameter nodes.");
   if (parameters === undefined) return false;
   for (const parameter of parameters) {
     if (Node_Initializer(ast, parameter) === undefined) continue;
-    const abi = facts.get(parameter, rustSourceParameterAbiFactKey);
+    const abi = records.sourceParameterAbi.get(parameter);
     if (abi === undefined) {
       appendRustDiagnostic(walk, "RUST_DEFAULT_PARAMETER_ABI_MISSING",
         "A default parameter body requires its exact finalized signature ABI.", parameter,
@@ -471,7 +461,7 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
     return;
   }
   if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
-    const operation = walk.context.facts.get(target, rustTargetOperationFactKey);
+    const operation = walk.context.records.targetOperation.get(target);
     if (operation?.kind === "source-indexed-field" ||
       operation?.kind === "source-index-signature" && operation.storage.kind === "record") return;
     const receiver = Node_Expression(walk.context.ast, target);
@@ -483,7 +473,7 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
     return;
   }
   if (kind === KindCallExpression) {
-    const fact = walk.context.facts.get(target, rustTargetOperationFactKey);
+    const fact = walk.context.records.targetOperation.get(target);
     if (fact !== undefined && fact.kind === "flow-marker") {
       recordBindingWrite(walk, ast.arguments(target)[0], "referent");
     }
@@ -494,8 +484,8 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
   }
   const declaration = walk.context.source.navigation.sourceReferenceFor(target)?.declaration;
   if (declaration !== undefined) {
-    const key = writeKind === "binding" ? rustMutatedBindingFactKey : rustMutatedReferentFactKey;
-    walk.context.facts.set(declaration, key, { mutated: true }, [
+    const family = writeKind === "binding" ? walk.context.records.mutatedBinding : walk.context.records.mutatedReferent;
+    family.set(declaration, { mutated: true }, [
       { message: `rust ${writeKind} write` },
     ]);
   }
@@ -507,8 +497,8 @@ export function recordAssignmentWrite(
   target: Node | undefined,
 ): void {
   const targetKind = target === undefined ? "" : walk.context.ast.kindName(target);
-  const operation = walk.context.facts.get(expression, rustCompoundWriteFactKey) ??
-    walk.context.facts.get(expression, rustTargetOperationFactKey);
+  const operation = walk.context.records.compoundWrite.get(expression) ??
+    walk.context.records.targetOperation.get(expression);
   if ((targetKind === KindPropertyAccessExpression || targetKind === KindElementAccessExpression) &&
     operation?.kind === "runtime-set" && operation.abi.targetReceiver.kind === "input" &&
     operation.abi.targetReceiver.input.mode === "ref") {
@@ -537,8 +527,7 @@ export function tryFlowMarkerCall(
   sourceFile: SourceFile,
   expected: TargetTypeRef | undefined,
 ): FlowMarkerResolution | undefined {
-  const facts = walk.context.facts;
-  const flow = facts.get(expression, flowStateFactKey);
+  const flow = walk.context.source.sourceFacts.getFact(expression, flowStateFactKey);
   if (flow === undefined) {
     return undefined;
   }
@@ -565,9 +554,8 @@ export function validateFlowMarkerAgainstMode(
   argument: Node,
   mode: "value" | "ref" | "mut-ref",
 ): void {
-  const flow = walk.context.facts.resolve(argument, flowStateFactKey) ??
-    walk.context.facts.get(argument, flowStateFactKey);
-  const rustFact = walk.context.facts.get(argument, rustTargetOperationFactKey);
+  const flow = walk.context.source.sourceFacts.getFact(argument, flowStateFactKey);
+  const rustFact = walk.context.records.targetOperation.get(argument);
   const markerState = rustFact !== undefined && rustFact.kind === "flow-marker" ? rustFact.state : flow?.state;
   if (markerState === undefined) {
     return;

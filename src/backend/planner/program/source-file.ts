@@ -1,14 +1,13 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import { rustPackageFallibleBoundary } from "./fallible-boundaries.js";
-import { rustModuleCallableStorageFactKey } from "../../../analysis/callables/module-values.js";
+
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustNativeCallableProtocolItems } from "../declarations/callables/native-protocols.js";
 import { planRustClassEnvironmentItems } from "../objects/class-environments.js";
 import { planRustClassValueImplementations } from "../objects/constructor-values.js";
 import { planRustProjectStructuralImplementations } from "../objects/project-structural-views.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { rustCompileTimeSourceKey } from "../../../target-model/facts/source-declarations.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
+
 import {
   KindFunctionDeclaration,
   KindImportDeclaration,
@@ -17,10 +16,7 @@ import {
   KindVariableStatement,
   Node_Initializer,
 } from "@tsonic/target-api/source";
-import {
-  rustFallibleFactKey,
-  rustModuleBindingFactKey,
-} from "../../../analysis/facts/keys.js";
+
 import {
   rustCarrierSupportsClone,
   isRustStringCarrier,
@@ -121,7 +117,7 @@ export function planRustSourceFile(
   publicImplementationModuleNames: ReadonlySet<string>,
   publicImplementationItemIdentities: ReadonlySet<string>,
   publishesImplementationAbi: boolean,
-  errorDomain: import("../../target-ast/syntax/nodes.js").RustErrorDomain,
+  errorDomain: import("../../../target-model/operations/error-boundary.js").RustErrorDomain,
   sourcePackageErrors: RustSourcePackageErrorPlan,
   input: RustPlanningContext,
   diagnostics: TargetDiagnostic[],
@@ -258,10 +254,7 @@ function planModuleItems(
   const asynchronous = context.input.program.sourceNavigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );
-  const fallible = context.input.program.facts.getFact(
-    context.sourceFile,
-    rustFallibleFactKey,
-  ) !== undefined;
+  const fallible = context.input.program.records.fallible.get(context.sourceFile) !== undefined;
   const errorBoundary = fallible ? rustCurrentErrorBoundary(context) : undefined;
   if (fallible && errorBoundary === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -307,8 +300,8 @@ function planModuleItems(
       const plannedFunctions = planFunctionDeclarations(statement, context);
       if (plannedFunctions !== undefined) {
         items.push(...plannedFunctions);
-        const binding = context.input.program.facts.getFact(statement, rustModuleBindingFactKey);
-        const storage = context.input.program.facts.getFact(statement, rustModuleCallableStorageFactKey);
+        const binding = context.input.program.records.moduleBinding.get(statement);
+        const storage = context.input.program.records.moduleCallableStorage.get(statement);
         if (binding?.storage === "native-callable" && binding.value !== undefined && storage === undefined) {
           context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, statement),
             "rust.backend.module-callable-storage", "Module callable values require their finalized native storage selection."));
@@ -356,7 +349,7 @@ function planModuleItems(
       continue;
     }
     if (kind === KindVariableStatement) {
-      if (context.input.program.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
+      if (context.input.program.records.typeOnlyDeclaration.get(statement) !== undefined) continue;
       const diagnosticCount = context.diagnostics.length;
       const planned = planTopLevelVariableStatement(
         statement,
@@ -419,7 +412,7 @@ function planModuleItems(
       continue;
     }
     if (kind === "KindInterfaceDeclaration") {
-      if (context.input.program.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
+      if (context.input.program.records.typeOnlyDeclaration.get(statement) !== undefined) continue;
       const diagnosticCount = context.diagnostics.length;
       const definition = context.input.program.projectTypes.definitionForDeclaration(statement);
       const planned = definition !== undefined && context.input.program.projectTypes.isPolymorphic(definition)
@@ -560,7 +553,7 @@ function planDefaultExportAssignment(
 ): PlannedRustModuleCell | undefined {
   const { ast } = context.input.program.source;
   const assignment = ast.as.AsExportAssignment(declaration);
-  const binding = context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
+  const binding = context.input.program.records.moduleBinding.get(declaration);
   const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
   if (assignment === undefined || assignment.IsExportEquals === true ||
     assignment.Expression === undefined || binding?.storage !== "module-cell" ||
@@ -624,10 +617,10 @@ function planTopLevelVariableStatement(
   const items: RustItem[] = [];
   const initialization: import("../../target-ast/syntax/nodes.js").RustStmt[] = [];
   for (const declaration of declarations) {
-    if (context.input.program.facts.getFact(declaration, rustCompileTimeSourceKey)) continue;
+    if (context.input.program.records.compileTimeSource.get(declaration)) continue;
     const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
     const initializer = Node_Initializer(ast, declaration);
-    const binding = context.input.program.facts.getFact(declaration, rustModuleBindingFactKey);
+    const binding = context.input.program.records.moduleBinding.get(declaration);
     if (binding === undefined || !isValidRustIdentifier(name) ||
       initializer === undefined && (binding.storage !== "module-cell" || binding.initialization !== "declaration") ||
       initializer !== undefined && binding.storage === "module-cell" && binding.initialization !== "value") {
@@ -654,7 +647,7 @@ function planTopLevelVariableStatement(
         return undefined;
       }
       items.push(item);
-      const storage = context.input.program.facts.getFact(declaration, rustModuleCallableStorageFactKey);
+      const storage = context.input.program.records.moduleCallableStorage.get(declaration);
       if (binding.value !== undefined && storage === undefined) {
         context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
           "rust.backend.module-callable-storage", "Module callable values require their finalized native storage selection."));

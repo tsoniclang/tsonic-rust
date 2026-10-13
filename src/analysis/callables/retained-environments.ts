@@ -2,8 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
-import { rustSourceParameterAbiFactKey, rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustHasOpenOwnedStorage, rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
 import { rustEnclosingStorageContract, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
@@ -16,7 +15,7 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 export function rustRetainedCallLifetimes(
   walk: RustFactWalk, invocation: Node, declaration: Node, parameters: readonly TargetTypeRef[], result: TargetTypeRef,
 ): ReadonlyMap<string, RustLifetimeRef> | undefined {
-  const { ast, facts, sourceStorage: storage } = walk.context;
+  const { ast, records, sourceStorage: storage } = walk.context;
   const references = rustTargetGenericReferences({ kind: "tuple", elements: [...parameters, result] });
   if (references.lifetimes.length === 0) return new Map();
   const selected = rustRetainedEnvironment(declaration, parameters, walk.context);
@@ -32,29 +31,29 @@ export function rustRetainedCallLifetimes(
   if (activation.kind !== "resolved") return undefined;
   const callerEnvironment = caller === undefined ? { kind: "none" as const }
     : rustRetainedEnvironment(caller, ast.parameters(caller).map(parameter =>
-      facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier), walk.context);
+      records.sourceParameterAbi.get(parameter)?.parameterCarrier), walk.context);
   if (callerEnvironment.kind === "unresolved") return undefined;
-  const knownCaller = caller === undefined ? undefined : facts.get(caller, rustRetainedEnvironmentFactKey);
+  const knownCaller = caller === undefined ? undefined : records.retainedEnvironment.get(caller);
   const retainedCaller = knownCaller ?? (callerEnvironment.kind === "selected" ? callerEnvironment.environment : undefined);
   const carriers: TargetTypeRef[] = [];
   const projected = new Map<SourceStorageSubject, TargetTypeRef | undefined>();
   const carrierFor = (subject: SourceStorageSubject): TargetTypeRef | undefined => {
     if (subject.kind === "value" && subject.projection.length === 0 &&
-      facts.get(subject.node, rustTargetOperationFactKey)?.kind === "closure") {
-      const captures = facts.get(subject.node, rustClosureCaptureFactKey);
+      records.targetOperation.get(subject.node)?.kind === "closure") {
+      const captures = records.closureCapture.get(subject.node);
       if (captures === undefined) return undefined;
       const carriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier);
       const lifetime = rustRetainedValueLifetime(subject.node, carriers, walk);
       return lifetime === undefined ? undefined : reference(lifetime);
     }
     const root = subject.kind === "input"
-      ? facts.get(subject.node, rustSourceParameterAbiFactKey)?.parameterCarrier
-      : facts.getRuntimeCarrierFact(subject.node)?.carrier;
+      ? records.sourceParameterAbi.get(subject.node)?.parameterCarrier
+      : records.runtimeCarrier.get(subject.node)?.carrier;
     if (subject.projection.length === 0) return root;
     if (projected.has(subject)) return projected.get(subject);
     const carrier = rustSourceStorageProjectedCarrier({ sourceStorage: storage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: walk.context.semantics,
-      types: { resolveNode: node => facts.getRuntimeCarrierFact(node)?.carrier },
+      types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
     }, subject, root);
     projected.set(subject, carrier);
     return carrier;
@@ -90,7 +89,7 @@ export function rustRetainedCallLifetimes(
   }
   const contract = rustEnclosingStorageContract(invocation, ast, walk.context.sourceLifetimes);
   const retainedLifetimes = new Set((retainedCaller?.parameters ?? []).flatMap(parameter => {
-    const carrier = facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier;
+    const carrier = records.sourceParameterAbi.get(parameter)?.parameterCarrier;
     return carrier === undefined || rustHasOpenOwnedStorage(carrier) ? [] : rustTargetGenericReferences(carrier).lifetimeIdentities;
   }));
   const effective = retainedCaller === undefined ? contract : { ...contract, parameters: [
@@ -121,7 +120,7 @@ export function rustRetainedValueLifetime(
     rustEnclosingStorageContract(declaration, context.ast, context.sourceLifetimes));
   const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);
   const selected = owner === undefined ? { kind: "none" as const } : rustRetainedEnvironment(owner,
-    context.ast.parameters(owner).map(parameter => context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier), context);
+    context.ast.parameters(owner).map(parameter => context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), context);
   if (selected.kind === "unresolved") return undefined;
   if (selected.kind === "selected") return selected.environment.lifetime;
   const identity = sourceNodeIdentity(context.ast, declaration);

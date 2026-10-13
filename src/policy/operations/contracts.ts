@@ -1,17 +1,6 @@
-import type {
-  ExtensionFactSubject,
-  Node,
-  ProviderDeclarationIdentity,
-  ResolvedSourceIterationInfo,
-  SourceFile,
-  Symbol,
-  Type,
-  TypeIndexInfo,
-} from "@tsonic/tsts";
+import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity, ResolvedSourceIterationInfo, Symbol, Type, TypeIndexInfo } from "@tsonic/tsts";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustSourcePolicyContext } from "../model/context.js";
-import type { RustPlanWriter } from "../../target-model/facts/selections.js";
 import type {
   RustSelectedTargetOperation,
   RustSelectedTargetSignature,
@@ -31,13 +20,6 @@ type ResolvedSourceCallInfo = NonNullable<
 type ResolvedSourcePropertyAccessInfo = NonNullable<
   ReturnType<SourceFileSemantics["operations"]["propertyAccess"]>
 >;
-
-export interface RustOperationPolicyContext extends RustSourcePolicyContext {
-  readonly facts: RustPlanWriter;
-  readonly currentSourceFile: SourceFile;
-  readonly currentSemantics: SourceFileSemantics;
-  readonly extensionId: "tsonic.rust.policy";
-}
 
 export type RustPolicySelection<T> =
   | { readonly kind: "accept"; readonly value: T; readonly evidence?: readonly RustPolicyEvidence[] }

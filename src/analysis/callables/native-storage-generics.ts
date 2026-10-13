@@ -1,23 +1,23 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { rustTargetGenericArgumentEquals, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustLifetimeKey, rustLifetimesEqual } from "../../target-model/lifetimes/index.js";
-import { rustTargetOperationFactKey, rustSourceParameterAbiFactKey, rustSourceCallableReturnFactKey,
-  rustAsyncFunctionFactKey, rustClosureCaptureFactKey } from "../facts/keys.js";
-import { rustRetainedCallSubstitutions, rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
-import { rustCallableInputLifetimeParameters } from "../facts/source-input-lifetimes.js";
+
+import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
+
+import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 
 interface RustNativeStorageGenericInput {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly genericInvocationBindingsFor: (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
     arguments_: readonly RustTargetGenericArgument[]) => RustNativeStorageGenericSelection | undefined;
 }
@@ -46,23 +46,23 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
   const unresolved = (reason: string): RustNativeStorageGenericSelection => Object.freeze({ kind: "unresolved", reason });
   const lexicalOwners = new Map<Node, Node | null>();
   const ownBindings = (declaration: Node): boolean => input.ast.typeParameters(declaration).length !== 0 ||
-    input.facts.getFact(declaration, rustRetainedEnvironmentFactKey) !== undefined ||
-    rustCallableInputLifetimeParameters(declaration, input.ast, input.facts).length !== 0;
+    input.records.retainedEnvironment.get(declaration) !== undefined ||
+    rustCallableInputLifetimeParameters(declaration, input.ast, input.records).length !== 0;
   const lexicalOwnerFor = (declaration: Node, depth: number): Node | null | undefined => {
     const previous = lexicalOwners.get(declaration);
     if (previous !== undefined) return previous;
-    const captures = input.facts.getFact(declaration, rustClosureCaptureFactKey);
-    const carriers = [input.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier,
-      input.facts.getFact(declaration, rustAsyncFunctionFactKey)?.futureCarrier,
-      ...input.ast.parameters(declaration).map(parameter => input.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier),
+    const captures = input.records.closureCapture.get(declaration);
+    const carriers = [input.records.sourceCallableReturn.get(declaration)?.returnCarrier,
+      input.records.asyncFunction.get(declaration)?.futureCarrier,
+      ...input.ast.parameters(declaration).map(parameter => input.records.sourceParameterAbi.get(parameter)?.parameterCarrier),
       ...[...captures?.captures ?? [], ...captures?.receiverFields ?? [], ...captures?.receivers ?? []].map(capture => capture.carrier),
     ].filter((carrier): carrier is TargetTypeRef => carrier !== undefined);
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
     for (let owner = sourceEnclosingCallable(input.ast.parent(declaration), input.ast); owner !== undefined;
       owner = sourceEnclosingCallable(input.ast.parent(owner), input.ast)) {
       if (!input.step(depth++)) return undefined;
-      const environment = input.facts.getFact(owner, rustRetainedEnvironmentFactKey);
-      const lifetimes = [...rustCallableInputLifetimeParameters(owner, input.ast, input.facts)
+      const environment = input.records.retainedEnvironment.get(owner);
+      const lifetimes = [...rustCallableInputLifetimeParameters(owner, input.ast, input.records)
         .flatMap(parameter => parameter.kind === "lifetime" ? [parameter.lifetime] : []),
         ...environment === undefined ? [] : [environment.lifetime]];
       if (input.ast.typeParameters(owner).some(parameter => references.typeIdentities.includes(sourceNodeIdentity(input.ast, parameter)!)) ||
@@ -103,8 +103,8 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
       if (lexical.kind === "unresolved") return finish(lexical);
       let actual = lexical.bindings;
       if (activation.kind === "invocation") {
-        const signature = input.facts.getSelectedTargetCall(activation.invocation);
-        const operation = input.facts.getFact(activation.invocation, rustTargetOperationFactKey);
+        const signature = input.records.selectedCall.get(activation.invocation);
+        const operation = input.records.targetOperation.get(activation.invocation);
         if (signature === undefined || operation?.kind !== "source-call")
           return finish(unresolved("Native callable activation has no exact finalized invocation signature."));
         const caller = select(sourceEnclosingCallable(activation.invocation, input.ast), activation.callerBindings, depth + 1);
@@ -115,7 +115,7 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
         if (generic?.kind === "unresolved") return finish(generic);
         const own = generic?.bindings ?? rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], arguments_);
         const merged = own === undefined ? undefined : mergeBindings(actual, { ...own,
-          lifetimes: new Map([...own.lifetimes, ...[...rustRetainedCallSubstitutions(input.facts, activation.invocation)]
+          lifetimes: new Map([...own.lifetimes, ...[...rustRetainedCallSubstitutions(input.records, activation.invocation)]
             .map(([identity, lifetime]) => [identity, caller.bindings.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime] as const)]) });
         if (merged === undefined)
           return finish(unresolved("Native callable activation has inconsistent selected generic arguments."));

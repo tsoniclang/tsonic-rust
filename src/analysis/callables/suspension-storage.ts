@@ -1,19 +1,17 @@
 import type { Node } from "@tsonic/tsts";
-import { rustSourceParameterAbiFactKey } from "../facts/keys.js";
-import type { RustSuspendedCallableStorage } from "../facts/keys.js";
+
+import type { RustSuspendedCallableStorage } from "../../target-model/records/callables-and-resources.js";
 import { rustEnclosingStorageContract, selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustLifetimeOutlives, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { sourceLexicalEnvironment } from "@tsonic/target-api/source";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSuspendedOwnedReceiver } from "../facts/callables-and-resources.js";
-import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
-import { rustCallableInputLifetimeParameters } from "../facts/source-input-lifetimes.js";
+import type { RustSuspendedOwnedReceiver } from "../../target-model/records/callables-and-resources.js";
+
+import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustRetainedEnvironment, rustSuspendedCapturedParameters } from "../../policy/ownership/retained-environments.js";
-import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
 
 export type RustSuspendedCallableStorageResolution =
   | {
@@ -78,14 +76,14 @@ export function resolveRustSuspendedCallableStorage(
 
   const carriers: TargetTypeRef[] = [...storedCarriers, ...(ownedReceiver === undefined ? [] : [ownedReceiver.carrier])];
   for (const field of capturedFields) {
-    const carrier = walk.context.facts.get(field.declaration, rustCapturedFieldStorageFactKey)?.valueCarrier;
+    const carrier = walk.context.records.capturedFieldStorage.get(field.declaration)?.valueCarrier;
     if (carrier === undefined) {
       return { kind: "rejected", reason: "A captured suspended-callable field has no exact finalized Rust storage carrier." };
     }
     carriers.push(carrier);
   }
   for (const parameter of capturedParameters) {
-    const carrier = walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)
+    const carrier = walk.context.records.sourceParameterAbi.get(parameter)
       ?.parameterCarrier;
     if (carrier === undefined) {
       return {
@@ -96,7 +94,7 @@ export function resolveRustSuspendedCallableStorage(
     carriers.push(carrier);
   }
   const lexical = sourceLexicalEnvironment(declaration, [body], ast, walk.context.source.navigation,
-    (use, referencedDeclaration) => walk.context.facts.get(use.reference, rustCompileTimeSourceKey) !== true &&
+    (use, referencedDeclaration) => walk.context.records.compileTimeSource.get(use.reference) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
   if (lexical.kind === "unresolved") return { kind: "rejected", reason: lexical.reason };
   const subject = walk.context.sourceStorage.subject(declaration, "value");
@@ -116,9 +114,9 @@ export function resolveRustSuspendedCallableStorage(
     const reference = capture.references[0];
     const sourceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
     const stored = capture.kind === "field"
-      ? walk.context.facts.get(capture.declaration, rustCapturedFieldStorageFactKey)?.valueCarrier
+      ? walk.context.records.capturedFieldStorage.get(capture.declaration)?.valueCarrier
       : capture.kind === "receiver" ? undefined
-      : walk.context.facts.get(capture.declaration, rustRuntimeCarrierKey)?.carrier;
+      : walk.context.records.runtimeCarrier.get(capture.declaration)?.carrier;
     const carrier = stored ??
       (reference === undefined || sourceFile === undefined ? undefined
         : resolveExpressionCarrier(walk, reference, sourceFile, undefined));
@@ -127,11 +125,11 @@ export function resolveRustSuspendedCallableStorage(
     carriers.push(carrier);
   }
   const sourceContract = rustEnclosingStorageContract(declaration, ast, walk.context.sourceLifetimes);
-  const inferred = rustCallableInputLifetimeParameters(declaration, ast, walk.context.facts);
+  const inferred = rustCallableInputLifetimeParameters(declaration, ast, walk.context.records);
   const contract = inferred.length === 0 ? sourceContract : { declaration,
     parameters: [...sourceContract.parameters, ...inferred] };
   const inputCarriers = exactParameters.map(parameter =>
-    walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
+    walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
   const environment = rustRetainedEnvironment(declaration, inputCarriers, walk.context);
   if (environment.kind === "unresolved") return { kind: "rejected", reason: environment.reason };
   if (requiredLifetime !== undefined) {
@@ -140,8 +138,7 @@ export function resolveRustSuspendedCallableStorage(
       kind: "rejected", reason: "A selected native promise lifetime requires every captured carrier to outlive its declared storage contract.",
     };
   }
-  if (environment.kind === "selected" && requiredLifetime === undefined) walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
-    environment.environment, [{ message: "rust owned suspended environment" }]);
+  if (environment.kind === "selected" && requiredLifetime === undefined) walk.context.records.retainedEnvironment.set(declaration, environment.environment, [{ message: "rust owned suspended environment" }]);
   const lifetime = requiredLifetime ?? (environment.kind === "selected" ? environment.environment.lifetime
     : inputCarriers.some(carrier => carrier === undefined) ? undefined
     : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract));

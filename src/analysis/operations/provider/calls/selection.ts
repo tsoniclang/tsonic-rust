@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
 import { createRustJsCallRequest, selectedSoleArgumentNumberKind } from "./source-profile-request.js";
 import {
@@ -31,9 +32,9 @@ import { mapRustSourceMarkerCall } from "./deferred.js";
 import { providerIdentityText, providerOperationFact, rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
-import { rustModuleBindingFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
+
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
-import { rustRuntimeCarrierKey, rustSelectedCallKey } from "../../../../target-model/facts/selections.js";
+
 import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { selectedValueCarrier } from "../../selected-values.js";
@@ -52,19 +53,14 @@ import { selectBorrowedCallbackParameters } from "./borrowed-callbacks.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustClassConstructorInstance } from "../../../../target-model/types/carriers/class-constructors.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier } from "../../../../target-model/types/carriers/source-error.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedCallSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const pointerView = selectRustPointerViewCall(request, context, options);
@@ -401,7 +397,7 @@ export function selectRustCheckedCall(
       if (result !== undefined) return result;
     }
     const reference = context.source.navigation.sourceReferenceFor(request.source.sourceCallee.expression);
-    const binding = context.facts.get(reference?.declaration, rustModuleBindingFactKey);
+    const binding = context.records.moduleBinding.get(reference?.declaration);
     const nativeCallable = binding?.storage === "native-callable" &&
       (binding.callableDeclaration === sourceDeclaration ||
         declarationKind === "KindFunctionType" || declarationKind === "KindCallSignature");
@@ -439,10 +435,9 @@ export function selectRustCheckedCall(
   );
 }
 
-
 function acceptRuntimeCallableCall(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   if (checkedCallIsConstruction(request, context)) {
@@ -479,7 +474,7 @@ function acceptRuntimeCallableCall(
 function acceptStructuralRuntimeMethodCall(
   request: RustCheckedCallSelectionInput,
   selectedDeclaration: Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
   if (checkedCallIsConstruction(request, context)) {
@@ -537,12 +532,7 @@ function acceptStructuralRuntimeMethodCall(
       }
     : undefined;
   if (optionalGuard !== undefined) {
-    context.facts.set(
-      optionalGuard.guard,
-      rustRuntimeCarrierKey,
-      { carrier: optionalGuard.sourceGuardCarrier },
-      [{ message: "rust exact optional structural-method storage carrier" }],
-    );
+    context.records.runtimeCarrier.set(optionalGuard.guard, { carrier: optionalGuard.sourceGuardCarrier }, [{ message: "rust exact optional structural-method storage carrier" }]);
   }
   return acceptRuntimeCallableCarrierCall(
     request,
@@ -568,7 +558,7 @@ export interface RustOptionalCallGuard {
 function acceptRuntimeCallableCarrierCall(
   request: RustCheckedCallSelectionInput,
   calleeCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   sourceSelectedReceiverCarrier?: TargetTypeRef,
   sourceStructuralMethod?: RustSelectedTargetSignature["sourceStructuralMethod"],
@@ -680,14 +670,9 @@ function acceptRuntimeCallableCarrierCall(
         }),
   };
   if (optionalResult.fact !== undefined) {
-    context.facts.set(
-      request.source.call,
-      rustOptionalChainFactKey,
-      optionalResult.fact,
-      [{ message: `rust optional call ${optionalResult.fact.lowering}` }],
-    );
+    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
   }
-  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature);
+  context.records.selectedCall.set(request.source.call, selectedSignature);
   return acceptRustPolicy({ selectedSignature }, [{
     message: "rust selected exact runtime-callable invocation",
   }]);
@@ -696,7 +681,7 @@ function acceptRuntimeCallableCarrierCall(
 function runtimeCallableTargetParameters(
   request: RustCheckedCallSelectionInput,
   targetParameters: readonly TargetTypeRef[],
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): {
   readonly parameters: readonly NonNullable<RustTargetMember["parameters"]>[number][];
   readonly sourceParameterIndexes: readonly number[];

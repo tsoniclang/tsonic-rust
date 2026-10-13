@@ -1,10 +1,11 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
-import type { RustCheckedPropertySelectionInput, RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+import type { RustCheckedPropertySelectionInput } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 
 export function isIntrinsicSourceQualifier(
   request: RustCheckedPropertySelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): boolean {
   const { ast } = context;

@@ -12,9 +12,8 @@ import {
 } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 
-type Input = Pick<RustAnalysisContext, "ast" | "source" | "facts">;
+type Input = Pick<RustAnalysisContext, "ast" | "source" | "records">;
 
 export function rustModuleInitializationIsStateIndependent(
   input: Input,
@@ -32,7 +31,7 @@ export function rustModuleInitializationIsStateIndependent(
     return declaration !== undefined && ast.is.IsClassDeclaration(declaration) ? declaration : undefined;
   };
   const expressionIsIndependent = (expression: Node, parameters: ReadonlySet<Node>, point: Node): boolean => {
-    if (input.facts.getFact(expression, rustCompileTimeSourceKey)) return true;
+    if (input.records.compileTimeSource.get(expression)) return true;
     switch (ast.kindName(expression)) {
       case "KindNumericLiteral":
       case "KindBigIntLiteral":
@@ -124,7 +123,7 @@ export function rustModuleInitializationIsStateIndependent(
   };
   for (const statement of ast.statements(sourceFile)) {
     if (statement === undefined) return false;
-    if (input.facts.getFact(statement, rustCompileTimeSourceKey)) continue;
+    if (input.records.compileTimeSource.get(statement)) continue;
     switch (ast.kindName(statement)) {
       case "KindImportDeclaration":
       case "KindExportDeclaration":
@@ -138,7 +137,7 @@ export function rustModuleInitializationIsStateIndependent(
         const declarations = VariableDeclarationList_Declarations(ast, VariableStatement_DeclarationList(ast, statement));
         if (declarations === undefined || declarations.some(declaration => {
           if (declaration === undefined) return true;
-          if (input.facts.getFact(declaration, rustCompileTimeSourceKey)) return false;
+          if (input.records.compileTimeSource.get(declaration)) return false;
           const value = Node_Initializer(ast, declaration);
           return value !== undefined && !expressionIsIndependent(value, none, declaration);
         })) return false;

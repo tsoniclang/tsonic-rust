@@ -17,21 +17,12 @@ import {
   BinaryExpression_Right,
   Node_Operand,
 } from "@tsonic/target-api/source";
-import {
-  rustContextualValueConversionFactKey,
-  rustCallScopedLifetimeReconciliationFactKey,
-  rustFlowReadProjectionFactKey,
-  rustOptionProjectionFactKey,
-  rustProjectDowncastFactKey,
-  rustProjectUpcastFactKey,
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
+
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { applyRustValueConversion } from "./value-conversions.js";
 import { planProviderRecordCopy } from "./provider-record-copy.js";
 import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
-import { rustObjectReferenceViewKey } from "../../../analysis/facts/object-reference-views.js";
-import { rustIndexedFieldKeyArgument } from "../../../analysis/facts/indexed-field-keys.js";
+
 import { planRustObjectReferenceView } from "./object-reference-views.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
@@ -45,7 +36,7 @@ import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
-import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches, rustValueReferenceReborrow } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches, rustValueReferenceReborrow } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
@@ -53,7 +44,7 @@ import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
 import { planRustCallableConversion } from "./callable-conversions.js";
 import { planRustProjectUnionMapping } from "./project-union-mappings.js";
-import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
+import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
 import { planRustIntegerTruncation } from "./integer-truncation.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -95,7 +86,7 @@ function planProjectedExpression(
   access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
-  const key = context.input.program.facts.getFact(node, rustIndexedFieldKeyArgument);
+  const key = context.input.program.records.indexedFieldKeyArgument.get(node);
   if (key !== undefined && finalStage !== "source" && override === undefined) {
     const type = rustTypeFromCarrierInContext(key.carrier, context);
     if (type?.kind !== "named" || type.genericArguments?.some(argument => argument.kind !== "type" && argument.kind !== "const")) return undefined;
@@ -111,19 +102,13 @@ function planProjectedExpression(
   if (planned === undefined || resultUse === "discarded") {
     return planned;
   }
-  const flowRead = context.input.program.facts.getFact(node, rustFlowReadProjectionFactKey);
-  const upcast = context.input.program.facts.getFact(node, rustProjectUpcastFactKey);
-  const downcast = context.input.program.facts.getFact(node, rustProjectDowncastFactKey);
-  const lifetimeReconciliation = context.input.program.facts.getFact(
-    node,
-    rustCallScopedLifetimeReconciliationFactKey,
-  );
-  const contextualConversion = context.input.program.facts.getFact(
-    node,
-    rustContextualValueConversionFactKey,
-  );
-  const projection = context.input.program.facts.getFact(node, rustOptionProjectionFactKey);
-  const objectView = context.input.program.facts.getFact(node, rustObjectReferenceViewKey);
+  const flowRead = context.input.program.records.flowReadProjection.get(node);
+  const upcast = context.input.program.records.projectUpcast.get(node);
+  const downcast = context.input.program.records.projectDowncast.get(node);
+  const lifetimeReconciliation = context.input.program.records.callScopedLifetimeReconciliation.get(node);
+  const contextualConversion = context.input.program.records.contextualValueConversion.get(node);
+  const projection = context.input.program.records.optionProjection.get(node);
+  const objectView = context.input.program.records.objectReferenceView.get(node);
   const fusedProjectUnion = finalStage !== "source" && flowRead?.kind === "union-map" &&
     contextualConversion?.conversion.kind === "project-union-map" &&
     rustTargetTypeRefEquals(flowRead.selectedCarrier, contextualConversion.sourceCarrier) &&
@@ -145,7 +130,7 @@ function planProjectedExpression(
       context.input.program.typeDefinitions)?.sourceMode === "ref" ||
       contextualConversion.conversion.kind === "project-union-map" && !context.input.program.valueLifetimes.canMove(node));
   let borrowedFlowApplied = false;
-  const referenceReborrow = rustValueReferenceReborrow(context.input.program.facts, node,
+  const referenceReborrow = rustValueReferenceReborrow(context.input.program.records, node,
     context.input.program.typeDefinitions);
   const finish = (value: RustExpr): RustExpr => access === "shared-receiver" ? planRustNonConsumingValue(node, value, context)
     : access === "shared-place"
@@ -161,7 +146,7 @@ function planProjectedExpression(
     contextualConversion?.sourceCarrier ??
     objectView?.sourceCarrier ??
     projection?.sourceCarrier ??
-    context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+    context.input.program.records.runtimeCarrier.get(node)?.carrier;
   let flowSelected = planned;
   if (fusedProjectUnion !== undefined) {
     if (!rustTargetTypeRefEquals(currentCarrier, fusedProjectUnion.sourceCarrier)) {
@@ -399,13 +384,13 @@ export function planRawExpression(
 function applyRustContextualValueConversion(
   node: Node,
   expression: RustExpr,
-  fact: import("../../../analysis/facts/keys.js").RustContextualValueConversionFact,
+  fact: import("../../../target-model/records/value-projections.js").RustContextualValueConversionFact,
   context: RustPlanContext,
   sourceIsSharedReference = false,
   upstream?: Extract<RustFlowReadProjectionFact, { readonly kind: "union-map" }>,
 ): RustExpr | undefined {
   const sourceCarrier = rustValueCarrierBeforeContextualConversion(
-    context.input.program.facts,
+    context.input.program.records,
     node,
   );
   if (!rustTargetTypeRefEquals(sourceCarrier, fact.sourceCarrier)) {
@@ -427,9 +412,9 @@ function applyRustContextualValueConversion(
         `carrier.current=${JSON.stringify(sourceCarrier)}`,
         `carrier.source=${JSON.stringify(fact.sourceCarrier)}`,
         `carrier.target=${JSON.stringify(fact.targetCarrier)}`,
-        `carrier.left=${JSON.stringify(context.input.program.facts.getRuntimeCarrierFact(left)?.carrier)}`,
-        `carrier.right=${JSON.stringify(context.input.program.facts.getRuntimeCarrierFact(right)?.carrier)}`,
-        `operation=${JSON.stringify(context.input.program.facts.getFact(node, rustTargetOperationFactKey))}`,
+        `carrier.left=${JSON.stringify(context.input.program.records.runtimeCarrier.get(left)?.carrier)}`,
+        `carrier.right=${JSON.stringify(context.input.program.records.runtimeCarrier.get(right)?.carrier)}`,
+        `operation=${JSON.stringify(context.input.program.records.targetOperation.get(node))}`,
       ],
     });
     return undefined;
@@ -500,7 +485,7 @@ function rustExpressionUnsafeRequirement(
   if (rustSelectedCallRequiresUnsafe(node, context.input)) {
     return "call";
   }
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   if (operation?.kind === "source-accessor" &&
     rustSelectedAccessorRequiresUnsafe(node, "getter", context.input)) {
     return "accessor";
@@ -526,7 +511,7 @@ function rustExpressionUnsafeRequirement(
 export function planRustProjectUpcast(
   node: Node,
   expression: RustExpr,
-  fact: import("../../../analysis/facts/keys.js").RustProjectUpcastFact,
+  fact: import("../../../target-model/records/value-projections.js").RustProjectUpcastFact,
   actual: TargetTypeRef | undefined,
   context: RustPlanContext,
   ownership: "owned" | "borrowed",

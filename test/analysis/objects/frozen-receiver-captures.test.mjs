@@ -1,9 +1,10 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustFrozenReceiverCaptures } from "../../../dist/analysis/objects/frozen-receiver-captures.js";
 import { createRustFrozenDataWriteRegistry } from "../../../dist/analysis/objects/frozen-data-writes.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustObjectReferenceViewKey } from "../../../dist/analysis/facts/object-reference-views.js";
+
+
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 
 const carrier = identity => ({ kind: "target-named", id: identity, genericArguments: [] });
@@ -40,15 +41,18 @@ function fixture({
       kindName: name => name.private ? "KindPrivateIdentifier" : "KindIdentifier",
     },
     sourceFiles: [root],
-    facts: { getFact(node, key) {
-      if (key === rustObjectReferenceViewKey) return node.view;
-      if (key !== rustTargetOperationFactKey) return undefined;
-      if (node === freeze) return freezeOperation;
-      if (operations.has(node)) return operations.get(node);
-      const group = groups.find(selected => selected.references.includes(node));
-      return group === undefined ? undefined : { kind: "source-field", storage: "project-object",
+    records: createRustRecordFixture({objectReferenceView: { get: (node) => {
+    return node.view;
+} },
+targetOperation: { get: (node) => {
+    if (node === freeze)
+        return freezeOperation;
+    if (operations.has(node))
+        return operations.get(node);
+    const group = groups.find(selected => selected.references.includes(node));
+    return group === undefined ? undefined : { kind: "source-field", storage: "project-object",
         declaration: group.declaration, valueSemantics: { kind: "stored" }, accessMode: node.mode };
-    } },
+} }}),
     projectTypes: {
       definitions: owners,
       openCarrier: selected => selected.carrier,

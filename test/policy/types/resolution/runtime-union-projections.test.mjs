@@ -1,9 +1,11 @@
+import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustFlowReadProjection } from "../../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { planRustFlowReadProjection } from "../../../../dist/backend/planner/expressions/flow-reads.js";
-import { rustFlowReadProjectionFactKey } from "../../../../dist/analysis/facts/value-projections.js";
+
 import { rustRuntimeUnionContract } from "../../../../dist/target-model/types/carriers/runtime-unions.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
@@ -26,7 +28,7 @@ test("runtime union projections retain exact variants, absence and ownership", (
         for (const owns of [false, true]) {
           const context = { input: { program: {
             source: { ast: fakeAstReader([sourceFile]) },
-            facts: { getRuntimeCarrierFact: () => ({ carrier: sourceCarrier }) },
+            records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
             valueLifetimes: { canMove: () => owns },
             projectTypes,
             typeDefinitions: emptyRustTypeDefinitions, configuration: { edition: "2024" },
@@ -57,7 +59,7 @@ test("runtime union projections retain exact variants, absence and ownership", (
             ...(!optional ? [{ ...selected.fact, selectedCarrier: rustOptionTargetType(alternative.carrier) }] : []),
           ]) {
             context.diagnostics.length = 0;
-            assert.equal(rustFlowReadProjectionFactKey.equals(selected.fact, changed), false);
+            assert.equal(rustFlowReadProjectionEquals(selected.fact, changed), false);
             assert.equal(planRustFlowReadProjection(node, input, changed, context), undefined);
             assert.equal(context.diagnostics.length, 1);
           }

@@ -12,19 +12,7 @@ import {
   asSourceNode,
   sourceEnclosingCallable,
 } from "@tsonic/target-api/source";
-import {
-  rustAsyncFunctionFactKey,
-  rustBindingProjectionFactKey,
-  rustContextualValueConversionFactKey,
-  rustFallibleFactKey,
-  rustGeneratorFactKey,
-  rustObjectLiteralMethodAdapterFactKey,
-  rustSelfModeFactKey,
-  rustSourceAccessorEffectsFactKey,
-  rustSourceCallEffectsFactKey,
-  rustSourceCallableReturnFactKey,
-  rustTargetOperationFactKey,
-} from "../facts/keys.js";
+
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
 import { finalizeRustPreparedCheckedCall } from "../operations/provider/index.js";
@@ -32,13 +20,14 @@ import { rustCallbackProtocol } from "../operations/provider/callbacks.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { rustCallableProtocol } from "../../target-model/types/index.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
-import { rustSourceCallCallableStorageCarrier } from "../facts/target-operation.js";
+import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
-import { rustGenericCallableInvocationFactKey, type RustGenericCallableInvocationFact } from "../facts/generic-callable-effects.js";
+
+import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
 import { selectRustGenericCallableInvocation } from "./generic-call-errors.js";
-import { rustTargetOperationIsFallible } from "../facts/target-operation.js";
+import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
-import { rustSelectedCallKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
+
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
 import { selectedDeclarationIsProjectSource } from "../expressions/references.js";
 import { selectRustResourceManagement } from "./management.js";
@@ -46,18 +35,21 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustPropertyProjectionGetters } from "../conversions/property-projections.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
-import { rustProjectCallableAdaptersKey } from "../facts/project-callable-adapters.js";
-import { rustFutureValuesForSourceStorage } from "../facts/future-values.js";
+
+import { rustFutureValuesForSourceStorage } from "../callables/future-values.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { collectRustErrorRegionEffects } from "./error-regions.js";
 import { collectRustErrorDeclarations } from "./error-declarations.js";
-import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustErrorEffectsFactKey,
-  rustLocalErrorEffects, rustPureErrorEffects, type RustErrorEffectsFact } from "../facts/error-effects.js";
+import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustLocalErrorEffects, rustPureErrorEffects } from "../errors/error-effects.js";
+
+import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { createRustSourceErrorEffectSelection } from "./source-error-effects.js";
-import { rustSourceErrorEffectsFactKey, type RustSourceErrorEffectEdge } from "../facts/source-error-effects.js";
+
+import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit, type RustEffectsWorkBudget } from "./effects-work-budget.js";
-import { rustAwaitSourceErrorEffectsFactKey, type RustAwaitSourceErrorBranch } from "../facts/await-source-error-effects.js";
+
+import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
 import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
@@ -107,7 +99,7 @@ function collectFallibilityFacts(
   const isFallible = (declaration: Node): boolean => rustErrorEffectsAreFallible(declarationEffects(declaration));
   for (const nativeInput of walk.context.callableValues.native.calls) {
     budget.step();
-    walk.context.facts.set(nativeInput.node, rustSourceCallEffectsFactKey, {
+    walk.context.records.sourceCallEffects.set(nativeInput.node, {
       invocation: "fallible", awaiting: nativeInput.completion === undefined ? "not-applicable" : "fallible",
       nativeInput: { invocationError: nativeInput.invocationError, invocationErrorSource: nativeInput.invocationErrorSource,
         awaitErrors: nativeInput.awaitErrors, awaitErrorSources: nativeInput.awaitErrorSources },
@@ -124,18 +116,18 @@ function collectFallibilityFacts(
   const genericInvocationIsFallible = (declaration: Node): boolean => {
     const implementations = projectImplementations.get(declaration) ?? [declaration];
     return [...implementations].some(implementation => isFallible(implementation) &&
-      walk.context.facts.get(implementation, rustAsyncFunctionFactKey) === undefined &&
-      walk.context.facts.get(implementation, rustGeneratorFactKey) === undefined);
+      walk.context.records.asyncFunction.get(implementation) === undefined &&
+      walk.context.records.generator.get(implementation) === undefined);
   };
   const genericAwaitIsFallible = (declaration: Node): boolean =>
-    walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.implementationCompletion === undefined &&
-      (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined || isFallible(declaration));
+    walk.context.records.sourceCallableReturn.get(declaration)?.implementationCompletion === undefined &&
+      (walk.context.records.asyncFunction.get(declaration) === undefined || isFallible(declaration));
   const hasCompletion = (carrier: import("../../target-model/types/model.js").TargetTypeRef | undefined): boolean =>
     carrier !== undefined && rustNativeCallableCompletion(carrier, walk.context.typeDefinitions) !== undefined;
   const genericInvocation = (node: Node): RustGenericCallableInvocationFact | undefined => {
     const selected = selectRustGenericCallableInvocation(node, walk.context, declaration => {
-      const result = walk.context.facts.get(declaration, rustAsyncFunctionFactKey)?.futureCarrier ??
-        walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
+      const result = walk.context.records.asyncFunction.get(declaration)?.futureCarrier ??
+        walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
       return { invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
         awaiting: !hasCompletion(result) ? "not-applicable"
           : genericAwaitIsFallible(declaration) ? "fallible" : "infallible" };
@@ -158,8 +150,7 @@ function collectFallibilityFacts(
   }
   for (const expression of walk.objectLiteralMethodExpressions) {
     budget.step();
-    const adapters = walk.context.facts.get(expression, rustObjectLiteralMethodAdapterFactKey) ??
-      walk.context.facts.resolve(expression, rustObjectLiteralMethodAdapterFactKey);
+    const adapters = walk.context.records.objectLiteralMethodAdapter.get(expression);
     for (const dispatch of adapters?.dispatches ?? []) {
       budget.step();
       if (dispatch.adapterFallible) {
@@ -169,15 +160,14 @@ function collectFallibilityFacts(
   }
   for (const definition of walk.context.projectTypes.definitions) {
     budget.step();
-    for (const adapter of walk.context.facts.get(definition.declaration, rustProjectCallableAdaptersKey) ?? []) {
+    for (const adapter of walk.context.records.projectCallableAdapters.get(definition.declaration) ?? []) {
       budget.step();
       if (adapter.adapterFallible) effectsByDeclaration.set(adapter.contract, rustLocalErrorEffects);
     }
   }
   for (const expression of walk.objectLiteralMethodSpreadExpressions) {
     budget.step();
-    const operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
-      walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+    const operation = walk.context.records.targetOperation.get(expression);
     if (operation?.kind !== "record-literal") {
       continue;
     }
@@ -193,8 +183,7 @@ function collectFallibilityFacts(
     }
   }
   const selectedProjectDeclaration = (node: Node): Node | undefined => {
-    const selected = walk.context.facts.get(node, rustSelectedCallKey) ??
-      walk.context.facts.resolve(node, rustSelectedCallKey);
+    const selected = walk.context.records.selectedCall.get(node);
     const declaration = asSourceNode(
       selected?.sourceDeclaration,
       walk.context.ast,
@@ -205,14 +194,9 @@ function collectFallibilityFacts(
     return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };
   const operationIsFallible = (node: Node): boolean => {
-    const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-      walk.context.facts.resolve(node, rustTargetOperationFactKey);
-    const bindingProjection = walk.context.facts.get(node, rustBindingProjectionFactKey) ??
-      walk.context.facts.resolve(node, rustBindingProjectionFactKey);
-    const contextualConversion = walk.context.facts.get(
-      node,
-      rustContextualValueConversionFactKey,
-    ) ?? walk.context.facts.resolve(node, rustContextualValueConversionFactKey);
+    const operation = walk.context.records.targetOperation.get(node);
+    const bindingProjection = walk.context.records.bindingProjection.get(node);
+    const contextualConversion = walk.context.records.contextualValueConversion.get(node);
     const projection = bindingProjection?.projection;
     const bindingProjectionIsFallible = bindingProjection === undefined
       ? false
@@ -241,13 +225,11 @@ function collectFallibilityFacts(
   };
   const selectedAccessorDeclarations = (node: Node): readonly Node[] => {
     const projected = rustPropertyProjectionGetters(node, walk.context);
-    const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-      walk.context.facts.resolve(node, rustTargetOperationFactKey);
+    const operation = walk.context.records.targetOperation.get(node);
     if (operation?.kind !== "source-accessor") {
       return projected;
     }
-    const selected = walk.context.facts.get(node, rustSelectedOperationKey) ??
-      walk.context.facts.resolve(node, rustSelectedOperationKey);
+    const selected = walk.context.records.selectedOperation.get(node);
     return [
       ...projected,
       asSourceNode(
@@ -294,7 +276,7 @@ function collectFallibilityFacts(
     }
     resolving.add(value);
     try {
-      const carrier = walk.context.facts.getRuntimeCarrierFact(value)?.carrier;
+      const carrier = walk.context.records.runtimeCarrier.get(value)?.carrier;
       const invocationFallible = rustCallbackProtocol(carrier)?.fallible === true;
       const body = ast.body(value);
       if (body !== undefined) {
@@ -383,8 +365,8 @@ function collectFallibilityFacts(
           carrierWork += budget.metadata(error.errorType);
         }
         if (carrierWork !== 0) {
-          const selectedSignature = walk.context.facts.getSelectedTargetCall(invocation);
-          const selectedOperation = walk.context.facts.get(invocation, rustTargetOperationFactKey);
+          const selectedSignature = walk.context.records.selectedCall.get(invocation);
+          const selectedOperation = walk.context.records.targetOperation.get(invocation);
           budget.metadata(selectedSignature?.member.genericParameters);
           let replacementWork = 1;
           for (const argument of selectedOperation?.kind === "source-call" ? selectedOperation.targetGenericArguments ?? [] : []) {
@@ -417,13 +399,13 @@ function collectFallibilityFacts(
           rustOperationContext(walk, node),
           walk.operationOptions,
           (declaration) => {
-            const selfMode = walk.context.facts.get(declaration, rustSelfModeFactKey);
+            const selfMode = walk.context.records.selfMode.get(declaration);
             if (selfMode === undefined) {
               return undefined;
             }
             return {
               selfMode,
-              async: walk.context.facts.get(declaration, rustAsyncFunctionFactKey) !== undefined,
+              async: walk.context.records.asyncFunction.get(declaration) !== undefined,
               fallible: isFallible(declaration),
             };
           },
@@ -441,7 +423,7 @@ function collectFallibilityFacts(
       if (kind === "KindAwaitExpression") {
         const operand = Node_Expression(walk.context.ast, node);
         const topology = operand === undefined ? undefined
-          : rustAwaitSelection(walk.context.facts.getRuntimeCarrierFact(operand)?.carrier, walk.context.typeDefinitions);
+          : rustAwaitSelection(walk.context.records.runtimeCarrier.get(operand)?.carrier, walk.context.typeDefinitions);
         const branches = topology === undefined ? [] : rustAwaitSelectionLeaves(topology);
         const sourceEdges = operand === undefined || branches.every(branch => branch.future === undefined) ? []
           : selectRustAwaitSourceErrors(walk, operand, branches.filter(branch => branch.future !== undefined)
@@ -474,7 +456,7 @@ function collectFallibilityFacts(
         }
       }
       if (nativeInput === undefined && (kind === KindCallExpression || kind === KindNewExpression)) {
-        const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
+        const operation = walk.context.records.targetOperation.get(node);
         const target = selectedProjectDeclaration(node);
         const generic = rustGenericCallableValue(rustSourceCallCallableStorageCarrier(operation, walk.context.structuralShapes));
         if (generic !== undefined) {
@@ -486,8 +468,8 @@ function collectFallibilityFacts(
           ? operation.target.variants.map(variant => variant.declaration)
           : generic !== undefined || target === undefined ? [] : [target];
         for (const declaration of declarations) {
-          if (walk.context.facts.get(declaration, rustAsyncFunctionFactKey) === undefined &&
-            walk.context.facts.get(declaration, rustGeneratorFactKey) === undefined && !appendDeclaration(declaration)) return undefined;
+          if (walk.context.records.asyncFunction.get(declaration) === undefined &&
+            walk.context.records.generator.get(declaration) === undefined && !appendDeclaration(declaration)) return undefined;
         }
       }
       const effects = mergeEffects(selected);
@@ -527,9 +509,9 @@ function collectFallibilityFacts(
   const ownedCallbackClosures = new Set<Node>();
   for (const declaration of declarations) {
     budget.step();
-    const result = walk.context.facts.get(declaration, rustAsyncFunctionFactKey)?.futureCarrier ??
-      walk.context.facts.get(declaration, rustSourceCallableReturnFactKey)?.returnCarrier;
-    walk.context.facts.set(declaration, rustSourceCallEffectsFactKey, {
+    const result = walk.context.records.asyncFunction.get(declaration)?.futureCarrier ??
+      walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
+    walk.context.records.sourceCallEffects.set(declaration, {
       invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
       awaiting: !hasCompletion(result) ? "not-applicable"
         : genericAwaitIsFallible(declaration) ? "fallible" : "infallible",
@@ -576,12 +558,11 @@ function collectFallibilityFacts(
       walk.context.diagnostics.push(rustPolicyTargetDiagnostic(finalized.diagnostic));
       continue;
     }
-    const operation = walk.context.facts.get(call, rustTargetOperationFactKey) ??
-      walk.context.facts.resolve(call, rustTargetOperationFactKey);
+    const operation = walk.context.records.targetOperation.get(call);
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
-        walk.context.facts.set(subject, rustFallibleFactKey, { fallible: true }, [
+        walk.context.records.fallible.set(subject, { fallible: true }, [
           { message: "rust fallible callback ABI" },
         ]);
       }
@@ -590,9 +571,8 @@ function collectFallibilityFacts(
   for (const declaration of new Set([...declarations, ...effectsByDeclaration.keys()])) {
     const effects = declarationEffects(declaration);
     budget.metadata(effects);
-    walk.context.facts.set(declaration, rustErrorEffectsFactKey, effects,
-      [{ message: "rust finalized exact declaration error effects" }]);
-    if (rustErrorEffectsAreFallible(effects)) walk.context.facts.set(declaration, rustFallibleFactKey, { fallible: true }, [
+    walk.context.records.errorEffects.set(declaration, effects, [{ message: "rust finalized exact declaration error effects" }]);
+    if (rustErrorEffectsAreFallible(effects)) walk.context.records.fallible.set(declaration, { fallible: true }, [
       { message: "rust fallible declaration" },
     ]);
   }
@@ -613,10 +593,9 @@ function collectFallibilityFacts(
     if (selectedEffects.some(effects => effects === undefined)) return;
     const effects = mergeEffects(selectedEffects as RustErrorEffectsFact[]);
     if (effects === undefined) return;
-    walk.context.facts.set(sourceFile, rustErrorEffectsFactKey, effects,
-      [{ message: "rust finalized exact module initialization error effects" }]);
+    walk.context.records.errorEffects.set(sourceFile, effects, [{ message: "rust finalized exact module initialization error effects" }]);
     if (rustErrorEffectsAreFallible(effects)) {
-      walk.context.facts.set(sourceFile, rustFallibleFactKey, { fallible: true }, [
+      walk.context.records.fallible.set(sourceFile, { fallible: true }, [
         { message: "rust fallible project module initialization" },
       ]);
     }
@@ -626,14 +605,13 @@ function collectFallibilityFacts(
       budget.step();
       const kind = ast.kindName(node);
       if (kind === "KindArrowFunction" || kind === KindFunctionExpression) {
-        const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-          walk.context.facts.resolve(node, rustTargetOperationFactKey);
+        const operation = walk.context.records.targetOperation.get(node);
         const body = ast.body(node);
         const effects = body === undefined ? undefined : expressionRegionEffects(body);
         if (operation?.kind === "closure" && effects !== undefined && rustErrorEffectsAreFallible(effects)) {
           if (rustGenericCallableValue(operation.resultCarrier) !== undefined || rustCallableProtocol(operation.resultCarrier) !== undefined ||
             operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
-            walk.context.facts.set(node, rustFallibleFactKey, { fallible: true }, [
+            walk.context.records.fallible.set(node, { fallible: true }, [
               { message: "rust fallible first-class callable implementation" },
             ]);
           } else if (!ownedCallbackClosures.has(node)) {
@@ -647,10 +625,8 @@ function collectFallibilityFacts(
           }
         }
       } else if (kind === KindPropertyAccessExpression || kind === KindElementAccessExpression) {
-        const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-          walk.context.facts.resolve(node, rustTargetOperationFactKey);
-        const selected = walk.context.facts.get(node, rustSelectedOperationKey) ??
-          walk.context.facts.resolve(node, rustSelectedOperationKey);
+        const operation = walk.context.records.targetOperation.get(node);
+        const selected = walk.context.records.selectedOperation.get(node);
         if (operation?.kind === "source-accessor") {
           const readDeclaration = asSourceNode(
             selected?.provenance?.sourceSelectedReadDeclaration,
@@ -660,7 +636,7 @@ function collectFallibilityFacts(
             selected?.provenance?.sourceSelectedWriteDeclaration,
             walk.context.ast,
           );
-          walk.context.facts.set(node, rustSourceAccessorEffectsFactKey, {
+          walk.context.records.sourceAccessorEffects.set(node, {
             ...(operation.read === undefined || readDeclaration === undefined
               ? {}
               : { read: isFallible(readDeclaration) ? "fallible" : "infallible" }),
@@ -670,8 +646,7 @@ function collectFallibilityFacts(
           }, [{ message: "rust finalized selected project accessor effects" }]);
         }
       } else if (kind === KindCallExpression || kind === KindNewExpression) {
-        const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-          walk.context.facts.resolve(node, rustTargetOperationFactKey);
+        const operation = walk.context.records.targetOperation.get(node);
         if (operation?.kind === "source-call") {
           const declaration = selectedProjectDeclaration(node);
           const nativeCallable = operation.target.form === "callable" &&
@@ -694,7 +669,7 @@ function collectFallibilityFacts(
                   : genericAwaitIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
               }))
               : undefined;
-            walk.context.facts.set(node, rustSourceCallEffectsFactKey, {
+            walk.context.records.sourceCallEffects.set(node, {
               ...(unionBranches === undefined ? {} : { unionBranches }),
               invocation: invocation !== undefined ? invocation.effects.invocation
                 : runtimeCallable || (unionBranches === undefined
@@ -722,18 +697,15 @@ function collectFallibilityFacts(
   }
   for (const [region, effects] of effectsByRegion) {
     budget.metadata(effects);
-    walk.context.facts.set(region, rustErrorEffectsFactKey, effects,
-      [{ message: "rust finalized exact lexical region error effects" }]);
+    walk.context.records.errorEffects.set(region, effects, [{ message: "rust finalized exact lexical region error effects" }]);
   }
   for (const [node, invocation] of genericInvocations) {
     budget.metadata(invocation);
-    walk.context.facts.set(node, rustGenericCallableInvocationFactKey, invocation,
-      [{ message: "rust finalized physical generic invocation and exact producer error channels" }]);
+    walk.context.records.genericCallableInvocation.set(node, invocation, [{ message: "rust finalized physical generic invocation and exact producer error channels" }]);
   }
   for (const [node, effects] of effectsByExpression) {
     budget.metadata(effects);
-    walk.context.facts.set(node, rustErrorEffectsFactKey, effects,
-      [{ message: "rust finalized exact selected invocation or await errors" }]);
+    walk.context.records.errorEffects.set(node, effects, [{ message: "rust finalized exact selected invocation or await errors" }]);
   }
   for (const [node, edges] of sourceErrorEdges) {
     budget.step();
@@ -741,10 +713,7 @@ function collectFallibilityFacts(
       budget.metadata(edge.effects);
       budget.metadata(edge.nativeErrors);
     }
-    walk.context.facts.set(node, rustSourceErrorEffectsFactKey, Object.freeze({ edges: Object.freeze(edges) }),
-      [{ message: "rust exact selected source error identity correspondence" }]);
+    walk.context.records.sourceErrorEffects.set(node, Object.freeze({ edges: Object.freeze(edges) }), [{ message: "rust exact selected source error identity correspondence" }]);
   }
-  for (const [node, branches] of awaitSourceEdges) walk.context.facts.set(node,
-    rustAwaitSourceErrorEffectsFactKey, Object.freeze({ branches }),
-    [{ message: "rust exact awaited branch and producer error correspondence" }]);
+  for (const [node, branches] of awaitSourceEdges) walk.context.records.awaitSourceErrorEffects.set(node, Object.freeze({ branches }), [{ message: "rust exact awaited branch and producer error correspondence" }]);
 }

@@ -1,10 +1,11 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustEffectiveValueCarrier } from "../../../facts/value-carrier-queries.js";
-import { isRustFinalizedSourceInput } from "../../../facts/finalized-operation-abi.js";
+import { rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
+import { isRustFinalizedSourceInput } from "../../finalized-operation/conversions.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 
 export function selectReferenceReborrow(
@@ -24,8 +25,8 @@ export function selectReferenceReborrow(
 
 export function selectReceiverReferenceReborrow(
   request: RustCheckedCallSelectionInput,
-  abi: import("../../../facts/finalized-operation-abi.js").RustFinalizedOperationAbi,
-  context: RustOperationPolicyContext,
+  abi: import("../../../../target-model/records/finalized-operation.js").RustFinalizedOperationAbi,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): Extract<
   RustAppliedValueCarrierReconciliation,
@@ -35,7 +36,7 @@ export function selectReceiverReferenceReborrow(
   if (receiver === undefined || abi.sourceReceiver.kind !== "receiver") {
     return undefined;
   }
-  const source = rustEffectiveValueCarrier(context.facts, receiver.expression) ??
+  const source = rustEffectiveValueCarrier(context.records, receiver.expression) ??
     resolveRustTargetTypeRef(receiver.expression, context, options);
   const target = abi.sourceReceiver.carrier;
   if (source === undefined || rustTargetTypeRefEquals(source, target)) {
@@ -43,7 +44,7 @@ export function selectReceiverReferenceReborrow(
   }
   const modes = new Set<import("../../../../target-model/operations/model.js").RustArgumentMode>();
   const collect = (
-    input: import("../../../facts/finalized-operation-abi.js").RustFinalizedTargetInput,
+    input: import("../../../../target-model/records/finalized-operation.js").RustFinalizedTargetInput,
   ): void => {
     if (isRustFinalizedSourceInput(input) && input.source.kind === "receiver") {
       modes.add(input.mode);

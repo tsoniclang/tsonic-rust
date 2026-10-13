@@ -5,30 +5,22 @@ import {
   Node_Expression,
   Node_Initializer,
 } from "@tsonic/target-api/source";
-import {
-  rustAsyncFunctionFactKey,
-  rustFallibleFactKey,
-  rustFutureValueFactKey,
-  rustMutatedBindingFactKey,
-  rustResourceManagementFactKey,
-  rustSelfModeFactKey,
-  rustSourceCallEffectsFactKey,
-  rustTargetOperationFactKey,
-} from "../facts/keys.js";
+
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
 import { collectDescendantsOfKind } from "../operations/inputs.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../facts/future-values.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../callables/future-values.js";
+
 import { selectRustResourceManagement } from "./management.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustFutureValueFact } from "../facts/keys.js";
-import { finalizeRustAwaitValueFact, rustAwaitValueFactKey } from "../facts/await-values.js";
-import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import type { RustFutureValueFact } from "../../target-model/records/object-methods.js";
+import { finalizeRustAwaitValueFact } from "../callables/await-values.js";
+
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
 
@@ -48,14 +40,14 @@ export function recordResourceManagementFacts(
         rustOperationContext(walk, declaration),
         walk.operationOptions,
         (method) => {
-          const selfMode = walk.context.facts.get(method, rustSelfModeFactKey);
+          const selfMode = walk.context.records.selfMode.get(method);
           if (selfMode === undefined) {
             return undefined;
           }
           return {
             selfMode,
-            async: walk.context.facts.get(method, rustAsyncFunctionFactKey) !== undefined,
-            fallible: walk.context.facts.get(method, rustFallibleFactKey) !== undefined,
+            async: walk.context.records.asyncFunction.get(method) !== undefined,
+            fallible: walk.context.records.fallible.get(method) !== undefined,
           };
         },
       );
@@ -69,12 +61,7 @@ export function recordResourceManagementFacts(
         );
         continue;
       }
-      walk.context.facts.set(
-        declaration,
-        rustResourceManagementFactKey,
-        selected.fact,
-        [{ message: "rust finalized exact resource-management operation" }],
-      );
+      walk.context.records.resourceManagement.set(declaration, selected.fact, [{ message: "rust finalized exact resource-management operation" }]);
       walk.context.generatedDeclarationUses.record(
         declaration,
         selected.projectDisposerDeclarations,
@@ -86,8 +73,7 @@ export function recordResourceManagementFacts(
 export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   const resolving = new Set<Node>();
   const resolve = (node: Node): RustFutureValueFact | undefined => {
-    const existing = walk.context.facts.get(node, rustFutureValueFactKey) ??
-      walk.context.facts.resolve(node, rustFutureValueFactKey);
+    const existing = walk.context.records.futureValue.get(node);
     if (existing !== undefined || resolving.has(node)) {
       return existing;
     }
@@ -96,8 +82,8 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       const transport = (operand: Node | undefined): RustFutureValueFact | undefined => {
         if (operand === undefined) return undefined;
         const fact = resolve(operand);
-        const source = walk.context.facts.getRuntimeCarrierFact(operand)?.carrier;
-        let target = walk.context.facts.getRuntimeCarrierFact(node)?.carrier;
+        const source = walk.context.records.runtimeCarrier.get(operand)?.carrier;
+        let target = walk.context.records.runtimeCarrier.get(node)?.carrier;
         if (fact === undefined) return undefined;
         if (target === undefined && source !== undefined && walk.context.ast.kindName(node) === KindIdentifier) {
           target = setCarrierFact(walk, node, source);
@@ -110,11 +96,9 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
         }
         return selected;
       };
-      const operation = walk.context.facts.get(node, rustTargetOperationFactKey) ??
-        walk.context.facts.resolve(node, rustTargetOperationFactKey);
+      const operation = walk.context.records.targetOperation.get(node);
       const effects = operation?.kind === "source-call"
-        ? walk.context.facts.get(node, rustSourceCallEffectsFactKey) ??
-          walk.context.facts.resolve(node, rustSourceCallEffectsFactKey)
+        ? walk.context.records.sourceCallEffects.get(node)
         : undefined;
       let fact = operation?.kind === "source-call"
         ? rustFutureValueForStoredBranch(walk, node, operation.resultCarrier)
@@ -127,22 +111,22 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
           fact = transport(operand);
         } else if (kind === KindVariableDeclaration) {
           const initializer = Node_Initializer(walk.context.ast, node);
-          fact = walk.context.facts.get(node, rustMutatedBindingFactKey) !== undefined || initializer === undefined
-            ? rustFutureValueForSourceStorage(walk.context.facts.getRuntimeCarrierFact(node)?.carrier)
+          fact = walk.context.records.mutatedBinding.get(node) !== undefined || initializer === undefined
+            ? rustFutureValueForSourceStorage(walk.context.records.runtimeCarrier.get(node)?.carrier)
             : transport(initializer);
         } else if (kind === KindIdentifier) {
           const declaration = walk.context.source.navigation.sourceReferenceFor(node)?.declaration;
           fact = transport(declaration);
         } else if (kind === "KindParameter" || kind === "KindPropertyDeclaration" || kind === "KindPropertySignature" ||
           kind === "KindPropertyAccessExpression" || kind === "KindElementAccessExpression") {
-          fact = rustFutureValueForSourceStorage(walk.context.facts.getRuntimeCarrierFact(node)?.carrier);
+          fact = rustFutureValueForSourceStorage(walk.context.records.runtimeCarrier.get(node)?.carrier);
         }
       }
       if (fact === undefined) {
         return undefined;
       }
-      const carrier = walk.context.facts.get(node, rustRuntimeCarrierKey)?.carrier ??
-        walk.context.facts.resolve(node, rustRuntimeCarrierKey)?.carrier;
+      const carrier = walk.context.records.runtimeCarrier.get(node)?.carrier ??
+        walk.context.records.runtimeCarrier.get(node)?.carrier;
       if (!rustFutureValueMatchesCarrier(fact, carrier, walk.context.typeDefinitions)) {
         appendRustDiagnostic(
           walk,
@@ -153,7 +137,7 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
         );
         return undefined;
       }
-      walk.context.facts.set(node, rustFutureValueFactKey, fact, [
+      walk.context.records.futureValue.set(node, fact, [
         { message: "rust exact future value" },
       ]);
       return fact;
@@ -171,8 +155,8 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       });
       if (walk.context.ast.kindName(node) !== "KindAwaitExpression") return;
       const operand = Node_Expression(walk.context.ast, node);
-      const operation = walk.context.facts.get(node, rustTargetOperationFactKey);
-      const carrier = rustEffectiveValueCarrier(walk.context.facts, operand);
+      const operation = walk.context.records.targetOperation.get(node);
+      const carrier = rustEffectiveValueCarrier(walk.context.records, operand);
       if (operand === undefined || operation?.kind !== "await-op" || carrier === undefined) return;
       const knownFuture = resolve(operand);
       const awaiting = finalizeRustAwaitValueFact(carrier, operation.resultCarrier, leaf =>
@@ -186,7 +170,7 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
           ["target.capability=rust.async.await-value"]);
         return;
       }
-      walk.context.facts.set(node, rustAwaitValueFactKey, awaiting, [{ message: "rust finalized native await branches" }]);
+      walk.context.records.awaitValue.set(node, awaiting, [{ message: "rust finalized native await branches" }]);
     };
     visit(sourceFile);
   }

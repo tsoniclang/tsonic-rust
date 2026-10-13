@@ -4,9 +4,9 @@ import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { acmeTestingPackage, analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { projectSourceResultContracts } from "../../fixtures/project-source-result-contracts.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
-import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/facts/source-call-results.js";
+
+
+import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/source-call-results.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
@@ -27,8 +27,8 @@ function sourceCalls(program, name) {
 }
 
 function exactProjectedCall(program, call) {
-  const fact = program.facts.getFact(call, rustTargetOperationFactKey);
-  const selected = program.facts.getSelectedTargetCall(call);
+  const fact = program.records.targetOperation.get(call);
+  const selected = program.records.selectedCall.get(call);
   assert.equal(fact.kind, "source-call");
   assert.ok(selected.sourceDeclaration);
   assert.ok(program.source.ast.body(selected.sourceDeclaration));
@@ -120,7 +120,7 @@ export function main(): void {
     const value = exactProjectedCall(program, calls[0]);
     assert.equal(value.fact.resultProjection.kind, "option-value");
     assert.equal(value.fact.resultCarrier.name, "uint64");
-    const absent = program.facts.getFact(calls[1], rustTargetOperationFactKey);
+    const absent = program.records.targetOperation.get(calls[1]);
     assert.equal(absent.resultProjection, undefined);
     assert.equal(rustOptionElementCarrier(absent.resultCarrier).name, "uint64");
   }
@@ -172,7 +172,7 @@ export function main(): void {
 }
 ` } });
   const derived = program.projectTypes.definitions.find(definition => definition.sourceName === "Derived");
-  const adapters = program.facts.getFact(derived.declaration, rustProjectCallableAdaptersKey);
+  const adapters = program.records.projectCallableAdapters.get(derived.declaration);
   assert.ok(adapters.length > 0);
   assert.ok(adapters.every(adapter => adapter.adapterFallible === false));
   const override = adapters.find(adapter => adapter.contract !== adapter.implementation);
@@ -181,8 +181,8 @@ export function main(): void {
   const calls = sourceCalls(program, "read");
   assert.equal(calls.length, 2);
   for (const call of calls) {
-    const fact = program.facts.getFact(call, rustTargetOperationFactKey);
-    const selected = program.facts.getSelectedTargetCall(call);
+    const fact = program.records.targetOperation.get(call);
+    const selected = program.records.selectedCall.get(call);
     assert.equal(fact.target.form, "method");
     assert.equal(fact.target.dispatch.selected, "virtual");
     assert.equal(fact.parameters[0].inputs[0].sourceArgumentIndex, 0);
@@ -210,13 +210,13 @@ export function main(): void {
   } });
   const calls = sourceCalls(program, "read");
   assert.equal(calls.length, 2);
-  const numeric = program.facts.getFact(calls[0], rustTargetOperationFactKey);
-  const text = program.facts.getFact(calls[1], rustTargetOperationFactKey);
+  const numeric = program.records.targetOperation.get(calls[0]);
+  const text = program.records.targetOperation.get(calls[1]);
   assert.equal(numeric.parameters[0].parameterCarrier.name, "uint64");
   assert.equal(numeric.resultCarrier.name, "uint64");
   assert.equal(rustTargetTypeRefEquals(text.parameters[0].parameterCarrier, rustStringTargetType()), true);
   assert.equal(rustTargetTypeRefEquals(text.resultCarrier, rustStringTargetType()), true);
-  const generic = program.facts.getFact(sourceCalls(program, "identity")[0], rustTargetOperationFactKey);
+  const generic = program.records.targetOperation.get(sourceCalls(program, "identity")[0]);
   assert.equal(rustTargetTypeRefEquals(generic.resultCarrier, rustStringTargetType()), true);
 });
 
@@ -243,7 +243,7 @@ export function main(): void { new Derived<number>().retain(3); }
   assert.equal(derivedVariant.targetTypeArguments[0].identity, derived.typeParameterIdentities[0]);
   assert.equal(program.projectMethodDispatch.variantForMember(baseMethod, derivedVariant.targetTypeArguments,
     program.projectTypes.openCarrier(derived)), baseVariant);
-  const adapters = program.facts.getFact(derived.declaration, rustProjectCallableAdaptersKey);
+  const adapters = program.records.projectCallableAdapters.get(derived.declaration);
   const override = adapters.find(adapter => adapter.contract === baseMethod && adapter.implementation === derivedMethod);
   assert.ok(override);
   assert.equal(override.returnCarrier.identity, derived.typeParameterIdentities[0]);

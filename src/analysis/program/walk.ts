@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "./operation-context.js";
 import { rustSourceStorageContext } from "../../policy/types/resolution/source-storage-projection.js";
 import {
   BinaryExpression_Left,
@@ -26,15 +27,15 @@ import {
 } from "../operations/provider/index.js";
 import { isSharedSourceMarkerOperation } from "../expressions/references.js";
 import { resolveRegExpCreation } from "../expressions/regexp.js";
-import { rustConversionKey, rustSelectedOperationKey } from "../../target-model/facts/selections.js";
+
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
-import { rustPostCheckOperationKind } from "../facts/keys.js";
+import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { checkedPropertySelectionInput } from "../operations/provider/properties.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingPolicy } from "./module-bindings.js";
-import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
+
 import type { RustOperationsProviderOptions, RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 import type { RustProviderOperationRow } from "../../providers/packages/model.js";
 import type { RustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
@@ -130,7 +131,7 @@ function recordTerminalExpressionFailure(walk: RustFactWalk, node: Node | undefi
 export function rustOperationContext(
   walk: RustFactWalk,
   node: Node,
-): RustOperationPolicyContext {
+): RustOperationAnalysisContext {
   return {
     ...rustScopedContext(walk, node),
     extensionId: rustTargetSemanticsExtensionId,
@@ -158,12 +159,8 @@ export function recordPolicySelection<T extends { readonly operation?: unknown }
     walk.postCheckOperations.set(subject, deferredKind);
     return;
   }
-  if (operation !== undefined && walk.context.facts.getSelectedTargetOperator(subject) === undefined) {
-    walk.context.facts.set(
-      subject,
-      rustSelectedOperationKey,
-      operation as import("../../target-model/types/model.js").RustSelectedTargetOperation,
-    );
+  if (operation !== undefined && walk.context.records.selectedOperation.get(subject) === undefined) {
+    walk.context.records.selectedOperation.set(subject, operation as import("../../target-model/types/model.js").RustSelectedTargetOperation);
   }
 }
 
@@ -323,7 +320,7 @@ export function selectExpressionOperation(
     }, context, walk.operationOptions);
     recordPolicySelection(walk, expression, selection);
     if (selection.kind === "accept" && selection.value.convertedType !== undefined) {
-      walk.context.facts.set(expression, rustConversionKey, {
+      walk.context.records.conversion.set(expression, {
         convertedType: selection.value.convertedType,
       });
     }
@@ -369,7 +366,7 @@ export function hasSelectedRuntimeCallableUse(walk: RustFactWalk, node: Node): b
   }
   if (parent === undefined || ![KindCallExpression, KindNewExpression].includes(ast.kindName(parent)) ||
     Node_Expression(ast, parent) !== callee) return false;
-  const selected = walk.context.facts.getSelectedTargetCall(parent);
+  const selected = walk.context.records.selectedCall.get(parent);
   if (ast.kindName(parent) === KindNewExpression) return selected?.sourceConstructorCarrier !== undefined;
   return selected?.sourceCallableCarrier !== undefined &&
     selected.sourceStructuralMethod === undefined;

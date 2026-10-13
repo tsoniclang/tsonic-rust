@@ -6,11 +6,7 @@ import {
   Node_Name,
 } from "@tsonic/target-api/source";
 import { resolve } from "node:path";
-import {
-  rustAsyncFunctionFactKey,
-  rustFallibleFactKey,
-  rustSourceCallableReturnFactKey,
-} from "../../../analysis/facts/keys.js";
+
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 
@@ -66,16 +62,16 @@ export function resolveBinaryEntry(
   }
   const declaration = rustBinaryEntryDeclaration(input.program);
   if (declaration !== undefined) {
-    const asyncFact = input.program.facts.getFact(declaration, rustAsyncFunctionFactKey);
+    const asyncFact = input.program.records.asyncFunction.get(declaration);
     return {
       declaration,
       sourceFile: entrySourceFile,
       moduleName,
       functionName: "main",
       async: asyncFact?.kind,
-      fallible: input.program.facts.getFact(declaration, rustFallibleFactKey) !== undefined,
+      fallible: input.program.records.fallible.get(declaration) !== undefined,
       nativeTermination: !isRustUnitCarrier(asyncFact?.outputCarrier ??
-        input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.returnCarrier),
+        input.program.records.sourceCallableReturn.get(declaration)?.returnCarrier),
     };
   }
   diagnostics.push({
@@ -111,9 +107,9 @@ export function rustBinaryEntryDeclaration(
     }
     const name = Node_Name(program.source.ast, statement);
     if (name === undefined || program.source.ast.text(name) !== "main") continue;
-    const asyncFact = program.facts.getFact(statement, rustAsyncFunctionFactKey);
+    const asyncFact = program.records.asyncFunction.get(statement);
     const returnCarrier = asyncFact?.outputCarrier ??
-      program.facts.getFact(statement, rustSourceCallableReturnFactKey)?.returnCarrier;
+      program.records.sourceCallableReturn.get(statement)?.returnCarrier;
     return program.source.ast.hasModifierKind(statement, "export") &&
         returnCarrier !== undefined &&
         program.source.ast.parameters(statement).length === 0 &&

@@ -2,18 +2,18 @@ import { createHash } from "node:crypto";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceCallableDefinitionIsDiscarded } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustCallableProtocol, rustLocationTargetType, rustTargetGenericReferences } from "../../target-model/types/index.js";
-import { rustClosureCaptureFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import type { RustClosureCaptureFact } from "../facts/operations/keys.js";
+
+import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustLifetimeIndex, RustSourceGenericParameterContract } from "../../target-model/lifetimes/index.js";
 import { rustLifetimeKey, rustStaticLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { bindRustElidedCallableInput, substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { resolveRustEnclosingGenericParameters } from "../../policy/types/resolution/generic-environment.js";
-import { rustCallableImplicitLifetimeParameters } from "../facts/source-input-lifetimes.js";
+import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 import type { RustNativeCapturePlan } from "./native-captures.js";
 
 export interface RustSuspendedCallableImplementation {
@@ -43,7 +43,7 @@ export interface RustSuspendedCallablePlan {
 export function createRustSuspendedCallablePlan(
   ast: AstReader,
   sourceFiles: readonly SourceFile[],
-  facts: RustPlanQueries,
+  records: RustProgramRecords,
   names: RustNamePlan,
   lifetimes: RustLifetimeIndex,
   nativeCaptures: RustNativeCapturePlan,
@@ -55,7 +55,7 @@ export function createRustSuspendedCallablePlan(
       sourceCallableDefinitionIsDiscarded(node, ast)) return;
     const name = names.nameForDeclaration(node);
     if (name !== undefined) usedNames.add(name);
-    if (facts.getFact(node, rustClosureCaptureFactKey)?.invocationOwner === "shared-state") selected.push(node);
+    if (records.closureCapture.get(node)?.invocationOwner === "shared-state") selected.push(node);
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of sourceFiles) visit(sourceFile);
@@ -63,8 +63,8 @@ export function createRustSuspendedCallablePlan(
   const implementations = new Map<Node, RustSuspendedCallableImplementation>();
   const issues: RustSourceCallableSpecializationIssue[] = [];
   for (const declaration of selected) {
-    const operation = facts.getFact(declaration, rustTargetOperationFactKey);
-    const captureFact = facts.getFact(declaration, rustClosureCaptureFactKey);
+    const operation = records.targetOperation.get(declaration);
+    const captureFact = records.closureCapture.get(declaration);
     const captures = captureFact?.captures;
     const receiverFields = captureFact?.receiverFields;
     const receivers = captureFact?.receivers;
@@ -105,7 +105,7 @@ export function createRustSuspendedCallablePlan(
       .map(rustLifetimeKey), ...signature.typeIdentities.filter(identity => !nativeIdentities.has(identity))];
     const parameters = resolveRustEnclosingGenericParameters(declaration, requested, ast,
       owner => [...lifetimes.contractFor(owner)?.parameters ?? [],
-        ...rustCallableImplicitLifetimeParameters(owner, ast, facts)]);
+        ...rustCallableImplicitLifetimeParameters(owner, ast, records)]);
     if (parameters === undefined || signature.constIdentities.length > 0) {
       issues.push({ subject: declaration, message: "A suspended callable state lost its exact enclosing generic parameter declarations." });
       continue;

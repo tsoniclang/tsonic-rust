@@ -122,7 +122,7 @@ test("native result union planning rejects mutated projection evidence", () => {
   let node;
   const visit = current => {
     if (ast.is.IsIdentifier(current) && ast.text(current) === "grouping") {
-      const carrier = program.facts.getRuntimeCarrierFact(current)?.carrier;
+      const carrier = program.records.runtimeCarrier.get(current)?.carrier;
       if (carrier?.kind === "target-named" && carrier.id === rustJsIntlGroupingTargetId) {
         node = current;
       }
@@ -131,7 +131,7 @@ test("native result union planning rejects mutated projection evidence", () => {
   };
   visit(sourceFile);
   assert.notEqual(node, undefined);
-  const source = program.facts.getRuntimeCarrierFact(node).carrier;
+  const source = program.records.runtimeCarrier.get(node).carrier;
   const selected = rustStringTargetType();
   const context = {
     input: { program },

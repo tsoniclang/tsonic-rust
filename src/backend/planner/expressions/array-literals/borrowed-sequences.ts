@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { sourceSequenceInputChoice, sourceSequenceInputIsEmpty } from "@tsonic/target-api/source";
-import type { RustBorrowedSequenceInput } from "../../../../analysis/facts/operations/borrowed-sequences.js";
-import { rustEffectiveValueCarrier } from "../../../../analysis/facts/value-carrier-queries.js";
+import type { RustBorrowedSequenceInput } from "../../../../target-model/records/borrowed-sequences.js";
+import { rustEffectiveValueCarrier } from "../../../../analysis/conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/carriers/optional.js";
 import { rustRestSequenceElements } from "../../../../target-model/operations/rest-assembly.js";
@@ -45,7 +45,7 @@ export function planRustBorrowedSequenceAppend(
     if (selected.kind === "empty") return sourceSequenceInputIsEmpty(context.input.program.source.ast, selected.expression)
       ? { kind: "tuple-literal", elements: [] } : reject("Only an exact empty array literal may omit source construction.");
     const carrier = context.expressionOverrides?.get(selected.expression)?.carrier ??
-      rustEffectiveValueCarrier(context.input.program.facts, selected.expression);
+      rustEffectiveValueCarrier(context.input.program.records, selected.expression);
     const present = rustOptionElementCarrier(selected.carrier);
     const contract = rustValueConversionContract(selected.conversion, context.input.program.typeDefinitions);
     if (!rustTargetTypeRefEquals(carrier, selected.carrier) ||

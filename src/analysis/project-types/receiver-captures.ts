@@ -1,21 +1,9 @@
+import type { RustReceiverFieldCapture, RustReceiverCapture } from "../../target-model/records/receiver-captures.js";
 import type { AstReader, Node, SourceFile, Type } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer, sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import type { SourceProgramNavigation, SourceProgramSemantics } from "@tsonic/target-api/source";
 import { rustProjectObjectField } from "./object-layout.js";
 import type { RustProjectTypePolicy } from "./type-policy.js";
-
-export interface RustReceiverFieldCapture {
-  readonly declaration: Node;
-  readonly reference: Node;
-  readonly receiver: Node;
-  readonly references: readonly Node[];
-}
-
-export interface RustReceiverCapture {
-  readonly owner: Node;
-  readonly reference: Node;
-  readonly references: readonly Node[];
-}
 
 export interface RustReceiverFieldCaptureQueries {
   readonly issues: readonly { readonly node: Node; readonly reason: string }[];

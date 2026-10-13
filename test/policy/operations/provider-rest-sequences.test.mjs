@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { acmeTestingPackage, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { rustJsArrayTargetType } from "../../../dist/target-model/types/index.js";
 
 test("native variadic sequences retain initialized values, widths, exhaustion and exception ordering", { timeout: 300_000 }, () => {

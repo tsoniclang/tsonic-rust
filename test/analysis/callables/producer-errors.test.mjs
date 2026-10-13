@@ -1,9 +1,10 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { selectRustProducerError } from "../../../dist/analysis/callables/producer-errors.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
-import { rustErrorEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function fixture() {
@@ -18,7 +19,7 @@ function fixture() {
     const selected = context.ast.name(candidate.declaration);
     return selected !== undefined && context.ast.text(selected) === name;
   });
-  const input = { producers, facts: context.facts, definitions: context.typeDefinitions };
+  const input = { producers, records: context.records, definitions: context.typeDefinitions };
   const reference = (name, channel) => rustProducerErrorReference(producers.errorFor(producer(name).declaration, channel));
   return { context, input, producer, reference };
 }
@@ -65,9 +66,8 @@ test("producer error selection rejects foreign owners, missing evidence and malf
     assert.equal(selectRustProducerError({ ...reference, ...changed }, current.input) === undefined, true,
       "unproved producer channels cannot default to pure or ambient errors");
   }
-  const missing = { ...current.input, facts: { ...current.input.facts,
-    getFact: (node, key) => key === rustErrorEffectsFactKey ? undefined : current.input.facts.getFact(node, key),
-  } };
+  const missing = { ...current.input, records: createRustRecordFixture({...current.input.records,
+errorEffects: { get: (node) => undefined }}) };
   assert.equal(selectRustProducerError(reference, missing) === undefined, true, "unsealed effects stay unresolved");
   let reads = 0;
   const changed = { ...reference };

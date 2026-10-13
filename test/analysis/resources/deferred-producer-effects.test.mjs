@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { rustDeferredProducerEffectsFactKey, rustErrorEffectsFactKey, rustSourceCallableReturnFactKey }
-  from "../../../dist/analysis/facts/keys.js";
+
+
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustNativeCallableCompletion } from "../../../dist/target-model/types/callable-completions.js";
-import { mergeRustDeferredProducerChannels } from "../../../dist/analysis/facts/deferred-producer-effects.js";
+import { mergeRustDeferredProducerChannels } from "../../../dist/analysis/callables/deferred-producer-effects.js";
 import { finiteCompletionSequencingSource } from "../../../../tsonic/test/fixtures/finite-completion-sequencing.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
@@ -53,7 +54,7 @@ test("direct, captured and forwarded input futures retain the actual caller erro
     assert.equal(rustTargetTypeRefEquals(error.owner, implementation), true, name);
     assert.equal(error.trait.id, protocol.trait.id, name);
     assert.equal(error.name, "AwaitError0");
-    const fact = current.context.facts.get(current.declaration(name), rustDeferredProducerEffectsFactKey);
+    const fact = current.context.records.deferredProducerEffects.get(current.declaration(name));
     assert.equal(Object.isFrozen(fact) && Object.isFrozen(fact.channels) && Object.isFrozen(fact.channels[0]) &&
       Object.isFrozen(error), true);
     assert.equal(fact.channels[0].awaiting, "fallible");
@@ -76,7 +77,7 @@ test("generic return storage substitutes output and associated error through the
     assert.equal(error.kind, "associated-type");
     assert.equal(rustTargetTypeRefEquals(error.owner, input.implementation), true);
     assert.equal(error.trait.id, formal.protocol.trait.id);
-    const result = current.context.facts.get(declaration, rustSourceCallableReturnFactKey);
+    const result = current.context.records.sourceCallableReturn.get(declaration);
     const output = rustNativeCallableCompletion(result.returnCarrier, current.context.typeDefinitions).futures[0].output;
     assert.equal(rustTargetTypeRefEquals(error.trait.genericArguments[0].type, output), true,
       "the original callee binder must not escape in the generic protocol application");
@@ -102,7 +103,7 @@ test("sync returns of async source calls retain stable producer ownership and pu
     "infallible");
   assert.equal(current.context.callableValues.nativeProducers.deferredFor(current.declaration("pendingFailure"), 0).awaiting,
     "fallible");
-  const effects = current.context.facts.get(current.declaration("pendingFailure"), rustErrorEffectsFactKey);
+  const effects = current.context.records.errorEffects.get(current.declaration("pendingFailure"));
   assert.equal(effects.localErrors, false, "constructing the Future does not execute its body");
   assert.equal(effects.nativeErrors.length, 0);
 });
@@ -146,7 +147,7 @@ test("no-Future evidence is explicit, while absent facts, foreign owners and inv
   `);
   const producers = current.context.callableValues.nativeProducers;
   for (const name of ["scalar", "empty", "diverging"]) {
-    assert.equal(current.context.facts.get(current.declaration(name), rustDeferredProducerEffectsFactKey).kind, "no-future");
+    assert.equal(current.context.records.deferredProducerEffects.get(current.declaration(name)).kind, "no-future");
     assert.equal(current.error(name).id, rustInfallibleTargetId);
     assert.equal(producers.deferredFor(current.declaration(name), 0).awaiting, "infallible");
     assert.equal(producers.deferredFor(current.declaration(name), 1) === undefined, true,

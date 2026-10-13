@@ -9,13 +9,13 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { requireExpressionCarrier, rustOperationFact } from "../fundamentals.js";
 import { planExpression } from "../entry.js";
 import { planNativeRustArray } from "../native-arrays.js";
-import { rustNativeArrayStorageKey } from "../../../../target-model/operations/native-memory.js";
+
 import { rustJsArrayTargetType, rustOptionElementCarrier, rustVecTargetType } from "../../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustEffectiveValueCarrier } from "../../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../../analysis/conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../../../../target-model/metadata/closed-data.js";
-import type { RustBorrowedSequenceInput } from "../../../../analysis/facts/operations/borrowed-sequences.js";
+import type { RustBorrowedSequenceInput } from "../../../../target-model/records/borrowed-sequences.js";
 import { planRustBorrowedSequenceAppend } from "./borrowed-sequences.js";
 
 type Contribution = { readonly kind: "value"; readonly value: RustExpr }
@@ -33,7 +33,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     const elements: RustExpr[] = [];
     for (const [index, source] of sources.entries()) {
       if (source === undefined || fact.resultCarrier.kind !== "tuple" || !rustTargetTypeRefEquals(
-        context.expressionOverrides?.get(source)?.carrier ?? rustEffectiveValueCarrier(context.input.program.facts, source),
+        context.expressionOverrides?.get(source)?.carrier ?? rustEffectiveValueCarrier(context.input.program.records, source),
         fact.resultCarrier.elements[index])) {
         return reject(node, context, "Tuple contribution does not match its exact finalized destination storage.");
       }
@@ -76,7 +76,7 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     }
     if (!rustTargetTypeRefEquals(contribution.carrier, fact.elementCarrier) ||
       !rustTargetTypeRefEquals(context.expressionOverrides?.get(expression)?.carrier ??
-        rustEffectiveValueCarrier(context.input.program.facts, expression), contribution.carrier)) {
+        rustEffectiveValueCarrier(context.input.program.records, expression), contribution.carrier)) {
       return reject(node, context, "Array value contribution lost its finalized source and destination carriers.");
     }
     const value = planExpression(expression, context);
@@ -93,10 +93,10 @@ export function planArrayLiteral(node: Node, context: RustPlanContext): RustExpr
     const empty: RustExpr = { kind: "associated-call", owner,
       method: fact.lane === "native" ? "new" : "from_dense", args: fact.lane === "native" ? [] : [array] };
     if (fact.lane === "js") { context.usedAliases?.add("js_abi"); return empty; }
-    return context.input.program.facts.getFact(node, rustNativeArrayStorageKey) === undefined
+    return context.input.program.records.nativeArrayStorage.get(node) === undefined
       ? empty : planNativeRustArray(node, empty, context);
   }
-  if (fact.lane === "native") return context.input.program.facts.getFact(node, rustNativeArrayStorageKey) === undefined
+  if (fact.lane === "native") return context.input.program.records.nativeArrayStorage.get(node) === undefined
     ? array : planNativeRustArray(node, array, context);
   context.usedAliases?.add("js_abi");
   return { kind: "call", path: "js_abi::JsArray::from_dense", args: [array] };

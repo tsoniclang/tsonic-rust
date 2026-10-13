@@ -6,11 +6,7 @@ import {
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import {
-  rustAsyncFunctionFactKey,
-  rustGeneratorFactKey,
-  rustSourceCallEffectsFactKey,
-} from "../../../../analysis/facts/keys.js";
+
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import {
   isRustUnitCarrier,
@@ -38,7 +34,7 @@ import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { rustDeclarationRequiresUnsafe } from "../../safety/explicit-safety.js";
-import { rustCallableInvocationResult } from "../../../../analysis/facts/callable-results.js";
+import { rustCallableInvocationResult } from "../../../../analysis/callables/results.js";
 import { rustProjectStateType as rustProjectNamedStateType } from "./names.js";
 import { rustCapturedFieldStorage, rustCapturedFieldType } from "../captured-fields.js";
 
@@ -151,8 +147,8 @@ export function projectOwnFields(
   }
   const externalFieldCount = fields.length;
   for (const layoutField of layout.fields) {
-    const declared = context.input.program.facts.getRuntimeCarrierFact(layoutField.declaration)?.carrier ??
-      context.input.program.facts.getRuntimeCarrierFact(Node_Type(context.input.program.source.ast, layoutField.declaration))?.carrier;
+    const declared = context.input.program.records.runtimeCarrier.get(layoutField.declaration)?.carrier ??
+      context.input.program.records.runtimeCarrier.get(Node_Type(context.input.program.source.ast, layoutField.declaration))?.carrier;
     const carrier = declared === undefined
       ? undefined
       : context.input.program.projectTypes.instantiateMemberCarrier(
@@ -339,9 +335,9 @@ export function projectCallableShape(
       methodTypeArgumentSubstitutions.size === methodTypeParameters.length &&
       methodTypeParameterNames.every((name) =>
         name !== undefined && name.length > 0 && methodTypeArgumentSubstitutions.has(name));
-  const asynchronous = context.input.program.facts.getFact(member, rustAsyncFunctionFactKey);
+  const asynchronous = context.input.program.records.asyncFunction.get(member);
   if (!methodSpecializationValid ||
-    context.input.program.facts.getFact(member, rustGeneratorFactKey) !== undefined ||
+    context.input.program.records.generator.get(member) !== undefined ||
     asynchronous?.kind === "native-future" ||
     context.input.program.source.ast.hasModifierKind(member, "async") && asynchronous?.kind !== "js-promise") {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -360,8 +356,8 @@ export function projectCallableShape(
     : { ...context, typeParameterSubstitutions: substitutions };
   const syntheticNames = createRustSyntheticNameState(selectedContext.input.program.source.ast, member, []);
   const parameterPlan = planRustCallableParameters(member, selectedContext, syntheticNames);
-  const returnCarrier = rustCallableInvocationResult(selectedContext.input.program.facts, member);
-  const effects = selectedContext.input.program.facts.getFact(member, rustSourceCallEffectsFactKey);
+  const returnCarrier = rustCallableInvocationResult(selectedContext.input.program.records, member);
+  const effects = selectedContext.input.program.records.sourceCallEffects.get(member);
   if (parameterPlan === undefined || returnCarrier === undefined || effects === undefined) {
     return undefined;
   }
@@ -496,13 +492,13 @@ export function projectTypeSubstitutions(
 export function projectLifetimeSubstitutions(
   definition: RustProjectTypeDefinition,
   carrier: TargetTypeRef,
-): ReadonlyMap<string, import("../../../../target-model/lifetimes/index.js").RustLifetimeRef> {
+): ReadonlyMap<string, import("../../../../target-model/lifetimes/model.js").RustLifetimeRef> {
   const value = rustSourceTypeCarrierValue(carrier);
   const arguments_ = value?.genericArguments ?? [];
   if (arguments_.length !== definition.genericParameters.length) {
     throw new Error("Project carrier does not match its sealed generic declaration arity.");
   }
-  const result = new Map<string, import("../../../../target-model/lifetimes/index.js").RustLifetimeRef>();
+  const result = new Map<string, import("../../../../target-model/lifetimes/model.js").RustLifetimeRef>();
   for (const [index, parameter] of definition.genericParameters.entries()) {
     const argument = arguments_[index];
     if (parameter.kind === "lifetime") {

@@ -1,7 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { rustAwaitValueFactKey, rustAwaitValueMatchesCarrier } from "../../../analysis/facts/await-values.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
+
+import { rustAwaitValueMatchesCarrier } from "../../../analysis/callables/await-values.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -16,8 +17,8 @@ export function planRustAwaitExpression(
 ): RustExpr | undefined {
   const operation = rustOperationFact(node, context);
   const operand = Node_Expression(context.input.program.source.ast, node);
-  const fact = context.input.program.facts.getFact(node, rustAwaitValueFactKey);
-  const operandCarrier = rustEffectiveValueCarrier(context.input.program.facts, operand);
+  const fact = context.input.program.records.awaitValue.get(node);
+  const operandCarrier = rustEffectiveValueCarrier(context.input.program.records, operand);
   if (operation?.kind !== "await-op" || fact === undefined ||
     !rustAwaitValueMatchesCarrier(fact, operandCarrier, operation.resultCarrier, context.input.program.typeDefinitions)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),

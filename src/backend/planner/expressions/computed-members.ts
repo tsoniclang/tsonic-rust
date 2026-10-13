@@ -1,6 +1,6 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import { rustComputedMemberFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/operations/keys.js";
+
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
@@ -21,12 +21,12 @@ export function prepareRustComputedMemberEvaluation(
   node: Node,
   context: RustPlanContext,
 ): RustComputedMemberEvaluation | undefined {
-  const fact = context.input.program.facts.getFact(node, rustComputedMemberFactKey);
+  const fact = context.input.program.records.computedMember.get(node);
   const ast = context.input.program.source.ast;
   const element = ast.is.IsElementAccessExpression(node) ? ast.as.AsElementAccessExpression(node) : undefined;
   const parent = ast.parent(node);
   const call = parent === undefined ? undefined
-    : context.input.program.facts.getFact(parent, rustTargetOperationFactKey);
+    : context.input.program.records.targetOperation.get(parent);
   if (fact !== undefined && (element === undefined || fact.receiver !== element.Expression ||
     fact.key !== element.ArgumentExpression) ||
     fact === undefined && element !== undefined && call?.kind === "source-call" &&

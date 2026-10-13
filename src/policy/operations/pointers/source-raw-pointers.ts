@@ -6,8 +6,8 @@ export function isRustSourceRawPointer(
   subject: ExtensionFactSubject,
   context: RustTargetTypeResolutionContext,
 ): boolean {
-  const fact = context.facts.get(subject, rawPointerFactKey);
-  const marker = context.facts.get(subject, sourceMarkerFactKey);
+  const fact = context.source.sourceFacts.getFact(subject, rawPointerFactKey);
+  const marker = context.source.sourceFacts.getFact(subject, sourceMarkerFactKey);
   return marker?.kind === "type-marker" ? marker.marker === "raw-pointer"
     : fact?.representation === "opaque-identity";
 }

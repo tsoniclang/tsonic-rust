@@ -2,7 +2,7 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustRuntimeCategory } from "./runtime-category.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
-import { rustClassValueFactKey } from "../../../analysis/facts/class-values.js";
+
 import { planRustClassValueRead } from "../objects/class-values.js";
 import {
   diagnosticInput,
@@ -53,11 +53,7 @@ import {
   planRustValueRead,
   planRustNonConsumingValue,
 } from "./typed-locations.js";
-import {
-  rustSourceBindingFactKey,
-  rustSourceCallableValueFactKey,
-  rustYieldFactKey,
-} from "../../../analysis/facts/keys.js";
+
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
 import { expressionCarrier, planBigIntLiteral, planDeleteExpression, planGeneratorResumeExpression, planNumericLiteral, planSourceConversion, planTemplateExpression, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
@@ -74,7 +70,7 @@ import { planPropertyAccess } from "./properties.js";
 import { planRecordLiteral } from "./records.js";
 import { planUnaryExpression } from "./updates/source.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import { rustEffectiveValueCarrier } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustExpressionContainsStatementBlock } from "../../target-ast/syntax/expressions.js";
 import { planRustAwaitExpression } from "./await.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -162,11 +158,11 @@ export function planExpressionInner(
     case "KindClassExpression":
       return planRustClassValueRead(node, context);
     case KindIdentifier: {
-      if (context.input.program.facts.getFact(node, rustClassValueFactKey) !== undefined) {
+      if (context.input.program.records.classValue.get(node) !== undefined) {
         return planRustClassValueRead(node, context);
       }
       const identifierFact = rustOperationFact(node, context);
-      const binding = context.input.program.facts.getFact(node, rustSourceBindingFactKey);
+      const binding = context.input.program.records.sourceBinding.get(node);
       if (identifierFact !== undefined && identifierFact.kind === "option-none") {
         const carrier = expressionCarrier(node, context);
         return rustOptionalStorageValue(carrier) === undefined ? { kind: "none" }
@@ -202,7 +198,7 @@ export function planExpressionInner(
         }
         return finishProviderOperationExpression(context, identifierFact, planned, node);
       }
-      const callableValue = context.input.program.facts.getFact(node, rustSourceCallableValueFactKey);
+      const callableValue = context.input.program.records.sourceCallableValue.get(node);
       if (callableValue !== undefined) {
         return planRustSourceCallableValue(callableValue, context);
       }
@@ -277,7 +273,7 @@ export function planExpressionInner(
       const planned = inner === undefined ? undefined : planExpression(inner, context);
       const innerCarrier = inner === undefined
         ? undefined
-        : rustEffectiveValueCarrier(context.input.program.facts, inner);
+        : rustEffectiveValueCarrier(context.input.program.records, inner);
       if (fact?.kind !== "non-null-expression" || inner === undefined || planned === undefined ||
         innerCarrier === undefined || !rustTargetTypeRefEquals(innerCarrier, fact.sourceCarrier) ||
         !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.non-null-expression")) {
@@ -359,7 +355,7 @@ export function planExpressionInner(
       }
       if (typeof fact.result !== "string") {
         const operand = planExpressionBeforeValueProjections(operandNode, context, "value", "shared-reference");
-        const carrier = context.input.program.facts.getRuntimeCarrierFact(operandNode)?.carrier;
+        const carrier = context.input.program.records.runtimeCarrier.get(operandNode)?.carrier;
         const planned = operand === undefined ? undefined
           : planRustRuntimeCategory(createRustSharedReferenceArgument(context,
             planRustNonConsumingValue(operandNode, operand, context), operandNode), fact.result, context, true);
@@ -390,7 +386,7 @@ export function planExpressionInner(
       if (fact?.kind !== "void-expression" || operandNode === undefined ||
         !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.void-carrier") ||
         !selectedOperationMatches(
-          context.input.program.facts.getSelectedTargetOperator(node),
+          context.input.program.records.selectedOperation.get(node),
           fact.operationId,
           "operator",
           fact.resultCarrier,
@@ -460,7 +456,7 @@ export function planExpressionInner(
       return planRustAwaitExpression(node, context, planExpression);
     case "KindYieldExpression": {
       const generator = context.generator;
-      const fact = context.input.program.facts.getFact(node, rustYieldFactKey);
+      const fact = context.input.program.records.yield.get(node);
       if (generator === undefined || fact === undefined ||
         fact.generatorDeclaration !== generator.declaration ||
         !rustTargetTypeRefEquals(fact.yieldType, generator.protocol.yieldType) ||

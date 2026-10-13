@@ -10,7 +10,7 @@ import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { expressionCarrier } from "../fundamentals.js";
 import { isRustCopyCarrier } from "../../../../target-model/types/index.js";
-import { isRustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
+import { isRustFinalizedSourceInput } from "../../../../analysis/operations/finalized-operation/conversions.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { mutateRustStoredObjectField } from "../../objects/project-storage.js";
 import { planExpression } from "../entry.js";
@@ -18,13 +18,13 @@ import { planFinalizedTargetInput, planProviderOperationExpression } from "../co
 import { planRustMutableProjectReceiver } from "../typed-locations.js";
 import { readRustProjectDispatchedField, writeRustProjectDispatchedField } from "../../objects/project-objects.js";
 import { planRustProjectFieldDispatchRoles } from "../../objects/project-field-dispatch.js";
-import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
+
 import { sourceFieldSelectedOperationMatches } from "../properties.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
-import type { RustFinalizedSourceInput } from "../../../../analysis/facts/finalized-operation-abi.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import type { RustFinalizedSourceInput } from "../../../../target-model/records/finalized-operation.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { planRustDirectStorageCore } from "./direct-storage.js";
 
@@ -191,7 +191,7 @@ export function findRustUpdateProjectField(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.records.targetOperation.get(current);
     if (fact?.kind === "source-field" || fact?.kind === "source-union-field") {
       return { expression: current, fact };
     }
@@ -245,7 +245,7 @@ export function planRustUpdateProjectionArguments(
     }
     const argument = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, projection);
     const carrier = argument === undefined ? undefined : expressionCarrier(argument, context);
-    const operation = context.input.program.facts.getFact(projection, rustTargetOperationFactKey);
+    const operation = context.input.program.records.targetOperation.get(projection);
     const candidateTargetInput = operation?.kind === "provider-operation" &&
         operation.abi.target.form === "index" &&
         operation.abi.targetArguments.length === 1

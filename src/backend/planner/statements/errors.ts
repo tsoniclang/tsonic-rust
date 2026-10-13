@@ -22,7 +22,7 @@ import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagno
 import { planBlockLike } from "./core.js";
 import { planExpression } from "../expressions/index.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+
 import type { Node } from "@tsonic/tsts";
 import type { RustCompletionBoundary, RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
@@ -31,7 +31,7 @@ import { isRustProgramErrorCarrier } from "../../../target-model/types/index.js"
 import { planRustProgramErrorConstruction } from "../expressions/program-errors.js";
 
 export function planThrowStatement(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  const fact = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const fact = context.input.program.records.targetOperation.get(node);
   if (fact === undefined || fact.kind !== "throw-op" ||
     fact.error.kind !== "conversion" && fact.error.kind !== "program") {
     context.diagnostics.push(missingFactDiagnostic(

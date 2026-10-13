@@ -21,16 +21,16 @@ import { planExpression } from "../entry.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../typed-locations.js";
 import { planRustSourceUnionFieldProjection, mutateRustUnionField } from "../unions.js";
 import { planRustSourceStaticFieldStorage } from "../../declarations/classes/static-field-storage.js";
-import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustExpressionResultUse } from "../entry.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import { planRustComputedMemberExpression } from "../computed-members.js";
 import { planRustSourceAccessorReceiver } from "../../objects/accessor-receivers.js";
-import { rustCompoundWriteFactKey } from "../../../../analysis/facts/operations/keys.js";
+
 import { planRustRuntimeIndexUpdate } from "./runtime.js";
 
 export function planUnaryExpression(
@@ -45,7 +45,7 @@ export function planUnaryExpression(
       return undefined;
     }
     if (!selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetOperator(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
@@ -76,7 +76,7 @@ export function planUnaryExpression(
     return undefined;
   }
   if (!selectedOperationMatches(
-    context.input.program.facts.getSelectedTargetOperator(node),
+    context.input.program.records.selectedOperation.get(node),
     fact.operationId,
     "operator",
     fact.resultCarrier,
@@ -145,7 +145,7 @@ function planRustUpdateExpression(
   }
   const returnsPrevious = resultUse === "value" &&
     context.input.program.source.ast.kindName(expression) === KindPostfixUnaryExpression;
-  if (context.input.program.facts.getFact(expression, rustCompoundWriteFactKey) !== undefined) {
+  if (context.input.program.records.compoundWrite.get(expression) !== undefined) {
     return planRustRuntimeIndexUpdate(expression, operand, fact, step, returnsPrevious, context);
   }
   if (rustSourceFieldHasValueReceiver(operand, context)) {
@@ -275,7 +275,7 @@ function findRustUpdateSourceIndex(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.records.targetOperation.get(current);
     if (fact?.kind === "source-index-signature") {
       return { expression: current, fact };
     }
@@ -356,7 +356,7 @@ function findRustUpdateSourceStaticField(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.records.targetOperation.get(current);
     if (fact?.kind === "source-static-field") {
       return { expression: current, fact };
     }
@@ -455,7 +455,7 @@ export function findRustUpdateSourceAccessor(
 } | undefined {
   let current: Node | undefined = operand;
   while (current !== undefined) {
-    const fact = context.input.program.facts.getFact(current, rustTargetOperationFactKey);
+    const fact = context.input.program.records.targetOperation.get(current);
     if (fact?.kind === "source-accessor") {
       return { expression: current, fact };
     }

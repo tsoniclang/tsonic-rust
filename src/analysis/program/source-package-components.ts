@@ -7,12 +7,12 @@ import type {
 import type {
   RustAnalysisContext,
 } from "./context.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
-import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey, rustTypeAliasDeclarationFactKey } from "../facts/keys.js";
+
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustClosedErrorTransportDemand, type RustClosedErrorTransportDemand } from "../facts/closed-errors.js";
+import { rustClosedErrorTransportDemand } from "../errors/closed-errors.js";
+import type { RustClosedErrorTransportDemand } from "../errors/closed-errors.js";
 import type { RustNativeStorageSelection } from "../callables/native-storage.js";
 import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
 
@@ -156,11 +156,11 @@ export function analyzeRustSourcePackageComponents(
     };
     const visit = (node: import("@tsonic/tsts").Node): void => {
       if (IsTypeSyntaxNode(context.ast, node)) return;
-      if (context.facts.getFact(node, rustTypeAliasDeclarationFactKey)?.kind === "erased") return;
-      inspectStorage(node, context.facts.getFact(node, rustRuntimeCarrierKey)?.carrier, () => nativeStorage.valueFor(node));
-      inspectStorage(node, context.facts.getFact(node, rustSourceCallableReturnFactKey)?.returnCarrier, () => nativeStorage.returnFor(node));
+      if (context.records.typeAliasDeclaration.get(node)?.kind === "erased") return;
+      inspectStorage(node, context.records.runtimeCarrier.get(node)?.carrier, () => nativeStorage.valueFor(node));
+      inspectStorage(node, context.records.sourceCallableReturn.get(node)?.returnCarrier, () => nativeStorage.returnFor(node));
       const parameter = context.ast.is.IsParameterDeclaration(node)
-        ? context.facts.getFact(node, rustSourceParameterAbiFactKey)?.parameterCarrier : undefined;
+        ? context.records.sourceParameterAbi.get(node)?.parameterCarrier : undefined;
       inspectStorage(node, parameter, () => nativeStorage.parameterFor(node, parameter!));
       context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
@@ -223,7 +223,7 @@ export function analyzeRustSourcePackageComponents(
   const errorComponents = new Set<string>();
   const closedErrorsByComponent = new Map<string, { thrownCarriers: TargetTypeRef[]; retained: boolean; sourceView: boolean }>();
   for (const sourceFile of context.sourceFiles) {
-    const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.facts, context.typeDefinitions, context.projectTypes);
+    const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.records, context.typeDefinitions, context.projectTypes);
     const componentId = componentIdByFileName.get(normalizePath(context.ast.getFileName(sourceFile)));
     if (demand === undefined) return rejected("RUST_CLOSED_ERROR_DEMAND_UNRESOLVED",
       "Closed Error demand exceeds its bounded exact source-tree contract.");

@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import {
   KindPropertyAssignment,
@@ -14,12 +15,12 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustValueConversionIsFallible } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../policy/conversions/selection.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
+
 import type {
   RustSourceObjectField,
   RustSourceObjectShape,
 } from "../../project-types/source-type-registry.js";
-import type { RustTargetOperationFact } from "../../facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export interface SelectedObjectShapeProjection {
@@ -41,7 +42,7 @@ type SelectedAuthoredObjectFields =
 
 export function selectedAuthoredObjectFields(
   shape: RustSourceObjectShape,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): SelectedAuthoredObjectFields {
   const selected: {
     readonly field: RustSourceObjectField;

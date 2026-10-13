@@ -8,9 +8,9 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
+
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import { rustTargetOperationText } from "../../../analysis/operations/target-operation.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -24,7 +24,7 @@ import { planExpression, planExpressionBeforeContextualConversion, planExpressio
 import type { RustExpressionResultUse } from "./entry.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
 import { prepareRustComputedMemberEvaluation } from "./computed-members.js";
-import { rustComputedMemberFactKey } from "../../../analysis/facts/operations/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planRustOptionBranch } from "./option-branch.js";
 import { planRustPresentValue } from "./optional-storage.js";
@@ -43,7 +43,7 @@ export function planNullishAssignment(
   }
   if (left === undefined || right === undefined || context.syntheticNames === undefined ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.nullish-assignment-carrier") ||
-    !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
+    !selectedOperationMatches(context.input.program.records.selectedOperation.get(node),
       fact.operationId, "operator", fact.resultCarrier, rustTargetOperationText(fact))) {
     return undefined;
   }
@@ -65,11 +65,11 @@ export function planNullishAssignment(
   if (location !== undefined) {
     bindings.push(...location.bindings);
   } else {
-    const target = context.input.program.facts.getFact(left, rustTargetOperationFactKey);
+    const target = context.input.program.records.targetOperation.get(left);
     const staticReceiver = target?.kind === "source-static-field" ||
       target?.kind === "source-accessor" && target.receiver.kind === "static";
     const receiver = staticReceiver ? undefined : Node_Expression(ast, left);
-    const index = context.input.program.facts.getFact(left, rustComputedMemberFactKey) === undefined &&
+    const index = context.input.program.records.computedMember.get(left) === undefined &&
       ast.kindName(left) === KindElementAccessExpression
       ? ElementAccessExpression_ArgumentExpression(ast, left)
       : undefined;

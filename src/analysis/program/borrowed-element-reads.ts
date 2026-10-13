@@ -3,7 +3,7 @@ import { BinaryExpression_Right, Node_Expression, type SourceProgramNavigation }
 import type { RustTargetProgram } from "./model.js";
 import { analyzeRustBorrowedElementLocals, type RustBorrowedElementLocal } from "./borrowed-element-locals.js";
 import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
-import { rustBorrowedStringInputs } from "../facts/provider-borrows.js";
+import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 import { analyzeRustBorrowedIterationBindings, type RustBorrowedIterationBinding } from "./borrowed-iteration-bindings.js";
 
 export interface RustBorrowedElementRead {
@@ -25,12 +25,12 @@ export interface RustBorrowedElementReads {
 export function analyzeRustBorrowedElementReads(
   ast: AstReader,
   files: readonly SourceFile[],
-  facts: RustTargetProgram["facts"],
+  records: RustTargetProgram["records"],
   navigation: SourceProgramNavigation,
 ): RustBorrowedElementReads {
   const reads = new WeakMap<Node, RustBorrowedElementRead>();
   const indexedReads = new WeakMap<Node, RustBorrowedElementRead>();
-  const locals = analyzeRustBorrowedElementLocals(ast, files, facts, navigation);
+  const locals = analyzeRustBorrowedElementLocals(ast, files, records, navigation);
   const select = (consumer: Node, read: RustBorrowedElementRead): void => {
     reads.set(consumer, read);
     indexedReads.set(read.element, read);
@@ -40,15 +40,15 @@ export function analyzeRustBorrowedElementReads(
     if (local !== undefined) indexedReads.set(local.element, local);
     const parent = ast.parent(node);
     if (parent !== undefined && ast.is.IsExpressionStatement(parent) &&
-      Node_Expression(ast, parent) === node && rustBorrowedStringAppend(node, ast, facts)) {
+      Node_Expression(ast, parent) === node && rustBorrowedStringAppend(node, ast, records)) {
       const right = BinaryExpression_Right(ast, node);
-      const read = right === undefined ? undefined : rustBorrowedElementRead(right, ast, facts);
+      const read = right === undefined ? undefined : rustBorrowedElementRead(right, ast, records);
       if (read !== undefined) select(node, read);
     }
-    const operation = rustBorrowPureOperation(node, facts);
+    const operation = rustBorrowPureOperation(node, records);
     if (operation !== undefined) {
       for (const receiver of rustBorrowedStringInputs(node, operation, ast)) {
-        const read = rustBorrowedElementRead(receiver, ast, facts);
+        const read = rustBorrowedElementRead(receiver, ast, records);
         const argumentsList = ast.is.IsCallExpression(node) ? ast.arguments(node) : [];
         const callee = Node_Expression(ast, node);
         const sourceReceiver = ast.is.IsCallExpression(node)
@@ -64,7 +64,7 @@ export function analyzeRustBorrowedElementReads(
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   files.forEach(visit);
-  const forIteration = analyzeRustBorrowedIterationBindings(ast, files, facts, navigation);
+  const forIteration = analyzeRustBorrowedIterationBindings(ast, files, records, navigation);
   return Object.freeze({ forExpression: (node: Node) => reads.get(node),
     forRead: (node: Node) => indexedReads.get(node), ...locals, forIteration });
 }

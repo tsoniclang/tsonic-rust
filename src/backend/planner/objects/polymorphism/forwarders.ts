@@ -485,7 +485,7 @@ function projectThisOverrides(
   }
   const program = context.input.program;
   for (const node of rustProjectThisReferences(method, ownerCarrier, program.source.ast,
-    program.facts, program.projectTypes)) {
+    program.records, program.projectTypes)) {
     overrides.set(node, {
       carrier: ownerCarrier,
       valueForm: "value",

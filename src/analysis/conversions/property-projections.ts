@@ -1,5 +1,6 @@
+import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { Node, Type } from "@tsonic/tsts";
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
@@ -10,9 +11,12 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { selectRustStructuralFieldProjection } from "../../policy/types/objects/structural-fields.js";
 import { selectRustProjectedValueConversion, selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { resolveRustProjectField, type RustProjectFieldSelection } from "../operations/provider/project-fields.js";
-import { resolveRustProjectAccessor, type RustProjectAccessorSelection } from "../operations/provider/project-accessors.js";
-import { rustPropertyProjectionFactKey, type RustPropertyProjectionCase } from "../facts/property-projections.js";
+import { resolveRustProjectField } from "../operations/provider/project-fields.js";
+import type { RustProjectFieldSelection } from "../../target-model/records/project-fields.js";
+import { resolveRustProjectAccessor } from "../operations/provider/project-accessors.js";
+import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
+
+import type { RustPropertyProjectionCase } from "../../target-model/records/property-projections.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
 
@@ -20,7 +24,7 @@ const maximumPropertyProjectionMembers = 1_048_576;
 
 export function createRustPropertyProjectionSelector(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   carriers: readonly (TargetTypeRef | undefined)[],
 ): (argumentIndex: number) => RustValueConversion | undefined {
@@ -62,10 +66,9 @@ export function createRustPropertyProjectionSelector(
       return projection.conversion;
     });
     if (conversion !== undefined) {
-      const previous = context.facts.get(argument.expression, rustPropertyProjectionFactKey);
+      const previous = context.records.propertyProjection.get(argument.expression);
       if (previous !== undefined && !closedMetadataEquals(previous.conversion, conversion)) return undefined;
-      if (previous === undefined) context.facts.set(argument.expression, rustPropertyProjectionFactKey,
-        Object.freeze({ conversion, cases: Object.freeze(cases) }));
+      if (previous === undefined) context.records.propertyProjection.set(argument.expression, Object.freeze({ conversion, cases: Object.freeze(cases) }));
     }
     cache.set(argumentIndex, conversion);
     return conversion;
@@ -76,7 +79,7 @@ export function selectRustPropertyProjectionCase(
   sourceType: Type,
   destination: Type,
   source: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   reserve: () => boolean,
 ): RustPropertyProjectionCase | undefined {
@@ -129,12 +132,12 @@ export function selectRustPropertyProjectionCase(
 
 export function rustPropertyProjectionGetters(
   expression: Node,
-  context: Pick<RustOperationPolicyContext, "facts" | "ast"> & {
+  context: Pick<RustOperationAnalysisContext, "records" | "ast"> & {
     readonly projectTypes: RustProjectTypePolicy;
     readonly projectFieldDispatch: RustProjectFieldDispatchQueries;
   },
 ): readonly Node[] {
-  const getters = context.facts.get(expression, rustPropertyProjectionFactKey)?.cases.flatMap(projection =>
+  const getters = context.records.propertyProjection.get(expression)?.cases.flatMap(projection =>
     projection.reads.flatMap(read => {
       if (read.kind === "source-accessor") return read.read === undefined ? [] : [read.read.declaration];
       if (read.declaration === undefined) return [];

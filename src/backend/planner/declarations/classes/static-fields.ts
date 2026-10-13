@@ -72,7 +72,7 @@ export function planRustClassInitialization(
       ));
       return undefined;
     }
-    const carrier = context.input.program.facts.getRuntimeCarrierFact(member)?.carrier;
+    const carrier = context.input.program.records.runtimeCarrier.get(member)?.carrier;
     const type = rustTypeFromCarrierInContext(carrier, context);
     if (carrier === undefined || type === undefined) {
       context.diagnostics.push(missingFactDiagnostic(

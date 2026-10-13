@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, mapSelectedTargetTypeArguments, selectRustOptionalCallResult } from "./instantiation.js";
 import { defaultValueFactKey, fieldFactKey, flowStateFactKey } from "@tsonic/tsts";
@@ -10,21 +11,15 @@ import {
 } from "../regexp-replacement-callback.js";
 import { rejectSelectedOperation } from "../result.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
-import { rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey } from "../../../facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
 import { selectRustTypedLocationCall } from "../../typed-locations.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedCallSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-  RustTargetOperationSelection,
-} from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/operations/contracts.js";
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
-import type { RustProviderOperationTemplate, RustTargetOperationFact } from "../../../facts/keys.js";
+import type { RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type {
   RustSelectedTargetSignature,
   RustTargetMember,
@@ -37,7 +32,7 @@ import { selectRustValueCarrierReconciliation } from "../../../../policy/types/r
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;
   readonly providerDeclaration?: ProviderDeclarationIdentity;
-  readonly callback: import("../../../facts/keys.js").RustCallbackOperationTemplate;
+  readonly callback: import("../../../../target-model/operations/model.js").RustCallbackOperationTemplate;
   readonly template: RustProviderOperationTemplate;
   readonly parameterCarriers: readonly TargetTypeRef[];
   readonly resultCarrier: TargetTypeRef;
@@ -50,7 +45,7 @@ export function prepareRustDeferredCheckedCall(
     RustCheckedCallSelectionResult,
     { readonly kind: "deferred-callback" }
   >,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   resolveArgument: (
     argument: Node,
@@ -222,7 +217,7 @@ export function finalizeRustPreparedCheckedCall(
   request: RustCheckedCallSelectionInput,
   prepared: RustPreparedDeferredCheckedCall,
   callbackFallible: boolean,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   let template = callbackFallible
@@ -280,7 +275,7 @@ export function mapRustSourceMarkerCall(
   request: RustCheckedCallSelectionInput,
   provider: ProviderDeclarationIdentity,
   markerName: SourceCallMarkerKind,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   if (markerName === "default-value" || markerName === "field") {
@@ -345,8 +340,7 @@ export function mapRustSourceMarkerCall(
       `Rust does not support selected source marker '${markerName}' in this operation lane.`,
     );
   }
-  const flow = context.facts.resolve(request.source.call, flowStateFactKey) ??
-    context.facts.get(request.source.call, flowStateFactKey);
+  const flow = context.source.sourceFacts.getFact(request.source.call, flowStateFactKey);
   const expectedState = markerName === "shared-borrow"
     ? "borrowed-shared"
     : markerName === "mutable-borrow" ? "borrowed-mut" : "moved";
@@ -375,7 +369,7 @@ export function mapRustSourceMarkerCall(
     state: expectedState,
   };
   const evidence = [{ message: `rust selected flow marker ${markerName}` }];
-  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
+  context.records.targetOperation.set(request.source.call, fact, evidence);
   return acceptRustPolicy({
     selectedSignature: {
       member: {
@@ -403,13 +397,13 @@ function mapRustDefaultValueCall(
   request: RustCheckedCallSelectionInput,
   provider: ProviderDeclarationIdentity,
   marker: "default-value" | "field",
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const sourceArguments = selectedCallArgumentNodes(request);
   const sourceFact = marker === "field"
-    ? context.facts.resolve(request.source.call, fieldFactKey) ?? context.facts.get(request.source.call, fieldFactKey)
-    : context.facts.resolve(request.source.call, defaultValueFactKey) ?? context.facts.get(request.source.call, defaultValueFactKey);
+    ? context.source.sourceFacts.getFact(request.source.call, fieldFactKey)
+    : context.source.sourceFacts.getFact(request.source.call, defaultValueFactKey);
   const resultCarrier = resolveRustTargetTypeRef(sourceFact?.type, context, options);
   const sourceTypeArguments = request.source.sourceSelectedMethodTypeArguments;
   const sourceParameters = rustSelectedCallTypeParameters(sourceTypeArguments ?? [], context);
@@ -486,8 +480,8 @@ function mapRustDefaultValueCall(
     sourceSelectedMethodTypeArguments: sourceTypeArguments,
   };
   const evidence = [{ message: `rust selected source-core native default initialization (${marker})` }];
-  context.facts.set(request.source.call, rustTargetOperationFactKey, fact, evidence);
-  context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
-  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.records.targetOperation.set(request.source.call, fact, evidence);
+  context.records.selectedOperation.set(request.source.call, operation, evidence);
+  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }

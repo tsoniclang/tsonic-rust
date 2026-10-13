@@ -1,9 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetGenericReferences, type RustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import { rustClosureCaptureFactKey } from "../facts/keys.js";
+
 import type { RustNativeCallableInput } from "./native-inputs.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 
@@ -18,7 +18,7 @@ export interface RustNativeCapturePlan {
 }
 
 export function createRustNativeCapturePlan(input: {
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
   readonly nativeStorage: RustNativeStoragePlan;
 }): RustNativeCapturePlan {
@@ -26,7 +26,7 @@ export function createRustNativeCapturePlan(input: {
   const selections = new Map<Node, RustNativeCaptureSelection>();
   const unresolved = (reason: string): RustNativeCaptureSelection => Object.freeze({ kind: "unresolved", reason });
   const select = (declaration: Node): RustNativeCaptureSelection => {
-    const fact = input.facts.getFact(declaration, rustClosureCaptureFactKey);
+    const fact = input.records.closureCapture.get(declaration);
     if (fact === undefined) return unresolved("A native capture environment requires its exact finalized capture declarations.");
     const inputs = new Set<RustNativeCallableInput>();
     let failure: string | undefined;

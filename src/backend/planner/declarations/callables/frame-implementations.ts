@@ -1,5 +1,5 @@
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallableImplementation } from "../../../../analysis/callables/frame-values.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey } from "../../../../analysis/facts/keys.js";
+
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -130,8 +130,8 @@ function planFrameEntry(
   let resultType: RustType | undefined;
   for (const implementation of entry.implementations) {
     if (implementation.independent) continue;
-    const suspended = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
-      context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
+    const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
+      context.input.program.records.generator.get(implementation.declaration) !== undefined;
     const state = stateType(implementation, generics);
     const captures = rustCallablePayloadTypes(implementation, context);
     if (captures === undefined) return undefined;

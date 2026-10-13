@@ -1,7 +1,7 @@
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
-import { rustSourceCallableReturnFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
+
 import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -11,7 +11,7 @@ import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOp
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../operations/provider/properties.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
@@ -40,7 +40,7 @@ export function selectRustInferredReturn(
   walk.resolvingReturns.add(declaration);
   try {
     const probe = createRustCarrierProbe(walk);
-    const facts = probe.context.facts;
+    const records = probe.context.records;
     const expressions = directReturns(walk, declaration);
     const active = new Set<Node>();
     const carriers = expressions.map(expression => expressionCarrier(expression));
@@ -83,7 +83,7 @@ export function selectRustInferredReturn(
         if (kind === "KindIdentifier") {
           const selection = walk.context.source.navigation.sourceReferenceFor(expression);
           const reference = selection?.declaration;
-          const parameter = reference === undefined ? undefined : facts.get(reference, rustSourceParameterAbiFactKey);
+          const parameter = reference === undefined ? undefined : records.sourceParameterAbi.get(reference);
           if (parameter !== undefined) return parameter.valueCarrier;
           const initializer = reference === undefined ? undefined : Node_Initializer(ast, reference);
           const referenceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
@@ -113,13 +113,13 @@ export function selectRustInferredReturn(
           if (target !== undefined && ast.body(target) !== undefined && !ast.hasModifierKind(target, "async") &&
             walk.context.semanticsFor(target).operations.generator(target) === undefined) {
             const sourceResult = call === undefined ? undefined : semantics.operations.callResult(call);
-            const carrier = facts.get(target, rustSourceCallableReturnFactKey)?.returnCarrier ??
+            const carrier = records.sourceCallableReturn.get(target)?.returnCarrier ??
               resolveRustTargetTypeRef(Node_Type(ast, target) ?? sourceResult?.selectedReturnType, context, walk.operationOptions);
             const selected = selectRustInferredReturn(walk, target, carrier);
             if (selected === undefined) return undefined;
-            if (facts.get(target, rustSourceCallableReturnFactKey) === undefined) {
+            if (records.sourceCallableReturn.get(target) === undefined) {
               const completion = walk.context.semanticsFor(target).operations.callableCompletion(target);
-              facts.set(target, rustSourceCallableReturnFactKey, {
+              records.sourceCallableReturn.set(target, {
                 returnCarrier: selected,
                 ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
               });
@@ -135,7 +135,7 @@ export function selectRustInferredReturn(
           const receiver = source.receiver.expression;
           const receiverCarrier = expressionCarrier(receiver);
           if (receiverCarrier === undefined) return undefined;
-          facts.set(receiver, rustRuntimeCarrierKey, { carrier: receiverCarrier });
+          records.runtimeCarrier.set(receiver, { carrier: receiverCarrier });
           const selection = selectRustCheckedPropertyAccess(
             checkedPropertySelectionInput(rustOperationContext(probe, expression), expression, source),
             rustOperationContext(probe, expression), walk.operationOptions,
@@ -149,7 +149,7 @@ export function selectRustInferredReturn(
           if (operand === undefined) return undefined;
           const carrier = expressionCarrier(operand);
           if (carrier === undefined) return undefined;
-          facts.set(operand, rustRuntimeCarrierKey, { carrier });
+          records.runtimeCarrier.set(operand, { carrier });
         }
         const sourceFile = ast.getSourceFile(expression);
         return sourceFile !== undefined && kind !== "KindIdentifier"

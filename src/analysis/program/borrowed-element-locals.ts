@@ -3,12 +3,12 @@ import {
   BinaryExpression_Left, BinaryExpression_Right, BreakOrContinueStatement_Label, Node_Expression, Node_Initializer, Node_Operand,
   VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
-import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
 import { rustBorrowedElementRead, rustBorrowPureOperation } from "./borrowed-element-purity.js";
-import { rustBorrowedStringInputs } from "../facts/provider-borrows.js";
+import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 import type { RustTargetProgram } from "./model.js";
 
 export interface RustBorrowedElementLocal extends RustBorrowedElementRead {
@@ -20,7 +20,7 @@ export interface RustBorrowedElementLocal extends RustBorrowedElementRead {
 export function analyzeRustBorrowedElementLocals(
   ast: AstReader,
   files: readonly SourceFile[],
-  facts: RustTargetProgram["facts"],
+  records: RustTargetProgram["records"],
   navigation: SourceProgramNavigation,
 ) {
   const starts = new WeakMap<Node, RustBorrowedElementLocal>();
@@ -32,14 +32,14 @@ export function analyzeRustBorrowedElementLocals(
     if (["KindNumericLiteral", "KindStringLiteral", "KindNoSubstitutionTemplateLiteral",
       "KindTrueKeyword", "KindFalseKeyword", "KindNullKeyword"].includes(kind)) return true;
     if (ast.is.IsIdentifier(node)) {
-      const declaration = facts.getFact(node, rustSourceBindingFactKey)?.sourceDeclaration;
+      const declaration = records.sourceBinding.get(node)?.sourceDeclaration;
       return declaration !== undefined && isLocal(declaration, ast);
     }
     if (ast.is.IsParenthesizedExpression(node) || ast.is.IsAsExpression(node) ||
       ast.is.IsTypeAssertion(node) || ast.is.IsSatisfiesExpression(node) || ast.is.IsNonNullExpression(node)) {
       return pureExpression(Node_Expression(ast, node));
     }
-    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(node);
     if (operation?.kind === "operator-token") {
       const left = BinaryExpression_Left(ast, node);
       const right = BinaryExpression_Right(ast, node);
@@ -47,12 +47,12 @@ export function analyzeRustBorrowedElementLocals(
       return left !== undefined && right !== undefined
         ? pureExpression(left) && pureExpression(right) &&
           (!isRustAssignmentOperator(operation.operator) ||
-            ast.is.IsIdentifier(left) && facts.getRuntimeCarrierFact(left)?.carrier.kind === "source-primitive")
+            ast.is.IsIdentifier(left) && records.runtimeCarrier.get(left)?.carrier.kind === "source-primitive")
         : operand !== undefined && pureExpression(operand) &&
           (!isRustAssignmentOperator(operation.operator) ||
-            ast.is.IsIdentifier(operand) && facts.getRuntimeCarrierFact(operand)?.carrier.kind === "source-primitive");
+            ast.is.IsIdentifier(operand) && records.runtimeCarrier.get(operand)?.carrier.kind === "source-primitive");
     }
-    const provider = rustBorrowPureOperation(node, facts);
+    const provider = rustBorrowPureOperation(node, records);
     if (provider === undefined) return false;
     const expression = Node_Expression(ast, node);
     const receiver = ast.is.IsCallExpression(node)
@@ -123,9 +123,9 @@ export function analyzeRustBorrowedElementLocals(
       ast.is.IsCallExpression(ast.parent(parent)!) && Node_Expression(ast, ast.parent(parent)!) === parent) {
       parent = ast.parent(parent)!;
     }
-    const operation = rustBorrowPureOperation(parent, facts);
+    const operation = rustBorrowPureOperation(parent, records);
     if (operation !== undefined) return rustBorrowedStringInputs(parent, operation, ast).includes(current);
-    const binary = facts.getFact(parent, rustTargetOperationFactKey);
+    const binary = records.targetOperation.get(parent);
     return binary?.kind === "operator-token" && ["==", "!=", "<", ">", "<=", ">="].includes(binary.operator);
   };
   const selectLocal = (
@@ -140,12 +140,12 @@ export function analyzeRustBorrowedElementLocals(
     const list = VariableStatement_DeclarationList(ast, statement);
     const declarations = list === undefined ? [] : VariableDeclarationList_Declarations(ast, list) ?? [];
     const declaration = declarations.length === 1 ? declarations[0] : undefined;
-    if (declaration === undefined || !isRustStringCarrier(facts.getRuntimeCarrierFact(declaration)?.carrier) ||
+    if (declaration === undefined || !isRustStringCarrier(records.runtimeCarrier.get(declaration)?.carrier) ||
       ast.variableDeclarationKind(declaration) === "using" || ast.variableDeclarationKind(declaration) === "await using") return undefined;
     const initializer = Node_Initializer(ast, declaration);
-    const read = initializer === undefined ? undefined : rustBorrowedElementRead(initializer, ast, facts);
+    const read = initializer === undefined ? undefined : rustBorrowedElementRead(initializer, ast, records);
     if (read === undefined || !ast.is.IsIdentifier(read.array)) return undefined;
-    const arrayBinding = facts.getFact(read.array, rustSourceBindingFactKey)?.sourceDeclaration;
+    const arrayBinding = records.sourceBinding.get(read.array)?.sourceDeclaration;
     if (arrayBinding === undefined || !isLocal(arrayBinding, ast)) return undefined;
     const summary = navigation.declarationUseSummary(declaration);
     if (summary.bindingWritten || summary.captured || summary.exported) return undefined;

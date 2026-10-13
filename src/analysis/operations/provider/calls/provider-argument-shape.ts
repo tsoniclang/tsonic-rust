@@ -1,11 +1,5 @@
 import { rustTargetGenericReferences } from "../../../../target-model/types/index.js";
-import type {
-  RustArgumentMode,
-  RustProviderFactOperationKind,
-  RustProviderOperationForm,
-  RustProviderOperationTemplate,
-  RustRuntimeSetOperationKind,
-} from "../../../facts/keys.js";
+import type { RustArgumentMode, RustProviderFactOperationKind, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetOperationKind } from "../../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 
 export function rustProviderSourceArgumentMode(

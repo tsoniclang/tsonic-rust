@@ -8,7 +8,6 @@ import { createRustSharedReferenceArgument } from "../input-shaping.js";
 import { rustExpressionReadsStorage } from "../typed-locations.js";
 import { planExpression } from "../entry.js";
 import { isRustStringCarrier } from "../../../../target-model/types/index.js";
-import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.js";
 
 export function planRustBorrowedSingletonSlice(
   node: Node,
@@ -28,8 +27,8 @@ export function canBorrowRustSingletonSlice(
   if (!context.input.program.valueLifetimes.canBorrowStableValue(node) &&
     later.some(value => !context.input.program.borrowStability.canBorrowAcross(node, value))) return false;
   const declaration = context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
-  const parameter = context.input.program.facts.getFact(node, rustSourceParameterAbiFactKey) ??
-    context.input.program.facts.getFact(declaration, rustSourceParameterAbiFactKey);
+  const parameter = context.input.program.records.sourceParameterAbi.get(node) ??
+    context.input.program.records.sourceParameterAbi.get(declaration);
   if (parameter?.mode === "ref" && isRustStringCarrier(parameter.valueCarrier)) return false;
   const captured = [...context.capturedBindings ?? []].reverse().find(value => value.declaration === declaration);
   const borrowed = captured?.borrowedCarrier;

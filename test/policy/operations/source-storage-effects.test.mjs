@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCompilerSessionFromFiles, formatDiagnostics, providerVirtualDeclarationFactKey } from "@tsonic/tsts";
+import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { jsSourceSemanticsIdentity } from "@tsonic/js-source-profile";
 import { collectTargetSourceProfileContributions } from "../../../../tsonic/packages/host/dist/target/source-profile.js";
-import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
+import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
 import { rustJsSurfaceSourceProfileContributions, rustNativeSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
 import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
 import { rustPolicyNode } from "../../../dist/policy/model/context.js";
@@ -302,7 +302,7 @@ test("provider member keys cannot be replaced by a misleading optional member la
     const declaration = source.semantics.forNode(invocation).declarations.signatureDeclaration(call.selectedSignature);
     const identity = resolveSelectedSourceProfileMember({
       ast: source.ast,
-      facts: { get: source.sourceFacts.getFact },
+      source,
       semanticsFor: source.semantics.forNode,
     }, declaration, current.profiles);
     assert.equal(identity?.memberName, memberKey.kind === "property-key" ? "assign" : "@@iterator");

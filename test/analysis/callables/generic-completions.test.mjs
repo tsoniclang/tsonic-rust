@@ -18,7 +18,7 @@ function fixture(second) {
   `);
   const components = analyzeRustSourcePackageComponents(context, "lib");
   assert.equal(components.kind, "resolved", components.diagnostics?.map(row => `${row.code}: ${row.message}`).join("\n"));
-  const input = { ast: context.ast, sourceLifetimes: context.sourceLifetimes, facts: context.facts,
+  const input = { ast: context.ast, sourceLifetimes: context.sourceLifetimes, records: context.records,
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
     definitions: context.typeDefinitions, components: components.plan };
   const plan = createRustGenericCallableCompletionPlan(input);

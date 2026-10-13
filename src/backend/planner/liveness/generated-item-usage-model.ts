@@ -1,7 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetPlanningSourceNavigation } from "@tsonic/target-api/analysis";
 import type { RustSourceCallableSpecializationPlan } from "../../../analysis/callables/specializations.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/operations/facts.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustDeclarationGenericRequirementIndex } from "../../../analysis/declarations/generic-requirements.js";
 import type { RustClassValuePlan } from "../../../analysis/objects/class-values.js";
 import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
@@ -9,7 +9,7 @@ import type { RustProjectFieldDispatchQueries } from "../../../analysis/project-
 import type { RustProjectMethodPropertyPlan } from "../../../analysis/project-types/method-properties.js";
 import type { RustObjectRepresentationPlan } from "../../../analysis/project-types/object-representation.js";
 import type { RustProjectTypePolicy } from "../../../analysis/project-types/type-policy.js";
-import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import type { RustSourceTypeFamilyPlan } from "../../../target-model/types/type-families.js";
@@ -62,7 +62,7 @@ export interface RustGeneratedItemUsageInput {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly declarations: readonly Node[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly projectTypes: RustProjectTypePolicy;
   readonly classValues: RustClassValuePlan;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;

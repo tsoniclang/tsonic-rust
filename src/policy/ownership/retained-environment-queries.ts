@@ -3,7 +3,8 @@ import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStor
 import { Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity, type SourceLexicalEnvironment } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
-import type { RustRetainedEnvironment, RustRetainedEnvironmentSelection } from "./retained-environments.js";
+import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
+import type { RustRetainedEnvironmentSelection } from "./retained-environments.js";
 
 type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes">;
 type LexicalSelection = SourceLexicalEnvironment | { readonly kind: "unresolved"; readonly reason: string };

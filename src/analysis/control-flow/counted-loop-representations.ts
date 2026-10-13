@@ -7,17 +7,8 @@ import {
   type SourceDeclarationUse,
   type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
-import {
-  rustFlowReadProjectionFactKey,
-  rustOptionProjectionFactKey,
-  rustProjectDowncastFactKey,
-  rustProjectUpcastFactKey,
-  rustTargetOperationFactKey,
-} from "../facts/keys.js";
-import {
-  rustEffectiveValueCarrier,
-  rustValueCarrierBeforeContextualConversion,
-} from "../facts/value-carrier-queries.js";
+
+import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import {
   isRustBoolCarrier,
   isRustIntegerCarrier,
@@ -26,7 +17,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustIntegerKindIsExactlyRepresentableAsFloat64 } from "../../target-model/conversions/numeric-promotion.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustBorrowedElementReads } from "../program/borrowed-element-reads.js";
 
@@ -56,7 +47,7 @@ export interface RustCountedLoopRepresentationPlan {
 interface RustCountedLoopAnalysisContext {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly borrowedElementReads: RustBorrowedElementReads;
   readonly expressionStability: WeakMap<Node, boolean>;
   readonly bodyStability: WeakMap<Node, boolean>;
@@ -66,14 +57,14 @@ export function analyzeRustCountedLoopRepresentations(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly borrowedElementReads: RustBorrowedElementReads;
 }): RustCountedLoopRepresentationPlan {
   const byStatement = new WeakMap<Node, RustCountedLoopRepresentation>();
   const context: RustCountedLoopAnalysisContext = {
     ast: input.ast,
     navigation: input.navigation,
-    facts: input.facts,
+    records: input.records,
     borrowedElementReads: input.borrowedElementReads,
     expressionStability: new WeakMap(),
     bodyStability: new WeakMap(),
@@ -116,15 +107,13 @@ function classifyCountedLoop(
     !countedLoopBoundIsStable(counted.bound, counted.body, input)) {
     return undefined;
   }
-  const startCarrier = rustEffectiveValueCarrier(input.facts, counted.start);
-  const boundCarrier = rustEffectiveValueCarrier(input.facts, counted.bound);
-  const counterCarrier = input.facts.getRuntimeCarrierFact(
-    counted.counterDeclaration,
-  )?.carrier;
+  const startCarrier = rustEffectiveValueCarrier(input.records, counted.start);
+  const boundCarrier = rustEffectiveValueCarrier(input.records, counted.bound);
+  const counterCarrier = input.records.runtimeCarrier.get(counted.counterDeclaration)?.carrier;
   const condition = ForStatement_Condition(input.ast, statement);
   const comparison = condition === undefined
     ? undefined
-    : input.facts.getFact(condition, rustTargetOperationFactKey);
+    : input.records.targetOperation.get(condition);
   if (comparison?.kind !== "operator-token" || comparison.operator !== "<" ||
     !isRustBoolCarrier(comparison.resultCarrier)) {
     return undefined;
@@ -153,7 +142,7 @@ function classifyCountedLoop(
     return undefined;
   }
   const rangeCarrier = rustValueCarrierBeforeContextualConversion(
-    input.facts,
+    input.records,
     counted.bound,
   );
   const conversion = comparison.rightConversion;
@@ -169,10 +158,10 @@ function classifyCountedLoop(
       conversionContract.category !== "numeric-promotion") ||
     !rustTargetTypeRefEquals(conversionContract.source, rangeCarrier) ||
     !rustTargetTypeRefEquals(conversionContract.target, counterCarrier) ||
-    input.facts.getFact(counted.bound, rustFlowReadProjectionFactKey) !== undefined ||
-    input.facts.getFact(counted.bound, rustProjectUpcastFactKey) !== undefined ||
-    input.facts.getFact(counted.bound, rustProjectDowncastFactKey) !== undefined ||
-    input.facts.getFact(counted.bound, rustOptionProjectionFactKey) !== undefined ||
+    input.records.flowReadProjection.get(counted.bound) !== undefined ||
+    input.records.projectUpcast.get(counted.bound) !== undefined ||
+    input.records.projectDowncast.get(counted.bound) !== undefined ||
+    input.records.optionProjection.get(counted.bound) !== undefined ||
     !selectedSourceLiteralIsRepresentable(
       counted.start,
       rangeCarrier.name,
@@ -223,7 +212,7 @@ function countedLoopBoundIsStable(
   visit(bound);
   const boundMayChangeThroughExternalAlias = [...boundDeclarations].some(
     (declaration) => !carrierHasIndependentScalarValue(
-      input.facts.getRuntimeCarrierFact(declaration)?.carrier,
+      input.records.runtimeCarrier.get(declaration)?.carrier,
     ),
   );
   return stable && (!boundMayChangeThroughExternalAlias ||
@@ -326,7 +315,7 @@ function directEvaluationMayChangeBound(
   if (input.ast.is.IsBinaryExpression(node) ||
     input.ast.is.IsPrefixUnaryExpression(node) ||
     input.ast.is.IsPostfixUnaryExpression(node)) {
-    const fact = input.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = input.records.targetOperation.get(node);
     return fact?.kind !== "operator-token" && fact?.kind !== "string-concat" &&
       !operationEvaluationIsPure(node, input);
   }
@@ -427,7 +416,7 @@ function operationEvaluationIsPure(
   input: RustCountedLoopAnalysisContext,
 ): boolean {
   if (input.borrowedElementReads.forRead(operation) !== undefined) return true;
-  const fact = input.facts.getFact(operation, rustTargetOperationFactKey);
+  const fact = input.records.targetOperation.get(operation);
   return fact?.kind === "provider-operation" &&
     fact.abi.effects.evaluation === "pure";
 }

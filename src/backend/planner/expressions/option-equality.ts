@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
-import { rustStrictEqualityOperandCarrier } from "../../../analysis/facts/value-carrier-queries.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import { rustStrictEqualityOperandCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { rustOptionEqualityContract, type RustOptionEqualityView } from "../../../target-model/operations/option-equality.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -39,8 +39,8 @@ export function planRustOptionEquality(
 ): RustExpr | undefined {
   const leftNode = BinaryExpression_Left(context.input.program.source.ast, node);
   const rightNode = BinaryExpression_Right(context.input.program.source.ast, node);
-  const leftCarrier = rustStrictEqualityOperandCarrier(context.input.program.facts, leftNode);
-  const rightCarrier = rustStrictEqualityOperandCarrier(context.input.program.facts, rightNode);
+  const leftCarrier = rustStrictEqualityOperandCarrier(context.input.program.records, leftNode);
+  const rightCarrier = rustStrictEqualityOperandCarrier(context.input.program.records, rightNode);
   const contract = rustOptionEqualityContract(leftCarrier, rightCarrier);
   const boolCarrier = rustSourcePrimitiveTargetType("bool");
   const operator = context.input.program.source.ast.operatorKindName(node);
@@ -52,7 +52,7 @@ export function planRustOptionEquality(
     !rustTargetTypeRefEquals(contract.comparisonCarrier, fact.comparisonCarrier) || contract.view !== fact.view ||
     contract.leftLiftDepth !== fact.leftLiftDepth || contract.rightLiftDepth !== fact.rightLiftDepth ||
     !requireExpressionCarrier(node, boolCarrier, context, "rust.backend.option-equality-carrier") ||
-    !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node), fact.operationId,
+    !selectedOperationMatches(context.input.program.records.selectedOperation.get(node), fact.operationId,
       "operator", boolCarrier, fact.operationId)) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.option-equality",
       "Option equality conflicts with its exact native operand carriers, borrowed view, presence depth or selected operation."));

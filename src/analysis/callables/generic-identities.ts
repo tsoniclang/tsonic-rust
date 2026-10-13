@@ -1,12 +1,13 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
 import { isRustBoolCarrier } from "../../target-model/types/index.js";
-import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
-import { rustTargetOperationFactKey, type RustTargetOperationFact } from "../facts/keys.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember,
   RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
@@ -99,7 +100,7 @@ function selectIdentity(
 export function createRustGenericCallableIdentityPlan(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
   readonly physical: RustGenericCallablePhysicalPlan;
 }): RustGenericCallableIdentityPlan {
@@ -117,12 +118,12 @@ export function createRustGenericCallableIdentityPlan(input: {
     return selected;
   };
   const visit = (node: Node): void => {
-    const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = input.records.targetOperation.get(node);
     if (operation?.kind !== "operator-token" || operation.operator !== "==" && operation.operator !== "!=") return;
     const leftNode = BinaryExpression_Left(input.ast, node);
     const rightNode = BinaryExpression_Right(input.ast, node);
-    const leftLogical = rustEffectiveValueCarrier(input.facts, leftNode);
-    const rightLogical = rustEffectiveValueCarrier(input.facts, rightNode);
+    const leftLogical = rustEffectiveValueCarrier(input.records, leftNode);
+    const rightLogical = rustEffectiveValueCarrier(input.records, rightNode);
     if (rustGenericCallableValue(leftLogical) === undefined && rustGenericCallableValue(rightLogical) === undefined) return;
     const leftStorage = leftNode === undefined ? undefined : input.nativeStorage.valueFor(leftNode);
     const rightStorage = rightNode === undefined ? undefined : input.nativeStorage.valueFor(rightNode);

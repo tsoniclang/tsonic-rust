@@ -1,8 +1,9 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { applyFinalizedValueConversion } from "../../../../dist/backend/planner/expressions/value-conversions.js";
-import { finalizeValueConversion } from "../../../../dist/analysis/facts/finalized-operation/conversions.js";
+import { finalizeValueConversion } from "../../../../dist/analysis/operations/finalized-operation/conversions.js";
 import { rustJsValueTargetType, rustJsArrayTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
 import { rustTargetRuntimeErrorType } from "../../../../dist/backend/planner/types/error-boundary.js";
@@ -15,7 +16,7 @@ test("finalized conversions consume exact constructed inputs rather than recheck
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
   const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) },
     typeDefinitions: emptyRustTypeDefinitions, configuration: { edition: "2024" },
-    facts: { getRuntimeCarrierFact: () => { throw new Error("outer node is not the constructed input"); } },
+    records: createRustRecordFixture({runtimeCarrier: { get: () => { throw new Error("outer node is not the constructed input"); } }}),
   } }, sourceFile, diagnostics: [], usedAliases: new Set() };
   const source = { kind: "path", path: "selected_present_value" };
   const borrow = finalizeValueConversion(rustStringToBorrowedStrValueConversion, rustStringTargetType());

@@ -1,14 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  acmeTestingPackage,
-  acmeVectorsPackage,
-  artifactText,
-  assertRustTargetRejection,
-  compileRust,
-  createRustSession,
-} from "../../../helpers/rust-session.mjs";
+import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
 const counterSource = `

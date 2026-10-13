@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { rustClosureCaptureFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { analyzeRust, artifactText, compileRustThroughTargetPack } from "../../helpers/rust-session.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -65,7 +65,7 @@ export function suspended(seed: int32): () => Promise<int32> {
 ` } });
   const storage = new Map();
   const visit = node => {
-    const fact = program.facts.getFact(node, rustClosureCaptureFactKey);
+    const fact = program.records.closureCapture.get(node);
     if (fact !== undefined) {
       let owner = source.ast.parent(node);
       while (owner !== undefined && !source.ast.is.IsFunctionDeclaration(owner)) owner = source.ast.parent(owner);

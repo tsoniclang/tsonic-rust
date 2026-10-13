@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustContextualValueConversionFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustValueCarrierBeforeContextualConversion } from "../../../dist/analysis/facts/value-carrier-queries.js";
+
+import { rustValueCarrierBeforeContextualConversion } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustNativeCallableOperand, rustNativeCallablePhysicalSource } from "../../../dist/analysis/callables/native-conversions.js";
 import { rustCallableConversionPhysical, rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -22,7 +22,7 @@ function fixture(text) {
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
-  const input = { facts: program.facts, storage: program.callableValues.nativeStorage,
+  const input = { records: program.records, storage: program.callableValues.nativeStorage,
     producers: program.callableValues.nativeProducers, definitions: program.typeDefinitions };
   const declaration = name => {
     const node = declarations.get(name);
@@ -31,7 +31,7 @@ function fixture(text) {
   };
   const initializer = name => Node_Initializer(ast, declaration(name));
   const operand = node => {
-    const source = rustValueCarrierBeforeContextualConversion(program.facts, node);
+    const source = rustValueCarrierBeforeContextualConversion(program.records, node);
     assert.equal(source !== undefined, true, "checked source operand");
     const physical = rustNativeCallableOperand(source, node, input);
     assert.equal(physical !== undefined, true, "physical source operand");
@@ -49,7 +49,7 @@ test("source-produced conversion operands retain the original physical producer 
     }
   `);
   const node = current.initializer("adapted");
-  const fact = current.program.facts.getFact(node, rustContextualValueConversionFactKey);
+  const fact = current.program.records.contextualValueConversion.get(node);
   assert.equal(fact?.conversion.kind, "callable-adapter", "source checking selects adaptation");
   const physical = current.operand(node);
   assert.equal(physical.signature.parameters.length, 0, "operand is before its own contextual adapter");
@@ -145,7 +145,7 @@ test("physical callable operand queries reject unrelated values, missing owners 
     export function create(): () => number { const callback = original; const other = 3; return callback; }
   `);
   const node = current.initializer("callback");
-  const source = rustValueCarrierBeforeContextualConversion(current.program.facts, node);
+  const source = rustValueCarrierBeforeContextualConversion(current.program.records, node);
   assert.equal(current.operand(node).input === undefined, true, "direct source declaration owns its physical signature");
   assert.equal(rustNativeCallableOperand(source, current.initializer("other"), current.input) === undefined, true,
     "unrelated checked source node is not a callable operand");
@@ -169,7 +169,7 @@ test("source-produced stored and returned adapters select the canonical physical
     }
   `);
   const node = current.initializer("adapted");
-  const fact = current.program.facts.getFact(node, rustContextualValueConversionFactKey);
+  const fact = current.program.records.contextualValueConversion.get(node);
   assert.equal(fact?.conversion.kind, "callable-adapter");
   const source = current.operand(node);
   const fileName = current.ast.getFileName(current.ast.getSourceFile(node));
@@ -187,7 +187,7 @@ test("source-produced stored and returned adapters select the canonical physical
 
 function adaptation(current, name) {
   const node = current.initializer(name);
-  const fact = current.program.facts.getFact(node, rustContextualValueConversionFactKey);
+  const fact = current.program.records.contextualValueConversion.get(node);
   assert.equal(fact?.conversion.kind, "callable-adapter", `${name}: finalized conversion`);
   const source = current.operand(node);
   const fileName = current.ast.getFileName(current.ast.getSourceFile(node));

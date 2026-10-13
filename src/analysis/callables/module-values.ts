@@ -1,23 +1,18 @@
 import type { Node } from "@tsonic/tsts";
-import { defineRustPlanKey } from "../../target-model/facts/keys.js";
+
 import { rustCallableConversionMatches } from "../../target-model/conversions/callable.js";
 import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
-import { rustContextualValueConversionFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey,
-  rustSourceCallableValueFactKey } from "../facts/keys.js";
+
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustSourceCallableValueFact } from "../facts/keys.js";
+import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import { selectRustInlineModuleCallableAliases } from "./module-aliases.js";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
-export const rustModuleCallableStorageFactKey = defineRustPlanKey<{ readonly kind: "inline" | "stored" }>(
-  "moduleCallableStorage", (left, right) => left.kind === right.kind,
-);
-
 export function recordRustModuleCallableStorage(walk: RustFactWalk): void {
-  const { ast, facts, source } = walk.context;
+  const { ast, records, source } = walk.context;
   const visit = (node: Node): void => {
-    const binding = facts.get(node, rustModuleBindingFactKey);
+    const binding = records.moduleBinding.get(node);
     if (binding?.storage === "native-callable" && binding.value !== undefined) {
       const aliases: { readonly declarations: readonly Node[]; readonly references: readonly Node[];
         readonly producer: RustSourceCallableValueFact }[] = [];
@@ -26,8 +21,8 @@ export function recordRustModuleCallableStorage(walk: RustFactWalk): void {
         rustGenericCallableValue(binding.value.carrier) !== undefined;
       const stored = !declarationValue && (summary.exported || summary.bindingWritten || source.navigation.declarationUses(node).some(use => {
         if (use.kind !== "first-class") return false;
-        const reference = facts.get(use.reference, rustDirectCallableReferenceFactKey);
-        const selected = facts.get(use.reference, rustContextualValueConversionFactKey);
+        const reference = records.directCallableReference.get(use.reference);
+        const selected = records.contextualValueConversion.get(use.reference);
         if (reference === undefined) return true;
         if (selected === undefined) {
           const alias = selectRustInlineModuleCallableAliases(walk, use.reference, reference);
@@ -40,19 +35,15 @@ export function recordRustModuleCallableStorage(walk: RustFactWalk): void {
           : selected.conversion.kind !== "callable-adapter" ||
             !rustCallableConversionMatches(selected.conversion, reference.carrier, selected.targetCarrier, walk.context.typeDefinitions);
       }));
-      facts.set(node, rustModuleCallableStorageFactKey, Object.freeze({ kind: stored ? "stored" : "inline" }),
-        [{ message: "rust finalized native module callable storage uses" }]);
+      records.moduleCallableStorage.set(node, Object.freeze({ kind: stored ? "stored" : "inline" }), [{ message: "rust finalized native module callable storage uses" }]);
       if (declarationValue) for (const use of summary.uses) {
         if (use.kind !== "first-class") continue;
-        const value = facts.get(use.reference, rustDirectCallableReferenceFactKey);
-        if (value !== undefined) facts.set(use.reference, rustSourceCallableValueFactKey, value,
-          [{ message: "rust exact immutable declaration-owned callable value" }]);
+        const value = records.directCallableReference.get(use.reference);
+        if (value !== undefined) records.sourceCallableValue.set(use.reference, value, [{ message: "rust exact immutable declaration-owned callable value" }]);
       }
       if (!stored) for (const alias of aliases) {
-        for (const declaration of alias.declarations) facts.set(declaration, rustCompileTimeSourceKey, true,
-          [{ message: "rust exact immutable invocation-only native callable alias" }]);
-        for (const reference of alias.references) facts.set(reference, rustDirectCallableReferenceFactKey, alias.producer,
-          [{ message: "rust exact immutable invocation-only native callable producer" }]);
+        for (const declaration of alias.declarations) records.compileTimeSource.set(declaration, true, [{ message: "rust exact immutable invocation-only native callable alias" }]);
+        for (const reference of alias.references) records.directCallableReference.set(reference, alias.producer, [{ message: "rust exact immutable invocation-only native callable producer" }]);
       }
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

@@ -1,8 +1,10 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustSourceParameterAbiFactKey, rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
+
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustProviderEvaluationScope } from "../../../../dist/backend/planner/project/provider-evaluation-scope.js";
 
@@ -16,7 +18,7 @@ export function observed(source: string, fail: boolean): boolean {
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "provider-operation" && ast.is.IsCallExpression(node) &&
       ast.arguments(node).some(argument => argument !== undefined && ast.is.IsCallExpression(argument))) {
       operations.push({ node, fact });
@@ -27,13 +29,14 @@ export function observed(source: string, fail: boolean): boolean {
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   const receiver = Node_Expression(ast, Node_Expression(ast, node));
-  const selected = program.facts.getFact(receiver, rustSourceParameterAbiFactKey);
+  const selected = program.records.sourceParameterAbi.get(receiver);
   assert.equal(selected.mode, "ref");
   const plan = parameter => {
-    const facts = { ...program.facts, getFact(subject, key) {
-      return subject === receiver && key === rustSourceParameterAbiFactKey ? parameter : program.facts.getFact(subject, key);
-    } };
-    return planRustProviderEvaluationScope({ input: { program: { ...program, facts } },
+    const records = createRustRecordFixture({...program.records,
+sourceParameterAbi: { get: (subject) => {
+    return subject === receiver ? parameter : program.records.sourceParameterAbi.get(subject);
+} }});
+    return planRustProviderEvaluationScope({ input: { program: { ...program, records } },
       sourceFile: ast.getSourceFile(node), diagnostics: [] }, fact, node, receiver, ast.arguments(node),
     () => ({ kind: "path", path: "snapshot" }), () => undefined);
   };

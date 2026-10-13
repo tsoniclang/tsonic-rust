@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustCallableParameterAbi } from "../../../../analysis/facts/callable-adapters.js";
-import { rustProjectCallableAdaptersKey } from "../../../../analysis/facts/project-callable-adapters.js";
+import type { RustCallableParameterAbi } from "../../../../target-model/records/callable-adapters.js";
+
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustFunctionParam, RustImplFunction, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
@@ -32,7 +32,7 @@ export function planRootCallableForwarder(
   const concrete = context.input.program.projectTypes.definitionForCarrier(concreteCarrier);
   const representation = context.input.program.objectRepresentations.representationFor(concrete);
   const matches = concrete === undefined ? []
-    : (context.input.program.facts.getFact(concrete.declaration, rustProjectCallableAdaptersKey) ?? [])
+    : (context.input.program.records.projectCallableAdapters.get(concrete.declaration) ?? [])
       .filter(adapter => adapter.contract === contract && adapter.implementation === implementation && adapter.slot === slot);
   const adapter = matches.length === 1 ? matches[0] : undefined;
   if (representation === undefined || adapter === undefined ||

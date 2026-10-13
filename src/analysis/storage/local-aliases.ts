@@ -1,10 +1,8 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { isRustVecCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustBindingStorageFactKey, rustMutatedReferentFactKey } from "../facts/keys.js";
-import { rustNativeArrayStorageKey } from "../../target-model/operations/native-memory.js";
 
 export interface RustLocalStorageAliasPlan {
   owner(declaration: Node): Node | undefined;
@@ -15,16 +13,16 @@ export function analyzeRustLocalStorageAliases(input: {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
 }): RustLocalStorageAliasPlan {
-  const { ast, navigation, facts } = input;
+  const { ast, navigation, records } = input;
   const owners = new WeakMap<Node, Node>();
   const mutableOwners = new WeakSet<Node>();
   const visit = (node: Node): void => {
     if (ast.is.IsVariableDeclaration(node)) {
       const initializer = ast.as.AsVariableDeclaration(node)?.Initializer;
       const type = ast.typeNode(node);
-      const carrier = facts.getRuntimeCarrierFact(node)?.carrier;
+      const carrier = records.runtimeCarrier.get(node)?.carrier;
       if (initializer !== undefined && ast.is.IsArrayLiteralExpression(initializer) &&
         (type === undefined || ast.kindName(type) === "KindArrayType") && isRustVecCarrier(carrier)) {
         const scope = enclosingCallable(node, ast);
@@ -38,9 +36,9 @@ export function analyzeRustLocalStorageAliases(input: {
             return ast.is.IsVariableDeclaration(declaration) && value !== undefined &&
               (declaration === node || ast.is.IsIdentifier(value)) && enclosingCallable(declaration, ast) === scope &&
               !summary.bindingWritten && !summary.captured && !summary.exported &&
-              facts.getFact(declaration, rustBindingStorageFactKey) === undefined &&
-              facts.getFact(declaration, rustNativeArrayStorageKey) === undefined &&
-              rustTargetTypeRefEquals(carrier, facts.getRuntimeCarrierFact(declaration)?.carrier);
+              records.bindingStorage.get(declaration) === undefined &&
+              records.nativeArrayStorage.get(declaration) === undefined &&
+              rustTargetTypeRefEquals(carrier, records.runtimeCarrier.get(declaration)?.carrier);
           }) && flow.uses.every(use => {
             if (use.kind === "type-only" || use.kind === "source-linkage" || use.throughMember) return true;
             if (use.role === "storage") {
@@ -49,12 +47,12 @@ export function analyzeRustLocalStorageAliases(input: {
                 ast.as.AsVariableDeclaration(parent)?.Initializer === use.reference;
             }
             return use.role === "argument" &&
-              ["borrow-shared", "borrow-mut"].includes(facts.getArgumentPassingFact(use.reference)?.mode ?? "");
+              ["borrow-shared", "borrow-mut"].includes(records.argumentPassing.get(use.reference)?.mode ?? "");
           });
         if (valid) {
           for (const declaration of declarations) owners.set(declaration, node);
           if (declarations.some(declaration => navigation.declarationUseSummary(declaration).memberWritten ||
-            facts.getFact(declaration, rustMutatedReferentFactKey) !== undefined)) mutableOwners.add(node);
+            records.mutatedReferent.get(declaration) !== undefined)) mutableOwners.add(node);
         }
       }
     }

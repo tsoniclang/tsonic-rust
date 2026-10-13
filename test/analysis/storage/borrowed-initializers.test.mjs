@@ -1,10 +1,11 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { borrowedNullishSequencesSource } from "../../../../tsonic/test/fixtures/borrowed-nullish-sequences.mjs";
 import { createTsonicPlugin } from "../../../../rust-nodejs/dist/index.js";
 import { analyzeRustBorrowedInitializers } from "../../../dist/analysis/storage/borrowed-initializers.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 for (const surfaces of [[], ["js"]]) {
@@ -25,7 +26,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(selection !== undefined, true, "each actual native view has its checked receiver lifetime owner");
       assert.equal(selection.receiver === ast.as.AsElementAccessExpression(initializer).Expression, true,
         "the exact receiver survives nested fields without name matching");
-      const operation = program.facts.getFact(initializer, rustTargetOperationFactKey);
+      const operation = program.records.targetOperation.get(initializer);
       assert.equal(operation?.kind, "provider-operation");
       assert.equal(operation.abi.targetReceiver.kind, "input");
       assert.equal(rustTargetTypeRefEquals(selection.carrier, operation.abi.targetReceiver.input.sourceCarrier), true,
@@ -34,7 +35,7 @@ for (const surfaces of [[], ["js"]]) {
     }
     assert.equal(Object.isFrozen(program.borrowedInitializers), true);
     const initializer = initializers[0];
-    const fact = program.facts.getFact(initializer, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(initializer);
     const input = fact.abi.targetReceiver.input;
     const invalid = [
       { ...fact, abi: { ...fact.abi, targetReceiver: { kind: "none" } } },
@@ -45,10 +46,11 @@ for (const surfaces of [[], ["js"]]) {
         rawCarrier: { kind: "reference", mutable: false, referent: { kind: "source-primitive", name: "string" }, lifetime: { kind: "static" } } } } },
     ];
     for (const mutation of [undefined, ...invalid]) {
-      const facts = { ...program.facts, getFact(node, key) {
-        return node === initializer && key === rustTargetOperationFactKey ? mutation : program.facts.getFact(node, key);
-      } };
-      const selected = analyzeRustBorrowedInitializers(ast, program.sourceFiles, facts);
+      const records = createRustRecordFixture({...program.records,
+targetOperation: { get: (node) => {
+    return node === initializer ? mutation : program.records.targetOperation.get(node);
+} }});
+      const selected = analyzeRustBorrowedInitializers(ast, program.sourceFiles, records);
       assert.equal(selected.forExpression(initializer) === undefined, true, "missing or incompatible borrowing evidence is never manufactured");
     }
   });

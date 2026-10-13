@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -9,7 +10,7 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { planRustExternalProjectInitialization } from "../../../dist/backend/planner/objects/polymorphism/external-construction.js";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustBorrowedStrTargetType, rustSourceOptionalTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { rustOptionalStringToBorrowedStrValueConversion } from "../../../dist/target-model/conversions/model.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
@@ -153,7 +154,7 @@ test("inherited native initialization consumes one selected owned message withou
     { initializer: { kind: "none" } },
   ] };
   const context = selected => ({ diagnostics: [], input: { program: {
-    facts: { getFact: (node, key) => node === parameter && key === rustSourceParameterAbiFactKey ? selected : undefined },
+    records: createRustRecordFixture({sourceParameterAbi: { get: (node) => node === parameter ? selected : undefined }}),
     source: { ast: { getSourceFile: () => undefined, getFileName: () => "", getSourceText: () => "", pos: () => 0, end: () => 0,
       kindName: () => "KindClassDeclaration" } },
   } } });

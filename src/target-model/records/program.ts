@@ -1,0 +1,108 @@
+import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustYieldFact, RustResourceManagementFact, RustSourceParameterAbiFact } from "./callables-and-resources.js";
+import type { RustRuntimeCarrierSelection, RustConversionSelection } from "./selections.js";
+import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
+import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
+import type { RustAwaitValueFact } from "./await-values.js";
+import type { RustSourceCallableReturnFact } from "./source-declarations.js";
+import type { RustErrorEffectsFact } from "./error-effects.js";
+import type { RustSourceErrorEffectsFact } from "./source-error-effects.js";
+import type { RustDeferredProducerEffectsFact } from "./deferred-producer-effects.js";
+import type { RustAwaitSourceErrorEffectsFact } from "./await-source-error-effects.js";
+import type { RustObjectLiteralMethodAdapterFact, RustSourceCallEffectsFact, RustSourceAccessorEffectsFact, RustFutureValueFact } from "./object-methods.js";
+import type { RustOptionProjectionFact, RustFlowReadProjectionFact, RustContextualValueConversionFact, RustCallScopedLifetimeReconciliationFact, RustProjectUpcastFact, RustSourceBindingFact, RustBindingProjectionFact } from "./value-projections.js";
+import type { RustProjectDowncastFact } from "../types/project-projections.js";
+import type { RustTargetOperationFact, RustTypedLocationPlan } from "./operations.js";
+import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact, RustComputedMemberFact } from "./operation-selections.js";
+import type { RustOptionalChainFact } from "../operations/model.js";
+import type { RustNativeArrayStorage, RustRawLocationPlan } from "./native-memory.js";
+import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
+import type { RustObjectReferenceView } from "./object-reference-views.js";
+import type { RustProjectCallableAdapter } from "./project-callable-adapters.js";
+import type { RustRetainedEnvironment } from "./retained-environments.js";
+import type { RustLifetimeRef } from "../lifetimes/model.js";
+import type { RustGenericCallableInvocationFact } from "./generic-callable-effects.js";
+import type { RustCapturedFieldStorageFact } from "./receiver-captures.js";
+import type { RustPropertyProjectionFact } from "./property-projections.js";
+import type { RustMemoryBindingPlan } from "./memory-bindings.js";
+import type { RustRawAddressPlan } from "./raw-addresses.js";
+import type { RustClassValueFact } from "./class-values.js";
+
+export interface RustRecordFamily<T> {
+  readonly get: (subject: ExtensionFactSubject | undefined) => T | undefined;
+}
+
+export interface RustProgramRecords {
+  readonly typeAliasDeclaration: RustRecordFamily<RustTypeAliasDeclarationFact>;
+  readonly asyncFunction: RustRecordFamily<RustAsyncFunctionFact>;
+  readonly generator: RustRecordFamily<RustGeneratorFact>;
+  readonly yield: RustRecordFamily<RustYieldFact>;
+  readonly resourceManagement: RustRecordFamily<RustResourceManagementFact>;
+  readonly sourceParameterAbi: RustRecordFamily<RustSourceParameterAbiFact>;
+  readonly runtimeCarrier: RustRecordFamily<RustRuntimeCarrierSelection>;
+  readonly selectedCall: RustRecordFamily<RustSelectedTargetSignature>;
+  readonly selectedOperation: RustRecordFamily<RustSelectedTargetOperation>;
+  readonly conversion: RustRecordFamily<RustConversionSelection>;
+  readonly argumentPassing: RustRecordFamily<ArgumentPassingFact>;
+  readonly nativeGuardResult: RustRecordFamily<boolean>;
+  readonly nativeUnreachable: RustRecordFamily<boolean>;
+  readonly awaitValue: RustRecordFamily<RustAwaitValueFact>;
+  readonly compileTimeSource: RustRecordFamily<true>;
+  readonly sourceCallableReturn: RustRecordFamily<RustSourceCallableReturnFact>;
+  readonly errorEffects: RustRecordFamily<RustErrorEffectsFact>;
+  readonly sourceErrorEffects: RustRecordFamily<RustSourceErrorEffectsFact>;
+  readonly deferredProducerEffects: RustRecordFamily<RustDeferredProducerEffectsFact>;
+  readonly awaitSourceErrorEffects: RustRecordFamily<RustAwaitSourceErrorEffectsFact>;
+  readonly objectLiteralMethodAdapter: RustRecordFamily<RustObjectLiteralMethodAdapterFact>;
+  readonly fallible: RustRecordFamily<{ readonly fallible: true }>;
+  readonly sourceCallEffects: RustRecordFamily<RustSourceCallEffectsFact>;
+  readonly sourceAccessorEffects: RustRecordFamily<RustSourceAccessorEffectsFact>;
+  readonly futureValue: RustRecordFamily<RustFutureValueFact>;
+  readonly optionProjection: RustRecordFamily<RustOptionProjectionFact>;
+  readonly flowReadProjection: RustRecordFamily<RustFlowReadProjectionFact>;
+  readonly contextualValueConversion: RustRecordFamily<RustContextualValueConversionFact>;
+  readonly callScopedLifetimeReconciliation: RustRecordFamily<RustCallScopedLifetimeReconciliationFact>;
+  readonly projectUpcast: RustRecordFamily<RustProjectUpcastFact>;
+  readonly projectDowncast: RustRecordFamily<RustProjectDowncastFact>;
+  readonly sourceBinding: RustRecordFamily<RustSourceBindingFact>;
+  readonly bindingProjection: RustRecordFamily<RustBindingProjectionFact>;
+  readonly mutatedBinding: RustRecordFamily<{ readonly mutated: true }>;
+  readonly mutatedReferent: RustRecordFamily<{ readonly mutated: true }>;
+  readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
+  readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
+  readonly compoundWrite: RustRecordFamily<Extract<RustTargetOperationFact, { kind: "runtime-set" }>>;
+  readonly computedMember: RustRecordFamily<RustComputedMemberFact>;
+  readonly receiverIndependentMethod: RustRecordFamily<{ readonly carrier: TargetTypeRef }>;
+  readonly preparedOperationResult: RustRecordFamily<RustPreparedOperationResultFact>;
+  readonly optionalChain: RustRecordFamily<RustOptionalChainFact>;
+  readonly typedLocationPlan: RustRecordFamily<RustTypedLocationPlan>;
+  readonly bindingStorage: RustRecordFamily<RustBindingStorageFact>;
+  readonly closureCapture: RustRecordFamily<RustClosureCaptureFact>;
+  readonly sourceCallableValue: RustRecordFamily<RustSourceCallableValueFact>;
+  readonly directCallableReference: RustRecordFamily<RustSourceCallableValueFact>;
+  readonly moduleBinding: RustRecordFamily<RustModuleBindingFact>;
+  readonly typeOnlyDeclaration: RustRecordFamily<{
+  readonly reason: "ambient" | "type-family-predicate" | "representation-alias";
+}>;
+  readonly nativeArrayStorage: RustRecordFamily<RustNativeArrayStorage>;
+  readonly nativeBacking: RustRecordFamily<RustNativeMemoryLayout>;
+  readonly rawLocationPlan: RustRecordFamily<RustRawLocationPlan>;
+  readonly indexedFieldKeyArgument: RustRecordFamily<{
+  readonly carrier: TargetTypeRef;
+  readonly evaluate: boolean;
+}>;
+  readonly objectReferenceView: RustRecordFamily<RustObjectReferenceView>;
+  readonly projectCallableAdapters: RustRecordFamily<readonly RustProjectCallableAdapter[]>;
+  readonly retainedEnvironment: RustRecordFamily<RustRetainedEnvironment>;
+  readonly retainedCallLifetimes: RustRecordFamily<readonly {
+  readonly identity: string; readonly lifetime: RustLifetimeRef;
+}[]>;
+  readonly genericNumericOperands: RustRecordFamily<readonly TargetTypeRef[]>;
+  readonly moduleCallableStorage: RustRecordFamily<{ readonly kind: "inline" | "stored" }>;
+  readonly genericCallableInvocation: RustRecordFamily<RustGenericCallableInvocationFact>;
+  readonly capturedFieldStorage: RustRecordFamily<RustCapturedFieldStorageFact>;
+  readonly propertyProjection: RustRecordFamily<RustPropertyProjectionFact>;
+  readonly memoryBindingPlan: RustRecordFamily<RustMemoryBindingPlan>;
+  readonly rawAddressPlan: RustRecordFamily<RustRawAddressPlan>;
+  readonly memoryLayoutObservation: RustRecordFamily<{ readonly value: number }>;
+  readonly classValue: RustRecordFamily<RustClassValueFact>;
+}

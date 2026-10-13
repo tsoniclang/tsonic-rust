@@ -34,7 +34,7 @@ import { projectOwnMethodProperties } from "../../objects/polymorphism/model.js"
 import type { ProjectMethodPropertyPlan } from "../../objects/polymorphism/model.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustDefaultImplementation } from "../default-implementation.js";
-import { rustFallibleFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { structAttributes } from "../struct-attributes.js";
@@ -76,7 +76,7 @@ export interface PlannedProjectObjectField {
 }
 
 export function carrierOf(context: RustPlanContext, node: Node | undefined) {
-  return node === undefined ? undefined : context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  return node === undefined ? undefined : context.input.program.records.runtimeCarrier.get(node)?.carrier;
 }
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
@@ -508,10 +508,7 @@ function planConstructor(
   const environmentParameter = environment === undefined ? undefined : rustClassEnvironmentParameter(classDeclaration, context, "owned");
   if (environment !== undefined && environmentParameter === undefined) return undefined;
   const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
-  const fallible = context.input.program.facts.getFact(
-    member ?? classDeclaration,
-    rustFallibleFactKey,
-  ) !== undefined;
+  const fallible = context.input.program.records.fallible.get(member ?? classDeclaration) !== undefined;
   const errorBoundary = fallible
     ? rustErrorBoundaryForDeclaration(member ?? classDeclaration, context)
     : undefined;

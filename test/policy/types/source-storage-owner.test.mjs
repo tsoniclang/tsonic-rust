@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
@@ -41,11 +42,11 @@ for (const expression of ["callback", "holder.callback", "callbacks[0]", '(() =>
       semanticsFor: node => source.semantics.forNode(node),
       callableRepresentation: "storage", typeDefinitions: emptyRustTypeDefinitions,
       sourceLifetimes: { contractFor: () => undefined }, pointerReturns: { resolve: () => undefined },
-      facts: { get: (node, key) => source.sourceFacts.getFact(node, key),
-        getFact: (node, key) => source.sourceFacts.getFact(node, key),
-        resolve: () => undefined, getTargetConversionFact: () => undefined,
-        getRuntimeCarrierFact: node => node === operand ? { carrier } : undefined,
-        getSelectedTargetOperator: () => undefined, getSelectedTargetCall: () => undefined },
+      records: createRustRecordFixture({
+conversion: { get: () => undefined },
+runtimeCarrier: { get: (node) => node === operand ? { carrier } : undefined },
+selectedOperation: { get: () => undefined },
+selectedCall: { get: () => undefined }}),
     };
     let selections = 0;
     const options = {

@@ -1,5 +1,5 @@
-import type { RustSourceCallableValueFact } from "../../../analysis/facts/keys.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustClosureCaptureFactKey, rustFallibleFactKey } from "../../../analysis/facts/keys.js";
+import type { RustSourceCallableValueFact } from "../../../target-model/records/operation-selections.js";
+
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -81,7 +81,7 @@ export function planRustSourceCallableValueConstruction(
   if (callableType === undefined || argumentsType === undefined) {
     return undefined;
   }
-  const captures = lexical === undefined ? [] : context.input.program.facts.getFact(value.sourceDeclaration, rustClosureCaptureFactKey)?.captures;
+  const captures = lexical === undefined ? [] : context.input.program.records.closureCapture.get(value.sourceDeclaration)?.captures;
   if (captures === undefined) return undefined;
   const environment = planRustCapturedEnvironment(value.sourceDeclaration, captures, context,
     { staticStorage: rustCallableProtocol(value.carrier)?.lifetime?.kind === "static", mutableValueCapture: false });
@@ -105,12 +105,9 @@ export function planRustSourceCallableValueConstruction(
         name: String(index),
       })), ...environmentArguments],
   };
-  const suspended = context.input.program.facts.getFact(value.sourceDeclaration, rustAsyncFunctionFactKey) !== undefined ||
-    context.input.program.facts.getFact(value.sourceDeclaration, rustGeneratorFactKey) !== undefined;
-  const fallible = !suspended && context.input.program.facts.getFact(
-    value.sourceDeclaration,
-    rustFallibleFactKey,
-  ) !== undefined;
+  const suspended = context.input.program.records.asyncFunction.get(value.sourceDeclaration) !== undefined ||
+    context.input.program.records.generator.get(value.sourceDeclaration) !== undefined;
+  const fallible = !suspended && context.input.program.records.fallible.get(value.sourceDeclaration) !== undefined;
   const errorCarrier = context.input.program.callableValues.nativeProducers.errorFor(value.sourceDeclaration, "invoke");
   const errorType = errorCarrier === undefined ? undefined : rustTypeFromCarrierInContext(errorCarrier, context);
   if (errorType === undefined) {

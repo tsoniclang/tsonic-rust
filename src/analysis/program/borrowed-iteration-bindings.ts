@@ -4,13 +4,13 @@ import {
   ForInOrOfStatement_Statement, Node_Expression, Node_Name, Node_Operand,
   VariableDeclarationList_Declarations, type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustTargetProgram } from "./model.js";
 import { rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
-import { rustBorrowedStringInputs } from "../facts/provider-borrows.js";
+import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 
 export interface RustBorrowedIterationBinding {
   readonly declaration: Node;
@@ -18,11 +18,11 @@ export interface RustBorrowedIterationBinding {
 }
 
 export function selectRustBorrowedIterationBinding(
-  node: Node, ast: AstReader, facts: RustTargetProgram["facts"], navigation: SourceProgramNavigation,
+  node: Node, ast: AstReader, records: RustTargetProgram["records"], navigation: SourceProgramNavigation,
 ): RustBorrowedIterationBinding | undefined {
-  const iteration = facts.getFact(node, rustTargetOperationFactKey);
+  const iteration = records.targetOperation.get(node);
   const iterable = Node_Expression(ast, node);
-  const carrier = iterable === undefined ? undefined : rustEffectiveValueCarrier(facts, iterable);
+  const carrier = iterable === undefined ? undefined : rustEffectiveValueCarrier(records, iterable);
   const initializer = ForInOrOfStatement_Initializer(ast, node);
   const declarations = initializer === undefined ? undefined : VariableDeclarationList_Declarations(ast, initializer);
   const declaration = declarations?.length === 1 ? declarations[0] : undefined;
@@ -50,11 +50,11 @@ export function selectRustBorrowedIterationBinding(
       parent = ast.parent(current);
     }
     if (parent === undefined) return false;
-    if (rustBorrowedStringAppend(parent, ast, facts)) return BinaryExpression_Right(ast, parent) === current;
+    if (rustBorrowedStringAppend(parent, ast, records)) return BinaryExpression_Right(ast, parent) === current;
     const call = ast.parent(parent);
     if (ast.is.IsPropertyAccessExpression(parent) && call !== undefined && ast.is.IsCallExpression(call) &&
       Node_Expression(ast, call) === parent) parent = call;
-    const operation = rustBorrowPureOperation(parent, facts);
+    const operation = rustBorrowPureOperation(parent, records);
     return operation !== undefined && rustBorrowedStringInputs(parent, operation, ast).includes(current);
   }
 
@@ -72,14 +72,14 @@ export function selectRustBorrowedIterationBinding(
       return binding !== undefined && enclosingCallable(binding, ast) === enclosingCallable(node, ast);
     }
     if (transparent(expression)) return pureExpression(Node_Expression(ast, expression));
-    const operation = facts.getFact(expression, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(expression);
     if (operation?.kind === "operator-token" && !isRustAssignmentOperator(operation.operator)) {
       const left = BinaryExpression_Left(ast, expression);
       const right = BinaryExpression_Right(ast, expression);
       return left !== undefined && right !== undefined ? pureExpression(left) && pureExpression(right)
         : pureExpression(Node_Operand(ast, expression));
     }
-    const provider = rustBorrowPureOperation(expression, facts);
+    const provider = rustBorrowPureOperation(expression, records);
     if (provider === undefined) return false;
     const callee = Node_Expression(ast, expression);
     const receiver = ast.is.IsCallExpression(expression) ? callee === undefined ? undefined : Node_Expression(ast, callee) : callee;
@@ -92,7 +92,7 @@ export function selectRustBorrowedIterationBinding(
       case "KindBlock": return ast.statements(statement).every(child => child !== undefined && safeStatement(child));
       case "KindExpressionStatement": {
         const expression = Node_Expression(ast, statement);
-        return expression !== undefined && (rustBorrowedStringAppend(expression, ast, facts)
+        return expression !== undefined && (rustBorrowedStringAppend(expression, ast, records)
           ? pureExpression(BinaryExpression_Right(ast, expression)) : pureExpression(expression));
       }
       case "KindIfStatement": {
@@ -108,12 +108,12 @@ export function selectRustBorrowedIterationBinding(
 }
 
 export function analyzeRustBorrowedIterationBindings(
-  ast: AstReader, files: readonly SourceFile[], facts: RustTargetProgram["facts"], navigation: SourceProgramNavigation,
+  ast: AstReader, files: readonly SourceFile[], records: RustTargetProgram["records"], navigation: SourceProgramNavigation,
 ): (node: Node) => RustBorrowedIterationBinding | undefined {
   const bindings = new WeakMap<Node, RustBorrowedIterationBinding>();
   const visit = (node: Node): void => {
     if (ast.is.IsForOfStatement(node)) {
-      const selected = selectRustBorrowedIterationBinding(node, ast, facts, navigation);
+      const selected = selectRustBorrowedIterationBinding(node, ast, records, navigation);
       if (selected !== undefined) bindings.set(node, selected);
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

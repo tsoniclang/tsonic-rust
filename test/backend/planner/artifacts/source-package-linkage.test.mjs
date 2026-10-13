@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -138,7 +139,7 @@ test("library roots retain exact facade linkage and component cycles fail closed
     sourceFiles: [{ fileName: "/root/index.ts" }, { fileName: "/dep/index.ts" }],
     ast: { getFileName: (sourceFile) => sourceFile.fileName, forEachChild() {} },
     callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
-    facts: { getFact: () => undefined },
+    records: createRustRecordFixture({}),
     projectTypes: { programErrorDefinitions: [] },
   }, "bin");
   assert.equal(cycle.kind, "rejected");

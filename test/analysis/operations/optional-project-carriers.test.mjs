@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
-import { rustOptionProjectionFactKey, rustProjectUpcastFactKey,
-  rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/index.js";
-import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/facts/source-call-results.js";
+import { rustSourceCallResultProjectionMatches } from "../../../dist/analysis/callables/source-call-results.js";
 
 const sourceText = `
 class Base<Value> {
@@ -58,9 +58,9 @@ for (const surfaces of [[], ["js"]]) {
     const constructions = nodes(program, (node, ast) => ast.is.IsNewExpression(node));
     assert.equal(constructions.length, 2);
     for (const node of constructions) {
-      const source = program.facts.getRuntimeCarrierFact(node)?.carrier;
-      const upcast = program.facts.getFact(node, rustProjectUpcastFactKey);
-      const presence = program.facts.getFact(node, rustOptionProjectionFactKey);
+      const source = program.records.runtimeCarrier.get(node)?.carrier;
+      const upcast = program.records.projectUpcast.get(node);
+      const presence = program.records.optionProjection.get(node);
       assert.equal(source !== undefined, true, "native construction carrier exists");
       assert.equal(upcast !== undefined, true, "exact project upcast exists");
       assert.equal(presence?.kind, "some", "present source enters one optional position");
@@ -76,7 +76,7 @@ for (const surfaces of [[], ["js"]]) {
     }
     const conditional = nodes(program, (node, ast) => ast.is.IsConditionalExpression(node));
     assert.equal(conditional.length, 1);
-    const conditionalResult = program.facts.getFact(conditional[0], rustTargetOperationFactKey);
+    const conditionalResult = program.records.targetOperation.get(conditional[0]);
     assert.equal(conditionalResult?.kind, "conditional");
     assert.equal(rustOptionElementCarrier(conditionalResult.resultCarrier) !== undefined, true,
       "annotated conditional retains exact optional result");
@@ -86,11 +86,11 @@ for (const surfaces of [[], ["js"]]) {
       return ast.is.IsIdentifier(callee) && ast.text(callee) === "consume";
     });
     assert.equal(consume.length, 1);
-    const call = program.facts.getFact(consume[0], rustTargetOperationFactKey);
+    const call = program.records.targetOperation.get(consume[0]);
     assert.equal(call?.kind, "source-call");
     const input = call.parameters[0].inputs[0];
     const argument = program.source.ast.arguments(consume[0])[0];
-    const presence = program.facts.getFact(argument, rustOptionProjectionFactKey);
+    const presence = program.records.optionProjection.get(argument);
     assert.equal(rustTargetTypeRefEquals(input.carrier, presence.resultCarrier), true,
       "selected call input consumes the same finalized presence carrier");
   });
@@ -105,10 +105,10 @@ for (const surfaces of [[], ["js"]]) {
     });
     assert.equal(fluent.length, 3);
     for (const call of fluent) {
-      const operation = program.facts.getFact(call, rustTargetOperationFactKey);
-      const optional = program.facts.getFact(call, rustOptionalChainFactKey);
-      const raw = program.facts.getRuntimeCarrierFact(call)?.carrier;
-      const selected = program.facts.getSelectedTargetCall(call);
+      const operation = program.records.targetOperation.get(call);
+      const optional = program.records.optionalChain.get(call);
+      const raw = program.records.runtimeCarrier.get(call)?.carrier;
+      const selected = program.records.selectedCall.get(call);
       assert.equal(operation?.kind, "source-call");
       assert.equal(operation.resultProjection?.kind, "project-downcast", "native implementation result is exactly projected");
       assert.equal(program.projectTypes.definitionForCarrier(operation.resultProjection.sourceCarrier)?.sourceName, "Base");
@@ -135,7 +135,7 @@ for (const surfaces of [[], ["js"]]) {
       return ast.is.IsPropertyAccessExpression(callee) && ast.text(ast.name(callee)) === "asBase";
     });
     assert.equal(base.length, 1);
-    const baseOperation = program.facts.getFact(base[0], rustTargetOperationFactKey);
+    const baseOperation = program.records.targetOperation.get(base[0]);
     assert.equal(baseOperation?.kind, "source-call");
     assert.equal(baseOperation.resultProjection === undefined, true, "ordinary base return is not replaced with this");
     assert.equal(program.projectTypes.definitionForCarrier(baseOperation.resultCarrier)?.sourceName, "Base");

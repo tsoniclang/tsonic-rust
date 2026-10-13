@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
-import { rustClosedTypeTestMatches } from "../../../../dist/analysis/facts/operations/type-tests.js";
+
+import { rustClosedTypeTestMatches } from "../../../../dist/analysis/operations/contracts/type-tests.js";
 import { planRustClosedTypeTest } from "../../../../dist/backend/planner/expressions/type-tests.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
@@ -15,7 +15,7 @@ for (const kind of ["nominal", "array", "error"]) test(`closed ${kind} tests rej
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "closed-type-test") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };

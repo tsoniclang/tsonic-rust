@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import {
   rustCallableProtocol,
   isRustAbsenceCarrier,
@@ -14,7 +15,7 @@ import { selectedRustCallSignature } from "./signatures.js";
 import { asNode } from "../../../../policy/identities/selected-source.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
 import { materializeRustOmittedCallArguments } from "../../../../policy/types/callables/omitted-arguments.js";
-import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
+import { isRustCVariadicArgumentCarrier } from "../../c-variadic.js";
 import {
   KindCallExpression,
   KindNewExpression,
@@ -23,13 +24,13 @@ import {
 } from "@tsonic/target-api/source";
 import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../result.js";
 import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../facts/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../conversions/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
-import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
-import { rustArgumentPassingMode } from "../../../facts/parameter-passing.js";
+
+import { rustArgumentPassingMode } from "../../../callables/parameter-passing.js";
 import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../../target-model/types/index.js";
-import { rustTargetOperationFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey } from "../../../facts/keys.js";
-import { rustTargetOperationText } from "../../../facts/target-operation.js";
+
+import { rustTargetOperationText } from "../../target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";
@@ -42,14 +43,8 @@ import {
 } from "./template-instantiation.js";
 import { selectReferenceReborrow, selectReceiverReferenceReborrow } from "./reference-reborrows.js";
 import type { InstantiatedProviderOperationTemplate } from "./template-instantiation.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedCallSelectionResult,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-  RustTargetOperationSelection,
-} from "../../../../policy/operations/contracts.js";
-import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../facts/keys.js";
+import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/operations/contracts.js";
+import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
 import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 import type { RustOperationsProviderOptions } from "../model.js";
@@ -71,7 +66,7 @@ import {
 } from "./provider-argument-shape.js";
 
 export function instantiateExactSelectedConstructionCarrier(
-  definition: import("../../../project-types/type-policy.js").RustProjectTypeDefinition,
+  definition: import("../../../../target-model/types/project-types.js").RustProjectTypeDefinition,
   targetGenericArguments: readonly RustTargetGenericArgument[],
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
@@ -92,7 +87,7 @@ export function instantiateExactSelectedConstructionCarrier(
 export function mapSelectedProjectGenericArguments(
   request: RustCheckedCallSelectionInput,
   genericOwner: import("@tsonic/tsts").Node,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly RustTargetGenericArgument[] | undefined {
   const selected = request.source.sourceSelectedMethodTypeArguments ?? [];
@@ -140,10 +135,10 @@ export function mapSelectedProjectGenericArguments(
 }
 
 export function selectedProjectConstructor(
-  definition: import("../../../project-types/type-policy.js").RustProjectTypeDefinition,
+  definition: import("../../../../target-model/types/project-types.js").RustProjectTypeDefinition,
   request: RustCheckedCallSelectionInput,
   options: RustOperationsProviderOptions,
-): import("../../../project-types/type-policy.js").RustProjectConstructorSignature | undefined {
+): import("../../../../target-model/types/project-types.js").RustProjectConstructorSignature | undefined {
   const exact = options.projectTypes.constructorForSignature(
     definition,
     request.source.selectedSignature,
@@ -158,7 +153,7 @@ export function selectedProjectConstructor(
 
 export function mapSelectedTargetTypeArguments(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly TargetTypeRef[] | undefined {
   const sourceArguments = request.source.sourceSelectedMethodTypeArguments;
@@ -176,7 +171,7 @@ function resolveSelectedLifetimeArgument(
   evidence: NonNullable<
     RustCheckedCallSelectionInput["source"]["sourceSelectedMethodTypeArguments"]
   >[number],
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   inferred: RustLifetimeRef | undefined,
 ): RustLifetimeRef | undefined {
   return evidence.explicitTypeNode === undefined
@@ -187,7 +182,7 @@ function resolveSelectedLifetimeArgument(
 export function instantiateSelectedCallTemplate(
   request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   resolutionOptions: RustOperationsProviderOptions,
 ): InstantiatedProviderOperationTemplate | undefined {
   const rawReceiverCarrier = selectedCallReceiverValueCarrier(
@@ -217,7 +212,7 @@ export function instantiateSelectedCallTemplate(
 export function selectedProviderCallGenericArguments(
   request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   resolutionOptions: RustOperationsProviderOptions,
 ): {
   readonly directGenericArguments: ReadonlyMap<string, RustTargetGenericArgument>;
@@ -291,7 +286,7 @@ export function selectedProviderCallGenericArguments(
 function selectedCallParameterInferenceCarriers(
   request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly (TargetTypeRef | undefined)[] {
   const borrowedStringTypeParameters = rustBorrowedStringTypeParameterNames(template);
@@ -333,7 +328,7 @@ export function acceptSelectedCall(
   request: RustCheckedCallSelectionInput,
   template: RustProviderOperationTemplate,
   parameterCarriers: readonly (TargetTypeRef | undefined)[] | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   resolutionOptions: RustOperationsProviderOptions,
   callIdentity: {
     readonly sourceName: string;
@@ -412,10 +407,7 @@ export function acceptSelectedCall(
     );
   }
   const resultCarrier = optionalResult.resultCarrier;
-  const preparedResult = context.facts.resolve(
-    request.source.call,
-    rustPreparedOperationResultFactKey,
-  );
+  const preparedResult = context.records.preparedOperationResult.get(request.source.call);
   if (preparedResult !== undefined && (
     preparedResult.operationId !== fact.operationId ||
     preparedResult.operationKind !== fact.abi.operationKind ||
@@ -457,11 +449,11 @@ export function acceptSelectedCall(
         `Selected call '${callIdentity.sourceName}' has no exact source argument ${pending.sourceIndex}.`,
       );
     }
-    recordRustValueCarrierReconciliation(context.facts, argument, pending.reconciliation);
+    recordRustValueCarrierReconciliation(context.records, argument, pending.reconciliation);
   }
   if (receiverReconciliation !== undefined && request.source.sourceReceiver !== undefined) {
     recordRustValueCarrierReconciliation(
-      context.facts,
+      context.records,
       request.source.sourceReceiver.expression,
       receiverReconciliation,
     );
@@ -480,25 +472,20 @@ export function acceptSelectedCall(
       );
     }
     const mode = rustArgumentPassingMode(sourceArgument.mode);
-    context.facts.set(argument, rustArgumentPassingKey, {
+    context.records.argumentPassing.set(argument, {
       mode,
       ...(mode === "borrow-shared" || mode === "borrow-mut"
         ? { storageExpression: argument }
         : {}),
     }, [{ message: `rust selected argument ${sourceArgument.sourceIndex} passes as ${mode}` }]);
   }
-  context.facts.set(request.source.call, rustTargetOperationFactKey, {
+  context.records.targetOperation.set(request.source.call, {
     ...fact,
   }, evidence);
   if (optionalResult.fact !== undefined) {
-    context.facts.set(
-      request.source.call,
-      rustOptionalChainFactKey,
-      optionalResult.fact,
-      [{ message: `rust optional call ${optionalResult.fact.lowering}` }],
-    );
+    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
   }
-  context.facts.set(request.source.call, rustSelectedOperationKey, operation, evidence);
+  context.records.selectedOperation.set(request.source.call, operation, evidence);
   const member: RustTargetMember = {
     id: fact.operationId,
     sourceName: callIdentity.sourceName,
@@ -513,7 +500,7 @@ export function acceptSelectedCall(
     ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
   };
   const selectedSignature = selectedRustCallSignature(request, member);
-  context.facts.set(request.source.call, rustSelectedCallKey, selectedSignature, evidence);
+  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
   return acceptRustPolicy({ selectedSignature }, evidence);
 }
 
@@ -538,7 +525,7 @@ function selectedCallSourceCarriers(
   request: RustCheckedCallSelectionInput,
   fact: RustProviderOperationTemplate,
   declared: readonly (TargetTypeRef | undefined)[] | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): SelectedCallSourceCarriers {
   const declaredBySourceIndex = selectedCallSourceParameterCarriers(request, fact, declared, context, options);
@@ -560,7 +547,7 @@ function selectedCallSourceCarriers(
       return resolved;
     }
     const normalized = normalizeSelectedArgumentCarrier(argument, resolved, expected, context, options);
-    let effective = rustEffectiveValueCarrier(context.facts, argument) ?? normalized;
+    let effective = rustEffectiveValueCarrier(context.records, argument) ?? normalized;
     const optionElement = rustOptionElementCarrier(expected);
     if (optionElement !== undefined && effective !== undefined &&
       (isRustAbsenceCarrier(effective) || rustTargetTypeRefEquals(effective, optionElement))) {
@@ -687,7 +674,6 @@ function selectedCallSourceCarriers(
   return resolved;
 }
 
-
 function selectedCallArgumentTargetCarrier(
   form: RustProviderOperationForm,
   sourceIndex: number,
@@ -710,7 +696,7 @@ function selectedCallArgumentTargetCarrier(
 function selectedCallReceiverCarrier(
   request: RustCheckedCallSelectionInput,
   form: RustProviderOperationForm,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   if (!providerFormRequiresSourceReceiver(form)) {
@@ -721,7 +707,7 @@ function selectedCallReceiverCarrier(
 
 export function selectedCallReceiverValueCarrier(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   const receiver = request.source.sourceReceiver;
@@ -751,14 +737,14 @@ type RustOptionalCallResult =
   | {
       readonly kind: "resolved";
       readonly resultCarrier: TargetTypeRef;
-      readonly fact?: import("../../../facts/keys.js").RustOptionalChainFact;
+      readonly fact?: import("../../../../target-model/operations/model.js").RustOptionalChainFact;
     }
   | { readonly kind: "rejected"; readonly message: string };
 
 export function selectRustOptionalCallResult(
   request: RustCheckedCallSelectionInput,
   innerResultCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   exactGuard?: RustOptionalCallGuard,
 ): RustOptionalCallResult {
@@ -828,7 +814,7 @@ export function providerFormRequiresSourceReceiver(form: RustProviderOperationFo
 
 export function checkedCallIsConstruction(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): boolean {
   const call = asNode(request.source.call, context);
   const callee = asNode(request.source.sourceCallee.expression, context);

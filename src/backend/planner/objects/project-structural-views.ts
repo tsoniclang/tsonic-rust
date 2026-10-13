@@ -8,7 +8,7 @@ import { rustCurrentErrorBoundary, rustErrorBoundaryForProjectMember, rustErrorT
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectDispatchTraitType } from "./polymorphism/names.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
-import { rustFallibleFactKey } from "../../../analysis/facts/keys.js";
+
 import { applyRustCallableValueAdapter } from "../declarations/callables/adapters.js";
 import { planRustCallableArguments } from "../declarations/callables/parameter-adapters.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -87,7 +87,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
         let invocation: RustExpr = polymorphic ? { kind: "associated-call", owner: owner!, method: variant!.exactSlot,
           args: [{ kind: "path", path: "self" }, ...arguments_.adaptedArguments] }
           : { kind: "method-call", receiver: instance!, method: callable.targetName, args: arguments_.adaptedArguments };
-        if (context.input.program.facts.getFact(callable.declaration, rustFallibleFactKey) !== undefined) {
+        if (context.input.program.records.fallible.get(callable.declaration) !== undefined) {
           const error = rustErrorBoundaryForProjectMember(callable.declaration, context);
           if (error === undefined) return undefined;
           invocation = { kind: "try", expr: invocation, resultErrorType: rustErrorType(boundary), operandErrorType: rustErrorType(error) };
@@ -124,7 +124,7 @@ export function planRustProjectStructuralImplementations(declaration: Node, cont
             arguments_, local, instance, view.sourceCarrier) : { kind: "associated-call" as const, owner: dispatchOwner,
             method: selected.method, args: [root, ...arguments_] };
           if (call === undefined) return undefined;
-          if (context.input.program.facts.getFact(selected.declaration, rustFallibleFactKey) !== undefined) {
+          if (context.input.program.records.fallible.get(selected.declaration) !== undefined) {
             const sourceBoundary = rustErrorBoundaryForProjectMember(selected.declaration, local);
             if (sourceBoundary === undefined) return undefined;
             call = { kind: "try", expr: call, operandErrorType: rustErrorType(sourceBoundary), resultErrorType: rustErrorType(boundary) };

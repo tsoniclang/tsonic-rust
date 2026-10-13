@@ -1,4 +1,4 @@
-import type { RustCallableParameterAdapter } from "../facts/callable-adapters.js";
+import type { RustCallableParameterAdapter } from "../../target-model/records/callable-adapters.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
 

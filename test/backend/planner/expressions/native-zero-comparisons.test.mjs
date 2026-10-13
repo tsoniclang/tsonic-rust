@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { planRustNativeZeroComparison } from "../../../../dist/backend/planner/expressions/native-zero-comparisons.js";
 import { propagateRustBottomOperand } from "../../../../dist/backend/planner/expressions/bottom-operands.js";
 import { artifactText, compileRust } from "../../../helpers/rust-session.mjs";
@@ -13,7 +14,7 @@ const length = { kind: "method-call", receiver: { kind: "path", path: "values" }
 function context(carrier, fact) {
   return {
     expressionOverrides: new Map([[subject, { carrier }]]),
-    input: { program: { facts: { getFact: () => fact } } },
+    input: { program: { records: createRustRecordFixture({ targetOperation: { get: () => fact } }) } },
   };
 }
 const nativeUint = { kind: "source-primitive", name: "native-uint" };

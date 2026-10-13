@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustSession } from "../../../helpers/rust-session.mjs";
-import { rustSourceCallableReturnFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planRustNativeControl } from "../../../../dist/backend/planner/expressions/native-controls.js";
 import { rustNamedTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
@@ -30,11 +31,9 @@ export function forward(value: number): number { return selected(value); }
     callableDeclaration, callableReturnCarrier: result, operandExpression,
     operandCarrier: result, operandErrorCarrier: scalar, resultErrorCarrier: scalar, resultCarrier: scalar });
   const program = Object.freeze({ source, typeDefinitions: emptyRustTypeDefinitions,
-    facts: Object.freeze({
-      getRuntimeCarrierFact: selected => selected === operandExpression ? { carrier: result } : undefined,
-      getFact: (selected, key) => selected === callableDeclaration && key === rustSourceCallableReturnFactKey
-        ? { returnCarrier: result } : undefined,
-    }) });
+    records: Object.freeze(createRustRecordFixture({sourceCallableReturn: { get: (selected) => selected === callableDeclaration
+    ? { returnCarrier: result } : undefined },
+runtimeCarrier: { get: (selected) => selected === operandExpression ? { carrier: result } : undefined }})) });
   harness.targetSession.close();
   const context = () => ({ input: { program }, diagnostics: [],
     sourceFile: program.source.ast.getSourceFile(node), callableDeclaration: fact.callableDeclaration,

@@ -1,5 +1,5 @@
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import {
   isRustProgramErrorCarrier,

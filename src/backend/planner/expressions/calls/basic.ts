@@ -19,15 +19,14 @@ import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
 import { providerSelectedCallMatches, rustOperationFact } from "../fundamentals.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";
 import { requireRustDefaultValueCarrier } from "../../types/generic-requirements.js";
-import { rustArgumentPassingKey } from "../../../../target-model/facts/selections.js";
-import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
+
 import { rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import { planRustReferenceOperationCall } from "../reference-operations.js";
 import { planRustBorrowedElementRead } from "../borrowed-element-reads.js";
 import { planRustNativeControl } from "../native-controls.js";
@@ -56,7 +55,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
   const { ast } = context.input.program.source;
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "closed-type-test") return planRustClosedTypeTest(node, fact, context);
-  const callCarrier = context.input.program.facts.getRuntimeCarrierFact(node)?.carrier;
+  const callCarrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
   const innerResultCarrier = fact?.kind === "source-call" ||
       fact?.kind === "provider-operation" ||
       fact?.kind === "object-shape-projection" ||
@@ -83,7 +82,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
     return undefined;
   }
   const sourceCallEffects = fact?.kind === "source-call"
-    ? context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey)
+    ? context.input.program.records.sourceCallEffects.get(node)
     : undefined;
   if (fact?.kind === "source-call" && !sourceCallEffectsMatch(fact, sourceCallEffects,
     context.input.program.typeDefinitions, context.input.program.callableValues.native.callFor(node))) {
@@ -218,8 +217,8 @@ function planRustDefaultValueCall(
   context: RustPlanContext,
 ): RustExpr | undefined {
   const sourceArguments = context.input.program.source.ast.arguments(node);
-  const selected = context.input.program.facts.getSelectedTargetCall(node);
-  const operation = context.input.program.facts.getSelectedTargetOperation(node);
+  const selected = context.input.program.records.selectedCall.get(node);
+  const operation = context.input.program.records.selectedOperation.get(node);
   if (!isDenseDataArray(sourceArguments) || sourceArguments.length !== 0 ||
     selected === undefined || selected.member.id !== fact.operationId ||
     selected.member.kind !== "method" || selected.member.static !== true ||
@@ -284,7 +283,7 @@ function planObjectShapeProjectionCall(
     : fact.projection === "has-own"
       ? [rustStringTargetType()]
       : [];
-  const selected = context.input.program.facts.getSelectedTargetCall(node);
+  const selected = context.input.program.records.selectedCall.get(node);
   if (selected === undefined || selected.member.id !== fact.operationId ||
     selected.member.kind !== "method" ||
     (selected.member.static === true) !== staticCall ||
@@ -312,7 +311,7 @@ function planObjectShapeProjectionCall(
   if (!isDenseDataArray(sourceArguments) || sourceArguments.some((argument) => argument === undefined) ||
     sourceArguments.length !== expectedParameterCarriers.length ||
     sourceArguments.some((argument, index) => {
-      const passing = context.input.program.facts.getFact(argument!, rustArgumentPassingKey);
+      const passing = context.input.program.records.argumentPassing.get(argument!);
       return passing?.mode !== (staticCall &&
           (index === 0 || fact.projection === "assign" && index === 1)
         ? "borrow-shared"

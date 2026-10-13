@@ -9,14 +9,14 @@ import {
 import type {
   RustValueConversionContract,
 } from "../../../target-model/conversions/contracts.js";
-import type { RustPlanQueries } from "../../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+
 import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 
-export function isRustArrayFieldContentAssignment(node: Node, ast: AstReader, facts: RustPlanQueries): boolean {
+export function isRustArrayFieldContentAssignment(node: Node, ast: AstReader, records: RustProgramRecords): boolean {
   let current = node;
   let parent = ast.parent(current);
   let indexed = false;
@@ -29,7 +29,7 @@ export function isRustArrayFieldContentAssignment(node: Node, ast: AstReader, fa
   }
   if (!indexed || parent === undefined || ast.kindName(parent) !== KindBinaryExpression ||
     BinaryExpression_Left(ast, parent) !== current) return false;
-  const operation = facts.getFact(parent, rustTargetOperationFactKey);
+  const operation = records.targetOperation.get(parent);
   return (operation?.kind === "operator-token" || operation?.kind === "operator-call") &&
     isRustAssignmentOperator(operation.operator);
 }
@@ -38,13 +38,13 @@ export function markBinaryProjectIdentityUsed(
   node: Node,
   input: {
     readonly ast: AstReader;
-    readonly facts: RustPlanQueries;
+    readonly records: RustProgramRecords;
   },
   mark: (carrier: TargetTypeRef | undefined) => void,
 ): void {
   if (input.ast.kindName(node) !== KindBinaryExpression) return;
-  mark(input.facts.getRuntimeCarrierFact(BinaryExpression_Left(input.ast, node))?.carrier);
-  mark(input.facts.getRuntimeCarrierFact(BinaryExpression_Right(input.ast, node))?.carrier);
+  mark(input.records.runtimeCarrier.get(BinaryExpression_Left(input.ast, node))?.carrier);
+  mark(input.records.runtimeCarrier.get(BinaryExpression_Right(input.ast, node))?.carrier);
 }
 
 export function isRustPreconstructionThisOperation(ast: AstReader, node: Node): boolean {

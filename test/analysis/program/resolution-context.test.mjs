@@ -8,7 +8,7 @@ function fixture() {
   const selected = [];
   const subject = Object.freeze({ kind: "value", node, projection: [] });
   const context = {
-    facts: {},
+    records: {},
     ast: { is: { IsTypeAliasDeclaration: () => false, IsInterfaceDeclaration: () => false,
       IsTypeParameterDeclaration: () => false } },
     sourceStorage: {
@@ -24,7 +24,7 @@ test("operation contexts carry checked scope without leaking their result's phys
   const input = fixture();
   const context = rustOperationContext(input.walk, input.node);
   assert.equal(context.currentSemantics === input.semantics && context.currentSourceFile === input.semantics.sourceFile, true);
-  assert.equal(context.facts === input.walk.context.facts, true);
+  assert.equal(context.records === input.walk.context.records, true);
   assert.equal(context.extensionId, "tsonic.rust.policy");
   assert.equal(Object.hasOwn(context, "sourceStorageSubject"), false, "each selected operand owns its physical storage");
   assert.deepEqual(input.selected, [], "scope selection must not launch a result storage query");

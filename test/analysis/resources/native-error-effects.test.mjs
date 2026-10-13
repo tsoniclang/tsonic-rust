@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustErrorEffectsFactKey, rustFallibleFactKey, rustSourceErrorEffectsFactKey,
-  rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
+
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
@@ -25,7 +27,7 @@ function fixture(text, options = {}) {
     return selected[0];
   };
   const effects = node => {
-    const value = program.facts.getFact(node, rustErrorEffectsFactKey);
+    const value = program.records.errorEffects.get(node);
     assert.equal(value !== undefined, true, "exact effects are total on the selected evaluation region");
     assert.equal(Object.isFrozen(value) && Object.isFrozen(value.nativeErrors), true);
     return value;
@@ -73,7 +75,7 @@ for (const surfaces of [[], ["js"]]) {
       "callee-only C0/C1 parameters cannot escape in a nested producer reference");
     const invocation = current.calls("compare")[0];
     const unresolved = createRustSourceErrorEffectSelection({ context: {
-      ast: current.ast, facts: current.program.facts, typeDefinitions: current.program.typeDefinitions,
+      ast: current.ast, records: current.program.records, typeDefinitions: current.program.typeDefinitions,
       sourceStorage: current.program.sourceStorage, callableValues: { ...current.program.callableValues,
         nativeStorage: { ...current.program.callableValues.nativeStorage,
           invocationInputFor: () => ({ kind: "unresolved", reason: "missing exact physical input" }) },
@@ -100,7 +102,7 @@ test("concrete callback errors retain exact producer declarations rather than th
     const invocation = current.initializer(name);
     const producer = current.program.callableValues.nativeProducers.forDeclaration(current.ast.arguments(invocation)[0]);
     assert.equal(producer !== undefined, true);
-    const edge = current.program.facts.getFact(invocation, rustSourceErrorEffectsFactKey).edges[0];
+    const edge = current.program.records.sourceErrorEffects.get(invocation).edges[0];
     assert.equal(edge.effects.localErrors, false, "recipient has no manufactured local error channel");
     assert.equal(edge.nativeErrors.length, 1);
     const reference = rustProducerErrorReference(edge.nativeErrors[0].target.errorType);
@@ -123,8 +125,8 @@ test("pure source bodies stay pure while abstract input invocation carries its e
   const expected = [{ identity: native.invocationErrorSource, errorType: native.invocationError }];
   assertChannels(current.callable("invoke"), expected);
   assertChannels(current.effects(current.calls("callback")[0]), expected);
-  assert.equal(current.program.facts.getFact(current.declaration("pure"), rustFallibleFactKey) === undefined, true);
-  assert.equal(current.program.facts.getFact(current.declaration("invoke"), rustFallibleFactKey) !== undefined, true);
+  assert.equal(current.program.records.fallible.get(current.declaration("pure")) === undefined, true);
+  assert.equal(current.program.records.fallible.get(current.declaration("invoke")) !== undefined, true);
 });
 
 test("two callbacks retain independent invocation and await errors alongside a local throw", () => {
@@ -191,7 +193,7 @@ test("provider callback references remain pure evaluations without erasing invok
   const call = current.calls("setTimeout")[0];
   const callback = current.ast.arguments(call)[0];
   assertChannels(current.callable("fail"), [], true);
-  assert.equal(current.program.facts.getFact(callback, rustErrorEffectsFactKey) === undefined, true,
+  assert.equal(current.program.records.errorEffects.get(callback) === undefined, true,
     "evaluating a reference does not manufacture its referenced body's errors");
   assertChannels(current.effects(current.initializer("callback")), [], true);
   assertChannels(current.callable("register"), [], true);
@@ -209,7 +211,7 @@ test("call edges rebind two same-signature formals to physical caller inputs wit
   const expected = [];
   for (const [index, name] of ["first", "second"].entries()) {
     const call = current.initializer(name);
-    const selected = current.program.facts.getFact(call, rustSourceErrorEffectsFactKey);
+    const selected = current.program.records.sourceErrorEffects.get(call);
     assert.equal(selected?.edges.length, 1);
     const edge = selected.edges[0];
     assert.equal(edge.declaration === current.declaration("invoke"), true);
@@ -234,7 +236,7 @@ test("source error rebinding rejects unknown identities, mutated carriers and un
     export function invoke(callback: () => number): number { return callback(); }
     export function forward(callback: () => number): number { const output = invoke(callback); return output; }
   `);
-  const selection = createRustSourceErrorEffectSelection({ context: { ast: current.ast, facts: current.program.facts,
+  const selection = createRustSourceErrorEffectSelection({ context: { ast: current.ast, records: current.program.records,
     callableValues: current.program.callableValues } });
   const select = (node, declaration, kind, effects) => selection.edgeFor(declaration, kind, effects,
     selection.bindingsFor(node, declaration, effects.nativeErrors.map(error => error.errorType)));
@@ -262,7 +264,7 @@ test("source async invocation remains pure while exact rebound errors belong to 
   `);
   const call = current.initializer("pending");
   assertChannels(current.effects(call), []);
-  const selected = current.program.facts.getFact(call, rustSourceErrorEffectsFactKey);
+  const selected = current.program.records.sourceErrorEffects.get(call);
   const awaited = selected?.edges.find(edge => edge.kind === "await");
   assert.equal(awaited !== undefined, true);
   assert.equal(awaited.effects.nativeErrors.length, 2);
@@ -294,7 +296,7 @@ test("selected source generic arguments substitute callee protocol environments 
     export function forward(callback: () => number): number { const output = invoke(callback); return output; }
   `);
   const call = current.initializer("output");
-  const edge = current.program.facts.getFact(call, rustSourceErrorEffectsFactKey).edges[0];
+  const edge = current.program.records.sourceErrorEffects.get(call).edges[0];
   const source = edge.nativeErrors[0].source;
   const target = edge.nativeErrors[0].target;
   assert.equal(source.errorType.trait.id, target.errorType.trait.id);
@@ -302,7 +304,7 @@ test("selected source generic arguments substitute callee protocol environments 
   assert.equal(target.errorType.trait.genericArguments.length, 1);
   assert.equal(rustTargetTypeRefEquals(source.errorType.trait.genericArguments[0].type,
     target.errorType.trait.genericArguments[0].type), false);
-  const operation = current.program.facts.getFact(call, rustTargetOperationFactKey);
+  const operation = current.program.records.targetOperation.get(call);
   assert.equal(rustTargetTypeRefEquals(target.errorType.trait.genericArguments[0].type, operation.resultCarrier), true);
   assertChannels(current.callable("forward"), [target]);
 });
@@ -312,7 +314,7 @@ test("distinct callee formal channels survive forwarding the same actual callbac
     export function pair(left: () => number, right: () => number): number { return left() + right(); }
     export function forward(callback: () => number): number { const output = pair(callback, callback); return output; }
   `);
-  const edge = current.program.facts.getFact(current.initializer("output"), rustSourceErrorEffectsFactKey).edges[0];
+  const edge = current.program.records.sourceErrorEffects.get(current.initializer("output")).edges[0];
   assert.equal(edge.nativeErrors.length, 2);
   const first = edge.nativeErrors[0];
   const second = edge.nativeErrors[1];
@@ -386,6 +388,6 @@ test("first-class value calls do not execute a function-type descriptor as a dec
   `);
   const call = current.calls("callback")[0];
   assert.equal(current.effects(call).localErrors, true);
-  assert.equal(current.program.facts.getFact(call, rustSourceErrorEffectsFactKey) === undefined, true,
+  assert.equal(current.program.records.sourceErrorEffects.get(call) === undefined, true,
     "the callable ABI, not a type-only declaration edge, owns this invocation");
 });

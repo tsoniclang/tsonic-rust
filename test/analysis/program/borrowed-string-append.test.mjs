@@ -1,7 +1,8 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/program/borrowed-element-reads.js";
 import { analyzeRustCountedLoopRepresentations } from "../../../dist/analysis/control-flow/counted-loop-representations.js";
 
@@ -42,7 +43,7 @@ function selectedNodes(source, program, name) {
   const nodes = functionNodes(source, program, name);
   const loop = nodes.find(node => source.ast.is.IsForStatement(node));
   const append = nodes.find(node => source.ast.is.IsBinaryExpression(node) &&
-    program.facts.getFact(node, rustTargetOperationFactKey)?.operator === "+=");
+    program.records.targetOperation.get(node)?.operator === "+=");
   const element = nodes.find(node => source.ast.is.IsElementAccessExpression(node));
   assert.ok(loop, name);
   return { loop, append, element };
@@ -59,7 +60,7 @@ test("indexed string append selects one immutable borrowed read for emission and
   assert.equal(selected.element === element, true);
   assert.equal(program.borrowedElementReads.forRead(element) === selected, true);
   assert.ok(Object.isFrozen(selected));
-  const operation = program.facts.getFact(element, rustTargetOperationFactKey);
+  const operation = program.records.targetOperation.get(element);
   assert.equal(operation?.kind, "provider-operation");
   assert.equal(operation.abi.effects.evaluation, "observable");
   assert.deepEqual(operation.borrowedIndexOperation, { method: "borrow_number_element", evaluation: "pure" });
@@ -78,9 +79,9 @@ test("indexed string append selects one immutable borrowed read for emission and
 test("a merely available borrowed operation cannot establish counted-loop purity", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
   const { loop, element } = selectedNodes(source, program, "combine");
-  assert.ok(program.facts.getFact(element, rustTargetOperationFactKey).borrowedIndexOperation);
+  assert.ok(program.records.targetOperation.get(element).borrowedIndexOperation);
   const counted = analyzeRustCountedLoopRepresentations({
-    ast: program.source.ast, sourceFiles: program.sourceFiles, navigation: program.sourceNavigation, facts: program.facts,
+    ast: program.source.ast, sourceFiles: program.sourceFiles, navigation: program.sourceNavigation, records: program.records,
     borrowedElementReads: { ...program.borrowedElementReads, forRead: () => undefined },
   });
   assert.equal(counted.representationFor(loop) === undefined, true);
@@ -127,8 +128,8 @@ export function retained(values: string[]): string {
 test("borrowed append requires the sealed in-place write strategy and exact pure read", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
   const { append, element } = selectedNodes(source, program, "combine");
-  const selectedAppend = program.facts.getFact(append, rustTargetOperationFactKey);
-  const selectedRead = program.facts.getFact(element, rustTargetOperationFactKey);
+  const selectedAppend = program.records.targetOperation.get(append);
+  const selectedRead = program.records.targetOperation.get(element);
   const replacements = [
     [append, { ...selectedAppend, writeStrategy: undefined }],
     [append, { ...selectedAppend, writeStrategy: "preserve-before-rhs" }],
@@ -138,16 +139,17 @@ test("borrowed append requires the sealed in-place write strategy and exact pure
     [element, { ...selectedRead, borrowedIndexOperation: { ...selectedRead.borrowedIndexOperation, evaluation: "observable" } }],
   ];
   for (const [mutationIndex, [subject, replacement]] of replacements.entries()) {
-    const facts = { ...program.facts, getFact(node, key) {
-      return node === subject && key === rustTargetOperationFactKey ? replacement : program.facts.getFact(node, key);
-    } };
-    assert.equal(facts.getFact(subject, rustTargetOperationFactKey) === replacement, true,
+    const records = createRustRecordFixture({...program.records,
+targetOperation: { get: (node) => {
+    return node === subject ? replacement : program.records.targetOperation.get(node);
+} }});
+    assert.equal(records.targetOperation.get(subject) === replacement, true,
       `selected fact mutation ${mutationIndex}`);
-    const reads = analyzeRustBorrowedElementReads(program.source.ast, program.sourceFiles, facts, program.sourceNavigation);
+    const reads = analyzeRustBorrowedElementReads(program.source.ast, program.sourceFiles, records, program.sourceNavigation);
     assert.equal(reads.forExpression(append) === undefined, true, `append mutation ${mutationIndex}`);
     assert.equal(reads.forRead(element) === undefined, true, `read mutation ${mutationIndex}`);
     const counted = analyzeRustCountedLoopRepresentations({ ast: program.source.ast, sourceFiles: program.sourceFiles,
-      navigation: program.sourceNavigation, facts, borrowedElementReads: reads }).representationFor(
+      navigation: program.sourceNavigation, records, borrowedElementReads: reads }).representationFor(
       selectedNodes(source, program, "combine").loop);
     assert.equal(counted === undefined, true, `counted mutation ${mutationIndex}`);
   }

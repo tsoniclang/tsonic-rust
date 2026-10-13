@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { lexicalFallibilitySource } from "../../../../../tsonic/test/fixtures/lexical-fallibility.mjs";
 import { artifactText, analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
-import { rustFallibleFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 
 for (const surfaces of [[], ["js"]]) {
   test(`fallibility inventory retains deferred lexical effects without applying them to the owner in ${surfaces[0] ?? "native"}`, () => {
@@ -15,11 +15,11 @@ for (const surfaces of [[], ["js"]]) {
     program.sourceFiles.forEach(visit);
     for (const name of ["dormant", "forward", "fail", "through"]) {
       assert.equal(declarations.has(name), true, name);
-      assert.equal(program.facts.getFact(declarations.get(name), rustFallibleFactKey) !== undefined, true, name);
+      assert.equal(program.records.fallible.get(declarations.get(name)) !== undefined, true, name);
     }
     for (const name of ["unused", "caught", "run"]) {
       assert.equal(declarations.has(name), true, name);
-      assert.equal(program.facts.getFact(declarations.get(name), rustFallibleFactKey) === undefined, true, name);
+      assert.equal(program.records.fallible.get(declarations.get(name)) === undefined, true, name);
     }
   });
   test(`lexical invocation effects do not execute deferred declarations in ${surfaces[0] ?? "native"}`, () => {

@@ -3,7 +3,8 @@ import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustJsPromiseTargetId } from "../../../target-model/types/carriers/source-types.js";
 import { rustOwnedStorageChildren } from "../storage/owned-storage.js";
-import { rustRetainedEnvironment, type RustRetainedEnvironment } from "../../ownership/retained-environments.js";
+import { rustRetainedEnvironment } from "../../ownership/retained-environments.js";
+import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
 import { closeRustSuspendedStorage } from "../storage/suspended-storage.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";
 

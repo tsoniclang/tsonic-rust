@@ -3,10 +3,10 @@ import { rustClosedTypeTestConstant } from "../../../target-model/operations/typ
 import { BinaryExpression_Left, BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustClosedTypeTestPlan, RustClosedTypePredicate } from "../../../target-model/operations/type-tests.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustClosedTypeTestMatches } from "../../../analysis/facts/operations/type-tests.js";
+import { rustClosedTypeTestMatches } from "../../../analysis/operations/contracts/type-tests.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -32,8 +32,8 @@ export function planRustClosedTypeTest(
     !rustClosedTypeTestMatches(fact, context.input.program.projectTypes, context.input.program.typeDefinitions) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(left, context), fact.sourceCarrier) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.closed-type-test-result") ||
-    !selectedOperationMatches(nominal ? context.input.program.facts.getSelectedTargetOperator(node)
-      : context.input.program.facts.getSelectedTargetOperation(node),
+    !selectedOperationMatches(nominal ? context.input.program.records.selectedOperation.get(node)
+      : context.input.program.records.selectedOperation.get(node),
       fact.operationId, nominal ? "operator" : "method", fact.resultCarrier, "closed-type-test")) {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.closed-type-test", "Type predicate requires its exact selected operation, carrier and retained test plan."));

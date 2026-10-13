@@ -2,7 +2,7 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { SourceFileSemantics, TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import {
   rustPlaceholderLifetime,
@@ -35,7 +35,7 @@ export interface AnalyzeRustLifetimesInput {
   readonly source: TargetSourceProgram;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   referencedDeclaration(node: Node): Node | undefined;
   semanticsFor(node: Node): SourceFileSemantics;

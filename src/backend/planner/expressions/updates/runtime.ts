@@ -1,7 +1,7 @@
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { rustCompoundWriteFactKey } from "../../../../analysis/facts/operations/keys.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { planRuntimeSetStatement } from "../../statements/iteration.js";
@@ -17,7 +17,7 @@ export function planRustRuntimeIndexUpdate(
   returnsPrevious: boolean,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const write = context.input.program.facts.getFact(expression, rustCompoundWriteFactKey);
+  const write = context.input.program.records.compoundWrite.get(expression);
   const { ast } = context.input.program.source;
   const receiver = Node_Expression(ast, operand);
   const index = ElementAccessExpression_ArgumentExpression(ast, operand);

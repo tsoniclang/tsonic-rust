@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeNamedMemberSource } from "../../../../tsonic/test/fixtures/native-callback-closure.mjs";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustComputedMemberFactKey } from "../../../dist/analysis/facts/operations/keys.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
+
 import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/index.js";
 
 for (const surfaces of [[], ["js"]]) {
@@ -14,7 +14,7 @@ for (const surfaces of [[], ["js"]]) {
     const variables = new Map();
     const visit = node => {
       if (ast.is.IsElementAccessExpression(node)) {
-        const fact = program.facts.getFact(node, rustComputedMemberFactKey);
+        const fact = program.records.computedMember.get(node);
         if (fact !== undefined) computed.push({ node, fact });
       }
       if (ast.is.IsVariableDeclaration(node)) variables.set(ast.text(ast.name(node)), node);
@@ -23,7 +23,7 @@ for (const surfaces of [[], ["js"]]) {
     program.sourceFiles.forEach(visit);
     const method = computed.find(({ node }) => {
       const call = ast.parent(node);
-      const fact = call === undefined ? undefined : program.facts.getFact(call, rustTargetOperationFactKey);
+      const fact = call === undefined ? undefined : program.records.targetOperation.get(call);
       return fact?.kind === "source-call" && fact.target.form === "method" &&
         ast.is.IsCallExpression(ast.as.AsElementAccessExpression(node)?.ArgumentExpression);
     });
@@ -36,15 +36,15 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(method.fact.key === syntax.ArgumentExpression, true, "exact authored key");
     const staticMethod = computed.find(({ node }) => {
       const call = ast.parent(node);
-      const fact = call === undefined ? undefined : program.facts.getFact(call, rustTargetOperationFactKey);
+      const fact = call === undefined ? undefined : program.records.targetOperation.get(call);
       return fact?.kind === "source-call" &&
         (fact.target.form === "function" || fact.target.form === "static-method");
     });
     assert.equal(staticMethod !== undefined, true, "static calls retain their exact computed-key effects");
     assert.equal(staticMethod.fact.evaluateKey, true);
     assert.equal(staticMethod.fact.evaluateReceiver, false, "the selected direct class reference is erased");
-    const point = program.facts.getRuntimeCarrierFact(variables.get("Point"))?.carrier;
-    const pair = program.facts.getRuntimeCarrierFact(variables.get("Pair"))?.carrier;
+    const point = program.records.runtimeCarrier.get(variables.get("Point"))?.carrier;
+    const pair = program.records.runtimeCarrier.get(variables.get("Pair"))?.carrier;
     const nested = rustStructuralObjectCarrierValue(pair)?.fields.find(field => field.sourceName === "point")?.type;
     assert.equal(rustStructuralObjectCarrierValue(point)?.representation, "value");
     assert.equal(rustStructuralObjectCarrierValue(nested)?.representation, "value");

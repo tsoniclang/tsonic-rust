@@ -377,8 +377,7 @@ function parameterUsesFlowState(
   return context.source.navigation.declarationUses(parameter)
     .filter((use) => !use.captured)
     .some(({ reference }) => {
-      const flow = context.facts.resolve(reference, flowStateFactKey) ??
-        context.facts.get(reference, flowStateFactKey);
+      const flow = context.source.sourceFacts.getFact(reference, flowStateFactKey);
       return flow?.state === state;
     });
 }
@@ -414,7 +413,7 @@ function parameterCanUseSharedBorrow(
     if (summary === undefined || summary.bindingWritten || summary.memberWritten || summary.captured ||
       summary.exported) return false;
     for (const { reference, role, throughMember } of summary.uses) {
-      const flow = context.facts.resolve(reference, flowStateFactKey) ?? context.facts.get(reference, flowStateFactKey);
+      const flow = context.source.sourceFacts.getFact(reference, flowStateFactKey);
       if (flow?.state === "borrowed-shared" || throughMember || role === "receiver" ||
         role === "comparison" || role === "condition" || role === "type-only") continue;
       let operand = reference;

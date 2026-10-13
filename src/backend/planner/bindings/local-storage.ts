@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
-import type { RustBindingStorageFact } from "../../../analysis/facts/operations/keys.js";
+import type { RustBindingStorageFact } from "../../../target-model/records/operation-selections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -8,7 +8,7 @@ import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLocationTargetType } from "../../../target-model/types/index.js";
-import { rustNativeBackingKey } from "../../../target-model/operations/native-memory.js";
+
 import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { planRustNativeAllocation } from "../expressions/native-memory.js";
 import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
@@ -45,7 +45,7 @@ export function planRustLocalBindingStorage(
     kind: "expr", expr: { kind: "method-call", receiver: { kind: "path", path: name }, method: "store", args: [value] },
   } };
   const nativeType = rustTypeFromCarrierInContext(rustLocationTargetType(storage.valueCarrier), context);
-  const nativeValue = context.input.program.facts.getFact(declaration, rustNativeBackingKey) === undefined
+  const nativeValue = context.input.program.records.nativeBacking.get(declaration) === undefined
     ? { kind: "call" as const, path: "rt::Location::allocate", args: [value] }
     : planRustNativeAllocation(declaration, value, context);
   return nativeType === undefined || nativeValue === undefined ? undefined

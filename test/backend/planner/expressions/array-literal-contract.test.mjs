@@ -1,8 +1,9 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { planArrayLiteral } from "../../../../dist/backend/planner/expressions/array-literals/planning.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
@@ -15,7 +16,7 @@ export function copy(values: int32[]): int32[] { return [...values]; }
   const { ast } = program.source;
   const operations = [];
   const visit = node => {
-    const fact = program.facts.getFact(node, rustTargetOperationFactKey);
+    const fact = program.records.targetOperation.get(node);
     if (fact?.kind === "array-literal") operations.push({ node, fact });
     for (const child of ast.children(node)) visit(child);
   };
@@ -24,8 +25,9 @@ export function copy(values: int32[]): int32[] { return [...values]; }
   const { node, fact } = operations[0];
   assert.ok(Object.isFrozen(fact.contributions));
   const context = selected => ({ input: { program: { ...program,
-    facts: { ...program.facts, getFact: (subject, key) => subject === node && key === rustTargetOperationFactKey
-      ? selected : program.facts.getFact(subject, key) } } }, diagnostics: [],
+    records: createRustRecordFixture({...program.records,
+targetOperation: { get: (subject) => subject === node
+    ? selected : program.records.targetOperation.get(subject) }}) } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",

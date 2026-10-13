@@ -1,9 +1,10 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustGenericCallableDispatchPlan, selectRustGenericCallableInvocationStorage }
   from "../../../dist/analysis/callables/generic-dispatch.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
-import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
+
+
 
 function fixture() {
   const source = Object.freeze({ fileName: "/project/index.ts" });
@@ -30,10 +31,11 @@ function fixture() {
         [`Is${kind}`, node => kind === "CallExpression" && node === invocation])),
       as: { AsCallExpression: node => node },
     },
-    facts: { getFact: (node, key) => node === invocation && key === rustTargetOperationFactKey ? operation
-      : node === callee && key === rustRuntimeCarrierKey ? { carrier } : undefined,
-      getTargetConversionFact: () => undefined,
-      getRuntimeCarrierFact: node => node === callee ? { carrier } : undefined },
+    records: createRustRecordFixture({targetOperation: { get: (node) => node === invocation ? operation
+    : node === callee && false ? { carrier } : undefined },
+runtimeCarrier: { get: (node) => node === invocation && false ? operation
+    : node === callee ? { carrier } : undefined },
+conversion: { get: () => undefined }}),
     generic: { definitionFor: selected => selected === carrier ? called : undefined,
       physical: { definitionFor: selected => selected === carrier ? called : undefined,
         definitions: () => [called, transported, bridged] } },
@@ -79,7 +81,7 @@ test("generic invocation storage is exact and does not manufacture a family from
   assert.equal(selected?.definition === current.called && selected.carrier === current.carrier &&
     selected.operation === current.operation, true);
   for (const changed of [
-    { ...current.input, facts: { getFact: () => undefined } },
+    { ...current.input, records: createRustRecordFixture({}) },
     { ...current.input, ast: { ...current.input.ast, as: { AsCallExpression: () => undefined } } },
     { ...current.input, nativeStorage: { invocationCallableFor: () => ({ kind: "unresolved", reason: "missing exact storage" }) } },
     { ...current.input, generic: { ...current.input.generic, physical: { definitionFor: () => undefined } } },

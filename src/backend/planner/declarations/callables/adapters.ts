@@ -5,9 +5,7 @@ import { rustOptionalStorageValue } from "../../../../target-model/types/project
 import { planRustGenericCallableFlow } from "../../expressions/generic-callable-flow.js";
 import { planRustCallableConversion } from "../../expressions/callable-conversions.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type {
-  RustCallableValueAdapter,
-} from "../../../../analysis/facts/keys.js";
+import type { RustCallableValueAdapter } from "../../../../target-model/records/callable-adapters.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import {
   isRustUnitCarrier,

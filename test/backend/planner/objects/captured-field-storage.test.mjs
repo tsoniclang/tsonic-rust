@@ -1,10 +1,11 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustBindingStorageOperations } from "../../../../dist/backend/planner/expressions/binding-storage.js";
 import { createRustCapturedField, rustCapturedFieldType, readRustCapturedField, writeRustCapturedField, writeRustCapturedFieldFromStorage } from "../../../../dist/backend/planner/objects/captured-fields.js";
 import { readRustProjectObjectFieldOwner, writeRustProjectObjectField } from "../../../../dist/backend/planner/objects/project-objects.js";
 import { rustStoredObjectFieldSupportsBorrowedRead } from "../../../../dist/backend/planner/objects/project-storage.js";
-import { validatedRustCapturedFieldStorageFact } from "../../../../dist/analysis/facts/receiver-captures.js";
+import { validatedRustCapturedFieldStorageFact } from "../../../../dist/analysis/storage/receiver-captures.js";
 import { int32Carrier, stringCarrier } from "../../../helpers/rust-session.mjs";
 import { selectRustCapturedFieldStorage } from "../../../../dist/policy/ownership/captured-field-storage.js";
 
@@ -143,7 +144,10 @@ test("analysis validates exact captured storage facts against the canonical over
   const captures = { isCaptured: () => true, storageDeclaration: () => canonical, storageReadonly: () => false,
     storageImmutable: () => false, isDeferred: () => true };
   function program(selectedFact = fact, selectedCaptures = captures, valueCarrier = int32Carrier, storageCarrier = generic) {
-    return { facts: { getFact: () => selectedFact, getRuntimeCarrierFact: selected => ({ carrier: selected === canonical ? storageCarrier : valueCarrier }) },
+    return { records: createRustRecordFixture({
+      capturedFieldStorage: { get: () => selectedFact },
+      runtimeCarrier: { get: (selected) => ({ carrier: selected === canonical ? storageCarrier : valueCarrier }) },
+    }),
       objectRepresentations: { receiverCaptures: selectedCaptures } };
   }
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program()) === fact, true);
@@ -152,7 +156,7 @@ test("analysis validates exact captured storage facts against the canonical over
     { ...fact, storage: { ...fact.storage, initialization: "ready" } },
     { ...fact, storage: { ...fact.storage, unchecked: true } }]) {
     const input = program();
-    input.facts.getFact = () => selected;
+    input.records = { ...input.records, capturedFieldStorage: { get: () => selected } };
     assert.equal(validatedRustCapturedFieldStorageFact(declaration, input), undefined);
   }
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, { ...captures, isCaptured: () => false })), undefined);
@@ -177,7 +181,7 @@ test("analysis validates exact captured storage facts against the canonical over
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, program({ ...copied,
     storage: { kind: "copy", initialization: "deferred" } }, copiedCaptures, int32Carrier, int32Carrier)), undefined);
   const missing = program();
-  missing.facts.getRuntimeCarrierFact = () => undefined;
+  missing.records = { ...missing.records, runtimeCarrier: { get: () => undefined } };
   assert.equal(validatedRustCapturedFieldStorageFact(declaration, missing), undefined);
   let reads = 0;
   const accessor = { ...fact };

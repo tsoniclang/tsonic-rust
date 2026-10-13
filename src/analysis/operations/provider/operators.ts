@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import {
   isRustBigIntCarrier,
   isRustIntegerCarrier,
@@ -8,12 +9,8 @@ import {
   rustOptionElementCarrier,
   isRustSignedNumericCarrier,
 } from "../../../target-model/types/index.js";
-import {
-  rustTargetOperationFactKey,
-  rustPostCheckBinaryOperationId,
-  rustPostCheckUnaryMinusOperationId,
-  rustPostCheckUnaryPlusOperationId,
-} from "../../facts/keys.js";
+
+import { rustPostCheckBinaryOperationId, rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../target-model/operations/model.js";
 import { acceptDeclarationOperation, acceptRustOperation, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationTemplate, rejectSelectedOperation, selectedArgumentMatchScore } from "./result.js";
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
@@ -25,42 +22,35 @@ import {
   KindBigIntLiteral,
   sourceSequenceInputIsEmpty,
 } from "@tsonic/target-api/source";
-import { finalizeRustProviderOperationAbi } from "../../facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../finalized-operation/finalize.js";
 import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
-import {
-  rustEffectiveValueCarrier,
-} from "../../facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { selectRustExactIntegerConversion } from "../../../target-model/conversions/exact-integer.js";
-import { rustContextualValueConversionFactKey } from "../../facts/value-projections.js";
+
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { selectRustBuiltinErrorTypeTest } from "./builtin-errors.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
 import { selectRustClosedTypeTest } from "./type-tests.js";
 import { selectRustProjectTypeTestPlan } from "../../../policy/operations/operators/type-tests.js";
-import type {
-  RustCheckedCallSelectionInput,
-  RustCheckedOperationSelectionResult,
-  RustCheckedOperatorSelectionInput,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-  RustTargetOperationSelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput, RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustOperatorToken, RustRuntimeSetOperationKind, RustTargetOperationFact } from "../../facts/keys.js";
+import type { RustOperatorToken } from "../../../target-model/syntax/tokens.js";
+import type { RustRuntimeSetOperationKind } from "../../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetOperationSupportsAssignment } from "../../facts/target-operation.js";
+import { rustTargetOperationSupportsAssignment } from "../target-operation.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
 
 export function selectRustCheckedOperator(
   request: RustCheckedOperatorSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   if (isDeclarationFileSubject(request.expression, context)) {
@@ -93,17 +83,17 @@ export function selectRustCheckedOperator(
     }
     return acceptPostCheckOperator(request);
   }
-  const operand = rustEffectiveValueCarrier(context.facts, request.left) ??
+  const operand = rustEffectiveValueCarrier(context.records, request.left) ??
     resolveRustTargetTypeRef(request.left, context, options);
   return mapSelectedUnaryOperator(request, operand, context);
 }
 
 function selectRustProjectTypeTest(
   request: RustCheckedOperatorSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
-  const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.left) ??
+  const sourceCarrier = rustEffectiveValueCarrier(context.records, request.left) ??
     resolveRustTargetTypeRef(request.left, context, options);
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
   const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
@@ -200,7 +190,7 @@ function acceptPostCheckOperator(
 function mapSelectedUnaryOperator(
   request: RustCheckedOperatorSelectionInput,
   operand: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const operandNode = asNode(request.left, context);
   if ((request.operator === "-" || request.operator === "+") &&
@@ -251,10 +241,10 @@ function mapSelectedAssignment(
   request: RustCheckedOperatorSelectionInput,
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
-  const selectedLeftFact = context.facts.resolve(request.left, rustTargetOperationFactKey);
+  const selectedLeftFact = context.records.targetOperation.get(request.left);
   if (selectedLeftFact?.kind === "builtin-error-property" && rustTargetOperationSupportsAssignment(selectedLeftFact, context.typeDefinitions)) return undefined;
   if (selectedLeftFact?.kind === "source-field" ||
     selectedLeftFact?.kind === "source-static-field" ||
@@ -263,7 +253,7 @@ function mapSelectedAssignment(
     selectedLeftFact?.kind === "provider-operation" && selectedLeftFact.abi.target.form === "index") {
     return undefined;
   }
-  const selectedLeft = context.facts.getSelectedTargetOperator(request.left);
+  const selectedLeft = context.records.selectedOperation.get(request.left);
   const selectedDeclaration = selectedLeft?.provenance?.sourceSelectedDeclaration;
   const selectedWriteDeclaration = selectedLeft?.provenance?.sourceSelectedWriteDeclaration;
   const providerWriteEvidence = resolveSelectedProviderDeclaration(
@@ -299,7 +289,7 @@ function mapSelectedAssignment(
     : directIdentity === undefined ? undefined : [directIdentity];
   const jsIdentity = jsMembers?.[0];
   const receiver = selectedLeft?.provenance?.sourceReceiver;
-  const receiverCarrier = rustEffectiveValueCarrier(context.facts, receiver) ??
+  const receiverCarrier = rustEffectiveValueCarrier(context.records, receiver) ??
     resolveRustTargetTypeRef(receiver, context, options);
   if (providerIdentity !== undefined) {
     const providerSelection = mapSelectedProviderAssignment(
@@ -402,7 +392,7 @@ function mapSelectedAssignment(
     sourceReceiver: receiver,
     sourceSelectedDeclaration: selectedDeclaration,
     sourceResultType: request.right,
-  }, context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right ?? left);
+  }, context.records.runtimeCarrier.get(request.right)?.carrier ?? right ?? left);
 }
 
 function mapSelectedProviderAssignment(
@@ -413,7 +403,7 @@ function mapSelectedProviderAssignment(
   receiver: ExtensionFactSubject | undefined,
   selectedDeclaration: ExtensionFactSubject | undefined,
   receiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const selection = selectRustProviderOperation(options.providerRows, identity, operationKind);
@@ -486,7 +476,7 @@ function mapSelectedProviderAssignment(
       : selectRustExactIntegerConversion(actual, rustOptionElementCarrier(actual) === undefined
         ? rustOptionElementCarrier(expected) ?? expected : expected);
     if (conversion === undefined) return selected;
-    context.facts.set(argument, rustContextualValueConversionFactKey, {
+    context.records.contextualValueConversion.set(argument, {
       sourceCarrier: conversion.source, targetCarrier: conversion.target, conversion,
     }, [{ message: "rust exact provider field write" }]);
     return expected;
@@ -528,7 +518,7 @@ function mapSelectedProviderAssignment(
     );
   }
   const selectedRight = finalizedSourceArgumentCarriers[finalizedSourceArgumentCarriers.length - 1];
-  let sourceResultCarrier = context.facts.getRuntimeCarrierFact(request.right)?.carrier ?? right;
+  let sourceResultCarrier = context.records.runtimeCarrier.get(request.right)?.carrier ?? right;
   const rightNode = asNode(request.right, context);
   if (rightNode !== undefined && context.ast.kindName(rightNode) === "KindArrayLiteralExpression") {
     sourceResultCarrier = rustOptionElementCarrier(selectedRight) ?? selectedRight;
@@ -579,7 +569,7 @@ export function selectedCallArgumentNodes(
 
 export function selectedCallArgumentCarriers(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly (TargetTypeRef | undefined)[] {
   return request.source.sourceArguments.map((argument) =>
@@ -588,7 +578,7 @@ export function selectedCallArgumentCarriers(
 
 export function selectedSourceValueCarrier(
   value: RustCheckedCallSelectionInput["source"]["sourceArguments"][number],
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
   if (context.ast.is.IsSpreadElement(value.expression)) {
@@ -596,7 +586,7 @@ export function selectedSourceValueCarrier(
     if (operand !== undefined && sourceSequenceInputIsEmpty(context.ast, operand)) return { kind: "tuple", elements: [] };
     return operand === undefined
       ? undefined
-      : rustEffectiveValueCarrier(context.facts, operand) ??
+      : rustEffectiveValueCarrier(context.records, operand) ??
         resolveRustTargetTypeRef(operand, context, options);
   }
   return selectedValueCarrier(value.expression, value.type, context, options);

@@ -1,11 +1,12 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustStructuralShapePlan } from "../../../../dist/analysis/objects/structural-shape-plan.js";
 import { rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustStructuralUsageKey, structuralFieldKey } from "../../../../dist/backend/planner/liveness/generated-item-usage-helpers.js";
 import { analyzeRustGeneratedItemUsage } from "../../../../dist/backend/planner/liveness/generated-item-usage.js";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
-import { rustClassValueFactKey } from "../../../../dist/analysis/facts/class-values.js";
+
+
 import { rustCallableTargetType, rustSourceOptionalTargetType, rustSourceTypeCarrier, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
@@ -49,9 +50,9 @@ test("emitted array elements and class-view signatures reify exact types without
     structuralShapes: { unionForCarrier: () => undefined, definitionForCarrier: () => undefined },
   };
   const cases = [
-    { key: rustTargetOperationFactKey, fact: { kind: "array-literal", contributions: [],
+    { key: "targetOperation", fact: { kind: "array-literal", contributions: [],
       elementCarrier: rustVecTargetType(rustSourceOptionalTargetType(classes[0].carrier)) }, expected: classes[0] },
-    { key: rustClassValueFactKey, fact: { declaration: {}, sourceCarrier: classes[1].carrier,
+    { key: "classValue", fact: { declaration: {}, sourceCarrier: classes[1].carrier,
       carrier: rustStructuralObjectTargetType("/index.ts", []) }, expected: classes[1],
       view: { fields: [{ callable: { carrier: rustCallableTargetType([
         rustSourceOptionalTargetType(classes[1].carrier),
@@ -59,8 +60,7 @@ test("emitted array elements and class-view signatures reify exact types without
   ];
   for (const entry of cases) {
     const usage = analyzeRustGeneratedItemUsage({ ...input,
-      facts: { getRuntimeCarrierFact: () => undefined,
-        getFact: (subject, key) => subject === node && key === entry.key ? entry.fact : undefined },
+      records: createRustRecordFixture({ [entry.key]: { get: subject => subject === node ? entry.fact : undefined } }),
       classValues: { ...input.classValues, viewFor: () => entry.view },
     });
     for (const definition of classes) {

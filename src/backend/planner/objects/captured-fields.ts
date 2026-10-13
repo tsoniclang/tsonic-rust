@@ -2,7 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
-import { rustCapturedFieldStorageFactKey, validatedRustCapturedFieldStorageFact } from "../../../analysis/facts/receiver-captures.js";
+
+import { validatedRustCapturedFieldStorageFact } from "../../../analysis/storage/receiver-captures.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustInlineBindingStorageType, rustBindingStorageOperations } from "../expressions/binding-storage.js";
@@ -12,7 +13,7 @@ import { diagnosticInput } from "../program/plan-context.js";
 import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } from "../bindings/deferred-storage.js";
 
 export function rustCapturedFieldStorage(declaration: Node, context: RustPlanContext): RustCapturedFieldStorage | undefined {
-  const fact = context.input.program.facts.getFact(declaration, rustCapturedFieldStorageFactKey);
+  const fact = context.input.program.records.capturedFieldStorage.get(declaration);
   const captures = context.input.program.objectRepresentations.receiverCaptures;
   const demanded = captures.isCaptured(declaration);
   if (!demanded && fact === undefined) return undefined;

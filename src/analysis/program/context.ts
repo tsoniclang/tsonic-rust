@@ -24,10 +24,8 @@ import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type
 import { createRustSourceTypeFamilyRegistry } from "../project-types/type-families.js";
 import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
 import { createRustClassValueRegistry, type RustClassValueRegistry } from "../objects/class-values.js";
-import {
-  createRustPlanBuilder,
-} from "../facts/plan-store.js";
-import type { RustPlanBuilder } from "../facts/plan-store.js";
+import { createRustProgramRecordBuilder } from "./records/create.js";
+import type { RustProgramRecordBuilder } from "./records/model.js";
 import {
   createRustProjectTypePolicyRegistry,
 } from "../project-types/type-policy.js";
@@ -80,7 +78,7 @@ import {
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
 import { createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
-import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
+import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
@@ -100,7 +98,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceFiles: readonly SourceFile[];
   readonly sourcePackages: TargetCompileInput["sourcePackages"];
   readonly rootPublishesLibrary: boolean;
-  readonly facts: RustPlanBuilder;
+  readonly records: RustProgramRecordBuilder;
   readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly objectRepresentations: RustObjectRepresentationPlanRegistry;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
@@ -154,7 +152,7 @@ export function createRustAnalysisContext(
     createRustSourceProfileStorageEffects(input.source, sourceProfiles));
   const sourceStorageFailure = sourceStorage.failureReason();
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
-  const facts = createRustPlanBuilder(input.source.sourceFacts, typeDefinitions);
+  const records = createRustProgramRecordBuilder(typeDefinitions);
   const names = createRustNamePlan({
     ast,
     runtimeValueUses,
@@ -164,7 +162,7 @@ export function createRustAnalysisContext(
     source: input.source,
     ast,
     sourceFiles,
-    facts,
+    records,
     names,
     referencedDeclaration(node) {
       return input.source.navigation.sourceReferenceFor(node)?.declaration;
@@ -181,7 +179,7 @@ export function createRustAnalysisContext(
     callableOwnership: createRustCallableOwnershipRegistry(),
     errorStorageDemands: createRustErrorStorageDemandQuery(input.source,
       sourceProfiles, sourceStorage,
-      createRustRetainedErrorDemandSelection(input.source, facts, providerSemantics.operations)),
+      createRustRetainedErrorDemandSelection(input.source, providerSemantics.operations)),
     typeDefinitions,
     typeFamilies: createRustSourceTypeFamilyRegistry(),
     pointerBacking: createTsonicPointerBackingDemands(input.source),
@@ -195,7 +193,7 @@ export function createRustAnalysisContext(
     sourceFiles,
     sourcePackages: input.sourcePackages,
     rootPublishesLibrary,
-    facts,
+    records,
     projectTypes: createRustProjectTypePolicyRegistry(),
     objectRepresentations: createRustObjectRepresentationPlanRegistry(),
     projectMethodDispatch: createRustProjectMethodDispatchPlanRegistry(),

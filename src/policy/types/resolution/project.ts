@@ -20,7 +20,7 @@ import { retainRustStructuralInstantiation } from "./structural-instantiations.j
 import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
 import { rustClassConstructorTargetType } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../../target-model/facts/type-only.js";
+
 import { Node_Type, sourceCallableInterface, sourceInterfaceRepresentationBase } from "@tsonic/target-api/source";
 import { resolveCallableType } from "./callables.js";
 import { bindRustSourceDeclarationArguments, resolveRustSelectedTypeArguments, resolveRustSourceDeclarationArguments } from "./generic-arguments.js";
@@ -72,7 +72,7 @@ export function resolveProjectSourceCarrier(
   for (const declaration of declarations) {
     if (!context.source.navigation.isProjectDeclaration(declaration)) continue;
     if (context.ast.is.IsInterfaceDeclaration(declaration) && selectedType !== undefined &&
-      context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey)?.reason === "representation-alias") {
+      context.records.typeOnlyDeclaration.get(declaration)?.reason === "representation-alias") {
       const edge = sourceInterfaceRepresentationBase(declaration, context.ast, context.source.navigation, context.semanticsFor(declaration));
       if (edge !== undefined) {
         if (context.currentSemantics.types.isArrayLike(selectedType)) return resolveRustSourceArrayCarrier(selectedType, context, options, resolving);

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustSourceErrorEffectEdge } from "../../../../analysis/facts/source-error-effects.js";
-import { rustErrorEffectsFactKey } from "../../../../analysis/facts/error-effects.js";
+import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/source-error-effects.js";
+
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
@@ -19,7 +19,7 @@ export function planRustSourceErrorPropagation(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const source = context.input.program.facts.getFact(edge.declaration, rustErrorEffectsFactKey);
+  const source = context.input.program.records.errorEffects.get(edge.declaration);
   if (source === undefined || source.localErrors !== edge.effects.localErrors ||
     source.nativeErrors.length !== edge.nativeErrors.length) return reject(node, context);
   const channels = new Map(edge.nativeErrors.map(channel => [channel.source.identity, channel]));

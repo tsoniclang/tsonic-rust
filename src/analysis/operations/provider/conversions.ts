@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { acceptRustMemberOperation, acceptRustOperation, normalizeSelectedOperationInputCarrier, providerIdentityText, providerOperationFact, rejectSelectedOperation } from "./result.js";
 import { sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
@@ -9,33 +10,25 @@ import {
 } from "./calls/template-instantiation.js";
 import { isRustAbsenceCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { selectRustValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
-import { rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
-import { rustTargetOperationFactKey, rustProjectDowncastFactKey } from "../../facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceAssertionConversion } from "../../../policy/conversions/selection.js";
 import { selectRustProjectProjection } from "../../../policy/types/project/project-projections.js";
-import type {
-  RustCheckedConversionSelectionInput,
-  RustCheckedConversionSelectionResult,
-  RustCheckedOperationSelectionResult,
-  RustCheckedPropertySelectionInput,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-  RustTargetOperationSelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedConversionSelectionInput, RustCheckedConversionSelectionResult, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
 import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustProviderFactOperationKind, RustProviderOperationTemplate, RustTargetOperationFact } from "../../facts/keys.js";
+import type { RustProviderFactOperationKind, RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function selectRustCheckedConversion(
   request: RustCheckedConversionSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedConversionSelectionResult> {
   if (request.conversionKind === "call-argument") {
@@ -50,7 +43,7 @@ export function selectRustCheckedConversion(
         { message: "rust deferred the selected generic source-call argument carrier to post-check target substitution" },
       ]);
     }
-    const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.expression) ??
+    const sourceCarrier = rustEffectiveValueCarrier(context.records, request.expression) ??
       resolveRustTargetTypeRef(request.expression, context, options);
     if (sourceCarrier !== undefined && rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
       return acceptRustPolicy({ convertedType: targetCarrier }, [
@@ -83,7 +76,7 @@ export function selectRustCheckedConversion(
       : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
     if (reconciliation?.kind === "call-scoped-lifetime" ||
       reconciliation?.kind === "project-upcast") {
-      recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
+      recordRustValueCarrierReconciliation(context.records, request.expression, reconciliation);
       return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: reconciliation.kind === "call-scoped-lifetime"
           ? "rust selected call argument uses an exact call-scoped lifetime reconciliation"
@@ -118,7 +111,7 @@ export function selectRustCheckedConversion(
     );
   }
   const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode, context, options);
-  const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.sourceExpression) ??
+  const sourceCarrier = rustEffectiveValueCarrier(context.records, request.sourceExpression) ??
     resolveRustTargetTypeRef(request.sourceExpression, context, options);
   if (targetCarrier === undefined || sourceCarrier === undefined) {
     return rejectSelectedOperation(
@@ -134,7 +127,7 @@ export function selectRustCheckedConversion(
     : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
   const projectUpcast = reconciliation.kind === "project-upcast";
   if (projectUpcast) {
-    recordRustValueCarrierReconciliation(context.facts, request.expression, reconciliation);
+    recordRustValueCarrierReconciliation(context.records, request.expression, reconciliation);
   }
   const projectDowncast = !identity && !projectUpcast && selectProjectDowncast(
     request.expression,
@@ -192,8 +185,8 @@ export function selectRustCheckedConversion(
       : projectDowncast
         ? "rust selected assertion project-type downcast"
       : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
-  context.facts.set(request.expression, rustTargetOperationFactKey, fact, evidence);
-  context.facts.set(request.expression, rustSelectedOperationKey, operation, evidence);
+  context.records.targetOperation.set(request.expression, fact, evidence);
+  context.records.selectedOperation.set(request.expression, operation, evidence);
   return acceptRustPolicy({ convertedType: targetCarrier, operation }, evidence);
 }
 
@@ -201,7 +194,7 @@ function selectProjectDowncast(
   subject: Node,
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): boolean {
   const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
@@ -217,7 +210,7 @@ function selectProjectDowncast(
     projection === undefined) {
     return false;
   }
-  context.facts.set(subject, rustProjectDowncastFactKey, {
+  context.records.projectDowncast.set(subject, {
     sourceCarrier,
     dispatchCarrier,
     targetCarrier,
@@ -230,7 +223,7 @@ export function mapProviderCheckedOperation(
   expression: ExtensionFactSubject,
   identity: ProviderDeclarationIdentity,
   operationKind: RustProviderFactOperationKind,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   sourceReceiver: ExtensionFactSubject | undefined,
   sourceArguments: readonly ExtensionFactSubject[],
@@ -287,14 +280,14 @@ export function finalizeProviderOperationFromSubjects(
   template: RustProviderOperationTemplate,
   sourceReceiver: ExtensionFactSubject | undefined,
   sourceArguments: readonly ExtensionFactSubject[],
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
   selectedReceiverCarrier?: TargetTypeRef,
   selectedArgumentCarriers?: readonly (TargetTypeRef | undefined)[],
 ): Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }> | undefined {
   const rawArgumentCarriers = sourceArguments.map((argument, index) =>
     selectedArgumentCarriers?.[index] ??
-      rustEffectiveValueCarrier(context.facts, argument) ??
+      rustEffectiveValueCarrier(context.records, argument) ??
       resolveRustTargetTypeRef(argument, context, options));
   const rawReceiverCarrier = selectedReceiverCarrier ?? (sourceReceiver === undefined
     ? undefined
@@ -309,7 +302,7 @@ export function finalizeProviderOperationFromSubjects(
   const instantiatedTemplate = instantiation.template;
   const sourceArgumentCarriers = sourceArguments.map((argument, index) => {
     const resolved = selectedArgumentCarriers?.[index] ??
-      rustEffectiveValueCarrier(context.facts, argument) ??
+      rustEffectiveValueCarrier(context.records, argument) ??
       resolveRustTargetTypeRef(argument, context, options);
     return normalizeSelectedOperationInputCarrier(
       argument,

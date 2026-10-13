@@ -7,7 +7,7 @@ import type {
 } from "@tsonic/target-api/analysis";
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustSourceCallableSpecializationPlan } from "../callables/specializations.js";
 import type { RustCallableValuePlan } from "../callables/value-plan.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
@@ -76,7 +76,7 @@ export interface RustTargetProgram {
   readonly source: TargetSourceSyntaxProgram;
   readonly sourceNavigation: TargetPlanningSourceNavigation;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectConstructions: RustProjectConstructionQueries;

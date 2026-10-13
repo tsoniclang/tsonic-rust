@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";
-import { rustSourceParameterAbiFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -69,7 +69,7 @@ test("native Future input storage uses canonical optional union payloads without
   const parameter = current.ast.parameters(owner)[0];
   const [input] = requireEnvironment(current, owner).inputs;
   assert.equal(input !== undefined, true);
-  const abi = current.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+  const abi = current.program.records.sourceParameterAbi.get(parameter);
   for (const value of [current.plan.parameterFor(parameter, abi.parameterCarrier), current.plan.returnFor(owner),
     current.plan.valueFor(current.initializer("selected"))]) {
     const carrier = requireSelected(value, "one canonical Future union payload");
@@ -83,7 +83,7 @@ test("the original callback completion reader retains its exact Future payload a
   const [input] = requireEnvironment(current, owner).inputs;
   assert.equal(input !== undefined, true, "original read has one exact formal Future payload");
   const parameter = current.ast.parameters(owner)[0];
-  const abi = current.program.facts.getFact(parameter, rustSourceParameterAbiFactKey);
+  const abi = current.program.records.sourceParameterAbi.get(parameter);
   const carrier = requireSelected(current.plan.parameterFor(parameter, abi.parameterCarrier), "original read parameter");
   assert.equal(contains(carrier, input.implementation, current.program.typeDefinitions), true);
   const result = requireSelected(current.plan.returnFor(owner), "original read result");

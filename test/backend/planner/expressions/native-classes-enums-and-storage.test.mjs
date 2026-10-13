@@ -1,13 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  acmeTestingPackage,
-  acmeVectorsPackage,
-  artifactText,
-  assertRustTargetRejection,
-  compileRust,
-  createRustSession,
-} from "../../../helpers/rust-session.mjs";
+import { acmeTestingPackage, acmeVectorsPackage, artifactText, assertRustTargetRejection, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
 const counterSource = `

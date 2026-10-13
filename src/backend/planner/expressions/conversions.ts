@@ -4,15 +4,8 @@ import {
   rustPrimitiveTypeName,
   rustOptionTargetType,
 } from "../../../target-model/types/index.js";
-import {
-  isRustFinalizedArrayInput,
-  isRustFinalizedConstantInput,
-  isRustFinalizedDispatchContextInput,
-  isRustFinalizedSliceInput,
-  isRustFinalizedSourceInput,
-  isRustFinalizedTaggedArrayInput,
-  validateRustFinalizedOperationAbi,
-} from "../../../analysis/facts/finalized-operation-abi.js";
+import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../../analysis/operations/finalized-operation/conversions.js";
+import { validateRustFinalizedOperationAbi } from "../../../analysis/operations/finalized-operation/validation.js";
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } from "../project/provider-evaluation-scope.js";
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
@@ -21,8 +14,8 @@ import { planExpression } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
-import { rustValueCarrierTransitionTarget } from "../../../analysis/facts/value-carrier-queries.js";
-import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/facts/target-operation.js";
+import { rustValueCarrierTransitionTarget } from "../../../analysis/conversions/value-carrier-queries.js";
+import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/operations/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
   rustTargetCallGenericArgumentToAstInContext,
@@ -30,11 +23,8 @@ import {
   rustTargetGenericArgumentToAstInContext,
   rustTypeFromCarrierInContext,
 } from "../types/render.js";
-import type {
-  RustProviderConstantArgument,
-  RustProviderChainStep,
-  RustTargetOperationFact,
-} from "../../../analysis/facts/keys.js";
+import type { RustProviderConstantArgument, RustProviderChainStep } from "../../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { Node } from "@tsonic/tsts";
 import type {
   RustCallGenericArgument,
@@ -42,7 +32,7 @@ import type {
   RustGenericArgument,
 } from "../../target-ast/syntax/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
-import type { RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../analysis/facts/finalized-operation-abi.js";
+import type { RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
@@ -725,9 +715,9 @@ export function planFinalizedSourceInput(
     return undefined;
   }
   const expressionOverride = context.expressionOverrides?.get(sourceNode);
-  const originalCarrier = context.input.program.facts.getRuntimeCarrierFact(sourceNode)?.carrier;
+  const originalCarrier = context.input.program.records.runtimeCarrier.get(sourceNode)?.carrier;
   const sourceCarrier = expressionOverride?.carrier ?? originalCarrier;
-  const convertedCarrier = rustValueCarrierTransitionTarget(context.input.program.facts, sourceNode, sourceCarrier);
+  const convertedCarrier = rustValueCarrierTransitionTarget(context.input.program.records, sourceNode, sourceCarrier);
   if (sourceCarrier === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, sourceNode),

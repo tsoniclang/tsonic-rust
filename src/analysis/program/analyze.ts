@@ -5,12 +5,12 @@ import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
-import { rustClosureCaptureFactKey, rustSourceParameterAbiFactKey } from "../facts/keys.js";
-import { rustCallableInvocationResult } from "../facts/callable-results.js";
+
+import { rustCallableInvocationResult } from "../callables/results.js";
 import { rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
-import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
+import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -34,12 +34,12 @@ import type { RustFactWalk } from "./walk.js";
 import type { RustOperationsProviderOptions } from "../operations/provider/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import { rustBindingStorageFactKey } from "../facts/keys.js";
+
 import { rustTypedLocationStorageRootReference } from "../operations/typed-locations.js";
 import { selectRustAddressOfSourceOperation } from "../../policy/operations/typed-locations/source-typed-locations.js";
-import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
+import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { collectRustMutableProjectStorageRequirements } from "../project-types/mutable-storage-requirements.js";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+
 import { recordRustNativeBacking } from "../operations/native-memory.js";
 import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
@@ -50,7 +50,7 @@ import { recordRustProjectCallableAdapterFacts } from "../project-types/callable
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
 import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
 import { collectRustImplicitInterfaceContracts } from "../project-types/implicit-interfaces.js";
-import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
+
 import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
@@ -95,7 +95,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   const moduleBindings = createRustModuleBindingPolicy(context, promotedStorageDeclarations);
   const sourceCallableAbi = createRustSourceCallableAbiResolver({
     isNativeCallableExpression: moduleBindings.isNativeCallableExpression,
-    parameterAbiFor: parameter => context.facts.get(parameter, rustSourceParameterAbiFactKey),
+    parameterAbiFor: parameter => context.records.sourceParameterAbi.get(parameter),
   });
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
   const resolvingCallableSignatures = new Set<Node>();
@@ -115,8 +115,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       try {
         recordFunctionSignatureFacts(walk, declaration);
         const parameters = ast.parameters(declaration).map(parameter => parameter === undefined ? undefined
-          : context.facts.getFact(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
-        const result = rustCallableInvocationResult(context.facts, declaration);
+          : context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
+        const result = rustCallableInvocationResult(context.records, declaration);
         return result === undefined || parameters.some(parameter => parameter === undefined) ? undefined
           : rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
       } finally {
@@ -211,7 +211,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourceFiles: projectSourceFiles,
     sourceLifetimes: context.sourceLifetimes,
     isRepresentationAlias(declaration) {
-      return context.facts.getFact(declaration, rustTypeOnlyDeclarationFactKey)?.reason === "representation-alias";
+      return context.records.typeOnlyDeclaration.get(declaration)?.reason === "representation-alias";
     },
     normalizeCarrier: rustTypeFamilyNormalizer(context.typeFamilies),
     genericParametersFor: declaration => rustProjectGenericParameters(declaration, context),
@@ -282,7 +282,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     if (ast.is.IsVariableDeclaration(node)) {
       const alias = callableAlias(node);
       if (alias !== undefined) {
-        for (const declaration of alias.declarations) context.facts.set(declaration, rustCompileTimeSourceKey, true);
+        for (const declaration of alias.declarations) context.records.compileTimeSource.set(declaration, true);
         return;
       }
     }
@@ -290,15 +290,15 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);
     if (metadata !== undefined || context.memoryMetadata.isCompileTimeExpression(node)) {
-      context.facts.set(node, rustCompileTimeSourceKey, true);
+      context.records.compileTimeSource.set(node, true);
       for (const issue of metadata?.issues ?? []) appendRustDiagnostic(walk,
         "RUST_MEMORY_METADATA_RUNTIME_ESCAPE", issue.reason, issue.node, []);
       return;
     }
     const operation = selectRustAddressOfSourceOperation(
       node,
-      (subject, key) => context.facts.resolve(subject, key),
-      (subject, key) => context.facts.get(subject, key),
+      (subject, key) => context.source.sourceFacts.getFact(subject, key),
+      (subject, key) => context.source.sourceFacts.getFact(subject, key),
     );
     if (operation !== undefined) {
       const root = rustTypedLocationStorageRootReference(
@@ -337,8 +337,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourceFiles: projectSourceFiles,
     hasPromotedStorage(declaration) {
       return promotedStorageDeclarations.has(declaration) ||
-        context.facts.get(declaration, rustBindingStorageFactKey) !== undefined ||
-        context.facts.resolve(declaration, rustBindingStorageFactKey) !== undefined;
+        context.records.bindingStorage.get(declaration) !== undefined ||
+        context.records.bindingStorage.get(declaration) !== undefined;
     },
     hasMutableStorageUse(declaration) {
       return mutableStorageDeclarations.declarations.has(declaration);
@@ -438,7 +438,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
           "Class evaluation requires one consistent, immutable capture and static-storage contract.", definition.declaration,
           ["target.capability=rust.class-value.environment"]);
       }
-      context.facts.set(definition.declaration, rustClosureCaptureFactKey, { receivers: [], receiverFields: [], captures: selected.environment.captures });
+      context.records.closureCapture.set(definition.declaration, { receivers: [], receiverFields: [], captures: selected.environment.captures });
     }
   }
   const nativeFields = recordRustNativeBacking(walk);
@@ -446,7 +446,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     navigation: context.source.navigation,
     ast,
     sourceFiles: context.sourceFiles,
-    facts: context.facts,
+    records: context.records,
     closedSourceFiles,
     names: context.names,
     projectTypes,
@@ -493,7 +493,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   for (const issue of recordRustObjectLiteralMethodAdapterFacts({
     ast: walk.context.ast,
     sourceLifetimes: walk.context.sourceLifetimes,
-    facts: walk.context.facts,
+    records: walk.context.records,
     projectTypes: walk.context.projectTypes,
     typeDefinitions: walk.context.typeDefinitions,
     projectMethodDispatch: walk.context.projectMethodDispatch,
@@ -536,7 +536,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
     representations: context.objectRepresentations, structuralShapes: context.structuralShapes,
-    sourceFiles: projectSourceFiles, facts: context.facts, views: context.classValues.instanceViewRequests(),
+    sourceFiles: projectSourceFiles, records: context.records, views: context.classValues.instanceViewRequests(),
     typeDefinitions: context.typeDefinitions });
   context.projectFieldDispatch.initialize({
     ast,
@@ -550,10 +550,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   // structural storage plan produced while walking bodies.
   recordRustProjectCallableAdapterFacts(walk);
   recordRustModuleCallableStorage(walk);
-  const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.sourceFiles, context.facts,
+  const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.sourceFiles, context.records,
     context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);
-  const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, facts: context.facts,
+  const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
@@ -567,7 +567,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
   recordRustDeferredProducerEffects(walk);
-  return finalizeRustLexicalFunctionQueries(lexical, context.source, context.facts, context.sourceLifetimes,
+  return finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);
 }
 

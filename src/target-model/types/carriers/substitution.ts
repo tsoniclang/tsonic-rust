@@ -609,7 +609,7 @@ function substituteCallableSignatureLifetimes(
 
 function lifetimeSubstitutionsOutsideBinder(
   substitutions: ReadonlyMap<string, RustLifetimeRef>,
-  binder: import("../../lifetimes/index.js").RustLifetimeBinder | undefined,
+  binder: import("../../lifetimes/model.js").RustLifetimeBinder | undefined,
 ): ReadonlyMap<string, RustLifetimeRef> {
   if (binder === undefined || binder.parameters.length === 0) return substitutions;
   const nested = new Map(substitutions);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustFallibleFactKey, rustSourceCallEffectsFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 
 const source = `
 async function fail(): Promise<void> { throw new Error("selected rejection"); }
@@ -28,9 +28,9 @@ for (const surfaces of [[], ["js"]]) {
     for (const name of ["reject", "forward", "caught", "plain"]) {
       assert.equal(methods.has(name), true, name);
       const declaration = methods.get(name);
-      assert.equal(program.facts.getFact(declaration, rustFallibleFactKey) !== undefined,
+      assert.equal(program.records.fallible.get(declaration) !== undefined,
         name === "reject" || name === "forward", name);
-      const effects = program.facts.getFact(declaration, rustSourceCallEffectsFactKey);
+      const effects = program.records.sourceCallEffects.get(declaration);
       assert.equal(effects !== undefined, true, name);
       assert.equal(effects.invocation, "infallible", name);
       assert.equal(effects.awaiting, name === "reject" || name === "forward" ? "fallible" : "infallible", name);

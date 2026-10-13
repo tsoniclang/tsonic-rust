@@ -4,11 +4,11 @@ import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
-import { rustBindingStorageFactKey, rustMutatedBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
-import type { RustClosureCaptureFact } from "../facts/keys.js";
-import { rustCallArgumentIsOwned } from "../facts/parameter-passing.js";
+
+import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
+import { rustCallArgumentIsOwned } from "./parameter-passing.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
-import { rustBorrowedStringInputs } from "../facts/provider-borrows.js";
+import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 
 export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable"> & {
   readonly initialization?: "deferred";
@@ -39,9 +39,9 @@ export function rustCapturedBindingStorage(
   if (cached !== undefined) {
     return cached;
   }
-  const mutated = walk.context.facts.get(declaration, rustMutatedBindingFactKey) !== undefined ||
+  const mutated = walk.context.records.mutatedBinding.get(declaration) !== undefined ||
     walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
-  const existing = walk.context.facts.get(declaration, rustBindingStorageFactKey);
+  const existing = walk.context.records.bindingStorage.get(declaration);
   const deferred = sourceBindingCapturedBeforeInitialization(declaration, walk.context.ast, walk.context.source.navigation);
   const scope = sourceBindingScope(declaration, walk.context.ast);
   const iterationValue = existing === undefined && isRustCopyCarrier(carrier) && scope !== undefined &&
@@ -121,13 +121,13 @@ function singleOwnerDirectBinding(
         expression = parent;
         parent = ast.parent(expression);
       }
-      const operation = parent === undefined ? undefined : walk.context.facts.get(parent, rustTargetOperationFactKey);
+      const operation = parent === undefined ? undefined : walk.context.records.targetOperation.get(parent);
       if (operation?.kind === "provider-operation" && operation.abi.effects.evaluation === "pure" &&
         operation.abi.effects.safety === "safe" && operation.abi.effects.invocation === "infallible" &&
         operation.abi.result.kind === "sync" && isRustCopyCarrier(operation.abi.result.carrier) &&
         rustBorrowedStringInputs(parent!, operation, ast).includes(expression)) return true;
       if (parent !== undefined && (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent))) {
-        if (!rustCallArgumentIsOwned(expression, ast, walk.context.facts)) return false;
+        if (!rustCallArgumentIsOwned(expression, ast, walk.context.records)) return false;
       } else if (parent !== undefined && ast.is.IsArrowFunction(parent) && ast.body(parent) === expression) {
         return true;
       } else if (parent === undefined || !["KindReturnStatement", "KindBinaryExpression", "KindPrefixUnaryExpression",

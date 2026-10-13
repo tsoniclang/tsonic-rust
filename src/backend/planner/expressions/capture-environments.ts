@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustClosureCaptureFact } from "../../../analysis/facts/operations/keys.js";
-import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
+import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
+
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustCapturedBinding, RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath } from "../program/plan-context.js";
@@ -22,7 +22,7 @@ export function planRustCapturedEnvironment(
     if (context.syntheticNames === undefined || !requireRustCarrierRequirements(capture.carrier,
       [...(move ? [] : ["clone" as const]), ...(options.staticStorage ? ["static" as const] : [])],
       capture.reference, context)) return undefined;
-    const binding = context.input.program.facts.getFact(capture.reference, rustSourceBindingFactKey);
+    const binding = context.input.program.records.sourceBinding.get(capture.reference);
     if (binding === undefined) return undefined;
     const functionValue = context.input.program.source.ast.is.IsFunctionDeclaration(binding.sourceDeclaration) &&
       context.input.program.lexicalFunctions.forDeclaration(binding.sourceDeclaration) !== undefined;

@@ -19,7 +19,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { rustAsyncFunctionFactKey } from "../facts/keys.js";
+
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
@@ -106,7 +106,7 @@ export function recordRustAsyncBodyFacts(
   if (!isJsPromise) {
     const inner = !isRustNeverCarrier(inferred) || selectedContext === undefined ? inferred
       : rustFutureOutputCarrier(rustOptionElementCarrier(selectedContext) ?? selectedContext);
-    if (inner !== undefined) walk.context.facts.set(declaration, rustAsyncFunctionFactKey, {
+    if (inner !== undefined) walk.context.records.asyncFunction.set(declaration, {
       kind: "native-future", isAsync: true, futureCarrier: rustFutureTargetType(inner), outputCarrier: inner,
     }, [{ message: "rust async function" }]);
     return;
@@ -144,7 +144,7 @@ export function recordRustAsyncBodyFacts(
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
     return;
   }
-  walk.context.facts.set(declaration, rustAsyncFunctionFactKey, {
+  walk.context.records.asyncFunction.set(declaration, {
     kind: "js-promise", isAsync: true, futureCarrier: closedFutureCarrier,
     outputCarrier: selected.outputCarrier, capturedParameters: storage.capturedParameters,
     storage: storage.storage,

@@ -7,7 +7,7 @@ import { memoryAbiCapability } from "../../helpers/memory-abi.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
-import { rustCompileTimeSourceKey } from "../../../dist/target-model/facts/source-declarations.js";
+
 import { isRustCopyCarrier, rustCarrierSupportsTrait, rustOptionTargetType, rustStringTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { writeRustStoredObjectField } from "../../../dist/backend/planner/objects/project-storage.js";
@@ -121,7 +121,7 @@ export function run(): uint32 { return struct(4); }
   const ordinary = [];
   const visit = node => {
     if (ast.is.IsCallExpression(node)) {
-      if (program.facts.getFact(node, rustCompileTimeSourceKey)) selected.push(node);
+      if (program.records.compileTimeSource.get(node)) selected.push(node);
       else ordinary.push(node);
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

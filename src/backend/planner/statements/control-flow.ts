@@ -37,12 +37,7 @@ import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
-import {
-  rustMutatedBindingFactKey,
-  rustOptionProjectionFactKey,
-  rustSourceBindingFactKey,
-  rustTargetOperationFactKey,
-} from "../../../analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
@@ -108,7 +103,7 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   const sourceReturn = sourceStatements.length === 1 ? sourceStatements[0] : undefined;
   const returnedExpression = sourceReturn !== undefined && ast.is.IsReturnStatement(sourceReturn)
     ? Node_Expression(ast, sourceReturn) : undefined;
-  const returnedOption = context.input.program.facts.getFact(returnedExpression, rustOptionProjectionFactKey);
+  const returnedOption = context.input.program.records.optionProjection.get(returnedExpression);
   if (context.fallibleBoundary === undefined && context.generator === undefined &&
     elseBlock === undefined && planned.kind === "option-presence" && !planned.present &&
     terminal?.kind === "return" && terminal.expr?.kind === "associated-value" &&
@@ -137,21 +132,18 @@ function tryPlanSelectedProjectTypeTestIf(
   context: RustPlanContext,
 ): { readonly handled: boolean; readonly statements?: readonly RustStmt[] } {
   const { ast } = context.input.program.source;
-  const fact = context.input.program.facts.getFact(condition, rustTargetOperationFactKey);
+  const fact = context.input.program.records.targetOperation.get(condition);
   const leftNode = fact?.kind === "project-type-test" && fact.lowering.kind === "dispatch"
     ? BinaryExpression_Left(ast, condition)
     : undefined;
   const binding = leftNode === undefined || ast.kindName(leftNode) !== KindIdentifier ||
       context.expressionOverrides?.has(leftNode) === true
     ? undefined
-    : context.input.program.facts.getFact(leftNode, rustSourceBindingFactKey);
+    : context.input.program.records.sourceBinding.get(leftNode);
   if (fact?.kind !== "project-type-test" || fact.lowering.kind !== "dispatch" ||
     leftNode === undefined || binding === undefined || thenStatement === undefined ||
     context.syntheticNames === undefined ||
-    context.input.program.facts.getFact(
-      binding.sourceDeclaration,
-      rustMutatedBindingFactKey,
-    ) !== undefined ||
+    context.input.program.records.mutatedBinding.get(binding.sourceDeclaration) !== undefined ||
     !rustTargetTypeRefEquals(fact.sourceCarrier, fact.dispatchCarrier)) {
     return { handled: false };
   }
@@ -247,7 +239,6 @@ export function planLabeledStatement(
     }
   }
 }
-
 
 export function planWhileStatement(
   node: Node,
@@ -568,8 +559,6 @@ export function withRustControlTarget(
 function planIncrementor(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   return planExpressionAsStatement(node, context);
 }
-
-
 
 export function isConstLiteralInitializer(node: Node, context: RustPlanContext): boolean {
   const kind = context.input.program.source.ast.kindName(node);

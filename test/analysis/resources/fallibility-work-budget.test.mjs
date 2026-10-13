@@ -4,11 +4,12 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
 import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
 import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
-import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { recordFallibilityFacts } from "../../../dist/analysis/resources/fallibility.js";
-import { rustErrorEffectsEqual } from "../../../dist/analysis/facts/error-effects.js";
-import { rustErrorEffectsFactKey, rustFallibleFactKey, rustSourceCallEffectsFactKey,
-  rustSourceErrorEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
+import { rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
+
+
+
 
 function fixture(text) {
   let program;
@@ -20,7 +21,7 @@ function fixture(text) {
     const context = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
       request.rootPublishesLibrary, dispatch.plan);
     analyzeRustProgram(context);
-    program = { ...context, facts: context.facts.seal() };
+    program = { ...context, records: context.records.seal() };
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
   } });
   assert.deepEqual(result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`), []);
@@ -32,17 +33,16 @@ function fixture(text) {
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
-  const filtered = new Set([rustErrorEffectsFactKey, rustFallibleFactKey,
-    rustSourceCallEffectsFactKey, rustSourceErrorEffectsFactKey]);
+  const filtered = new Set(["errorEffects", "fallible",
+    "sourceCallEffects", "sourceErrorEffects"]);
   const run = maximumWork => {
-    const facts = createRustPlanBuilder(source.sourceFacts, program.typeDefinitions,
-      { ...program.facts, get: (node, key) => filtered.has(key) ? undefined : program.facts.get(node, key) });
+    const records = createRustProgramRecordBuilder(program.typeDefinitions, { ...program.records, get: (node, key) => filtered.has(key) ? undefined : program.records[key].get(node) });
     const diagnostics = [];
-    const context = { ...program, source, ast, facts, diagnostics };
+    const context = { ...program, source, ast, records, diagnostics };
     recordFallibilityFacts({ context, resolving: new Set(), rejectedExpressions: new WeakSet(),
       preparedCallbackCalls: new Map(), objectLiteralMethodExpressions: [], objectLiteralMethodSpreadExpressions: [] },
     program.sourceFiles, maximumWork);
-    return { facts, diagnostics };
+    return { records, diagnostics };
   };
   return { program, declarations, run };
 }
@@ -50,8 +50,8 @@ function fixture(text) {
 function assertEffectsUnchanged(current, result) {
   assert.deepEqual(result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`), []);
   for (const declaration of current.declarations) {
-    const expected = current.program.facts.get(declaration, rustErrorEffectsFactKey);
-    const actual = result.facts.get(declaration, rustErrorEffectsFactKey);
+    const expected = current.program.records.errorEffects.get(declaration);
+    const actual = result.records.errorEffects.get(declaration);
     assert.equal(actual !== undefined, true, "all exact declaration effects must be finalized");
     assert.equal(rustErrorEffectsEqual(actual, expected), true, "resource accounting cannot alter exact error effects");
   }
@@ -66,7 +66,7 @@ test("the same valid source fails a small finite budget and completes with adequ
   `);
   const limited = current.run(10);
   assert.deepEqual(limited.diagnostics.map(diagnostic => diagnostic.code), ["RUST_ERROR_EFFECTS_WORK_LIMIT"]);
-  for (const declaration of current.declarations) assert.equal(limited.facts.get(declaration, rustErrorEffectsFactKey) === undefined,
+  for (const declaration of current.declarations) assert.equal(limited.records.errorEffects.get(declaration) === undefined,
     true, "exhaustion must not publish an invented pure declaration");
   assertEffectsUnchanged(current, current.run(1_000_000));
 });

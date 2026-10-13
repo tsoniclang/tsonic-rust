@@ -292,11 +292,11 @@ test("provider resolution requires the exact selected subject and uses broader f
   const selectedIdentity = identity({ signatureId: "acme.Store.get(string)" });
   const facts = new Map([[callee, selectedIdentity]]);
   const context = {
-    facts: {
-      get(subject) {
+    source: { sourceFacts: {
+      getFact(subject) {
         return facts.get(subject);
       },
-    },
+    } },
   };
 
   const exactCallee = [{ subject: callee, precision: "exact" }];
@@ -319,11 +319,11 @@ test("declaration corroboration cannot override the checker-selected overload", 
     [callee, identity({ signatureId: "acme.Store.get(number)" })],
   ]);
   const context = {
-    facts: {
-      get(subject) {
+    source: { sourceFacts: {
+      getFact(subject) {
         return facts.get(subject);
       },
-    },
+    } },
   };
 
   assert.deepEqual(resolveSelectedProviderDeclaration(context, selected, [{

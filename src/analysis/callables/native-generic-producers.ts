@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals, closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
@@ -9,7 +9,7 @@ import { rustGenericCallableValue } from "../../target-model/types/carriers/gene
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { rustSourceCallEffectsFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalDefinition } from "./generic-physical.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
@@ -40,7 +40,7 @@ export interface RustNativeGenericProducerPlan {
 export function createRustNativeGenericProducerPlan(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly generic: RustGenericCallablePlan;
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
@@ -63,8 +63,8 @@ export function createRustNativeGenericProducerPlan(input: {
     bindings.set(selected.protocol, values);
   };
   for (const invocation of input.nodes) {
-    const operation = input.facts.getFact(invocation, rustTargetOperationFactKey);
-    const signature = operation?.kind === "source-call" ? input.facts.getSelectedTargetCall(invocation) : undefined;
+    const operation = input.records.targetOperation.get(invocation);
+    const signature = operation?.kind === "source-call" ? input.records.selectedCall.get(invocation) : undefined;
     const declaration = signature?.sourceDeclaration;
     if (operation?.kind !== "source-call" || signature === undefined || declaration === undefined) continue;
     const owner = sourceEnclosingCallable(invocation, input.ast);
@@ -98,7 +98,7 @@ export function createRustNativeGenericProducerPlan(input: {
         }
         const implementation = subject.projection.length === 0 ? input.generic.implementationFor(subject.node) : undefined;
         if (implementation === undefined) {
-          const producer = input.facts.getFact(subject.node, rustTargetOperationFactKey);
+          const producer = input.records.targetOperation.get(subject.node);
           if (!quantified && !(producer?.kind === "closure" && rustGenericCallableValue(producer.resultCarrier) !== undefined)) continue;
           reject(invocation, selected, "An exact generic callable origin has no existing generic producer family.");
           continue;
@@ -169,7 +169,7 @@ export function createRustNativeGenericProducerPlan(input: {
       const arities = new Set<number>();
       for (const definition of input.generic.physical.definitions()) {
         if (definition.ownerFileName !== fileName) continue;
-        const effects = definition.implementations.map(implementation => input.facts.getFact(implementation.declaration, rustSourceCallEffectsFactKey));
+        const effects = definition.implementations.map(implementation => input.records.sourceCallEffects.get(implementation.declaration));
         if (effects.some(effect => effect === undefined)) return undefined;
         for (const channel of ["invocation", "awaiting"] as const) {
           const arity = effects.filter(effect => effect?.[channel] === "fallible").length;

@@ -1,5 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
+
 import {
   KindExportAssignment,
   KindExportDeclaration,
@@ -8,9 +8,7 @@ import {
   KindVariableStatement,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustModuleBindingFactKey } from "../facts/keys.js";
-import { rustModuleCallableStorageFactKey } from "../callables/module-values.js";
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
+
 import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
@@ -31,7 +29,7 @@ export interface RustModuleInitializationPlan {
 
 type RustModuleInitializationPlanInput = Pick<
   RustAnalysisContext,
-  "ast" | "source" | "sourceFiles" | "facts" | "projectTypes" | "safetyApplications"
+  "ast" | "source" | "sourceFiles" | "records" | "projectTypes" | "safetyApplications"
 >;
 
 export function createRustModuleInitializationPlan(
@@ -85,7 +83,7 @@ function classifyModuleInitialization(
       return unresolved(sourceFile, "Source file contains an undefined top-level statement slot.");
     }
     const kind = input.ast.kindName(statement);
-    if (input.facts.getFact(statement, rustTypeOnlyDeclarationFactKey) !== undefined) continue;
+    if (input.records.typeOnlyDeclaration.get(statement) !== undefined) continue;
     if (kind === KindImportDeclaration || kind === KindExportDeclaration ||
       kind === KindFunctionDeclaration || kind === "KindInterfaceDeclaration" ||
       kind === "KindTypeAliasDeclaration" || kind === "KindEnumDeclaration" ||
@@ -98,8 +96,8 @@ function classifyModuleInitialization(
         return unresolved(statement, "Top-level variable statement has no exact variable declarations.");
       }
       for (const declaration of variables) {
-        if (input.facts.getFact(declaration, rustCompileTimeSourceKey)) continue;
-        const binding = input.facts.getFact(declaration, rustModuleBindingFactKey);
+        if (input.records.compileTimeSource.get(declaration)) continue;
+        const binding = input.records.moduleBinding.get(declaration);
         if (binding === undefined) {
           return unresolved(
             declaration,
@@ -107,7 +105,7 @@ function classifyModuleInitialization(
           );
         }
         if (binding.storage === "native-callable" && binding.value !== undefined) {
-          const storage = input.facts.getFact(declaration, rustModuleCallableStorageFactKey);
+          const storage = input.records.moduleCallableStorage.get(declaration);
           if (storage === undefined) return unresolved(declaration,
             "Module callable values require their finalized native storage selection.");
           if (storage.kind === "stored") return { kind: "required" };
@@ -148,7 +146,7 @@ function classifyModuleInitialization(
         );
       }
       const operation = input.safetyApplications.operationForExpression(expression);
-      if (input.facts.getFact(expression, rustCompileTimeSourceKey)) continue;
+      if (input.records.compileTimeSource.get(expression)) continue;
       if (operation?.kind === "safety-builder" ||
         (operation?.kind === "unsafe-context" && operation.fact.kind === "remaining-block")) {
         continue;

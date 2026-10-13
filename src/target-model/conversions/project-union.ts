@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../types/model.js";
-import type { RustProjectUpcastFact } from "../types/value-projections.js";
+import type { RustProjectUpcastFact } from "../records/value-projections.js";
 import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustSourceTypeCarrierValue } from "../types/carriers/source-types.js";

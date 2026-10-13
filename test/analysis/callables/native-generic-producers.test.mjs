@@ -13,7 +13,7 @@ function fixture(text, configuration = {}) {
   };
   for (const file of program.sourceFiles) visit(file);
   const { native, nativeStorage, nativeGenericProducers: plan, generic } = program.callableValues;
-  const options = { ast: source.ast, facts: program.facts, nodes, generic, native, nativeStorage,
+  const options = { ast: source.ast, records: program.records, nodes, generic, native, nativeStorage,
     definitions: program.typeDefinitions };
   const declaration = name => nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);

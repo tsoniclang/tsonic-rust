@@ -48,12 +48,8 @@ import {
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
 } from "../../target-model/types/index.js";
-import {
-  rustGeneratorFactKey,
-  rustTargetOperationFactKey,
-  rustTargetOperationResultCarrier,
-  rustYieldFactKey,
-} from "../facts/keys.js";
+
+import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
@@ -73,10 +69,10 @@ import { selectRustConditionalNumericCarrier } from "../../policy/types/conditio
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionResultCarrier } from "../../target-model/types/await.js";
-import { rustEffectiveValueCarrier } from "../facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { normalizeSelectedLiteralCarrier } from "./selected-literals.js";
 import { rustOperationContext } from "../program/walk.js";
 
@@ -239,7 +235,7 @@ export function resolveExpressionCarrierUncached(
       const operandCarrier = operand === undefined
         ? undefined
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
-      const selection = rustAwaitSelection(rustEffectiveValueCarrier(walk.context.facts, operand) ?? operandCarrier,
+      const selection = rustAwaitSelection(rustEffectiveValueCarrier(walk.context.records, operand) ?? operandCarrier,
         walk.context.typeDefinitions);
       const output = selection === undefined ? undefined : rustAwaitSelectionResultCarrier(selection) ??
         resolveRustTargetTypeRef(expression, rustResolutionContext(walk, expression), walk.operationOptions);
@@ -267,7 +263,7 @@ export function resolveExpressionCarrierUncached(
         );
         return undefined;
       }
-      const generator = walk.context.facts.get(generatorDeclaration, rustGeneratorFactKey);
+      const generator = walk.context.records.generator.get(generatorDeclaration);
       if (generator === undefined) {
         appendRustDiagnostic(
           walk,
@@ -313,7 +309,7 @@ export function resolveExpressionCarrierUncached(
           source.yieldKind === "value" ? generator.yieldType : delegatedCarrier,
         );
       }
-      walk.context.facts.set(expression, rustYieldFactKey, {
+      walk.context.records.yield.set(expression, {
         generatorDeclaration,
         kind: source.yieldKind,
         yieldType,
@@ -454,7 +450,7 @@ export function resolveExpressionCarrierUncached(
         ? undefined
         : resolveExpressionCarrier(walk, operand, sourceFile, undefined);
       const physicalCarrier = operand === undefined || operandCarrier === undefined
-        ? undefined : walk.context.facts.getRuntimeCarrierFact(rustUnparenthesizedExpression(walk.context.ast, operand))?.carrier;
+        ? undefined : walk.context.records.runtimeCarrier.get(rustUnparenthesizedExpression(walk.context.ast, operand))?.carrier;
       const result = physicalCarrier === undefined
         ? undefined
         : getRustTypeofRuntimeKind(physicalCarrier, walk.context.typeDefinitions);
@@ -535,12 +531,10 @@ export function resolveExpressionCarrierUncached(
       if (receiverCarrier === undefined) {
         return undefined;
       }
-      let operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
-        walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      let operation = walk.context.records.targetOperation.get(expression);
       if (operation === undefined) {
         selectExpressionOperation(walk, expression, sourceFile);
-        operation = walk.context.facts.get(expression, rustTargetOperationFactKey) ??
-          walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+        operation = walk.context.records.targetOperation.get(expression);
       }
       const resultCarrier = operation === undefined
         ? undefined

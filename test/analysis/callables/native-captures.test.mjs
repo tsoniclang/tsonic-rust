@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
-import { rustClosureCaptureFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function fixture(text) {
@@ -24,7 +24,7 @@ test("native captured equal-signature inputs retain distinct physical types with
     }
   `);
   const closure = current.closures[0];
-  const logical = current.program.facts.getFact(closure, rustClosureCaptureFactKey);
+  const logical = current.program.records.closureCapture.get(closure);
   const selected = current.plan.forDeclaration(closure);
   assert.equal(selected.kind, "resolved", selected.reason);
   const inputs = current.native.inputsFor(current.declaration("make"));
@@ -37,7 +37,7 @@ test("native captured equal-signature inputs retain distinct physical types with
     assert.equal(selected.environment.typeIdentities.includes(input.implementation.identity), true);
     assert.equal(logical.captures.some(capture => capture.carrier === input.implementation), false);
   }
-  assert.equal(current.program.facts.getFact(closure, rustClosureCaptureFactKey) === logical, true);
+  assert.equal(current.program.records.closureCapture.get(closure) === logical, true);
   assert.equal(current.plan.forDeclaration(closure) === selected, true);
   assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.captures) && Object.isFrozen(selected.inputs), true);
 });
@@ -53,7 +53,7 @@ test("native capture environment keeps ordinary captured values and excludes met
   assert.equal(selected.kind, "resolved", selected.reason);
   assert.equal(selected.inputs.length, 0);
   assert.equal(selected.environment.typeParameters.length, 1);
-  const logical = current.program.facts.getFact(closure, rustClosureCaptureFactKey);
+  const logical = current.program.records.closureCapture.get(closure);
   assert.equal(rustTargetTypeRefEquals(selected.captures[0], logical.captures[0].carrier), true);
 });
 
@@ -85,7 +85,7 @@ test("native capture environments retain exact receiver fields and whole receive
   let fields = 0;
   let receivers = 0;
   for (const closure of current.closures) {
-    const logical = current.program.facts.getFact(closure, rustClosureCaptureFactKey);
+    const logical = current.program.records.closureCapture.get(closure);
     const selected = current.plan.forDeclaration(closure);
     assert.equal(selected.kind, "resolved", selected.reason);
     fields += selected.receiverFields.length;

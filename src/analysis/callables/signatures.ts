@@ -1,5 +1,5 @@
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
-import { rustCallableInvocationResult } from "../facts/callable-results.js";
+import { rustCallableInvocationResult } from "./results.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
 import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.js";
 import {
@@ -20,13 +20,7 @@ import {
   VariableStatement_DeclarationList,
   sourceDeclarationIsModuleScoped,
 } from "@tsonic/target-api/source";
-import {
-  rustAsyncFunctionFactKey,
-  rustGeneratorFactKey,
-  rustModuleBindingFactKey,
-  rustSourceCallableReturnFactKey,
-  rustSourceParameterAbiFactKey,
-} from "../facts/keys.js";
+
 import {
   isRustUnitCarrier,
   isRustNeverCarrier,
@@ -43,7 +37,7 @@ import { recordBindingPatternFacts, recordParameterAbiFacts, setParameterAbiFact
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -56,7 +50,7 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
 import { resolveRustRetainedResult } from "../../policy/types/resolution/retained-results.js";
-import { rustRetainedEnvironmentFactKey } from "../facts/retained-environments.js";
+
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
@@ -95,15 +89,13 @@ function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: 
   return contextual;
 }
 
-import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
-
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
   const { ast } = walk.context;
   const visit = (node: Node | undefined): void => {
     if (node === undefined) {
       return;
     }
-    if (walk.context.facts.get(node, rustCompileTimeSourceKey)) return;
+    if (walk.context.records.compileTimeSource.get(node)) return;
     const kind = ast.kindName(node);
     if (kind === "KindFunctionType" || kind === "KindCallSignature") {
       recordCallableTypeSignatureFacts(walk, node);
@@ -151,7 +143,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
       const value = finalizedNativeCallableValue(walk, statement, valueName);
       if (valueName !== undefined && implementationName !== undefined && value !== undefined) {
         setCarrierFact(walk, statement, value.carrier);
-        walk.context.facts.set(statement, rustModuleBindingFactKey, {
+        walk.context.records.moduleBinding.set(statement, {
           declarationKind: "function",
           storage: "native-callable",
           callableDeclaration: statement,
@@ -201,7 +193,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
       if (value !== undefined) {
         setCarrierFact(walk, declaration, value.carrier);
       }
-      walk.context.facts.set(declaration, rustModuleBindingFactKey, {
+      walk.context.records.moduleBinding.set(declaration, {
         declarationKind: "const",
         storage: "native-callable",
         callableDeclaration: candidate.callableDeclaration,
@@ -221,20 +213,19 @@ function finalizedNativeCallableValue(
   callableDeclaration: Node,
   valueName: string | undefined,
 ): Extract<
-  import("../facts/keys.js").RustModuleBindingFact,
+  import("../../target-model/records/operation-selections.js").RustModuleBindingFact,
   { readonly storage: "native-callable" }
 >["value"] | undefined {
   const parameterAbis = walk.context.ast.parameters(callableDeclaration).map((parameter) =>
     parameter === undefined
       ? undefined
-      : walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
-        walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey));
-  const resultCarrier = rustCallableInvocationResult(walk.context.facts, callableDeclaration);
+      : walk.context.records.sourceParameterAbi.get(parameter));
+  const resultCarrier = rustCallableInvocationResult(walk.context.records, callableDeclaration);
   if (valueName === undefined || resultCarrier === undefined ||
     parameterAbis.some((abi) => abi === undefined)) {
     return undefined;
   }
-  const closed = parameterAbis as import("../facts/keys.js").RustSourceParameterAbiFact[];
+  const closed = parameterAbis as import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
   const carrier = rustSourceFunctionValueCarrier(walk, callableDeclaration, closed, resultCarrier);
   if (carrier === undefined) return undefined;
   return {
@@ -253,10 +244,8 @@ function nativeModuleFunctionAbiIsFinalized(
   return isDenseDataArray(parameters) &&
     parameters.every((parameter) =>
       parameter !== undefined &&
-      (walk.context.facts.get(parameter, rustSourceParameterAbiFactKey) ??
-        walk.context.facts.resolve(parameter, rustSourceParameterAbiFactKey)) !== undefined) &&
-    (walk.context.facts.get(callableDeclaration, rustSourceCallableReturnFactKey) ??
-      walk.context.facts.resolve(callableDeclaration, rustSourceCallableReturnFactKey)) !== undefined;
+      (walk.context.records.sourceParameterAbi.get(parameter)) !== undefined) &&
+    (walk.context.records.sourceCallableReturn.get(callableDeclaration)) !== undefined;
 }
 
 function recordCallableValueSignaturesForStatements(
@@ -323,8 +312,8 @@ function recordCallableValueSignatureFacts(
     recordFunctionSignatureFacts(walk, expression);
     return;
   }
-  const valueCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
-    walk.context.facts.resolve(declaration, rustRuntimeCarrierKey)?.carrier ??
+  const valueCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
+    walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
     resolveRustTargetTypeRef(
       Node_Type(ast, declaration) ?? expression,
       rustResolutionContext(walk, declaration),
@@ -386,8 +375,8 @@ function recordCallableValueSignatureFacts(
   }
   recordCallableSuspensionFacts(walk, expression, undefined, selectedReturnCarrier);
   if (!recordCallableReturnFact(walk, expression,
-    walk.context.facts.get(expression, rustAsyncFunctionFactKey)?.outputCarrier ??
-      walk.context.facts.get(expression, rustGeneratorFactKey)?.resultCarrier ?? returnCarrier)) {
+    walk.context.records.asyncFunction.get(expression)?.outputCarrier ??
+      walk.context.records.generator.get(expression)?.resultCarrier ?? returnCarrier)) {
     return;
   }
   if (nativeCallable?.callableDeclaration === expression) return;
@@ -406,7 +395,7 @@ function selectedCallableValueReturn(
   declaration: Node,
   synchronousReturn: TargetTypeRef,
 ): TargetTypeRef {
-  return rustCallableInvocationResult(walk.context.facts, declaration) ?? synchronousReturn;
+  return rustCallableInvocationResult(walk.context.records, declaration) ?? synchronousReturn;
 }
 
 export function recordCallableSuspensionFacts(
@@ -446,7 +435,7 @@ export function recordCallableSuspensionFacts(
         );
         return;
       }
-      walk.context.facts.set(declaration, rustGeneratorFactKey, {
+      walk.context.records.generator.set(declaration, {
         kind: protocol.kind,
         resultCarrier: rustGeneratorStorageTargetType(
           protocol,
@@ -498,8 +487,8 @@ export function recordCallableReturnFact(
   declaration: Node,
   selectedCarrier?: TargetTypeRef,
 ): boolean {
-  const generator = walk.context.facts.get(declaration, rustGeneratorFactKey);
-  const asynchronous = walk.context.facts.get(declaration, rustAsyncFunctionFactKey);
+  const generator = walk.context.records.generator.get(declaration);
+  const asynchronous = walk.context.records.asyncFunction.get(declaration);
   if (walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined
     ? generator === undefined
     : asynchronous === undefined && walk.context.ast.hasModifierKind(declaration, "async")) return false;
@@ -519,23 +508,22 @@ export function recordCallableReturnFact(
   }
   const rawCarrier = pointer?.returnCarrier ?? rustGenericCallableValueOwner(walk.context.ast, declaration, selected);
   const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
-    parameter === undefined ? undefined : walk.context.facts.get(parameter, rustSourceParameterAbiFactKey)?.parameterCarrier);
+    parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
   const retained = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
     : resolveRustRetainedResult(declaration, sourceReturn, rawCarrier, parameterCarriers,
         rustResolutionContext(walk, declaration), walk.operationOptions);
   const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
-  if (retained?.environment !== undefined) walk.context.facts.set(declaration, rustRetainedEnvironmentFactKey,
-    retained.environment, [{ message: "rust returned owned environment" }]);
+  if (retained?.environment !== undefined) walk.context.records.retainedEnvironment.set(declaration, retained.environment, [{ message: "rust returned owned environment" }]);
   if (carrier !== undefined) {
     const borrowedParameter = walk.context.sourceCallables.borrowedReturnParameter(declaration);
     const borrowedAbi = borrowedParameter === undefined ? undefined
-      : walk.context.facts.get(borrowedParameter, rustSourceParameterAbiFactKey);
+      : walk.context.records.sourceParameterAbi.get(borrowedParameter);
     const completion = walk.context.semanticsFor(declaration).operations.callableCompletion(declaration);
     const absence = rustOptionElementCarrier(carrier) !== undefined || rustOptionalStorageValue(carrier) !== undefined ||
       rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, walk.context.typeDefinitions) !== undefined;
     const implementationResult = asynchronous !== undefined || generator !== undefined || sourceReturn === undefined
       ? undefined : resolveRustTargetTypeRef(sourceReturn, rustResolutionContext(walk, declaration), walk.operationOptions);
-    walk.context.facts.set(declaration, rustSourceCallableReturnFactKey, {
+    walk.context.records.sourceCallableReturn.set(declaration, {
       returnCarrier: carrier,
       ...(borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
         rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? { borrowedParameter } : {}),

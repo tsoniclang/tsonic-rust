@@ -1,14 +1,14 @@
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
-import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/facts/value-carrier-queries.js";
+import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/conversions/value-carrier-queries.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 
 export function planRustReferenceOperationCall(
@@ -30,7 +30,7 @@ export function planRustReferenceOperationCall(
       "Rust reference operation arguments conflict with the exact finalized source occurrence.",
     );
   }
-  const operandCarrier = rustValueCarrierBeforeOptionProjection(context.input.program.facts, fact.operandExpression);
+  const operandCarrier = rustValueCarrierBeforeOptionProjection(context.input.program.records, fact.operandExpression);
   if (operandCarrier === undefined ||
     !rustTargetTypeRefEquals(operandCarrier, fact.operandCarrier)) {
     return rejectReferenceOperation(
@@ -43,7 +43,7 @@ export function planRustReferenceOperationCall(
   if (fact.operation === "load" &&
     (!rustTargetTypeRefEquals(fact.referenceCarrier, fact.operandCarrier) ||
       !rustTargetTypeRefEquals(fact.resultCarrier, fact.operandCarrier.referent) ||
-      !rustTargetTypeRefEquals(context.input.program.facts.getRuntimeCarrierFact(call)?.carrier, fact.resultCarrier))) {
+      !rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(call)?.carrier, fact.resultCarrier))) {
     return rejectReferenceOperation(call, context, "RUST_REFERENCE_LOAD_VALUE_CONFLICT",
       "Rust reference load conflicts with its exact reference and result carrier relationship.");
   }
@@ -59,9 +59,7 @@ export function planRustReferenceOperationCall(
         ? { kind: "owned-string-from-borrowed-str", expression: operand }
         : { kind: "dereference", pointer: operand };
     case "store": {
-      const valueCarrier = context.input.program.facts.getRuntimeCarrierFact(
-        fact.valueExpression,
-      )?.carrier;
+      const valueCarrier = context.input.program.records.runtimeCarrier.get(fact.valueExpression)?.carrier;
       if (valueCarrier === undefined ||
         !rustTargetTypeRefEquals(valueCarrier, fact.valueCarrier)) {
         return rejectReferenceOperation(
@@ -72,14 +70,8 @@ export function planRustReferenceOperationCall(
         );
       }
       if (fact.writeStrategy !== undefined) {
-        const readFact = context.input.program.facts.getFact(
-          fact.writeStrategy.readExpression,
-          rustTargetOperationFactKey,
-        );
-        const valueFact = context.input.program.facts.getFact(
-          fact.valueExpression,
-          rustTargetOperationFactKey,
-        );
+        const readFact = context.input.program.records.targetOperation.get(fact.writeStrategy.readExpression);
+        const valueFact = context.input.program.records.targetOperation.get(fact.valueExpression);
         if (readFact?.kind !== "reference-operation" || readFact.operation !== "load" ||
           valueFact?.kind !== "operator-token" ||
           !rustTargetTypeRefEquals(readFact.operandCarrier, fact.operandCarrier) ||

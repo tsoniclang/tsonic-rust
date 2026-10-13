@@ -397,7 +397,7 @@ test("source profile identity comes from the registered compiler SourceFile, nev
     const text = readFileSync(path, "utf8");
     assert.doesNotMatch(text, /source-profiles|tsonicSourceProfileVirtualDirectory|normalizeTargetSourceProfileSegment/u, `${path} reconstructs source-profile ownership from a path`);
   }
-  const registry = readFileSync(join(sourceRoot, "analysis/facts/source-profile-registry.ts"), "utf8");
+  const registry = readFileSync(join(sourceRoot, "analysis/project/source-profiles.ts"), "utf8");
   assert.doesNotMatch(registry, /\.includes\s*\(/u);
   assert.match(registry, /sourceFileByProfile\.get\(profile\) === sourceFile/u);
   assert.match(registry, /ambiguousProfiles\.add\(profile\)/u);
@@ -531,7 +531,7 @@ test("provider parameter passing is metadata-derived and backend-gated", () => {
   const passingGate = argumentPlanning.slice(
     argumentPlanning.indexOf("export function requireProviderArgumentPassingFacts("),
   );
-  assert.match(passingGate, /getArgumentPassingFact\(argument\)/u);
+  assert.match(passingGate, /argumentPassing\.get\(argument\)/u);
   assert.match(passingGate, /if \(actual === undefined\)/u);
   assert.match(passingGate, /if \(actual\.mode !== expected\)/u);
   assert.match(passingGate, /missingFactDiagnostic/u);
@@ -568,7 +568,7 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
     "export function planOptionalChainExpression(",
     "function exactOptionalStructuralMethodGuard(",
   );
-  assert.match(planner, /getFact\(node, rustOptionalChainFactKey\)/u);
+  assert.match(planner, /optionalChain\.get\(node\)/u);
   assert.match(planner, /planRawExpression\(fact\.guard, context, "value"\)/u);
   assert.match(planner, /planRustNonConsumingValue\(fact\.guard, plannedGuard, context\)/u);
   assert.match(planner, /overrides\.set\(fact\.guard/u);
@@ -691,23 +691,23 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
     assert.doesNotMatch(section, /\.argModes|\.argOrder|\.argConversions|\.receiverMode|\.indexConversion|\.resultConversion|\.parameterCarriers|\.sourceArgumentCount/u, `${name} must not interpret sparse authoring metadata`);
   }
   assert.match(expressionFacts, /function providerSelectedCallMatches\(/u);
-  assert.match(expressionFacts, /getSelectedTargetCall\(node\)/u);
+  assert.match(expressionFacts, /selectedCall\.get\(node\)/u);
   assert.match(runtimeSet, /fact\.abi\.operationKind !== expectedOperationKind/u);
   assert.match(runtimeSet, /finishProviderOperationExpression\(context, fact, call, expression\)/u);
-  assert.match(runtimeSet, /getRuntimeCarrierFact\(right\)/u);
+  assert.match(runtimeSet, /runtimeCarrier\.get\(right\)/u);
   assert.match(runtimeSet, /selectedOperatorIdentityMatches/u);
 });
 
 test("operation target shape and source-call effects have one finalized owner", () => {
-  const keys = readFileSync(join(sourceRoot, "analysis/facts/operations/facts.ts"), "utf8");
-  const abi = readFileSync(join(sourceRoot, "analysis/facts/finalized-operation/model.ts"), "utf8");
+  const keys = readFileSync(join(sourceRoot, "target-model/records/operations.ts"), "utf8");
+  const abi = readFileSync(join(sourceRoot, "target-model/records/finalized-operation.ts"), "utf8");
   const expressions = collectFiles(join(sourceRoot, "backend/planner/expressions"), ".ts")
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
   const statements = collectFiles(join(sourceRoot, "backend/planner/statements"), ".ts")
     .map((path) => readFileSync(path, "utf8"))
     .join("\n");
-  const sourceCallFacts = readFileSync(join(sourceRoot, "analysis/facts/keys.ts"), "utf8");
+  const sourceCallFacts = readFileSync(join(sourceRoot, "target-model/records/program.ts"), "utf8");
   const factUnion = keys.slice(keys.indexOf("export type RustTargetOperationFact ="));
   const providerFact = sourceSection(factUnion, 'readonly kind: "provider-operation";', 'readonly kind: "array-literal";');
   const runtimeSetFact = sourceSection(factUnion, 'readonly kind: "runtime-set";', 'readonly kind: "iteration";');
@@ -719,8 +719,8 @@ test("operation target shape and source-call effects have one finalized owner", 
   assert.doesNotMatch(providerFact, /readonly target:|readonly operationKind:/u);
   assert.doesNotMatch(runtimeSetFact, /readonly target:/u);
   assert.doesNotMatch(`${keys}\n${expressions}`, /rustFallibleCallFactKey|fallibleOnAwait/u);
-  assert.match(sourceCallFacts, /rustSourceCallEffectsFactKey/u);
-  assert.match(expressions, /rustSourceCallEffectsFactKey/u);
+  assert.match(sourceCallFacts, /readonly sourceCallEffects: RustRecordFamily<RustSourceCallEffectsFact>/u);
+  assert.match(expressions, /sourceCallEffects\.get\(/u);
   assert.doesNotMatch(expressions, /convertedCarrier\s*\?\?\s*sourceCarrier/u);
   assert.doesNotMatch(expressions, /rust\.core\.Future/u);
   assert.doesNotMatch(statements, /assign_op_pattern|compoundAssignmentOperator/u);
@@ -767,7 +767,7 @@ test("backend assignment and nullish checks consume finalized fact details", () 
   assert.match(semantics, /"in-place-string-append-value"/u);
   assert.match(operators, /export function selectRustEquivalentAssignment\(/u);
   assert.match(expressions, /fact\.optionOperand === "left" \? leftNode : rightNode/u);
-  assert.doesNotMatch(expressions, /getRuntimeCarrierFact\(leftNode\)/u);
+  assert.doesNotMatch(expressions, /runtimeCarrier\.get\(leftNode\)/u);
 });
 
 test("counted-loop planning consumes one sealed Rust representation plan", () => {
@@ -807,7 +807,7 @@ test("provider purity uses one generic operation-form writability policy", () =>
     "utf8",
   );
   const finalization = readFileSync(
-    join(sourceRoot, "analysis/facts/finalized-operation/finalize.ts"),
+    join(sourceRoot, "analysis/operations/finalized-operation/finalize.ts"),
     "utf8",
   );
   assert.match(forms, /export function rustProviderOperationFormDeclaresWritableInput\(/u);

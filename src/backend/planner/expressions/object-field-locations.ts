@@ -2,7 +2,7 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
-import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
+
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
@@ -17,7 +17,7 @@ import { planRustSharedReceiver } from "./typed-locations.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 
 export function rustExpressionHasReferenceObjectField(expression: Node, context: RustPlanContext): boolean {
-  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(expression);
   if (operation?.kind !== "source-field") return false;
   if (operation.storage === "structural-object") {
     const field = context.input.program.structuralShapes.field(operation.receiverCarrier, operation.storageIndex);
@@ -33,7 +33,7 @@ export function planRustReferenceObjectFieldLocation(
   context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): RustExpr | undefined {
-  const operation = context.input.program.facts.getFact(expression, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(expression);
   const receiverNode = Node_Expression(context.input.program.source.ast, expression);
   const boundary = rustCurrentErrorBoundary(context);
   if (operation?.kind !== "source-field" || receiverNode === undefined || boundary === undefined ||

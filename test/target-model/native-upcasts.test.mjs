@@ -6,7 +6,8 @@ import { rustValueConversionContract } from "../../dist/target-model/conversions
 import { substituteRustValueConversion } from "../../dist/target-model/conversions/substitution.js";
 import { rustJsTypedArrayTargetType } from "../../dist/target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
-import { finalizeRustProviderOperationAbi, validateRustFinalizedOperationAbi } from "../../dist/analysis/facts/finalized-operation-abi.js";
+import { finalizeRustProviderOperationAbi } from "../../dist/analysis/operations/finalized-operation/finalize.js";
+import { validateRustFinalizedOperationAbi } from "../../dist/analysis/operations/finalized-operation/validation.js";
 import { rustUnitTargetType } from "../../dist/target-model/types/index.js";
 
 const bytes = rustJsTypedArrayTargetType("Uint8Array");

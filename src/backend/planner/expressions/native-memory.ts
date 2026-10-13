@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustNativeBackingKey, rustRawLocationPlanKey } from "../../../target-model/operations/native-memory.js";
+
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
@@ -10,7 +10,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function planRustNativeAllocation(node: Node, initial: RustExpr, context: RustPlanContext, errorCarrier?: TargetTypeRef): RustExpr | undefined {
-  const layout = context.input.program.facts.getFact(node, rustNativeBackingKey);
+  const layout = context.input.program.records.nativeBacking.get(node);
   return layout === undefined ? undefined : planRustNativeMemoryCall("allocate_native_location", initial, layout, context, errorCarrier);
 }
 
@@ -18,7 +18,7 @@ export function tryPlanRustRawLocation(
   node: Node, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): { readonly handled: boolean; readonly expression?: RustExpr } {
-  const plan = context.input.program.facts.getFact(node, rustRawLocationPlanKey);
+  const plan = context.input.program.records.rawLocationPlan.get(node);
   if (plan === undefined) return { handled: false };
   if (plan.operation === "reinterpret" && (context.explicitUnsafeContextDepth ?? 0) === 0) {
     context.diagnostics.push({ code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED", category: "error",

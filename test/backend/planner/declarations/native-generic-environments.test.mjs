@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { planRustNativeCallableGenerics } from "../../../../dist/backend/planner/declarations/callables/native-generics.js";
 import { rustCallablePayloadContext } from "../../../../dist/backend/planner/expressions/capture-payloads.js";
 import { nativeProducerFixture } from "../../../helpers/native-producer-bridges.mjs";
-import { rustContextualValueConversionFactKey, rustSourceCallableReturnFactKey } from "../../../../dist/analysis/facts/keys.js";
+
+
 
 function fixture(substitutions = new Map()) {
   const { context, protocol } = nativeProducerFixture({ result: { kind: "source-primitive", name: "float64" } });
@@ -19,7 +21,7 @@ function fixture(substitutions = new Map()) {
     futureEnvironmentFor: () => ({ kind: "resolved", inputs: [], captures: [] }),
   };
   context.input.program.source = { ast: { forEachChild() {} } };
-  context.input.program.facts = { getFact() {} };
+  context.input.program.records = createRustRecordFixture();
   context.typeParameterSubstitutions = substitutions;
   const source = { context, sourceTypeParameterIdentities: [], preservesExplicitLifetimes: false,
     finalizeGenerics: () => ({ parameters: [], wherePredicates: [] }) };
@@ -62,10 +64,12 @@ for (const position of ["return", "conversion"]) {
       returnFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
       valueFor: () => ({ kind: "selected", carrier, inputs: [current.input] }),
     };
-    program.facts.getFact = (node, key) => node !== current.declaration ? undefined
-      : position === "return" && key === rustSourceCallableReturnFactKey ? { returnCarrier: carrier }
-      : position === "conversion" && key === rustContextualValueConversionFactKey ? { conversion: { kind: "callable-adapter" } }
-      : undefined;
+    program.records = createRustRecordFixture({
+      sourceCallableReturn: { get: node => node === current.declaration && position === "return"
+        ? { returnCarrier: carrier } : undefined },
+      contextualValueConversion: { get: node => node === current.declaration && position === "conversion"
+        ? { conversion: { kind: "callable-adapter" } } : undefined },
+    });
     const selected = planRustNativeCallableGenerics(current.declaration, current.source);
     assert.equal(selected !== undefined, true);
     const parameters = selected.finalizeGenerics().parameters;

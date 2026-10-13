@@ -2,11 +2,11 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import { Node_Type, ObjectLiteralProperty_Value, SpreadAssignment_Expression } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustRecordCarrierValue, type RustIndexedRecordStorage } from "../../target-model/types/carriers/records.js";
 import { isRustIntegerCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -26,7 +26,7 @@ export function resolveRustIndexedRecordContract(walk: RustFactWalk, carrier: Ta
     walk.context.projectTypes.isPolymorphic(definition)) return undefined;
   const index = layout.indexSignatures[0]!;
   const resolve = (declaration: Node): TargetTypeRef | undefined => {
-    const declared = walk.context.facts.get(declaration, rustRuntimeCarrierKey)?.carrier ??
+    const declared = walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
       resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, declaration));
     return declared === undefined ? undefined : walk.context.projectTypes.instantiateMemberCarrier(declaration, carrier, declared);
   };

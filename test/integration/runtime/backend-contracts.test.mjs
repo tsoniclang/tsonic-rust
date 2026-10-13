@@ -1,10 +1,12 @@
+import { rustTargetOperationFactEquals } from "../../../dist/analysis/operations/contracts/equality.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { acmeTelemetryCapability, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/facts/finalized-operation-abi.js";
+
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 import {
   applyFallibleShape,
   applyRustFallibleResultExpression,
@@ -208,8 +210,8 @@ test("operation fact equality is structural and independent of metadata key orde
     kind: "provider-operation",
   };
 
-  assert.equal(rustTargetOperationFactKey.equals(left, right), true);
-  assert.equal(rustTargetOperationFactKey.equals(left, {
+  assert.equal(rustTargetOperationFactEquals(left, right), true);
+  assert.equal(rustTargetOperationFactEquals(left, {
     ...right,
     abi: { ...abi, target: { form: "call", path: "acme::different" } },
   }), false);
@@ -355,20 +357,18 @@ test("evaluation-only provider arguments do not require native parameter-passing
     diagnostics: [],
     input: {
       program: {
-        facts: {
-          getArgumentPassingFact(node) {
-            assert.equal(node, runtimeArgument);
-            return { mode: "borrow-shared" };
-          },
-          getRuntimeCarrierFact(node) {
-            assert.equal(node, runtimeArgument);
-            return { carrier: jsValue };
-          },
-          getTargetConversionFact(node) {
-            assert.equal(node, runtimeArgument);
-            return undefined;
-          },
-        },
+        records: createRustRecordFixture({argumentPassing: { get: (node) => {
+    assert.equal(node, runtimeArgument);
+    return { mode: "borrow-shared" };
+} },
+runtimeCarrier: { get: (node) => {
+    assert.equal(node, runtimeArgument);
+    return { carrier: jsValue };
+} },
+conversion: { get: (node) => {
+    assert.equal(node, runtimeArgument);
+    return undefined;
+} }}),
       },
     },
   };

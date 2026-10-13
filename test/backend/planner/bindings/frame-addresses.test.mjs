@@ -1,10 +1,11 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { rustRawLocationRoot, planRustSourceLocationStorage } from "../../../../dist/backend/planner/expressions/typed-locations.js";
 import { planRustProjectedObjectLocation } from "../../../../dist/backend/planner/expressions/object-field-locations.js";
 import { writeRustProjectDispatchedField } from "../../../../dist/backend/planner/objects/project-objects.js";
-import { rustTargetOperationFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 
 test("dispatched field writes borrow their physical receiver instead of consuming or cloning it", () => {
@@ -40,8 +41,7 @@ test("prepared physical addresses transfer one existing handle without reconstru
 test("prepared field addresses retain their exact member and current failure domain without infallible erasure", () => {
   const expression = {};
   const value = { kind: "path", path: "native_field_pointer" };
-  const context = { input: { program: { facts: { getFact: (node, key) =>
-    node === expression && key === rustTargetOperationFactKey ? { kind: "source-field", operationId: "exact-member" } : undefined } } },
+  const context = { input: { program: { records: createRustRecordFixture({targetOperation: { get: (node) => node === expression ? { kind: "source-field", operationId: "exact-member" } : undefined }}) } },
     valueFieldLocations: new Map([[expression, { address: (member, selected) => {
       assert.equal(selected === context, true, "query must not retain its preparation context");
       return member === "exact-member" ? { kind: "fallible", value } : undefined;

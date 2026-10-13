@@ -13,7 +13,7 @@ import {
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
+
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
@@ -45,7 +45,6 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
-
 
 export function planFunctionDeclarations(
   node: Node,
@@ -110,7 +109,7 @@ function planRustFunctionItem(
   const node = source.callableDeclaration;
   const { ast } = outerContext.input.program.source;
   const isAsync = ast.hasModifierKind(node, "async");
-  const generatorFact = outerContext.input.program.facts.getFact(node, rustGeneratorFactKey);
+  const generatorFact = outerContext.input.program.records.generator.get(node);
   const isUnsafe = rustDeclarationRequiresUnsafe(
     node,
     "declaration",
@@ -121,7 +120,7 @@ function planRustFunctionItem(
     isUnsafe,
     outerContext.input,
   );
-  const asyncFact = outerContext.input.program.facts.getFact(node, rustAsyncFunctionFactKey);
+  const asyncFact = outerContext.input.program.records.asyncFunction.get(node);
   const returnsJsPromise = asyncFact?.kind === "js-promise";
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
@@ -195,7 +194,7 @@ function planRustFunctionItem(
   if (parameterPlan === undefined) {
     return undefined;
   }
-  const operation = context.input.program.facts.getFact(node, rustTargetOperationFactKey);
+  const operation = context.input.program.records.targetOperation.get(node);
   const leading = planRustCallableLeadingParameters(node, operation?.kind === "closure" ? operation.leadingParameters ?? [] : [],
     { ...context, syntheticNames });
   if (leading === undefined) return undefined;
@@ -207,7 +206,7 @@ function planRustFunctionItem(
   context = leading.context;
   const params = [...leadingParams as NonNullable<typeof leadingParams[number]>[], ...parameterPlan.params, ...environment.parameters];
   const returnTypeNode = Node_Type(ast, node);
-  const sourceReturn = context.input.program.facts.getFact(node, rustSourceCallableReturnFactKey);
+  const sourceReturn = context.input.program.records.sourceCallableReturn.get(node);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
     sourceReturn?.returnCarrier;
   const errorRegion = planRustErrorRegion(node, context);

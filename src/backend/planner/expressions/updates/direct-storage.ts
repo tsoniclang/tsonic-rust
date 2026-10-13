@@ -7,13 +7,8 @@ import {
   KindPropertyAccessExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import {
-  rustSourceBindingFactKey,
-  rustTargetOperationFactKey,
-} from "../../../../analysis/facts/keys.js";
-import {
-  rustTargetOperationIsDirectLocation,
-} from "../../../../analysis/facts/target-operation.js";
+
+import { rustTargetOperationIsDirectLocation } from "../../../../analysis/operations/target-operation.js";
 import {
   rustDirectProjectFieldStoragePath,
   rustProjectObjectRepresentation,
@@ -27,12 +22,8 @@ import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
 } from "../../diagnostics.js";
-import type {
-  RustFinalizedSourceInput,
-} from "../../../../analysis/facts/finalized-operation-abi.js";
-import type {
-  RustTargetOperationFact,
-} from "../../../../analysis/facts/keys.js";
+import type { RustFinalizedSourceInput } from "../../../../target-model/records/finalized-operation.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { Node, Symbol } from "@tsonic/tsts";
 import type {
   SourceDeclarationReference,
@@ -77,7 +68,7 @@ export function planRustDirectStorageCore(
         : { kind: "dereference", pointer: captured.expression };
     }
     if (findRustLocationStorageRoot(operand, context) !== undefined) return undefined;
-    const binding = context.input.program.facts.getFact(operand, rustSourceBindingFactKey);
+    const binding = context.input.program.records.sourceBinding.get(operand);
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     return path !== undefined && isValidRustIdentifier(path)
       ? { kind: "path", path }
@@ -99,7 +90,7 @@ export function planRustDirectStorageCore(
           planProviderOperation,
         );
   }
-  const fact = context.input.program.facts.getFact(operand, rustTargetOperationFactKey);
+  const fact = context.input.program.records.targetOperation.get(operand);
   if (fact?.kind === "source-field" && fact.valueSemantics.kind === "stored" &&
     fact.storage === "project-object" && fact.dispatch === undefined) {
     const representation = rustProjectObjectRepresentation(fact.receiverCarrier, context);

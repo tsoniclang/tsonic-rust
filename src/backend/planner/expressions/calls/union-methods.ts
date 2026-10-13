@@ -2,8 +2,8 @@ import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import { rustSourceCallEffectsFactKey } from "../../../../analysis/facts/keys.js";
-import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
+
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { RustCallGenericArgument, RustExpr, RustPattern } from "../../../target-ast/syntax/nodes.js";
 import { rustTargetGenericBindingsForArguments, substituteRustTargetGenerics, type TargetTypeRef } from "../../../../target-model/types/index.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
@@ -34,12 +34,12 @@ export function planRustUnionMethodCall(
   const receiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const variants = context.input.program.typeDefinitions.sourceUnionVariants(target.receiverCarrier);
   const typePath = rustUnionTypePathInContext(target.receiverCarrier, context);
-  const selectedCall = context.input.program.facts.getSelectedTargetCall(node);
+  const selectedCall = context.input.program.records.selectedCall.get(node);
   const selected = selectedCall?.sourceUnionMethods;
   const substitutions = selectedCall === undefined ? undefined : rustTargetGenericBindingsForArguments(
     selectedCall.member.genericParameters ?? [], fact.targetGenericArguments ?? [],
   );
-  const effects = context.input.program.facts.getFact(node, rustSourceCallEffectsFactKey);
+  const effects = context.input.program.records.sourceCallEffects.get(node);
   if (receiver === undefined || receiverNode === undefined || variants === undefined || typePath === undefined ||
     context.syntheticNames === undefined || selected === undefined || substitutions === undefined || effects?.unionBranches === undefined ||
     target.variants.length !== variants.length || target.variants.length !== selected.variants.length ||

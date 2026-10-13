@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { rustSourceCallableReturnFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function returned(context, name) {
   const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
     context.ast.text(context.ast.name(node)) === name);
   assert.equal(declaration !== undefined, true, name);
-  const fact = context.facts.getFact(declaration, rustSourceCallableReturnFactKey);
+  const fact = context.records.sourceCallableReturn.get(declaration);
   assert.equal(fact !== undefined, true, `${name}: exact return fact`);
   return fact.returnCarrier;
 }

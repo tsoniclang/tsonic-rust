@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import {
   isProjectSourceDeclaration,
   resolveSelectedJsSourceMember,
@@ -21,13 +22,7 @@ import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { selectedRustProviderGlobal } from "../../../policy/identities/provider-globals.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import { selectRustRecordDelete } from "./records.js";
-import type {
-  RustCheckedDeleteSelectionInput,
-  RustCheckedOperationSelectionResult,
-  RustCheckedPropertySelectionInput,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedDeleteSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { Node, ResolvedSourcePropertyAccessInfo } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -40,7 +35,7 @@ import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-pro
 import { resolveRustIndexedProperty } from "../../../policy/types/resolution/indexed-fields.js";
 
 export function checkedPropertySelectionInput(
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   expression: Node,
   source: ResolvedSourcePropertyAccessInfo,
 ): RustCheckedPropertySelectionInput {
@@ -68,7 +63,7 @@ export function checkedPropertySelectionInput(
 
 export function selectRustCheckedDelete(
   request: RustCheckedDeleteSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const record = selectRustRecordDelete(request, context, options);
@@ -133,7 +128,7 @@ export function selectRustCheckedDelete(
 function selectExternalProjectFieldAccess(
   request: RustCheckedPropertySelectionInput,
   selectedReceiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const externalField = options.projectTypes.externalFieldForReceiver(
@@ -194,7 +189,7 @@ function selectExternalProjectFieldAccess(
 
 export function selectRustCheckedPropertyAccess(
   request: RustCheckedPropertySelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const selectedReceiverCarrier = selectedMemberReceiverCarrier(request, context, options);
@@ -505,7 +500,7 @@ export function selectRustCheckedPropertyAccess(
 function selectProjectSourceMethodProperty(
   request: RustCheckedPropertySelectionInput,
   selectedReceiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const declaration = request.sourceSelectedDeclaration;
@@ -643,7 +638,7 @@ function selectProjectSourceMethodProperty(
 function selectProjectSourceAccessor(
   request: RustCheckedPropertySelectionInput,
   selectedReceiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const readDeclaration = isProjectAccessorDeclaration(

@@ -3,7 +3,7 @@ import test from "node:test";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { acmeTestingPackage, checkRustSession, compileRust, createRustSession } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/source-profile-registry.js";
+import { createRustSourceProfileRegistry } from "../../../dist/analysis/project/source-profiles.js";
 import { checkedPropertySelectionInput } from "../../../dist/analysis/operations/provider/properties.js";
 import { isIntrinsicSourceQualifier } from "../../../dist/analysis/operations/provider/source-qualifiers.js";
 

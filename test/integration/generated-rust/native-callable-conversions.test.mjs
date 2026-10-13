@@ -3,12 +3,12 @@ import test from "node:test";
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nativeClosureProducerFixture, nativeClosureProducerErrorFacts } from "../../helpers/native-closure-producers.mjs";
+import { nativeClosureProducerFixture, nativeClosureProducerErrorRecords } from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { planRustCallableInputProducer, planRustCallableConversion }
   from "../../../dist/backend/planner/expressions/callable-conversions.js";
-import { rustTargetOperationFactKey } from "../../../dist/analysis/facts/keys.js";
+
 import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetType, rustCallableInputTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
@@ -89,12 +89,12 @@ fn main() {
 
 function fixtureExpressions(throwing) {
   const fixture = nativeClosureProducerFixture(throwing ? {
-    selectFacts: nativeClosureProducerErrorFacts(failure), body: context => ({
+    selectRecords: nativeClosureProducerErrorRecords(failure), body: context => ({
       kind: "try", expr: { kind: "call", path: "fail", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType,
     }),
   } : {});
-  const source = fixture.program.facts.getFact(fixture.node, rustTargetOperationFactKey).resultCarrier;
+  const source = fixture.program.records.targetOperation.get(fixture.node).resultCarrier;
   const expression = fixture.plan();
   assert.equal(expression !== undefined, true);
   const input = planRustCallableInputProducer(expression, source, fixture.context, fixture.node);

@@ -1,10 +1,10 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustProjectStructuralView } from "./project-structural-views.js";
-import type { RustReceiverFieldCapture, RustReceiverFieldCaptureQueries } from "../project-types/receiver-captures.js";
-import { rustTargetOperationFactKey } from "../facts/keys.js";
-import { rustObjectReferenceViewKey } from "../facts/object-reference-views.js";
+import type { RustReceiverFieldCapture } from "../../target-model/records/receiver-captures.js";
+import type { RustReceiverFieldCaptureQueries } from "../project-types/receiver-captures.js";
+
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -19,7 +19,7 @@ export interface RustFrozenReceiverCapturePlan {
 export function analyzeRustFrozenReceiverCaptures(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly projectTypes: RustProjectTypePolicy;
   readonly views: readonly RustProjectStructuralView[];
   readonly captures: RustReceiverFieldCaptureQueries;
@@ -54,7 +54,7 @@ export function analyzeRustFrozenReceiverCaptures(input: {
   for (const sourceFile of input.sourceFiles) enqueue(sourceFile);
   while (pending.length !== 0) {
     const node = pending.pop()!;
-    const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = input.records.targetOperation.get(node);
     if (operation?.kind === "provider-operation" && operation.abi.target.form === "call" &&
       operation.abi.target.path === "tsonic_rust_runtime::freeze_object") {
       let carrier: TargetTypeRef | undefined;
@@ -69,7 +69,7 @@ export function analyzeRustFrozenReceiverCaptures(input: {
         throw new Error("Frozen receiver capture analysis requires the exact finalized freeze input.");
       demand(carrier);
     }
-    const view = input.facts.getFact(node, rustObjectReferenceViewKey);
+    const view = input.records.objectReferenceView.get(node);
     if (view?.kind === "structural") recordOrigin(view.sourceCarrier, view.targetCarrier);
     if (input.ast.is.IsArrowFunction(node)) for (const capture of input.captures.capturesFor(node)) {
       reserve();
@@ -79,7 +79,7 @@ export function analyzeRustFrozenReceiverCaptures(input: {
       let writesStorage = false;
       for (const reference of capture.references) {
         reserve();
-        const selected = input.facts.getFact(reference, rustTargetOperationFactKey);
+        const selected = input.records.targetOperation.get(reference);
         if (selected?.kind === "source-field" && selected.storage === "project-object" &&
           selected.valueSemantics.kind === "stored" && (selected.accessMode === "write" || selected.accessMode === "read-write") &&
           selected.declaration !== undefined && input.captures.storageDeclaration(selected.declaration) ===

@@ -5,7 +5,6 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { planExpression } from "./entry.js";
-import { rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
 
 export function rustValueDestinationContext(
   expression: Node, carrier: TargetTypeRef | undefined, context: RustPlanContext,
@@ -40,6 +39,6 @@ export function planRustReturnValueExpression(
   if (selected === undefined) return undefined;
   const declaration = context.callableDeclaration;
   const borrowed = declaration !== undefined &&
-    context.input.program.facts.getFact(declaration, rustSourceCallableReturnFactKey)?.borrowedParameter !== undefined;
+    context.input.program.records.sourceCallableReturn.get(declaration)?.borrowedParameter !== undefined;
   return planValue(expression, selected, "value", borrowed ? "shared-reference" : "value");
 }

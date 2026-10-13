@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { rustSourceCallableValueFactKey } from "../../../../analysis/facts/keys.js";
+import { rustSourceCallableValueEquals } from "../../../../target-model/records/equality.js";
 import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { planRustSourceCallableValueConstruction } from "../../expressions/source-callable-value.js";
@@ -16,14 +16,14 @@ export function planRustLexicalFunctionValues(
     if (selection?.kind !== "resolved" || !selection.valueObserved) continue;
     const name = context.input.program.names.callableValueNameForDeclaration(declaration);
     const values = navigation.declarationUseSummary(declaration).uses.flatMap(use => {
-      const value = context.input.program.facts.getFact(use.reference, rustSourceCallableValueFactKey);
+      const value = context.input.program.records.sourceCallableValue.get(use.reference);
       return value === undefined ? [] : [value];
     });
     const value = values[0];
     const type = value === undefined ? undefined : rustTypeFromCarrierInContext(value.carrier, context);
     if (name === undefined || value === undefined || type === undefined ||
       value.sourceDeclaration !== declaration ||
-      !values.every(candidate => rustSourceCallableValueFactKey.equals(candidate, value))) {
+      !values.every(candidate => rustSourceCallableValueEquals(candidate, value))) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
         "rust.backend.lexical-function-value-contract", "A lexical function requires one exact checked callable value contract."));
       return undefined;

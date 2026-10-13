@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { sourcePrimitiveFactKey } from "@tsonic/tsts";
 import { resolveProjectSourceCarrier } from "../../../dist/policy/types/resolution/project.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -40,13 +41,12 @@ function selfReference({ generic = false, optional = true } = {}) {
   };
   const semantics = { types, declarations, facts: { typeSubjects: () => [] } };
   const context = {
+    records: createRustRecordFixture(),
     currentSemantics: semantics,
     semanticsFor: () => semantics,
     source: { navigation: { isProjectDeclaration: node => node === declaration },
-      sourceFacts: { getFact: () => undefined } },
+      sourceFacts: { getFact: (subject, key) => subject === argumentSymbol && key === sourcePrimitiveFactKey ? { kind: "uint32" } : undefined } },
     sourceLifetimes: { contractFor: () => ({ parameters }) },
-    facts: { get: (subject, key) => subject === argumentSymbol && key === sourcePrimitiveFactKey ? { kind: "uint32" } : undefined,
-      getFact: () => undefined },
     ast: {
       kind: () => undefined,
       kindName: node => node === declaration ? "KindInterfaceDeclaration" : node === method ? "KindMethodSignature" : undefined,

@@ -1,4 +1,4 @@
-import type { RustTargetOperationFact } from "../facts/keys.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustNativeCallableProtocolBinding } from "./native-protocols.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";

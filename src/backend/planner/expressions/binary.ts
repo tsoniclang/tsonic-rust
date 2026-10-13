@@ -45,15 +45,15 @@ import {
   planRustProjectTypeTest,
   planRustProjectTypeTestSelection,
 } from "../objects/project-downcasts.js";
-import { rustTargetOperationText } from "../../../analysis/facts/target-operation.js";
+import { rustTargetOperationText } from "../../../analysis/operations/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { finalizedConversionIsValid } from "../../../analysis/facts/finalized-operation/conversions.js";
+import { finalizedConversionIsValid } from "../../../analysis/operations/finalized-operation/conversions.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import type { Node } from "@tsonic/tsts";
-import { rustProjectTypeTestMatches } from "../../../analysis/facts/operations/type-tests.js";
+import { rustProjectTypeTestMatches } from "../../../analysis/operations/contracts/type-tests.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
 export interface RustPlannedProjectTypeTest {
   readonly fact: Extract<RustTargetOperationFact, { readonly kind: "project-type-test" }>;
@@ -81,7 +81,7 @@ export function planSelectedRustProjectTypeTest(
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.project-type-test-carrier") ||
     !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetOperator(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
@@ -131,7 +131,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       !validConversion(fact.rightConversion, fact.rightCarrier, fact.branch !== "left") ||
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(left, context), fact.leftCarrier) ||
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(right, context), fact.rightCarrier) ||
-      !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node), fact.operationId,
+      !selectedOperationMatches(context.input.program.records.selectedOperation.get(node), fact.operationId,
         "operator", fact.resultCarrier, fact.operationId)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.logical-value-evidence", "Short-circuit selection requires exact finalized branch and conversion evidence."));
@@ -167,7 +167,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(rightNode, context), fact.rightCarrier) ||
       !rustTargetTypeRefEquals(fact.rightCarrier, fact.resultCarrier) ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.sequence-carrier") ||
-      !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
+      !selectedOperationMatches(context.input.program.records.selectedOperation.get(node),
         fact.operationId, "operator", fact.resultCarrier, fact.operationId)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.sequence-evidence", "Sequencing requires exact finalized operand and result carriers."));
@@ -196,7 +196,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(rightNode, context),
         fact.errorOperand === "right" ? fact.sourceCarrier : fact.targetCarrier) ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.program-error-equality-carrier") ||
-      !selectedOperationMatches(context.input.program.facts.getSelectedTargetOperator(node),
+      !selectedOperationMatches(context.input.program.records.selectedOperation.get(node),
         fact.operationId, "operator", fact.resultCarrier, fact.operationId)) {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
         "rust.backend.program-error-equality-evidence", "Program-error equality requires its exact finalized operand carriers."));
@@ -211,7 +211,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.program-error-type-test-carrier") ||
       !selectedOperationMatches(
-        context.input.program.facts.getSelectedTargetOperator(node),
+        context.input.program.records.selectedOperation.get(node),
         fact.operationId,
         "operator",
         fact.resultCarrier,
@@ -235,7 +235,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
   }
   if ((fact?.kind === "operator-token" || fact?.kind === "operator-call" || fact?.kind === "string-concat") &&
     !selectedOperationMatches(
-      context.input.program.facts.getSelectedTargetOperator(node),
+      context.input.program.records.selectedOperation.get(node),
       fact.operationId,
       "operator",
       fact.resultCarrier,
@@ -274,7 +274,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       !rustTargetTypeRefEquals(expressionCarrier(nullishNode, context), fact.nullishCarrier) ||
       !requireExpressionCarrier(node, boolCarrier, context, "rust.backend.option-check-carrier") ||
       !selectedOperationMatches(
-        context.input.program.facts.getSelectedTargetOperator(node),
+        context.input.program.records.selectedOperation.get(node),
         fact.operationId,
         "operator",
         boolCarrier,
@@ -352,7 +352,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
     if (leftNode === undefined || rightNode === undefined || left === undefined || right === undefined ||
       !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.constant-equality-carrier") ||
       !selectedOperationMatches(
-        context.input.program.facts.getSelectedTargetOperator(node),
+        context.input.program.records.selectedOperation.get(node),
         fact.operationId,
         "operator",
         fact.resultCarrier,

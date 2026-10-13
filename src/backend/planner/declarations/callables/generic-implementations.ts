@@ -4,7 +4,7 @@ import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import { rustGenericCallableCarrier, rustGenericCallableProtocol, rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
-import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceCallEffectsFactKey, rustSourceCallableReturnFactKey } from "../../../../analysis/facts/keys.js";
+
 import type { RustExpr, RustFunctionParam, RustItem, RustPattern, RustType, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput } from "../../program/plan-context.js";
@@ -85,8 +85,8 @@ function planImplementation(
   if (captures === undefined) return undefined;
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
   const owner = allocateRustSyntheticName(names, "environment");
-  const suspended = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey) !== undefined ||
-    context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
+  const suspended = context.input.program.records.asyncFunction.get(implementation.declaration) !== undefined ||
+    context.input.program.records.generator.get(implementation.declaration) !== undefined;
   if (!validateRustCapturedReceiverFields(implementation.declaration, implementation.receiverFields, context) ||
     !validateRustCapturedReceivers(implementation.declaration, implementation.receivers, context)) return undefined;
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext);
@@ -194,9 +194,9 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
       predicates.set(closedMetadataKey(predicate), predicate);
     for (const predicate of rustProjectProjectionPredicates(contract.projectProjections, { ...context, typeParameterSubstitutions: substitutions }))
       predicates.set(closedMetadataKey(predicate), predicate);
-    const asyncFact = context.input.program.facts.getFact(implementation.declaration, rustAsyncFunctionFactKey);
+    const asyncFact = context.input.program.records.asyncFunction.get(implementation.declaration);
     const suspended = asyncFact !== undefined ||
-      context.input.program.facts.getFact(implementation.declaration, rustGeneratorFactKey) !== undefined;
+      context.input.program.records.generator.get(implementation.declaration) !== undefined;
     if (nativeFuture !== undefined && asyncFact !== undefined && asyncFact.kind !== "native-future") return undefined;
     const owner: RustExpr = { kind: "path", path: "environment" };
     const ownerArgument: RustExpr = suspended
@@ -214,8 +214,8 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     const pattern: RustPattern = { kind: "tuple-variant", path: `Self::${member.variantName}`,
       elements: [implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length === 0 ? { kind: "wildcard" } : { kind: "binding", name: "environment" }] };
     if (nativeFuture !== undefined) {
-      const selectedEffects = context.input.program.facts.getFact(implementation.declaration, rustSourceCallEffectsFactKey);
-      const sourceReturn = context.input.program.facts.getFact(implementation.declaration, rustSourceCallableReturnFactKey);
+      const selectedEffects = context.input.program.records.sourceCallEffects.get(implementation.declaration);
+      const sourceReturn = context.input.program.records.sourceCallableReturn.get(implementation.declaration);
       const returned = sourceReturn === undefined ? undefined : rustNativeFutureCallableResult(sourceReturn.returnCarrier);
       if (selectedEffects === undefined || sourceReturn === undefined ||
         asyncFact === undefined && returned === undefined) return undefined;

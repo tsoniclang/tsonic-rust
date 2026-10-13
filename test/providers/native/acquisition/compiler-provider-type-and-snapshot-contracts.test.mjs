@@ -13,22 +13,15 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/acquisition/worker-client.js";
-import {
-  compilerProviderModuleId,
-  projectRustCompilerModule,
-} from "../../../../dist/providers/native/projection/projection.js";
+
+import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/projection.js";
 import {
   rustCompilerProviderProtocolVersion,
 } from "../../../../dist/providers/native/model/model.js";
 import {
   verifyRustCompilerStandardLibraryMetadata,
 } from "../../../../dist/providers/native/acquisition/cargo-snapshot.js";
-import {
-  compileRustThroughTargetPack,
-  createRustSession,
-  rustSourceDiagnostics,
-} from "../../../helpers/rust-session.mjs";
+
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const fixtureCrate = resolve(repositoryRoot, "test/fixtures/crates/acme_widget");

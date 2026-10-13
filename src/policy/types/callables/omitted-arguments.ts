@@ -1,4 +1,5 @@
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../operations/contracts.js";
+import type { RustOperationPolicyContext } from "../../model/operation-context.js";
+import type { RustCheckedCallSelectionInput } from "../../operations/contracts.js";
 import type { RustProviderOperationTemplate, RustProviderConstantArgument } from "../../../target-model/operations/model.js";
 import { rustOptionElementCarrier } from "../../../target-model/types/index.js";
 

@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { acceptRustMemberOperation, elementProvenance, normalizeSelectedOperationInputCarrier, rejectSelectedOperation } from "./result.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { finalizeProviderOperationFromSubjects } from "./conversions.js";
@@ -13,20 +14,14 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectTsonicFixedArrayFromSource } from "@tsonic/source-core/facts";
 import { sourceIntegerLiteralValue } from "@tsonic/target-api/source";
 import { selectedValueCarrier } from "../selected-values.js";
-import type {
-  RustCheckedElementSelectionInput,
-  RustCheckedOperationSelectionResult,
-  RustCheckedPropertySelectionInput,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedElementSelectionInput, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { RustProviderOperationTemplate } from "../../facts/keys.js";
+import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import type { RustStructuralFieldRegistration, RustSourceUnion } from "../../project-types/source-type-registry.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { resolveRustProjectField } from "./project-fields.js";
-import type { RustTargetOperationFact } from "../../facts/keys.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
 type UnionField = NonNullable<Extract<RustTargetOperationFact,
   { readonly kind: "source-union-field" }>["variants"][number]["field"]>;
@@ -34,7 +29,7 @@ type UnionField = NonNullable<Extract<RustTargetOperationFact,
 export function isProjectAccessorDeclaration(
   declaration: Node | undefined,
   kind: "KindGetAccessor" | "KindSetAccessor",
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
 ): declaration is Node {
   return isProjectSourceDeclaration(context, declaration) &&
     context.ast.kindName(declaration) === kind;
@@ -43,7 +38,7 @@ export function isProjectAccessorDeclaration(
 export function selectStructuralSourceProperty(
   request: RustCheckedPropertySelectionInput,
   receiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   if (receiverCarrier === undefined) {
@@ -271,7 +266,7 @@ function structuralFieldOperationId(
 function selectedPropertyDeclarations(
   request: RustCheckedPropertySelectionInput,
   receiverCarrier: TargetTypeRef,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly Node[] | undefined {
   const declarations: Node[] = [];
@@ -313,7 +308,7 @@ function selectedPropertyDeclarations(
 function selectedSourceUnionVariantIndexes(
   request: RustCheckedPropertySelectionInput,
   union: RustSourceUnion,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): readonly number[] | undefined {
   const all = Object.freeze(union.variants.map((_, index) => index));
@@ -360,7 +355,7 @@ function selectedSourceUnionVariantIndexes(
 }
 
 function sourceDeclarationsOperationId(
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   declarations: readonly Node[],
   kind: "field" | "union-field",
 ): string | undefined {
@@ -385,7 +380,7 @@ function sourceDeclarationsOperationId(
 export function selectRustFixedArrayLengthProperty(
   request: RustCheckedPropertySelectionInput,
   receiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const fixedArray = rustFixedArrayCarrierValue(receiverCarrier);
@@ -470,7 +465,7 @@ export function selectRustFixedArrayLengthProperty(
 export function selectRustFixedArrayElementAccess(
   request: RustCheckedElementSelectionInput,
   receiverCarrier: TargetTypeRef | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const fixedArray = rustFixedArrayCarrierValue(receiverCarrier);

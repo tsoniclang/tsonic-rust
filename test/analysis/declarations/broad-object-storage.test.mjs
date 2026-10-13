@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { rustRuntimeCarrierKey } from "../../../dist/target-model/facts/selections.js";
+
 import { rustBroadSourceValueTargetType } from "../../../dist/policy/types/resolution/broad-values.js";
 import { rustEmptyObjectTargetType, rustJsArrayTargetType, rustTupleTargetType, rustVecTargetType } from "../../../dist/target-model/types/index.js";
 import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
@@ -24,7 +24,7 @@ export function run(): boolean {
     const carriers = new Map();
     const visit = node => {
       if (ast.is.IsVariableDeclaration(node)) {
-        carriers.set(ast.text(ast.name(node)), program.facts.getFact(node, rustRuntimeCarrierKey)?.carrier);
+        carriers.set(ast.text(ast.name(node)), program.records.runtimeCarrier.get(node)?.carrier);
       }
       ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };

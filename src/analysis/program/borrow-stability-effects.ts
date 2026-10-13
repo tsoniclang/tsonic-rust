@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
-import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
 import type { RustTargetProgram } from "./model.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs,
   rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
@@ -10,18 +10,18 @@ export const rustNoNativeWrites: readonly Node[] = Object.freeze([]);
 
 export function rustNativeWriteTargets(node: Node, input: {
   readonly ast: AstReader;
-  readonly facts: RustTargetProgram["facts"];
+  readonly records: RustTargetProgram["records"];
 }, targetsFor: (node: Node) => readonly Node[] | undefined, directField: (node: Node) => boolean,
 reserve: (count: number) => boolean): readonly Node[] | undefined {
-  const { ast, facts } = input;
-  if (ast.is.IsIdentifier(node) && facts.getFact(node, rustSourceBindingFactKey)?.scope === "lexical" ||
+  const { ast, records } = input;
+  if (ast.is.IsIdentifier(node) && records.sourceBinding.get(node)?.scope === "lexical" ||
     ["KindStringLiteral", "KindNoSubstitutionTemplateLiteral", "KindBigIntLiteral", "KindNullKeyword"].includes(ast.kindName(node))) {
     return rustNoNativeWrites;
   }
   const wrapped = Node_Expression(ast, node);
   if (wrapped !== undefined && rustSourceValueWrapperContains(node, wrapped, ast)) return targetsFor(wrapped);
-  const operation = facts.getFact(node, rustTargetOperationFactKey);
-  if (ast.is.IsBinaryExpression(node) && operation?.kind === "sequence" && rustBorrowValueIsUnprojected(node, facts)) {
+  const operation = records.targetOperation.get(node);
+  if (ast.is.IsBinaryExpression(node) && operation?.kind === "sequence" && rustBorrowValueIsUnprojected(node, records)) {
     const left = BinaryExpression_Left(ast, node);
     const right = BinaryExpression_Right(ast, node);
     const preceding = left === undefined ? undefined : targetsFor(left);
@@ -35,19 +35,19 @@ reserve: (count: number) => boolean): readonly Node[] | undefined {
     const value = BinaryExpression_Right(ast, node);
     const writes = value === undefined ? undefined : targetsFor(value);
     return target !== undefined && ast.is.IsIdentifier(target) &&
-      facts.getFact(target, rustSourceBindingFactKey)?.scope === "lexical" && writes !== undefined && reserve(writes.length + 1)
+      records.sourceBinding.get(target)?.scope === "lexical" && writes !== undefined && reserve(writes.length + 1)
       ? Object.freeze([...writes, target]) : undefined;
   }
-  const providerInputs = rustBorrowPureProviderInputs(node, ast, facts);
+  const providerInputs = rustBorrowPureProviderInputs(node, ast, records);
   if (providerInputs !== undefined) {
     if (providerInputs.some(child => targetsFor(child) === undefined)) return undefined;
     const count = providerInputs.reduce((total, child) => total + targetsFor(child)!.length, 0);
     return count === 0 ? rustNoNativeWrites : reserve(count)
       ? Object.freeze(providerInputs.flatMap(child => targetsFor(child)!)) : undefined;
   }
-  if (rustBorrowPureCopyValue(node, ast, facts, child => targetsFor(child) !== undefined)) {
+  if (rustBorrowPureCopyValue(node, ast, records, child => targetsFor(child) !== undefined)) {
     const children: Node[] = [];
-    const operation = facts.getFact(node, rustTargetOperationFactKey);
+    const operation = records.targetOperation.get(node);
     if (ast.is.IsBinaryExpression(node) && operation?.kind === "operator-token") {
       const left = BinaryExpression_Left(ast, node);
       const right = BinaryExpression_Right(ast, node);
@@ -61,14 +61,14 @@ reserve: (count: number) => boolean): readonly Node[] | undefined {
     return count === 0 ? rustNoNativeWrites : reserve(count)
       ? Object.freeze(children.flatMap(child => targetsFor(child) ?? rustNoNativeWrites)) : undefined;
   }
-  const field = facts.getFact(node, rustTargetOperationFactKey);
+  const field = records.targetOperation.get(node);
   if (directField(node) && field?.kind === "source-field" && field.accessMode === "read") return rustNoNativeWrites;
   if (!ast.is.IsPrefixUnaryExpression(node) && !ast.is.IsPostfixUnaryExpression(node)) return undefined;
   const operand = Node_Operand(ast, node);
-  const target = operand === undefined ? undefined : facts.getFact(operand, rustTargetOperationFactKey);
+  const target = operand === undefined ? undefined : records.targetOperation.get(operand);
   return operation?.kind === "operator-token" && (operation.operator === "+=" || operation.operator === "-=") &&
     operation.leftConversion === undefined && operation.rightConversion === undefined &&
-    operand !== undefined && rustBorrowPrimitiveCopyValue(operand, facts) && directField(operand) &&
+    operand !== undefined && rustBorrowPrimitiveCopyValue(operand, records) && directField(operand) &&
     target?.kind === "source-field" && target.accessMode === "read-write" && reserve(1)
     ? Object.freeze([operand]) : undefined;
 }

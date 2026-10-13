@@ -14,7 +14,7 @@ import { requireRustLocationValueCarrier, rustCarrierHasCopyContract } from "../
 import { rustCallableCaptureStorageType } from "../types/capture-storage.js";
 import { planRustFrameCallableEntry, publishRustFrameCallable } from "../expressions/frame-callables.js";
 import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
-import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
+
 import { rustBindingStorageOperations, rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { projectRustFrameOwnerData, rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
@@ -117,7 +117,7 @@ export function planRustFrameBindingInput(
   const implementation = context.input.program.callableValues.frames.implementationFor(node);
   if (implementation !== undefined && !implementation.independent)
     return planRustFrameCallableEntry(node, binding.carrier, context);
-  const declaration = context.input.program.facts.getFact(node, rustSourceBindingFactKey)?.sourceDeclaration;
+  const declaration = context.input.program.records.sourceBinding.get(node)?.sourceDeclaration;
   const sourceBinding = declaration === undefined ? undefined : types.definition.bindings.find(selected =>
     selected.declaration === declaration && selected.entry === types.entry);
   const owner = context.frameOwners?.get(types.definition);

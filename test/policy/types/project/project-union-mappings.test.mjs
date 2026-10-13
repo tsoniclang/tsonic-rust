@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -16,7 +17,7 @@ import { planRustProjectUnionMapping } from "../../../../dist/backend/planner/ex
 import { planExpression, planRustProjectUpcast } from "../../../../dist/backend/planner/expressions/entry.js";
 import { applyRustCallableValueAdapterRaw } from "../../../../dist/backend/planner/declarations/callables/adapters.js";
 import { analyzeRustGeneratedItemUsage } from "../../../../dist/backend/planner/liveness/generated-item-usage.js";
-import { rustContextualValueConversionFactKey, rustFlowReadProjectionFactKey } from "../../../../dist/analysis/facts/keys.js";
+
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
 function fixture({ siblings = false, nested = false, retainDerived = false, relationKind = "related", includeRoot = false } = {}) {
@@ -210,11 +211,9 @@ test("canonical nominal union emission moves owned fields and borrows views with
   const contextual = { sourceCarrier: source, targetCarrier: target, conversion };
   const projected = planExpression(node, { ...context,
     expressionOverrides: new Map([[node, { expression, carrier: source, valueForm: "owned" }]]),
-    input: { program: { ...context.input.program, facts: {
-      getFact: (subject, key) => subject === node && key === rustContextualValueConversionFactKey ? contextual : undefined,
-      getRuntimeCarrierFact: subject => subject === node ? { carrier: source } : undefined,
-      getTargetConversionFact: () => undefined,
-    } } },
+    input: { program: { ...context.input.program, records: createRustRecordFixture({contextualValueConversion: { get: (subject) => subject === node ? contextual : undefined },
+runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : undefined },
+conversion: { get: () => undefined }}) } },
   });
   assert.deepEqual(projected, adapted.expression);
   assertNoTargetDiagnostics(context.diagnostics);
@@ -232,9 +231,9 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
     declaration: fakeStatement({ kindName: "KindClassDeclaration" }) }));
   const unused = fakeStatement({ kindName: "KindClassDeclaration" });
   const usage = analyzeRustGeneratedItemUsage({ ast, sourceFiles: [sourceFile], declarations: [],
-    facts: { getFact: (subject, key) => subject === node && key === rustContextualValueConversionFactKey
-      ? { sourceCarrier: source, targetCarrier: target, conversion } : undefined,
-      getRuntimeCarrierFact: () => undefined },
+    records: createRustRecordFixture({contextualValueConversion: { get: (subject) => subject === node
+    ? { sourceCarrier: source, targetCarrier: target, conversion } : undefined },
+runtimeCarrier: { get: () => undefined }}),
     projectTypes: { ...projectTypes, definitions: classes, isPolymorphic: () => false,
       definitionForDeclaration: () => undefined,
       definitionForCarrier: carrier => classes.find(definition => rustTargetTypeRefEquals(definition.carrier, carrier)) },
@@ -302,11 +301,13 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
         valueLifetimes: { canMove: () => owned }, declarationGenericRequirements,
         callableValues: { generic: { definitionFor: () => undefined }, native: { protocolForSourceItem: () => undefined } },
         names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" },
-        facts: { getFact: (subject, key) => subject !== node ? undefined
-          : key === rustFlowReadProjectionFactKey ? flow
-            : key === rustContextualValueConversionFactKey ? { sourceCarrier: source, targetCarrier: target, conversion } : undefined,
-          getRuntimeCarrierFact: subject => subject === node ? { carrier: rawCarrier } : undefined,
-          getTargetConversionFact: () => undefined } } },
+        records: createRustRecordFixture({flowReadProjection: { get: (subject) => subject !== node ? undefined
+    : flow },
+contextualValueConversion: { get: (subject) => subject !== node ? undefined
+    :
+        { sourceCarrier: source, targetCarrier: target, conversion } },
+runtimeCarrier: { get: (subject) => subject === node ? { carrier: rawCarrier } : undefined },
+conversion: { get: () => undefined }}) } },
         expressionOverrides: new Map([[node, { expression, carrier: rawCarrier, valueForm: "owned" }]]),
         sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([[fileName, "index"]]),
         externalCrateNameByFileName: new Map() };
@@ -326,12 +327,9 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
       if (!absent && !owned) {
         const direct = planExpression(node, { ...context,
           expressionOverrides: new Map([[node, { expression, carrier: source, valueForm: "owned" }]]),
-          input: { program: { ...context.input.program, facts: {
-            ...context.input.program.facts,
-            getFact: (subject, key) => key === rustFlowReadProjectionFactKey ? undefined
-              : context.input.program.facts.getFact(subject, key),
-            getRuntimeCarrierFact: subject => subject === node ? { carrier: source } : undefined,
-          } } },
+          input: { program: { ...context.input.program, records: createRustRecordFixture({...context.input.program.records,
+flowReadProjection: { get: (subject) => undefined },
+runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : undefined }}) } },
         });
         assert.equal(direct.kind, "match");
         assert.deepEqual(direct.expression, { kind: "reference", expr: original });

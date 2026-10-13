@@ -2,14 +2,14 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity, Node_Expression } from "@tsonic/target-api/source";
-import type { RustPlanQueries } from "../../target-model/facts/selections.js";
-import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
-import { rustSourceParameterAbiFactKey, rustSourceCallableReturnFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
+
 import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableProtocolRegistry, type RustNativeCallableProtocol, type RustNativeCallableProtocolBinding } from "./native-protocols.js";
@@ -56,7 +56,7 @@ export interface RustNativeCallableInputPlan {
 export function createRustNativeCallableInputPlan(input: {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
-  readonly facts: RustPlanQueries;
+  readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly usedNames: Set<string>;
@@ -124,7 +124,7 @@ export function createRustNativeCallableInputPlan(input: {
     const implementations = new Set<SourceStorageSubject>();
     for (const origin of origins.subjects) {
       if (origin.kind === "return" && origin.projection.length === 0 &&
-        isRustNeverCarrier(input.facts.getFact(origin.node, rustSourceCallableReturnFactKey)?.returnCarrier)) continue;
+        isRustNeverCarrier(input.records.sourceCallableReturn.get(origin.node)?.returnCarrier)) continue;
       if (origin.kind !== "input") {
         implementations.add(origin);
         continue;
@@ -143,8 +143,8 @@ export function createRustNativeCallableInputPlan(input: {
   };
   for (const node of input.storage.nodes) {
     if (!input.ast.is.IsParameterDeclaration(node)) continue;
-    const carrier = input.facts.getFact(node, rustSourceParameterAbiFactKey)?.valueCarrier ??
-      input.facts.getFact(node, rustRuntimeCarrierKey)?.carrier;
+    const carrier = input.records.sourceParameterAbi.get(node)?.valueCarrier ??
+      input.records.runtimeCarrier.get(node)?.carrier;
     if (carrier === undefined) continue;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableValue(selected) === undefined && rustCallableProtocol(selected) === undefined) continue;
@@ -152,7 +152,7 @@ export function createRustNativeCallableInputPlan(input: {
     if (subject.kind === "resolved") selectInput(subject.subject, carrier);
   }
   for (const node of input.storage.nodes) {
-    const carrier = input.facts.getFact(node, rustRuntimeCarrierKey)?.carrier;
+    const carrier = input.records.runtimeCarrier.get(node)?.carrier;
     if (carrier === undefined) continue;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;
     if (rustGenericCallableValue(selected) === undefined && rustCallableProtocol(selected) === undefined) continue;
@@ -167,7 +167,7 @@ export function createRustNativeCallableInputPlan(input: {
   const protocols = new Map(definitions.map(protocol => [protocol.targetName, protocol]));
   const calls = new Map<Node, RustNativeCallableCall>();
   for (const node of input.storage.invocations) {
-    const operation = input.facts.getFact(node, rustTargetOperationFactKey);
+    const operation = input.records.targetOperation.get(node);
     if (operation?.kind !== "source-call" || operation.target.form !== "callable") continue;
     const callee = Node_Expression(input.ast, node);
     const origins = callee === undefined ? undefined : values.get(callee);

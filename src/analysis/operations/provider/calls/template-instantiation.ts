@@ -8,8 +8,8 @@ import {
   rustTargetGenericReferences,
   substituteRustTargetGenerics,
 } from "../../../../target-model/types/index.js";
-import { finalizeRustProviderOperationAbi } from "../../../facts/finalized-operation-abi.js";
-import { rustIndexedLocationContract } from "../../../facts/indexed-location.js";
+import { finalizeRustProviderOperationAbi } from "../../finalized-operation/finalize.js";
+import { rustIndexedLocationContract } from "../../indexed-location.js";
 import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/constraints/provider-generic-requirements.js";
 import {
   rustTargetGenericArgumentEquals,
@@ -17,13 +17,8 @@ import {
 } from "../../../../target-model/types/equality.js";
 import { substituteRustValueConversion } from "../../../../target-model/conversions/substitution.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
-import type {
-  RustProviderFactOperationKind,
-  RustProviderOperationForm,
-  RustProviderOperationTemplate,
-  RustRuntimeSetOperationKind,
-  RustTargetOperationFact,
-} from "../../../facts/keys.js";
+import type { RustProviderFactOperationKind, RustProviderOperationForm, RustProviderOperationTemplate, RustRuntimeSetOperationKind } from "../../../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type { RustProviderGenericParameter } from "../../../../target-model/operations/model.js";
 import type {
   RustTargetConstArgument,

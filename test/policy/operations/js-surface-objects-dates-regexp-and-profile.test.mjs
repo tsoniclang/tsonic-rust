@@ -7,15 +7,9 @@ import {
   createRustSession,
   rustSourceDiagnostics,
 } from "../../helpers/rust-session.mjs";
-import { selectJsSurfaceOperation } from "../../../dist/policy/operations/source-profiles/js/index.js";
-import {
-  rustJsArrayTargetType,
-  rustSourcePrimitiveTargetType,
-  rustStringTargetType,
-  rustAbsenceTargetType,
-  rustVecTargetType,
-} from "../../../dist/target-model/types/index.js";
-import { rustInt32ToFloat64ValueConversion } from "../../../dist/target-model/conversions/model.js";
+
+
+
 
 const denseSource = `
 import type { int32 } from "@tsonic/core/types.js";

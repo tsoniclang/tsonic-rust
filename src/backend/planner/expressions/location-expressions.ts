@@ -1,5 +1,5 @@
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../analysis/facts/keys.js";
+import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../target-model/records/operations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
 export function locationMethodReceiver(

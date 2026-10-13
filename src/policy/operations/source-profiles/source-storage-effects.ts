@@ -11,7 +11,7 @@ export function createRustSourceProfileStorageEffects(
 ): SourceStorageEffects {
   const context: Parameters<typeof resolveSelectedSourceProfileMember>[0] = {
     ast: source.ast,
-    facts: { get: (subject, key) => source.sourceFacts.getFact(subject, key) },
+    source,
     semanticsFor: source.semantics.forNode,
   };
   return createSourceGlobalCallStorageEffects(source, (node, call) => {

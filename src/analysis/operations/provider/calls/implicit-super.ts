@@ -1,11 +1,12 @@
+import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
+import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import { selectedProjectConstructor } from "./instantiation.js";
 
 export function selectedImplicitSuperConstructorClass(
   request: RustCheckedCallSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): Node | undefined {
   if (context.ast.kindName(request.source.sourceCallee.expression) !== "KindSuperKeyword") {

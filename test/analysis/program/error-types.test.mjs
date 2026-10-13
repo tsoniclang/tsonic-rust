@@ -1,3 +1,4 @@
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
@@ -6,7 +7,7 @@ import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner } from "../
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
-import { rustErrorEffectsFactKey } from "../../../dist/analysis/facts/keys.js";
+
 
 function fixture() {
   const context = analyzeRustErrorEffects(`
@@ -24,7 +25,7 @@ function fixture() {
     const selected = context.ast.name(candidate.declaration);
     return selected !== undefined && context.ast.text(selected) === name;
   });
-  const input = { ast: context.ast, facts: context.facts, definitions: context.typeDefinitions,
+  const input = { ast: context.ast, records: context.records, definitions: context.typeDefinitions,
     producers, components: classified.plan };
   const error = name => producers.errorFor(producer(name).declaration, 0);
   return { input, producer, error };
@@ -65,10 +66,9 @@ test("normalization rejects incomplete producer effects, recursive aliases and e
   const declaration = current.producer("failLeft").declaration;
   const carrier = current.error("failLeft");
   for (const effects of [undefined, { localErrors: false, nativeErrors: [{ identity: "cycle", errorType: carrier }] }]) {
-    const input = { ...current.input, facts: { ...current.input.facts,
-      getFact: (node, key) => node === declaration && key === rustErrorEffectsFactKey
-        ? effects : current.input.facts.getFact(node, key),
-    } };
+    const input = { ...current.input, records: createRustRecordFixture({...current.input.records,
+errorEffects: { get: (node) => node === declaration
+    ? effects : current.input.records.errorEffects.get(node) }}) };
     assert.equal(normalizeRustErrorType(carrier, input) === undefined, true);
   }
   assert.equal(rustProducerErrorReference(carrier).identity.length > 0, true);

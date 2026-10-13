@@ -1,3 +1,4 @@
+import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import {
   type RustSelectedSourceMemberSet,
 } from "../../../policy/identities/selected-source.js";
@@ -8,15 +9,9 @@ import {
   rustStringTargetType,
 } from "../../../target-model/types/index.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
-import { rustEffectiveValueCarrier } from "../../facts/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { acceptRustMemberOperation, acceptRustOperation, rejectSelectedOperation } from "./result.js";
-import type {
-  RustCheckedOperationSelectionResult,
-  RustCheckedOperatorSelectionInput,
-  RustCheckedPropertySelectionInput,
-  RustOperationPolicyContext,
-  RustPolicySelection,
-} from "../../../policy/operations/contracts.js";
+import type { RustCheckedOperationSelectionResult, RustCheckedOperatorSelectionInput, RustCheckedPropertySelectionInput, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustCarrierProvidesErrorObservation, rustCarrierProvidesErrorMutation } from "../../../target-model/types/carriers/error-protocols.js";
@@ -25,12 +20,12 @@ import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operato
 
 export function selectRustBuiltinErrorTypeTest(
   request: RustCheckedOperatorSelectionInput,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const predicate = selectRustErrorTypePredicate(context, request.sourceRightDeclaration, options.sourceProfiles);
   if (predicate === undefined) return undefined;
-  const sourceCarrier = rustEffectiveValueCarrier(context.facts, request.left) ??
+  const sourceCarrier = rustEffectiveValueCarrier(context.records, request.left) ??
     resolveRustTargetTypeRef(request.left, context, options);
   const test = sourceCarrier === undefined ? undefined : selectRustClosedTypeTestPlan(sourceCarrier, predicate, options.projectTypes, context.typeDefinitions);
   if (sourceCarrier === undefined || test === undefined) {
@@ -58,7 +53,7 @@ export function selectRustBuiltinErrorProperty(
   request: RustCheckedPropertySelectionInput,
   receiverCarrier: TargetTypeRef | undefined,
   sourceMembers: RustSelectedSourceMemberSet | undefined,
-  context: RustOperationPolicyContext,
+  context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
   const member = sourceMembers?.members[0];

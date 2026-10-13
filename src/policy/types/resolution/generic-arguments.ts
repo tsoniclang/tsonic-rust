@@ -207,7 +207,7 @@ export function resolveRustSelectedTypeArguments(
 
 export function resolveRustSourceDeclarationArguments(
   argumentNodes: readonly Node[],
-  contract: import("../../../target-model/lifetimes/index.js").RustSourceGenericContract,
+  contract: import("../../../target-model/lifetimes/model.js").RustSourceGenericContract,
   context: RustTargetTypeResolutionContext,
   options: RustTargetTypeResolutionOptions,
   resolving: Set<object>,

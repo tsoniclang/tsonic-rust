@@ -39,17 +39,12 @@ import { rustUnionAlternatives } from "../../target-model/types/union-relations.
 import { recordRustObjectReferenceView } from "./object-reference-views.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { selectRustIntegerTruncationConversion } from "../../policy/conversions/integer-truncation.js";
-import { rustContextualValueConversionFactKey } from "../facts/value-projections.js";
+
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation } from "../facts/value-carrier-queries.js";
-import {
-  rustOptionalChainFactKey,
-  rustSourceParameterAbiFactKey,
-  rustOptionProjectionFactKey,
-  rustPostCheckOperationKind,
-  rustTargetOperationFactKey,
-  rustTargetOperationResultCarrier,
-} from "../facts/keys.js";
+import { recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
+
+import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
+import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
@@ -61,11 +56,7 @@ import { recordAssignmentWrite } from "../declarations/types-and-bindings.js";
 import { recordSelectedOperationInputs } from "../operations/inputs.js";
 import { resolveBinaryOperandCarriers } from "../operations/operators.js";
 import { resolveExpressionCarrierUncached } from "./value-resolution.js";
-import {
-  rustConversionKey,
-  rustRuntimeCarrierKey,
-  rustSelectedOperationKey,
-} from "../../target-model/facts/selections.js";
+
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { recordRustCompoundWrite } from "../operations/provider/compound-writes.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
@@ -90,7 +81,7 @@ export function resolveExpressionCarrier(
   integerConversion: "native" | "exact" = "native",
 ): TargetTypeRef | undefined {
   if (walk.rejectedExpressions.has(expression)) return undefined;
-  const facts = walk.context.facts;
+  const records = walk.context.records;
   const contextualExpected = rustExpressionResolutionExpectation(
     walk,
     expression,
@@ -101,10 +92,9 @@ export function resolveExpressionCarrier(
       const operand = Node_Expression(walk.context.ast, expression);
       if (result !== undefined && operand !== undefined &&
         rustSourceValueWrapperContains(expression, operand, walk.context.ast)) {
-        const abi = facts.get(operand, rustSourceParameterAbiFactKey);
+        const abi = records.sourceParameterAbi.get(operand);
         if (abi !== undefined && rustTargetTypeRefEquals(result, abi.valueCarrier)) {
-          facts.set(expression, rustSourceParameterAbiFactKey, abi,
-            [{ message: "rust unchanged parameter ABI through a checked transparent expression" }]);
+          records.sourceParameterAbi.set(expression, abi, [{ message: "rust unchanged parameter ABI through a checked transparent expression" }]);
         }
       }
       return result;
@@ -115,10 +105,8 @@ export function resolveExpressionCarrier(
         ? applyFlowReadLane(walk, expression, carrier)
         : carrier);
     }
-    const selectedOperation = facts.get(expression, rustSelectedOperationKey) ??
-      facts.resolve(expression, rustSelectedOperationKey);
-    const targetOperation = facts.get(expression, rustTargetOperationFactKey) ??
-      facts.resolve(expression, rustTargetOperationFactKey);
+    const selectedOperation = records.selectedOperation.get(expression);
+    const targetOperation = records.targetOperation.get(expression);
     const selectedOperationOwnsResult = selectedOperation !== undefined || targetOperation !== undefined;
     const flowCarrier = selectedOperationOwnsResult &&
         (rustTargetTypeRefEquals(carrier, expected) ||
@@ -128,8 +116,8 @@ export function resolveExpressionCarrier(
       : applyFlowReadLane(walk, expression, carrier);
     return retainParameterAbi(applyOptionLane(walk, expression, flowCarrier, expected, integerConversion));
   };
-  const existing = facts.get(expression, rustRuntimeCarrierKey) ??
-    walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
+  const existing = records.runtimeCarrier.get(expression) ??
+    walk.context.records.runtimeCarrier.get(expression);
   if (walk.resolving.has(expression)) {
     return existing === undefined
       ? undefined
@@ -141,8 +129,8 @@ export function resolveExpressionCarrier(
       return finalize(resolveRustClassValue(walk, expression, contextualExpected));
     }
     if (existing !== undefined) {
-      let operation = facts.get(expression, rustTargetOperationFactKey) ??
-        walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      let operation = records.targetOperation.get(expression) ??
+        walk.context.records.targetOperation.get(expression);
       const expressionKind = walk.context.ast.kindName(expression);
       if (expressionKind === KindIdentifier && rustStructuralObjectCarrierValue(existing.carrier) !== undefined) {
         const classValue = resolveRustClassValue(walk, expression, contextualExpected ?? existing.carrier);
@@ -161,8 +149,8 @@ export function resolveExpressionCarrier(
           !rustTargetTypeRefEquals(callableCarrier, existing.carrier)) {
           return undefined;
         }
-        operation = facts.get(expression, rustTargetOperationFactKey) ??
-          walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+        operation = records.targetOperation.get(expression) ??
+          walk.context.records.targetOperation.get(expression);
       }
       recordSelectedOperationInputs(walk, expression, sourceFile, operation);
       return finalize(existing.carrier);
@@ -185,11 +173,11 @@ export function resolveExpressionCarrier(
       resolveExpressionOperationDependencies(walk, expression, sourceFile, contextualExpected);
       selectExpressionOperation(walk, expression, sourceFile);
     }
-    const selectedCarrier = facts.get(expression, rustRuntimeCarrierKey) ??
-      walk.context.facts.resolve(expression, rustRuntimeCarrierKey);
+    const selectedCarrier = records.runtimeCarrier.get(expression) ??
+      walk.context.records.runtimeCarrier.get(expression);
     if (selectedCarrier !== undefined) {
-      const operation = facts.get(expression, rustTargetOperationFactKey) ??
-        walk.context.facts.resolve(expression, rustTargetOperationFactKey);
+      const operation = records.targetOperation.get(expression) ??
+        walk.context.records.targetOperation.get(expression);
       recordSelectedOperationInputs(
         walk,
         expression,
@@ -198,13 +186,13 @@ export function resolveExpressionCarrier(
       );
       return finalize(selectedCarrier.carrier);
     }
-    const selectedOperation = facts.get(expression, rustSelectedOperationKey) ??
-      walk.context.facts.resolve(expression, rustSelectedOperationKey);
+    const selectedOperation = records.selectedOperation.get(expression) ??
+      walk.context.records.selectedOperation.get(expression);
     if (selectedOperation !== undefined) {
-      const rustOperation = facts.get(expression, rustTargetOperationFactKey) ??
-        walk.context.facts.resolve(expression, rustTargetOperationFactKey);
-      const optionalChain = facts.get(expression, rustOptionalChainFactKey) ??
-        walk.context.facts.resolve(expression, rustOptionalChainFactKey);
+      const rustOperation = records.targetOperation.get(expression) ??
+        walk.context.records.targetOperation.get(expression);
+      const optionalChain = records.optionalChain.get(expression) ??
+        walk.context.records.optionalChain.get(expression);
       if (optionalChain !== undefined && selectedOperation.resultType !== undefined &&
         !rustTargetTypeRefEquals(optionalChain.resultCarrier, selectedOperation.resultType)) {
         appendRustDiagnostic(
@@ -256,7 +244,7 @@ export function resolveExpressionCarrierBeforeFlowReadProjection(
   expected: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
   const resolved = resolveExpressionCarrier(walk, expression, sourceFile, expected);
-  return walk.context.facts.getRuntimeCarrierFact(expression)?.carrier ?? resolved;
+  return walk.context.records.runtimeCarrier.get(expression)?.carrier ?? resolved;
 }
 
 function rustExpressionResolutionExpectation(
@@ -291,7 +279,6 @@ function expressionIsPlainAssignment(ast: AstReader, expression: Node): boolean 
   return operator !== undefined && ast.kindName(operator) === KindEqualsToken;
 }
 
-
 function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): void {
   const { ast } = walk.context;
   const kind = ast.kindName(expression);
@@ -304,7 +291,7 @@ function recordExpressionBindingEffects(walk: RustFactWalk, expression: Node): v
     return;
   }
   if (kind === KindPrefixUnaryExpression || kind === KindPostfixUnaryExpression) {
-    const fact = walk.context.facts.get(expression, rustTargetOperationFactKey);
+    const fact = walk.context.records.targetOperation.get(expression);
     if (fact?.kind === "operator-token" && (fact.operator === "+=" || fact.operator === "-=")) {
       const operand = Node_Operand(ast, expression);
       if (operand !== undefined) recordRustCompoundWrite(walk, expression, operand, fact.resultCarrier);
@@ -475,8 +462,8 @@ function resolveIndependentValueOperation(
     const right = BinaryExpression_Right(ast, argument);
     if (left !== undefined) resolveIndependentValueOperation(walk, left, sourceFile);
     if (right !== undefined) resolveIndependentValueOperation(walk, right, sourceFile);
-    const leftCarrier = walk.context.facts.getRuntimeCarrierFact(left)?.carrier;
-    const rightCarrier = walk.context.facts.getRuntimeCarrierFact(right)?.carrier;
+    const leftCarrier = walk.context.records.runtimeCarrier.get(left)?.carrier;
+    const rightCarrier = walk.context.records.runtimeCarrier.get(right)?.carrier;
     if (isRustNumericCarrier(leftCarrier) || isRustNumericCarrier(rightCarrier)) {
       resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
     }
@@ -505,7 +492,7 @@ function resolveIndependentValueOperation(
         return;
       }
       resolveIndependentValueOperation(walk, inner, sourceFile);
-      if (walk.context.facts.getRuntimeCarrierFact(inner) !== undefined) {
+      if (walk.context.records.runtimeCarrier.get(inner) !== undefined) {
         resolveExpressionCarrier(walk, argument, sourceFile, undefined, "operation");
       }
     }
@@ -527,7 +514,7 @@ function applyOptionLane(
   if (resolved !== undefined && target !== undefined &&
     !rustTargetTypeRefEquals(resolved, target)) {
     const scalarTarget = expectedOptionElement ?? target;
-    const retained = walk.context.facts.get(expression, rustContextualValueConversionFactKey);
+    const retained = walk.context.records.contextualValueConversion.get(expression);
     const refined = selectRustGuardedIntegerConversion({ ast: walk.context.ast, navigation: walk.context.source.navigation,
       sourceFacts: walk.context.source.sourceFacts }, expression, resolved, scalarTarget);
     const exactInteger = refined ?? (integerConversion === "exact"
@@ -535,17 +522,17 @@ function applyOptionLane(
     if (exactInteger !== undefined || retained?.conversion.kind === "exact-integer" &&
       rustTargetTypeRefEquals(retained.sourceCarrier, resolved) &&
       rustTargetTypeRefEquals(retained.targetCarrier, scalarTarget)) {
-      recordRustValueCarrierReconciliation(walk.context.facts, expression, { kind: "conversion", fact: {
+      recordRustValueCarrierReconciliation(walk.context.records, expression, { kind: "conversion", fact: {
         sourceCarrier: resolved, targetCarrier: scalarTarget,
         conversion: exactInteger ?? retained!.conversion,
       } });
       projected = scalarTarget;
     } else {
-      const operation = walk.context.facts.get(expression, rustTargetOperationFactKey);
+      const operation = walk.context.records.targetOperation.get(expression);
       const truncation = selectRustIntegerTruncationConversion(walk.context.ast, expression,
         operation?.kind === "provider-operation" ? operation.operationId : undefined, resolved, scalarTarget);
       if (truncation !== undefined) {
-        walk.context.facts.set(expression, rustContextualValueConversionFactKey, {
+        walk.context.records.contextualValueConversion.set(expression, {
           sourceCarrier: resolved, targetCarrier: scalarTarget, conversion: truncation,
         }, [{ message: "rust exact bounded integer result" }]);
         projected = scalarTarget;
@@ -580,10 +567,10 @@ function applyOptionLane(
       }
       if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
-        recordRustValueCarrierReconciliation(walk.context.facts, expression, reconciliation);
+        recordRustValueCarrierReconciliation(walk.context.records, expression, reconciliation);
         projected = reconciliationTarget;
         if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
-          walk.context.facts.set(expression, rustConversionKey, { convertedType: reconciliationTarget }, [
+          walk.context.records.conversion.set(expression, { convertedType: reconciliationTarget }, [
             { message: "rust project-type upcast conversion" },
           ]);
         }
@@ -603,12 +590,12 @@ function applyOptionLane(
     return projected;
   }
   if (isRustUnitCarrier(projected)) {
-    const existing = walk.context.facts.get(expression, rustTargetOperationFactKey);
+    const existing = walk.context.records.targetOperation.get(expression);
     if (existing === undefined) {
       setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
     if (projected !== undefined) {
-      walk.context.facts.set(expression, rustOptionProjectionFactKey, {
+      walk.context.records.optionProjection.set(expression, {
         kind: "none",
         sourceCarrier: projected,
         resultCarrier: expected,
@@ -617,7 +604,7 @@ function applyOptionLane(
     return expected;
   }
   if (projected !== undefined && rustTargetTypeRefEquals(projected, inner)) {
-    walk.context.facts.set(expression, rustOptionProjectionFactKey, {
+    walk.context.records.optionProjection.set(expression, {
       kind: "some",
       sourceCarrier: projected,
       elementCarrier: inner,
@@ -645,7 +632,7 @@ export function reconcileRequiredCarrier(
   if (reconciliation.kind === "call-scoped-lifetime" ||
     reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
     recordRustValueCarrierReconciliation(
-      walk.context.facts,
+      walk.context.records,
       expression,
       reconciliation,
     );
