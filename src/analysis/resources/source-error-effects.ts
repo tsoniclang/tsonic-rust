@@ -12,6 +12,7 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 import type { RustNativeCallableProducer } from "../callables/native-producers.js";
 import { rustNativeCallableErrorType } from "../callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
@@ -173,7 +174,17 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
         }
       }
       if (actual !== undefined) types.set(identity, actual);
-      else if (producer !== undefined) producers.set(identity, producer);
+      else if (producer !== undefined) {
+        const carrier = substituteRustTargetGenerics(input.carrier, types, lifetimes, consts);
+        const physical = storageBindings === undefined
+          ? walk.context.callableValues.nativeStorage.invocationInputFor(input, node, caller)
+          : walk.context.callableValues.nativeStorage.boundSubjectFor(input.subject, carrier, storageBindings);
+        const payload = physical.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(carrier, physical.carrier,
+          rustOptionElementCarrier(carrier) ?? carrier, walk.context.typeDefinitions);
+        if (payload === undefined) return undefined;
+        producers.set(identity, producer);
+        types.set(identity, payload);
+      }
       else return undefined;
     }
     const substitute = (carrier: TargetTypeRef): TargetTypeRef | undefined => {

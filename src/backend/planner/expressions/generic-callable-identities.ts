@@ -7,6 +7,7 @@ import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpression } from "./entry.js";
+import { rustReferenceToPlace } from "../../target-ast/expressions.js";
 
 export function planRustGenericCallableIdentity(
   node: Node, selected: RustGenericCallableIdentityComparison, context: RustPlanContext,
@@ -25,7 +26,12 @@ export function planRustGenericCallableIdentity(
   const left = planExpression(selected.leftNode, context, "value", stableLeft ? "shared-place" : "value");
   const right = planExpression(selected.rightNode, context, "value", "shared-place");
   if (left === undefined || right === undefined) return undefined;
-  const expression: RustExpr = { kind: "tuple-literal", elements: [left, right].map(expr => ({ kind: "reference", expr })) };
+  const stableRight = context.input.program.valueLifetimes.canBorrowStableValue(selected.rightNode) ||
+    context.input.program.borrowStability.canBorrowAcross(selected.rightNode, selected.rightNode);
+  const expression: RustExpr = { kind: "tuple-literal", elements: [
+    stableLeft ? rustReferenceToPlace(left) : { kind: "reference", expr: left },
+    stableRight ? rustReferenceToPlace(right) : { kind: "reference", expr: right },
+  ] };
   if (selected.pairs.length === 0 || selected.exhaustive && selected.pairs.every(pair => pair.kind === "declaration")) {
     return { kind: "evaluate-then", effect: expression, discard: "value", value: {
       kind: "bool-literal", value: (selected.pairs.length !== 0) === (selected.operation.operator === "=="),

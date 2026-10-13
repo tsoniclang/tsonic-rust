@@ -6,6 +6,7 @@ import { rustErrorEffectsFactKey, rustFallibleFactKey, rustSourceErrorEffectsFac
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
+import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -43,6 +44,46 @@ function assertChannels(actual, expected, localErrors = false) {
     assert.equal(source !== undefined, true, "exact native channel identity");
     assert.equal(rustTargetTypeRefEquals(source.errorType, selected.errorType), true, "exact native channel carrier");
   }
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`captured generic producer errors bind concrete caller inputs (${surfaces[0] ?? "native"})`, () => {
+    const current = fixture(`
+      type Identity = <Value>(value: Value) => Value;
+      function make(callback: () => number): Identity {
+        return <Value>(value: Value): Value => { callback(); return value; };
+      }
+      function compare(left: () => number, right: () => number): boolean {
+        const first = make(left);
+        const second = make(right);
+        return first<number>(7) === 7 && second<string>("native") === "native";
+      }
+      export function main(): boolean { return compare(() => 1, () => 2); }
+    `, { surfaces });
+    const declaration = current.declaration("compare");
+    const inputs = current.program.callableValues.native.inputsFor(declaration);
+    assert.equal(inputs.length, 2);
+    const effects = current.callable("compare");
+    assert.equal(effects.nativeErrors.length, 2);
+    const callerEffects = current.callable("main");
+    assert.equal(callerEffects.nativeErrors.length, 2);
+    const references = rustTargetGenericReferences({ kind: "tuple",
+      elements: callerEffects.nativeErrors.map(source => source.errorType) });
+    assert.equal(inputs.some(input => references.typeIdentities.includes(input.implementation.identity)), false,
+      "callee-only C0/C1 parameters cannot escape in a nested producer reference");
+    const invocation = current.calls("compare")[0];
+    const unresolved = createRustSourceErrorEffectSelection({ context: {
+      ast: current.ast, facts: current.program.facts, typeDefinitions: current.program.typeDefinitions,
+      sourceStorage: current.program.sourceStorage, callableValues: { ...current.program.callableValues,
+        nativeStorage: { ...current.program.callableValues.nativeStorage,
+          invocationInputFor: () => ({ kind: "unresolved", reason: "missing exact physical input" }) },
+      },
+    } });
+    assert.equal(unresolved.register(effects.nativeErrors), true);
+    assert.equal(unresolved.bindingsFor(invocation, declaration,
+      effects.nativeErrors.map(source => source.errorType)) === undefined, true,
+    "a concrete origin alone cannot replace missing physical ABI evidence");
+  });
 }
 
 test("concrete callback errors retain exact producer declarations rather than the recipient package", () => {

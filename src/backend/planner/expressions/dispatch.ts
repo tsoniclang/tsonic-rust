@@ -533,7 +533,7 @@ export function planExpressionInner(
       if (token !== undefined && ast.kindName(token) === KindEqualsToken) {
         return planAssignmentExpression(node, context);
       }
-      return planBinaryExpression(node, context, resultUse);
+      return planBinaryExpression(node, context, resultUse, access);
     }
     case KindCallExpression: {
       return planCallExpression(node, context, resultUse);

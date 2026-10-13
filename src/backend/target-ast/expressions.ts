@@ -4,6 +4,12 @@ export function cloneRustExpression(expression: RustExpr): RustExpr {
   return { kind: "method-call", receiver: expression, receiverMode: "ref", method: "clone", args: [] };
 }
 
+export function rustReferenceToPlace(expression: RustExpr): RustExpr {
+  return expression.kind === "evaluate-then"
+    ? { ...expression, value: rustReferenceToPlace(expression.value) }
+    : { kind: "reference", expr: expression };
+}
+
 export function rustBooleanLiteralComparison(operator: string, left: RustExpr, right: RustExpr): RustExpr | undefined {
   if (operator !== "==" && operator !== "!=") return undefined;
   const literal = left.kind === "bool-literal" ? { value: left.value, other: right }

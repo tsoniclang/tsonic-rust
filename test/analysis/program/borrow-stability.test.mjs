@@ -35,11 +35,19 @@ test("native binding comparisons borrow observations and distinguish exact repla
     }
     export function opaque(left: string[] | undefined, right: () => string[]): boolean { return left === right(); }
     export function observableOwnedResult(left: string | undefined, right: string): boolean { return left === right.trim(); }
+    export function sequenced(left: string[] | undefined, right: string[], other: string[]): boolean {
+      let order = 0;
+      return (order++, left) === (right = other);
+    }
+    export function replacedSequence(left: string[] | undefined, right: string[]): boolean {
+      let order = 0;
+      return (order++, left) === (left = right);
+    }
   ` } });
   const { ast } = program.source;
   const nodes = allNodes(ast, program.sourceFiles);
   for (const [name, expected] of [["observed", true], ["replaced", false], ["unrelated", true], ["opaque", false],
-    ["observableOwnedResult", false]]) {
+    ["observableOwnedResult", false], ["sequenced", true], ["replacedSequence", false]]) {
     const declaration = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
     const comparison = allNodes(ast, [declaration]).find(node => ast.is.IsBinaryExpression(node) &&
       program.facts.getFact(node, rustTargetOperationFactKey)?.kind === "option-equality");
@@ -47,9 +55,15 @@ test("native binding comparisons borrow observations and distinguish exact repla
     const left = BinaryExpression_Left(ast, comparison);
     const right = BinaryExpression_Right(ast, comparison);
     assert.equal(program.borrowStability.canBorrowAcross(left, right), expected, name);
-    const binding = program.facts.getFact(left, rustSourceBindingFactKey);
+    let bindingNode = left;
+    while (!ast.is.IsIdentifier(bindingNode)) {
+      bindingNode = program.facts.getFact(bindingNode, rustTargetOperationFactKey)?.kind === "sequence"
+        ? BinaryExpression_Right(ast, bindingNode) : Node_Expression(ast, bindingNode);
+      assert.equal(bindingNode !== undefined, true, name + " exact binding subject");
+    }
+    const binding = program.facts.getFact(bindingNode, rustSourceBindingFactKey);
     const facts = { ...program.facts, getFact(node, key) {
-      return node === left && key === rustSourceBindingFactKey ? { ...binding, scope: "module" } : program.facts.getFact(node, key);
+      return node === bindingNode && key === rustSourceBindingFactKey ? { ...binding, scope: "module" } : program.facts.getFact(node, key);
     } };
     const rejected = analyzeRustBorrowStability(analysisInput(program, facts));
     assert.equal(rejected.kind, "resolved", name);

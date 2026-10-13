@@ -15,6 +15,7 @@ import { rustCapturedFieldStorageFactKey, validatedRustCapturedFieldStorageFact 
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../facts/native-storage-paths.js";
 import { rustNativeWriteTargets, rustNoNativeWrites } from "./borrow-stability-effects.js";
 import { rustCompoundWriteFactKey } from "../facts/operations/keys.js";
+import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
@@ -143,6 +144,22 @@ export function analyzeRustBorrowStability(
     borrowedWriteFor: (node: Node) => writes.get(node),
     canBorrowLocalBinding: (reference: Node) => stableBindings.has(reference),
     canBorrowAcross(source: Node, later: Node): boolean {
+      const visitedValues = new Set<Node>();
+      for (let depth = 0; depth < 256 && !visitedValues.has(source); depth += 1) {
+        visitedValues.add(source);
+        const inner = Node_Expression(input.ast, source);
+        if (inner !== undefined && rustSourceValueWrapperContains(source, inner, input.ast)) {
+          source = inner;
+          continue;
+        }
+        const sequence = input.facts.getFact(source, rustTargetOperationFactKey);
+        if (sequence?.kind !== "sequence") break;
+        const tail = BinaryExpression_Right(input.ast, source);
+        if (tail === undefined || !rustBorrowValueIsUnprojected(source, input.facts) ||
+          !rustTargetTypeRefEquals(sequence.resultCarrier, sequence.rightCarrier) ||
+          !rustTargetTypeRefEquals(sequence.rightCarrier, input.facts.getRuntimeCarrierFact(tail)?.carrier)) return false;
+        source = tail;
+      }
       const root = rustNativeStorageRoot(source, input);
       const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
       const binding = path?.length === 0 && input.facts.getFact(source, rustSourceBindingFactKey)?.scope === "lexical";

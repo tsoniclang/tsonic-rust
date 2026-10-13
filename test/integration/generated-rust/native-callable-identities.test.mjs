@@ -35,6 +35,8 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
       const generated = artifactText(result, "src/index.rs");
       assert.match(generated, /core::ptr::addr_eq/u);
+      assert.equal(generated.match(/\bfirst\.clone\(\)/gu)?.length ?? 0, 1,
+        "the authored alias clones once; shared sequence-tail comparisons never clone");
       assert.doesNotMatch(generated, /transmute|as \*const|Box<dyn|unreachable_unchecked/u);
       validateGeneratedProject(`native-activation-identity-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });
     });

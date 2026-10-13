@@ -31,7 +31,7 @@ import { planRustNativeZeroComparison } from "./native-zero-comparisons.js";
 import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
-import type { RustExpressionResultUse } from "./entry.js";
+import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustScopedStringComparison } from "./scoped-comparisons.js";
 import { planNullishAssignment } from "./nullish-assignment.js";
@@ -110,7 +110,8 @@ export function planSelectedRustProjectTypeTest(
     : { fact, leftNode, left, test, ...(selection === undefined ? {} : { selection }) };
 }
 
-export function planBinaryExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
+export function planBinaryExpression(node: Node, context: RustPlanContext,
+  resultUse: RustExpressionResultUse = "value", access: RustExpressionAccess = "value"): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
   if (fact?.kind === "logical-value") {
     const ast = context.input.program.source.ast;
@@ -174,7 +175,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext, resul
     }
     const left = planRustDiscardedValue(leftNode, context);
     if (left === undefined || isRustNeverCarrier(fact.leftCarrier)) return left?.expression;
-    const right = planExpression(rightNode, context, resultUse);
+    const right = planExpression(rightNode, context, resultUse, access);
     return right === undefined ? undefined
       : { kind: "evaluate-then", effect: left.expression, discard: left.discard, value: right };
   }

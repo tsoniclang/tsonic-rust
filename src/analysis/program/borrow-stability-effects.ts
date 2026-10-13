@@ -2,7 +2,8 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import type { RustTargetProgram } from "./model.js";
-import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs } from "./borrowed-element-purity.js";
+import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs,
+  rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
 export const rustNoNativeWrites: readonly Node[] = Object.freeze([]);
@@ -20,6 +21,15 @@ reserve: (count: number) => boolean): readonly Node[] | undefined {
   const wrapped = Node_Expression(ast, node);
   if (wrapped !== undefined && rustSourceValueWrapperContains(node, wrapped, ast)) return targetsFor(wrapped);
   const operation = facts.getFact(node, rustTargetOperationFactKey);
+  if (ast.is.IsBinaryExpression(node) && operation?.kind === "sequence" && rustBorrowValueIsUnprojected(node, facts)) {
+    const left = BinaryExpression_Left(ast, node);
+    const right = BinaryExpression_Right(ast, node);
+    const preceding = left === undefined ? undefined : targetsFor(left);
+    const following = right === undefined ? undefined : targetsFor(right);
+    if (preceding === undefined || following === undefined) return undefined;
+    const count = preceding.length + following.length;
+    return count === 0 ? rustNoNativeWrites : reserve(count) ? Object.freeze([...preceding, ...following]) : undefined;
+  }
   if (ast.is.IsBinaryExpression(node) && operation?.kind === "operator-token" && operation.operator === "=") {
     const target = BinaryExpression_Left(ast, node);
     const value = BinaryExpression_Right(ast, node);
