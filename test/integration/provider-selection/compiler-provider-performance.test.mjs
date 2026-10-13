@@ -31,7 +31,7 @@ main();
   const drain = main.indexOf("tsonic_rust_node::run_with_contexts(");
   assert.ok(initializeClock >= 0 && initializeClock < initializeSource);
   assert.ok(initializeSource >= 0 && initializeSource < drain, main);
-  assert.match(artifactText(result, "src/index.rs"), /fn module_init\([^]*?main\(\)/u);
+  assert.match(artifactText(result, "src/index.rs"), /fn module_init\([\s\S]*?main\(\)/u);
   assert.equal(main.match(/initialize_clock\(\)/gu)?.length, 1);
   validateGeneratedProject("compiler-provider-performance", result.artifacts, { run: true });
 });

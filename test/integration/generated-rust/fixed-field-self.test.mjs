@@ -43,7 +43,7 @@ mod fixed_field_owner_cost {
 
 for (const surfaces of [[], ["js"]]) test(`computed fixed field self retains the exact callable owner in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
   const source = fixedFieldSelfSource.replace("this.recurse(count - 1)", 'this["recurse"](count - 1)');
-  const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source } });
+  const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source + "\nmain();\n" } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
   const emitted = artifactText(result, "src/index.rs");
   assert.equal(typeof emitted === "string", true);

@@ -33,7 +33,7 @@ export function main(): Outcome<void> {
   assert.match(source, /read_to_string[^;]+\?/u);
   assert.doesNotMatch(source, /TsonicError|TsonicResult|Box::new|\.unwrap\(/u);
   assert.equal(result.artifacts.some(artifact => artifact.path === "src/main.rs"), false);
-  assert.match(source, /fn main\(\) -> Result<\(\), Box<dyn (?:std|core)::error::Error>>/u);
+  assert.match(source, /fn main\(\) -> std::result::Result<\(\), std::boxed::Box<dyn std::error::Error>>/u);
   const root = writeGeneratedProject("native-boxed-errors", result.artifacts);
   writeFileSync(join(root, "src/main.rs"), "fn main() -> Result<(), Box<dyn std::error::Error>> {\n    native_boxed_errors::index::main()\n}\n");
   runCargo(root, ["generate-lockfile", "--offline"]);

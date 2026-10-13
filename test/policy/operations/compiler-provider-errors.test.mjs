@@ -140,6 +140,7 @@ export function main(): void {
   check(read(error) === first);
   check(error === alias);
 }
+main();
 ` },
     });
     assertNoTargetDiagnostics(result.diagnostics);
@@ -165,7 +166,7 @@ for (const [name, source, field] of [
           const alias = error;
           change(alias);
           if (error !== alias || error.${field} !== "changed") throw new Error("detached native Error mutation");
-        }` },
+        }\nmain();` },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     validateGeneratedProject(`native-error-${name}-mutation`, result.artifacts, { run: true });

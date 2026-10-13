@@ -9,7 +9,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`closed project Error subtype recovery keeps exact fields, identity and live mutation in ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces,
       target: { id: "rust", options: { outputType: "bin", crateName: "closed_error_recovery" } },
-      files: closedErrorRecoveryFiles,
+      files: { ...closedErrorRecoveryFiles, "index.ts": closedErrorRecoveryFiles["index.ts"] + "\nmain();\n" },
     });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5)
       .map(diagnostic => diagnostic.message.slice(0, 256)).join("\n"));

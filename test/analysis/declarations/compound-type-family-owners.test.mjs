@@ -7,7 +7,8 @@ import { compoundTypeFamilyOwnerFiles } from "../../fixtures/compound-type-famil
 for (const surfaces of [[], ["js"]]) {
   const profile = surfaces.length === 0 ? "native" : "js";
   test(`compound conditional-type owners retain their exact generic bounds (${profile})`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces, files: compoundTypeFamilyOwnerFiles, packages: [acmeTestingPackage()],
+    const { result } = compileRust({ surfaces, files: { ...compoundTypeFamilyOwnerFiles,
+      "index.ts": compoundTypeFamilyOwnerFiles["index.ts"] + "\nmain();\n" }, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "compound_type_families" } } });
     assert.deepEqual(result.diagnostics, []);
     const native = validateGeneratedProject(`compound-type-families-${profile}`, result.artifacts, {run: true});

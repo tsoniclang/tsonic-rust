@@ -52,7 +52,7 @@ const files = {
 
 test("generic nominal recovery preserves exact instances across a forward-only package graph", { timeout: 300_000 }, () => {
   const { result } = compileRust({
-    surfaces: ["js"], files,
+    surfaces: ["js"], files: { ...files, "index.ts": files["index.ts"] + "\nmain();\n" },
     target: { id: "rust", options: { outputType: "bin", crateName: "generic_nominal_projections" } },
     sourcePackages: {
       fingerprint: "generic-nominal-forward-only", rootPackageId: "app",

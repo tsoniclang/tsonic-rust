@@ -76,7 +76,7 @@ main();
 for (const surface of ["native", "js"]) {
   for (const [name, source] of [["borrowed", borrowedSource], ["owned", ownedSource], ["interference", interferenceSource]]) {
     test(`${surface} ${name} lexical results preserve exact native ownership and lifetimes`, () => {
-      const { result } = compileRust({ files: { "index.ts": source },
+      const { result } = compileRust({ files: { "index.ts": source + "\nmain();\n" },
         surfaces: surface === "js" ? ["js"] : [], target: { id: "rust", options: { outputType: "bin" } } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
       const generated = artifactText(result, "src/index.rs");

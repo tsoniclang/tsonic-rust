@@ -23,6 +23,7 @@ export interface RoutingHost<Value> {
   route(value: Value): Route<Value>;
 }
 export function main(): void {}
+main();
 ` };
 
 for (const surface of ["native", "js"]) {

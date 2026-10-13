@@ -35,7 +35,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`named asynchronous values preserve imports, returned aliases and declaration identity (${surfaces[0] ?? "native"})`,
     { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces,
-        target: { id: "rust", options: { outputType: "bin" } }, files });
+        target: { id: "rust", options: { outputType: "bin" } }, files: { ...files, "index.ts": files["index.ts"] + "\nawait main();\n" } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
       assert.doesNotMatch(artifactText(result, "src/index.rs"), /transmute|unreachable_unchecked|i64_to_f64/u);
       validateGeneratedProject(`named-future-values-${surfaces[0] ?? "native"}`, result.artifacts, { run: true });

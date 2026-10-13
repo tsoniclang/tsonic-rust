@@ -20,7 +20,7 @@ for (const surfaces of [[], ["js"]]) {
     const files = { ...nestedStructuralStorageFiles,
       "index.ts": `${nestedStructuralStorageFiles["index.ts"]}
         import { check } from "@acme/testing";
-        export function main(): void { check(run()); }`,
+        export function main(): void { check(run()); }\nmain();`,
     };
     const { result } = compileRust({ surfaces, files, packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: "nested_structural_storage" } } });

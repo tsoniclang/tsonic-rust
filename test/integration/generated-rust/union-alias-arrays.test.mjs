@@ -6,7 +6,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 for (const surfaces of [[], ["js"]]) {
   test(`equivalent cross-file union aliases retain one array element representation on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: unionAliasArrayFiles });
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { ...unionAliasArrayFiles, "index.ts": unionAliasArrayFiles["index.ts"] + "\nmain();\n" } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 4).map(row => `${row.code}: ${row.message.slice(0, 256)}`).join("\n"));
     assert.equal(/\.map\([^;]+\.collect|transmute|from_raw_parts/u.test(rustSourceText(result)), false,

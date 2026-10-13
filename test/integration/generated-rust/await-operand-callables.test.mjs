@@ -11,7 +11,7 @@ for (const surfaces of [[], ["js"]]) {
       const name = `await_operand_callables_${profile}`;
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: name } },
-        files: { "index.ts": surfaces.length === 0 ? nativeAwaitOperandCallableSource : awaitOperandCallableSource },
+        files: { "index.ts": (surfaces.length === 0 ? nativeAwaitOperandCallableSource : awaitOperandCallableSource) + "\nawait main();\n" },
       });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
       const executed = validateGeneratedProject(name, result.artifacts, { run: true });

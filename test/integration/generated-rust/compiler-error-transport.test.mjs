@@ -55,6 +55,7 @@ export function main(): void {
   check(caught === ${surfaces.length === 0 ? 6 : 7} && cleaned === 1);
   check(original === alias && original.message === "stored" && original.stack === before);
 }
+main();
 `,
       },
     });

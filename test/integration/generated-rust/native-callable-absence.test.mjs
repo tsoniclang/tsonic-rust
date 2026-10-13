@@ -17,6 +17,7 @@ const cases = [
       try { relay(undefined); } catch { caught++; }
       if (caught !== 2) throw new Error("native absence changed");
     }
+    main();
   `],
   ["generic", `
     import type { int64 } from "@tsonic/core/types.js";
@@ -29,6 +30,7 @@ const cases = [
       try { call(wide, undefined); } catch { caught = true; }
       if (!caught) throw new Error("generic absence changed");
     }
+    main();
   `],
   ["future", `
     function fail(): never { throw new Error("absent"); }
@@ -40,6 +42,7 @@ const cases = [
       try { await call(undefined); } catch { caught = true; }
       if (!caught) throw new Error("future absence changed");
     }
+    await main();
   `],
 ];
 

@@ -36,7 +36,7 @@ test("canonical compiler string quoting retains its nonoptional result", { timeo
   const { result } = compileRust({
     surfaces: ["js"], packages: [acmeTestingPackage()],
     target: { id: "rust", options: { outputType: "bin", crateName: "json_string_result" } },
-    files: { "index.ts": String.raw`
+    files: { "index.ts": (String.raw`
 import { check } from "@acme/testing";
 function quote(value: string): string { return JSON.stringify(value); }
 export function main(): void {
@@ -44,7 +44,7 @@ export function main(): void {
   check(JSON.stringify("line\n").slice(1, -1) === "line\\n");
   check(JSON.stringify(undefined) === "null" && JSON.stringify(null) === "null");
 }
-` },
+` + "\nmain();\n") },
   });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("json-string-result", result.artifacts, { run: true });

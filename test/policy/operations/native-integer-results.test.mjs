@@ -49,6 +49,7 @@ export function main(): void {
   input[0] = 7;
   check(copy[0] === 1 && assigned[2] === 127);
 }
+main();
 ` } });
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");

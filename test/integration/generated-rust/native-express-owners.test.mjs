@@ -12,6 +12,7 @@ export async function main(): Promise<void> {
   try { await api.dispatch(); } catch { caught = true; }
   if (!caught) throw new Error("async object method lost its rejection");
 }
+await main();
 `],
   ["caught-record-contribution", `
 interface Envelope { value: unknown; }
@@ -26,6 +27,7 @@ export function main(): void {
     throw new Error("record contribution lost its error");
   }
 }
+main();
 `],
   ["try-definite-initialization", `
 function value(fail: boolean): string {
@@ -42,6 +44,7 @@ export async function main(): Promise<void> {
     throw new Error("definite initialization or catch completion changed");
   }
 }
+await main();
 `],
 ];
 

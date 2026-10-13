@@ -428,7 +428,7 @@ main();
   assert.match(main, /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError>/u);
   assert.match(
     main,
-    /acme_files::drain_runtime_fallible\(\)\?;/u,
+    /acme_files::drain_runtime_fallible\(\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u,
   );
   assert.match(main, /Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)/u);
   validateGeneratedProject("fallible-epilogue-proof", result.artifacts);

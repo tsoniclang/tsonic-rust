@@ -151,7 +151,7 @@ for (const surfaces of [[], ["js"]]) {
     for (const [name, source] of [["constant", constantSource], ["dependent", dependentSource], ["permuted", permutedSource], ["getter", getterSource]]) {
       test(`${name} generic structural views preserve native ABI and live state ${order} in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
         const { result, source: checked } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-          files: { "index.ts": source(order) } });
+          files: { "index.ts": source(order) + "\nmain();\n" } });
         const diagnostics = result.diagnostics.slice(0, 32).map(row => {
           const node = row.sourceNode;
           const range = node === undefined ? undefined : checked.ast.authoredRange(node);

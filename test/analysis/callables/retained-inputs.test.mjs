@@ -49,7 +49,7 @@ for (const surfaces of [undefined, ["js"]]) {
 
 for (const [name, text] of [["reordered", reorderedPointerInputSource], ["int64", widePointerInputSource]]) {
   test(`native contextual callback inference retains ${name} source metadata`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": text } });
+    const { result } = compileRust({ target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": text + "\nmain();\n" } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
     const code = artifactText(result, "src/index.rs");
     if (name === "int64") {

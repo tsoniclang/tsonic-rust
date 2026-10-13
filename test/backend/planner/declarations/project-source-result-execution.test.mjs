@@ -11,7 +11,7 @@ for (const fixture of projectSourceResultContracts) {
       surfaces: fixture.surfaces,
       packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: fixture.crateName } },
-      files: { "index.ts": fixture.source },
+      files: { "index.ts": fixture.source + "\nmain();\n" },
     });
     assertNoTargetDiagnostics(result.diagnostics);
     const execution = validateGeneratedProject(fixture.name, result.artifacts, { run: true });

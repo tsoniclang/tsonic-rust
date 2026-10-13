@@ -257,7 +257,7 @@ for (const fixture of projectSourceResultContracts) {
       surfaces: fixture.surfaces,
       packages: [acmeTestingPackage()],
       target: { id: "rust", options: { outputType: "bin", crateName: fixture.crateName } },
-      files: { "index.ts": fixture.source },
+      files: { "index.ts": fixture.source + "\nmain();\n" },
     });
     assertNoTargetDiagnostics(result.diagnostics);
     assert.ok(result.artifacts.some(artifact => artifact.path === "src/main.rs"));

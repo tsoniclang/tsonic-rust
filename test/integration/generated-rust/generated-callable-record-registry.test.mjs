@@ -88,7 +88,7 @@ for (const surfaces of [[], ["js"]]) {
     { timeout: 300_000 }, () => {
       const name = `optional_callback_record_forwarding_${surfaces[0] ?? "native"}`;
       const { result } = compileRust({ surfaces,
-        target: { id: "rust", options: { outputType: "bin", crateName: name } }, files: callbackFiles });
+        target: { id: "rust", options: { outputType: "bin", crateName: name } }, files: { ...callbackFiles, "index.ts": callbackFiles["index.ts"] + "\nawait main();\n" } });
       assert.equal(result.diagnostics.length, 0,
         result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
       const generated = rustSourceText(result);

@@ -111,6 +111,7 @@ export function main(): void {
   const accumulated = values[index()] += values[0];
   check(accumulated === 24n && values[0] === 24n && indexReads === 1);
 }
+main();
 ` },
     });
     assert.deepEqual(result.diagnostics, []);

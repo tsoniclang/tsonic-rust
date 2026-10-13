@@ -14,10 +14,12 @@ for (const surfaces of [[], ["js"]]) {
   for (const [name, source] of [
     ["explicit", 'export function main(): void { console.log("entry ran"); } main();'],
     ["top_level", 'console.log("entry ran");'],
+    ["async", 'export async function main(): Promise<void> { console.log("entry ran"); } await main();'],
   ]) {
     test(`binary ${name} runs exactly once on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
       const sourceText = surfaces.length === 0
-        ? name === "explicit" ? "export function main(): void {} main();" : "export const result = 42;"
+        ? name === "explicit" ? "export function main(): void {} main();"
+          : name === "async" ? "export async function main(): Promise<void> {} await main();" : "export const result = 42;"
         : source;
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: `entry_${name}_${surfaces[0] ?? "native"}` } },

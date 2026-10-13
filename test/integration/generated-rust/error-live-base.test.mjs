@@ -43,7 +43,7 @@ export function main(): void { if (!run()) throw new Error("mixed Error recovery
     test(`live Error borrowed reads release guards only for actual same-owner writes in Rust ${profile}${representation === "arrow" ? " arrow captures" : ""}`, { timeout: 300_000 }, () => {
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: "live_error_borrows" } },
-        files: { "index.ts": errorBorrowEffectsSource(representation) } });
+        files: { "index.ts": errorBorrowEffectsSource(representation) + "\nmain();\n" } });
       assertNoTargetDiagnostics(result.diagnostics);
       assert.equal(validateGeneratedProject(`live-error-borrows-${profile}-${representation}`, result.artifacts, { run: true }).status, 0);
     });
@@ -54,7 +54,7 @@ for (const representation of ["declaration", "arrow"]) {
   test(`captured native Error stack guard releases before exact recapture${representation === "arrow" ? " through arrow capture" : ""}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "captured_error_stack" } },
-      files: { "index.ts": errorStackRecaptureSource(representation) } });
+      files: { "index.ts": errorStackRecaptureSource(representation) + "\nmain();\n" } });
     assertNoTargetDiagnostics(result.diagnostics);
     assert.equal(validateGeneratedProject(`captured-error-stack-${representation}`, result.artifacts, { run: true }).status, 0);
   });

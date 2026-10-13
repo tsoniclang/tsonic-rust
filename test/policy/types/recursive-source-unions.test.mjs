@@ -41,7 +41,7 @@ export function main(): void { if (!run()) throw new Error("recursive generic co
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { ...recursiveCollectionUnionFiles, "index.ts": `${recursiveCollectionUnionFiles["index.ts"]}
 ${surfaces.length === 0 ? "" : recursiveCollectionUnionIdentitySource}
-export function main(): void { if (!run()${surfaces.length === 0 ? "" : " || !aliases()"}) throw new Error("recursive collections"); }` } });
+export function main(): void { if (!run()${surfaces.length === 0 ? "" : " || !aliases()"}) throw new Error("recursive collections"); }\nmain();` } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     assert.equal(validateGeneratedProject(`recursive-collection-unions-${surfaces[0] ?? "native"}`, result.artifacts, { run: true }).status, 0);

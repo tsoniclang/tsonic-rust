@@ -195,7 +195,7 @@ export function main(): void {}
   };
   const { result: binaryResult } = compileRust({
     target: { id: "rust", options: { outputType: "bin", crateName: "binary_entry_liveness" } },
-    files: binaryFiles,
+    files: { ...binaryFiles, "index.ts": binaryFiles["index.ts"] + "\nmain();\n" },
     sourcePackages: sourcePackageGraphWithoutFacades(binaryFiles),
   });
   assertNoTargetDiagnostics(binaryResult.diagnostics);

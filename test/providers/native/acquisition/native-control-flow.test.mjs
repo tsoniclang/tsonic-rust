@@ -137,7 +137,7 @@ export function main(): Result<void, int32> {
   assert.deepEqual(result.diagnostics, []);
   const output = artifactText(result, "src/index.rs");
   assert.equal(result.artifacts.some(artifact => artifact.path === "src/main.rs"), false);
-  assert.match(output, /fn main\(\) -> Result<\(\), i32>/u);
+  assert.match(output, /fn main\(\) -> std::result::Result<\(\), i32>/u);
   assert.doesNotMatch(output, /TsonicError|TsonicResult|Box::|panic!|unwrap\(/u);
   const nativeDriver = "fn main() -> Result<(), i32> {\n    native_result_entry::index::main()\n}\n";
   validateGeneratedProject("native-result-entry", [...result.artifacts, { path: "src/main.rs", text: nativeDriver }], { run: true });

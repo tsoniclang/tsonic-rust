@@ -28,7 +28,7 @@ tsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }
 function compile(providerRoot, options = {}, source = nativeProviderProofSource, records = false) {
   return compileRust({
     capabilities: [memoryAbiCapability("rust")], packages: [records ? nativeRecordProvider(providerRoot, options) : nativeMemoryProvider(providerRoot, options)],
-    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source },
+    target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source + "\nmain();\n" },
   }).result;
 }
 

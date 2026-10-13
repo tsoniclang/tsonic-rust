@@ -35,6 +35,7 @@ export function main(): void {
   check(read(flatten(grouped)) === ${surfaces.length === 0 ? "wide" : "wide + 1n"} && read(flatten(group("text"))) === 2n &&
     read(flatten(group(true))) === 1n && read(flatten(group(() => wide))) === wide);
 }
+main();
 ` } });
     assertNoTargetDiagnostics(result.diagnostics);
     validateGeneratedProject("nested-union-mappings", result.artifacts, { run: true });

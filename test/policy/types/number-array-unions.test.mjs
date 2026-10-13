@@ -55,7 +55,7 @@ for (const initialized of ["new Array<number>(3)", "[1, 2]"]) {
             check(copied.length === values.length && copied[0] === before);
             copied[0] = 19;
             check(values[0] === before);
-          }`,
+          }\nmain();`,
       },
     });
     assertNoTargetDiagnostics(result.diagnostics);

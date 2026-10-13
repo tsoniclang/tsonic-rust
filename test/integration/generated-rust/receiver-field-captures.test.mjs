@@ -28,8 +28,8 @@ test("retained receiver field writes preserve the selected object's freeze ident
 for (const example of [...receiverFieldCaptureEdges, ...receiverFieldFreezeEdges]) for (const surfaces of receiverFieldFreezeEdges.includes(example) ? [["js"]] : [[], ["js"]]) {
   test(`receiver field edge ${example.name} in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const main = example.asynchronous
-      ? '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("receiver field edge"); }'
-      : '\nexport function main(): void { if (!run()) throw new Error("receiver field edge"); }';
+      ? '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("receiver field edge"); }\nawait main();\n'
+      : '\nexport function main(): void { if (!run()) throw new Error("receiver field edge"); }\nmain();\n';
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": example.source + main } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
@@ -40,7 +40,7 @@ for (const example of [...receiverFieldCaptureEdges, ...receiverFieldFreezeEdges
 for (const example of genericCallableOwnershipCases) for (const surfaces of [[], ["js"]]) {
   test(`quantified callable ownership ${example.name} in ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": example.source } });
+      files: { "index.ts": example.source + "\nmain();\n" } });
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
     assert.equal(/dyn Any|downcast_unchecked|transmute|unsafe\s*\{/u.test(rustSourceText(result)), false,
       `exact native quantified ownership ${example.name}`);

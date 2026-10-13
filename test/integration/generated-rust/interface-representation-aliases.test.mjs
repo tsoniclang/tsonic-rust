@@ -16,7 +16,7 @@ ${surfaces === undefined ? "" : interfaceRepresentationAliasJsProofSource}
 export function main(): void {
   if (!run()) throw new Error("interface representation alias");
   ${surfaces === undefined ? "" : 'if (!runJsAliases()) throw new Error("array facade live and frozen alias");'}
-}` },
+}\nmain();` },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject("interface-representation-aliases", result.artifacts, { run: true }).status, 0);

@@ -52,7 +52,7 @@ for (const current of measuredCases) for (const surfaces of [[], ["js"]]) {
   const profile = surfaces[0] ?? "native";
   test(`${current.name} has one native callback owner and balanced lifetime in ${profile}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": current.source } });
+      files: { "index.ts": current.source + "\nmain();\n" } });
     assert.equal(result.diagnostics.length, 0,
       result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
     const directory = writeGeneratedProject(`recursive-class-cost-${current.name}-${profile}`, result.artifacts);

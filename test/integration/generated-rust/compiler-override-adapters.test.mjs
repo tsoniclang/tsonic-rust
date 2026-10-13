@@ -47,7 +47,7 @@ export function main(): void {
 
 test("checked overrides adapt widened inputs and narrowed outputs without changing native domains", { timeout: 300_000 }, () => {
   const { result } = compileRust({
-    surfaces: ["js"], packages: [acmeTestingPackage()], files,
+    surfaces: ["js"], packages: [acmeTestingPackage()], files: { ...files, "index.ts": files["index.ts"] + "\nmain();\n" },
     target: { id: "rust", options: { outputType: "bin", crateName: "override_adapter_proof" } },
   });
   assertNoTargetDiagnostics(result.diagnostics);

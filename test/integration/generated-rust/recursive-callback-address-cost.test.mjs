@@ -99,7 +99,7 @@ for (const [name, selectedProof] of [["addressed-lexical-frame", () => lexicalPr
     const profile = surfaces[0] ?? "native";
     test(`${name} preserves native pointer allocation and complete owner release in ${profile}`, { timeout: 300_000 }, () => {
       const source = recursiveCallbackProtocolCases.find(current => current.name === name).source;
-      const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source } });
+      const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": source + "\nmain();\n" } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 4).map(row => row.message.slice(0, 256)).join("\n"));
       const directory = writeGeneratedProject(`recursive-address-cost-${name}-${profile}`, result.artifacts);
       const proof = selectedProof(profile);

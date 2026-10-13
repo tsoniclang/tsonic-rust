@@ -8,7 +8,7 @@ for (const [name, source] of Object.entries(frozenObjectSources)) {
   test(`frozen objects preserve ${name}`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "frozen_objects" } },
-      files: { "index.ts": source },
+      files: { "index.ts": source + "\nmain();\n" },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(validateGeneratedProject(`frozen-objects-${name}`, result.artifacts, { run: true }).status, 0);

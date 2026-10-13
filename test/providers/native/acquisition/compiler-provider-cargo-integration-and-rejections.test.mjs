@@ -213,7 +213,7 @@ export function main(): void {
         projectFile: project.manifestPath,
       },
     },
-    files: { "index.ts": source },
+    files: { "index.ts": source + "\nmain();\n" },
   });
 
   assert.deepEqual(result.diagnostics, []);

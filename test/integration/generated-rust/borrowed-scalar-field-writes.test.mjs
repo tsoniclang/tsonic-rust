@@ -44,7 +44,7 @@ for (const surfaces of [[], ["js"]]) {
       const frozen = surfaces.length === 0 ? "" : borrowedScalarFieldFreezeSource;
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
         files: { "index.ts": borrowedScalarFieldWritesSource + frozen +
-          `\nexport function main(): void { if (!run()${surfaces.length === 0 ? "" : " || !frozenWrite()"}) throw new Error("scalar write order"); }` } });
+          `\nexport function main(): void { if (!run()${surfaces.length === 0 ? "" : " || !frozenWrite()"}) throw new Error("scalar write order"); }\nmain();\n` } });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));
       const output = artifactText(result, "src/index.rs");
       for (const name of ["parameter", "literal", "storage", "arithmetic"]) {

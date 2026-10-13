@@ -6,7 +6,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("native guards retain every surviving cross-file union arm before explicit JSON conversion", { timeout: 300_000 }, async () => {
   const { result } = compileRust({ surfaces: ["js"], capabilities: [await nodejsCapability()],
-    target: { id: "rust", options: { outputType: "bin" } }, files: guardedClosedUnionFiles });
+    target: { id: "rust", options: { outputType: "bin" } }, files: { ...guardedClosedUnionFiles, "index.ts": guardedClosedUnionFiles["index.ts"] + "\nmain();\n" } });
   assert.equal(result.diagnostics.length, 0,
     result.diagnostics.slice(0, 4).map(row => `${row.code}: ${row.message.slice(0, 256)}`).join("\n"));
   assert.equal(/js_value_from_closed\(&.*(?:Buffer|Uint8Array)/u.test(rustSourceText(result)), false,
