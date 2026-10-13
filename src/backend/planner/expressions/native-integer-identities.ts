@@ -1,7 +1,7 @@
 import { isRustIntegerCarrier, isRustSignedNumericCarrier } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
-import { rustIntegerLiteralValue } from "../../target-ast/integer-comparisons.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import { rustIntegerLiteralValue } from "../../target-ast/syntax/integer-comparisons.js";
 
 export function planRustNativeIntegerIdentity(
   operator: string,

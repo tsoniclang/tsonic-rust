@@ -18,7 +18,7 @@ import {
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustAsyncFunctionFactKey } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";

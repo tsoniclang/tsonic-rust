@@ -1,4 +1,4 @@
-import type { RustSourceFileModel } from "../target-ast/nodes.js";
+import type { RustSourceFileModel } from "../target-ast/syntax/nodes.js";
 import type { CargoManifestPlan } from "./project/cargo.js";
 import type { RustEdition } from "../../target-model/project/model.js";
 

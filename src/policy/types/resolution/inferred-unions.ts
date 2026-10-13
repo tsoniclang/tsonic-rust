@@ -3,8 +3,8 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
-import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
-import type { RustSourceUnionVariant } from "../source-type-registry.js";
+import { rustSourceUnionMemberDeclarationIsOwned } from "../../identities/source-union-members.js";
+import type { RustSourceUnionVariant } from "../model/source-type-registry.js";
 import { rustSourceUnionMemberTypes } from "./source-unions.js";
 
 export function resolveRustInferredUnion(

@@ -1,11 +1,11 @@
 import type { Node, Type } from "@tsonic/tsts";
 import { sourceBoundTypeRelationship, type SourceFileSemantics } from "@tsonic/target-api/source";
-import type { RustSourceUnion } from "../source-type-registry.js";
+import type { RustSourceUnion } from "../model/source-type-registry.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { rustSourceUnionMemberDeclarationIsOwned } from "../../evidence/source-union-members.js";
+import { rustSourceUnionMemberDeclarationIsOwned } from "../../identities/source-union-members.js";
 import {
   isRustAbsenceCarrier,
   isRustUnitCarrier,

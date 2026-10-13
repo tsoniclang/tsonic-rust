@@ -3,7 +3,7 @@ import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";

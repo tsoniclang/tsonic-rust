@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { lowerRustCompletionScope } from "../../../../dist/backend/target-ast/normalization/completion-regions.js";
 import { rustItemsReferenceModuleAlias } from "../../../../dist/backend/target-ast/inspection/source-module-usage.js";
-import { emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { printRustBlockStatements } from "../../../../dist/print/source/blocks.js";
 
 const nativeError = { kind: "qualified", owner: { kind: "named", path: "Producer" },

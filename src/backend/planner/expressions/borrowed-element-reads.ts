@@ -1,6 +1,6 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustBorrowedElementRead } from "../../../analysis/program/borrowed-element-reads.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

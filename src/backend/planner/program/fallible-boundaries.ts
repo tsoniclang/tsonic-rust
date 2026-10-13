@@ -1,4 +1,4 @@
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import type { RustNativeErrorJoinPlan, RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
 import type { RustSourcePackageErrorBoundary } from "./source-package-errors.js";

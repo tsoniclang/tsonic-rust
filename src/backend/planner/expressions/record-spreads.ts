@@ -5,10 +5,10 @@ import { readRustStoredObjectField, readRustStructuralObjectMethodStorage } from
 import { planRustBoundProjectMethodCallable } from "./properties.js";
 import { planRustOptionBranch } from "./option-branch.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustObjectLiteralMethodImplementationPlan } from "../objects/object-literal-implementations.js";
-import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/value-block.js";
+import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
 import { rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
 
 type RecordFact = Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>;

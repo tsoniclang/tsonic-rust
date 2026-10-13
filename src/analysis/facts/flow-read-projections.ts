@@ -3,7 +3,7 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 
 export function rustFlowReadProjectionMatches(
   fact: RustFlowReadProjectionFact, projectTypes: RustProjectTypePolicy, definitions: RustTypeDefinitions,

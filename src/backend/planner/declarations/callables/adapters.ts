@@ -13,7 +13,7 @@ import {
   isRustUnitCarrier,
   rustOptionElementCarrier,
 } from "../../../../target-model/types/index.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import {
   lowerRustValueConversion,
   planRustProjectUpcast,

@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import {
   planExpression,
   planRustOperatorCallExpression,
@@ -26,11 +26,11 @@ import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from 
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
 import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
 import { planRustIndexedRecordStorage, planRustSourceIndexKey, sourceIndexSelectedOperationMatches } from "../objects/indexed-records.js";
-import { rustStringConcat } from "../../target-ast/expressions.js";
+import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationPlan } from "./core.js";
 import type { RustAssignmentOperator, RustBinaryOperator } from "../../../target-model/syntax/tokens.js";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { planRustSourceAccessorReceiver } from "../objects/accessor-receivers.js";

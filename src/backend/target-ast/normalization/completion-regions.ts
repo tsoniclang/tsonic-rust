@@ -1,5 +1,5 @@
-import type { RustBlock, RustExpr, RustPattern, RustStmt, RustType } from "../nodes.js";
-import { mapRustExpressionChildren } from "../expression-children.js";
+import type { RustBlock, RustExpr, RustPattern, RustStmt, RustType } from "../syntax/nodes.js";
+import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { applyRustTailShape } from "./block-flow.js";
 import { rustBlockBreaksToLabel, rustBlockReferencesPath } from "../inspection/source-usage.js";

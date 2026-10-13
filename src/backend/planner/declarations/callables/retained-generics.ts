@@ -5,7 +5,7 @@ import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustSourceParameterAbiF
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
-import type { RustWherePredicate } from "../../../target-ast/nodes.js";
+import type { RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";

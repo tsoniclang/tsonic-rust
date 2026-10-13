@@ -11,8 +11,8 @@ import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/
 import { instantiateRustSourceUnionPayloads } from "../../../dist/target-model/types/source-union-definitions.js";
 import { planRustSourceUnionPayloadTemplate } from "../../../dist/backend/planner/types/source-union-payloads.js";
 import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
-import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/nodes.js";
-import { rustDeriveAttributes } from "../../../dist/backend/target-ast/attributes.js";
+import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/syntax/nodes.js";
+import { rustDeriveAttributes } from "../../../dist/backend/target-ast/syntax/attributes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { printRustType } from "../../../dist/print/source/types.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";

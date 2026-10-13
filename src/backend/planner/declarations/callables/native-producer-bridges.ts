@@ -11,8 +11,8 @@ import { rustAwaitSelectionLeaves } from "../../../../target-model/types/await.j
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { allocateRustGeneratedName } from "../../../../target-model/names/generated.js";
 import type { RustBlock, RustFunctionParam, RustGenericArgument, RustGenericParameter,
-  RustItem, RustImplFunction, RustType, RustWherePredicate } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+  RustItem, RustImplFunction, RustType, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";

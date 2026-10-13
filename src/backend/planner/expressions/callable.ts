@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import {
   applyFallibleShape,
@@ -47,7 +47,7 @@ import { rustOptionDefaultValue } from "./option-default.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustExpr, RustStmt, RustType } from "../../target-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustReceiverIndependentMethodFactKey } from "../../../analysis/facts/operations/keys.js";

@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../../target-ast/value-block.js";
+import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import {
   KindIdentifier,
   KindNumericLiteral,
@@ -24,7 +24,7 @@ import { planRustSourceStaticFieldStorage } from "../../declarations/classes/sta
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustExpressionResultUse } from "../entry.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";

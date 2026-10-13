@@ -1,4 +1,4 @@
-import type { RustAttribute, RustAttributeArgument } from "../../backend/target-ast/attributes.js";
+import type { RustAttribute, RustAttributeArgument } from "../../backend/target-ast/syntax/attributes.js";
 import { indentText } from "./types.js";
 import { escapeRustString } from "./patterns.js";
 

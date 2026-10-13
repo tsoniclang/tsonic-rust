@@ -1,4 +1,4 @@
-import { rustListAttribute, rustWordAttribute, rustValueAttribute } from "../attributes.js";
+import { rustListAttribute, rustWordAttribute, rustValueAttribute } from "../syntax/attributes.js";
 export const rustLintAttributes = Object.freeze({
   blocksInConditions:
     rustListAttribute("expect", [rustWordAttribute("clippy::blocks_in_conditions"), rustValueAttribute("reason", { kind: "string", value: "checked evaluation region" })]),

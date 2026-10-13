@@ -1,4 +1,4 @@
-import { emptyRustGenerics, type RustItem, type RustType } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustItem, type RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustErrorTransportVariant } from "./error-transport.js";
 
 export function planRustClosedThrowAdmission(variants: readonly RustErrorTransportVariant[]): readonly RustItem[] {

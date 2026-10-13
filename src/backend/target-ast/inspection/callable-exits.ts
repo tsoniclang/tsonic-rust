@@ -1,4 +1,4 @@
-import type { RustExpr } from "../nodes.js";
+import type { RustExpr } from "../syntax/nodes.js";
 import { rustExpressionChildren } from "./source-usage.js";
 
 export function rustExpressionExitsCallable(expression: RustExpr): boolean {

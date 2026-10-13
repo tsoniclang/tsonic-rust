@@ -2,8 +2,8 @@ import type { RustSourceTypeFamilyImplementation } from "../../../../target-mode
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { rustProgramErrorTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetGenericReferences } from "../../../../target-model/types/carriers/generic-references.js";
-import type { RustGenerics, RustItem, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustGenerics, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

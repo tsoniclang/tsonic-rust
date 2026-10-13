@@ -1,6 +1,6 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
-import { cloneRustExpression } from "../../target-ast/expressions.js";
+import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
 import type { RustBindingStorageFact } from "../../../analysis/facts/operations/keys.js";
 import type { Node } from "@tsonic/tsts";
 import { rustBindingStorageOperations, type RustBindingStorageOperations } from "./binding-storage.js";
@@ -27,7 +27,7 @@ import {
   rustProgramErrorTargetType,
   rustStructuralObjectCarrierValue,
 } from "../../../target-model/types/index.js";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
   missingFactDiagnostic,

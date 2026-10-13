@@ -1,7 +1,7 @@
 import type { RustNativeCallableProtocol } from "../../../../analysis/callables/native-protocols.js";
 import { rustNativeCallableProtocolResult } from "../../../../analysis/callables/native-protocols.js";
-import type { RustItem, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { diagnosticInput } from "../../program/plan-context.js";

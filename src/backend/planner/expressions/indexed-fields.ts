@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact } from "../../../analysis/facts/operations/facts.js";
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustRecordFieldResult } from "../objects/record-fields.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

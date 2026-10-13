@@ -1,10 +1,10 @@
-import { rustHiddenAttribute } from "../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
-import type { RustItem, RustType } from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type { RustSourcePackageCrateContentPlan } from "./source-package-crates.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";

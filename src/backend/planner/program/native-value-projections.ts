@@ -1,8 +1,8 @@
-import { emptyRustGenerics, type RustExpr, type RustItem, type RustType, type RustImplFunction } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustExpr, type RustItem, type RustType, type RustImplFunction } from "../../target-ast/syntax/nodes.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
 import { rustStructuralViewIntoRoot } from "../objects/project-structural-roots.js";
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planCheckedNativeValueProjection } from "../objects/checked-project-projections.js";
 
 export function planRustNativeValueProjections(

@@ -32,7 +32,7 @@ import { planForInStatement, planForOfStatement } from "./iteration.js";
 import { planRustReturnExit } from "./completion-exits.js";
 import { planThrowStatement, planTryStatement } from "./errors.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustBlock, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";
 import { rustTypeAliasDeclarationFactKey } from "../../../analysis/facts/keys.js";

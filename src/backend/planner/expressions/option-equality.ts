@@ -7,7 +7,7 @@ import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/meta
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustOptionCarrier, rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";

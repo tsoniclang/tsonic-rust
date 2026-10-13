@@ -1,5 +1,5 @@
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
-import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
+import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
+import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";

@@ -6,7 +6,7 @@ import {
 } from "../../policy/types/resolution/providers.js";
 import {
   resolveSelectedProviderDeclaration,
-} from "../../policy/evidence/selected-source.js";
+} from "../../policy/identities/selected-source.js";
 import {
   rustProviderOperationOwnerMatches,
 } from "../../policy/operations/provider-selection.js";
@@ -15,7 +15,7 @@ import type { RustProviderRecordAbsentField } from "../../target-model/conversio
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 import { rustProgramErrorConversionMatches, rustProgramErrorRuntimeRouteMatches, type RustProgramErrorConversion } from "../../../target-model/conversions/program-error.js";

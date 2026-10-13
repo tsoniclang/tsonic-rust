@@ -17,7 +17,7 @@ import { createRustAssociatedRequirementCollector } from "./associated-requireme
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
@@ -41,7 +41,7 @@ import {
 } from "../../target-model/types/index.js";
 import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustBindingProjectionCloneCarriers } from "../../policy/types/binding-normalization.js";
+import { rustBindingProjectionCloneCarriers } from "../../policy/types/storage/binding-normalization.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import {
   rustAsyncFunctionFactKey,

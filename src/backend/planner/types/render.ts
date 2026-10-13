@@ -17,7 +17,7 @@ import type {
   RustTraitReference,
   RustType,
   RustTypeBound,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import {
   rustLifetimeKey,
   type RustLifetimeBinder,

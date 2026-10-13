@@ -113,7 +113,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly frozenDataWrites: RustFrozenDataWriteRegistry;
   readonly classValues: RustClassValueRegistry;
   readonly providerSemantics: RustProviderSemantics;
-  readonly dispatchContexts: import("../runtime/dispatch-contexts.js").RustDispatchContextCatalog;
+  readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextCatalog;
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
   readonly generatedDeclarationUses: RustGeneratedDeclarationUseRegistry;
@@ -128,7 +128,7 @@ export function createRustAnalysisContext(
   providerSemantics: RustProviderSemantics,
   jsEnabled: boolean,
   rootPublishesLibrary: boolean,
-  dispatchContexts: import("../runtime/dispatch-contexts.js").RustDispatchContextCatalog,
+  dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextCatalog,
 ): RustAnalysisContext {
   const ast = input.source.ast;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = input.source.sourceFiles;

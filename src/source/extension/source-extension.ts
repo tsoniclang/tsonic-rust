@@ -14,7 +14,7 @@ import {
 import {
   rustLifetimeTypeDeclarations,
   rustReferenceOperationDeclarations,
-} from "../semantics/declarations/index.js";
+} from "./declarations/index.js";
 import {
   rustLangModule,
   rustConstPointerExport,
@@ -24,7 +24,7 @@ import {
   rustSourceTypeExportIds,
   rustSourceVirtualModulesProviderId,
   rustTypesModule,
-} from "../semantics/identity.js";
+} from "./identity.js";
 import { rustSourceSemanticsModules } from "../profiles/source-modules.js";
 
 export {

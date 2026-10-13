@@ -15,8 +15,8 @@ import {
   operatorPrecedence,
   RustPrecedence,
 } from "./precedence.js";
-import type { RustExpr } from "../../../backend/target-ast/nodes.js";
-import { rustStringConcatenationParts } from "../../../backend/target-ast/expressions.js";
+import type { RustExpr } from "../../../backend/target-ast/syntax/nodes.js";
+import { rustStringConcatenationParts } from "../../../backend/target-ast/syntax/expressions.js";
 
 export function printRustExpr(expression: RustExpr): string {
   switch (expression.kind) {
@@ -244,7 +244,7 @@ function printRustBlockExpressionContents(
 }
 
 function printBlockExpression(
-  block: import("../../../backend/target-ast/nodes.js").RustBlock,
+  block: import("../../../backend/target-ast/syntax/nodes.js").RustBlock,
 ): string {
   const body = printRustBlockStatements(block, 1);
   return body.length === 0 ? "{}" : `{\n${body}\n}`;

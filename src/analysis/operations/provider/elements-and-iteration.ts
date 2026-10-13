@@ -4,7 +4,7 @@ import {
   asNode,
   isProjectSourceDeclaration,
   resolveSelectedProviderDeclaration,
-} from "../../../policy/evidence/selected-source.js";
+} from "../../../policy/identities/selected-source.js";
 import {
   isRustCopyCarrier,
   getRustGeneratorProtocol,
@@ -40,7 +40,7 @@ import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperat
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
 import { rustRuntimeCarrierKey } from "../../../target-model/facts/selections.js";

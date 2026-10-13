@@ -1,12 +1,12 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
-import { rustDeriveAttributes } from "../../target-ast/attributes.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
 import type { RustClassValueDefinition } from "../../../analysis/objects/class-values.js";
 import { rustSourceBindingFactKey } from "../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustSourceBindingPath, sourceModuleItemPath, rustSourceItemIsPubliclyReachable } from "../program/plan-context.js";
-import { emptyRustGenerics, type RustCallGenericArgument, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustCallGenericArgument, type RustExpr, type RustFunctionParam, type RustItem, type RustStructField } from "../../target-ast/syntax/nodes.js";
 import { isRustCopyCarrier, rustLocationTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics, rustProjectStateMarker } from "./polymorphism/names.js";

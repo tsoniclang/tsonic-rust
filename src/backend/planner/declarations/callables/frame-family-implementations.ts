@@ -1,6 +1,6 @@
 import type { RustFrameCallableTypes } from "../../types/frame-callables.js";
-import type { RustGenerics, RustItem, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustGenerics, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 
 export function planRustFrameCallableFamilyItems(
   types: RustFrameCallableTypes, independentType: RustType, generics: RustGenerics,

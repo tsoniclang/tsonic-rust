@@ -57,10 +57,10 @@ import { rustLocationCallbackCarrier } from "./location-callbacks.js";
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import {
   resolveRustTargetTypeRef,
-} from "../../policy/types/resolution.js";
+} from "../../policy/types/resolution/index.js";
 import type {
   RustTargetTypeResolutionOptions,
-} from "../../policy/types/resolution.js";
+} from "../../policy/types/resolution/index.js";
 import {
   selectRustTypedLocationSourceOperation,
 } from "../../policy/operations/typed-locations/source-typed-locations.js";

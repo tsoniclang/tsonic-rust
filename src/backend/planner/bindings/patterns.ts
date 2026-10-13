@@ -24,7 +24,7 @@ import {
   rustStructuralObjectCarrierValue,
   rustTupleTargetType,
 } from "../../../target-model/types/index.js";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import {
   createRustStructuralObjectFromCarrier,
   readRustStoredObjectField,

@@ -1,8 +1,8 @@
-import { rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
 import { planRustAuthoredStructScope } from "../../declarations/scoped-types.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustItem, RustStructField, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustItem, RustStructField, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustDefaultImplementation } from "../../declarations/default-implementation.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";

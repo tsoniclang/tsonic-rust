@@ -3,7 +3,7 @@ import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@ts
 import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustAssignmentOperationPlan } from "./core.js";
-import type { RustStmt } from "../../target-ast/nodes.js";
+import type { RustStmt } from "../../target-ast/syntax/nodes.js";
 import { planExpression } from "../expressions/entry.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCompoundAssignmentValue } from "./assignments.js";

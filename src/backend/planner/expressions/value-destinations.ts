@@ -3,7 +3,7 @@ import type { RustNativeStorageSelection } from "../../../analysis/callables/nat
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { planExpression } from "./entry.js";
 import { rustSourceCallableReturnFactKey } from "../../../analysis/facts/keys.js";
 

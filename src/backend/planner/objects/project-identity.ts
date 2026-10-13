@@ -1,6 +1,6 @@
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
-import type { RustExpr, RustGenerics, RustItem, RustType } from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
+import type { RustExpr, RustGenerics, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import { planCheckedNativeProjectionImplementation } from "./checked-project-projections.js";
 import { rustProjectObjectStateField } from "./project-objects.js";
 

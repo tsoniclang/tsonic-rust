@@ -3,8 +3,8 @@ import test from "node:test";
 import { rustNameNeedsStyleAllowance } from "../../../../dist/backend/target-ast/normalization/authored-names.js";
 import { finalizeRustSourceStyle } from "../../../../dist/backend/target-ast/normalization/source-style.js";
 import { rustLintAttributes } from "../../../../dist/backend/target-ast/normalization/lint-policy.js";
-import { rustListAttribute, rustWordAttribute } from "../../../../dist/backend/target-ast/attributes.js";
-import { emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
+import { rustListAttribute, rustWordAttribute } from "../../../../dist/backend/target-ast/syntax/attributes.js";
+import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { printRustSourceFile } from "../../../../dist/print/source/items.js";
 
 test("native naming rules preserve Unicode, raw spellings and unmodified conforming names", () => {

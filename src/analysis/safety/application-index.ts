@@ -14,7 +14,7 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import {
   readRustSourceSafetyBuilder,
   readRustSourceUnsafeContext,
-} from "../../policy/safety/source-explicit-safety.js";
+} from "../../policy/operations/safety/source-explicit-safety.js";
 
 export interface RustSafetyApplicationFactIndex {
   readonly all: readonly RustSafetyApplication[];

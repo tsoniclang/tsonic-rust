@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustDeriveAttributes, rustHiddenAttribute, rustListAttribute, rustValueAttribute, rustWordAttribute } from "../../../dist/backend/target-ast/attributes.js";
+import { rustDeriveAttributes, rustHiddenAttribute, rustListAttribute, rustValueAttribute, rustWordAttribute } from "../../../dist/backend/target-ast/syntax/attributes.js";
 import { printRustAttribute, printRustAttributes } from "../../../dist/print/source/attributes.js";
 
 test("generated layout and naming attributes preserve structured arguments and order", () => {

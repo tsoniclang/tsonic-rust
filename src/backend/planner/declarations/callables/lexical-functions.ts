@@ -3,7 +3,7 @@ import { rustBindingStorageFactKey } from "../../../../analysis/facts/keys.js";
 import { rustRetainedCallableStorage } from "../../../../analysis/facts/callable-results.js";
 import type { RustLexicalFunctionCapture, RustLexicalFunctionSelection } from "../../../../analysis/callables/lexical-functions.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustExpr, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
 import { planExpressionBeforeValueProjections } from "../../expressions/entry.js";
 import { planRustCaptureValue, planRustNonConsumingValue } from "../../expressions/typed-locations.js";

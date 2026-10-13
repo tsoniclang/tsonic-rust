@@ -3,8 +3,8 @@ import { countTsonicMemoryLayoutValues, selectTsonicRawLocationOperation } from 
 import type { TsonicMemoryLayoutFact, TsonicRawLocationSelection } from "@tsonic/source-core/facts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
 import { resolveRustFixedArrayTargetType } from "../../types/resolution/target.js";
 import { resolveProviderTypeIdentity, providerCarrierFromRelations } from "../../types/resolution/providers.js";
 import { selectRustProviderOperation, rustProviderOperationOwnerMatches } from "../provider-selection.js";

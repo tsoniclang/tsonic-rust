@@ -31,17 +31,17 @@ import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import {
   resolveRustTargetTypeRef,
   rustParameterLaneTargetType,
-} from "../types/resolution.js";
+} from "../types/resolution/index.js";
 import type {
   RustTargetTypeResolutionContext,
   RustTargetTypeResolutionOptions,
-} from "../types/resolution.js";
+} from "../types/resolution/index.js";
 import {
   Node_Initializer,
   Node_Expression,
   Node_Type,
 } from "@tsonic/target-api/source";
-import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../evidence/selected-source.js";
+import { resolveSelectedProviderDeclaration, resolveSelectedSourceProfileMember } from "../identities/selected-source.js";
 import { selectRustProviderOperation } from "../operations/provider-selection.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../operations/source-profiles/js/index.js";
 import { rustProviderArgumentBorrowsString } from "./provider-argument-borrow.js";

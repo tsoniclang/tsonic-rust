@@ -1,10 +1,10 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPackageFallibleBoundary } from "../program/fallible-boundaries.js";
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput, rustActiveErrorType, rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

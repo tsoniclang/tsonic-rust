@@ -4,7 +4,7 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
 import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../../policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../../policy/types/model/type-family-normalization.js";
 import { resolveRustTypeFamilyApplication } from "../../../policy/types/resolution/type-families.js";
 import { bindRustSourceGenericArguments } from "../../../policy/types/resolution/generic-arguments.js";
 import type { RustTargetTypeResolutionContext } from "../../../policy/types/resolution/model.js";

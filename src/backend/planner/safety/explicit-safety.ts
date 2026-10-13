@@ -1,4 +1,4 @@
-import { type RustAttribute } from "../../target-ast/attributes.js";
+import { type RustAttribute } from "../../target-ast/syntax/attributes.js";
 import type {
   Node,
   SourceFile,
@@ -13,7 +13,7 @@ import type {
 } from "../context.js";
 import type {
   RustExpr,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type {
   RustPlanContext,

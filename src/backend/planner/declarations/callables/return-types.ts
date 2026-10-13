@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustGeneratorFact } from "../../../../analysis/facts/keys.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustType } from "../../../target-ast/nodes.js";
+import type { RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustReturnTypeFromCarrierInContext, rustTypeFromCarrierInContext } from "../../types/render.js";
 

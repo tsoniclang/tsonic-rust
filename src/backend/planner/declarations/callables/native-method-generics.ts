@@ -4,7 +4,7 @@ import { rustTargetGenericReferences } from "../../../../target-model/types/carr
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 import { rustLifetimeKey } from "../../../../target-model/lifetimes/index.js";
-import type { RustGenerics, RustWherePredicate } from "../../../target-ast/nodes.js";
+import type { RustGenerics, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";

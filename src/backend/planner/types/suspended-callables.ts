@@ -1,5 +1,5 @@
 import type { RustSuspendedCallableImplementation } from "../../../analysis/callables/suspended-values.js";
-import type { RustType } from "../../target-ast/nodes.js";
+import type { RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "./render.js";
 import { rustTypeFromCarrierInContext } from "./render.js";
 import { rustLifetimeToAst } from "./lifetime-syntax.js";

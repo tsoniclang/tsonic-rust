@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";

@@ -4,7 +4,7 @@ import { rustNativeCallableProtocolResult } from "../../../../analysis/callables
 import { rustNativeFutureCallableResult } from "../../../../target-model/types/carriers/generic-callables.js";
 import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
 import { mapRustTargetTypes } from "../../../../target-model/types/carriers/substitution.js";
-import type { RustExpr, RustItem, RustStmt, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustItem, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";

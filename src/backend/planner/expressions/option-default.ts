@@ -1,4 +1,4 @@
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import type { RustPlanContext } from "../program/plan-context.js";

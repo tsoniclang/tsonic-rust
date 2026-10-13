@@ -6,7 +6,7 @@ import { rustStructuralGenericCarrier } from "../../../dist/analysis/objects/str
 import { retainRustStructuralInstantiation } from "../../../dist/policy/types/resolution/structural-instantiations.js";
 import { rustGenericsWithAssociatedBounds } from "../../../dist/backend/planner/types/generic-bounds.js";
 import { rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
-import { selectRustStructuralFieldProjection } from "../../../dist/policy/types/structural-fields.js";
+import { selectRustStructuralFieldProjection } from "../../../dist/policy/types/objects/structural-fields.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 

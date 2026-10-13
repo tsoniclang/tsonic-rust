@@ -8,7 +8,7 @@ import {
 } from "../../../target-model/types/index.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import {
   acceptSelectedCall,
   selectedCallReceiverValueCarrier,

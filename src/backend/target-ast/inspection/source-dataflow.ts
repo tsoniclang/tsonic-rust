@@ -1,4 +1,4 @@
-import type { RustExpr, RustStmt } from "../nodes.js";
+import type { RustExpr, RustStmt } from "../syntax/nodes.js";
 import {
   rustExpressionChildren,
   rustExpressionReferencesPath,

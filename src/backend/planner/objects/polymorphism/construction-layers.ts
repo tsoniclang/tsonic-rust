@@ -1,5 +1,5 @@
 import type { RustProjectConstructionPlan } from "../../../../analysis/project-types/construction-plan.js";
-import type { RustStmt } from "../../../target-ast/nodes.js";
+import type { RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters,
   type RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
 import type { RustConstructionBody } from "../../declarations/classes/construction-body.js";

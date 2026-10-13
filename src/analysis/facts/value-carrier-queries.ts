@@ -11,7 +11,7 @@ import { rustCompilerOwnedContextualConversionMatches, type RustContextualValueC
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type {
   RustAppliedValueCarrierReconciliation,
-} from "../../policy/types/value-carrier-reconciliation.js";
+} from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/types/value-projections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import {

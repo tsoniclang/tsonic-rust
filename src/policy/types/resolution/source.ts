@@ -27,7 +27,7 @@ import {
   rustUnitTargetType,
   rustVecTargetType,
 } from "../../../target-model/types/index.js";
-import { asNode } from "../../evidence/selected-source.js";
+import { asNode } from "../../identities/selected-source.js";
 import { denseDefined, resolveProjectSourceCarrier } from "./project.js";
 import { fieldFactKey, functionPointerFactKey, pointerFactKey, structFactKey } from "@tsonic/tsts";
 import { resolveRustSourceMarker } from "./markers.js";

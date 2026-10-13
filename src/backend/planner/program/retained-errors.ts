@@ -1,4 +1,4 @@
-import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustPattern, type RustType } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustExpr, type RustImplFunction, type RustItem, type RustPattern, type RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustErrorTransportPlan } from "./error-transport.js";
 import { planCheckedNativeProjectionImplementation } from "../objects/checked-project-projections.js";
 import { planRustErrorObjectFormatting } from "./error-formatting.js";

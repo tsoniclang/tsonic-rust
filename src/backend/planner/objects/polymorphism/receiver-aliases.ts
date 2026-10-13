@@ -1,9 +1,9 @@
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { cloneRustExpression as cloneExpression } from "../../../target-ast/expressions.js";
+import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import { cloneField } from "./model.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
 

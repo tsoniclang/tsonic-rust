@@ -40,7 +40,7 @@ import type {
   RustCallGenericArgument,
   RustExpr,
   RustGenericArgument,
-} from "../../target-ast/nodes.js";
+} from "../../target-ast/syntax/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
 import type { RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { RustPlanContext } from "../program/plan-context.js";

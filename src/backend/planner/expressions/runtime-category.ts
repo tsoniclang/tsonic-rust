@@ -1,7 +1,7 @@
 import { getRustTypeofRuntimeKind, type RustTypeofResult } from "../../../target-model/types/runtime-kind.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustUnionTypePathInContext } from "../types/render.js";

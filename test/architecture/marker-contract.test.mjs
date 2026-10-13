@@ -107,7 +107,7 @@ test("provider argument-flow markers remain neutral while Rust references are ex
     );
   }
 
-  const identity = source("src/source/semantics/identity.ts");
+  const identity = source("src/source/extension/identity.ts");
   assert.match(identity, /sharedReference:\s*"ref"/u);
   assert.match(identity, /mutableReference:\s*"mut"/u);
   assert.match(identity, /load:\s*"load"/u);

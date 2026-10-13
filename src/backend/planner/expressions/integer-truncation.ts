@@ -1,4 +1,4 @@
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustContextualValueConversionFact } from "../../../analysis/facts/keys.js";
 import { rustIntegerTruncationConversionMatches } from "../../../target-model/conversions/integer-truncation.js";

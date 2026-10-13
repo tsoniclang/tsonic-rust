@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { printRustClosureParams } from "../../../dist/print/source/expressions/closure-params.js";
 import { collapseRustForwardingClosure } from "../../../dist/backend/target-ast/normalization/forwarding-closures.js";
-import { tupleRustClosureArguments } from "../../../dist/backend/target-ast/expressions.js";
+import { tupleRustClosureArguments } from "../../../dist/backend/target-ast/syntax/expressions.js";
 
 test("native typed closure parameters preserve types, reference patterns and mutability", () => {
   assert.equal(printRustClosureParams([

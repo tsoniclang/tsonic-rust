@@ -3,7 +3,7 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
 import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
-import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtime/index.js";
+import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
 import { createRustPlanBuilder } from "../../../dist/analysis/facts/plan-store.js";
 import { recordFallibilityFacts } from "../../../dist/analysis/resources/fallibility.js";
 import { rustErrorEffectsEqual } from "../../../dist/analysis/facts/error-effects.js";

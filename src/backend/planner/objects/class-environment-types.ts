@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustType } from "../../target-ast/nodes.js";
+import type { RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { rustTargetGenericArgumentToAstInContext } from "../types/render.js";
 import { rustSourceTypeCarrierValue } from "../../../target-model/types/index.js";

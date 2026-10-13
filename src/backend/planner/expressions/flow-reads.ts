@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read-projections.js";
@@ -11,7 +11,7 @@ import {
   rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, rustCurrentErrorBoundary } from "../program/plan-context.js";

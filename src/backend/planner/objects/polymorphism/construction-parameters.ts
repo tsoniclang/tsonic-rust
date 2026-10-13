@@ -3,7 +3,7 @@ import { rustSourceParameterAbiFactKey } from "../../../../analysis/facts/keys.j
 import { rustTargetIdentifier } from "../../../../target-model/names/identifiers.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustCallableParameterPlan } from "../../declarations/callables/parameters.js";
-import type { RustFunctionParam } from "../../../target-ast/nodes.js";
+import type { RustFunctionParam } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, type RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";

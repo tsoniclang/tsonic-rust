@@ -1,4 +1,4 @@
-import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
@@ -44,8 +44,8 @@ import type {
   RustItem,
   RustStmt,
   RustStructField,
-} from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+} from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -71,7 +71,7 @@ export interface PlannedProjectObjectField {
   readonly carrier: TargetTypeRef;
   readonly type: RustType;
   readonly storageType: RustType;
-  readonly visibility: import("../../../target-ast/nodes.js").RustVisibility;
+  readonly visibility: import("../../../target-ast/syntax/nodes.js").RustVisibility;
   readonly initializer?: Node;
 }
 

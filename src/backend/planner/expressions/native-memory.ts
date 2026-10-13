@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustNativeBackingKey, rustRawLocationPlanKey } from "../../../target-model/operations/native-memory.js";
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";

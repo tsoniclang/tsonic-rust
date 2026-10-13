@@ -1,10 +1,10 @@
-import { rustValueBlock } from "../../../dist/backend/target-ast/value-block.js";
-import { rustListAttribute, rustWordAttribute } from "../../../dist/backend/target-ast/attributes.js";
+import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
+import { rustListAttribute, rustWordAttribute } from "../../../dist/backend/target-ast/syntax/attributes.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { finalizeRustBlockLiveness } from "../../../dist/backend/target-ast/inspection/source-liveness.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
-import { cloneRustExpression } from "../../../dist/backend/target-ast/expressions.js";
+import { cloneRustExpression } from "../../../dist/backend/target-ast/syntax/expressions.js";
 
 test("exact native Clone receiver evidence removes only unnecessary binding mutability", () => {
   const owner = { kind: "path", path: "owner" };

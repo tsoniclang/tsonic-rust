@@ -1,14 +1,14 @@
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../policy/operations/contracts.js";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
-import type { RustTargetTypeResolutionOptions } from "../../policy/types/resolution.js";
+import type { RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNativeFlowTypeMembers } from "../../policy/types/resolution/native-flow-refinement.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
-import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
 import { rustFlowReadProjectionFactKey } from "../facts/keys.js";
 import { rustFlowReadProjectionMatches } from "../facts/flow-read-projections.js";

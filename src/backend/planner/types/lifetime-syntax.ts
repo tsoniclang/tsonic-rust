@@ -1,6 +1,6 @@
 import { rustLifetimeName } from "../../../target-model/lifetimes/index.js";
 import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
-import type { RustLifetime } from "../../target-ast/nodes.js";
+import type { RustLifetime } from "../../target-ast/syntax/nodes.js";
 
 export function rustLifetimeToAst(lifetime: RustLifetimeRef): RustLifetime {
   switch (lifetime.kind) {

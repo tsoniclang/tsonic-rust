@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { applyRustFoundationImports } from "../../../../dist/backend/planner/foundation/imports.js";
-import { createRustSourceFile } from "../../../../dist/backend/target-ast/nodes.js";
-import { rustValueAttribute } from "../../../../dist/backend/target-ast/attributes.js";
+import { createRustSourceFile } from "../../../../dist/backend/target-ast/syntax/nodes.js";
+import { rustValueAttribute } from "../../../../dist/backend/target-ast/syntax/attributes.js";
 
 function imports(value, options = {}) {
   const result = applyRustFoundationImports(createRustSourceFile([{

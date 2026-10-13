@@ -1,7 +1,7 @@
 import type { RustProjectTypeDefinition } from "../../../../target-model/types/project-types.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { projectFieldStoragePath, type ProjectClassStateLayer } from "./model.js";
 import { rustProjectRepresentationGenerics } from "./names.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import { isRustProgramErrorCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import type { RustProjectTypeTestPlan } from "../../../target-model/operations/type-tests.js";
 import type { RustFlowReadProjectionFact } from "../../../target-model/types/value-projections.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCurrentErrorBoundary } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";

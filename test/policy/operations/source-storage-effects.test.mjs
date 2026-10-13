@@ -9,9 +9,9 @@ import { createRustSourceProfileRegistry } from "../../../dist/analysis/facts/so
 import { rustJsSurfaceSourceProfileContributions, rustNativeSourceProfileContributions } from "../../../dist/source/profiles/declarations.js";
 import { createRustSourceProfileStorageEffects } from "../../../dist/policy/operations/source-profiles/source-storage-effects.js";
 import { rustPolicyNode } from "../../../dist/policy/model/context.js";
-import { resolveSelectedSourceProfileMember } from "../../../dist/policy/evidence/selected-source.js";
+import { resolveSelectedSourceProfileMember } from "../../../dist/policy/identities/selected-source.js";
 import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
-import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/runtime/index.js";
+import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { nativeStorageOperationAuthoritySource, nativeStorageOperationFactSource, nativeStorageVirtualOperationSource } from "../../../../tsonic/test/fixtures/native-storage-operation-authority.mjs";
 

@@ -9,7 +9,7 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import type { RustClassEnvironment } from "./class-environments.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { rustClassValueFactKey } from "../facts/class-values.js";
 import type { RustAnalysisContext } from "../program/context.js";

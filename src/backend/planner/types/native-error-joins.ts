@@ -1,6 +1,6 @@
-import type { RustExpr, RustItem, RustPattern, RustType, RustVisibility } from "../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../target-ast/nodes.js";
-import { rustDeriveAttributes } from "../../target-ast/attributes.js";
+import type { RustExpr, RustItem, RustPattern, RustType, RustVisibility } from "../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
+import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { isValidRustIdentifier } from "../../../target-model/names/identifiers.js";
 import { rustTypeIsLegalInPosition } from "./type-observations.js";

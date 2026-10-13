@@ -4,7 +4,7 @@ import { isRustAbsenceCarrier, isRustOptionCarrier } from "../../../target-model
 import { rustUnionPayloadAdmission } from "../../../target-model/conversions/union-injection.js";
 import { rustAbsenceTargetType } from "../../../target-model/types/carriers/native.js";
 import { planRustUnionConstruction } from "./union-patterns.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../types/render.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustOptionTargetType, rustOptionElementCarrier, isRustJsValueCarrier } from "../../../target-model/types/index.js";

@@ -1,6 +1,6 @@
 import type { RustNativeCompletionFuture } from "../../../../target-model/types/callable-completions.js";
 import { rustJsPromiseTargetId } from "../../../../target-model/types/carriers/source-types.js";
-import type { RustTypeBound } from "../../../target-ast/nodes.js";
+import type { RustTypeBound } from "../../../target-ast/syntax/nodes.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 
 export function rustNativeCompletionErrorBounds(future: RustNativeCompletionFuture): readonly RustTypeBound[] {

@@ -19,8 +19,8 @@ import type {
   RustItem,
   RustStructField,
   RustType,
-} from "../../../target-ast/nodes.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+} from "../../../target-ast/syntax/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustObjectLiteralAccessorImplementationPlan, RustObjectLiteralImplementationPlan, RustObjectLiteralMethodDispatchPlan, RustObjectLiteralMethodImplementationPlan, RustObjectLiteralMethodOverridePlan, RustRecordLiteralFact } from "./model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";

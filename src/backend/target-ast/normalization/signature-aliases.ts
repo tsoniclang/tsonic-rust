@@ -1,4 +1,4 @@
-import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustTraitFunction, RustType, RustTypeBound, RustVisibility } from "../nodes.js";
+import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustTraitFunction, RustType, RustTypeBound, RustVisibility } from "../syntax/nodes.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 

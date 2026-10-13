@@ -1,5 +1,5 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
-import { cloneRustExpression as cloneExpression } from "../../target-ast/expressions.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
+import { cloneRustExpression as cloneExpression } from "../../target-ast/syntax/expressions.js";
 import type { Node } from "@tsonic/tsts";
 import { rustCapturedFieldStorage } from "./captured-fields.js";
 import { planRustProjectFieldDispatchRole, planRustProjectFieldDispatchRoles } from "./project-field-dispatch.js";
@@ -7,7 +7,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustNativeMemoryCall } from "../expressions/native-memory.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
-import type { RustExpr, RustCallGenericArgument } from "../../target-ast/nodes.js";
+import type { RustExpr, RustCallGenericArgument } from "../../target-ast/syntax/nodes.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";

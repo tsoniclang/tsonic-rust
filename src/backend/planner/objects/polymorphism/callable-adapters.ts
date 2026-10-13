@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustCallableParameterAbi } from "../../../../analysis/facts/callable-adapters.js";
 import { rustProjectCallableAdaptersKey } from "../../../../analysis/facts/project-callable-adapters.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
-import type { RustExpr, RustFunctionParam, RustImplFunction, RustStmt, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustFunctionParam, RustImplFunction, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { applyRustCallableValueAdapter } from "../../declarations/callables/adapters.js";
 import { planRustCallableArguments } from "../../declarations/callables/parameter-adapters.js";

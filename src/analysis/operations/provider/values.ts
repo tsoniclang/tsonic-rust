@@ -1,9 +1,9 @@
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
-import { resolveSelectedProviderDeclaration } from "../../../policy/evidence/selected-source.js";
+import { resolveSelectedProviderDeclaration } from "../../../policy/identities/selected-source.js";
 import { mapProviderCheckedOperation } from "./conversions.js";
 import { rejectSelectedOperation } from "./result.js";
 import { selectRustProviderExport } from "../../../policy/operations/provider-selection.js";
-import { selectedRustProviderGlobal } from "../../../policy/evidence/provider-globals.js";
+import { selectedRustProviderGlobal } from "../../../policy/identities/provider-globals.js";
 import type {
   RustCheckedValueSelectionInput,
   RustCheckedValueSelectionResult,

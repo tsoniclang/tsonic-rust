@@ -1,4 +1,4 @@
-import { emptyRustGenerics, type RustGenerics, type RustItem, type RustType } from "../../target-ast/nodes.js";
+import { emptyRustGenerics, type RustGenerics, type RustItem, type RustType } from "../../target-ast/syntax/nodes.js";
 
 export function planRustErrorObjectFormatting(type: RustType, generics: RustGenerics): readonly RustItem[] {
   return [{ kind: "impl", generics, target: type, trait: { kind: "named", path: "core::fmt::Display" },

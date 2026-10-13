@@ -5,7 +5,7 @@ import { rustTargetOperationText } from "../../../analysis/facts/target-operatio
 import { isRustNeverCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";

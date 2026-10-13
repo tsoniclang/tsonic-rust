@@ -12,7 +12,7 @@ import {
 } from "../../../dist/backend/planner/project/cargo.js";
 import {
   analyzeRustRuntimeReferences,
-} from "../../../dist/analysis/runtime/index.js";
+} from "../../../dist/analysis/project/index.js";
 import { printCargoManifest } from "../../../dist/print/project/manifest.js";
 import {
   fakeCompileInput,

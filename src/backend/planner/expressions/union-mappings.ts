@@ -5,7 +5,7 @@ import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../target-mod
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustUnionPattern, planRustUnionConstruction } from "./union-patterns.js";
 

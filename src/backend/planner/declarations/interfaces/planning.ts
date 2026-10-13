@@ -1,4 +1,4 @@
-import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/attributes.js";
+import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
 import { carrierOf } from "../classes/planning.js";
 import { diagnosticInput, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredFieldDeadCodeDisposition, rustGeneratedProjectInterfaceFieldDeadCodeDisposition, rustProjectInterfaceDeadCodeDisposition } from "../../liveness/directives.js";
@@ -10,7 +10,7 @@ import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } fro
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "../classes/planning.js";
-import type { RustItem, RustStructField } from "../../../target-ast/nodes.js";
+import type { RustItem, RustStructField } from "../../../target-ast/syntax/nodes.js";
 import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../../objects/project-storage-abi.js";

@@ -1,4 +1,4 @@
-import type { RustSelectedSourceMemberIdentity } from "../../evidence/selected-source.js";
+import type { RustSelectedSourceMemberIdentity } from "../../identities/selected-source.js";
 import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceErrorConstructors } from "../../../target-model/identities/source-errors.js";

@@ -10,7 +10,7 @@ import {
 } from "../../../../target-model/types/index.js";
 import { finalizeRustProviderOperationAbi } from "../../../facts/finalized-operation-abi.js";
 import { rustIndexedLocationContract } from "../../../facts/indexed-location.js";
-import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/types/provider-generic-requirements.js";
+import { rustProviderOperationGenericRequirementsAreSelectable } from "../../../../policy/constraints/provider-generic-requirements.js";
 import {
   rustTargetGenericArgumentEquals,
   rustTargetTypeRefEquals,

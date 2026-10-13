@@ -12,7 +12,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../facts/source-profile-registry.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
-import { rustProjectGenericParameters } from "../../policy/types/project-generic-contract.js";
+import { rustProjectGenericParameters } from "../../policy/types/project/project-generic-contract.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   KindExportAssignment,
@@ -26,8 +26,8 @@ import { recordFunctionSignatureFacts, recordNestedCallableTypeSignatureFacts, r
 import { recordFutureValueFacts, recordResourceManagementFacts } from "../resources/suspension.js";
 import { recordRustDeferredProducerEffects } from "../resources/deferred-producer-effects.js";
 import { recordRustObjectLiteralMethodAdapterFacts } from "../objects/method-adapters.js";
-import { resolveRustExternalProjectBase } from "../../policy/types/external-project-types.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustFactWalk } from "./walk.js";
@@ -42,9 +42,9 @@ import { collectRustMutableProjectStorageRequirements } from "../project-types/m
 import { rustCompileTimeSourceKey } from "../../target-model/facts/source-declarations.js";
 import { recordRustNativeBacking } from "../operations/native-memory.js";
 import { collectRustThrownClassDeclarations } from "../resources/thrown-values.js";
-import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
+import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/type-family-normalization.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
 import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";

@@ -9,7 +9,7 @@ import {
   selectedRustRegExpReplacementCallbackEvidence,
 } from "../regexp-replacement-callback.js";
 import { rejectSelectedOperation } from "../result.js";
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
 import { rustTargetOperationFactKey } from "../../../facts/keys.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -32,7 +32,7 @@ import type {
 } from "../../../../target-model/types/model.js";
 import type { RustRegExpReplacementCallbackContract } from "../regexp-replacement-callback.js";
 import { rustJsStringTargetType, rustStringTargetType, rustOptionElementCarrier } from "../../../../target-model/types/index.js";
-import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 
 export interface RustPreparedDeferredCheckedCall {
   readonly sourceName: string;

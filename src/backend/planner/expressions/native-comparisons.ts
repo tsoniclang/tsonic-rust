@@ -1,8 +1,8 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { isRustBoolCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
-import { negateRustBooleanExpression, rustBooleanLiteralComparison } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustBooleanLiteralComparison } from "../../target-ast/syntax/expressions.js";
 import { effectivePlannedExpressionCarrier, rustPartialOrderingTest } from "./fundamentals.js";
 
 export function planEmptyStringComparison(

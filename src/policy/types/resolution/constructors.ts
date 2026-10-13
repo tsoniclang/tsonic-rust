@@ -1,6 +1,6 @@
 import type { TypeSignatureInfo, Type } from "@tsonic/tsts";
 import { sourceCallableParameterEvidence } from "@tsonic/target-api/source";
-import type { RustSourceObjectShape } from "../source-type-registry.js";
+import type { RustSourceObjectShape } from "../model/source-type-registry.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { rustCallableProtocol } from "../../../target-model/types/carriers/callables.js";

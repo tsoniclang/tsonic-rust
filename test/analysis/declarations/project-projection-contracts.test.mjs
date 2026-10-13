@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { hasRustProjectProjection, selectRustProjectProjection, selectRustProjectProjectionImplementation } from "../../../dist/policy/types/project-projections.js";
+import { hasRustProjectProjection, selectRustProjectProjection, selectRustProjectProjectionImplementation } from "../../../dist/policy/types/project/project-projections.js";
 import { classifyCarrierRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { createRustProjectProjectionRequirementCollector, createRustProjectProjectionImplementationIndex } from "../../../dist/analysis/declarations/project-projection-requirements.js";

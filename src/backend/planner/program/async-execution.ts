@@ -1,5 +1,5 @@
-import type { RustBinaryHookPlan } from "../../../analysis/runtime/hooks.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustBinaryHookPlan } from "../../../analysis/project/hooks.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 
 export function planRustAsyncExecution(
   execution: RustExpr,

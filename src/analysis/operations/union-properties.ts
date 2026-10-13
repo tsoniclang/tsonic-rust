@@ -4,7 +4,7 @@ import type { RustCheckedPropertySelectionInput, RustOperationPolicyContext, Rus
 import type { RustOperationsProviderOptions } from "./provider/model.js";
 import type { RustTargetOperationFact } from "../facts/keys.js";
 import { selectRustGuardedValueMembers } from "./native-flow-refinement.js";
-import { resolveSelectedSourceProfilePropertyMembers } from "../../policy/evidence/selected-source.js";
+import { resolveSelectedSourceProfilePropertyMembers } from "../../policy/identities/selected-source.js";
 import { selectJsSurfaceOperation } from "../../policy/operations/source-profiles/js/index.js";
 import { finalizeProviderOperationFromSubjects } from "./provider/conversions.js";
 import { acceptRustMemberOperation, rejectSelectedOperation } from "./provider/result.js";

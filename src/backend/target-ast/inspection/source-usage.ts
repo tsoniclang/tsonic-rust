@@ -1,4 +1,4 @@
-import type { RustBlock, RustExpr, RustPattern, RustStmt } from "../nodes.js";
+import type { RustBlock, RustExpr, RustPattern, RustStmt } from "../syntax/nodes.js";
 
 export function rustBlockReferencesPath(block: RustBlock, path: string): boolean {
   return rustStatementsReferencePath(block.statements, path);

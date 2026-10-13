@@ -4,7 +4,7 @@ import { planRustNativeCallableProtocol } from "../../dist/backend/planner/decla
 import { planRustNativeProducerBridge } from "../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
 import { rustCallableTargetType, rustSourceUnionCarrierValue } from "../../dist/target-model/types/index.js";
-import { createRustSourceFile } from "../../dist/backend/target-ast/nodes.js";
+import { createRustSourceFile } from "../../dist/backend/target-ast/syntax/nodes.js";
 import { finalizeRustSourceStyle } from "../../dist/backend/target-ast/normalization/source-style.js";
 import { printRustSourceFile } from "./printed-rust-source.mjs";
 

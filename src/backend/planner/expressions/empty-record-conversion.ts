@@ -1,6 +1,6 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustEmptyObjectTargetId } from "../../../target-model/types/index.js";
 import { rustEmptyRecordConversionMatches, type RustEmptyRecordConversion } from "../../../target-model/conversions/empty-record.js";

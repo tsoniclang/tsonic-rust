@@ -239,7 +239,7 @@ test("project downcasts use closed routes and restrict checked Any to native out
 });
 
 test("Cargo registry patches require explicit runtime-reference provenance", () => {
-  const analysis = readFileSync(join(sourceRoot, "analysis/runtime/references.ts"), "utf8");
+  const analysis = readFileSync(join(sourceRoot, "analysis/project/references.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/project/manifest.ts"), "utf8");
   const runtimeReferences = readFileSync(
     join(sourceRoot, "providers/runtime/source-crates.ts"),
@@ -390,7 +390,7 @@ test("provider and library identity never flows through local-name recasing", ()
 
 test("source profile identity comes from the registered compiler SourceFile, never a path substring", () => {
   const identitySources = [
-    join(sourceRoot, "policy/evidence/selected-source.ts"),
+    join(sourceRoot, "policy/identities/selected-source.ts"),
     ...collectFiles(join(sourceRoot, "policy/types/resolution"), ".ts"),
   ];
   for (const path of identitySources) {
@@ -913,7 +913,7 @@ test("provider operation metadata contains only structured Rust forms", () => {
 });
 
 test("backend Rust AST exposes only fact-backed primitive numeric casts", () => {
-  const nodes = readFileSync(join(sourceRoot, "backend/target-ast/nodes.ts"), "utf8");
+  const nodes = readFileSync(join(sourceRoot, "backend/target-ast/syntax/nodes.ts"), "utf8");
   const printer = readFileSync(join(sourceRoot, "print/source/expressions/core.ts"), "utf8");
   assert.doesNotMatch(nodes, /readonly kind: "cast"/u);
   assert.match(nodes, /readonly kind: "numeric-cast"; readonly expression: RustExpr; readonly target: RustPrimitiveTypeName/u);

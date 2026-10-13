@@ -1,5 +1,5 @@
 import type { RustStructuralShapeDefinition } from "../../../analysis/objects/structural-shape-plan.js";
-import type { RustGenerics } from "../../target-ast/nodes.js";
+import type { RustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustAssociatedPredicates } from "../types/associated-bounds.js";

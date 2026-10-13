@@ -1,7 +1,7 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustComputedMemberFactKey, rustTargetOperationFactKey } from "../../../analysis/facts/operations/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";

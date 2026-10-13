@@ -4,7 +4,7 @@ import { rustSourceBindingFactKey, rustTargetOperationFactKey } from "../../../a
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { isRustCopyCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpression } from "../expressions/entry.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";

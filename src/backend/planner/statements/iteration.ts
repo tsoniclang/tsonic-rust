@@ -33,7 +33,7 @@ import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/final
 import { rustCompoundWriteFactKey } from "../../../analysis/facts/operations/keys.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustAssignmentOperationFact } from "./core.js";
-import type { RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 

@@ -2,7 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustProjectConstructionPlan } from "../../../../analysis/project-types/construction-plan.js";
 import { substituteRustTargetGenerics } from "../../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import type { RustExpr, RustStmt, RustType } from "../../../target-ast/nodes.js";
+import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planRustReceiverAlias } from "../../objects/polymorphism/receiver-aliases.js";

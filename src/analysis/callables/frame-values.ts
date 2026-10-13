@@ -9,7 +9,7 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
-import { rustCallableOrigin } from "../../policy/types/callable-origins.js";
+import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustBindingStorageFactKey, rustClosureCaptureFactKey, rustTargetOperationFactKey, type RustClosureCaptureFact } from "../facts/keys.js";
 import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";

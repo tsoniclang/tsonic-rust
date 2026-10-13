@@ -8,7 +8,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustOptionElementCarrier } from "../../../target-model/types/carriers/optional.js";
 import { rustFlowReadProjectionMatches } from "../../../analysis/facts/flow-read-projections.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustUnionMapping } from "./union-mappings.js";
 

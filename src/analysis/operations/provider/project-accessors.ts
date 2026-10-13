@@ -1,7 +1,7 @@
 import { Node_Type } from "@tsonic/target-api/source";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustOperationPolicyContext } from "../../../policy/operations/contracts.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceCallableReturnFactKey } from "../../facts/keys.js";
 import type { RustTargetOperationFact } from "../../facts/keys.js";

@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustClosureCaptureFact } from "../../../analysis/facts/operations/keys.js";
 import { rustClosureCaptureFactKey } from "../../../analysis/facts/operations/keys.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
@@ -14,7 +14,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { substituteRustTargetGenerics } from "../../../target-model/types/index.js";
 import { planExpression } from "./entry.js";
 import { checkRustDataWrite } from "../objects/data-writes.js";
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { planRustReceiverAlias } from "../objects/polymorphism/receiver-aliases.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 

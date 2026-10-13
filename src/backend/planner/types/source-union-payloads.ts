@@ -1,7 +1,7 @@
 import type { RustSourceUnionPayloadTemplate } from "../../../target-model/types/source-union-definitions.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustItem, RustGenerics, RustType } from "../../target-ast/nodes.js";
+import type { RustItem, RustGenerics, RustType } from "../../target-ast/syntax/nodes.js";
 
 export function planRustSourceUnionPayloadTemplate(
   template: RustSourceUnionPayloadTemplate,

@@ -1,5 +1,5 @@
 import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "./source-unions.js";
-import { asNode } from "../../evidence/selected-source.js";
+import { asNode } from "../../identities/selected-source.js";
 import { denseDefined } from "./project.js";
 import { resolveRustCallableEvidence } from "./source-evidence.js";
 import { resolveRustTargetType } from "./target.js";

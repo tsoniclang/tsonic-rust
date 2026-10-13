@@ -15,7 +15,7 @@ import {
 import { rustSourceItemIdentity } from "./source-package-facades.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 export { rustErrorType } from "./fallible-boundaries.js";
-import type { RustBlock, RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/nodes.js";
+import type { RustBlock, RustErrorDomain, RustExpr, RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import {
   isValidRustIdentifier,
   rustTargetIdentifier,
@@ -54,7 +54,7 @@ interface RustControlTargetBase {
 export type RustControlTarget =
   | (RustControlTargetBase & {
       readonly kind: "loop";
-      readonly continuePrelude: readonly import("../../target-ast/nodes.js").RustStmt[];
+      readonly continuePrelude: readonly import("../../target-ast/syntax/nodes.js").RustStmt[];
       readonly breakUsed: { value: boolean };
     })
   | (RustControlTargetBase & { readonly kind: "switch" | "label" });

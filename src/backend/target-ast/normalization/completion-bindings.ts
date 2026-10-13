@@ -1,4 +1,4 @@
-import type { RustBlock, RustStmt } from "../nodes.js";
+import type { RustBlock, RustStmt } from "../syntax/nodes.js";
 import { firstAccessesInStatements } from "../inspection/source-dataflow.js";
 import { rustBlockReferencesPath, rustStatementReferencesPath } from "../inspection/source-usage.js";
 

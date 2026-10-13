@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustFinalizedDispatchContextInput } from "../../../analysis/facts/finalized-operation-abi.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";

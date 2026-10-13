@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { cloneRustExpression } from "../../../target-ast/expressions.js";
+import { cloneRustExpression } from "../../../target-ast/syntax/expressions.js";
 import {
   Node_Initializer,
   Node_Type,
@@ -22,7 +22,7 @@ import type {
   RustExpr,
   RustFunctionParam,
   RustType,
-} from "../../../target-ast/nodes.js";
+} from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import {
   missingFactDiagnostic,

@@ -42,7 +42,7 @@ import {
   sourceIntegerInduction,
 } from "@tsonic/target-api/source";
 import { rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
-import { rustGenericCallableValueOwner } from "../../policy/types/callable-origins.js";
+import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 import {
   rustAsyncFunctionFactKey,
@@ -58,7 +58,7 @@ import { resolveRustDeclaredBindingStorage, recordBindingPatternFacts, recordCal
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustRuntimeCarrierKey } from "../../target-model/facts/selections.js";
 import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";

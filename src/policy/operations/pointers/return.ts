@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution.js";
-import { resolveRustTargetTypeRef } from "../../types/resolution.js";
+import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "../../types/resolution/index.js";
+import { resolveRustTargetTypeRef } from "../../types/resolution/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {

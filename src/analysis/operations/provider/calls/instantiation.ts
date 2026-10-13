@@ -11,9 +11,9 @@ import {
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { selectedRustCallSignature } from "./signatures.js";
-import { asNode } from "../../../../policy/evidence/selected-source.js";
+import { asNode } from "../../../../policy/identities/selected-source.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
-import { materializeRustOmittedCallArguments } from "./omitted-arguments.js";
+import { materializeRustOmittedCallArguments } from "../../../../policy/types/callables/omitted-arguments.js";
 import { isRustCVariadicArgumentCarrier } from "../../../facts/c-variadic.js";
 import {
   KindCallExpression,
@@ -22,9 +22,9 @@ import {
   sourceConstructorParametersMatch,
 } from "@tsonic/target-api/source";
 import { normalizeSelectedArgumentCarrier, rejectSelectedOperation } from "../result.js";
-import { selectRustValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../facts/value-carrier-queries.js";
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../../target-model/facts/selections.js";
 import { rustArgumentPassingMode } from "../../../facts/parameter-passing.js";
 import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../../target-model/types/index.js";
@@ -51,7 +51,7 @@ import type {
 } from "../../../../policy/operations/contracts.js";
 import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../facts/keys.js";
 import type { ProviderDeclarationIdentity } from "@tsonic/tsts";
-import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/value-carrier-reconciliation.js";
+import type { RustAppliedValueCarrierReconciliation } from "../../../../policy/types/resolution/value-carrier-reconciliation.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustOptionalCallGuard } from "./selection.js";
 import type {

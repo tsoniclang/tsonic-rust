@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { rustRawAddressPlanKey } from "../../../target-model/operations/raw-addresses.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustPrimitiveTypeName } from "../../../target-model/types/carriers/primitives.js";

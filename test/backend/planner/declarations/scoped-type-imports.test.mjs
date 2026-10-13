@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { emptyRustGenerics } from "../../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 import { completeRustAuthoredStructScopes } from "../../../../dist/backend/planner/declarations/scoped-types.js";
 
 test("hoisted authored type scopes import only selected enclosing bindings", () => {

@@ -14,7 +14,7 @@ import type {
   RustGenerics,
   RustType,
   RustTypeBound,
-} from "../../../target-ast/nodes.js";
+} from "../../../target-ast/syntax/nodes.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { sourceModuleItemPath } from "../../program/plan-context.js";

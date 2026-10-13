@@ -19,12 +19,12 @@ import { acceptRustPolicy, rejectRustPolicy } from "../../../policy/operations/c
 import {
   asNode,
   resolveSelectedSourceProfilePropertyMembers,
-} from "../../../policy/evidence/selected-source.js";
-import { selectRustFlowReadProjection } from "../../../policy/types/value-carrier-reconciliation.js";
+} from "../../../policy/identities/selected-source.js";
+import { selectRustFlowReadProjection } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 import { recordRustFlowReadProjection } from "../../facts/value-carrier-queries.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
 import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
@@ -34,7 +34,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { normalizeSelectedLiteralCarrier, sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";
 import { selectRustOptionalChain } from "../../../policy/operations/optional-chains.js";
-import { selectRustValueCarrierReconciliation } from "../../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { contextualConditionalArgumentMatches } from "./calls/contextual-conditionals.js";
 import type {
   RustCheckedElementSelectionInput,

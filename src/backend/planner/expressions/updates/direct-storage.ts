@@ -37,7 +37,7 @@ import type { Node, Symbol } from "@tsonic/tsts";
 import type {
   SourceDeclarationReference,
 } from "@tsonic/target-api/source";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type {
   RustFinalizedInputPlanOverrides,
 } from "../../project/provider-evaluation-scope.js";

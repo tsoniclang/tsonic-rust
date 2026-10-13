@@ -16,7 +16,7 @@ import {
   rustSourceParameterAbiFactKey,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 import { rustCapturedFieldStorageFactKey } from "../facts/receiver-captures.js";
 import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
@@ -33,8 +33,8 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
-import { closeRustSuspendedStorage } from "../../policy/types/suspended-storage.js";
+import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
+import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {

@@ -6,7 +6,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustProjectCallableAdaptersKey } from "../../../dist/analysis/facts/project-callable-adapters.js";
 import { selectRustCallableParameterAdapters } from "../../../dist/analysis/callables/adapters.js";
 import { planRootCallableForwarder } from "../../../dist/backend/planner/objects/polymorphism/callable-adapters.js";
-import { emptyRustGenerics } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { rustParameterTypeFromCarrierInContext, rustReturnTypeFromCarrierInContext } from "../../../dist/backend/planner/types/render.js";
 import { planRustCallableArguments } from "../../../dist/backend/planner/declarations/callables/parameter-adapters.js";
 

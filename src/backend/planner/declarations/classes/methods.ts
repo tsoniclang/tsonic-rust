@@ -34,14 +34,14 @@ import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import type { RustImplFunction, RustStmt } from "../../../target-ast/nodes.js";
+import type { RustImplFunction, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "../callables/async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import { rustClassEnvironmentParameter, rustClassMemberEnvironmentContext } from "../../objects/class-environments.js";
 import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
-import { emptyRustGenerics } from "../../../target-ast/nodes.js";
+import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 
 export function planProjectMethod(
@@ -379,7 +379,7 @@ export function planProjectMethod(
 
 function planDirectProjectMethodOverridePrelude(
   member: Node,
-  params: readonly import("../../../target-ast/nodes.js").RustFunctionParam[],
+  params: readonly import("../../../target-ast/syntax/nodes.js").RustFunctionParam[],
   syntheticNames: import("../../names/synthetic.js").RustSyntheticNameState,
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
@@ -487,8 +487,8 @@ export function planProjectStaticMethods(
 export function planProjectStaticFunctionItems(
   definition: RustProjectTypeDefinition,
   context: RustPlanContext,
-): readonly import("../../../target-ast/nodes.js").RustItem[] | undefined {
-  const items: import("../../../target-ast/nodes.js").RustItem[] = [];
+): readonly import("../../../target-ast/syntax/nodes.js").RustItem[] | undefined {
+  const items: import("../../../target-ast/syntax/nodes.js").RustItem[] = [];
   for (const member of projectOwnMethods(definition, context)) {
     const name = context.input.program.projectTypes.memberSlotName(member, "static");
     if (name === undefined) continue;

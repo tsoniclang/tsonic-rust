@@ -3,10 +3,10 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { rustTypeOnlyDeclarationFactKey } from "../../target-model/facts/type-only.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
-import { rustSourceTypeDeclarations } from "../../policy/types/source-declarations.js";
+import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { sourceCallableInterface, sourceInterfaceRepresentationBase } from "@tsonic/target-api/source";
 

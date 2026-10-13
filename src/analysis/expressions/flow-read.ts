@@ -20,11 +20,11 @@ import {
   rustRuntimeUnionContract,
   rustRuntimeUnionProjection,
 } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectRustFlowReadProjection } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustFlowReadProjection } from "../facts/value-carrier-queries.js";
 import { rustFlowReadProjectionFactKey, rustTargetOperationFactKey } from "../facts/keys.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -35,7 +35,7 @@ import { selectRustUnionArmMapping } from "../../target-model/types/union-relati
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { rustClosedValueCategoryProjection } from "../../target-model/types/carriers/closed-values.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
-import { selectRustClosedArrayView } from "../../policy/types/closed-array-views.js";
+import { selectRustClosedArrayView } from "../../policy/types/collections/closed-array-views.js";
 import { selectRustGuardedValueMembers } from "../operations/native-flow-refinement.js";
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustRetainedErrorCarrier,
   isRustWritableSourceErrorCarrier, isRustWritableRetainedErrorCarrier, rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";

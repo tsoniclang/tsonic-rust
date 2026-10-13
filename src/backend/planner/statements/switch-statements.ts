@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { CaseBlock_Clauses, CaseOrDefaultClause_Expression, CaseOrDefaultClause_Statements,
   SwitchStatement_CaseBlock, SwitchStatement_Expression, KindCaseClause } from "@tsonic/target-api/source";
-import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/nodes.js";
+import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";

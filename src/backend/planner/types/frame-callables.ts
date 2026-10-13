@@ -1,7 +1,7 @@
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition } from "../../../analysis/callables/frame-values.js";
 import { rustFrameCallableValue } from "../../../target-model/types/carriers/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustType } from "../../target-ast/nodes.js";
+import type { RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustTypeRenderingContext } from "./render.js";
 import { rustTypeFromCarrierInContext } from "./render.js";
 import { rustProjectStateType } from "../objects/polymorphism/names.js";

@@ -20,9 +20,9 @@ import type { RustOperationsProviderOptions } from "../operations/provider/index
 import {
   isProjectSourceDeclaration,
   resolveSelectedProviderDeclaration,
-} from "../../policy/evidence/selected-source.js";
+} from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustProjectCallableTargetName } from "../facts/source-member-name.js";
 
 export interface RustProjectDisposerEffects {

@@ -6,7 +6,7 @@ import type { RustProviderOperationRow } from "../../providers/packages/model.js
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustRetainedErrorCarrier } from "../../target-model/types/carriers/source-error.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { selectedCallProviderDeclaration, resolveSelectedProviderDeclaration } from "../../policy/evidence/selected-source.js";
+import { selectedCallProviderDeclaration, resolveSelectedProviderDeclaration } from "../../policy/identities/selected-source.js";
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 
 export function createRustRetainedErrorDemandSelection(

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/nodes.js";
+import { emptyRustGenerics, createRustSourceFile } from "../../../dist/backend/target-ast/syntax/nodes.js";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { rustNativeFutureType } from "../../../dist/backend/planner/types/native-futures.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";

@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import {
   type SourceExpressionEffects,
@@ -20,7 +20,7 @@ import { providerSourceInputKey } from "../../../analysis/facts/provider-source-
 import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
 import { rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/facts/value-carrier-queries.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import {
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,

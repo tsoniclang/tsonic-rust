@@ -5,7 +5,7 @@ import type {
   RustOperationPolicyContext,
   RustPolicySelection,
 } from "../../policy/operations/contracts.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   isRustAbsenceCarrier,

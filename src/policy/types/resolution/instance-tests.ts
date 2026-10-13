@@ -4,7 +4,7 @@ import type { RustTargetTypeResolutionOptions } from "./model.js";
 import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { getRustTypeofRuntimeKind } from "../../../target-model/types/runtime-kind.js";
-import { resolveSelectedJsSourceExportName, resolveSelectedProviderDeclaration } from "../../evidence/selected-source.js";
+import { resolveSelectedJsSourceExportName, resolveSelectedProviderDeclaration } from "../../identities/selected-source.js";
 import { resolveRustConstructInstance } from "./constructors.js";
 
 export function resolveRustInstanceType(

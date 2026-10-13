@@ -4,13 +4,13 @@ import { rustTargetOperationFactKey } from "../../../analysis/facts/keys.js";
 import { rustBorrowPureOperation } from "../../../analysis/program/borrowed-element-purity.js";
 import { rustJsErrorTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
-import { rustBorrowedStringView } from "../../target-ast/expressions.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
+import { rustBorrowedStringView } from "../../target-ast/syntax/expressions.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 
 export function rustErrorFieldHasGuardedBorrow(node: Node, context: RustPlanContext): boolean {
   node = errorReadNode(node, context);

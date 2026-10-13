@@ -1,6 +1,6 @@
 import type { RustSourceCallableValueFact } from "../../../analysis/facts/keys.js";
 import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustClosureCaptureFactKey, rustFallibleFactKey } from "../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../target-ast/nodes.js";
+import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import {
@@ -15,7 +15,7 @@ import { rustUnitTargetType, rustCallableProtocol } from "../../../target-model/
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustLexicalFunctionArguments } from "../declarations/callables/lexical-functions.js";
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustGenericCallableValue } from "../../../target-model/types/carriers/generic-callables.js";
 import { planRustGenericCallableValue } from "./generic-callables.js";

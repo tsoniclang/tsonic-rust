@@ -1,7 +1,7 @@
 import { createImplementationPlan } from "./registry.js";
 import { rustTargetOperationFactKey } from "../../../../analysis/facts/keys.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/nodes.js";
+import type { RustFunctionParam, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "../../../../analysis/facts/keys.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";

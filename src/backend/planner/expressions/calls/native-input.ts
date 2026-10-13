@@ -3,7 +3,7 @@ import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustSourceCallEffectsFact } from "../../../../analysis/facts/keys.js";
 import type { RustNativeCallableCall, RustNativeCallableInput } from "../../../../analysis/callables/native-inputs.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
-import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/nodes.js";
+import type { RustCallGenericArgument, RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { rustPropagateNativeError } from "../../program/fallible-boundaries.js";

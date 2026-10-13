@@ -3,7 +3,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import { rustCapturedFieldStorageFactKey, validatedRustCapturedFieldStorageFact } from "../../../analysis/facts/receiver-captures.js";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustInlineBindingStorageType, rustBindingStorageOperations } from "../expressions/binding-storage.js";
 import type { RustValueFieldLocation } from "./value-fields.js";

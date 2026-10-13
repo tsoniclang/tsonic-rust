@@ -16,7 +16,7 @@ import { selectRustEquivalentAssignment } from "../../policy/operations/operator
 import {
   rustSourceOperationExportIds,
   rustSourceOperationSignatureIds,
-} from "../../source/semantics/identity.js";
+} from "../../source/extension/identity.js";
 import { readRustLanguageCall } from "./native-language-call.js";
 import type { Node, ProviderDeclarationIdentity, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";

@@ -2,7 +2,7 @@ import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@ts
 import type { Node } from "@tsonic/tsts";
 import { rustCompoundWriteFactKey } from "../../../../analysis/facts/operations/keys.js";
 import type { RustTargetOperationFact } from "../../../../analysis/facts/keys.js";
-import type { RustExpr } from "../../../target-ast/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { planRuntimeSetStatement } from "../../statements/iteration.js";
 import { planExpression } from "../entry.js";

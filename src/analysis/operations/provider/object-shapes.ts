@@ -8,11 +8,11 @@ import {
   selectedProjectConstructor,
   selectRustOptionalCallResult,
 } from "./calls/instantiation.js";
-import { asNode } from "../../../policy/evidence/selected-source.js";
+import { asNode } from "../../../policy/identities/selected-source.js";
 import { rustOptionElementCarrier, rustOptionTargetType } from "../../../target-model/types/index.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { rejectSelectedOperation } from "./result.js";
-import { resolveRustTargetTypeRef } from "../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustArgumentPassingKey, rustSelectedCallKey, rustSelectedOperationKey } from "../../../target-model/facts/selections.js";
 import { rustProjectCallableTargetName } from "../../facts/source-member-name.js";
 import { rustTargetOperationFactKey, rustOptionalChainFactKey } from "../../facts/keys.js";
@@ -20,7 +20,7 @@ import { rustCallableInvocationResult } from "../../facts/callable-results.js";
 import { rustClassConstructorInstance } from "../../../target-model/types/carriers/class-constructors.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
-import { rustProjectGenericContractCorrespondence } from "../../../policy/types/project-generic-contract.js";
+import { rustProjectGenericContractCorrespondence } from "../../../policy/types/project/project-generic-contract.js";
 import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./operators.js";
 import { selectedValueCarrier } from "../selected-values.js";
 import { selectedRustCallSignature } from "./calls/signatures.js";
@@ -44,7 +44,7 @@ import type { RustTargetOperationFact } from "../../facts/keys.js";
 import { selectRustPointerReturnCarrier } from "../../../policy/operations/pointers/return.js";
 import { resolveRustUnionMethodContracts, rustUnionMethodOwner, selectRustUnionMethods } from "./calls/union-methods.js";
 import { rustSourceUnionCarrierValue } from "../../../target-model/types/carriers/source-types.js";
-import { rustGenericCallableValueOwner } from "../../../policy/types/callable-origins.js";
+import { rustGenericCallableValueOwner } from "../../../policy/types/callables/callable-origins.js";
 import { selectRustRecordObjectCall } from "./records.js";
 import { selectRustSourceCallResult } from "../../../policy/types/resolution/call-results.js";
 import { resolveRustTypeComponentEvidence } from "../../../policy/types/resolution/source-evidence.js";

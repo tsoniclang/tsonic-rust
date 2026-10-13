@@ -38,9 +38,9 @@ import {
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { recordRustObjectReferenceView } from "./object-reference-views.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
-import { selectRustIntegerTruncationConversion } from "../../policy/types/integer-truncation.js";
+import { selectRustIntegerTruncationConversion } from "../../policy/conversions/integer-truncation.js";
 import { rustContextualValueConversionFactKey } from "../facts/value-projections.js";
-import { selectRustValueCarrierReconciliation } from "../../policy/types/value-carrier-reconciliation.js";
+import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation } from "../facts/value-carrier-queries.js";
 import {
   rustOptionalChainFactKey,
@@ -51,8 +51,8 @@ import {
   rustTargetOperationResultCarrier,
 } from "../facts/keys.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
-import { resolveRustTargetTypeRef } from "../../policy/types/resolution.js";
-import { selectedSourceLiteralIsRepresentable } from "../../policy/types/selected-numeric-literal.js";
+import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
+import { selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { selectProviderRecordArgument } from "../operations/provider/calls/record-arguments.js";
 import { selectRustExactIntegerConversion } from "../../target-model/conversions/exact-integer.js";
 import { selectRustGuardedIntegerConversion } from "../../policy/conversions/integer-refinement.js";

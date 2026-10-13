@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustCheckedCallSelectionInput, RustOperationPolicyContext } from "../../../../policy/operations/contracts.js";
-import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution.js";
+import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { selectRustPointerReturnCarrier } from "../../../../policy/operations/pointers/return.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustSourceUnionCarrierValue, substituteRustTargetGenerics } from "../../../../target-model/types/index.js";

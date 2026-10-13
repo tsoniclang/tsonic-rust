@@ -16,7 +16,7 @@ import {
 import {
   selectRustNativeTraitObjectUpcast,
   selectRustCallScopedLifetimeReconciliation,
-} from "../../dist/policy/types/value-carrier-reconciliation.js";
+} from "../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../dist/target-model/conversions/contextual.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/index.js";
 

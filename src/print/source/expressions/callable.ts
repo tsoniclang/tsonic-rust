@@ -3,7 +3,7 @@ import type {
   RustCallGenericArgument,
   RustExpr,
   RustType,
-} from "../../../backend/target-ast/nodes.js";
+} from "../../../backend/target-ast/syntax/nodes.js";
 
 type RustDirectCall = Extract<RustExpr, { readonly kind: "call" | "path" }>;
 type RustAssociatedCall = Extract<RustExpr, { readonly kind: "associated-call" }>;

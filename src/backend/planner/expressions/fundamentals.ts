@@ -1,4 +1,4 @@
-import { rustValueBlock } from "../../target-ast/value-block.js";
+import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import {
   KindBinaryExpression,
   sourceIntegerLiteralValue,
@@ -31,7 +31,7 @@ import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js
 import { rustTypeContainsImplTrait } from "../types/type-observations.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
@@ -42,7 +42,7 @@ import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion }
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/facts/finalized-operation-abi.js";
 import type { Node } from "@tsonic/tsts";
-import type { RustExpr, RustType } from "../../target-ast/nodes.js";
+import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustSelectedTargetOperation as TargetOperationFact, TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../../analysis/facts/keys.js";

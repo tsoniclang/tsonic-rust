@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { compileRust } from "./rust-session.mjs";
 import { createRustAnalysisContext } from "../../dist/analysis/program/context.js";
 import { analyzeRustProgram } from "../../dist/analysis/program/analyze.js";
-import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../dist/analysis/runtime/index.js";
+import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../dist/analysis/project/index.js";
 
 export function analyzeRustErrorEffects(text, options = {}) {
   let context;

@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, BinaryExpression_OperatorToken } from "@tsonic/target-api/source";
-import type { RustExpr, RustPattern } from "../../target-ast/nodes.js";
+import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustUnionEqualityArm } from "../../../target-model/operations/binary.js";
 import { isRustUnitCarrier } from "../../../target-model/types/carriers/js.js";
@@ -19,7 +19,7 @@ import { lowerNestedRustValueConversion } from "./value-conversions.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import { planRustOperatorCallExpression } from "./binary.js";
-import { negateRustBooleanExpression, rustBooleanLiteralComparison } from "../../target-ast/expressions.js";
+import { negateRustBooleanExpression, rustBooleanLiteralComparison } from "../../target-ast/syntax/expressions.js";
 
 export function planRustUnionEquality(
   node: Node,

@@ -6,7 +6,7 @@ import { rustBorrowedStringTypeParameterNames } from "../../../dist/analysis/ope
 import {
   mergeProviderDeclarationIdentities,
   resolveSelectedProviderDeclaration,
-} from "../../../dist/policy/evidence/selected-source.js";
+} from "../../../dist/policy/identities/selected-source.js";
 import { rustCallScopedElisionLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { selectRustCheckedOperator } from "../../../dist/analysis/operations/provider/operators.js";
 import { rustOptionTargetType, rustAbsenceTargetType } from "../../../dist/target-model/types/index.js";

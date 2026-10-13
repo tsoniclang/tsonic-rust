@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustGuardedValueCarrier } from "../../../dist/analysis/operations/native-flow-refinement.js";
-import { selectRustFlowReadProjection } from "../../../dist/policy/types/value-carrier-reconciliation.js";
+import { selectRustFlowReadProjection } from "../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
 import { rustFlowReadProjectionFactKey } from "../../../dist/analysis/facts/keys.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
