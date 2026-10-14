@@ -43,7 +43,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustStrTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpStringTargetType" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust str is a dynamically sized native string type and cannot be an ordinary sized by-value local. CLR System.String is a sized managed reference type; preserving native str is not the same contract as naming a CLR string reference." },
     frozen: false,
   },
   {
@@ -52,7 +52,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustBorrowedStrTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpStringTargetType" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust &'a str is a non-null borrow whose native type carries 'a; the opposite CLR string reference has no Rust borrow-lifetime parameter. The constructor must preserve the actual reference qualifier and lifetime." },
     frozen: false,
   },
   {
@@ -143,9 +143,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     id: "src/target-model/types/carriers/native.ts#rustFixedArrayTargetType",
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustFixedArrayTargetType" },
-    counterpart: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "csharpRuntimeNativeArrayTargetType" },
-    divergence: { register: "S11-03",
-      reason: "Rust fixed arrays retain a const length in the native type; CLR array/layout contracts have no equivalent type-level array length." },
+    counterpart: null,
     frozen: false,
   },
   {
@@ -154,7 +152,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/native-error-joins.ts", symbol: "rustNativeErrorJoinTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpRuntimeErrorTargetType" },
     divergence: { register: "S11-04",
-      reason: "Rust represents native error completion as an exact Result/error carrier; C# transports native exceptions through the CLR exception channel." },
+      reason: "A Rust Result<T, E> return needs one E type, so this existing closed join represents its distinct native error alternatives. CLR methods may throw several Exception subclasses without adding an error type parameter to the return signature." },
     frozen: false,
   },
   {
@@ -198,7 +196,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/substitution.ts", symbol: "substituteRustTargetGenerics" },
     counterpart: { module: "src/target-model/types/substitution.ts", symbol: "substituteTargetTypeParameters" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust native generic arguments include named lifetimes and const values as well as types. Their substitution must preserve those native argument kinds; CLR generic type arguments do not include Rust lifetime/const parameters. This is not a waiver for duplicating the target-neutral substitution owner." },
     frozen: false,
   },
   {
@@ -214,7 +212,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/primitives.ts", symbol: "rustSliceRefTargetType" },
     counterpart: { module: "src/target-model/types/carriers/collections.ts", symbol: "csharpReadOnlyListTargetType" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust &'a [T] is a shared borrow of an unsized slice, with a native lifetime and non-null reference. A CLR IReadOnlyList<T> interface reference does not carry that Rust borrow type or lifetime." },
     frozen: false,
   },
   {
@@ -223,7 +221,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/primitives.ts", symbol: "rustSliceMutRefTargetType" },
     counterpart: { module: "src/target-model/types/carriers/collections.ts", symbol: "csharpListTargetType" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust &'a mut [T] is an exclusive native slice borrow. CLR List<T> has no Rust mutable-borrow lifetime parameter; this explains the borrow qualifier, not a requirement to choose List<T> over another explicit native API." },
     frozen: false,
   },
   {
@@ -232,7 +230,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/primitives.ts", symbol: "rustFutureTargetType" },
     counterpart: { module: "src/target-model/types/carriers/delegates.ts", symbol: "csharpTaskTargetType" },
     divergence: { register: "S11-06",
-      reason: "Rust native completions have concrete Future output types; .NET uses its declared native Task/awaiter contract." },
+      reason: "Rust Future has an associated Output and is driven by poll; concrete async bodies may have unnamed native future types. The CLR Task<T>/awaiter contract is a nominal native type, not a Rust impl Future type." },
     frozen: true,
   },
   {
@@ -254,8 +252,6 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["target-named"],
     declaration: { module: "src/target-model/types/carriers/source-error.ts", symbol: "rustRetainedErrorTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpExceptionTargetType" },
-    divergence: { register: "S11-04",
-      reason: "Rust represents native error completion as an exact Result/error carrier; C# transports native exceptions through the CLR exception channel." },
     frozen: false,
   },
   {
@@ -263,8 +259,6 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["target-named"],
     declaration: { module: "src/target-model/types/carriers/source-error.ts", symbol: "rustWritableRetainedErrorTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpRuntimeErrorTargetType" },
-    divergence: { register: "S11-04",
-      reason: "Rust represents native error completion as an exact Result/error carrier; C# transports native exceptions through the CLR exception channel." },
     frozen: false,
   },
   {
@@ -272,8 +266,6 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["target-named"],
     declaration: { module: "src/target-model/types/carriers/source-error.ts", symbol: "rustSourceErrorTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpExceptionTargetType" },
-    divergence: { register: "S11-04",
-      reason: "Rust represents native error completion as an exact Result/error carrier; C# transports native exceptions through the CLR exception channel." },
     frozen: false,
   },
   {
@@ -281,8 +273,6 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["target-named"],
     declaration: { module: "src/target-model/types/carriers/source-error.ts", symbol: "rustWritableSourceErrorTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpRuntimeErrorTargetType" },
-    divergence: { register: "S11-04",
-      reason: "Rust represents native error completion as an exact Result/error carrier; C# transports native exceptions through the CLR exception channel." },
     frozen: false,
   },
   {
@@ -290,8 +280,6 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["target-named"],
     declaration: { module: "src/target-model/types/carriers/source-error.ts", symbol: "rustMutableJsErrorTargetType" },
     counterpart: { module: "src/target-model/types/carriers/scalar-types.ts", symbol: "csharpRuntimeErrorTargetType" },
-    divergence: { register: "S11-04",
-      reason: "Rust represents native error completion as an exact Result/error carrier; C# transports native exceptions through the CLR exception channel." },
     frozen: false,
   },
   {
@@ -299,8 +287,6 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["array", "associated-type", "closure", "function-pointer", "impl-trait", "opaque", "pointer", "reference", "slice", "source-primitive", "target-named", "target-specific", "trait-object", "trait-ref", "tuple", "type-parameter"],
     declaration: { module: "src/target-model/types/await.ts", symbol: "rustAwaitSelectionResultCarrier" },
     counterpart: { module: "src/target-model/types/carriers/delegates.ts", symbol: "csharpTaskTargetType" },
-    divergence: { register: "S11-06",
-      reason: "Rust native completions have concrete Future output types; .NET uses its declared native Task/awaiter contract." },
     frozen: false,
   },
   {
@@ -309,7 +295,7 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/lifetime-elision.ts", symbol: "instantiateRustElidedCallResult" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust lifetime elision can tie a returned native borrow to its sole input borrow. This operation instantiates that native lifetime relation; CLR type arguments cannot carry the named Rust lifetime. No alternate analysis/planner owner is justified." },
     frozen: false,
   },
   {
@@ -318,25 +304,21 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     declaration: { module: "src/target-model/types/carriers/lifetime-elision.ts", symbol: "substituteElidedLifetime" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust lifetime elision can tie a returned native borrow to its sole input borrow. This operation instantiates that native lifetime relation; CLR type arguments cannot carry the named Rust lifetime. No alternate analysis/planner owner is justified." },
     frozen: false,
   },
   {
     id: "src/target-model/types/carriers/indexed-fields.ts#rustIndexedFieldTrait",
     kinds: ["trait-ref"],
     declaration: { module: "src/target-model/types/carriers/indexed-fields.ts", symbol: "rustIndexedFieldTrait" },
-    counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
-    divergence: { register: "S11-03",
-      reason: "Rust expresses dependent indexed field types through native traits and associated-type projections; CLR metadata has no Rust associated-type item." },
+    counterpart: null,
     frozen: false,
   },
   {
     id: "src/target-model/types/carriers/indexed-fields.ts#rustIndexedFieldProjection",
     kinds: ["associated-type"],
     declaration: { module: "src/target-model/types/carriers/indexed-fields.ts", symbol: "rustIndexedFieldProjection" },
-    counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
-    divergence: { register: "S11-03",
-      reason: "Rust expresses dependent indexed field types through native traits and associated-type projections; CLR metadata has no Rust associated-type item." },
+    counterpart: null,
     frozen: false,
   },
   {

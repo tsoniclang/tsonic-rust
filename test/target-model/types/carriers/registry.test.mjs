@@ -8,6 +8,7 @@ import { rustFutureTargetType } from "../../../../dist/target-model/types/carrie
 import { rustJsPromiseTargetTypeWithLifetime, rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/projections.js";
 import { rustNativeFutureOutputType } from "../../../../dist/target-model/types/callable-completions.js";
+import { rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const current = await loadCarrierRegistry(root);
@@ -40,6 +41,10 @@ test("Rust registry is metadata only and preserves exact native arguments, quali
   assert.equal(pending.genericArguments[0].lifetime === lifetime, true);
   assert.equal(pending.genericArguments[1].type === value, true);
   assert.equal(rustFutureTargetType(value).genericArguments[0].type === value, true);
+  const input = rustCallableInputTargetType([], value, lifetime);
+  assert.equal(input.kind, "reference");
+  assert.equal(input.mutable, false);
+  assert.equal(input.lifetime === lifetime, true);
   const completion = current.rows.find(row => row.declaration.symbol === "rustNativeFutureOutputType");
   for (const ready of [false, true]) {
     const carrier = rustNativeFutureOutputType({ identity: "checked:completion", output: value, captures: [], ready });

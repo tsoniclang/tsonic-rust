@@ -106,7 +106,7 @@ export const jsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTypeRe
     declaration: { module: "src/target-model/types/carriers/js.ts", symbol: "rustJsPromiseTargetTypeWithLifetime" },
     counterpart: { module: "src/target-model/types/carriers/delegates.ts", symbol: "csharpTaskTargetType" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "The selected Rust JsPromise<'a, T, E> may retain a future that borrows for 'a; its native declaration requires that lifetime argument. The CLR Task<T> type has no Rust lifetime parameter. This is not approval for extra Promise families or per-producer JS errors." },
     frozen: false,
   },
   {

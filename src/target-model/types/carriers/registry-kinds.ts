@@ -22,7 +22,7 @@ export const kindsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTyp
     declaration: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust closure expressions have unique anonymous environment types and native Fn/FnMut/FnOnce call traits; CLR delegates use nominal signatures. This preserves the actual native call/ownership constraint, not an internal wrapper-family requirement." },
     frozen: false,
   },
   {
@@ -38,7 +38,7 @@ export const kindsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTyp
     declaration: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust impl Trait carries an opaque native return type with explicit trait bounds, outlives and capture arguments. CLR native signatures use named or generic types rather than Rust opaque-return lifetime bounds." },
     frozen: false,
   },
   {
@@ -61,7 +61,7 @@ export const kindsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTyp
     declaration: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust &'a T and &'a mut T require explicit native borrow qualifiers and lifetime relationships. CLR references/by-ref passing do not have Rust named lifetime type arguments; this is not a waiver for differing analysis owners." },
     frozen: false,
   },
   {
@@ -70,7 +70,7 @@ export const kindsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTyp
     declaration: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust [T] is a dynamically sized native type normally accessed behind a borrow or owning pointer. CLR T[] and Span<T> are different native types, not Rust's unsized slice type; the native slice and borrow qualifiers must remain exact." },
     frozen: false,
   },
   {
@@ -100,7 +100,7 @@ export const kindsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTyp
     declaration: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust dyn Trait + 'a is an unsized native trait-object type with object-safety and lifetime constraints. CLR interface references have no equivalent Rust trait-object lifetime type parameter." },
     frozen: false,
   },
   {
@@ -109,7 +109,7 @@ export const kindsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTyp
     declaration: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     divergence: { register: "S11-03",
-      reason: "Rust preserves native reference qualifiers, anonymous callable types and explicit lifetimes; CLR references and delegates have no corresponding Rust lifetime parameter." },
+      reason: "Rust native trait bounds may bind type/const arguments and associated-type equalities; CLR interface constraints do not expose Rust associated-type projection or borrow-lifetime syntax. These native constraints are preserved without creating a separate target-neutral owner." },
     frozen: false,
   },
   {
