@@ -72,6 +72,11 @@ test("sealed records publish only frozen typed family readers without a native k
     futureValue: () => model.futureValues.resolve(subject, () => undefined),
     resourceManagement: () => model.resourceManagementPlans.select(subject, {}, {}, () => undefined),
     deferredProducerEffects: () => model.deferredProducerChannels.finalize(new Map()),
+    nativeGuardResult: () => model.nativeGuardResults.resolve(subject, () => false),
+    nativeUnreachable: () => model.nativeUnreachableNodes.resolve(subject, () => true),
+    genericNumericOperands: () => model.genericNumerics.comparison(subject, carrier, carrier, undefined),
+    indexedFieldKeyArgument: () => model.indexedFieldKeys.bind({}, [], new Map(), () => false),
+    propertyProjection: () => model.propertyProjections.finalize(subject, undefined, []),
   };
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
@@ -96,23 +101,27 @@ test("sealed records publish only frozen typed family readers without a native k
   assert.throws(() => model.seal(), /only once/u);
 });
 
-test("scoped native records preserve false values, exact subjects and original conflict checks", () => {
+test("scoped guard producers preserve false, exact subjects and parent isolation without reselecting", () => {
   const parent = createModel();
   const subject = {};
-  parent.nativeGuardResult.set(subject, false);
+  parent.nativeGuardResults.resolve(subject, () => false);
   const inherited = parent.seal();
   const scoped = createRustProgramRecordBuilder(undefined, inherited);
   assert.equal(scoped.nativeGuardResult.get(subject), false, "false is present evidence");
   assert.equal(scoped.nativeGuardResult.get({}) === undefined, true, "equal-looking source is not the owner");
-  assert.doesNotThrow(() => scoped.nativeGuardResult.set(subject, false));
-  assert.throws(() => scoped.nativeGuardResult.set(subject, true), /Conflicting Rust semantic plan/u);
+  let reselections = 0;
+  for (const value of [false, true]) {
+    assert.equal(scoped.nativeGuardResults.resolve(subject, () => { reselections += 1; return value; }), false,
+      "a checked inherited guard is the canonical decision");
+  }
+  assert.equal(reselections, 0, "the producer does not recompute or replace inherited evidence");
   const specialized = {};
-  scoped.nativeGuardResult.set(specialized, true);
+  scoped.nativeGuardResults.resolve(specialized, () => true);
   assert.equal(inherited.nativeGuardResult.get(specialized) === undefined, true, "specialization cannot mutate its parent");
   const records = scoped.seal();
   assert.equal(records.nativeGuardResult.get(subject), false);
   assert.equal(records.nativeGuardResult.get(specialized), true);
-  assert.throws(() => scoped.nativeGuardResult.set(specialized, true), /after analysis is sealed/u);
+  assert.throws(() => scoped.nativeGuardResults.resolve(specialized, () => true), /after analysis is sealed/u);
 });
 
 test("every finalized contextual conversion family contributes its actual native foundation", () => {
