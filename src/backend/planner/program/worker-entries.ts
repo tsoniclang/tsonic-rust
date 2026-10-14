@@ -27,6 +27,7 @@ export interface RustWorkerEntryPlan {
   readonly asynchronous: boolean;
   readonly operandErrorType?: RustType;
   readonly nativeError: boolean;
+  readonly errorIdentity: string;
 }
 
 export interface RustWorkerEntryPlans {
@@ -95,17 +96,16 @@ export function planRustWorkerEntries(input: {
       ));
       continue;
     }
-    const componentErrorType: RustType = {
-      kind: "named",
-      path: componentErrorDomain.errorDomain === "runtime"
-        ? "tsonic_rust_runtime::TsonicError"
-        : `crate::${component.programModuleName}::TsonicError`,
-      identity: componentErrorDomain.errorTypeIdentity,
-    };
+    const selection = input.planning.program.errorRegions.initialization.workerFor(target.sourceFile);
+    if (selection === undefined) {
+      input.diagnostics.push(workerDiagnostic("RUST_WORKER_ENTRY_ERROR_REGION_MISSING",
+        "A worker initializer has no completed exact error composition.", target.sourceFile));
+      continue;
+    }
     const initializers = planRustModuleInitializers(
       input.planning,
       content.sources,
-      [target.sourceFile],
+      selection,
       input.packageInitializers,
       input.typeRenderingContextFor(component),
       input.diagnostics,
@@ -119,12 +119,17 @@ export function planRustWorkerEntries(input: {
     const baseName = `tsonic_worker_${identity.moduleSegments.join("_")}`;
     const functionName = allocateName(baseName, occupied);
     const initializer = planRustCrateInitializer(
+      selection,
       initializers,
       functionName,
-      { componentId: component.componentId, errorDomain: componentErrorDomain.errorDomain,
-        errorTypeIdentity: componentErrorDomain.errorTypeIdentity, errorTypePath: componentErrorType.path },
+      input.typeRenderingContextFor(component),
       occupied,
     );
+    if (selection.modules.length > 0 && initializer === undefined) {
+      input.diagnostics.push(workerDiagnostic("RUST_WORKER_ENTRY_ERROR_RECONSTRUCTION_MISSING",
+        "A completed worker error composition has no exact native reconstruction.", target.sourceFile));
+      continue;
+    }
     const emptyItem: RustItem = {
       kind: "function",
       name: functionName,
@@ -140,7 +145,7 @@ export function planRustWorkerEntries(input: {
     items.push(...selectedItems);
     itemsByComponentId.set(component.componentId, items);
 
-    const nativeError = initializer?.errorName !== undefined;
+    const nativeError = selection.error.kind === "native";
     const errorBoundary = initializer?.errorType === undefined || nativeError
       ? undefined
       : resolveRustSourcePackageErrorBoundary(
@@ -166,6 +171,7 @@ export function planRustWorkerEntries(input: {
         : `${component.crateName}::${functionName}`,
       asynchronous: initializer?.asynchronous === true,
       nativeError,
+      errorIdentity: target.fileName,
       ...(initializer?.errorType === undefined
         ? {}
         : {

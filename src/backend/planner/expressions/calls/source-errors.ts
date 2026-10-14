@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/source-error-effects.js";
 
-import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
@@ -17,22 +16,10 @@ export function planRustSourceErrorPropagation(
   expression: RustExpr,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const source = context.input.program.records.errorEffects.get(edge.declaration);
-  if (source === undefined || source.localErrors !== edge.effects.localErrors ||
-    source.nativeErrors.length !== edge.nativeErrors.length) return reject(node, context);
-  const channels = new Map(edge.nativeErrors.map(channel => [channel.source.identity, channel]));
-  if (channels.size !== edge.nativeErrors.length) return reject(node, context);
-  const instantiated = source.nativeErrors.map(selected => {
-    const channel = channels.get(selected.identity);
-    return channel === undefined || !rustTargetTypeRefEquals(selected.errorType, channel.source.errorType) ||
-      !edge.effects.nativeErrors.some(target => target.identity === channel.target.identity &&
-        rustTargetTypeRefEquals(target.errorType, channel.target.errorType))
-      ? undefined : { identity: selected.identity, errorType: channel.target.errorType };
-  });
-  if (instantiated.some(channel => channel === undefined) || edge.effects.nativeErrors.some(target =>
-    !edge.nativeErrors.some(channel => channel.target.identity === target.identity))) return reject(node, context);
-  const planned = planRustSelectedErrorRegion(edge.declaration, { localErrors: source.localErrors,
-    nativeErrors: instantiated as NonNullable<typeof instantiated[number]>[] }, context);
+  const selection = context.input.program.errorRegions.sourceFor(edge);
+  if (selection === undefined) return reject(node, context);
+  const channels = new Map(selection.channels.map(channel => [channel.sourceIdentity, channel]));
+  const planned = planRustSelectedErrorRegion(selection.operand, context);
   if (planned === undefined) return reject(node, context);
   const operand = planned.boundary;
   if (operand === undefined) return expression;
@@ -53,10 +40,10 @@ export function planRustSourceErrorPropagation(
       return rustInjectLocalError(active, imported);
     }
     const channel = channels.get(selected.identity);
-    if (channel !== undefined && rustTypeEquals(selected.errorType, { kind: "named", path: "core::convert::Infallible" }))
+    if (channel?.uninhabited === true)
       return { kind: "match", expression: payload, arms: [] };
     return channel === undefined ? undefined : rustInjectNativeError(active,
-      { identity: channel.target.identity, errorType: selected.errorType }, payload);
+      { identity: channel.targetIdentity, errorType: selected.errorType }, payload);
   }) ?? reject(node, context);
 }
 

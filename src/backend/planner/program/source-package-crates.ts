@@ -482,7 +482,7 @@ function planRustInitializerFacadeModule(
     .sort((left, right) => compareNames(left.facadeFunctionName, right.facadeFunctionName))) {
     const source = sourceByFile.get(contract.sourceFile);
     const initialization = source?.moduleInitialization;
-    const errorContractMatches = initialization?.errorEffects === contract.errorEffects;
+    const errorContractMatches = initialization?.errorRegion === contract.errorRegion;
     if (source === undefined || initialization === undefined ||
       initialization.functionName !== contract.implementationFunctionName ||
       initialization.asynchronous !== contract.asynchronous || !errorContractMatches) {

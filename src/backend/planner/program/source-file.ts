@@ -1,7 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { RustFallibleBoundary } from "./fallible-boundaries.js";
 import { planRustErrorRegion } from "./error-regions.js";
-import type { RustErrorEffectsFact } from "../../../target-model/records/error-effects.js";
+import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustNativeCallableProtocolItems } from "../declarations/callables/native-protocols.js";
@@ -96,7 +96,7 @@ export interface PlannedRustSourceFile {
   readonly moduleInitialization?: {
     readonly functionName: string;
     readonly asynchronous: boolean;
-    readonly errorEffects: RustErrorEffectsFact;
+    readonly errorRegion: RustErrorRegionSelection;
     readonly errorBoundary?: RustFallibleBoundary;
   };
 }
@@ -221,7 +221,7 @@ interface PlannedRustModuleItems {
   readonly initialization?: {
     readonly functionName: string;
     readonly asynchronous: boolean;
-    readonly errorEffects: RustErrorEffectsFact;
+    readonly errorRegion: RustErrorRegionSelection;
     readonly errorBoundary?: RustFallibleBoundary;
   };
 }
@@ -253,12 +253,10 @@ function planModuleItems(
     if (views === undefined) ensureTopLevelPlanningDiagnostic(context, declaration, diagnosticCount, "constructor-view");
     else items.push(...views);
   }
-  const asynchronous = context.input.program.sourceNavigation.moduleHasTopLevelAwait(
-    context.sourceFile,
-  );
-  const errorEffects = context.input.program.records.errorEffects.get(context.sourceFile);
+  const asynchronous = context.input.program.errorRegions.initialization.moduleFor(context.sourceFile)?.asynchronous === true;
+  const errorRegion = context.input.program.errorRegions.get(context.sourceFile);
   const region = planRustErrorRegion(context.sourceFile, context);
-  if (errorEffects === undefined || region === undefined) {
+  if (errorRegion === undefined || region === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, context.sourceFile),
       "rust.backend.module-initializer-error-boundary",
@@ -502,7 +500,7 @@ function planModuleItems(
   const initialization: NonNullable<PlannedRustModuleItems["initialization"]> = {
     functionName: initializationFunctionName,
     asynchronous,
-    errorEffects,
+    errorRegion,
     ...(errorBoundary === undefined ? {} : { errorBoundary }),
   };
   items.push({

@@ -1,7 +1,7 @@
 import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
-import { planRustNativeErrorJoin, type RustNativeErrorJoinSelection,
-  type RustNativeErrorJoinSource } from "../types/native-error-joins.js";
+import { planRustNativeErrorJoin, type RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
+import type { RustBinaryErrorSelection } from "../../../target-model/records/error-regions.js";
 
 export interface RustBinaryErrorPlan {
   readonly errorType: RustType;
@@ -12,13 +12,17 @@ export interface RustBinaryErrorPlan {
 }
 
 export function planRustBinaryErrors(
+  selection: RustBinaryErrorSelection,
   lifecycleType: RustType,
-  nativeSources: readonly RustNativeErrorJoinSource[] = [],
-  includeLifecycle = true,
+  nativeSources: readonly RustNativeErrorJoinSelection[] = [],
 ): RustBinaryErrorPlan {
-  const lifecycle = { identity: "lifecycle", variant: "Lifecycle", errorType: lifecycleType };
+  const lifecycle = { identity: "lifecycle", errorType: lifecycleType };
+  const nativeByIdentity = new Map(nativeSources.map(source => [source.identity, source.errorType]));
   const join = planRustNativeErrorJoin({ identity: "binary-startup-errors", name: "StartupErrors",
-    visibility: "private", sources: [...(includeLifecycle ? [lifecycle] : []), ...nativeSources] });
+    visibility: "private", sources: selection.sources.map(source => ({
+      identity: source.identity, variant: source.variant,
+      errorType: source.kind === "lifecycle" ? lifecycleType : nativeByIdentity.get(source.identity)!,
+    })) });
   if (join?.errorType === undefined) throw new Error("Binary startup requires a complete native error composition.");
   const propagate = (source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr => {
     const selected = join.propagate(source, result);
