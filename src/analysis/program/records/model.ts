@@ -26,6 +26,11 @@ import type { RustAwaitValueProducer } from "./await-value.js";
 import type { RustFutureValueProducer } from "./future-value.js";
 import type { RustResourceManagementProducer } from "./resource-management.js";
 import type { RustDeferredProducerEffectsProducer } from "./deferred-producer-effects.js";
+import type { RustNativeGuardResultProducer } from "./native-guard-result.js";
+import type { RustNativeUnreachableProducer } from "./native-unreachable.js";
+import type { RustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
+import type { RustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
+import type { RustPropertyProjectionProducer } from "./property-projection.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -36,7 +41,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "receiverIndependentMethod" | "classValue" | "objectLiteralMethodAdapter" | "projectCallableAdapters" | "objectReferenceView" |
   "awaitSourceErrorEffects" | "errorEffects" | "fallible" | "genericCallableInvocation" |
   "sourceAccessorEffects" | "sourceCallEffects" | "sourceErrorEffects" | "awaitValue" |
-  "futureValue" | "resourceManagement" | "deferredProducerEffects";
+  "futureValue" | "resourceManagement" | "deferredProducerEffects" |
+  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -66,6 +72,11 @@ export type RustProgramRecordWriter = {
   readonly futureValues: RustFutureValueProducer;
   readonly resourceManagementPlans: RustResourceManagementProducer;
   readonly deferredProducerChannels: RustDeferredProducerEffectsProducer;
+  readonly nativeGuardResults: RustNativeGuardResultProducer;
+  readonly nativeUnreachableNodes: RustNativeUnreachableProducer;
+  readonly genericNumerics: RustGenericNumericOperandsProducer;
+  readonly indexedFieldKeys: RustIndexedFieldKeyArgumentProducer;
+  readonly propertyProjections: RustPropertyProjectionProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

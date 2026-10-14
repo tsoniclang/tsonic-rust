@@ -4,7 +4,6 @@ import type { RustCheckedCallSelectionInput } from "../../policy/operations/cont
 import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustValueConversion } from "../../target-model/operations/model.js";
-import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionElementCarrier, rustJsValueTargetType } from "../../target-model/types/index.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -52,7 +51,7 @@ export function createRustPropertyProjectionSelector(
       if (types.isUnion(type)) pending.push(...types.unionOrIntersectionTypes(type));
       else sourceTypes.push(type);
     }
-    const conversion = selectRustProjectedValueConversion(carrier, "properties", context.typeDefinitions, source => {
+    const selectedConversion = selectRustProjectedValueConversion(carrier, "properties", context.typeDefinitions, source => {
       const rootCarrier = rustOptionElementCarrier(carrier) ?? carrier;
       const selected = rustTargetTypeRefEquals(rootCarrier, source) ? sourceTypes : sourceTypes.filter(type => {
         const resolved = resolveRustTargetTypeRef(type, context, options);
@@ -65,11 +64,8 @@ export function createRustPropertyProjectionSelector(
       cases.push(projection);
       return projection.conversion;
     });
-    if (conversion !== undefined) {
-      const previous = context.records.propertyProjection.get(argument.expression);
-      if (previous !== undefined && !closedMetadataEquals(previous.conversion, conversion)) return undefined;
-      if (previous === undefined) context.records.propertyProjection.set(argument.expression, Object.freeze({ conversion, cases: Object.freeze(cases) }));
-    }
+    const conversion = context.records.propertyProjections.finalize(argument.expression, selectedConversion, cases);
+    if (selectedConversion !== undefined && conversion === undefined) return undefined;
     cache.set(argumentIndex, conversion);
     return conversion;
   };
