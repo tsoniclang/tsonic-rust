@@ -1,0 +1,50 @@
+import type { Node } from "@tsonic/tsts";
+import type { RustFoundation } from "../../../target-model/foundation/model.js";
+import { maximumRustFoundation } from "../../../target-model/foundation/model.js";
+import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
+import type { RustSourceParameterAbiFact } from "../../../target-model/records/callables-and-resources.js";
+import type { RustRecordFamily } from "../../../target-model/records/program.js";
+import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import { rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
+import { rustFoundationForCarrier } from "../../foundation/requirements.js";
+import type { RustSourceParameterAbi } from "../../../policy/ownership/source-callable-abi.js";
+import { createRustRecordFamily } from "./family.js";
+
+export interface RustSourceParameterAbiProducer {
+  readonly records: RustRecordFamily<RustSourceParameterAbiFact>;
+  parameter(parameter: Node, selected: RustSourceParameterAbi): void;
+  use(expression: Node, source: Node): void;
+}
+
+export function createRustSourceParameterAbiProducer(
+  assertOpen: () => void,
+  requireFoundation: (foundation: RustFoundation) => void,
+  definitions: RustTypeDefinitions,
+  inherited?: RustRecordFamily<RustSourceParameterAbiFact>,
+): RustSourceParameterAbiProducer {
+  const family = createRustRecordFamily<RustSourceParameterAbiFact>({
+    id: "tsonic.rust.sourceParameterAbi", equals: closedMetadataEquals,
+  }, assertOpen, inherited, fact => {
+    const carriers = maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier),
+      rustFoundationForCarrier(fact.parameterCarrier));
+    requireFoundation(fact.entryConversion === undefined ? carriers : maximumRustFoundation(carriers,
+      rustFoundationForValueConversion(fact.entryConversion, definitions)));
+  });
+  return Object.freeze({
+    records: family.reader,
+    parameter(parameter: Node, selected: RustSourceParameterAbi): void {
+      assertOpen();
+      family.writer.set(parameter, Object.freeze({
+        form: selected.form, valueCarrier: selected.valueCarrier, parameterCarrier: selected.parameterCarrier,
+        mode: selected.mode,
+        ...(selected.inputLifetime === undefined ? {} : { inputLifetime: selected.inputLifetime }),
+        ...(selected.entryConversion === undefined ? {} : { entryConversion: selected.entryConversion }),
+      }));
+    },
+    use(expression: Node, source: Node): void {
+      assertOpen();
+      const selected = family.reader.get(source);
+      if (selected !== undefined) family.writer.set(expression, selected);
+    },
+  });
+}

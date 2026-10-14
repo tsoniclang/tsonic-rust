@@ -57,14 +57,14 @@ builder.compoundWrite.get(node);
 `);
   assert.equal(positive.status, 0, positive.diagnostics);
   const removedKeys = [
-    ["rustAsyncFunctionFactKey", "callables-and-resources"], ["rustYieldFactKey", "callables-and-resources"],
-    ["rustComputedMemberFactKey", "operation-selections"], ["rustCompoundWriteFactKey", "operation-selections"],
+    ["rustAsyncFunctionFactKey", "callables-and-resources", /Cannot find module/u], ["rustYieldFactKey", "callables-and-resources", /Cannot find module/u],
+    ["rustComputedMemberFactKey", "operation-selections", /has no exported member/u], ["rustCompoundWriteFactKey", "operation-selections", /has no exported member/u],
   ];
   const invalid = [
     ...["asyncFunction", "yield", "computedMember", "compoundWrite"].map(family =>
       [family, `builder.${family}.set(node, undefined);`, /Property 'set' does not exist/u]),
-    ...removedKeys.map(([key, module]) => [key,
-      `import { ${key} } from "${join(root, `dist/analysis/program/records/keys/${module}.js`)}";`, /has no exported member/u]),
+    ...removedKeys.map(([key, module, diagnostic]) => [key,
+      `import { ${key} } from "${join(root, `dist/analysis/program/records/keys/${module}.js`)}";`, diagnostic]),
     ["computed pure helper", `import { recordRustComputedMemberEvaluation } from "${join(root,
       "dist/analysis/operations/computed-members.js")}";`, /has no exported member/u],
     ["native foreign declaration", "builder.asyncFunctions.native({}, carrier);", /missing.*properties.*Node/u],

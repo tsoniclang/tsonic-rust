@@ -29,11 +29,10 @@ import {
   rustSourceOptionalTargetType,
   rustCallableProtocol,
   rustClosureProtocol,
-  rustGeneratorStorageTargetType,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordBindingPatternFacts, recordParameterAbiFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordParameterAbiFacts } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -348,7 +347,7 @@ function recordCallableValueSignatureFacts(
       return;
     }
     setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
-    setParameterAbiFact(walk, parameter, parameterAbi);
+    walk.context.records.sourceParameterAbis.parameter(parameter, parameterAbi);
     const name = Node_Name(ast, parameter);
     const nameKind = name === undefined ? "" : ast.kindName(name);
     if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
@@ -419,23 +418,7 @@ export function recordCallableSuspensionFacts(
         );
         return;
       }
-      walk.context.records.generator.set(declaration, {
-        kind: protocol.kind,
-        resultCarrier: rustGeneratorStorageTargetType(
-          protocol,
-          storage.storage.kind === "static"
-            ? undefined
-            : storage.storage.kind === "receiver"
-              ? { kind: "placeholder" }
-              : storage.storage.lifetime,
-        ),
-        yieldType: protocol.yieldType,
-        returnType: protocol.returnType,
-        nextType: protocol.nextType,
-        capturedParameters: storage.capturedParameters,
-        storage: storage.storage,
-        ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
-      }, [{ message: "rust generator protocol" }]);
+      walk.context.records.generators.suspend(declaration, protocol, storage);
       const typeNode = Node_Type(ast, declaration);
       if (typeNode !== undefined) {
         setCarrierFact(walk, typeNode, carrier);

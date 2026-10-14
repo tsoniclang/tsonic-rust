@@ -33,6 +33,7 @@ function admitFamily(model, family, subject, fact) {
     fact.sourceCarrier, fact.targetCarrier, fact.sourceVariants);
   else if (family === "projectDowncast") model.projectDowncasts.project(subject,
     fact.sourceCarrier, fact.dispatchCarrier, fact.targetCarrier, fact.projection);
+  else if (family === "sourceParameterAbi") model.sourceParameterAbis.parameter(subject, fact);
   else if (family === "awaitValue") {
     assert.equal(fact.selection.kind, "leaf", "the fixture supplies one exact completion");
     const leaf = fact.selection.value;
@@ -108,8 +109,14 @@ test("sealed records publish only frozen typed family readers without a native k
     compileTimeSource: () => model.compileTimeSources.erase(subject),
     selfMode: () => model.selfModes.method(subject, "ref"),
     memoryLayoutObservation: () => model.memoryLayoutObservations.observe(subject, 0),
+    generator: () => model.generators.suspend(subject,
+      { kind: "sync", yieldType: carrier, returnType: carrier, nextType: carrier },
+      { capturedParameters: [], storage: { kind: "static" } }),
+    sourceParameterAbi: () => model.sourceParameterAbis.parameter(subject,
+      { form: "required", valueCarrier: carrier, parameterCarrier: carrier, mode: "value" }),
+    sourceBinding: () => model.sourceBindings.lexical(subject, subject, "authored"),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 53, "every integrated producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 56, "every integrated producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {

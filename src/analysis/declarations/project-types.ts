@@ -107,17 +107,8 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
           const carrier = walk.context.records.runtimeCarrier.get(parameter)?.carrier;
           if (name !== undefined && carrier !== undefined) {
             setCarrierFact(walk, name, carrier);
-            walk.context.records.sourceBinding.set(name, {
-              scope: "lexical",
-              sourceName: ast.text(name),
-              sourceDeclaration: parameter,
-            }, [{ message: "rust implicit parameter-property initializer binding" }]);
-            const abi = walk.context.records.sourceParameterAbi.get(parameter);
-            if (abi !== undefined) {
-              walk.context.records.sourceParameterAbi.set(name, abi, [
-                { message: "rust implicit parameter-property initializer ABI" },
-              ]);
-            }
+            walk.context.records.sourceBindings.lexical(name, parameter, ast.text(name));
+            walk.context.records.sourceParameterAbis.use(name, parameter);
           }
         }
       }

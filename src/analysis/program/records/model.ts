@@ -54,6 +54,9 @@ import type { RustTypedLocationProducer } from "./typed-location-plan.js";
 import type { RustCompileTimeSourceProducer } from "./compile-time-source.js";
 import type { RustSelfModeProducer } from "./self-mode.js";
 import type { RustMemoryLayoutObservationProducer } from "./memory-layout-observation.js";
+import type { RustGeneratorProducer } from "./generator.js";
+import type { RustSourceParameterAbiProducer } from "./source-parameter-abi.js";
+import type { RustSourceBindingProducer } from "./source-binding.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -71,7 +74,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "asyncFunction" | "yield" | "computedMember" | "compoundWrite" |
   "typeAliasDeclaration" | "mutatedBinding" | "mutatedReferent" |
   "argumentPassing" | "bindingStorage" | "retainedCallLifetimes" | "bindingProjection" | "typedLocationPlan" |
-  "compileTimeSource" | "selfMode" | "memoryLayoutObservation";
+  "compileTimeSource" | "selfMode" | "memoryLayoutObservation" |
+  "generator" | "sourceParameterAbi" | "sourceBinding";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -129,6 +133,9 @@ export type RustProgramRecordWriter = {
   readonly compileTimeSources: RustCompileTimeSourceProducer;
   readonly selfModes: RustSelfModeProducer;
   readonly memoryLayoutObservations: RustMemoryLayoutObservationProducer;
+  readonly generators: RustGeneratorProducer;
+  readonly sourceParameterAbis: RustSourceParameterAbiProducer;
+  readonly sourceBindings: RustSourceBindingProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

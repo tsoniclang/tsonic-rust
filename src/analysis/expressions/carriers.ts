@@ -92,7 +92,7 @@ export function resolveExpressionCarrier(
         rustSourceValueWrapperContains(expression, operand, walk.context.ast)) {
         const abi = records.sourceParameterAbi.get(operand);
         if (abi !== undefined && rustTargetTypeRefEquals(result, abi.valueCarrier)) {
-          records.sourceParameterAbi.set(expression, abi, [{ message: "rust unchanged parameter ABI through a checked transparent expression" }]);
+          records.sourceParameterAbis.use(expression, operand);
         }
       }
       return result;
