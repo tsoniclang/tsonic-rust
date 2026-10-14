@@ -36,7 +36,6 @@ import {
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
-import { recordRustObjectReferenceView } from "./object-reference-views.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { selectRustIntegerTruncationConversion } from "../../policy/conversions/integer-truncation.js";
 
@@ -66,7 +65,6 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { readRustSourceRawAddress } from "../../policy/operations/pointers/raw-addresses.js";
 import { readRustRawLocation } from "../../policy/operations/pointers/native-memory.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
-import { resolveRustClassValue } from "../objects/class-values.js";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
 import { applyFlowReadLane } from "./flow-read.js";
 import { resolveNativeProviderCallableArguments } from "../operations/provider/calls/native-callables.js";
@@ -126,14 +124,14 @@ export function resolveExpressionCarrier(
   walk.resolving.add(expression);
   try {
     if (walk.context.ast.kindName(expression) === "KindClassExpression") {
-      return finalize(resolveRustClassValue(walk, expression, contextualExpected));
+      return finalize(walk.context.records.classValues.resolve(walk, expression, contextualExpected));
     }
     if (existing !== undefined) {
       let operation = records.targetOperation.get(expression) ??
         walk.context.records.targetOperation.get(expression);
       const expressionKind = walk.context.ast.kindName(expression);
       if (expressionKind === KindIdentifier && rustStructuralObjectCarrierValue(existing.carrier) !== undefined) {
-        const classValue = resolveRustClassValue(walk, expression, contextualExpected ?? existing.carrier);
+        const classValue = walk.context.records.classValues.resolve(walk, expression, contextualExpected ?? existing.carrier);
         if (classValue !== undefined) return finalize(classValue);
       }
       if ((expressionKind === "KindArrowFunction" || expressionKind === "KindFunctionExpression") &&
@@ -576,7 +574,7 @@ function applyOptionLane(
         }
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated" &&
-        recordRustObjectReferenceView(walk, expression, resolved, reconciliationTarget)) projected = reconciliationTarget;
+        walk.context.records.objectReferenceViews.select(walk, expression, resolved, reconciliationTarget)) projected = reconciliationTarget;
     }
   }
   if (expected === undefined || !isRustOptionCarrier(expected)) {
@@ -627,7 +625,7 @@ export function reconcileRequiredCarrier(
     walk.context.projectTypes, walk.context.typeDefinitions,
   );
   if (reconciliation.kind === "incompatible") {
-    return reconciliation.reason === "unrelated" && recordRustObjectReferenceView(walk, expression, sourceCarrier, targetCarrier);
+    return reconciliation.reason === "unrelated" && walk.context.records.objectReferenceViews.select(walk, expression, sourceCarrier, targetCarrier);
   }
   if (reconciliation.kind === "call-scoped-lifetime" ||
     reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {

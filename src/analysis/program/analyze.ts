@@ -25,7 +25,6 @@ import { recordFallibilityFacts } from "../resources/fallibility.js";
 import { recordFunctionSignatureFacts, recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
 import { recordFutureValueFacts, recordResourceManagementFacts } from "../resources/suspension.js";
 import { recordRustDeferredProducerEffects } from "../resources/deferred-producer-effects.js";
-import { recordRustObjectLiteralMethodAdapterFacts } from "../objects/method-adapters.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -46,12 +45,10 @@ import { rustSourceTypeDeclarations } from "../../policy/types/model/source-decl
 import { realizeRustSourceTypeFamilyDemands } from "../project-types/type-family-demands.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { recordRustTypeOnlyDeclarations } from "../declarations/type-only.js";
-import { recordRustProjectCallableAdapterFacts } from "../project-types/callable-adapters.js";
 import { recordRustValueStructDeclaration } from "../declarations/value-structs.js";
 import { recordRustInterfaceRepresentationAliases } from "../declarations/interface-aliases.js";
 import { collectRustImplicitInterfaceContracts } from "../project-types/implicit-interfaces.js";
 
-import { finalizeRustCopiedMethods } from "../objects/copied-methods.js";
 import { closeRustInheritedStructuralViews } from "../objects/inherited-structural-views.js";
 import { createRustSourceProfileCallableAliasQuery } from "../../policy/operations/source-profiles/callable-aliases.js";
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
@@ -490,7 +487,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     navigation: context.source.navigation,
     projectTypes,
   });
-  for (const issue of recordRustObjectLiteralMethodAdapterFacts({
+  for (const issue of walk.context.records.objectLiteralMethodAdapters.finalize({
     ast: walk.context.ast,
     sourceLifetimes: walk.context.sourceLifetimes,
     records: walk.context.records,
@@ -532,7 +529,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     (fileName) => sourcePackageComponentByFile.get(fileName)!,
     nativeFields,
     sourceTypes.structuralInstantiations(),
-    finalizeRustCopiedMethods(walk, projectSourceFiles, fileName => sourcePackageComponentByFile.get(fileName)!),
+    walk.context.records.receiverIndependentMethods.finalize(walk, projectSourceFiles, fileName => sourcePackageComponentByFile.get(fileName)!),
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
     representations: context.objectRepresentations, structuralShapes: context.structuralShapes,
@@ -548,7 +545,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   });
   // Fallibility depends on finalized operation facts and the one whole-program
   // structural storage plan produced while walking bodies.
-  recordRustProjectCallableAdapterFacts(walk);
+  walk.context.records.projectCallableAdapterPlans.finalize(walk);
   recordRustModuleCallableStorage(walk);
   const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.sourceFiles, context.records,
     context.runtimeValueUses, context.sourceCallables);

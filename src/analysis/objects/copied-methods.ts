@@ -1,6 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
-import { appendRustDiagnostic } from "../program/walk.js";
 
 import { structuralStorageKey } from "./structural-shape-plan.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -8,9 +7,13 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustCopiedMethodReceiverIsPreserved } from "../../policy/ownership/copied-methods.js";
 
-export function finalizeRustCopiedMethods(
+export function selectRustCopiedMethods(
   walk: RustFactWalk, files: readonly SourceFile[], componentForFile: (fileName: string) => string,
-): ReadonlySet<string> {
+): {
+  readonly proven: ReadonlySet<string>;
+  readonly demands: ReadonlyMap<string, Node>;
+  readonly implementations: ReadonlyMap<string, readonly { readonly node: Node; readonly carrier: TargetTypeRef }[]>;
+} {
   const demands = new Map<string, Node>();
   const implementations = new Map<string, { readonly node: Node; readonly carrier: TargetTypeRef }[]>();
   const incoming = new Map<string, Set<string>>();
@@ -99,19 +102,7 @@ export function finalizeRustCopiedMethods(
     }));
   }
   const proven = proveRustCopiedMethodFlow([...demands.keys()], incoming, independent);
-  for (const [identity, subject] of demands) {
-    const methods = implementations.get(identity) ?? [];
-    if (!proven.has(identity)) {
-      appendRustDiagnostic(walk, "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN",
-        "A retained own method requires a closed callable value whose implementations do not use the original receiver.", subject,
-        ["target.capability=rust.object-rest.method-value"]);
-      continue;
-    }
-    for (const method of methods) {
-      walk.context.records.receiverIndependentMethod.set(method.node, { carrier: method.carrier }, [{ message: "rust copied method has a proven receiver-independent callable ABI" }]);
-    }
-  }
-  return proven;
+  return { proven, demands, implementations };
 
   function usesReceiver(root: Node): boolean {
     let used = false;

@@ -10,7 +10,6 @@ import type { RustClassEnvironment } from "./class-environments.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { setCarrierFact } from "../operations/project-calls.js";
 
 import type { RustAnalysisContext } from "../program/context.js";
 import { rustProjectStaticFieldStorage, type RustProjectStaticFieldStorage } from "../project-types/object-layout.js";
@@ -23,6 +22,7 @@ import { rustClassConstructorInstance } from "../../target-model/types/carriers/
 import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
 import { rustCallableAdapterValues } from "../callables/adapter-values.js";
 import { selectRustCallableValueAdapter } from "../callables/adapters.js";
+import type { RustClassValueFact } from "../../target-model/records/class-values.js";
 
 export interface RustClassValueView {
   readonly declaration: Node;
@@ -246,13 +246,12 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
   };
 }
 
-export function resolveRustClassValue(
+export function selectRustClassValue(
   walk: RustFactWalk,
   expression: Node,
   expected: TargetTypeRef | undefined,
-): TargetTypeRef | undefined {
-  const existing = walk.context.records.classValue.get(expression);
-  if (existing !== undefined) return existing.carrier;
+): { readonly kind: "qualifier"; readonly carrier: TargetTypeRef } |
+  { readonly kind: "constructor"; readonly value: RustClassValueFact } | undefined {
   const { ast } = walk.context;
   const declaration = ast.kindName(expression) === "KindClassExpression" ? expression
     : walk.context.source.navigation.sourceReferenceFor(expression)?.declaration;
@@ -271,15 +270,13 @@ export function resolveRustClassValue(
   if (native === undefined || instance === undefined || walk.context.projectTypes.definitionForCarrier(instance)?.declaration !== declaration) return undefined;
   if (shape === undefined) {
     if (!ast.is.IsClassExpression(expression) && isClassDeclarationQualifier(expression, ast)) {
-      return setCarrierFact(walk, expression, native);
+      return { kind: "qualifier", carrier: native };
     }
     walk.context.classValues.recordConstructorValue(declaration, "value");
-    walk.context.records.classValue.set(expression, { declaration, sourceCarrier: instance, carrier: native });
-    return setCarrierFact(walk, expression, native);
+    return { kind: "constructor", value: { declaration, sourceCarrier: instance, carrier: native } };
   }
   if (carrier === undefined || !selectRustClassValueView(walk, expression, declaration, carrier)) return undefined;
-  walk.context.records.classValue.set(expression, { declaration, sourceCarrier: instance, carrier });
-  return setCarrierFact(walk, expression, carrier);
+  return { kind: "constructor", value: { declaration, sourceCarrier: instance, carrier } };
 }
 
 function isClassDeclarationQualifier(expression: Node, ast: AstReader): boolean {
