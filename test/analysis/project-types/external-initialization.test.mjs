@@ -62,10 +62,10 @@ test("external initialization rejects foreign, mutated, duplicate and missing ev
     ["malformed ABI", input.base, input.ast, { ...input.records,
       targetOperation: { get: () => ({ ...input.operation, abi: { ...input.operation.abi, targetArguments: [] } }) } }],
     ["missing operand", input.base, { arguments: () => [undefined] }, input.records],
-    ["missing source fact", input.base, input.ast, createRustRecordFixture({...input.records,
-runtimeCarrier: { get: () => undefined }})],
-    ["conflicting source", input.base, input.ast, createRustRecordFixture({...input.records,
-runtimeCarrier: { get: () => ({ carrier: rustAbsenceTargetType() }) }})],
+    ["missing source fact", input.base, input.ast, createRustRecordFixture({
+runtimeCarrier: { get: () => undefined }}, input.records)],
+    ["conflicting source", input.base, input.ast, createRustRecordFixture({
+runtimeCarrier: { get: () => ({ carrier: rustAbsenceTargetType() }) }}, input.records)],
     ["extra argument", input.base, { arguments: () => [input.argument, {}] }, input.records],
     ["duplicate initializer", { ...input.base, fields: [...input.base.fields, ...input.base.fields] }, input.ast, input.records],
     ["foreign field carrier", { ...input.base, fields: [{ ...input.base.fields[0], carrier: rustJsErrorTargetType() }] }, input.ast, input.records],

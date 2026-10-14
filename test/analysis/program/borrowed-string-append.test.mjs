@@ -139,10 +139,10 @@ test("borrowed append requires the sealed in-place write strategy and exact pure
     [element, { ...selectedRead, borrowedIndexOperation: { ...selectedRead.borrowedIndexOperation, evaluation: "observable" } }],
   ];
   for (const [mutationIndex, [subject, replacement]] of replacements.entries()) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === subject ? replacement : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
     assert.equal(records.targetOperation.get(subject) === replacement, true,
       `selected fact mutation ${mutationIndex}`);
     const reads = analyzeRustBorrowedElementReads(program.source.ast, program.sourceFiles, records, program.sourceNavigation);

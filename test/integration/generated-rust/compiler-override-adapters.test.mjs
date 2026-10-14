@@ -131,9 +131,9 @@ export function main(): void { const value: Base = new Derived(); value.value(3)
     [{ ...adapter, implementationParameters: [] }],
   ]) {
     const diagnostics = [];
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 projectCallableAdapters: { get: (subject) => subject === definition.declaration
-    ? replacement : program.records.projectCallableAdapters.get(subject) }});
+    ? replacement : program.records.projectCallableAdapters.get(subject) }}, program.records);
     assert.equal(plan({ ...context, diagnostics, input: { program: { ...program, records } } }), undefined);
     assert.equal(diagnostics.length, 1);
     assert.equal(diagnostics[0].code, "RUST_MISSING_TARGET_FACT");

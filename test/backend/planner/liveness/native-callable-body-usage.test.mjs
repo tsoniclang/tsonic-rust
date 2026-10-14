@@ -19,6 +19,7 @@ function fixture(outputType) {
           if (selected !== read || selected === other) throw new Error("identity");
           if (await selected(7) !== 7 || await direct(9) !== 9) throw new Error("payload");
         }
+        ${outputType === "bin" ? "await main();" : ""}
       `,
     },
   });

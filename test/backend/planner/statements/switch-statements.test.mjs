@@ -24,8 +24,8 @@ export function choose(value: string | undefined, candidate: string | undefined)
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
   assert.ok(Object.isFrozen(fact.clauses) && fact.clauses.every(Object.isFrozen));
-  const context = selected => ({ input: { program: { ...program, records: createRustRecordFixture({...program.records,
-targetOperation: { get: (subject) => subject === node ? selected : program.records.targetOperation.get(subject) }}) } }, diagnostics: [], sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
+  const context = selected => ({ input: { program: { ...program, records: createRustRecordFixture({
+targetOperation: { get: (subject) => subject === node ? selected : program.records.targetOperation.get(subject) }}, program.records) } }, diagnostics: [], sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []), controlFlow: { nextLoopId: 0 },
     moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),

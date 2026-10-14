@@ -5,7 +5,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { integerRemainderCases, integerRemainderExecutionSource } from "../../../../tsonic/test/fixtures/proven-integer-remainder.mjs";
 
 test("proven integer remainder preserves all number results and rejects uncertain numeric selections", { timeout: 300_000 }, () => {
-  const files = { "index.ts": `${integerRemainderExecutionSource()}\nexport function main(): void { if (!run()) throw new Error("integer remainder"); }` };
+  const files = { "index.ts": `${integerRemainderExecutionSource()}\nexport function main(): void { if (!run()) throw new Error("integer remainder"); }\nmain();` };
   const options = { files, surfaces: ["js"], target: { id: "rust", options: { outputType: "bin", crateName: "integer_remainder_proof" } } };
   const analysis = analyzeRust(options);
   const { ast } = analysis.source;

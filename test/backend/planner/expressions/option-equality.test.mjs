@@ -33,9 +33,9 @@ test("optional equality rejects forged native carriers, borrowed views, presence
   assert.equal(operations.length, 3);
   for (const { node, fact } of operations) {
     const context = selected => ({ input: { program: { ...program,
-      records: createRustRecordFixture({...program.records,
+      records: createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? selected : program.records.targetOperation.get(subject) }}) } }, diagnostics: [],
+    ? selected : program.records.targetOperation.get(subject) }}, program.records) } }, diagnostics: [],
       sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
       syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),

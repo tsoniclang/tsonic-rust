@@ -53,13 +53,13 @@ export function projected(value: boolean | undefined, other: int32): boolean | i
   for (const { node, fact } of operations) {
     const left = BinaryExpression_Left(ast, node);
     const context = (selected, omitProjection = false) => ({ input: { program: { ...program,
-      records: createRustRecordFixture({...program.records,
+      records: createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
     ? selected : omitProjection && subject === left && false
     ? undefined : program.records.targetOperation.get(subject) },
 flowReadProjection: { get: (subject) => subject === node && false
     ? selected : omitProjection && subject === left
-    ? undefined : program.records.flowReadProjection.get(subject) }}) } }, diagnostics: [],
+    ? undefined : program.records.flowReadProjection.get(subject) }}, program.records) } }, diagnostics: [],
       sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
       syntheticNames: createRustSyntheticNameState(ast, node, []), moduleName: "index", structuralShapesModuleName: "shapes",
       moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),

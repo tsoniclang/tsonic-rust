@@ -39,9 +39,9 @@ export function missing(values: (number | undefined)[]): boolean {
   assert.ok(planBinaryExpression(node, valid));
   assertNoTargetDiagnostics(valid.diagnostics);
   for (const nullishDepths of [undefined, [], [-1], [0.5], [NaN], [Infinity], [2], [0, 0], [1, 0]]) {
-    const selected = context(createRustRecordFixture({...program.records,
+    const selected = context(createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? { ...fact, nullishDepths } : program.records.targetOperation.get(subject) }}));
+    ? { ...fact, nullishDepths } : program.records.targetOperation.get(subject) }}, program.records));
     assert.equal(planBinaryExpression(node, selected), undefined);
     assert.equal(selected.diagnostics.length, 1);
     assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
@@ -68,9 +68,9 @@ export function read(values: (string | undefined)[]): void {
   const { node, fact } = operations[0];
   assert.equal(fact.guardDepth, 1);
   for (const guardDepth of [undefined, 0, -1, 2, 3, 0.5, NaN, Infinity]) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 optionalChain: { get: (subject) => subject === node
-    ? { ...fact, guardDepth } : program.records.optionalChain.get(subject) }});
+    ? { ...fact, guardDepth } : program.records.optionalChain.get(subject) }}, program.records);
     const context = { input: { program: { ...program, records } }, diagnostics: [],
       sourceFile: ast.getSourceFile(node) };
     const result = planOptionalChainExpression(node, context, "property", () => {
@@ -122,9 +122,9 @@ export function read(values: (string | undefined)[]): string {
     { leftConversion: { kind: "numeric-promotion", source: "int32", target: "int64" } },
   ];
   for (const mutation of mutations) {
-    const selected = context(createRustRecordFixture({...program.records,
+    const selected = context(createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? { ...fact, ...mutation } : program.records.targetOperation.get(subject) }}));
+    ? { ...fact, ...mutation } : program.records.targetOperation.get(subject) }}, program.records));
     assert.equal(planBinaryExpression(node, selected), undefined);
     assert.equal(selected.diagnostics.length, 1);
     assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");

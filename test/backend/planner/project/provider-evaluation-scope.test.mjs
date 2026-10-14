@@ -32,10 +32,10 @@ export function observed(source: string, fail: boolean): boolean {
   const selected = program.records.sourceParameterAbi.get(receiver);
   assert.equal(selected.mode, "ref");
   const plan = parameter => {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 sourceParameterAbi: { get: (subject) => {
     return subject === receiver ? parameter : program.records.sourceParameterAbi.get(subject);
-} }});
+} }}, program.records);
     return planRustProviderEvaluationScope({ input: { program: { ...program, records } },
       sourceFile: ast.getSourceFile(node), diagnostics: [] }, fact, node, receiver, ast.arguments(node),
     () => ({ kind: "path", path: "snapshot" }), () => undefined);

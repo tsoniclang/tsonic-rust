@@ -79,12 +79,12 @@ test("contextual async physical invocation preserves the finalized optional unio
   assert.equal(rustTargetTypeRefEquals(signature?.result, result), true, "one physical invocation result owner");
   const invalid = createRustNativeOutwardResults({ definitions: current.context.typeDefinitions,
     producers: current.producers, returnCarrierFor: current.producers.outwardReturnFor,
-    records: createRustRecordFixture({...current.context.records,
+    records: createRustRecordFixture({
 targetOperation: { get: (node) => {
     const selected = current.context.records.targetOperation.get(node);
     return node === declaration ? { ...selected,
         invocationResult: { ...selected.invocationResult, sourceCarrier: { kind: "source-primitive", name: "int32" } } } : selected;
-} }}),
+} }}, current.context.records),
   });
   assert.equal(invalid.invocationFor(declaration) === undefined, true, "foreign conversion sources reject");
 });
@@ -95,8 +95,8 @@ test("outward carrier queries fail closed before finalized native effects and do
   const records = current.context.records;
   let finalized = false;
   const selected = createRustNativeOutwardResults({
-    records: createRustRecordFixture({...records,
-errorEffects: { get: (node) => { return !finalized ? undefined : records.errorEffects.get(node); } }}),
+    records: createRustRecordFixture({
+errorEffects: { get: (node) => { return !finalized ? undefined : records.errorEffects.get(node); } }}, records),
     definitions: current.context.typeDefinitions, producers: current.producers,
     returnCarrierFor(node) {
       const result = current.context.callableValues.nativeStorage.returnFor(node);

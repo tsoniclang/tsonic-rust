@@ -314,7 +314,7 @@ for (const [label, body] of [
     const { result } = compileRust({
       surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "static_error_proof" } },
-      files: { "index.ts": `export class State { ${body} } export function main(): void {}` },
+      files: { "index.ts": `export class State { ${body} } export function main(): void {} main();` },
     });
     assert.deepEqual(result.diagnostics, []);
     assert.match(artifactText(result, "src/index.rs"),

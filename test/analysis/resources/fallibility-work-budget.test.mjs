@@ -7,6 +7,7 @@ import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from 
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { recordFallibilityFacts } from "../../../dist/analysis/resources/fallibility.js";
 import { rustErrorEffectsEqual } from "../../../dist/analysis/errors/error-effects.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 
 
@@ -36,7 +37,9 @@ function fixture(text) {
   const filtered = new Set(["errorEffects", "fallible",
     "sourceCallEffects", "sourceErrorEffects"]);
   const run = maximumWork => {
-    const records = createRustProgramRecordBuilder(program.typeDefinitions, { ...program.records, get: (node, key) => filtered.has(key) ? undefined : program.records[key].get(node) });
+    const parent = createRustRecordFixture(Object.fromEntries([...filtered].map(family =>
+      [family, { get: () => undefined }])), program.records);
+    const records = createRustProgramRecordBuilder(program.typeDefinitions, parent);
     const diagnostics = [];
     const context = { ...program, source, ast, records, diagnostics };
     recordFallibilityFacts({ context, resolving: new Set(), rejectedExpressions: new WeakSet(),

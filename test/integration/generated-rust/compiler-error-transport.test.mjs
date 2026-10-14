@@ -163,9 +163,9 @@ export function fail(error: Error): void { throw error; }
     [{ ...fact.error, conversion: { ...fact.error.conversion, route: { kind: "runtime", boundary: "provider-native" } } }, "Program error construction requires an exact carrier and error domain."],
   ]) {
     const diagnostics = [];
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 targetOperation: { get: (subject) => subject === statement
-    ? { ...fact, error } : program.records.targetOperation.get(subject) }});
+    ? { ...fact, error } : program.records.targetOperation.get(subject) }}, program.records);
     assert.equal(planThrowStatement(statement, {
       input: { program: { ...program, records } },
       sourceFile: ast.getSourceFile(statement), diagnostics,

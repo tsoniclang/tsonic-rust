@@ -94,11 +94,11 @@ test("Future capture discovery preserves unresolved checked provenance instead o
 test("Future capture environments reject malformed carrier facts and foreign capture references", () => {
   const current = fixture();
   const capture = current.program.lexicalFunctions.forDeclaration(current.closure).captures[0];
-  const malformed = createRustNativeFutureInputPlan({ ...current.input, records: createRustRecordFixture({...current.input.records,
+  const malformed = createRustNativeFutureInputPlan({ ...current.input, records: createRustRecordFixture({
 runtimeCarrier: { get: (node) => {
     return (node === capture.declaration || node === capture.reference)
         ? { carrier: { kind: "invalid" } } : current.input.records.runtimeCarrier.get(node);
-} }}) });
+} }}, current.input.records) });
   rejected(malformed.forDeclaration(current.closure), /valid finalized carrier/u);
   const other = fixture();
   const foreignCapture = other.program.lexicalFunctions.forDeclaration(other.closure).captures[0];

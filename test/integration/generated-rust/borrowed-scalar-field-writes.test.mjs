@@ -71,7 +71,7 @@ for (const surfaces of [[], ["js"]]) {
   test(`reentrant owned writes retain original-child and native Drop ordering in ${profile}`, { timeout: 300_000 }, () => {
     const options = { surfaces, target: { id: "rust", options: { outputType: "bin", crateName: `owned_write_${profile}` } },
       files: { "index.ts": ownedFieldSnapshotSource + ownedFieldSnapshotRunSource +
-        '\nexport function main(): void { if (!run()) throw new Error("owned snapshot write"); }' } };
+        '\nexport function main(): void { if (!run()) throw new Error("owned snapshot write"); }\nmain();\n' } };
     const { program } = analyzeRust(options);
     const { result } = compileRust(options);
     assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 6).map(row => row.message.slice(0, 256)).join("\n"));

@@ -66,8 +66,8 @@ test("producer error selection rejects foreign owners, missing evidence and malf
     assert.equal(selectRustProducerError({ ...reference, ...changed }, current.input) === undefined, true,
       "unproved producer channels cannot default to pure or ambient errors");
   }
-  const missing = { ...current.input, records: createRustRecordFixture({...current.input.records,
-errorEffects: { get: (node) => undefined }}) };
+  const missing = { ...current.input, records: createRustRecordFixture({
+errorEffects: { get: (node) => undefined }}, current.input.records) };
   assert.equal(selectRustProducerError(reference, missing) === undefined, true, "unsealed effects stay unresolved");
   let reads = 0;
   const changed = { ...reference };

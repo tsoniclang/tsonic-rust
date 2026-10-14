@@ -18,9 +18,9 @@ import { rustSourceOptionalElementCarrier } from "../../../../dist/target-model/
 function planningContext(program, node, selected) {
   const { ast } = program.source;
   return { input: { program: { ...program,
-    records: createRustRecordFixture({...program.records,
+    records: createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? selected : program.records.targetOperation.get(subject) }}) } }, diagnostics: [],
+    ? selected : program.records.targetOperation.get(subject) }}, program.records) } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",

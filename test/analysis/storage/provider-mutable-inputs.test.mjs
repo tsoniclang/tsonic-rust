@@ -74,9 +74,9 @@ test("repeated native mutable slots and missing exact argument syntax fail befor
   const { node, proof } = current.calls[0];
   const repeated = { ...proof.operation, abi: { ...proof.operation.abi,
     targetArguments: [proof.operation.abi.targetArguments[0], proof.operation.abi.targetArguments[0]] } };
-  const repeatedInput = { ...current.input, records: createRustRecordFixture({...current.input.records,
+  const repeatedInput = { ...current.input, records: createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node ? repeated
-    : current.input.records.targetOperation.get(subject) }}) };
+    : current.input.records.targetOperation.get(subject) }}, current.input.records) };
   const selected = selectRustProviderMutableInputs(node, repeated, repeatedInput);
   assert.equal(selected.kind, "rejected");
   assert.equal(/multiple mutable inputs/.test(selected.reason), true);

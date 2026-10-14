@@ -30,10 +30,10 @@ export function read(values: string[]): number { return parseInt(${expression}, 
         index === 0 ? { ...input, parameterCarrier: { kind: "source-primitive", name: "int32" } } : input) } },
     ];
     for (const [index, replacement] of altered.entries()) {
-      const records = createRustRecordFixture({...program.records,
+      const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === call ? replacement : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
       const reads = analyzeRustBorrowedElementReads(ast, program.sourceFiles, records, program.sourceNavigation);
       assert.equal(reads.forExpression(call) === undefined, true, `invalid native input contract ${index}`);
     }

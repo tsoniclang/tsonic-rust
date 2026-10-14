@@ -65,10 +65,10 @@ test("native binding comparisons borrow observations and distinguish exact repla
       assert.equal(bindingNode !== undefined, true, name + " exact binding subject");
     }
     const binding = program.records.sourceBinding.get(bindingNode);
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 sourceBinding: { get: (node) => {
     return node === bindingNode ? { ...binding, scope: "module" } : program.records.sourceBinding.get(node);
-} }});
+} }}, program.records);
     const rejected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
     assert.equal(rejected.kind, "resolved", name);
     assert.equal(rejected.plan.canBorrowAcross(left, right), false, name + " foreign storage");
@@ -81,11 +81,11 @@ sourceBinding: { get: (node) => {
         [{ ...operation.abi.effects, evaluation: "pure", safety: "requires-unsafe" }, false],
         [{ ...operation.abi.effects, evaluation: "pure", invocation: "fallible" }, false],
       ]) {
-        const records = createRustRecordFixture({...program.records,
+        const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === right
         ? { ...operation, abi: { ...operation.abi, effects } } : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
         const result = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
         assert.equal(result.kind, "resolved");
         assert.equal(result.plan.canBorrowAcross(left, right), accepted, "exact native pure-input effect contract");
@@ -93,7 +93,7 @@ targetOperation: { get: (node) => {
       const carrier = operation.abi.result.carrier;
       const projection = { sourceCarrier: carrier, targetCarrier: carrier,
         conversion: { kind: "native-representation", source: carrier, target: carrier } };
-      const projectedFacts = createRustRecordFixture({...program.records,
+      const projectedFacts = createRustRecordFixture({
 targetOperation: { get: (node) => {
     if (node === right)
         return {
@@ -107,7 +107,7 @@ contextualValueConversion: { get: (node) => {
             ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
         };
     return node === right ? projection : program.records.contextualValueConversion.get(node);
-} }});
+} }}, program.records);
       const projected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, projectedFacts));
       assert.equal(projected.kind, "resolved");
       assert.equal(projected.plan.canBorrowAcross(left, right), false,
@@ -119,7 +119,7 @@ contextualValueConversion: { get: (node) => {
         { kind: "none", sourceCarrier: lift.sourceCarrier, resultCarrier: lift.resultCarrier },
         { ...lift, sourceCarrier: distinct }, { ...lift, elementCarrier: distinct }, { ...lift, resultCarrier: carrier },
       ]) {
-        const records = createRustRecordFixture({...program.records,
+        const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     if (node === right)
         return {
@@ -133,7 +133,7 @@ optionProjection: { get: (node) => {
             ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
         };
     return node === right ? replacement : program.records.optionProjection.get(node);
-} }});
+} }}, program.records);
         const rejected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
         assert.equal(rejected.kind, "resolved");
         assert.equal(rejected.plan.canBorrowAcross(left, right), false, "only exact native Some construction is a pure result lift");
@@ -352,17 +352,17 @@ for (const surfaces of [[], ["js"]]) {
     }
     const binding = program.records.sourceBinding.get(selected.value);
     assert.equal(binding !== undefined, true);
-    const locationFacts = createRustRecordFixture({...program.records,
+    const locationFacts = createRustRecordFixture({
 bindingStorage: { get: (node) => {
     return node === binding.sourceDeclaration
         ? { storage: "location", valueCarrier: targetFact.resultCarrier } : program.records.bindingStorage.get(node);
-} }});
+} }}, program.records);
     assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts, locationFacts)).plan.borrowedWriteFor(assignment) === undefined, true);
-    const unknownCopy = createRustRecordFixture({...program.records,
+    const unknownCopy = createRustRecordFixture({
 runtimeCarrier: { get: (node) => {
     return node === selected.value ? { carrier: { kind: "target-named", id: "external.CustomClone" } }
         : program.records.runtimeCarrier.get(node);
-} }});
+} }}, program.records);
     assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts, unknownCopy)).plan.borrowedWriteFor(assignment) === undefined, true);
     for (const storage of ["bound", "property"]) {
       const input = analysisInput(program, sourceFacts);
@@ -411,10 +411,10 @@ export function provider(holder: Value, value: number): void { holder.point.x = 
     { ...operation.abi, sourceArguments: [] },
     { ...operation.abi, sourceArguments: operation.abi.sourceArguments.map(argument => ({ ...argument, form: "spread-sequence" })) },
   ].entries()) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === value ? { ...operation, abi } : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
     assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts, records)).plan.borrowedWriteFor(assignment) === undefined, true, String(index));
   }
 });
@@ -477,10 +477,10 @@ test("native field borrowing consumes exact disjoint scalar writes but rejects o
     for (const replacement of [undefined, { ...field, storageIndex: -1 },
       { ...field, valueSemantics: { kind: "accessor", writable: true } },
       { ...field, dispatch: { read: "read", write: "write", ownerCarrier: field.receiverCarrier } }]) {
-      const records = createRustRecordFixture({...program.records,
+      const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === receiver ? replacement : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
       const selected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
       assert.equal(selected.kind, "resolved");
       assert.equal(selected.plan.canBorrowAcross(receiver, operand), false);
@@ -548,11 +548,11 @@ test("source argument ownership follows all exact finalized native inputs rather
     ["nested native slice inputs", [{ source: { kind: "argument-slice", sourceIndexes: [0] },
       elements: [selected], elementCarrier: selected.sourceCarrier, mode: "ref", parameterCarrier: selected.parameterCarrier }], "ref"],
   ]) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === call
         ? { ...operation, abi: { ...operation.abi, targetArguments } } : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
     assert.equal(rustCallArgumentMode(argument, ast, records), expected, label);
     assert.equal(rustCallArgumentIsOwned(argument, ast, records), false, label);
   }
@@ -599,11 +599,11 @@ test("borrowed conversion effects require exact finalized input and pure native 
       ? { kind: "input", input: { ...operation.abi.targetReceiver.input, mode: "mut-ref" } }
       : { kind: "none" }, targetArguments: operation.abi.targetArguments.map(selected => ({ ...selected, mode: "mut-ref" })) },
   ]) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === observation
         ? { ...operation, abi: { ...operation.abi, ...changes } } : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
     const result = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
     assert.equal(result.kind, "resolved");
     assert.equal(result.plan.canBorrowAcross(receiver, operand), false, "unknown observation never extends the source borrow");

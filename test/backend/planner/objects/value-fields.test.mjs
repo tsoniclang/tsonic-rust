@@ -52,8 +52,8 @@ export function run(): number { const value = new Value(4); return value.count; 
       assert.equal(planRustValueFieldLocation(node, rejected, "write") === undefined, true, changed.valueForm);
       assert.equal(rejected.diagnostics.some(row => row.code === "RUST_MISSING_TARGET_FACT"), true);
     }
-    const missing = context(override, createRustRecordFixture({...program.records,
-selectedOperation: { get: () => undefined }}));
+    const missing = context(override, createRustRecordFixture({
+selectedOperation: { get: () => undefined }}, program.records));
     assert.equal(planRustValueFieldLocation(node, missing, "write") === undefined, true, "selected property evidence is required");
   }
 });
