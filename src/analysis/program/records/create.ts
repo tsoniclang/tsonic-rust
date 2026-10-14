@@ -6,7 +6,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForCarrier } from "../../foundation/requirements.js";
 import { rustFoundationForContextualConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
-import { rustTypeAliasDeclarationFactKey, rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
+import { rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
 import { rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
 import { createRustSelectedOperationProducer } from "./selected-operation.js";
 import { createRustRuntimeCarrierProducer } from "./runtime-carrier.js";
@@ -34,7 +34,7 @@ import { createRustGenericNumericOperandsProducer } from "./generic-numeric-oper
 import { createRustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
 import { createRustPropertyProjectionProducer } from "./property-projection.js";
 import { rustCompileTimeSourceKey } from "./keys/source-declarations.js";
-import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
+import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
 import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
@@ -47,6 +47,9 @@ import { createRustModuleBindingProducer } from "./module-binding.js";
 import { createRustModuleCallableStorageProducer } from "./module-callable-storage.js";
 import { createRustSourceCallableReturnProducer } from "./source-callable-return.js";
 import { createRustCapturedFieldStorageProducer } from "./captured-field-storage.js";
+import { createRustTypeAliasDeclarationProducer } from "./type-alias-declaration.js";
+import { createRustMutatedBindingProducer } from "./mutated-binding.js";
+import { createRustMutatedReferentProducer } from "./mutated-referent.js";
 import { rustMemoryLayoutObservationKey } from "./keys/memory-layout.js";
 
 export function createRustProgramRecordBuilder(
@@ -69,7 +72,7 @@ export function createRustProgramRecordBuilder(
     requireFoundation(foundation(value));
   });
 
-  const typeAliasDeclaration = createFamily(rustTypeAliasDeclarationFactKey, parent?.typeAliasDeclaration);
+  const typeAliasDeclarations = createRustTypeAliasDeclarationProducer(assertOpen, parent?.typeAliasDeclaration);
   const asyncFunction = createFamily(rustAsyncFunctionFactKey, parent?.asyncFunction);
   const generator = createFamily(rustGeneratorFactKey, parent?.generator);
   const yielded = createFamily(rustYieldFactKey, parent?.yield);
@@ -110,8 +113,8 @@ export function createRustProgramRecordBuilder(
   const projectDowncast = createFamily(rustProjectDowncastFactKey, parent?.projectDowncast);
   const sourceBinding = createFamily(rustSourceBindingFactKey, parent?.sourceBinding);
   const bindingProjection = createFamily(rustBindingProjectionFactKey, parent?.bindingProjection);
-  const mutatedBinding = createFamily(rustMutatedBindingFactKey, parent?.mutatedBinding);
-  const mutatedReferent = createFamily(rustMutatedReferentFactKey, parent?.mutatedReferent);
+  const mutatedBindings = createRustMutatedBindingProducer(assertOpen, parent?.mutatedBinding);
+  const mutatedReferents = createRustMutatedReferentProducer(assertOpen, parent?.mutatedReferent);
   const selfMode = createFamily(rustSelfModeFactKey, parent?.selfMode);
   const targetOperations = createRustTargetOperationProducer(assertOpen, requireFoundation, definitions, parent?.targetOperation);
   const compoundWrite = createFamily(rustCompoundWriteFactKey, parent?.compoundWrite);
@@ -145,7 +148,7 @@ export function createRustProgramRecordBuilder(
   const classValues = createRustClassValueProducer(assertOpen, parent?.classValue);
 
   const records: RustProgramRecords = Object.freeze({
-    typeAliasDeclaration: typeAliasDeclaration.reader,
+    typeAliasDeclaration: typeAliasDeclarations.records,
     asyncFunction: asyncFunction.reader,
     generator: generator.reader,
     yield: yielded.reader,
@@ -178,8 +181,8 @@ export function createRustProgramRecordBuilder(
     projectDowncast: projectDowncast.reader,
     sourceBinding: sourceBinding.reader,
     bindingProjection: bindingProjection.reader,
-    mutatedBinding: mutatedBinding.reader,
-    mutatedReferent: mutatedReferent.reader,
+    mutatedBinding: mutatedBindings.records,
+    mutatedReferent: mutatedReferents.records,
     selfMode: selfMode.reader,
     targetOperation: targetOperations.records,
     compoundWrite: compoundWrite.reader,
@@ -213,7 +216,8 @@ export function createRustProgramRecordBuilder(
     classValue: classValues.records,
   });
   return Object.freeze({
-    typeAliasDeclaration: typeAliasDeclaration.writer,
+    typeAliasDeclaration: typeAliasDeclarations.records,
+    typeAliasDeclarations,
     asyncFunction: asyncFunction.writer,
     generator: generator.writer,
     yield: yielded.writer,
@@ -263,8 +267,10 @@ export function createRustProgramRecordBuilder(
     projectDowncast: projectDowncast.writer,
     sourceBinding: sourceBinding.writer,
     bindingProjection: bindingProjection.writer,
-    mutatedBinding: mutatedBinding.writer,
-    mutatedReferent: mutatedReferent.writer,
+    mutatedBinding: mutatedBindings.records,
+    mutatedBindings,
+    mutatedReferent: mutatedReferents.records,
+    mutatedReferents,
     selfMode: selfMode.writer,
     targetOperation: targetOperations.records,
     targetOperations,

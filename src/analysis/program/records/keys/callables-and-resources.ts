@@ -3,13 +3,7 @@ import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustPlanKey } from "../key.js";
 import { rustLifetimesEqual } from "../../../../target-model/lifetimes/index.js";
-import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustSuspendedOwnedReceiver, RustSuspendedCallableStorage, RustYieldFact, RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
-
-export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarationFact> =
-  defineRustPlanKey("typeAliasDeclaration", (left, right) =>
-    left.kind === right.kind && (left.kind !== "native-alias" ||
-      right.kind === "native-alias" && rustTargetTypeRefEquals(left.target, right.target)) &&
-    (left.kind === "native-alias" || closedMetadataEquals(left, right)));
+import type { RustAsyncFunctionFact, RustGeneratorFact, RustSuspendedOwnedReceiver, RustSuspendedCallableStorage, RustYieldFact, RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
 
 export const rustAsyncFunctionFactKey: RustPlanKey<RustAsyncFunctionFact> =
   defineRustPlanKey("asyncFunction", (left, right) =>

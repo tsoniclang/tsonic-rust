@@ -47,11 +47,5 @@ export const rustBindingProjectionFactKey: RustPlanKey<RustBindingProjectionFact
     closedMetadataEquals(left.projection, right.projection) &&
     left.normalization === right.normalization);
 
-export const rustMutatedBindingFactKey: RustPlanKey<{ readonly mutated: true }> =
-  defineRustPlanKey("mutatedBinding", () => true);
-
-export const rustMutatedReferentFactKey: RustPlanKey<{ readonly mutated: true }> =
-  defineRustPlanKey("mutatedReferent", () => true);
-
 export const rustSelfModeFactKey: RustPlanKey<{ readonly mode: "ref" | "mut-ref" }> =
   defineRustPlanKey("selfMode", (left, right) => left.mode === right.mode);

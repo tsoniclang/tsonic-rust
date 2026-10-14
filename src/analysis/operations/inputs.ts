@@ -540,11 +540,7 @@ export function recordForOfFacts(
     if (initializer !== undefined) {
       if (walk.context.ast.kindName(initializer) === KindIdentifier) {
         const declaration = recordProjectSourceBinding(walk, initializer)?.sourceDeclaration;
-        if (declaration !== undefined) {
-          walk.context.records.mutatedBinding.set(declaration, { mutated: true }, [
-            { message: "rust selected iteration assignment writes the existing binding" },
-          ]);
-        }
+        if (declaration !== undefined) walk.context.records.mutatedBindings.written(declaration);
       }
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
         setCarrierFact(walk, declaration, selected.elementCarrier);
