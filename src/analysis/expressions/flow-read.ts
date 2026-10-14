@@ -128,7 +128,7 @@ export function applyFlowReadLane(
       return undefined;
     }
   }
-  const selection = selectRustFlowReadProjection(
+  const selection = walk.context.records.flowReadProjections.resolve(expression,
     sourceCarrier,
     selectedCarrier,
     walk.context.projectTypes, walk.context.typeDefinitions,
@@ -150,7 +150,6 @@ export function applyFlowReadLane(
     );
     return undefined;
   }
-  walk.context.records.flowReadProjections.project(expression, selection.fact.sourceCarrier, selection.fact.selectedCarrier, selection.fact);
   if (selection.fact.kind === "option-reference") recordBindingWrite(walk, expression, "referent");
   return selection.fact.selectedCarrier;
 }

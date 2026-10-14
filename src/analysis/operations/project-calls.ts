@@ -18,7 +18,6 @@ import { appendMalformedSourceAst } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
-import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
@@ -408,7 +407,7 @@ export function applySelectedProjectSourceCall(
         );
         return undefined;
       }
-      const receiverProjection = selectRustFlowReadProjection(
+      const receiverProjection = walk.context.records.flowReadProjections.resolve(receiver,
         rawReceiverCarrier,
         selectedReceiverCarrier,
         walk.context.projectTypes, walk.context.typeDefinitions,
@@ -422,9 +421,6 @@ export function applySelectedProjectSourceCall(
           ["target.capability=rust.source-call.receiver-projection"],
         );
         return undefined;
-      }
-      if (receiverProjection.kind === "projection") {
-        walk.context.records.flowReadProjections.project(receiver, receiverProjection.fact.sourceCarrier, receiverProjection.fact.selectedCarrier, receiverProjection.fact);
       }
       const selfMode = walk.context.records.selfMode.get(selectedDeclaration);
       if (selfMode === undefined) {

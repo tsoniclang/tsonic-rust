@@ -30,7 +30,6 @@ import { recordRustComputedCallEvaluation } from "../operations/computed-members
 import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, readRustSourceUnsafeContext } from "../../policy/operations/safety/source-explicit-safety.js";
 import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
-import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 
 import { selectRustOptionalCallResult } from "../operations/provider/calls/instantiation.js";
 import {
@@ -765,7 +764,7 @@ function applySelectedRuntimeCallableCall(
   if (target.form === "callable") {
     const resolved = calleeCarrier;
     if (optionalCall === undefined) {
-      const projection = resolved === undefined ? undefined : selectRustFlowReadProjection(
+      const projection = resolved === undefined ? undefined : walk.context.records.flowReadProjections.resolve(callee,
         resolved, carrier, walk.context.projectTypes, walk.context.typeDefinitions,
       );
       if (projection === undefined || projection.kind === "incompatible") {
@@ -773,9 +772,6 @@ function applySelectedRuntimeCallableCall(
           "The runtime callee cannot project to its exact checked callable carrier.", callee,
           ["target.capability=rust.source-call.runtime-callable-value"]);
         return undefined;
-      }
-      if (projection.kind === "projection") {
-        walk.context.records.flowReadProjections.project(callee, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
       }
     }
   } else if (target.form === "constructor-value") {

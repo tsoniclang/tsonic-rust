@@ -15,6 +15,8 @@ import type { RustProjectUpcastFact } from "${join(root, "dist/target-model/reco
 import type { RustProjectProjectionSelection } from "${join(root, "dist/target-model/types/project-projections.js")}";
 import type { RustFlowReadProjectionInput } from "${join(root, "dist/analysis/program/records/flow-read-projection.js")}";
 import type { RustContextualValueConversion } from "${join(root, "dist/target-model/conversions/contextual.js")}";
+import type { RustProjectTypePolicy } from "${join(root, "dist/target-model/types/project-types.js")}";
+import type { RustTypeDefinitions } from "${join(root, "dist/target-model/types/source-union-definitions.js")}";
 const builder = createRustProgramRecordBuilder();
 declare const subject: ExtensionFactSubject;
 declare const carrier: TargetTypeRef;
@@ -22,6 +24,8 @@ declare const projection: RustProjectProjectionSelection;
 declare const variants: RustProjectUpcastFact["sourceVariants"];
 declare const flow: RustFlowReadProjectionInput;
 declare const conversion: RustContextualValueConversion;
+declare const projectTypes: RustProjectTypePolicy;
+declare const definitions: RustTypeDefinitions;
 `;
 
 function check(directory, text) {
@@ -55,12 +59,17 @@ builder.conversions.converted(subject, undefined);
 builder.optionProjections.none(subject, carrier, carrier);
 builder.optionProjections.some(subject, carrier, carrier, carrier);
 builder.flowReadProjections.project(subject, carrier, carrier, flow);
+builder.flowReadProjections.resolve(subject, carrier, carrier, projectTypes, definitions);
+builder.flowReadProjections.validate(subject, carrier, projectTypes, definitions);
 builder.contextualValueConversions.convert(subject, carrier, carrier, conversion);
 const converted: TargetTypeRef | undefined = builder.conversion.get(subject)?.convertedType;
 const selected: TargetTypeRef | undefined = builder.flowReadProjection.get(subject)?.selectedCarrier;
 `);
   assert.equal(positive.status, 0, positive.diagnostics);
   const invalid = [
+    ["flow query missing native definitions", "builder.flowReadProjections.resolve(subject, carrier, carrier, projectTypes);", /Expected 5 arguments/u],
+    ["flow validation foreign source", "builder.flowReadProjections.validate(subject, {}, projectTypes, definitions);", /not assignable/u],
+    ["sealed flow query", "builder.seal().flowReadProjection.resolve(subject, carrier, carrier, projectTypes, definitions);", /Property 'resolve' does not exist/u],
     ...["callScopedLifetimeReconciliation", "projectUpcast", "projectDowncast"].map(family =>
       [family, `builder.${family}.set(subject, undefined);`, /Property 'set' does not exist/u]),
     ...["rustCallScopedLifetimeReconciliationFactKey", "rustProjectUpcastFactKey", "rustProjectDowncastFactKey"].map(key =>
@@ -119,5 +128,5 @@ const selected: TargetTypeRef | undefined = builder.flowReadProjection.get(subje
     assert.notEqual(result.status, 0, name);
     assert.match(result.diagnostics, diagnostic, name);
   }
-  assert.equal(invalid.length, 57);
+  assert.equal(invalid.length, 60);
 });

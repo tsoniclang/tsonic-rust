@@ -16,7 +16,6 @@ import {
   asNode,
   resolveSelectedSourceProfilePropertyMembers,
 } from "../../../policy/identities/selected-source.js";
-import { selectRustFlowReadProjection } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
 
@@ -132,10 +131,9 @@ export function selectedMemberReceiverCarrier(
     );
     const selected = indexes?.length === 1 ? sourceUnion.variants[indexes[0]!]!.carrier : undefined;
     if (selected !== undefined) {
-      const projection = selectRustFlowReadProjection(refinedCarrier, selected, options.projectTypes, context.typeDefinitions);
+      const projection = context.records.flowReadProjections.resolve(receiver, refinedCarrier, selected, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
-        context.records.flowReadProjections.project(receiver, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
-        return selected;
+        return projection.fact.selectedCarrier;
       }
     }
   }
@@ -213,10 +211,9 @@ export function selectedMemberReceiverCarrier(
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
   }
-  const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
+  const flowProjection = context.records.flowReadProjections.resolve(receiver, sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
   if (flowProjection.kind === "projection") {
-    context.records.flowReadProjections.project(receiver, flowProjection.fact.sourceCarrier, flowProjection.fact.selectedCarrier, flowProjection.fact);
-    return selectedCarrier;
+    return flowProjection.fact.selectedCarrier;
   }
   if (rustRuntimeUnionProjection(sourceCarrier, selectedCarrier) !== undefined) {
     return selectedCarrier;
@@ -284,7 +281,7 @@ export function acceptRustMemberOperation(
       : rustOptionElementCarrier(sourceReceiverCarrier) ?? sourceReceiverCarrier
     : sourceReceiverCarrier;
   if (operationReceiverCarrier !== undefined && selectedReceiverCarrier !== undefined) {
-    const projection = selectRustFlowReadProjection(
+    const projection = context.records.flowReadProjections.resolve(request.receiver,
       operationReceiverCarrier,
       selectedReceiverCarrier,
       options.projectTypes, context.typeDefinitions,
@@ -296,9 +293,6 @@ export function acceptRustMemberOperation(
         "RUST_SELECTED_RECEIVER_PROJECTION_UNSUPPORTED",
         "The checked member receiver cannot project from its exact runtime carrier to its TSTS-selected carrier.",
       );
-    }
-    if (projection.kind === "projection") {
-      context.records.flowReadProjections.project(request.receiver, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
     }
   }
   if (request.optionalChain !== true) {

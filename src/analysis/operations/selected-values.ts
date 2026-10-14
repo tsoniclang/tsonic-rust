@@ -4,7 +4,6 @@ import type { ExtensionFactSubject } from "@tsonic/tsts";
 
 import { resolveRustTargetTypeRef, type RustTargetTypeResolutionOptions } from "../../policy/types/resolution/index.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
-import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
@@ -34,10 +33,9 @@ export function selectedValueCarrier(
     const members = type === undefined ? [] : types.isUnion(type) ? types.unionOrIntersectionTypes(type) : [type];
     if (members.length > 0 && members.every(member => !types.isAny(member) && !types.isUnknown(member) &&
       !types.isNullish(member) && !types.isVoidLike(member) && !types.couldContainTypeVariables(member))) {
-      const projection = selectRustFlowReadProjection(effective, present, options.projectTypes, context.typeDefinitions);
+      const projection = context.records.flowReadProjections.resolve(expression, effective, present, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
-        context.records.flowReadProjections.project(expression, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
-        return present;
+        return projection.fact.selectedCarrier;
       }
     }
   }
@@ -52,10 +50,9 @@ export function selectedValueCarrier(
   if (stored === undefined || selected === undefined || rustTargetTypeRefEquals(stored, selected)) {
     return selected ?? stored;
   }
-  const flowRead = selectRustFlowReadProjection(stored, selected, options.projectTypes, context.typeDefinitions);
+  const flowRead = context.records.flowReadProjections.resolve(expression, stored, selected, options.projectTypes, context.typeDefinitions);
   if (flowRead.kind === "projection") {
-    context.records.flowReadProjections.project(expression, flowRead.fact.sourceCarrier, flowRead.fact.selectedCarrier, flowRead.fact);
-    return selected;
+    return flowRead.fact.selectedCarrier;
   }
   if (stored.kind === "reference" && rustTargetTypeRefEquals(stored.referent, selected)) {
     return selected;

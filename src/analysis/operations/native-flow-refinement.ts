@@ -11,11 +11,6 @@ import { resolveRustNativeFlowCarrier, selectRustNativeFlowMembers, selectRustNa
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
-import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-
-
-import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { resolveRustInstanceType } from "../../policy/types/resolution/instance-tests.js";
 
 export function selectRustGuardedValueCarrier(
@@ -24,9 +19,8 @@ export function selectRustGuardedValueCarrier(
   context: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions & { readonly projectTypes: RustProjectTypePolicy },
 ): TargetTypeRef | undefined {
-  const existing = context.records.flowReadProjection.get(reference);
-  if (existing !== undefined) return rustTargetTypeRefEquals(existing.sourceCarrier, sourceCarrier) &&
-    rustFlowReadProjectionMatches(existing, options.projectTypes, context.typeDefinitions) ? existing.selectedCarrier : undefined;
+  const existing = context.records.flowReadProjections.validate(reference, sourceCarrier, options.projectTypes, context.typeDefinitions);
+  if (existing !== undefined) return existing.kind === "projection" ? existing.fact.selectedCarrier : undefined;
   const members = selectRustGuardedValueMembers(reference, sourceCarrier, context, options);
   const sourceType = context.currentSemantics.types.expressionType(reference);
   const leaves = rustUnionLeaves(sourceCarrier, context.typeDefinitions);
@@ -34,10 +28,9 @@ export function selectRustGuardedValueCarrier(
     : sourceType === undefined || leaves === undefined || members.length >= leaves.length ? undefined
     : resolveRustNativeFlowCarrier(sourceType, members, context, options);
   if (selected === undefined) return undefined;
-  const projection = selectRustFlowReadProjection(sourceCarrier, selected, options.projectTypes, context.typeDefinitions);
+  const projection = context.records.flowReadProjections.resolve(reference, sourceCarrier, selected, options.projectTypes, context.typeDefinitions);
   if (projection.kind !== "projection") return undefined;
-  context.records.flowReadProjections.project(reference, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
-  return selected;
+  return projection.fact.selectedCarrier;
 }
 
 export function selectRustGuardedValueMembers(

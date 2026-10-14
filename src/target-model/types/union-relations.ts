@@ -5,6 +5,7 @@ import { rustRuntimeUnionContract, type RustRuntimeUnionVariant } from "./carrie
 import { closedMetadataEquals, hasExactObjectKeys, isClosedMetadata, isDenseDataArray } from "../metadata/closed-data.js";
 import { rustOptionElementCarrier } from "./carriers/optional.js";
 import { rustClosedValuePayloadProjection } from "./carriers/closed-values.js";
+import { rustSourceUnionCarrierValue } from "./carriers/source-types.js";
 
 export interface RustUnionPathStep {
   readonly union: TargetTypeRef;
@@ -88,7 +89,7 @@ function collectRustUnionPaths(carrier: TargetTypeRef, definitions: RustTypeDefi
     }
     const alternatives = rustUnionAlternatives(current, definitions);
     if (alternatives === undefined) {
-      if (path.length === 0) return false;
+      if (path.length === 0 || rustSourceUnionCarrierValue(current) !== undefined) return false;
       if (matches === undefined) leaves.push(Object.freeze({ carrier: current, path }));
       return true;
     }

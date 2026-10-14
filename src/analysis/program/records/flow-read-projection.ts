@@ -4,12 +4,13 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { createRustRecordFamily } from "./family.js";
+import { createRustFlowReadProjectionQueries, type RustFlowReadProjectionQueries } from "../../control-flow/flow-read-projections.js";
 
 export type RustFlowReadProjectionInput = {
   [Kind in RustFlowReadProjectionFact["kind"]]: Omit<Extract<RustFlowReadProjectionFact, { readonly kind: Kind }>, "sourceCarrier" | "selectedCarrier">
 }[RustFlowReadProjectionFact["kind"]];
 
-export interface RustFlowReadProjectionProducer {
+export interface RustFlowReadProjectionProducer extends RustFlowReadProjectionQueries {
   readonly records: RustRecordFamily<RustFlowReadProjectionFact>;
   project(subject: ExtensionFactSubject, source: TargetTypeRef, selected: TargetTypeRef, projection: RustFlowReadProjectionInput): void;
 }
@@ -19,12 +20,14 @@ export function createRustFlowReadProjectionProducer(
 ): RustFlowReadProjectionProducer {
   const family = createRustRecordFamily<RustFlowReadProjectionFact>({ id: "tsonic.rust.flowReadProjection", equals: rustFlowReadProjectionEquals },
     assertOpen, inherited);
-  return Object.freeze({ records: family.reader,
-    project(subject: ExtensionFactSubject, source: TargetTypeRef, selected: TargetTypeRef, projection: RustFlowReadProjectionInput): void {
-      assertOpen();
-      family.writer.set(subject, Object.freeze(projectionFact(source, selected, projection)));
-    },
+  const project = (subject: ExtensionFactSubject, source: TargetTypeRef, selected: TargetTypeRef, projection: RustFlowReadProjectionInput): void => {
+    assertOpen();
+    family.writer.set(subject, Object.freeze(projectionFact(source, selected, projection)));
+  };
+  const queries = createRustFlowReadProjectionQueries({ assertOpen, records: family.reader,
+    publish: (subject, fact) => project(subject, fact.sourceCarrier, fact.selectedCarrier, fact),
   });
+  return Object.freeze({ records: family.reader, project, ...queries });
 }
 
 function projectionFact(source: TargetTypeRef, selected: TargetTypeRef, projection: RustFlowReadProjectionInput): RustFlowReadProjectionFact {
