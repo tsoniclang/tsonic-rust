@@ -17,6 +17,32 @@ function fixture(text, surfaces = ["js"]) {
   return { context, ast, nodes, records: context.records };
 }
 
+test("prepared callbacks and declaration or closure effects publish each positive subject once", () => {
+  const counts = new Map();
+  const context = analyzeRustErrorEffects(`
+    export function fail(): void { throw new Error("original"); }
+    export function register(): void {
+      const callback = (): void => { throw new Error("original"); };
+      setTimeout(fail, 0);
+      setTimeout(callback, 0);
+    }
+  `, {}, current => ({ ...current, records: { ...current.records,
+    fallibleSubjects: { ...current.records.fallibleSubjects, selected(subject) {
+      counts.set(subject, (counts.get(subject) ?? 0) + 1);
+      return current.records.fallibleSubjects.selected(subject);
+    } },
+  } }));
+  const declared = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "fail");
+  const closure = context.sourceStorage.nodes.find(node => context.ast.is.IsArrowFunction(node));
+  assert.equal(declared !== undefined && closure !== undefined, true);
+  assert.equal(counts.get(declared), 1, "prepared named callback and declaration converge before publication");
+  assert.equal(counts.get(closure), 1, "prepared lambda and closure analysis converge before publication");
+  assert.equal([...counts.values()].every(count => count === 1), true);
+  assert.equal(context.records.fallible.get(declared)?.fallible, true);
+  assert.equal(context.records.fallible.get(closure)?.fallible, true);
+});
+
 test("native awaits publish exact value and source-error branches through the same selected producer", () => {
   const current = fixture(`
     import type { int32 } from "@tsonic/core/types.js";

@@ -92,7 +92,7 @@ test("sealed records publish only frozen typed family readers without a native k
     rawAddressPlan: () => model.rawAddresses.identity(subject, "same", carrier, []),
     receiverIndependentMethod: () => model.receiverIndependentMethods.finalize({}, [], () => ""),
     classValue: () => model.classValues.resolve({}, subject, undefined),
-    objectLiteralMethodAdapter: () => model.objectLiteralMethodAdapters.finalize({ expressions: [] }),
+    objectLiteralMethodAdapter: () => model.objectLiteralMethodAdapters.finalize({ expressions: new Set() }),
     projectCallableAdapters: () => model.projectCallableAdapterPlans.finalize({}),
     objectReferenceView: () => model.objectReferenceViews.select({}, subject, carrier, carrier),
     awaitSourceErrorEffects: () => model.awaitSourceErrors.selected(subject, []),

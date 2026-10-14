@@ -1,4 +1,5 @@
-import type { SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -24,6 +25,7 @@ export function createRustReceiverIndependentMethodProducer(
     finalize(walk: RustFactWalk, files: readonly SourceFile[], componentForFile: (fileName: string) => string): ReadonlySet<string> {
       assertOpen();
       const selection = selectRustCopiedMethods(walk, files, componentForFile);
+      const candidates = new Map<Node, TargetTypeRef>();
       for (const [identity, subject] of selection.demands) {
         if (!selection.proven.has(identity)) {
           appendRustDiagnostic(walk, "RUST_COPIED_METHOD_RECEIVER_NOT_PROVEN",
@@ -32,9 +34,16 @@ export function createRustReceiverIndependentMethodProducer(
           continue;
         }
         for (const method of selection.implementations.get(identity) ?? []) {
-          family.writer.set(method.node, { carrier: method.carrier });
+          const pending = candidates.get(method.node);
+          const existing = pending ?? family.reader.get(method.node)?.carrier;
+          if (existing !== undefined && !rustTargetTypeRefEquals(existing, method.carrier)) {
+            failTargetAnalysisInvariant("tsonic-rust",
+              "Conflicting Rust semantic plan 'tsonic.rust.receiverIndependentMethod' for one exact source subject.");
+          }
+          if (pending === undefined) candidates.set(method.node, existing ?? method.carrier);
         }
       }
+      for (const [node, carrier] of candidates) family.writer.set(node, Object.freeze({ carrier }));
       return selection.proven;
     },
   });

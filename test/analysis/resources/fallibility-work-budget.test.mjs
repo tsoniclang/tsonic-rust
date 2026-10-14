@@ -43,7 +43,7 @@ function fixture(text) {
     const diagnostics = [];
     const context = { ...program, source, ast, records, diagnostics };
     recordFallibilityFacts({ context, resolving: new Set(), rejectedExpressions: new WeakSet(),
-      preparedCallbackCalls: new Map(), objectLiteralMethodExpressions: [], objectLiteralMethodSpreadExpressions: [] },
+      preparedCallbackCalls: new Map(), objectLiteralMethodExpressions: new Set(), objectLiteralMethodSpreadExpressions: new Set() },
     program.sourceFiles, maximumWork);
     return { records, diagnostics };
   };

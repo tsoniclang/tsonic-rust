@@ -31,6 +31,7 @@ import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
+  walk.context.records.assertOpen();
   const { ast } = walk.context;
   for (const sourceFile of sourceFiles) {
     for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {

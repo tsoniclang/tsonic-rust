@@ -873,11 +873,11 @@ export function resolveRecordLiteralCarrier(
     }
   }
   if (contributions.some((contribution) => contribution.kind === "method")) {
-    walk.objectLiteralMethodExpressions.push(expression);
+    walk.objectLiteralMethodExpressions.add(expression);
   }
   if (contributions.some((contribution) =>
     contribution.kind === "spread" && contribution.methods.length > 0)) {
-    walk.objectLiteralMethodSpreadExpressions.push(expression);
+    walk.objectLiteralMethodSpreadExpressions.add(expression);
   }
   const finalizedCarrier = setCarrierFact(walk, expression, resultCarrier);
   if (finalizedCarrier !== undefined && contextualReconciliation !== undefined) {

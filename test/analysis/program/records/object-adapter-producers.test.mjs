@@ -13,7 +13,7 @@ const wideCallable = rustCallableTargetType([wide], wide);
 const producers = [
   ["receiverIndependentMethod", "receiverIndependentMethods", owner => owner.finalize({}, [], () => "unused")],
   ["classValue", "classValues", owner => owner.resolve({}, {}, undefined)],
-  ["objectLiteralMethodAdapter", "objectLiteralMethodAdapters", owner => owner.finalize({ expressions: [] })],
+  ["objectLiteralMethodAdapter", "objectLiteralMethodAdapters", owner => owner.finalize({ expressions: new Set() })],
   ["projectCallableAdapters", "projectCallableAdapterPlans", owner => owner.finalize({})],
   ["objectReferenceView", "objectReferenceViews", owner => owner.select({}, {}, integer, integer)],
 ];
@@ -62,6 +62,7 @@ test("copied-method producer admits only proved implementations and preserves in
   assert.equal(original.finalize().size, 1);
   const fact = parent.receiverIndependentMethod.get(original.method);
   assert.equal(fact?.carrier === callable, true);
+  assert.equal(Object.isFrozen(fact), true);
   assert.equal(parent.receiverIndependentMethod.get({}) === undefined, true);
   assert.equal(parent.minimumFoundation(), "core");
   const child = createRustProgramRecordBuilder(undefined, parent.seal());
@@ -105,6 +106,42 @@ test("copied-method admission preserves publication order before later rejected-
   assert.equal(child.receiverIndependentMethod.get(rejected.method) === undefined, true);
 });
 
+test("copied-method batches preflight and admit one exact implementation shared by three demands", () => {
+  const method = { kind: "KindMethodDeclaration", children: [] };
+  const canonical = { carrier: callable };
+  let reads = 0;
+  const inherited = createRustRecordFixture({ receiverIndependentMethod: { get: node => {
+    assert.equal(node === method, true);
+    reads++;
+    return canonical;
+  } } });
+  const builder = createRustProgramRecordBuilder(undefined, inherited);
+  const selected = ["first", "second", "third"].map(fieldName => copiedFixture(builder,
+    { method, carrier: { ...callable }, fieldName }));
+  const walk = selected[0].walk;
+  const sources = selected.map(candidate => candidate.walk.context.records.targetOperation);
+  walk.context.records = createRustRecordFixture({ targetOperation: { get: subject => sources
+    .map(source => source.get(subject)).find(operation => operation !== undefined) } }, builder);
+  const proven = builder.receiverIndependentMethods.finalize(walk, selected.flatMap(candidate => candidate.files), () => "source");
+  assert.equal(proven.size, 3, "every proven flow identity is retained");
+  assert.equal(reads, 2, "one preflight and one actual admission, not one publication per demand");
+  assert.equal(builder.receiverIndependentMethod.get(method) === canonical, true);
+});
+
+test("contradictory copied-method candidates reject before publishing any new batch row", () => {
+  const builder = createRustProgramRecordBuilder();
+  const first = copiedFixture(builder, { fieldName: "first" });
+  const second = copiedFixture(builder, { fieldName: "second", method: first.method, carrier: wideCallable });
+  const sourceRecords = [first.walk.context.records.targetOperation, second.walk.context.records.targetOperation];
+  first.walk.context.records = createRustRecordFixture({ targetOperation: { get: subject => sourceRecords
+    .map(source => source.get(subject)).find(operation => operation !== undefined) } }, builder);
+  assert.throws(() => builder.receiverIndependentMethods.finalize(first.walk, [...first.files, ...second.files], () => "source"),
+    /Conflicting Rust semantic plan 'tsonic\.rust\.receiverIndependentMethod'/u);
+  assert.equal(builder.receiverIndependentMethod.get(first.method) === undefined, true,
+    "the earlier candidate is not published before a later contradiction is known");
+  assert.equal(first.walk.context.diagnostics.length, 0);
+});
+
 function adapterFixture(builder, { expression = {}, implementation = {}, contract = {}, slot = "value", returnCarrier = integer } = {}) {
   const declaration = {};
   const ownerCarrier = rustSourceTypeCarrier("/contract.ts", "Contract", "object", []);
@@ -127,7 +164,7 @@ function adapterFixture(builder, { expression = {}, implementation = {}, contrac
     },
     typeDefinitions: undefined,
     projectMethodDispatch: { variantsForMember: () => [variant] },
-    expressions: [expression],
+    expressions: new Set([expression]),
   };
   const walk = { context: { ...input, diagnostics: [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
   return { expression, implementation, contract, owner, concrete, input, walk,

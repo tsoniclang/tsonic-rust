@@ -23,6 +23,10 @@ function parentWalk() {
     callableSignatureCarrierFor: resolveRustCallableSignatureCarrier,
     inferredReturns: new Map(),
     resolvingReturns: new Set(),
+    deferredCallbackCalls: new WeakMap(),
+    preparedCallbackCalls: new Map(),
+    objectLiteralMethodExpressions: new Set(),
+    objectLiteralMethodSpreadExpressions: new Set(),
   };
 }
 
@@ -83,4 +87,34 @@ test("nested probes inherit live facts without retaining ancestor query closures
   assert.equal(nested.operationOptions.sourceCallableAbi.resolveParameterAbi(later, {}, {}) ===
     probe.context.records.sourceParameterAbi.get(later), true);
   assert.equal(nested.operationOptions.callableSignatureCarrier({}) === undefined, true);
+});
+
+test("pending callbacks and method obligations belong to one actual probe transaction", () => {
+  const parent = parentWalk();
+  const original = {};
+  const candidate = {};
+  const pending = {};
+  parent.deferredCallbackCalls.set(original, pending);
+  parent.preparedCallbackCalls.set(original, pending);
+  parent.objectLiteralMethodExpressions.add(original);
+  parent.objectLiteralMethodSpreadExpressions.add(original);
+  const probe = createRustCarrierProbe(parent);
+  const sibling = createRustCarrierProbe(parent);
+  const nested = createRustCarrierProbe(probe);
+  for (const container of ["deferredCallbackCalls", "preparedCallbackCalls",
+    "objectLiteralMethodExpressions", "objectLiteralMethodSpreadExpressions"]) {
+    assert.equal(probe[container] === parent[container], false, container);
+    assert.equal(probe[container] === sibling[container], false, container);
+    assert.equal(probe[container] === nested[container], false, container);
+    assert.equal(probe[container].has(original), false, `${container}: pending work is not inherited evidence`);
+    if (container.endsWith("Expressions")) probe[container].add(candidate);
+    else probe[container].set(candidate, pending);
+    probe[container].delete(original);
+    assert.equal(parent[container].has(original), true, `${container}: child cannot consume parent work`);
+    assert.equal(parent[container].has(candidate), false, `${container}: child cannot enqueue parent work`);
+    assert.equal(sibling[container].has(candidate), false, `${container}: sibling remains independent`);
+    assert.equal(nested[container].has(candidate), false, `${container}: nested obligations stay local`);
+  }
+  probe.objectLiteralMethodExpressions.add(candidate);
+  assert.equal(probe.objectLiteralMethodExpressions.size, 1, "one expression has one adapter obligation");
 });

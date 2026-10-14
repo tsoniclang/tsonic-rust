@@ -3,6 +3,7 @@ import type { RustFactWalk } from "./walk.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 
 export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
+  walk.context.records.assertOpen();
   const records = createRustProgramRecordBuilder(walk.context.typeDefinitions, walk.context.records);
   const sourceCallableAbi = createRustSourceCallableAbiResolver({
     isNativeCallableExpression: walk.moduleBindings.isNativeCallableExpression,
@@ -18,6 +19,10 @@ export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
     resolvingCallableSignatures: new Set(),
     finalizedParameters: new WeakSet(),
     capturedBindingStorage: new Map(),
+    deferredCallbackCalls: new WeakMap(),
+    preparedCallbackCalls: new Map(),
+    objectLiteralMethodExpressions: new Set(),
+    objectLiteralMethodSpreadExpressions: new Set(),
     sourceCallableAbi,
     operationOptions: {
       ...walk.operationOptions,

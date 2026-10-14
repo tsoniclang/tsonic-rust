@@ -58,6 +58,7 @@ export function recordFallibilityFacts(
   projectSourceFiles: readonly SourceFile[],
   maximumWork = defaultRustEffectsWorkLimit,
 ): void {
+  walk.context.records.assertOpen();
   const budget = createRustEffectsWorkBudget(maximumWork);
   const failure = budget.run(() => collectFallibilityFacts(walk, projectSourceFiles, budget));
   if (failure !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, undefined,
@@ -81,6 +82,7 @@ function collectFallibilityFacts(
   const sourceErrorEdges = new Map<Node, RustSourceErrorEffectEdge[]>();
   const genericInvocations = new Map<Node, RustGenericCallableInvocationFact>();
   const awaitSourceEdges = new Map<Node, readonly RustAwaitSourceErrorBranch[]>();
+  const fallibleSubjects = new Set<Node>();
   for (const call of walk.context.callableValues.native.calls) {
     budget.metadata(call.invocationError);
     budget.metadata(call.awaitErrors);
@@ -556,7 +558,7 @@ function collectFallibilityFacts(
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
-        walk.context.records.fallibleSubjects.selected(subject);
+        fallibleSubjects.add(subject);
       }
     }
   }
@@ -564,7 +566,7 @@ function collectFallibilityFacts(
     const effects = declarationEffects(declaration);
     budget.metadata(effects);
     walk.context.records.errorEffectPlans.selected(declaration, effects);
-    if (rustErrorEffectsAreFallible(effects)) walk.context.records.fallibleSubjects.selected(declaration);
+    if (rustErrorEffectsAreFallible(effects)) fallibleSubjects.add(declaration);
   }
   for (const sourceFile of projectSourceFiles) {
     budget.step();
@@ -585,7 +587,7 @@ function collectFallibilityFacts(
     if (effects === undefined) return;
     walk.context.records.errorEffectPlans.selected(sourceFile, effects);
     if (rustErrorEffectsAreFallible(effects)) {
-      walk.context.records.fallibleSubjects.selected(sourceFile);
+      fallibleSubjects.add(sourceFile);
     }
   }
   for (const sourceFile of projectSourceFiles) {
@@ -599,7 +601,7 @@ function collectFallibilityFacts(
         if (operation?.kind === "closure" && effects !== undefined && rustErrorEffectsAreFallible(effects)) {
           if (rustGenericCallableValue(operation.resultCarrier) !== undefined || rustCallableProtocol(operation.resultCarrier) !== undefined ||
             operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
-            walk.context.records.fallibleSubjects.selected(node);
+            fallibleSubjects.add(node);
           } else if (!ownedCallbackClosures.has(node)) {
             appendRustDiagnostic(
               walk,
@@ -695,4 +697,8 @@ function collectFallibilityFacts(
     walk.context.records.sourceErrorEdges.invocation(node, edges);
   }
   for (const [node, branches] of awaitSourceEdges) walk.context.records.awaitSourceErrors.selected(node, branches);
+  for (const subject of fallibleSubjects) {
+    budget.step();
+    walk.context.records.fallibleSubjects.selected(subject);
+  }
 }

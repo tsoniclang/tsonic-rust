@@ -84,8 +84,8 @@ export interface RustFactWalk {
   }>;
   readonly capturedBindingStorage: Map<Node, { readonly carrier: TargetTypeRef; readonly selection: RustCaptureStorage }>;
   readonly promotedStorageDeclarations: ReadonlySet<Node>;
-  readonly objectLiteralMethodExpressions: Node[];
-  readonly objectLiteralMethodSpreadExpressions: Node[];
+  readonly objectLiteralMethodExpressions: Set<Node>;
+  readonly objectLiteralMethodSpreadExpressions: Set<Node>;
   readonly moduleBindings: RustModuleBindingPolicy;
   currentThisCarrier?: TargetTypeRef;
   currentSuperCarrier?: TargetTypeRef;

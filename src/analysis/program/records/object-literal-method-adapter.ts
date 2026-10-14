@@ -8,7 +8,7 @@ import { createRustRecordFamily } from "./family.js";
 
 export interface RustObjectLiteralMethodAdapterProducer {
   readonly records: RustRecordFamily<RustObjectLiteralMethodAdapterFact>;
-  finalize(input: RustObjectLiteralMethodAdapterInput & { readonly expressions: readonly Node[] }): readonly RustObjectLiteralMethodAdapterIssue[];
+  finalize(input: RustObjectLiteralMethodAdapterInput & { readonly expressions: ReadonlySet<Node> }): readonly RustObjectLiteralMethodAdapterIssue[];
 }
 
 export function createRustObjectLiteralMethodAdapterProducer(
@@ -19,7 +19,7 @@ export function createRustObjectLiteralMethodAdapterProducer(
     assertOpen, inherited);
   return Object.freeze({
     records: family.reader,
-    finalize(input: RustObjectLiteralMethodAdapterInput & { readonly expressions: readonly Node[] }): readonly RustObjectLiteralMethodAdapterIssue[] {
+    finalize(input: RustObjectLiteralMethodAdapterInput & { readonly expressions: ReadonlySet<Node> }): readonly RustObjectLiteralMethodAdapterIssue[] {
       assertOpen();
       const issues: RustObjectLiteralMethodAdapterIssue[] = [];
       for (const expression of input.expressions) {

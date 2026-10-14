@@ -4,6 +4,8 @@ import { analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
 import { memoryAbiCapability } from "../../../helpers/memory-abi.mjs";
 import { recordRustInlineModuleCallableUses } from "../../../../dist/analysis/callables/module-values.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
+import { analyzeRustErrorEffects } from "../../../helpers/rust-error-analysis.mjs";
+import { resolveExpressionCarrier } from "../../../../dist/analysis/expressions/carriers.js";
 
 function checkedNodes(program) {
   const nodes = [];
@@ -21,6 +23,76 @@ function named(program, name) {
   assert.equal(result !== undefined, true, name);
   return result;
 }
+
+test("forward receiver mutation publishes one final mode per class or interface method", () => {
+  const calls = new Map();
+  const context = analyzeRustErrorEffects(`
+    interface Reader { read(): number; }
+    interface Builder { new(): Counter; }
+    class Counter {
+      value = 0;
+      chain(): void { this.change(); }
+      change(): void { this.value += 1; }
+      read(): number { return this.value; }
+      static identity(value: number): number { return value; }
+    }
+    export function run(): number { const counter = new Counter(); counter.chain(); return counter.read(); }
+  `, { surfaces: [] }, current => ({ ...current, records: { ...current.records,
+    selfModes: { ...current.records.selfModes, method(member, mode) {
+      calls.set(member, (calls.get(member) ?? 0) + 1);
+      current.records.selfModes.method(member, mode);
+    } },
+  } }));
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsClassDeclaration(node));
+  const definition = context.projectTypes.definitionForDeclaration(declaration);
+  assert.equal(context.objectRepresentations.representationFor(definition)?.kind, "value",
+    "mut-ref is the native value-receiver contract, not the shared receiver contract");
+  assert.equal(calls.size, 4, "three instance methods and one interface method signature");
+  for (const [member, count] of calls) {
+    const name = context.ast.text(context.ast.name(member));
+    assert.equal(count, 1, name);
+    assert.equal(context.records.selfMode.get(member)?.mode,
+      name === "chain" || name === "change" ? "mut-ref" : "ref", name);
+  }
+  const excluded = context.sourceStorage.nodes.filter(node => context.ast.is.IsConstructSignatureDeclaration(node) ||
+    context.ast.is.IsMethodDeclaration(node) && context.ast.hasModifierKind(node, "static"));
+  assert.equal(excluded.length, 2);
+  assert.equal(excluded.every(node => !calls.has(node) && context.records.selfMode.get(node) === undefined), true);
+});
+
+test("actual layout carrier queries reuse one zero-valued observation per checked call", () => {
+  const calls = new Map();
+  let walk;
+  const context = analyzeRustErrorEffects(`
+    import { abi } from "test:abi";
+    import { memorylayout, sizeof, strideof } from "@tsonic/core/lang.js";
+    import type { nativeUint } from "@tsonic/core/types.js";
+    const empty = memorylayout<{}>({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, fields: [] });
+    export function read(): nativeUint { return sizeof(empty) + strideof(empty); }
+  `, { surfaces: [], capabilities: [memoryAbiCapability("rust")] }, current => ({ ...current,
+    records: { ...current.records,
+      typeOnlyDeclarations: { ...current.records.typeOnlyDeclarations,
+        finalize(selected, files) { walk = selected; return current.records.typeOnlyDeclarations.finalize(selected, files); } },
+      memoryLayoutObservations: { ...current.records.memoryLayoutObservations, observe(expression, value) {
+        calls.set(expression, (calls.get(expression) ?? 0) + 1);
+        current.records.memoryLayoutObservations.observe(expression, value);
+      } },
+    },
+  }));
+  assert.equal(walk !== undefined, true);
+  assert.equal(calls.size, 2);
+  for (const [expression, count] of calls) {
+    const fact = context.records.memoryLayoutObservation.get(expression);
+    const carrier = context.records.runtimeCarrier.get(expression)?.carrier;
+    assert.equal(count, 1);
+    assert.equal(fact.value, 0, "zero is present selected metadata");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      assert.equal(resolveExpressionCarrier(walk, expression, context.ast.getSourceFile(expression), undefined) === carrier, true);
+      assert.equal(context.records.memoryLayoutObservation.get(expression) === fact, true);
+    }
+    assert.equal(calls.get(expression), 1, "cached source resolution does not call the actual constructor again");
+  }
+});
 
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";

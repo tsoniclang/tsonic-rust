@@ -283,7 +283,10 @@ function resourceDisposalTargetsEqual(
     return false;
   }
   if (left.form === "source-method" && right.form === "source-method") {
-    return left.name === right.name && left.receiverMode === right.receiverMode;
+    return left.name === right.name && left.receiverMode === right.receiverMode &&
+      (left.dispatch === undefined ? right.dispatch === undefined
+        : right.dispatch !== undefined && left.dispatch.virtualSlot === right.dispatch.virtualSlot &&
+          rustTargetTypeRefEquals(left.dispatch.ownerCarrier, right.dispatch.ownerCarrier));
   }
   return left.form === "provider" && right.form === "provider" &&
     closedMetadataEquals(left.target, right.target);

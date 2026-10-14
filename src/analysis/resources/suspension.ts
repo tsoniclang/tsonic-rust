@@ -26,6 +26,7 @@ export function recordResourceManagementFacts(
   walk: RustFactWalk,
   sourceFiles: readonly SourceFile[],
 ): void {
+  walk.context.records.assertOpen();
   const { ast } = walk.context;
   for (const sourceFile of sourceFiles) {
     for (const declaration of collectDescendantsOfKind(walk, sourceFile, KindVariableDeclaration)) {
@@ -68,6 +69,7 @@ export function recordResourceManagementFacts(
 }
 
 export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
+  walk.context.records.assertOpen();
   const resolve = (node: Node): RustFutureValueFact | undefined => walk.context.records.futureValues.resolve(node, () => {
     const transport = (operand: Node | undefined): RustFutureValueFact | undefined => {
       if (operand === undefined) return undefined;

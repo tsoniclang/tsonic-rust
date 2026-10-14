@@ -23,6 +23,7 @@ const noFuture: RustDeferredProducerEffectsFact = Object.freeze({ kind: "no-futu
 const noFutureChannel: RustDeferredProducerChannel = Object.freeze({ awaiting: "infallible", errorCarrier: infallible });
 
 export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
+  walk.context.records.assertOpen();
   const { records, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
   const completed = new Map<Node, RustDeferredProducerEffectsFact>();
   const inputs = new Map(callableValues.native.inputs.map(input => [input.implementation.identity, input]));
