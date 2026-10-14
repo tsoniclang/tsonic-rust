@@ -72,16 +72,16 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
         movingReads.add(name);
       }
     }
+  }
+  for (let index = storage.nodes.length - 1; index >= 0; index -= 1) {
+    const node = storage.nodes[index]!;
     if (ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node) || input.isOwnedOperationResult(node)) movingReads.add(node);
+    const operand = sourceTransparentExpressionOperand(ast, node);
+    if (operand !== undefined && movingReads.has(operand)) movingReads.add(node);
     if (input.canMoveStoredField(node)) {
       const receiver = Node_Expression(ast, node);
       if (receiver !== undefined && movingReads.has(receiver)) movingReads.add(node);
     }
-  }
-  for (let index = storage.nodes.length - 1; index >= 0; index -= 1) {
-    const node = storage.nodes[index]!;
-    const operand = sourceTransparentExpressionOperand(ast, node);
-    if (operand !== undefined && movingReads.has(operand)) movingReads.add(node);
   }
   return { kind: "resolved", flow: Object.freeze({ movingReads, captureTransfers }) };
 }

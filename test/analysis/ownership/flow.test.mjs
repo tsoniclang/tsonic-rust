@@ -21,6 +21,34 @@ function references(source, storage, name) {
     source.navigation.sourceReferenceFor(node)?.declaration !== source.ast.parent(node));
 }
 
+for (const [name, expression, input] of [
+  ["direct", "value.item", "Slot"],
+  ["parenthesized", "(((value))).item", "Slot"],
+  ["asserted", "(value satisfies Slot).item", "Slot"],
+  ["nested", "value.inner.item", "{ inner: Slot }"],
+  ["constructed", "new Slot('new').item", "Slot"],
+  ["produced", "produce().item", "Slot"],
+]) {
+  test(`stored-field movement is a reverse dependency fold for ${name} receivers`, async () => {
+    const { source, storage } = await fixture(`
+      class Slot { constructor(readonly item: string) {} }
+      declare function produce(): Slot;
+      function run(value: ${input}): string { return ${expression}; }
+    `);
+    const owner = storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) && source.ast.text(source.ast.name(node)) === "run");
+    const returned = source.ast.statements(source.ast.body(owner)).find(node => source.ast.is.IsReturnStatement(node));
+    const field = source.ast.as.AsReturnStatement(returned)?.Expression;
+    assert.equal(field !== undefined, true, "the checked return has its exact field expression");
+    for (const eligible of [false, true]) {
+      const selected = analyzeRustOwnershipFlow({ source, storage, capturesFor: () => undefined,
+        isOnceCallable: () => false, canMoveStoredField: node => eligible && source.ast.is.IsPropertyAccessExpression(node),
+        isOwnedOperationResult: () => false });
+      assert.equal(selected.kind, "resolved");
+      assert.equal(selected.flow.movingReads.has(field), eligible, "only the proven native field may transfer");
+    }
+  });
+}
+
 for (const [name, sourceText, expected] of [
   ["mutually exclusive returns", "function run(value: string, flag: boolean) { if (flag) return value; return value; }", [true, true]],
   ["sequential storage", "function run(value: string) { const first = value; const last = value; return [first,last]; }", [false, true]],

@@ -6,7 +6,6 @@ import {
   snapshotTargetPlanningSourceNavigation,
   targetSourceSyntaxProgram,
 } from "@tsonic/target-api/analysis";
-import { Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { analyzeRustBinaryDispatchDemand } from "../project/binary-dispatch-demand.js";
@@ -243,9 +242,11 @@ export function analyzeRustTargetProgram(
       const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
       if (definition === undefined ||
         objectRepresentations.representationFor(definition)?.kind !== "value") return false;
-      const receiver = Node_Expression(context.ast, field);
-      const declaration = receiver === undefined ? undefined : context.source.navigation.sourceReferenceFor(receiver)?.declaration;
-      return declaration !== undefined && records.bindingStorage.get(declaration) === undefined;
+      const semantics = context.semanticsFor(field).operations;
+      const access = semantics.propertyAccess(field) ?? semantics.elementAccess(field);
+      if (access === undefined || records.runtimeCarrier.get(access.receiver.expression)?.carrier.kind === "reference") return false;
+      const declaration = access.receiver.valueDeclaration;
+      return declaration === undefined || records.bindingStorage.get(declaration) === undefined;
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
