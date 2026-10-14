@@ -17,7 +17,10 @@ export function createRustNativeBackingProducer(
   return Object.freeze({
     records: family.reader,
     require(subject: Node, layout: RustNativeMemoryLayout): boolean {
-      return family.admit(subject, layout) === undefined;
+      assertOpen();
+      const existing = family.reader.get(subject);
+      return existing === undefined ? family.admit(subject, layout) === undefined
+        : rustNativeMemoryLayoutsEqual(existing, layout);
     },
   });
 }

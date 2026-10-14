@@ -82,6 +82,34 @@ test("scoped builders read inherited mutation facts and never publish new ones i
   assert.equal(sealed.mutatedReferent.get(fresh) === undefined, true);
 });
 
+test("positive mutation events retain canonical local and inherited facts and still refuse cached writes after seal", () => {
+  const parent = createRustProgramRecordBuilder();
+  const declaration = {};
+  parent.mutatedBindings.written(declaration);
+  parent.mutatedReferents.written(declaration);
+  const binding = parent.mutatedBinding.get(declaration);
+  const referent = parent.mutatedReferent.get(declaration);
+  const child = createRustProgramRecordBuilder(undefined, parent);
+  for (let repeat = 0; repeat < 4; repeat += 1) {
+    child.mutatedBindings.written(declaration);
+    child.mutatedReferents.written(declaration);
+    assert.equal(child.mutatedBinding.get(declaration) === binding, true);
+    assert.equal(child.mutatedReferent.get(declaration) === referent, true);
+  }
+  const fresh = {};
+  child.mutatedBindings.written(fresh);
+  const selected = child.mutatedBinding.get(fresh);
+  child.mutatedBindings.written(fresh);
+  assert.equal(child.mutatedBinding.get(fresh) === selected, true);
+  assert.equal(child.mutatedReferent.get(fresh) === undefined, true, "the two write-evidence families remain independent");
+  assert.equal(parent.mutatedBinding.get(fresh) === undefined, true, "child events never mutate a live parent");
+  child.seal();
+  for (const subject of [declaration, fresh]) {
+    assert.throws(() => child.mutatedBindings.written(subject), /after analysis is sealed/u);
+    assert.throws(() => child.mutatedReferents.written(subject), /after analysis is sealed/u);
+  }
+});
+
 test("type-alias registration publishes the selected declaration fact and keeps its carrier side effect", () => {
   const builder = createRustProgramRecordBuilder();
   const declaration = {};

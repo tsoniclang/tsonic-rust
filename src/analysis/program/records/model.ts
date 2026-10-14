@@ -1,6 +1,5 @@
-import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
-import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
+import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustConversionProducer } from "./conversion.js";
 import type { RustOptionProjectionProducer } from "./option-projection.js";
 import type { RustFlowReadProjectionProducer } from "./flow-read-projection.js";
@@ -67,10 +66,6 @@ import type { RustRetainedEnvironmentProducer } from "./retained-environment.js"
 import type { RustPreparedOperationResultProducer } from "./prepared-operation-result.js";
 import type { RustOptionalChainProducer } from "./optional-chain.js";
 import type { RustClosureCaptureProducer } from "./closure-capture.js";
-
-export interface RustRecordWriter<T> extends RustRecordFamily<T> {
-  readonly set: (subject: ExtensionFactSubject, value: T) => void;
-}
 
 export type RustProgramRecordWriter = RustProgramRecords & {
   readonly conversions: RustConversionProducer;

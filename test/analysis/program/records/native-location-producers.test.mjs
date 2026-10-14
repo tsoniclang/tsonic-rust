@@ -98,6 +98,44 @@ test("native array promotion preserves inherited canonical identity and strict k
   assert.equal(records.nativeArrayStorage.get(fresh) === undefined, true, "specialization never mutates its parent");
 });
 
+test("native array demand coalesces identical component contributions without replacing canonical evidence", () => {
+  const builder = createRustProgramRecordBuilder();
+  const declaration = {};
+  const element = {};
+  const reference = {};
+  assert.equal(builder.nativeArrays.promote([[element, "element"], [element, "element"]], declaration, layout, 8), true);
+  const original = builder.nativeArrayStorage.get(element);
+  assert.equal(builder.nativeArrays.promote([[element, "element"], [reference, "reference"], [element, "element"]],
+    declaration, { ...layout }, 8), true);
+  assert.equal(builder.nativeArrayStorage.get(element) === original, true, "the exact original component record is retained");
+  const referenceRecord = builder.nativeArrayStorage.get(reference);
+  assert.equal(referenceRecord?.kind, "reference");
+  assert.equal(builder.nativeArrays.promote([[reference, "reference"], [element, "element"]], declaration, layout, 8), true);
+  assert.equal(builder.nativeArrayStorage.get(reference) === referenceRecord, true);
+  builder.seal();
+  assert.throws(() => builder.nativeArrays.promote([[element, "element"]], declaration, layout, 8), /after analysis is sealed/u);
+});
+
+test("native array metadata conflicts refuse the whole group before any new publication", () => {
+  for (const existingConflict of [false, true]) {
+    const builder = createRustProgramRecordBuilder();
+    const declaration = {};
+    const fresh = {};
+    const subject = {};
+    if (existingConflict) builder.nativeArrays.promote([[subject, "element"]], declaration, layout, 8);
+    const original = builder.nativeArrayStorage.get(subject);
+    const group = existingConflict ? [[fresh, "literal"], [subject, "reference"]]
+      : [[fresh, "literal"], [subject, "binding"], [subject, "reference"]];
+    assert.throws(() => builder.nativeArrays.promote(group, declaration, layout, 8), /Conflicting Rust semantic plan/u);
+    assert.equal(builder.nativeArrayStorage.get(fresh) === undefined, true, "no earlier group member may leak");
+    assert.equal(builder.nativeArrayStorage.get(subject) === original, true, "no partial new or replaced subject");
+    if (existingConflict) {
+      assert.equal(builder.nativeArrays.promote(group, declaration, changedLayout, 8), false,
+        "the established layout refusal precedes internal metadata correspondence");
+    }
+  }
+});
+
 test("native backing admits the exact layout once and reports incompatible source demands without replacing it", () => {
   const parent = createRustProgramRecordBuilder();
   const subject = {};

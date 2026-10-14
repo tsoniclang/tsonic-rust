@@ -28,7 +28,10 @@ export function createRustRuntimeCarrierProducer(
       family.writer.set(subject, { carrier });
     },
     source(subject: ExtensionFactSubject, carrier: TargetTypeRef): RustRecordConflict<RustRuntimeCarrierSelection> | undefined {
-      return family.reuse(subject, { carrier });
+      assertOpen();
+      const existing = family.reader.get(subject);
+      return existing === undefined ? family.admit(subject, { carrier })
+        : rustTargetTypeRefEquals(existing.carrier, carrier) ? undefined : { existing, incoming: { carrier } };
     },
   });
 }

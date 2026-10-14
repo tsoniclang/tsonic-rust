@@ -108,11 +108,16 @@ const selected: TargetTypeRef | undefined = builder.flowReadProjection.get(subje
     ["old flow evidence", "builder.flowReadProjections.project(subject, carrier, carrier, flow, []);", /Expected 4 arguments/u],
     ["unknown contextual conversion", "builder.contextualValueConversions.convert(subject, carrier, carrier, { kind: 'guessed' });", /not assignable/u],
     ["retired flow forwarder", `import { recordRustFlowReadProjection } from "${join(root, "dist/analysis/conversions/value-carrier-queries.js")}";`, /has no exported member|no exported member named/u],
+    ["retired generic plan key", `import type { RustPlanKey } from "${join(root, "dist/analysis/program/records/key.js")}";`, /Cannot find module.*\/records\/key\.js/u],
+    ["private writer is not a program model port", `import type { RustRecordWriter } from "${join(root, "dist/analysis/program/records/model.js")}";`, /has no exported member|no exported member named/u],
+    ["removed generic reuse port", `import { createRustRecordFamily } from "${join(root, "dist/analysis/program/records/family.js")}";
+      const family = createRustRecordFamily({ id: "typed", equals: (left: number, right: number) => left === right }, () => {});
+      family.reuse({}, 1);`, /Property 'reuse' does not exist/u],
   );
   for (const [name, body, diagnostic] of invalid) {
     const result = check(directory, body);
     assert.notEqual(result.status, 0, name);
     assert.match(result.diagnostics, diagnostic, name);
   }
-  assert.equal(invalid.length, 54);
+  assert.equal(invalid.length, 57);
 });

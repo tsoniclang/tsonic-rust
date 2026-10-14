@@ -17,7 +17,8 @@ export function createRustMutatedBindingProducer(
   return Object.freeze({
     records: family.reader,
     written(declaration: Node): void {
-      family.writer.set(declaration, mutated);
+      assertOpen();
+      if (family.reader.get(declaration) === undefined) family.writer.set(declaration, mutated);
     },
   });
 }
