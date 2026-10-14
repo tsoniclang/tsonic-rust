@@ -125,8 +125,7 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       if (fact === undefined) {
         return undefined;
       }
-      const carrier = walk.context.records.runtimeCarrier.get(node)?.carrier ??
-        walk.context.records.runtimeCarrier.get(node)?.carrier;
+      const carrier = walk.context.records.runtimeCarrier.get(node)?.carrier;
       if (!rustFutureValueMatchesCarrier(fact, carrier, walk.context.typeDefinitions)) {
         appendRustDiagnostic(
           walk,

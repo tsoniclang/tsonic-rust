@@ -246,8 +246,7 @@ export function resolveFunctionExpressionCarrier(
     : ast.hasModifierKind(expression, "async") && asynchronous === undefined) {
     return undefined;
   }
-  const finalizedReturn = walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier ??
-    walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier;
+  const finalizedReturn = walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier;
   const selectedResultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
     ? selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
         (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
@@ -405,11 +404,9 @@ export function collectRustLexicalCaptures(
   const fieldCaptures = walk.context.objectRepresentations.receiverCaptures.capturesFor(expression);
   const fixedField = walk.context.objectRepresentations.receiverCaptures.fixedSelfFor(expression);
   if (fixedField !== undefined) {
-    const carrier = walk.context.records.runtimeCarrier.get(fixedField.reference)?.carrier ??
-      walk.context.records.runtimeCarrier.get(fixedField.reference)?.carrier;
+    const carrier = walk.context.records.runtimeCarrier.get(fixedField.reference)?.carrier;
     if (carrier === undefined || !fixedField.references.every(reference => rustTargetTypeRefEquals(
-      walk.context.records.runtimeCarrier.get(reference)?.carrier ??
-        walk.context.records.runtimeCarrier.get(reference)?.carrier, carrier))) return undefined;
+      walk.context.records.runtimeCarrier.get(reference)?.carrier, carrier))) return undefined;
     recursiveDeclaration = fixedField.declaration;
     recursiveField = { ...fixedField, carrier };
   }
@@ -450,8 +447,6 @@ export function collectRustLexicalCaptures(
     const reference = capture.references[capture.references.length - 1];
     if (reference === undefined) return undefined;
     const carrier = walk.context.records.runtimeCarrier.get(reference)?.carrier ??
-      walk.context.records.runtimeCarrier.get(reference)?.carrier ??
-      walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
       walk.context.records.runtimeCarrier.get(declaration)?.carrier;
     const selectedStorage = rustCapturedBindingStorage(walk, declaration, reference, expression, carrier, permitSingleOwner,
       nativeCallTrait, selected.callableRoots);

@@ -317,8 +317,7 @@ export function applySelectedProjectSourceCall(
     const receiverCarrier = resolveExpressionCarrier(walk, receiver, sourceFile, undefined);
     if (!rustTargetTypeRefEquals(receiverCarrier, union.receiverCarrier)) return undefined;
     const variants = union.variants.map(variant => {
-      const selfMode = walk.context.records.selfMode.get(variant.declaration) ??
-        walk.context.records.selfMode.get(variant.declaration);
+      const selfMode = walk.context.records.selfMode.get(variant.declaration);
       const owner = walk.context.projectTypes.definitionContainingDeclaration(variant.declaration);
       const polymorphic = owner !== undefined && walk.context.projectTypes.isPolymorphic(owner);
       const relationship = owner === undefined ? undefined : walk.context.projectTypes.relationship(variant.carrier, owner);

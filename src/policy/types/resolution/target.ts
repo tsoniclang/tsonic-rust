@@ -291,7 +291,7 @@ export function resolveStructuralObjectType(
   if (selectedContext === undefined) return undefined;
   context = selectedContext;
   const semantics = context.currentSemantics;
-  const struct = valueStruct ?? context.source.sourceFacts.getFact(type, structFactKey) ?? context.source.sourceFacts.getFact(type, structFactKey);
+  const struct = valueStruct ?? context.source.sourceFacts.getFact(type, structFactKey);
   if (struct !== undefined && (struct.valueType !== true || struct.fields === undefined)) return undefined;
   const representation = struct === undefined ? "reference" : "value";
   if (semantics.types.indexInfos(type).length !== 0) {

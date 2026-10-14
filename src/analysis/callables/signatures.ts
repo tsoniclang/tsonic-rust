@@ -313,7 +313,6 @@ function recordCallableValueSignatureFacts(
     return;
   }
   const valueCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
-    walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
     resolveRustTargetTypeRef(
       Node_Type(ast, declaration) ?? expression,
       rustResolutionContext(walk, declaration),

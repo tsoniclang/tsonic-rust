@@ -140,8 +140,7 @@ function recordVariableDeclarationListFacts(
     }
     const annotated = rustGenericCallableValueOwner(walk.context.ast, declaration,
       resolveRustDeclaredBindingStorage(walk, declaration));
-    const predeclared = walk.context.records.runtimeCarrier.get(declaration)?.carrier ??
-      walk.context.records.runtimeCarrier.get(declaration)?.carrier;
+    const predeclared = walk.context.records.runtimeCarrier.get(declaration)?.carrier;
     const induction = walk.context.ast.kindName(owner) === KindForStatement
       ? sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
           sourceFacts: walk.context.source.sourceFacts, semanticsFor: walk.context.semanticsFor,
