@@ -1,4 +1,5 @@
 import {
+  failTargetPlannerInvariant,
   rejectedTargetStage,
   resolvedTargetStage,
 } from "@tsonic/target-api/artifacts";
@@ -270,7 +271,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         initialization.root,
         packageInitializers,
         typeRenderingContextFor(rootComponentPlan),
-        diagnostics,
       );
 
   if (diagnostics.length > 0) {
@@ -319,17 +319,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const crateInitializerFunctionName = allocateRustGeneratedName(rootBindings, crateInitializerFunctionBase);
   const crateInitializer = planRustCrateInitializer(
     initialization.root,
-    moduleInitializers ?? [],
+    moduleInitializers,
     crateInitializerFunctionName,
     typeRenderingContextFor(rootComponentPlan),
     rootBindings,
   );
   if (initialization.root.modules.length > 0 && crateInitializer === undefined) {
-    return rejectedTargetStage([{
-      code: "RUST_INITIALIZER_ERROR_RECONSTRUCTION_MISSING", category: "error", source: "tsonic-rust",
-      message: "The completed root initializer error composition has no exact native reconstruction.",
-      evidence: ["target.capability=rust.backend.source-package-initialization"],
-    }]);
+    failTargetPlannerInvariant("tsonic-rust",
+      "The completed root initializer error composition has no exact native reconstruction.",
+      entrySourceFile);
   }
   const lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
     kind: "named",

@@ -1,6 +1,6 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustInitializerSelection } from "../../../target-model/records/error-regions.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
@@ -27,8 +27,7 @@ export function planRustModuleInitializers(
   selection: RustInitializerSelection,
   packageInitializers: RustSourcePackageInitializerPlan,
   rendering: RustTypeRenderingContext,
-  diagnostics: TargetDiagnostic[],
-): readonly RustModuleInitializer[] | undefined {
+): readonly RustModuleInitializer[] {
   const plannedBySourceFile = new Map(plannedSources.map(source => [source.sourceFile, source]));
   const ordered: RustModuleInitializer[] = [];
   for (const selected of selection.modules) {
@@ -41,16 +40,14 @@ export function planRustModuleInitializers(
         ? `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}` : undefined;
     const region = planRustSelectedErrorRegion(selected.region, rendering);
     if (path === undefined || region === undefined) {
-      diagnostics.push({ code: "RUST_SOURCE_PACKAGE_INITIALIZER_RECONSTRUCTION_MISSING", category: "error",
-        source: "tsonic-rust", sourceNode: selected.sourceFile,
-        message: `Completed initializer '${selected.identity}' has no exact native symbol or rendered error payload.`,
-        evidence: ["target.capability=rust.backend.source-package-initialization"] });
-      continue;
+      failTargetPlannerInvariant("tsonic-rust",
+        `Completed initializer '${selected.identity}' has no exact native symbol or rendered error payload.`,
+        selected.sourceFile);
     }
     ordered.push(Object.freeze({ sourceFile: selected.sourceFile, identity: selected.identity, path,
       asynchronous: selected.asynchronous, ...(region.boundary === undefined ? {} : { errorBoundary: region.boundary }) }));
   }
-  return diagnostics.length > 0 ? undefined : Object.freeze(ordered);
+  return Object.freeze(ordered);
 }
 
 export interface RustCrateInitializer {

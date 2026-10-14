@@ -1,5 +1,6 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
 
 import {
@@ -97,11 +98,9 @@ export function planRustSourcePackageInitializers(
     }
     const selected = input.program.errorRegions.initialization.moduleFor(sourceFile);
     if (selected === undefined) {
-      diagnostics.push({ ...initializerDiagnostic(
-        "RUST_SOURCE_PACKAGE_INITIALIZER_FACT_MISSING",
+      failTargetPlannerInvariant("tsonic-rust",
         `Source module '${fileName}' has no exact finalized initializer error effects.`,
-      ), sourceNode: sourceFile });
-      continue;
+        sourceFile);
     }
     pending.push({
       sourceFile,
