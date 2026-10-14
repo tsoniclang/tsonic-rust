@@ -33,7 +33,15 @@ function admitFamily(model, family, subject, fact) {
     fact.sourceCarrier, fact.targetCarrier, fact.sourceVariants);
   else if (family === "projectDowncast") model.projectDowncasts.project(subject,
     fact.sourceCarrier, fact.dispatchCarrier, fact.targetCarrier, fact.projection);
-  else if (family === "sourceParameterAbi") model.sourceParameterAbis.parameter(subject, fact);
+  else if (family === "sourceParameterAbi") {
+    model.sourceParameterAbis.parameter(subject, fact);
+    const selected = model.sourceParameterAbi.get(subject);
+    assert.equal(selected !== undefined, true, "the parameter producer admits its constructed ABI");
+    for (const field of Object.keys(fact)) {
+      assert.equal(selected[field] === fact[field], true, `the exact selected ABI ${field} is retained`);
+    }
+    return selected;
+  }
   else if (family === "awaitValue") {
     assert.equal(fact.selection.kind, "leaf", "the fixture supplies one exact completion");
     const leaf = fact.selection.value;
