@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeCalls, nativeNodes } from "../../../helpers/native-ast.mjs";
 import {
   acmeFilesPackage,
   acmePlatformPackage,
@@ -424,12 +425,16 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const main = artifactText(result, "src/main.rs");
-  assert.match(main, /fn main\(\) -> Result<\(\), tsonic_rust_runtime::TsonicError>/u);
-  assert.match(
-    main,
-    /acme_files::drain_runtime_fallible\(\)\.map_err\(tsonic_rust_runtime::TsonicError::from\)\?;/u,
-  );
-  assert.match(main, /Ok::<\(\), tsonic_rust_runtime::TsonicError>\(\(\)\)/u);
+  const main = nativeFunction(result, "main", "src/main.rs");
+  assert.equal(main.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  const propagated = nativeNodes(main.body, node => node.kind === "try" &&
+    nativeCalls(node.expr, "acme_files::drain_runtime_fallible").length === 1);
+  assert.equal(propagated.length, 1, "exact epilogue is fallible and propagated once");
+  const conversion = propagated[0].expr;
+  assert.equal(conversion.kind, "method-call");
+  assert.equal(conversion.method, "map_err");
+  assert.equal(conversion.args[0].owner.identity, main.errorType.identity);
+  assert.equal(conversion.args[0].name, "from");
+  assert.deepEqual(main.body.statements.at(-1).expr.args, [{ kind: "path", path: "()" }]);
   validateGeneratedProject("fallible-epilogue-proof", result.artifacts);
 });

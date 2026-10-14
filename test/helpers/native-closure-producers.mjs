@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { analyzeRust } from "./rust-session.mjs";
+import { createRustProviderPackage } from "../../dist/public/provider.js";
 
 import { createRustErrorRegionCatalog } from "../../dist/backend/planner/program/error-regions.js";
 import { rustPackageFallibleBoundary } from "../../dist/backend/planner/program/fallible-boundaries.js";
@@ -8,12 +9,12 @@ import { createRustSyntheticNameState } from "../../dist/backend/planner/names/s
 import { planRustCallableExpressionBody } from "../../dist/backend/planner/expressions/callable.js";
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";
 
-export function nativeClosureProducerFixture({ asynchronous = false, surfaces = [], source,
+export function nativeClosureProducerFixture({ asynchronous = false, surfaces = [], source, packages = [],
   selectRecords = records => records, selectProducers = value => value,
   body = () => ({ kind: "int-literal", text: "3" }),
 } = {}) {
   const output = asynchronous ? "Promise<int32>" : "int32";
-  const analyzed = analyzeRust({ surfaces, files: { "index.ts": source ?? `
+  const analyzed = analyzeRust({ surfaces, packages, files: { "index.ts": source ?? `
 import type { int32 } from "@tsonic/core/types.js";
 export function create(): () => ${output} {
   return ${asynchronous ? "async " : ""}(): ${output} => { return 3; };
@@ -65,18 +66,34 @@ export function create(): () => ${output} {
   };
 }
 
-export function nativeClosureProducerErrorRecords(errorType) {
-  return (records, producer) => ({ ...records, errorEffects: {
-    get: node => node === producer
-      ? { localErrors: false, nativeErrors: [{ identity: "fixture:failure", errorType }] }
-      : records.errorEffects.get(node),
-  } });
+export function nativeClosureProducerFailurePackage(errorType, { path = "fail", parameters = [], result = "int32" } = {}) {
+  const resultCarrier = { kind: "source-primitive", name: result };
+  return createRustProviderPackage({
+    id: "native-closure-producer-proof", version: "1.0.0", displayName: "Native closure producer proof",
+    crates: [],
+    modules: [{ moduleSpecifier: "test:producer", providerModuleId: "test.producer", exports: [{
+      id: "test:producer::fail", name: "fail", kind: "function", signatures: [{
+        id: "test:producer::fail()", name: "fail", parameters: parameters.map(parameter => ({
+          name: parameter.name, type: { kind: "source-primitive", name: parameter.type },
+        })), returnType: resultCarrier,
+      }],
+    }] }],
+    operations: [{ exportId: "test:producer::fail", operationKind: "method",
+      target: { form: "call", path }, parameterCarriers: parameters.map(parameter => ({ kind: "source-primitive", name: parameter.type })),
+      resultCarrier, isFallible: true,
+      errorBoundary: "source-program", nativeErrorCarriers: [errorType],
+    }],
+  });
 }
 
-export function printNativeClosureProducer(fixture) {
+export function planNativeClosureProducer(fixture) {
   const expression = fixture.plan();
   assert.equal(expression !== undefined, true,
     fixture.context.diagnostics.map(diagnostic => diagnostic.message).join("\n") || "closure producer exists");
   assert.equal(fixture.context.diagnostics.length, 0, "closure diagnostics");
-  return printRustExpr(expression);
+  return expression;
+}
+
+export function printNativeClosureProducer(fixture) {
+  return printRustExpr(planNativeClosureProducer(fixture));
 }

@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeNodes, nativeCalls, nativeType } from "../../../helpers/native-ast.mjs";
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
@@ -661,16 +662,23 @@ export function caller(flag: boolean): int32 {
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn risky\(flag: bool\) -> Result<i32, rt::TsonicError> \{/u);
-  assert.match(text, /return Err\(rt::TsonicError::from\(rt::JsError::error\(/u);
-  assert.match(text, /Ok\(7\)/u);
-  assert.doesNotMatch(text, /Ok::<_, rt::TsonicError>\(7\)/u);
-  assert.match(text, /let try_body: rt::TsonicResult<rt::Completion<i32, \(\)>> = 'try_body: \{/u);
-  assert.match(text, /outcome = match risky\(flag\)/u);
-  assert.match(text, /Err\(error\) => break 'try_body Err\(error\)/u);
-  assert.match(text, /let try_flow: rt::Completion<i32, \(\)> = match try_body \{/u);
-  assert.match(text, /Err\(_error\) => \{/u);
-  assert.doesNotMatch(text, /completion_region/u);
-  assert.match(text, /use tsonic_rust_runtime as rt;/u);
+  const risky = nativeFunction(result, "risky");
+  assert.deepEqual(risky.params.map(parameter => parameter.type), [nativeType("bool")]);
+  assert.deepEqual(risky.returnType, nativeType("i32"));
+  assert.equal(risky.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  assert.equal(nativeNodes(risky.body, node => node.kind === "throw" && nativeCalls(node.error, "rt::JsError::error").length === 1).length, 1);
+  assert.deepEqual(risky.body.statements.at(-1).expr, { kind: "call", path: "Ok", args: [{ kind: "int-literal", text: "7" }] });
+  const caller = nativeFunction(result, "caller");
+  const assignments = nativeNodes(caller.body, node => node.kind === "assign" && node.target.path === "outcome");
+  assert.equal(assignments.length, 2, "success and catch assign the same source storage");
+  const invoked = assignments.find(node => nativeCalls(node.value, "risky").length === 1);
+  assert.equal(invoked !== undefined, true, "selected fallible invocation is retained");
+  assert.equal(invoked.value.kind, "match");
+  const rejected = invoked.value.arms.find(arm => arm.pattern.path === "Err");
+  assert.equal(rejected.expression.kind, "break-expression");
+  assert.equal(rejected.expression.expr.path, "Err");
+  const region = nativeNodes(caller.body, node => node.kind === "block" && node.label === rejected.expression.label);
+  assert.equal(region.length, 1, "error transfers to the exact owning region");
+  assert.equal(nativeNodes(caller.body, node => node.kind === "match" && node.arms.some(arm => arm.pattern.path === "Err" &&
+    nativeNodes(arm.expression, value => value.kind === "unary" && value.operator === "-" && value.operand.text === "1").length === 1)).length, 1);
 });

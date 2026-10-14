@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeFunction, nativeSource, nativeNodes, nativeMethods, nativeType } from "../../helpers/native-ast.mjs";
 import { compileRust, artifactText, acmeTestingPackage, analyzeRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
@@ -55,11 +56,16 @@ await main();
 ` },
   });
   assert.deepEqual(result.diagnostics, []);
-  const output = artifactText(result, "src/index.rs");
-  assert.match(output, /fn forward\(value: &(?:String|str)\)/u);
-  assert.match(output, /fn retain\(value: String\)/u);
-  assert.doesNotMatch(output, /PointState|ObjectHandle/);
-  assert.match(output, /into_(?:result|value)\(\)/u);
+  const forwarded = nativeFunction(result, "forward").params[0].type;
+  assert.equal(forwarded.kind, "reference");
+  assert.equal(forwarded.mutable, false);
+  assert.equal(forwarded.referent.kind === "string" || forwarded.referent.kind === "str", true);
+  assert.deepEqual(nativeFunction(result, "retain").params.map(parameter => parameter.type), [nativeType("String")]);
+  const model = nativeSource(result);
+  assert.equal(nativeNodes(model, node => node.kind === "named" &&
+    ["PointState", "ObjectHandle"].includes(node.path.split("::").at(-1))).length, 0, "local native record has no object-state wrapper");
+  const completions = [...nativeMethods(model, "into_result"), ...nativeMethods(model, "into_value")];
+  assert.equal(completions.length > 0, true, "async result is consumed through its native completion contract");
   validateGeneratedProject("native-read-only-forwarding", result.artifacts, { run: true });
 });
 

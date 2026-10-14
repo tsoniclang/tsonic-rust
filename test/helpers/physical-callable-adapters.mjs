@@ -1,6 +1,6 @@
 import { createRustRecordFixture } from "./records.mjs";
 import assert from "node:assert/strict";
-import { nativeClosureProducerFixture, nativeClosureProducerErrorRecords } from "./native-closure-producers.mjs";
+import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "./native-closure-producers.mjs";
 
 
 import { createRustErrorRegionCatalog } from "../../dist/backend/planner/program/error-regions.js";
@@ -13,11 +13,13 @@ import { planRustCallableConversion } from "../../dist/backend/planner/expressio
 export function nativeFallibleAdapterFixture() {
   const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");
   const current = nativeClosureProducerFixture({
-    source: `import type { int32, int64 } from "@tsonic/core/types.js";
+    packages: [nativeClosureProducerFailurePackage(failure, { path: "original", result: "int64",
+      parameters: [{ name: "value", type: "int32" }] })],
+    source: `import { fail as original } from "test:producer";
+import type { int32, int64 } from "@tsonic/core/types.js";
 export function create(): (value: int32) => int64 {
-  return (value: int32): int64 => { return 3n; };
+  return (value: int32): int64 => { return original(value); };
 }`,
-    selectRecords: nativeClosureProducerErrorRecords(failure),
     body: context => ({ kind: "try", expr: { kind: "call", path: "original", args: [{ kind: "path", path: "value" }] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   });

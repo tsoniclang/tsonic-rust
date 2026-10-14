@@ -1,6 +1,8 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeMethods, nativeType,
+  nativeBorrow, nativeDispatchBinding, assertNoNativeCalls } from "../../helpers/native-ast.mjs";
 import { acmeTestingPackage, artifactText, compileRust, createRustSession, nodejsCapability, rustSourceDiagnostics } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
@@ -217,11 +219,24 @@ main();
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn ownedSeparator\(\) -> String \{[\s\S]*String::from\(tsonic_rust_node::path::sep\(\)\)/u);
-  assert.match(text, /ends_with_at_end\(\s*core::convert::AsRef::<str>::as_ref\(value\),\s*tsonic_rust_node::path::sep\(\),?\s*\)/u);
-  assert.match(text, /\[\s*core::convert::AsRef::<str>::as_ref\(&value\),\s*core::convert::AsRef::<str>::as_ref\(&tsonic_rust_node::path::sep\(\)\),\s*\]\s*\.concat\(\)/u);
-  assert.doesNotMatch(text, /sep\(\)\.to_string\(\)/u);
+  const owned = nativeFunction(result, "ownedSeparator");
+  assert.deepEqual(owned.returnType, nativeType("String"));
+  const conversions = nativeNodes(owned.body, node => node.kind === "owned-string-from-borrowed-str" &&
+    nativeCalls(node.expression, "tsonic_rust_node::path::sep").length === 1);
+  assert.equal(conversions.length, 1, "ownership is materialized exactly at the owned result boundary");
+  const ends = nativeFunction(result, "endsWithSeparator");
+  const comparisons = nativeCalls(ends.body, "js_string::ends_with_at_end");
+  assert.equal(comparisons.length, 1);
+  assert.equal(comparisons[0].args[0].path, "core::convert::AsRef::<str>::as_ref");
+  assert.equal(nativeCalls(comparisons[0].args[1], "tsonic_rust_node::path::sep").length, 1);
+  assertNoNativeCalls(ends.body, ["to_owned", "to_string", "clone"], "read-only native separator stays borrowed");
+  const append = nativeFunction(result, "appendSeparator");
+  const parts = nativeNodes(append.body, node => node.kind === "string-concat");
+  assert.equal(parts.length, 1);
+  assert.equal(parts[0].parts.length, 2);
+  assert.equal(parts[0].parts[0].path, "value");
+  assert.equal(nativeCalls(parts[0].parts[1], "tsonic_rust_node::path::sep").length, 1);
+  assertNoNativeCalls(append.body, ["to_string"], "native concatenation does not materialize a separate separator");
   validateGeneratedProject("node-borrowed-provider-strings", result.artifacts, { run: true });
 });
 
@@ -411,17 +426,39 @@ main();
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /tsonic_rust_node::http::create_server_optional\(dispatch_root_2, Some\(aliasedHandle\)\)/u);
-  assert.match(source, /fn handle\([^)]*\) -> Result<\(\), rt::TsonicError>/u);
-  assert.match(source, /response\.set_status_code\(/u);
-  assert.match(source, /response\.set_header\(/u);
-  assert.match(source, /response\.end_buffer\(/u);
-  assert.match(source, /server\s*\.listen_optional\(/u);
-  assert.match(source, /tsonic_rust_node::timers::set_interval_callable/u);
-  assert.match(source, /rt::Callable::<[^;]+rt::TsonicResult<\(\)>>/u);
-  const main = artifactText(result, "src/main.rs");
-  assert.match(main, /tsonic_rust_node::run_with_contexts\(/u);
+  const main = nativeFunction(result, "main");
+  const servers = nativeCalls(main.body, "tsonic_rust_node::http::create_server_optional");
+  assert.equal(servers.length, 1);
+  assert.equal(servers[0].args.length, 3);
+  nativeDispatchBinding(result, main.body, servers[0], servers[0].args[0].path, "tsonic_rust_node::http::HttpServers");
+  const tasks = servers[0].args[1];
+  assert.equal(tasks.kind, "method-call");
+  assert.equal(tasks.method, "handle");
+  assert.deepEqual(tasks.args, []);
+  nativeDispatchBinding(result, main.body, servers[0], tasks.receiver.path, "tsonic_rust_node::runtime_tasks::RuntimeTasks");
+  assert.deepEqual(servers[0].args[2], { kind: "call", path: "Some", args: [{ kind: "path", path: "aliasedHandle" }] });
+  assert.equal(nativeFunction(result, "handle").errorType.identity, "tsonic-rust-runtime:TsonicError");
+  const send = nativeFunction(result, "send");
+  for (const method of ["set_status_code", "set_header", "end_buffer"]) {
+    const calls = nativeMethods(send.body, method);
+    assert.equal(calls.length, 1, `the exact response ${method} row is retained`);
+    assert.equal(calls[0].receiver.path, "response");
+  }
+  assert.equal(nativeMethods(main.body, "listen_optional").length, 1);
+  const timers = nativeCalls(main.body, "tsonic_rust_node::timers::set_interval_callable");
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].args.length, 3);
+  const callables = nativeNodes(timers[0].args[1], node => node.kind === "associated-call" &&
+    node.owner.path === "rt::Callable" && node.method === "new");
+  assert.equal(callables.length, 1, "the exact timer callback retains one native callable owner");
+  const callableTypes = callables[0].owner.genericArguments.filter(argument => argument.kind === "type").map(argument => argument.type);
+  assert.deepEqual(callableTypes[0], nativeType("()"));
+  assert.equal(callableTypes[1].path, "Result");
+  assert.deepEqual(callableTypes[1].genericArguments[0].type, nativeType("()"));
+  assert.equal(callableTypes[1].genericArguments[1].type.identity, "tsonic-rust-runtime:TsonicError",
+    "the timer callback keeps the same exact fallible unit ABI, independent of Result alias spelling");
+  assert.equal(nativeCalls(nativeFunction(result, "main", "src/main.rs"), "tsonic_rust_node::run_with_contexts").length,
+    1, "the selected providers activate the Node event loop");
   validateGeneratedProject("node-server-contract", result.artifacts);
 });
 
@@ -443,11 +480,32 @@ export function register(
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /pub type RegisterHandler = rt::Callable<\s*\(\s*tsonic_rust_node::http::IncomingMessage<rt::TsonicError>,\s*tsonic_rust_node::http::ServerResponse<rt::TsonicError>,\s*\),\s*rt::TsonicResult<\(\)>,\s*>/u);
-  assert.match(source, /pub fn register\(handler: RegisterHandler\)/u);
-  assert.match(source, /tsonic_rust_node::http::create_server_optional\(dispatch_root, Some\(handler\)\)/u);
-  assert.doesNotMatch(source, /handler\.clone\(\)/u);
+  const model = nativeSource(result);
+  const aliases = model.items.filter(item => item.kind === "type-alias" && item.name === "RegisterHandler");
+  assert.equal(aliases.length, 1);
+  assert.equal(aliases[0].visibility, "public");
+  assert.equal(aliases[0].target.path, "rt::Callable");
+  const arguments_ = aliases[0].target.genericArguments.filter(argument => argument.kind === "type").map(argument => argument.type);
+  assert.equal(arguments_[0].kind, "tuple");
+  assert.deepEqual(arguments_[0].elements.map(type => type.path),
+    ["tsonic_rust_node::http::IncomingMessage", "tsonic_rust_node::http::ServerResponse"]);
+  assert.equal(arguments_[0].elements.every(type => type.genericArguments[0].type.identity === "tsonic-rust-runtime:TsonicError"), true);
+  assert.equal(arguments_[1].path, "rt::TsonicResult");
+  assert.deepEqual(arguments_[1].genericArguments[0].type, nativeType("()"));
+  const register = nativeFunction(result, "register");
+  assert.equal(register.visibility, "public");
+  assert.deepEqual(register.params.map(parameter => parameter.type), [{ kind: "named", path: "RegisterHandler" }]);
+  const servers = nativeCalls(register.body, "tsonic_rust_node::http::create_server_optional");
+  assert.equal(servers.length, 1);
+  assert.equal(servers[0].args.length, 3);
+  assert.deepEqual(servers[0].args[2], { kind: "call", path: "Some", args: [{ kind: "path", path: "handler" }] });
+  nativeDispatchBinding(result, register.body, servers[0], servers[0].args[0].path, "tsonic_rust_node::http::HttpServers");
+  const tasks = servers[0].args[1];
+  assert.equal(tasks.kind, "method-call");
+  assert.equal(tasks.method, "handle");
+  assert.deepEqual(tasks.args, []);
+  nativeDispatchBinding(result, register.body, servers[0], tasks.receiver.path, "tsonic_rust_node::runtime_tasks::RuntimeTasks");
+  assertNoNativeCalls(register.body, ["clone"], "the exact first-class handler is retained without a copy");
   validateGeneratedProject("node-retained-callback", result.artifacts);
 });
 

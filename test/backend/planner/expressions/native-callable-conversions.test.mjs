@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nativeClosureProducerFixture, nativeClosureProducerErrorRecords } from "../../../helpers/native-closure-producers.mjs";
+import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../../helpers/native-closure-producers.mjs";
 import { planRustCallableInputProducer, planRustCallableConversion }
   from "../../../../dist/backend/planner/expressions/callable-conversions.js";
 
@@ -34,7 +34,13 @@ for (const retained of [false, true]) {
 }
 
 function fixture(throwing = false) {
-  const current = nativeClosureProducerFixture(throwing ? { selectRecords: nativeClosureProducerErrorRecords(failure) } : {});
+  const current = nativeClosureProducerFixture(throwing ? {
+    packages: [nativeClosureProducerFailurePackage(failure)], source: `
+import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => int32 { return (): int32 => { fail(); return 3; }; }
+`,
+  } : {});
   const source = current.program.records.targetOperation.get(current.node).resultCarrier;
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "exact source producer plans");

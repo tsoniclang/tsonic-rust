@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeCallableContract, nativeType } from "../../helpers/native-ast.mjs";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { callableInputDomainSource, callableInputDomainDeclaration, callableInputDomainObservedCaller } from "../../../../tsonic/test/fixtures/callable-input-domains.mjs";
-import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 
@@ -15,13 +16,14 @@ for (const surfaces of [[], ["js"]]) {
     for (const sourceText of [callableInputDomainDeclaration, callableInputDomainDeclaration + callableInputDomainObservedCaller]) {
       const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } }, files: { "index.ts": sourceText } });
       assertNoTargetDiagnostics(result.diagnostics);
-      const source = artifactText(result, "src/index.rs");
-      const signature = source.match(/pub fn apply[\s\S]*?\{/u)?.[0];
-      assert.equal(signature !== undefined, true, "one emitted public declaration");
-      assert.match(signature, /transform: &impl rt::CallableImplementation<\(String,\), Output = rt::TsonicResult<String>>/u);
-      signatures.push(signature);
+      const declaration = nativeCallableContract(result, "apply", 1, [nativeType("String")], nativeType("String"));
+      assert.equal(declaration.visibility, "public");
+      assert.equal(declaration.params[1].type.kind, "reference");
+      assert.equal(declaration.params[1].type.mutable, false);
+      signatures.push({ params: declaration.params, generics: declaration.generics,
+        result: declaration.returnType, error: declaration.errorType });
     }
-    assert.equal(signatures[0], signatures[1], "local observations cannot change an externally callable native ABI");
+    assert.deepEqual(signatures[0], signatures[1], "local observations cannot change an externally callable native ABI");
   });
 
   test(`mixed owning and borrowing native callbacks execute through one declared input ABI in ${lane}`, { timeout: 300_000 }, () => {

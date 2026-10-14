@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeNodes, nativeCalls, nativeDispatchBinding } from "../../helpers/native-ast.mjs";
 import {
   acmeTestingPackage,
   artifactText,
@@ -106,8 +107,8 @@ export async function size_of(path: string): Promise<boolean> {
 
 test("stream scheduler operations lower through exact provider rows", async () => {
   const cases = [
-    { name: "watch", target: "watch" },
-    { name: "createReadStream", target: "create_read_stream" },
+    { name: "watch", target: "watch", hasTasks: false, rootType: "tsonic_rust_node::fs::Watchers" },
+    { name: "createReadStream", target: "create_read_stream", hasTasks: true, rootType: "tsonic_rust_node::background::BackgroundTasks" },
   ];
   for (const item of cases) {
     const { result } = compileRust({
@@ -118,10 +119,23 @@ test("stream scheduler operations lower through exact provider rows", async () =
       },
     });
     assert.deepEqual(result.diagnostics, []);
-    assert.match(artifactText(result, "src/index.rs"), new RegExp(
-      `dispatch_root_1\\.with\\(\\|dispatch_root\\| \\{\\s*tsonic_rust_node::fs::${item.target}\\(\\s*dispatch_root,\\s*core::convert::AsRef::<str>::as_ref\\("x"\\),?\\s*\\)\\s*\\}\\)\\?`,
-      "u",
-    ));
+    const selected = nativeFunction(result, "selected");
+    const path = `tsonic_rust_node::fs::${item.target}`;
+    const calls = nativeCalls(selected.body, path);
+    assert.equal(calls.length, 1, `${item.name} selects its exact provider row`);
+    const selectedCall = calls[0];
+    assert.equal(selectedCall.args.length, item.hasTasks ? 3 : 2);
+    nativeDispatchBinding(result, selected.body, selectedCall, selectedCall.args[0].path, item.rootType);
+    if (item.hasTasks) {
+      const tasks = selectedCall.args[1];
+      assert.equal(tasks.kind, "method-call");
+      assert.equal(tasks.method, "handle");
+      assert.deepEqual(tasks.args, []);
+      nativeDispatchBinding(result, selected.body, selectedCall, tasks.receiver.path, "tsonic_rust_node::runtime_tasks::RuntimeTasks");
+    }
+    assert.deepEqual(selectedCall.args.at(-1), { kind: "str-literal", value: "x" });
+    assert.equal(nativeNodes(selected.body, node => node.kind === "try" && nativeCalls(node.expr, path).length === 1).length,
+      1, "provider scheduling failure propagates");
   }
 });
 

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeFunction, nativeType } from "../../helpers/native-ast.mjs";
 import { lexicalCaptureConversionSource } from "../../../../tsonic/test/fixtures/lexical-capture-conversions.mjs";
-import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 for (const surfaces of [[], ["js"]]) {
@@ -14,9 +15,12 @@ for (const surfaces of [[], ["js"]]) {
         files: { "index.ts": (lexicalCaptureConversionSource + "\nmain();\n") },
       });
       assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
-      const source = artifactText(result, "src/index.rs");
-      assert.match(source, /fn read\([^)]*: i32\)/u);
-      assert.match(source, /fn fail\([^)]*: &Failure\)/u);
+      assert.deepEqual(nativeFunction(result, "read").params.map(parameter => parameter.type), [nativeType("i32")]);
+      const failure = nativeFunction(result, "fail").params;
+      assert.equal(failure.length, 1);
+      assert.equal(failure[0].type.kind, "reference");
+      assert.equal(failure[0].type.mutable, false);
+      assert.equal(failure[0].type.referent.path, "Failure", "the exact exception is borrowed before contextual conversion");
       const executed = validateGeneratedProject(name, result.artifacts, { run: true });
       assert.equal(executed.status, 0, executed.stderr);
     });

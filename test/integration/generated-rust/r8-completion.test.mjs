@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeNodes, nativeCalls, nativeType, nativeBorrow } from "../../helpers/native-ast.mjs";
 import {
   acmeTestingPackage,
   artifactText,
@@ -48,11 +49,27 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn manifest_has\(path: &str, needle: String\) -> Result<bool, rt::TsonicError>/u);
-  assert.match(text, /let xs: \[i32; 3\] = \[10, 20, 30\];/u);
-  assert.match(text, /match tsonic_rust_node::crypto::random_bytes\(16_usize\) \{\s*Ok\(value\) => value,\s*Err\(error\) => break 'try_body Err\(rt::TsonicError::from\(error\)\),\s*\}/u);
-  assert.doesNotMatch(text, /random_bytes\(16_usize\)\?/u);
+  const manifest = nativeFunction(result, "manifest_has");
+  assert.equal(manifest.visibility, "public");
+  assert.deepEqual(manifest.params.map(parameter => parameter.type), [nativeBorrow(nativeType("str")), nativeType("String")]);
+  assert.deepEqual(manifest.returnType, nativeType("bool"));
+  assert.equal(manifest.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  const main = nativeFunction(result, "main");
+  const arrays = nativeNodes(main.body, node => node.kind === "let" && node.name === "xs");
+  assert.equal(arrays.length, 1);
+  assert.deepEqual(arrays[0].type, { kind: "fixed-array", element: nativeType("i32"), length: { kind: "integer", value: 3n } });
+  assert.deepEqual(arrays[0].init.elements, ["10", "20", "30"].map(text => ({ kind: "int-literal", text })));
+  const caught = nativeNodes(main.body, node => node.kind === "match" && node.expression.kind === "call" &&
+    node.expression.path === "tsonic_rust_node::crypto::random_bytes");
+  assert.equal(caught.length, 1);
+  assert.deepEqual(caught[0].expression.args, [{ kind: "int-literal", text: "16_usize" }]);
+  const rejected = caught[0].arms.find(arm => arm.pattern.path === "Err");
+  assert.equal(rejected.expression.kind, "break-expression");
+  assert.equal(rejected.expression.expr.path, "Err");
+  assert.equal(nativeCalls(rejected.expression, "rt::TsonicError::from").length, 1);
+  assert.equal(nativeNodes(main.body, node => node.kind === "try" &&
+    nativeCalls(node.expr, "tsonic_rust_node::crypto::random_bytes").length !== 0).length, 0,
+    "the random failure enters the source catch instead of escaping the function");
   const run = validateGeneratedProject("r8-proof-bin", result.artifacts, { run: true });
   assert.equal(run.status, 0);
 });

@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeNodes, nativeCalls, nativeMethods, nativeType } from "../../../helpers/native-ast.mjs";
 import { artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 
 
@@ -72,9 +73,18 @@ export function bad(xs: int32[]): boolean {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn bad\(xs: js_abi::JsArray<i32>\) -> Result<bool, rt::TsonicError>/u);
-  assert.match(text, /xs\.try_some\(\|x\| Ok::<_, rt::TsonicError>\(risky\(x\)\? == 1\)\)/u);
+  const bad = nativeFunction(result, "bad");
+  assert.equal(bad.params[0].type.path, "js_abi::JsArray");
+  assert.deepEqual(bad.params[0].type.genericArguments, [{ kind: "type", type: nativeType("i32") }]);
+  assert.deepEqual(bad.returnType, nativeType("bool"));
+  assert.equal(bad.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  const selected = nativeMethods(bad.body, "try_some");
+  assert.equal(selected.length, 1, "the fallible callback operation is selected");
+  const callback = selected[0].args[0];
+  assert.equal(callback.kind === "closure" || callback.kind === "closure-block", true);
+  assert.equal(nativeNodes(callback, node => node.kind === "try" && nativeCalls(node.expr, "risky").length === 1).length, 1,
+    "callback failure propagates rather than becoming a boolean");
+  assert.equal(nativeNodes(callback, node => node.kind === "binary" && node.operator === "==" && node.right.text === "1").length, 1);
 });
 
 test("string literals mentioning runtime aliases do not create imports", () => {
