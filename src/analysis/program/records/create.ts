@@ -5,9 +5,8 @@ import type { RustProgramRecords, RustRecordFamily } from "../../../target-model
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForCarrier } from "../../foundation/requirements.js";
-import { rustFoundationForContextualConversion, rustFoundationForFinalizedConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
-import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
-import { rustTypeAliasDeclarationFactKey, rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustResourceManagementFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
+import { rustFoundationForContextualConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
+import { rustTypeAliasDeclarationFactKey, rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
 import { rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
 import { createRustSelectedOperationProducer } from "./selected-operation.js";
 import { createRustRuntimeCarrierProducer } from "./runtime-carrier.js";
@@ -18,14 +17,19 @@ import { createRustClassValueProducer } from "./class-value.js";
 import { createRustObjectLiteralMethodAdapterProducer } from "./object-literal-method-adapter.js";
 import { createRustProjectCallableAdapterProducer } from "./project-callable-adapters.js";
 import { createRustObjectReferenceViewProducer } from "./object-reference-view.js";
+import { createRustAwaitSourceErrorEffectsProducer } from "./await-source-error-effects.js";
+import { createRustErrorEffectsProducer } from "./error-effects.js";
+import { createRustFallibleProducer } from "./fallible.js";
+import { createRustGenericCallableInvocationProducer } from "./generic-callable-invocation.js";
+import { createRustSourceAccessorEffectsProducer } from "./source-accessor-effects.js";
+import { createRustSourceCallEffectsProducer } from "./source-call-effects.js";
+import { createRustSourceErrorEffectsProducer } from "./source-error-effects.js";
+import { createRustAwaitValueProducer } from "./await-value.js";
+import { createRustFutureValueProducer } from "./future-value.js";
+import { createRustResourceManagementProducer } from "./resource-management.js";
+import { createRustDeferredProducerEffectsProducer } from "./deferred-producer-effects.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "./keys/native-control-flow.js";
-import { rustAwaitValueFactKey } from "./keys/await-values.js";
 import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
-import { rustErrorEffectsFactKey } from "./keys/error-effects.js";
-import { rustSourceErrorEffectsFactKey } from "./keys/source-error-effects.js";
-import { rustDeferredProducerEffectsFactKey } from "./keys/deferred-producer-effects.js";
-import { rustAwaitSourceErrorEffectsFactKey } from "./keys/await-source-error-effects.js";
-import { rustFallibleFactKey, rustSourceCallEffectsFactKey, rustSourceAccessorEffectsFactKey, rustFutureValueFactKey } from "./keys/object-methods.js";
 import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
 import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
 import { rustTypeOnlyDeclarationFactKey } from "./keys/type-only.js";
@@ -36,7 +40,6 @@ import { rustIndexedFieldKeyArgument } from "./keys/indexed-field-keys.js";
 import { rustRetainedEnvironmentFactKey, rustRetainedCallLifetimesFactKey } from "./keys/retained-environments.js";
 import { rustGenericNumericOperandsKey } from "./keys/generic-numeric.js";
 import { rustModuleCallableStorageFactKey } from "./keys/module-values.js";
-import { rustGenericCallableInvocationFactKey } from "./keys/generic-callable-effects.js";
 import { rustCapturedFieldStorageFactKey } from "./keys/receiver-captures.js";
 import { rustPropertyProjectionFactKey } from "./keys/property-projections.js";
 import { createRustMemoryBindingProducer } from "./memory-bindings.js";
@@ -67,7 +70,7 @@ export function createRustProgramRecordBuilder(
   const asyncFunction = createFamily(rustAsyncFunctionFactKey, parent?.asyncFunction);
   const generator = createFamily(rustGeneratorFactKey, parent?.generator);
   const yielded = createFamily(rustYieldFactKey, parent?.yield);
-  const resourceManagement = createFamily(rustResourceManagementFactKey, parent?.resourceManagement);
+  const resourceManagementPlans = createRustResourceManagementProducer(assertOpen, parent?.resourceManagement);
   const sourceParameterAbi = createFamily(rustSourceParameterAbiFactKey, parent?.sourceParameterAbi, fact => {
     const carriers = maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier),
       rustFoundationForCarrier(fact.parameterCarrier));
@@ -82,31 +85,18 @@ export function createRustProgramRecordBuilder(
   const argumentPassing = createFamily(rustArgumentPassingKey, parent?.argumentPassing);
   const nativeGuardResult = createFamily(rustNativeGuardResultFactKey, parent?.nativeGuardResult);
   const nativeUnreachable = createFamily(rustNativeUnreachableFactKey, parent?.nativeUnreachable);
-  const awaitValue = createFamily(rustAwaitValueFactKey, parent?.awaitValue, fact => {
-    let foundation: RustFoundation = "core";
-    for (const leaf of rustAwaitSelectionLeaves(fact.selection)) {
-      if (leaf.completion.kind === "value") foundation = maximumRustFoundation(foundation,
-        rustFoundationForFinalizedConversion(leaf.completion.conversion, definitions));
-    }
-    return foundation;
-  });
+  const awaitValues = createRustAwaitValueProducer(assertOpen, requireFoundation, definitions, parent?.awaitValue);
   const compileTimeSource = createFamily(rustCompileTimeSourceKey, parent?.compileTimeSource);
   const sourceCallableReturn = createFamily(rustSourceCallableReturnFactKey, parent?.sourceCallableReturn);
-  const errorEffects = createFamily(rustErrorEffectsFactKey, parent?.errorEffects);
-  const sourceErrorEffects = createFamily(rustSourceErrorEffectsFactKey, parent?.sourceErrorEffects);
-  const deferredProducerEffects = createFamily(rustDeferredProducerEffectsFactKey, parent?.deferredProducerEffects,
-    fact => fact.kind === "no-future" ? "core" : fact.channels.reduce<RustFoundation>((foundation, channel) =>
-      maximumRustFoundation(foundation, rustFoundationForCarrier(channel.errorCarrier)), "core"));
-  const awaitSourceErrorEffects = createFamily(rustAwaitSourceErrorEffectsFactKey, parent?.awaitSourceErrorEffects);
+  const errorEffectPlans = createRustErrorEffectsProducer(assertOpen, parent?.errorEffects);
+  const sourceErrorEdges = createRustSourceErrorEffectsProducer(assertOpen, parent?.sourceErrorEffects);
+  const deferredProducerChannels = createRustDeferredProducerEffectsProducer(assertOpen, requireFoundation, parent?.deferredProducerEffects);
+  const awaitSourceErrors = createRustAwaitSourceErrorEffectsProducer(assertOpen, parent?.awaitSourceErrorEffects);
   const objectLiteralMethodAdapters = createRustObjectLiteralMethodAdapterProducer(assertOpen, parent?.objectLiteralMethodAdapter);
-  const fallible = createFamily(rustFallibleFactKey, parent?.fallible);
-  const sourceCallEffects = createFamily(rustSourceCallEffectsFactKey, parent?.sourceCallEffects);
-  const sourceAccessorEffects = createFamily(rustSourceAccessorEffectsFactKey, parent?.sourceAccessorEffects);
-  const futureValue = createFamily(rustFutureValueFactKey, parent?.futureValue, fact => {
-    const conversion = rustFoundationForFinalizedConversion(fact.awaitedConversion, definitions);
-    return fact.errorCarrier === undefined ? conversion : maximumRustFoundation(conversion,
-      rustFoundationForCarrier(fact.errorCarrier));
-  });
+  const fallibleSubjects = createRustFallibleProducer(assertOpen, parent?.fallible);
+  const sourceCallEffectPlans = createRustSourceCallEffectsProducer(assertOpen, parent?.sourceCallEffects);
+  const sourceAccessorEffectPlans = createRustSourceAccessorEffectsProducer(assertOpen, parent?.sourceAccessorEffects);
+  const futureValues = createRustFutureValueProducer(assertOpen, requireFoundation, definitions, parent?.futureValue);
   const optionProjection = createFamily(rustOptionProjectionFactKey, parent?.optionProjection);
   const flowReadProjection = createFamily(rustFlowReadProjectionFactKey, parent?.flowReadProjection);
   const contextualValueConversion = createFamily(rustContextualValueConversionFactKey, parent?.contextualValueConversion,
@@ -143,7 +133,7 @@ export function createRustProgramRecordBuilder(
   const retainedCallLifetimes = createFamily(rustRetainedCallLifetimesFactKey, parent?.retainedCallLifetimes);
   const genericNumericOperands = createFamily(rustGenericNumericOperandsKey, parent?.genericNumericOperands);
   const moduleCallableStorage = createFamily(rustModuleCallableStorageFactKey, parent?.moduleCallableStorage);
-  const genericCallableInvocation = createFamily(rustGenericCallableInvocationFactKey, parent?.genericCallableInvocation);
+  const genericCallableInvocations = createRustGenericCallableInvocationProducer(assertOpen, parent?.genericCallableInvocation);
   const capturedFieldStorage = createFamily(rustCapturedFieldStorageFactKey, parent?.capturedFieldStorage);
   const propertyProjection = createFamily(rustPropertyProjectionFactKey, parent?.propertyProjection);
   const memoryBindings = createRustMemoryBindingProducer(assertOpen, parent?.memoryBindingPlan);
@@ -156,7 +146,7 @@ export function createRustProgramRecordBuilder(
     asyncFunction: asyncFunction.reader,
     generator: generator.reader,
     yield: yielded.reader,
-    resourceManagement: resourceManagement.reader,
+    resourceManagement: resourceManagementPlans.records,
     sourceParameterAbi: sourceParameterAbi.reader,
     runtimeCarrier: runtimeCarriers.records,
     selectedCall: selectedCalls.records,
@@ -165,18 +155,18 @@ export function createRustProgramRecordBuilder(
     argumentPassing: argumentPassing.reader,
     nativeGuardResult: nativeGuardResult.reader,
     nativeUnreachable: nativeUnreachable.reader,
-    awaitValue: awaitValue.reader,
+    awaitValue: awaitValues.records,
     compileTimeSource: compileTimeSource.reader,
     sourceCallableReturn: sourceCallableReturn.reader,
-    errorEffects: errorEffects.reader,
-    sourceErrorEffects: sourceErrorEffects.reader,
-    deferredProducerEffects: deferredProducerEffects.reader,
-    awaitSourceErrorEffects: awaitSourceErrorEffects.reader,
+    errorEffects: errorEffectPlans.records,
+    sourceErrorEffects: sourceErrorEdges.records,
+    deferredProducerEffects: deferredProducerChannels.records,
+    awaitSourceErrorEffects: awaitSourceErrors.records,
     objectLiteralMethodAdapter: objectLiteralMethodAdapters.records,
-    fallible: fallible.reader,
-    sourceCallEffects: sourceCallEffects.reader,
-    sourceAccessorEffects: sourceAccessorEffects.reader,
-    futureValue: futureValue.reader,
+    fallible: fallibleSubjects.records,
+    sourceCallEffects: sourceCallEffectPlans.records,
+    sourceAccessorEffects: sourceAccessorEffectPlans.records,
+    futureValue: futureValues.records,
     optionProjection: optionProjection.reader,
     flowReadProjection: flowReadProjection.reader,
     contextualValueConversion: contextualValueConversion.reader,
@@ -211,7 +201,7 @@ export function createRustProgramRecordBuilder(
     retainedCallLifetimes: retainedCallLifetimes.reader,
     genericNumericOperands: genericNumericOperands.reader,
     moduleCallableStorage: moduleCallableStorage.reader,
-    genericCallableInvocation: genericCallableInvocation.reader,
+    genericCallableInvocation: genericCallableInvocations.records,
     capturedFieldStorage: capturedFieldStorage.reader,
     propertyProjection: propertyProjection.reader,
     memoryBindingPlan: memoryBindings.records,
@@ -224,7 +214,8 @@ export function createRustProgramRecordBuilder(
     asyncFunction: asyncFunction.writer,
     generator: generator.writer,
     yield: yielded.writer,
-    resourceManagement: resourceManagement.writer,
+    resourceManagement: resourceManagementPlans.records,
+    resourceManagementPlans,
     sourceParameterAbi: sourceParameterAbi.writer,
     runtimeCarrier: runtimeCarriers.records,
     runtimeCarriers,
@@ -236,19 +227,28 @@ export function createRustProgramRecordBuilder(
     argumentPassing: argumentPassing.writer,
     nativeGuardResult: nativeGuardResult.writer,
     nativeUnreachable: nativeUnreachable.writer,
-    awaitValue: awaitValue.writer,
+    awaitValue: awaitValues.records,
+    awaitValues,
     compileTimeSource: compileTimeSource.writer,
     sourceCallableReturn: sourceCallableReturn.writer,
-    errorEffects: errorEffects.writer,
-    sourceErrorEffects: sourceErrorEffects.writer,
-    deferredProducerEffects: deferredProducerEffects.writer,
-    awaitSourceErrorEffects: awaitSourceErrorEffects.writer,
+    errorEffects: errorEffectPlans.records,
+    errorEffectPlans,
+    sourceErrorEffects: sourceErrorEdges.records,
+    sourceErrorEdges,
+    deferredProducerEffects: deferredProducerChannels.records,
+    deferredProducerChannels,
+    awaitSourceErrorEffects: awaitSourceErrors.records,
+    awaitSourceErrors,
     objectLiteralMethodAdapter: objectLiteralMethodAdapters.records,
     objectLiteralMethodAdapters,
-    fallible: fallible.writer,
-    sourceCallEffects: sourceCallEffects.writer,
-    sourceAccessorEffects: sourceAccessorEffects.writer,
-    futureValue: futureValue.writer,
+    fallible: fallibleSubjects.records,
+    fallibleSubjects,
+    sourceCallEffects: sourceCallEffectPlans.records,
+    sourceCallEffectPlans,
+    sourceAccessorEffects: sourceAccessorEffectPlans.records,
+    sourceAccessorEffectPlans,
+    futureValue: futureValues.records,
+    futureValues,
     optionProjection: optionProjection.writer,
     flowReadProjection: flowReadProjection.writer,
     contextualValueConversion: contextualValueConversion.writer,
@@ -290,7 +290,8 @@ export function createRustProgramRecordBuilder(
     retainedCallLifetimes: retainedCallLifetimes.writer,
     genericNumericOperands: genericNumericOperands.writer,
     moduleCallableStorage: moduleCallableStorage.writer,
-    genericCallableInvocation: genericCallableInvocation.writer,
+    genericCallableInvocation: genericCallableInvocations.records,
+    genericCallableInvocations,
     capturedFieldStorage: capturedFieldStorage.writer,
     propertyProjection: propertyProjection.writer,
     memoryBindingPlan: memoryBindings.records,

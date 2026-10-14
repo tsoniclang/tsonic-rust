@@ -77,7 +77,7 @@ export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
       ["target.capability=rust.async.exact-deferred-producer"]);
     return;
   }
-  for (const [declaration, fact] of completed) records.deferredProducerEffects.set(declaration, fact, [{ message: "rust exact deferred producer channel" }]);
+  records.deferredProducerChannels.finalize(completed);
 }
 
 function errorForStoredFuture(walk: RustFactWalk, selected: RustStoredFutureValue,

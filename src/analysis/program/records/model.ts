@@ -15,6 +15,17 @@ import type { RustClassValueProducer } from "./class-value.js";
 import type { RustObjectLiteralMethodAdapterProducer } from "./object-literal-method-adapter.js";
 import type { RustProjectCallableAdapterProducer } from "./project-callable-adapters.js";
 import type { RustObjectReferenceViewProducer } from "./object-reference-view.js";
+import type { RustAwaitSourceErrorEffectsProducer } from "./await-source-error-effects.js";
+import type { RustErrorEffectsProducer } from "./error-effects.js";
+import type { RustFallibleProducer } from "./fallible.js";
+import type { RustGenericCallableInvocationProducer } from "./generic-callable-invocation.js";
+import type { RustSourceAccessorEffectsProducer } from "./source-accessor-effects.js";
+import type { RustSourceCallEffectsProducer } from "./source-call-effects.js";
+import type { RustSourceErrorEffectsProducer } from "./source-error-effects.js";
+import type { RustAwaitValueProducer } from "./await-value.js";
+import type { RustFutureValueProducer } from "./future-value.js";
+import type { RustResourceManagementProducer } from "./resource-management.js";
+import type { RustDeferredProducerEffectsProducer } from "./deferred-producer-effects.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -22,7 +33,10 @@ export interface RustRecordWriter<T> extends RustRecordFamily<T> {
 
 type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "selectedCall" | "targetOperation" |
   "nativeArrayStorage" | "nativeBacking" | "rawLocationPlan" | "memoryBindingPlan" | "rawAddressPlan" |
-  "receiverIndependentMethod" | "classValue" | "objectLiteralMethodAdapter" | "projectCallableAdapters" | "objectReferenceView";
+  "receiverIndependentMethod" | "classValue" | "objectLiteralMethodAdapter" | "projectCallableAdapters" | "objectReferenceView" |
+  "awaitSourceErrorEffects" | "errorEffects" | "fallible" | "genericCallableInvocation" |
+  "sourceAccessorEffects" | "sourceCallEffects" | "sourceErrorEffects" | "awaitValue" |
+  "futureValue" | "resourceManagement" | "deferredProducerEffects";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -41,6 +55,17 @@ export type RustProgramRecordWriter = {
   readonly objectLiteralMethodAdapters: RustObjectLiteralMethodAdapterProducer;
   readonly projectCallableAdapterPlans: RustProjectCallableAdapterProducer;
   readonly objectReferenceViews: RustObjectReferenceViewProducer;
+  readonly awaitSourceErrors: RustAwaitSourceErrorEffectsProducer;
+  readonly errorEffectPlans: RustErrorEffectsProducer;
+  readonly fallibleSubjects: RustFallibleProducer;
+  readonly genericCallableInvocations: RustGenericCallableInvocationProducer;
+  readonly sourceAccessorEffectPlans: RustSourceAccessorEffectsProducer;
+  readonly sourceCallEffectPlans: RustSourceCallEffectsProducer;
+  readonly sourceErrorEdges: RustSourceErrorEffectsProducer;
+  readonly awaitValues: RustAwaitValueProducer;
+  readonly futureValues: RustFutureValueProducer;
+  readonly resourceManagementPlans: RustResourceManagementProducer;
+  readonly deferredProducerChannels: RustDeferredProducerEffectsProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

@@ -3,7 +3,7 @@ import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustPlanKey } from "../key.js";
 import { rustLifetimesEqual } from "../../../../target-model/lifetimes/index.js";
-import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustSuspendedOwnedReceiver, RustSuspendedCallableStorage, RustYieldFact, RustResourceManagementFact, RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
+import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustSuspendedOwnedReceiver, RustSuspendedCallableStorage, RustYieldFact, RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
 
 export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarationFact> =
   defineRustPlanKey("typeAliasDeclaration", (left, right) =>
@@ -67,9 +67,6 @@ export const rustYieldFactKey: RustPlanKey<RustYieldFact> =
       ? right.delegatedCarrier === undefined
       : right.delegatedCarrier !== undefined &&
         rustTargetTypeRefEquals(left.delegatedCarrier, right.delegatedCarrier)));
-
-export const rustResourceManagementFactKey: RustPlanKey<RustResourceManagementFact> =
-  defineRustPlanKey("resourceManagement", closedMetadataEquals);
 
 export const rustSourceParameterAbiFactKey: RustPlanKey<RustSourceParameterAbiFact> =
   defineRustPlanKey("sourceParameterAbi", closedMetadataEquals);
