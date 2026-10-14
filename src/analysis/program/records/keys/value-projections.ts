@@ -12,4 +12,3 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
 
 export const rustContextualValueConversionFactKey: RustPlanKey<RustContextualValueConversionFact> =
   defineRustPlanKey("contextualValueConversion", closedMetadataEquals);
-

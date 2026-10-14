@@ -61,7 +61,7 @@ builder.closureCapture.get(node);
     ...["preparedOperationResult", "optionalChain", "closureCapture"].map(family =>
       [family, `builder.${family}.set(node, undefined);`, /Property 'set' does not exist/u]),
     ...["rustPreparedOperationResultFactKey", "rustOptionalChainFactKey", "rustClosureCaptureFactKey"].map(key =>
-      [key, `import { ${key} } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /no exported member|has no exported|Cannot find module/u]),
+      [key, `import { ${key} } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /Cannot find module.*\/keys\/operation-selections\.js/u]),
     ["prepared foreign subject", "builder.preparedOperations.prepare({}, operation, carrier);", /missing.*properties.*Node/u],
     ["prepared old DTO", "builder.preparedOperations.prepare(node, { operationId: 'id', operationKind: 'method', resultCarrier: carrier });", /Expected 3 arguments/u],
     ["prepared incomplete native template", "builder.preparedOperations.prepare(node, { operationId: 'id', operationKind: 'method' }, carrier);", /missing/u],

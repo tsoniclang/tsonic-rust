@@ -58,7 +58,7 @@ builder.compoundWrite.get(node);
   assert.equal(positive.status, 0, positive.diagnostics);
   const removedKeys = [
     ["rustAsyncFunctionFactKey", "callables-and-resources", /Cannot find module/u], ["rustYieldFactKey", "callables-and-resources", /Cannot find module/u],
-    ["rustComputedMemberFactKey", "operation-selections", /has no exported member/u], ["rustCompoundWriteFactKey", "operation-selections", /has no exported member/u],
+    ["rustComputedMemberFactKey", "operation-selections", /Cannot find module.*\/keys\/operation-selections\.js/u], ["rustCompoundWriteFactKey", "operation-selections", /Cannot find module.*\/keys\/operation-selections\.js/u],
   ];
   const invalid = [
     ...["asyncFunction", "yield", "computedMember", "compoundWrite"].map(family =>

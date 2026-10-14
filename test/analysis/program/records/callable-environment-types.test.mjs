@@ -70,8 +70,8 @@ test("callable/environment producers require semantic inputs and reject every re
   invalid.push(["environment static lifetime", "builder.retainedEnvironments.retain(declaration, { kind: 'static' }, []);", /not assignable/u]);
   invalid.push(["environment placeholder lifetime", "builder.retainedEnvironments.retain(declaration, { kind: 'placeholder' }, []);", /not assignable/u]);
   invalid.push(["environment parameter kind", "builder.retainedEnvironments.retain(declaration, lifetime, [carrier]);", /not assignable/u]);
-  invalid.push(["source callable old key", `import { rustSourceCallableValueFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /no exported member/u]);
-  invalid.push(["direct callable old key", `import { rustDirectCallableReferenceFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /no exported member/u]);
+  invalid.push(["source callable old key", `import { rustSourceCallableValueFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /Cannot find module.*\/keys\/operation-selections\.js/u]);
+  invalid.push(["direct callable old key", `import { rustDirectCallableReferenceFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /Cannot find module.*\/keys\/operation-selections\.js/u]);
   invalid.push(["retained environment old path/key", `import { rustRetainedEnvironmentFactKey } from "${join(root, "dist/analysis/program/records/keys/retained-environments.js")}";`, /Cannot find module/u]);
   for (const [label, text, diagnostic] of invalid) {
     const result = check(text);

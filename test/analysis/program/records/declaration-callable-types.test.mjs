@@ -87,5 +87,5 @@ test("all five old keys are deleted rather than left as an alternate registratio
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "no removed key has a surviving import path");
-  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2307, 2307, 2307, 2305, 2305]);
+  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2307, 2307, 2307, 2307, 2307]);
 });
