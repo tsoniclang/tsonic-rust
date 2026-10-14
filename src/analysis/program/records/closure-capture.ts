@@ -28,19 +28,15 @@ export function createRustClosureCaptureProducer(
       assertOpen();
       const recursiveField = recursion.recursiveField;
       family.writer.set(declaration, Object.freeze({
-        receivers: Object.freeze(receivers.map(receiver => Object.freeze({ owner: receiver.owner,
-          reference: receiver.reference, references: Object.freeze([...receiver.references]), carrier: receiver.carrier }))),
-        receiverFields: Object.freeze(receiverFields.map(field => Object.freeze({ declaration: field.declaration,
-          reference: field.reference, receiver: field.receiver, references: Object.freeze([...field.references]),
-          carrier: field.carrier, storage: Object.freeze({ kind: field.storage.kind, initialization: field.storage.initialization }) }))),
-        captures: Object.freeze(captures.map(capture => Object.freeze({ declaration: capture.declaration,
-          reference: capture.reference, carrier: capture.carrier, storage: capture.storage,
-          ...(capture.mutable === undefined ? {} : { mutable: capture.mutable }) }))),
+        receivers: Object.freeze(receivers.map(receiver => Object.freeze({ ...receiver,
+          references: Object.freeze([...receiver.references]) }))),
+        receiverFields: Object.freeze(receiverFields.map(field => Object.freeze({ ...field,
+          references: Object.freeze([...field.references]), storage: Object.freeze({ ...field.storage }) }))),
+        captures: Object.freeze(captures.map(capture => Object.freeze({ ...capture }))),
         ...(invocationOwner === undefined ? {} : { invocationOwner }),
         ...(recursion.recursiveDeclaration === undefined ? {} : { recursiveDeclaration: recursion.recursiveDeclaration }),
-        ...(recursiveField === undefined ? {} : { recursiveField: Object.freeze({ declaration: recursiveField.declaration,
-          receiver: recursiveField.receiver, reference: recursiveField.reference,
-          references: Object.freeze([...recursiveField.references]), carrier: recursiveField.carrier }) }),
+        ...(recursiveField === undefined ? {} : { recursiveField: Object.freeze({ ...recursiveField,
+          references: Object.freeze([...recursiveField.references]) }) }),
       }));
     },
   });

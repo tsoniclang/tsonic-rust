@@ -70,6 +70,28 @@ for (const surfaces of [[], ["js"]]) {
     assert.deepEqual(Object.keys(program.records.closureCapture), ["get"]);
     assert.equal(program.records.closureCaptures === undefined, true);
   });
+
+  test(`checked lexical class capture retains the exact selected native environment metadata in ${surface}`, () => {
+    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+      export function run(value: number): number {
+        class Value { read(): number { return value; } }
+        return new Value().read();
+      }
+    ` } });
+    const nodes = nodesOf(source, program.sourceFiles);
+    const declaration = nodes.find(node => source.ast.is.IsClassDeclaration(node));
+    const captures = program.records.closureCapture.get(declaration);
+    assert.equal(captures !== undefined, true);
+    assert.equal(captures.captures.length, 1);
+    const selected = captures.captures[0];
+    assert.equal(source.ast.is.IsParameter(selected.declaration), true);
+    assert.equal(source.ast.text(source.ast.name(selected.declaration)), "value");
+    assert.equal(nodes.includes(selected.reference), true);
+    assert.equal(selected.storage, "value");
+    assert.equal(typeof selected.fieldName, "string");
+    assert.equal(Object.isFrozen(selected) && Object.isFrozen(captures), true);
+    assert.equal(rustTargetTypeRefEquals(selected.carrier, program.records.runtimeCarrier.get(selected.reference)?.carrier), true);
+  });
 }
 
 for (const [name, result, expression] of [

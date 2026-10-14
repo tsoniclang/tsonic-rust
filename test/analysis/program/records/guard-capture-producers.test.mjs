@@ -134,6 +134,20 @@ for (const storage of ["value", "location", "cell", "borrow-cell"]) for (const m
   });
 }
 
+test("selected class-environment capture metadata survives canonical publication without a DTO projection", () => {
+  const builder = createRustProgramRecordBuilder();
+  const capture = { declaration: {}, reference: {}, carrier: integer, storage: "value", fieldName: "captured", copy: true };
+  builder.closureCaptures.capture(subject, [capture]);
+  const selected = builder.closureCapture.get(subject).captures[0];
+  assert.deepEqual(Object.keys(selected).sort(), Object.keys(capture).sort());
+  assert.equal(selected.declaration === capture.declaration && selected.reference === capture.reference && selected.carrier === integer, true);
+  assert.equal(selected.fieldName, "captured");
+  assert.equal(selected.copy, true);
+  assert.equal(Object.isFrozen(selected), true);
+  capture.fieldName = "later";
+  assert.equal(selected.fieldName, "captured");
+});
+
 test("receiver, field and recursive captures retain all source roots, ordering and shared invocation ownership", () => {
   const parent = createRustProgramRecordBuilder();
   const receiverReference = {};
