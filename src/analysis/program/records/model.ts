@@ -68,6 +68,7 @@ import type { RustOptionalChainProducer } from "./optional-chain.js";
 import type { RustClosureCaptureProducer } from "./closure-capture.js";
 
 export type RustProgramRecordWriter = RustProgramRecords & {
+  readonly assertOpen: () => void;
   readonly conversions: RustConversionProducer;
   readonly optionProjections: RustOptionProjectionProducer;
   readonly flowReadProjections: RustFlowReadProjectionProducer;
@@ -137,7 +138,6 @@ export type RustProgramRecordWriter = RustProgramRecords & {
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
-  readonly assertOpen: () => void;
   seal(): RustProgramRecords;
   minimumFoundation(): RustFoundation;
 }

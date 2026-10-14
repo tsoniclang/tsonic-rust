@@ -21,6 +21,7 @@ import { rustNativeCallableResultMatches } from "../../policy/ownership/callable
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 
 export function selectRustInferredReturn(
   walk: RustFactWalk,
@@ -104,8 +105,8 @@ export function selectRustInferredReturn(
             (left === undefined || right === undefined ? undefined : resolveRustBranchUnion(expression, [
               { expression: conditional.WhenTrue, carrier: left },
               { expression: conditional.WhenFalse, carrier: right },
-            ], context, walk.operationOptions)) ??
-            resolveRustTargetTypeRef(expression, context, walk.operationOptions);
+            ], context, probe.operationOptions)) ??
+            resolveRustTargetTypeRef(expression, context, probe.operationOptions);
         }
         if (kind === "KindCallExpression") {
           const semantics = walk.context.semanticsFor(expression);
@@ -126,10 +127,10 @@ export function selectRustInferredReturn(
           const receiver = source.receiver.expression;
           const receiverCarrier = expressionCarrier(receiver);
           if (receiverCarrier === undefined) return undefined;
-          records.runtimeCarriers.selected(receiver, receiverCarrier);
+          if (setCarrierFact(probe, receiver, receiverCarrier) === undefined) return undefined;
           const selection = selectRustCheckedPropertyAccess(
             checkedPropertySelectionInput(rustOperationContext(probe, expression), expression, source),
-            rustOperationContext(probe, expression), walk.operationOptions,
+            rustOperationContext(probe, expression), probe.operationOptions,
           );
           records.targetOperations.checked(expression, selection);
           records.selectedOperations.checked(expression, selection);
@@ -142,12 +143,12 @@ export function selectRustInferredReturn(
           if (operand === undefined) return undefined;
           const carrier = expressionCarrier(operand);
           if (carrier === undefined) return undefined;
-          records.runtimeCarriers.selected(operand, carrier);
+          if (setCarrierFact(probe, operand, carrier) === undefined) return undefined;
         }
         const sourceFile = ast.getSourceFile(expression);
         return sourceFile !== undefined && kind !== "KindIdentifier"
           ? resolveExpressionCarrier(probe, expression, sourceFile, undefined)
-          : resolveRustTargetTypeRef(expression, context, walk.operationOptions);
+          : resolveRustTargetTypeRef(expression, context, probe.operationOptions);
       } finally {
         active.delete(expression);
       }

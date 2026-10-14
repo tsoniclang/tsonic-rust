@@ -3,6 +3,8 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetOperation } from "../../target-model/types/model.js";
+import type { Node } from "@tsonic/tsts";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "./finalized-operation/conversions.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
@@ -87,6 +89,13 @@ export function rustTargetOperationText(fact: RustTargetOperationFact): string {
     return fact.kind;
   }
   return fact.operationId;
+}
+
+export function rustSelectedOperatorOperation(
+  subject: Node, fact: RustTargetOperationFact, resultType: TargetTypeRef,
+): RustSelectedTargetOperation {
+  return { operationId: fact.operationId, operationKind: "operator",
+    targetOperation: rustTargetOperationText(fact), resultType, provenance: { sourceExpression: subject } };
 }
 
 export function rustTargetOperationIsDirectLocation(fact: RustTargetOperationFact | undefined): boolean {

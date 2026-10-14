@@ -1,7 +1,7 @@
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
-import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../../target-model/operations/model.js";
+import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../../operations/literal-plans.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -45,18 +45,15 @@ export function createRustTargetOperationProducer(
       family.writer.set(subject, operation);
     },
     enumLiteral(subject: Node, name: string, resultCarrier: TargetTypeRef): void {
-      family.writer.set(subject, { kind: "source-enum-member",
-        operationId: `tsonic.rust.union.variant:${name}`, name, resultCarrier });
+      family.writer.set(subject, rustEnumLiteralFact(name, resultCarrier));
     },
     unaryMinusLiteral(subject: Node, resultCarrier: TargetTypeRef): RustTargetOperationFact {
-      const fact: RustTargetOperationFact = { kind: "operator-token", operationId: rustPostCheckUnaryMinusOperationId,
-        operator: "-", resultCarrier, operandModes: ["value"] };
+      const fact = rustUnaryMinusLiteralFact(resultCarrier);
       family.writer.set(subject, fact);
       return fact;
     },
     unaryPlusLiteral(subject: Node, resultCarrier: TargetTypeRef): RustTargetOperationFact {
-      const fact: RustTargetOperationFact = { kind: "source-conversion", operationId: rustPostCheckUnaryPlusOperationId,
-        resultCarrier };
+      const fact = rustUnaryPlusLiteralFact(resultCarrier);
       family.writer.set(subject, fact);
       return fact;
     },

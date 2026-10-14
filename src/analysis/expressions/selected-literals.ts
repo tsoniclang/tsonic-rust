@@ -8,6 +8,12 @@ import { isRustNumericCarrier } from "../../target-model/types/index.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/types/resolution/selected-numeric-literal.js";
 
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../operations/literal-plans.js";
+import { rustSelectedOperatorOperation } from "../operations/target-operation.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import { rustTargetOperationFactEquals } from "../operations/contracts/equality.js";
+import { rustSelectedTargetOperationEquals } from "../../target-model/types/equality.js";
 
 export function sourceLiteralIsRepresentableAsPrimitive(
   node: Node,
@@ -24,6 +30,7 @@ export function normalizeSelectedLiteralCarrier(
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
+  context.records.assertOpen();
   const node = asNode(subject, context);
   if (node === undefined || expected === undefined) {
     return actual;
@@ -31,9 +38,8 @@ export function normalizeSelectedLiteralCarrier(
   if ((context.ast.kindName(node) === "KindStringLiteral" || context.ast.kindName(node) === "KindNoSubstitutionTemplateLiteral")) {
     const variant = options.sourceTypes.enumVariantForLiteral(expected, context.ast.text(node));
     if (variant !== undefined) {
-      context.records.targetOperations.enumLiteral(node, variant.name, expected);
-      context.records.runtimeCarriers.selected(node, expected);
-      return expected;
+      recordSelectedLiteralOperation(node, rustEnumLiteralFact(variant.name, expected), context);
+      return selectedLiteralCarrier(node, expected, context);
     }
   }
   if (expected.kind !== "source-primitive" || !isRustNumericCarrier(expected)) {
@@ -42,14 +48,45 @@ export function normalizeSelectedLiteralCarrier(
   if (!sourceLiteralIsRepresentableAsPrimitive(node, expected.name, context)) {
     return actual;
   }
-  context.records.runtimeCarriers.selected(node, expected);
+  const carrier = selectedLiteralCarrier(node, expected, context);
   const numericOperationId = selectedSourceNumericLiteralOperationId(node, context.ast);
   if (numericOperationId === rustPostCheckUnaryMinusOperationId) {
-    const fact = context.records.targetOperations.unaryMinusLiteral(node, expected);
-    context.records.selectedOperations.operator(node, fact, expected);
+    const fact = recordSelectedLiteralOperation(node, rustUnaryMinusLiteralFact(carrier), context);
+    recordSelectedLiteralOperator(node, fact, carrier, context);
   } else if (numericOperationId === rustPostCheckUnaryPlusOperationId) {
-    const fact = context.records.targetOperations.unaryPlusLiteral(node, expected);
-    context.records.selectedOperations.operator(node, fact, expected);
+    const fact = recordSelectedLiteralOperation(node, rustUnaryPlusLiteralFact(carrier), context);
+    recordSelectedLiteralOperator(node, fact, carrier, context);
   }
-  return expected;
+  return carrier;
+}
+
+function selectedLiteralCarrier(node: Node, expected: TargetTypeRef, context: RustOperationAnalysisContext): TargetTypeRef {
+  if (context.records.runtimeCarriers.source(node, expected) !== undefined) failTargetAnalysisInvariant("tsonic-rust",
+    "Conflicting Rust semantic plan 'tsonic.rust.runtimeCarrier' for one exact source subject.");
+  const selected = context.records.runtimeCarrier.get(node);
+  if (selected === undefined) return failTargetAnalysisInvariant("tsonic-rust", "Selected literal requires its admitted native carrier.");
+  return selected.carrier;
+}
+
+function recordSelectedLiteralOperation(
+  node: Node, fact: RustTargetOperationFact, context: RustOperationAnalysisContext,
+): RustTargetOperationFact {
+  const existing = context.records.targetOperation.get(node);
+  if (existing !== undefined) {
+    if (!rustTargetOperationFactEquals(existing, fact)) failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.targetOperation' for one exact source subject.");
+    return existing;
+  }
+  context.records.targetOperations.source(node, fact);
+  return fact;
+}
+
+function recordSelectedLiteralOperator(
+  node: Node, fact: RustTargetOperationFact, carrier: TargetTypeRef, context: RustOperationAnalysisContext,
+): void {
+  const existing = context.records.selectedOperation.get(node);
+  if (existing === undefined) context.records.selectedOperations.operator(node, fact, carrier);
+  else if (!rustSelectedTargetOperationEquals(existing, rustSelectedOperatorOperation(node, fact, carrier))) {
+    failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'selectedOperation' for one exact source subject.");
+  }
 }
