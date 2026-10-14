@@ -1,3 +1,4 @@
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
@@ -23,10 +24,14 @@ export function planRustBinaryErrors(
       identity: source.identity, variant: source.variant,
       errorType: source.kind === "lifecycle" ? lifecycleType : nativeByIdentity.get(source.identity)!,
     })) });
-  if (join?.errorType === undefined) throw new Error("Binary startup requires a complete native error composition.");
+  if (join?.errorType === undefined) {
+    failTargetPlannerInvariant("tsonic-rust", "Binary startup requires a complete native error composition.");
+  }
   const propagate = (source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr => {
     const selected = join.propagate(source, result);
-    if (selected === undefined) throw new Error("Binary startup propagation requires an exact selected native error channel.");
+    if (selected === undefined) {
+      failTargetPlannerInvariant("tsonic-rust", "Binary startup propagation requires an exact selected native error channel.");
+    }
     return selected;
   };
   return Object.freeze({ errorType: join.errorType, items: join.items, propagate,
@@ -41,7 +46,9 @@ export function planRustBinaryErrors(
       const converted: RustExpr = rustTypeEquals(operandErrorType, lifecycleType) ? error
         : { kind: "associated-call", owner: lifecycleType, method: "from", args: [error] };
       const selected = join.inject(lifecycle, converted);
-      if (selected === undefined) throw new Error("Binary lifecycle errors require the exact selected native channel.");
+      if (selected === undefined) {
+        failTargetPlannerInvariant("tsonic-rust", "Binary lifecycle errors require the exact selected native channel.");
+      }
       return selected;
     },
   });

@@ -1,6 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
@@ -100,18 +101,15 @@ export function planRustWorkerEntries(input: {
     }
     const selection = input.planning.program.errorRegions.initialization.workerFor(target.sourceFile);
     if (selection === undefined) {
-      input.diagnostics.push(workerDiagnostic("RUST_WORKER_ENTRY_ERROR_REGION_MISSING",
-        "A worker initializer has no completed exact error composition.", target.sourceFile));
-      continue;
+      failTargetPlannerInvariant("tsonic-rust",
+        "A worker initializer has no completed exact error composition.", target.sourceFile);
     }
     const initializers = planRustModuleInitializers(
       content.sources,
       selection,
       input.packageInitializers,
       input.typeRenderingContextFor(component),
-      input.diagnostics,
     );
-    if (initializers === undefined) continue;
 
     const occupied = occupiedNamesByComponent.get(component.componentId) ?? new Set(
       content.libraryItems.flatMap(rustItemBindingNames),
@@ -127,9 +125,8 @@ export function planRustWorkerEntries(input: {
       occupied,
     );
     if (selection.modules.length > 0 && initializer === undefined) {
-      input.diagnostics.push(workerDiagnostic("RUST_WORKER_ENTRY_ERROR_RECONSTRUCTION_MISSING",
-        "A completed worker error composition has no exact native reconstruction.", target.sourceFile));
-      continue;
+      failTargetPlannerInvariant("tsonic-rust",
+        "A completed worker error composition has no exact native reconstruction.", target.sourceFile);
     }
     const emptyItem: RustItem = {
       kind: "function",

@@ -9,6 +9,7 @@ import { planRustClassEnvironmentItems } from "../objects/class-environments.js"
 import { planRustClassValueImplementations } from "../objects/constructor-values.js";
 import { planRustProjectStructuralImplementations } from "../objects/project-structural-views.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 
 import {
   KindFunctionDeclaration,
@@ -257,12 +258,9 @@ function planModuleItems(
   const errorRegion = context.input.program.errorRegions.get(context.sourceFile);
   const region = planRustErrorRegion(context.sourceFile, context);
   if (errorRegion === undefined || region === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, context.sourceFile),
-      "rust.backend.module-initializer-error-boundary",
+    failTargetPlannerInvariant("tsonic-rust",
       "Module initializer has no exact finalized error region.",
-    ));
-    return { items };
+      context.sourceFile);
   }
   const errorBoundary = region.boundary;
   const fallible = errorBoundary !== undefined;

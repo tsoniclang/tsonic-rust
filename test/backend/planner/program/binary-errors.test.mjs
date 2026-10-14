@@ -3,6 +3,7 @@ import test from "node:test";
 import { planRustBinaryErrors } from "../../../../dist/backend/planner/program/binary-errors.js";
 import { planRustAsyncExecution } from "../../../../dist/backend/planner/program/async-execution.js";
 import { printRustExpr } from "../../../../dist/print/source/expressions/core.js";
+import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
 
 const lifecycle = { kind: "named", path: "RuntimeError", identity: "runtime-error" };
 const provider = { kind: "named", path: "ProviderError", identity: "provider-error" };
@@ -75,3 +76,37 @@ test("native async executors propagate their own error exactly once without cons
   assert.equal(selected.expr === result, true);
   assert.deepEqual(calls, [executor]);
 });
+
+for (const [name, reconstruct, message] of [
+  ["empty startup composition", () => planRustBinaryErrors({ sources: [] }, lifecycle),
+    "Binary startup requires a complete native error composition."],
+  ["missing selected native payload", () => planRustBinaryErrors({ sources: [
+    { kind: "initialization", identity: "initialization", variant: "Initialization" },
+  ] }, lifecycle), "Binary startup requires a complete native error composition."],
+  ["unselected propagation channel", () => planRustBinaryErrors(lifecycleSelection, lifecycle)
+    .propagate({ identity: "foreign", errorType: provider }, result),
+    "Binary startup propagation requires an exact selected native error channel."],
+  ["unselected lifecycle channel", () => planRustBinaryErrors({ sources: [
+    { kind: "initialization", identity: "initialization", variant: "Initialization" },
+  ] }, lifecycle, [{ identity: "initialization", errorType: provider }])
+    .lifecycleError({ kind: "path", path: "error" }, lifecycle),
+    "Binary lifecycle errors require the exact selected native channel."],
+]) {
+  test(`binary invariant ${name} rejects through the shared planning boundary`, () => {
+    const compiled = runTargetCompilationStages({
+      analyze: () => resolvedTargetStage({}),
+      plan: () => resolvedTargetStage(reconstruct()),
+      materialize() { assert.fail("An incomplete binary error composition must not be materialized."); },
+    });
+    assert.equal(compiled.kind, "rejected");
+    assert.equal(Object.hasOwn(compiled, "value"), false);
+    assert.equal(compiled.diagnostics.length, 1);
+    const diagnostic = compiled.diagnostics[0];
+    assert.equal(diagnostic.code, "TSONIC_INTERNAL_PLANNER_INVARIANT");
+    assert.equal(diagnostic.category, "error");
+    assert.equal(diagnostic.source, "tsonic-rust");
+    assert.equal(diagnostic.message, message);
+    assert.equal(diagnostic.sourceNode === undefined, true);
+    assert.equal(Object.isFrozen(diagnostic), true);
+  });
+}
