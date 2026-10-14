@@ -5,13 +5,12 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustNativeLayout } from "./native-memory.js";
 import { planFinalizedTargetInput } from "./conversions.js";
+import { rustRuntimeNativeArrayTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 
 export function nativeRustArrayType(node: Node, context: RustPlanContext): RustType | undefined {
   const storage = context.input.program.records.nativeArrayStorage.get(node);
-  const type = storage === undefined ? undefined : rustTypeFromCarrierInContext(storage.layout.pointeeCarrier, context);
-  if (type === undefined) return undefined;
-  context.usedAliases?.add("rt");
-  return { kind: "named", path: "rt::raw_memory::NativeArray", genericArguments: [{ kind: "type", type }] };
+  return storage === undefined ? undefined
+    : rustTypeFromCarrierInContext(rustRuntimeNativeArrayTargetType(storage.layout.pointeeCarrier), context);
 }
 
 export function planNativeRustArray(node: Node, values: RustExpr, context: RustPlanContext): RustExpr | undefined {

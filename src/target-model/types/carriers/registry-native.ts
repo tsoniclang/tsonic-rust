@@ -3,6 +3,36 @@ import type { TargetTypeRef } from "../model.js";
 
 export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTypeRef["kind"]>[] = Object.freeze([
   {
+    id: "src/target-model/types/carriers/runtime-carriers.ts#rustRuntimeRecordFieldTargetType",
+    kinds: ["target-specific"],
+    declaration: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "rustRuntimeRecordFieldTargetType" },
+    counterpart: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "csharpRuntimeRecordFieldTargetType" },
+    frozen: false,
+  },
+  {
+    id: "src/target-model/types/carriers/runtime-carriers.ts#rustRuntimeNativeLayoutTargetType",
+    kinds: ["target-specific"],
+    declaration: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "rustRuntimeNativeLayoutTargetType" },
+    counterpart: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "csharpRuntimeNativeLayoutTargetType" },
+    frozen: false,
+  },
+  {
+    id: "src/target-model/types/carriers/runtime-carriers.ts#rustRuntimeNativeArrayTargetType",
+    kinds: ["target-specific"],
+    declaration: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "rustRuntimeNativeArrayTargetType" },
+    counterpart: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "csharpRuntimeNativeArrayTargetType" },
+    frozen: false,
+  },
+  {
+    id: "src/target-model/types/carriers/runtime-carriers.ts#rustRuntimeNativeMethodTargetType",
+    kinds: ["function-pointer"],
+    declaration: { module: "src/target-model/types/carriers/runtime-carriers.ts", symbol: "rustRuntimeNativeMethodTargetType" },
+    counterpart: { module: "src/target-model/types/carriers/delegates.ts", symbol: "csharpDelegateTargetType" },
+    divergence: { register: "S11-04",
+      reason: "The existing native method storage returns Result<R, E> to transport the selected error type; the paired CLR delegate uses native exception transport. The native parameter/result/error types and reference lifetimes remain unchanged." },
+    frozen: true,
+  },
+  {
     id: "src/target-model/types/carriers/source-types.ts#rustSourceTypeCarrier",
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/carriers/source-types.ts", symbol: "rustSourceTypeCarrier" },
@@ -144,6 +174,8 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/carriers/native.ts", symbol: "rustFixedArrayTargetType" },
     counterpart: null,
+    divergence: { register: "S11-11",
+      reason: "Rust [T; N] carries its exact usize const argument in the native type. CLR T[] has no native const-generic extent; the paired strided NativeArray<T> storage is not that fixed-array type." },
     frozen: false,
   },
   {
@@ -312,6 +344,8 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["trait-ref"],
     declaration: { module: "src/target-model/types/carriers/indexed-fields.ts", symbol: "rustIndexedFieldTrait" },
     counterpart: null,
+    divergence: { register: "S11-12",
+      reason: "The native rt::Field<Key> trait declares an associated type Output. CLR interfaces have no native associated-type declaration to preserve as this exact trait contract." },
     frozen: false,
   },
   {
@@ -319,6 +353,8 @@ export const nativeCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTy
     kinds: ["associated-type"],
     declaration: { module: "src/target-model/types/carriers/indexed-fields.ts", symbol: "rustIndexedFieldProjection" },
     counterpart: null,
+    divergence: { register: "S11-12",
+      reason: "Rust <Owner as rt::Field<Key>>::Output is a native associated-type projection with exact owner/key arguments. CLR native type syntax has no corresponding associated-type projection." },
     frozen: false,
   },
   {
