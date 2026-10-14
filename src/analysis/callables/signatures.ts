@@ -35,7 +35,7 @@ import { resolveRustContextualParameterAbi } from "../../policy/ownership/source
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
 import { setCarrierFact } from "../operations/project-calls.js";
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
@@ -405,19 +405,11 @@ export function recordCallableSuspensionFacts(
   }
 }
 
-export function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node) {
+export function selectedSourceCallableReturn(walk: RustFactWalk, declaration: Node): Type | undefined {
   const semantics = walk.context.semanticsFor(declaration);
-  const callableType = walk.context.ast.is.IsArrowFunction(declaration) || walk.context.ast.is.IsFunctionExpression(declaration)
-    ? semantics.types.expressionType(declaration)
-    : semantics.declarations.declaredValueType(declaration);
-  if (callableType === undefined) {
-    return undefined;
-  }
-  const signatures = semantics.types.signatureInfos(callableType, "call").filter((signature) =>
-    semantics.declarations.signatureDeclaration(signature.signature) === declaration);
-  return signatures.length === 1
-    ? signatures[0]!.returnType
-    : undefined;
+  const signature = semantics.types.declarationSignatureInfo(declaration);
+  return signature !== undefined && semantics.declarations.signatureDeclaration(signature.signature) === declaration
+    ? signature.returnType : undefined;
 }
 
 export function recordCallableReturnFact(

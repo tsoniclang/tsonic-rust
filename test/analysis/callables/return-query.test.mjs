@@ -7,6 +7,7 @@ import { createRustRetainedEnvironmentProducer } from "../../../dist/analysis/pr
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { resolveRustTargetTypeRef } from "../../../dist/policy/types/resolution/index.js";
 import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
+import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/signatures.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };
@@ -70,6 +71,29 @@ test("complete return queries keep exact completion and cache successful explici
   assert.throws(() => current.producer.resolve(noSelection, current.declaration, integer), /query is sealed/u);
   assert.throws(() => current.producer.resolve(noSelection, current.declaration), /query is sealed/u);
   assert.equal(current.completions(), 1);
+});
+
+test("getter source returns use exact checked declaration signatures instead of property payload callability", () => {
+  const current = fixture(`
+    class Reading { get value(): int32 { return 3; } }
+    export function step(): int32 { return new Reading().value; }
+  `);
+  const ast = current.walk.context.ast;
+  const getters = [];
+  const visit = node => {
+    if (ast.is.IsGetAccessorDeclaration(node)) getters.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  current.walk.context.sourceFiles.forEach(visit);
+  assert.equal(getters.length, 1);
+  const declaration = getters[0];
+  const semantics = current.walk.context.semanticsFor(declaration);
+  const signature = semantics.types.declarationSignatureInfo(declaration);
+  assert.equal(signature !== undefined, true);
+  assert.equal(selectedSourceCallableReturn(current.walk, declaration) === signature.returnType, true);
+  assert.equal(semantics.types.callSignatures(signature.returnType).length, 0, "the numeric property payload is not the getter signature");
+  assert.equal(current.walk.context.records.sourceCallableReturn.get(declaration) !== undefined, true,
+    "the actual getter keeps its complete native return record");
 });
 
 test("an implicit result validates a new explicit request before it becomes a cached query", () => {
