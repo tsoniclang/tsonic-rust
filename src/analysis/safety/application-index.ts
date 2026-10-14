@@ -32,7 +32,7 @@ export function createRustSafetyApplicationFactIndex(
     safetyApplication: Object.freeze({ get: index.forDeclaration }),
     safetyOperation: Object.freeze({ get: index.operationForExpression }),
     safetySubjectOperation: Object.freeze({ get: index.operationForSubject }),
-    compileTimeApplicationReference: Object.freeze({ get: index.isCompileTimeApplicationReference }),
+    isCompileTimeApplicationReference: Object.freeze({ get: index.isCompileTimeApplicationReference }),
     findings: Object.freeze({ get: index.findings }),
   });
 }

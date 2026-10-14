@@ -6,7 +6,7 @@ export interface RustSafetyApplicationFactIndex {
   readonly safetyApplication: { readonly get: (declaration: Node) => readonly RustSafetyApplication[] };
   readonly safetyOperation: { readonly get: (expression: Node) => RustSafetyOperation | undefined };
   readonly safetySubjectOperation: { readonly get: (subject: Node) => RustSafetyOperation | undefined };
-  readonly compileTimeApplicationReference: { readonly get: (declaration: Node, reference: Node) => boolean };
+  readonly isCompileTimeApplicationReference: { readonly get: (declaration: Node, reference: Node) => boolean };
   readonly findings: { readonly get: (sourceFile: SourceFile) => TargetSafetyApplicationFindings<RustSafetyApplication> };
 }
 

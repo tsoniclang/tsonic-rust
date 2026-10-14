@@ -17,7 +17,7 @@ export function createRustRuntimeValueUsePlan(input: {
   const firstClassUseByDeclaration = new WeakMap<Node, boolean>();
   const earlyRuntimeUseByDeclaration = new WeakMap<Node, boolean>();
   const isRuntimeReference = (declaration: Node, reference: Node): boolean =>
-    !input.safetyApplications.compileTimeApplicationReference.get(declaration, reference);
+    !input.safetyApplications.isCompileTimeApplicationReference.get(declaration, reference);
   return Object.freeze({
     isRuntimeReference,
     hasFirstClassUse(declaration: Node) {
