@@ -14,7 +14,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustFutureValueForOperation, rustFutureValueForSourceStorage, rustFutureValueMatchesCarrier, transportRustFutureValue } from "../callables/future-values.js";
 
 import { selectRustResourceManagement } from "./management.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustFutureValueFact } from "../../target-model/records/object-methods.js";
@@ -184,7 +184,7 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
   const conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
     undefined, walk.context.typeDefinitions);
   if (conversion !== undefined) {
-    setRustOperationFact(walk, statement, Object.freeze({
+    walk.context.records.targetOperations.source(statement, Object.freeze({
       kind: "throw-op",
       operationId: "tsonic.rust.error.throw",
       error: Object.freeze({ kind: "conversion", expression, conversion }),
@@ -192,7 +192,7 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
     return;
   }
   if (carrier !== undefined && isRustProgramErrorCarrier(carrier)) {
-    setRustOperationFact(walk, statement, {
+    walk.context.records.targetOperations.source(statement, {
       kind: "throw-op",
       operationId: "tsonic.rust.error.rethrow",
       error: { kind: "program", expression, carrier },

@@ -121,7 +121,7 @@ export function selectRustRecordDelete(
   };
   const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.index], context, options);
   return fact === undefined ? rejectSelectedOperation(request.expression, context, "RUST_RECORD_DELETE_KEY_NOT_CLOSED",
-    "Record deletion requires its exact native index key carrier.") : acceptRustOperation(request.expression, fact, context, {
+    "Record deletion requires its exact native index key carrier.") : acceptRustOperation(fact, {
       sourceExpression: request.expression, sourceReceiver: request.receiver,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration, sourceSelectedSymbol: request.sourceSelectedSymbol,
     });

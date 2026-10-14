@@ -1,4 +1,5 @@
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+import { selectedRustCallSignature } from "../program/records/selected-call.js";
 import type {
   AstReader,
   Node,
@@ -15,7 +16,6 @@ import {
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../policy/operations/contracts.js";
 
 import type {
-  RustSelectedTargetSignature,
   RustSelectedTargetOperation,
   RustTargetMember,
   TargetTypeRef,
@@ -25,7 +25,7 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 
-import type { RustTypedLocationPlan } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations.js";
 import {
   rustSourceLocationTargetType,
   rustOptionalLocationPointeeCarrier,
@@ -65,13 +65,6 @@ function typedLocationCallCalleeSymbol(
 ): import("@tsonic/tsts").Symbol | undefined {
   return request.source.sourceCallee.selectedSymbol ??
     request.source.sourceCallee.symbol;
-}
-
-function typedLocationCallCalleeDeclaration(
-  request: RustCheckedCallSelectionInput,
-): Node | undefined {
-  return request.source.sourceCallee.selectedDeclaration ??
-    request.source.sourceCallee.declaration;
 }
 
 export function selectRustTypedLocationCall(
@@ -217,14 +210,14 @@ export function recordRustTypedLocationCall(
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
   }];
   context.records.typedLocationPlan.set(request.source.call, plan, evidence);
-  context.records.targetOperation.set(request.source.call, {
+  const targetFact: RustTargetOperationFact = {
     kind: "typed-location",
     operationId,
     operation: sourceOperation.operation,
     pointeeCarrier,
     locationCarrier,
     resultCarrier,
-  }, evidence);
+  };
   const operation: RustSelectedTargetOperation = {
     operationId,
     operationKind: "method",
@@ -263,36 +256,11 @@ export function recordRustTypedLocationCall(
     })),
     providerDeclaration: provider,
   };
-  const selectedSignature: RustSelectedTargetSignature = {
-    member,
+  const selectedSignature = selectedRustCallSignature(request, member, {
     providerDeclaration: provider,
-    ...(request.source.selectedSignature === undefined
-      ? {}
-      : { sourceSignature: request.source.selectedSignature }),
-    ...(request.sourceSelectedDeclaration === undefined
-      ? {}
-      : { sourceDeclaration: request.sourceSelectedDeclaration }),
-    ...(typedLocationCallCalleeSymbol(request) === undefined
-      ? {}
-      : { sourceCalleeSymbol: typedLocationCallCalleeSymbol(request) }),
-    ...(typedLocationCallCalleeDeclaration(request) === undefined
-      ? {}
-      : { sourceCalleeDeclaration: typedLocationCallCalleeDeclaration(request) }),
-    ...(request.source.sourceResultType === undefined
-      ? {}
-      : { sourceReturnType: request.source.sourceResultType }),
-    sourceArgumentBindings: request.source.sourceArgumentBindings,
-    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-    ...(request.source.sourceSelectedMethodTypeArguments === undefined
-      ? {}
-      : {
-          sourceSelectedMethodTypeArguments:
-            request.source.sourceSelectedMethodTypeArguments,
-        }),
     targetGenericArguments: genericCarriers.map(type => ({ kind: "type", type })),
-  };
-  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature, operation }, evidence);
+  });
+  return acceptRustPolicy({ selectedSignature, targetFact, operation }, evidence);
 }
 
 function resolveRustTypedLocationPointee(

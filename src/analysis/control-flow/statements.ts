@@ -55,7 +55,7 @@ import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -446,7 +446,7 @@ function recordSwitchFacts(
     }
   }
   if (!failed && finalizedClauses.length === clauses.length) {
-    setRustOperationFact(walk, statement, {
+    walk.context.records.targetOperations.source(statement, {
       kind: "switch",
       operationId: "tsonic.rust.control.switch.strict-equality",
       discriminantCarrier,

@@ -3,7 +3,6 @@ import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 
 import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { asNode } from "../../policy/identities/selected-source.js";
 import { isRustNumericCarrier } from "../../target-model/types/index.js";
 import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/types/resolution/selected-numeric-literal.js";
@@ -32,18 +31,8 @@ export function normalizeSelectedLiteralCarrier(
   if ((context.ast.kindName(node) === "KindStringLiteral" || context.ast.kindName(node) === "KindNoSubstitutionTemplateLiteral")) {
     const variant = options.sourceTypes.enumVariantForLiteral(expected, context.ast.text(node));
     if (variant !== undefined) {
-      const fact: RustTargetOperationFact = {
-        kind: "source-enum-member",
-        operationId: `tsonic.rust.union.variant:${variant.name}`,
-        name: variant.name,
-        resultCarrier: expected,
-      };
-      context.records.targetOperation.set(node, fact, [
-        { message: "rust selected source enum literal" },
-      ]);
-      context.records.runtimeCarrier.set(node, { carrier: expected }, [
-        { message: "rust selected source enum literal carrier" },
-      ]);
+      context.records.targetOperations.enumLiteral(node, variant.name, expected);
+      context.records.runtimeCarriers.selected(node, expected);
       return expected;
     }
   }
@@ -53,30 +42,13 @@ export function normalizeSelectedLiteralCarrier(
   if (!sourceLiteralIsRepresentableAsPrimitive(node, expected.name, context)) {
     return actual;
   }
-  context.records.runtimeCarrier.set(node, { carrier: expected }, [
-    { message: "rust selected numeric literal carrier from checked peer/target evidence" },
-  ]);
+  context.records.runtimeCarriers.selected(node, expected);
   const numericOperationId = selectedSourceNumericLiteralOperationId(node, context.ast);
   if (numericOperationId === rustPostCheckUnaryMinusOperationId) {
-    const fact: RustTargetOperationFact = {
-      kind: "operator-token",
-      operationId: rustPostCheckUnaryMinusOperationId,
-      operator: "-",
-      resultCarrier: expected,
-    };
-    context.records.targetOperation.set(node, fact, [
-      { message: "rust finalized selected unary-minus literal carrier" },
-    ]);
+    const fact = context.records.targetOperations.unaryMinusLiteral(node, expected);
     context.records.selectedOperations.operator(node, fact, expected);
   } else if (numericOperationId === rustPostCheckUnaryPlusOperationId) {
-    const fact: RustTargetOperationFact = {
-      kind: "source-conversion",
-      operationId: rustPostCheckUnaryPlusOperationId,
-      resultCarrier: expected,
-    };
-    context.records.targetOperation.set(node, fact, [
-      { message: "rust finalized selected unary-plus literal carrier" },
-    ]);
+    const fact = context.records.targetOperations.unaryPlusLiteral(node, expected);
     context.records.selectedOperations.operator(node, fact, expected);
   }
   return expected;

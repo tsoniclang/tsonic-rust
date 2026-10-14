@@ -54,7 +54,7 @@ import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustR
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
 import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveArrayLiteralCarrier } from "../operations/inputs.js";
 import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.js";
 import { resolveExpressionCarrier } from "./carriers.js";
@@ -242,7 +242,7 @@ export function resolveExpressionCarrierUncached(
       if (output === undefined) {
         return undefined;
       }
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "await-op",
         operationId: "tsonic.rust.async.await",
         resultCarrier: output,
@@ -345,7 +345,7 @@ export function resolveExpressionCarrierUncached(
           operationId: "tsonic.rust.assertion.const",
           resultCarrier: carrier,
         };
-        setRustOperationFact(walk, expression, fact);
+        walk.context.records.targetOperations.source(expression, fact);
         walk.context.records.selectedOperations.operator(expression, fact, carrier);
       }
       return setCarrierFact(walk, expression, carrier);
@@ -362,7 +362,7 @@ export function resolveExpressionCarrierUncached(
       if (!rustTargetTypeRefEquals(carrier, resultCarrier)) {
         return undefined;
       }
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "identity-expression",
         operationId: "tsonic.rust.syntax.satisfies",
         resultCarrier,
@@ -378,7 +378,7 @@ export function resolveExpressionCarrierUncached(
         return undefined;
       }
       const resultCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "non-null-expression",
         operationId: rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
           ? "tsonic.rust.syntax.non-null.identity"
@@ -437,7 +437,7 @@ export function resolveExpressionCarrierUncached(
         !rustTargetTypeRefEquals(falseCarrier, resultCarrier)) {
         return undefined;
       }
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "conditional",
         operationId: "tsonic.rust.syntax.conditional",
         resultCarrier,
@@ -465,7 +465,7 @@ export function resolveExpressionCarrierUncached(
         return undefined;
       }
       const resultCarrier = rustStringTargetType();
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "typeof",
         operationId: `tsonic.rust.syntax.typeof.${typeof result === "string" ? result : "runtime-union"}`,
         resultCarrier,
@@ -490,7 +490,7 @@ export function resolveExpressionCarrierUncached(
       }
       const resultCarrier = rustAbsenceTargetType();
       const operationId = "tsonic.rust.syntax.void";
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "void-expression",
         operationId,
         resultCarrier,
@@ -590,7 +590,7 @@ function resolveTemplateExpressionCarrier(
     substitutions.push({ expression: substitution, carrier });
   }
   const resultCarrier = rustStringTargetType();
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "template-string",
     operationId: "tsonic.rust.syntax.template-string",
     resultCarrier,

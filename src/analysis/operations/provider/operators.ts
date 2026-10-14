@@ -119,7 +119,7 @@ function selectRustProjectTypeTest(
       variant: programErrorVariant,
       resultCarrier,
     };
-    return acceptRustOperation(request.expression, fact, context, {
+    return acceptRustOperation(fact, {
       sourceExpression: request.expression,
       sourceReceiver: request.left,
       sourceSelectedDeclaration: request.sourceRightDeclaration,
@@ -149,7 +149,7 @@ function selectRustProjectTypeTest(
     ...plan,
     resultCarrier,
   };
-  return acceptRustOperation(request.expression, fact, context, {
+  return acceptRustOperation(fact, {
     sourceExpression: request.expression,
     sourceReceiver: request.left,
     sourceSelectedDeclaration: request.sourceRightDeclaration,
@@ -219,11 +219,11 @@ function mapSelectedUnaryOperator(
     targetOperator = request.operator === "++" ? "+=" : "-=";
     resultCarrier = operand;
   } else if (request.operator === "+" && operand !== undefined && isRustNumericCarrier(operand)) {
-    return acceptRustOperation(request.expression, {
+    return acceptRustOperation({
       kind: "source-conversion",
       operationId: "tsonic.rust.operator.unary-plus",
       resultCarrier: operand,
-    }, context, {
+    }, {
       sourceExpression: request.expression,
       sourceReceiver: request.left,
     });
@@ -231,7 +231,7 @@ function mapSelectedUnaryOperator(
   if (targetOperator === undefined || resultCarrier === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_UNARY_OPERATOR_UNSUPPORTED", `Checked unary operator '${request.operator}' has no closed Rust operation for the selected operand carrier.`);
   }
-  return acceptRustOperation(request.expression, operatorFact(targetOperator, resultCarrier), context, {
+  return acceptRustOperation(operatorFact(targetOperator, resultCarrier), {
     sourceExpression: request.expression,
     sourceReceiver: request.left,
   });
@@ -383,11 +383,11 @@ function mapSelectedAssignment(
   if (abi === undefined) {
     return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_ASSIGNMENT_ABI_INCOMPLETE", "The selected JavaScript setter cannot finalize one total Rust operation ABI.");
   }
-  return acceptRustOperation(request.expression, {
+  return acceptRustOperation({
     kind: "runtime-set",
     operationId: selection.fact.operationId,
     abi,
-  }, context, {
+  }, {
     sourceExpression: request.expression,
     sourceReceiver: receiver,
     sourceSelectedDeclaration: selectedDeclaration,
@@ -529,11 +529,11 @@ function mapSelectedProviderAssignment(
     sourceResultCarrier = sourceType === undefined ? undefined
       : resolveRustExactNullishValueCarrier(sourceType, context.currentSemantics);
   }
-  return acceptRustOperation(request.expression, {
+  return acceptRustOperation({
     kind: "runtime-set",
     operationId: template.operationId,
     abi,
-  }, context, {
+  }, {
     sourceExpression: request.expression,
     sourceReceiver: receiver,
     sourceSelectedDeclaration: selectedDeclaration,

@@ -19,12 +19,13 @@ test("record fixture overlays project only the declared immutable reader port", 
   const subject = {};
   const selected = { carrier: { kind: "source-primitive", name: "int32" } };
   const builder = createRustProgramRecordBuilder();
-  builder.runtimeCarrier.set(subject, selected);
+  builder.runtimeCarriers.selected(subject, selected.carrier);
+  const admitted = builder.runtimeCarrier.get(subject);
   let foreignReads = 0;
   const base = { ...builder };
   Object.defineProperty(base, "foreign", { enumerable: true, get() { foreignReads += 1; throw new Error("foreign reader"); } });
   const records = createRustRecordFixture({ targetOperation: { get: () => undefined } }, base);
-  assert.equal(records.runtimeCarrier.get(subject) === selected, true, "the existing exact source value survives");
+  assert.equal(records.runtimeCarrier.get(subject) === admitted, true, "the existing exact source value survives");
   assert.equal(records.targetOperation.get(subject) === undefined, true, "the selected override is retained");
   assert.equal(records.minimumFoundation === undefined, true, "analysis configuration is not a record family");
   assert.equal(records.runtimeCarrier.set === undefined, true, "writer capabilities cannot leak through a family");

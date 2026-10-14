@@ -1,4 +1,5 @@
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
+import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
 import { createRustJsCallRequest, selectedSoleArgumentNumberKind } from "./source-profile-request.js";
 import {
@@ -35,7 +36,7 @@ import { createRustPropertyProjectionSelector } from "../../../conversions/prope
 
 import { rustOptionElementCarrier } from "../../../../target-model/types/index.js";
 
-import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
+import { selectedCallArgumentCarriers, selectedCallArgumentNodes, selectedCallCalleeDeclaration } from "../operators.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { selectedValueCarrier } from "../../selected-values.js";
 import { selectJsSurfaceConstructorBySourceOwner, selectJsSurfaceOperation } from "../../../../policy/operations/source-profiles/js/index.js";
@@ -452,6 +453,7 @@ function acceptRuntimeCallableCall(
       context,
       options,
     );
+    context.records.targetOperations.checked(callee, selection);
     context.records.selectedOperations.checked(callee, selection);
     if (selection.kind === "reject") return selection;
   }
@@ -532,9 +534,6 @@ function acceptStructuralRuntimeMethodCall(
         selectedGuardCarrier: callableCarrier,
       }
     : undefined;
-  if (optionalGuard !== undefined) {
-    context.records.runtimeCarrier.set(optionalGuard.guard, { carrier: optionalGuard.sourceGuardCarrier }, [{ message: "rust exact optional structural-method storage carrier" }]);
-  }
   return acceptRuntimeCallableCarrierCall(
     request,
     callableCarrier,
@@ -634,8 +633,7 @@ function acceptRuntimeCallableCarrierCall(
     returnType: generic === undefined ? resultCarrier : protocol.result,
     ...(genericParameters.length === 0 ? {} : { genericParameters }),
   };
-  const selectedSignature = {
-    member,
+  const selectedSignature = selectedRustCallSignature(request, member, {
     sourceCallableCarrier: calleeCarrier,
     ...(sourceConstructorCarrier === undefined ? {} : { sourceConstructorCarrier }),
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
@@ -648,33 +646,12 @@ function acceptRuntimeCallableCarrierCall(
       : { sourceStructuralMethod }),
     ...((sourceDeclaration ?? request.sourceSelectedDeclaration) === undefined ? {}
       : { sourceDeclaration: sourceDeclaration ?? request.sourceSelectedDeclaration }),
-    ...(request.source.selectedSignature === undefined
-      ? {}
-      : { sourceSignature: request.source.selectedSignature }),
-    ...(selectedCallCalleeSymbol(request) === undefined
-      ? {}
-      : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-    ...(selectedCallCalleeDeclaration(request) === undefined
-      ? {}
-      : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-    ...(request.source.sourceResultType === undefined
-      ? {}
-      : { sourceReturnType: request.source.sourceResultType }),
-    sourceArgumentBindings: request.source.sourceArgumentBindings,
-    sourceSelectedSignatureParameters:
-      request.source.sourceSelectedSignatureParameters,
-    ...(request.source.sourceSelectedMethodTypeArguments === undefined
-      ? {}
-      : {
-          sourceSelectedMethodTypeArguments:
-            request.source.sourceSelectedMethodTypeArguments,
-        }),
-  };
+  });
   if (optionalResult.fact !== undefined) {
     context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
   }
-  context.records.selectedCall.set(request.source.call, selectedSignature);
-  return acceptRustPolicy({ selectedSignature }, [{
+  return acceptRustPolicy({ selectedSignature,
+    ...(optionalGuard === undefined ? {} : { sourceGuard: optionalGuard }) }, [{
     message: "rust selected exact runtime-callable invocation",
   }]);
 }

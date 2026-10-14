@@ -51,7 +51,7 @@ import { resolveRustSourceUnionCarrier, resolveRustUnionValueCarrier } from "../
 import { rustSelectedAssignmentValueCarrier } from "./operators.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectRustCheckedIteration } from "./provider/index.js";
-import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
+import { setCarrierFact } from "./project-calls.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -299,7 +299,7 @@ export function resolveArrayLiteralCarrier(
       if (carriers.some(carrier => carrier === undefined)) return undefined;
       const resultCarrier = inferred
         ? { ...selected, elements: carriers as readonly TargetTypeRef[] } : selected;
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "tuple-literal",
         operationId: "tsonic.rust.tuple.literal",
         resultCarrier,
@@ -329,7 +329,7 @@ export function resolveArrayLiteralCarrier(
     for (const element of presentElements) {
       if (resolveArrayElementCarrier(walk, element, sourceFile, fixedArray.element) === undefined) return undefined;
     }
-    setRustOperationFact(walk, expression, { kind: "fixed-array-literal", operationId: "tsonic.rust.fixed-array.literal" });
+    walk.context.records.targetOperations.source(expression, { kind: "fixed-array-literal", operationId: "tsonic.rust.fixed-array.literal" });
     return setCarrierFact(walk, expression, expected);
   }
   if (expectedElement === undefined) {
@@ -371,7 +371,7 @@ export function resolveArrayLiteralCarrier(
   const resultCarrier = lane === "js"
     ? rustJsArrayTargetType(expectedElement)
     : rustVecTargetType(expectedElement);
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "array-literal",
     operationId: `tsonic.rust.js.array-literal.${lane}`,
     lane,

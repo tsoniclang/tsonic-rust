@@ -185,8 +185,7 @@ export function selectRustCheckedConversion(
       : projectDowncast
         ? "rust selected assertion project-type downcast"
       : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
-  context.records.targetOperation.set(request.expression, fact, evidence);
-  return acceptRustPolicy({ convertedType: targetCarrier, operation }, evidence);
+  return acceptRustPolicy({ convertedType: targetCarrier, targetFact: fact, operation }, evidence);
 }
 
 function selectProjectDowncast(
@@ -264,7 +263,7 @@ export function mapProviderCheckedOperation(
         providerDeclaration: identity,
       };
   return memberRequest === undefined
-    ? acceptRustOperation(expression, fact, context, provenance)
+    ? acceptRustOperation(fact, provenance)
     : acceptRustMemberOperation(
         memberRequest,
         operationKind === "indexer" ? "indexer" : "property",

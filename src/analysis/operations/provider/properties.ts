@@ -113,7 +113,7 @@ export function selectRustCheckedDelete(
       `The selected JavaScript deletion '${identity.ownerName}.${identity.memberName}' cannot finalize one total Rust operation ABI.`,
     );
   }
-  return acceptRustOperation(request.expression, fact, context, {
+  return acceptRustOperation(fact, {
     sourceExpression: request.expression,
     sourceReceiver: request.receiver,
     ...(request.sourceSelectedSymbol === undefined

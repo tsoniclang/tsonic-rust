@@ -36,7 +36,7 @@ import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
@@ -179,7 +179,7 @@ export function resolveRecordLiteralCarrier(
   }
   if (selectedExpected.kind === "target-named" && selectedExpected.id === rustEmptyObjectTargetId) {
     if (properties.length !== 0) return undefined;
-    setRustOperationFact(walk, expression, {
+    walk.context.records.targetOperations.source(expression, {
       kind: "empty-object-literal",
       operationId: "tsonic.rust.object.empty-literal",
       resultCarrier: selectedExpected,
@@ -848,7 +848,7 @@ export function resolveRecordLiteralCarrier(
     );
     return undefined;
   }
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "record-literal",
     operationId: "tsonic.rust.record.literal",
     storage,

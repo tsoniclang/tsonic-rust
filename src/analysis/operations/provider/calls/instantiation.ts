@@ -11,7 +11,7 @@ import {
   rustTypeGenericArgument,
 } from "../../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
-import { selectedRustCallSignature } from "./signatures.js";
+import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
 import { asNode } from "../../../../policy/identities/selected-source.js";
 import { selectProviderRecordArgument } from "./record-arguments.js";
 import { materializeRustOmittedCallArguments } from "../../../../policy/types/callables/omitted-arguments.js";
@@ -479,9 +479,6 @@ export function acceptSelectedCall(
         : {}),
     }, [{ message: `rust selected argument ${sourceArgument.sourceIndex} passes as ${mode}` }]);
   }
-  context.records.targetOperation.set(request.source.call, {
-    ...fact,
-  }, evidence);
   if (optionalResult.fact !== undefined) {
     context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
   }
@@ -499,8 +496,7 @@ export function acceptSelectedCall(
     ...(callIdentity.providerDeclaration === undefined ? {} : { providerDeclaration: callIdentity.providerDeclaration }),
   };
   const selectedSignature = selectedRustCallSignature(request, member);
-  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature, operation }, evidence);
+  return acceptRustPolicy({ selectedSignature, targetFact: fact, operation }, evidence);
 }
 
 type SelectedCallSourceCarriers =

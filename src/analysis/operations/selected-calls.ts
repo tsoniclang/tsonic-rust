@@ -10,8 +10,23 @@ export function selectRustCheckedCall(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const selection = resolveRustCheckedCall(request, context, options);
-  context.records.selectedOperations.checked(request.source.call, selection);
+  recordCheckedCallSelection(request, selection, context);
   return selection;
+}
+
+function recordCheckedCallSelection(
+  request: RustCheckedCallSelectionInput,
+  selection: RustPolicySelection<RustCheckedCallSelectionResult>,
+  context: RustOperationAnalysisContext,
+): void {
+  if (selection.kind === "accept" && selection.value.kind !== "source" &&
+    selection.value.kind !== "deferred-callback" && selection.value.sourceGuard !== undefined) {
+    context.records.runtimeCarriers.selected(selection.value.sourceGuard.guard,
+      selection.value.sourceGuard.sourceGuardCarrier);
+  }
+  context.records.targetOperations.checked(request.source.call, selection);
+  context.records.selectedCalls.checked(request, selection);
+  context.records.selectedOperations.checked(request.source.call, selection);
 }
 
 export function finalizeRustPreparedCheckedCall(
@@ -22,6 +37,6 @@ export function finalizeRustPreparedCheckedCall(
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
   const selection = resolveRustPreparedCheckedCall(request, prepared, callbackFallible, context, options);
-  context.records.selectedOperations.checked(request.source.call, selection);
+  recordCheckedCallSelection(request, selection, context);
   return selection;
 }

@@ -24,7 +24,7 @@ import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustSourceUnionTargetType, rustSourceUnionCarrierValue, rustOptionElementCarrier, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { Node, SourceFile, Type } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -538,7 +538,7 @@ export function tryFlowMarkerCall(
   if (flow.state !== "moved" && flow.state !== "borrowed-shared" && flow.state !== "borrowed-mut") {
     return { carrier: undefined };
   }
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "flow-marker",
     operationId: `tsonic.rust.flow.${flow.state}`,
     state: flow.state,
