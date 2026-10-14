@@ -29,7 +29,7 @@ import {
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordRustParameterAbiSelection, recordParameterAbiFacts } from "../declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -39,6 +39,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
+import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustSourceFunctionValueCarrier } from "./function-values.js";
 import { selectRustPointerReturnContract } from "../../policy/operations/pointers/return.js";
@@ -52,6 +53,7 @@ import { selectRustInferredReturn } from "./inferred-return.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
 import { recordRustAsyncBodyFacts } from "./async-results.js";
+import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 
 export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   const contextual = recordCallableParameterSignatureFacts(walk, declaration);
@@ -63,27 +65,6 @@ export function recordFunctionSignatureFacts(walk: RustFactWalk, declaration: No
 function recordCallableTypeSignatureFacts(walk: RustFactWalk, declaration: Node): void {
   recordCallableParameterSignatureFacts(walk, declaration);
   recordCallableReturnFact(walk, declaration);
-}
-
-function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
-  const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
-  if (parameters === undefined) {
-    return;
-  }
-  const signature = walk.context.ast.is.IsArrowFunction(declaration) || walk.context.ast.is.IsFunctionExpression(declaration)
-    ? resolveRustTargetTypeRef(declaration,
-        { ...rustResolutionContext(walk, declaration), callableRepresentation: "signature" }, walk.operationOptions)
-    : undefined;
-  const contextual = selectRustClosedCallableContext(walk, declaration, signature);
-  const logical = rustCallableProtocol(signature) ?? rustClosureProtocol(signature);
-  const protocol = rustCallableProtocol(contextual) ?? rustClosureProtocol(contextual);
-  for (const [index, parameter] of parameters.entries()) {
-    const input = protocol?.parameters[index];
-    const selected = rustTargetTypeRefEquals(input, logical?.parameters[index]) ? undefined : input;
-    recordParameterAbiFacts(walk, parameter, selected === undefined || Node_Initializer(walk.context.ast, parameter) === undefined
-      ? selected : rustSourceOptionalTargetType(selected));
-  }
-  return contextual;
 }
 
 export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourceFile: SourceFile): void {
@@ -447,11 +428,16 @@ export function recordCallableReturnFact(
   return walk.context.records.sourceCallableReturns.resolve(walk, declaration, selectedCarrier);
 }
 
+export interface RustSourceCallableReturnSelection {
+  readonly fact: RustSourceCallableReturnFact;
+  readonly retainedEnvironment?: RustRetainedEnvironment;
+}
+
 export function selectRustSourceCallableReturn(
   walk: RustFactWalk,
   declaration: Node,
   selectedCarrier?: TargetTypeRef,
-): RustSourceCallableReturnFact | undefined {
+): RustSourceCallableReturnSelection | undefined {
   const generator = walk.context.records.generator.get(declaration);
   const asynchronous = walk.context.records.asyncFunction.get(declaration);
   if (walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined
@@ -474,12 +460,11 @@ export function selectRustSourceCallableReturn(
   const rawCarrier = pointer?.returnCarrier ?? rustGenericCallableValueOwner(walk.context.ast, declaration, selected);
   const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
     parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
+  if (parameterCarriers.some(parameter => parameter === undefined)) return undefined;
   const retained = rawCarrier === undefined || asynchronous !== undefined || generator !== undefined ? undefined
     : resolveRustRetainedResult(declaration, sourceReturn, rawCarrier, parameterCarriers,
         rustResolutionContext(walk, declaration), walk.operationOptions);
   const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
-  if (retained?.environment !== undefined) walk.context.records.retainedEnvironments.retain(declaration,
-    retained.environment.lifetime, retained.environment.parameters);
   if (carrier !== undefined) {
     const borrowedParameter = walk.context.sourceCallables.borrowedReturnParameter(declaration);
     const borrowedAbi = borrowedParameter === undefined ? undefined
@@ -490,14 +475,17 @@ export function selectRustSourceCallableReturn(
     const implementationResult = asynchronous !== undefined || generator !== undefined || sourceReturn === undefined
       ? undefined : resolveRustTargetTypeRef(sourceReturn, rustResolutionContext(walk, declaration), walk.operationOptions);
     return {
-      returnCarrier: carrier,
-      ...(borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
-        rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? { borrowedParameter } : {}),
-      ...(isRustUnitCarrier(implementationResult) ? { implementationCompletion: "absence" as const }
-        : isRustNeverCarrier(implementationResult) ? { implementationCompletion: "diverging" as const } : {}),
-      ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
-      ...(absence || pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
-      ...(absence && completion?.canFallThrough || pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
+      fact: {
+        returnCarrier: carrier,
+        ...(borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
+          rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? { borrowedParameter } : {}),
+        ...(isRustUnitCarrier(implementationResult) ? { implementationCompletion: "absence" as const }
+          : isRustNeverCarrier(implementationResult) ? { implementationCompletion: "diverging" as const } : {}),
+        ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
+        ...(absence || pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
+        ...(absence && completion?.canFallThrough || pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
+      },
+      ...(retained?.environment === undefined ? {} : { retainedEnvironment: retained.environment }),
     };
   }
   return undefined;

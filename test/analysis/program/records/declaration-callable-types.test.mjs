@@ -47,7 +47,6 @@ test("five declaration and callable producer APIs accept their precise source an
     builder.moduleBindings.defaultExport(subject, carrier);
     builder.moduleCallableStoragePlans.finalize(walk);
     const resolved: boolean = builder.sourceCallableReturns.resolve(walk, subject, carrier);
-    builder.sourceCallableReturns.inferred(walk, subject, carrier);
     builder.sourceCallableReturns.setter(subject);
     builder.capturedFieldStoragePlans.resolve(walk, subject, carrier);
     const sealed: RustProgramRecords = builder;
@@ -68,13 +67,14 @@ test("removed general writes, leaked producers and malformed declaration inputs 
     builder.moduleBindings.callable(subject, carrier, "step", undefined);
     builder.moduleBindings.defaultExport(subject, subject);
     builder.moduleCallableStoragePlans.finalize(carrier);
-    builder.sourceCallableReturns.inferred(walk, subject, subject);
+    builder.sourceCallableReturns.resolve(walk, subject, subject);
     builder.capturedFieldStoragePlans.resolve(walk, carrier, carrier);
+    builder.sourceCallableReturns.inferred(walk, subject, carrier);
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "every removed or malformed form must fail source checking");
   const codes = [...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1]));
-  assert.deepEqual(codes, [...Array(10).fill(2339), ...Array(5).fill(2551), 2322, 2345, 2741, 2345, 2345, 2345, 2345, 2345]);
+  assert.deepEqual(codes, [...Array(10).fill(2339), ...Array(5).fill(2551), 2322, 2345, 2741, 2345, 2345, 2345, 2345, 2345, 2339]);
 });
 
 test("all five old keys are deleted rather than left as an alternate registration vocabulary", () => {

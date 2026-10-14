@@ -38,7 +38,6 @@ test("all five declaration and callable families expose one immutable reader and
     () => builder.moduleBindings.defaultExport(subject, integer),
     () => builder.moduleCallableStoragePlans.finalize({}),
     () => builder.sourceCallableReturns.resolve({}, subject),
-    () => builder.sourceCallableReturns.inferred({}, subject, integer),
     () => builder.sourceCallableReturns.setter(subject),
     () => builder.capturedFieldStoragePlans.resolve({}, subject, integer),
   ]) assert.throws(attempt, /after analysis is sealed/u);
@@ -131,30 +130,24 @@ test("module value conflicts retain const/cell kind, initialization and exact in
   }
 });
 
-test("inferred returns preserve one exact completion and reuse inherited facts without recomputation", () => {
+test("complete return queries reuse inherited facts and setters preserve native unit results", () => {
   const parent = createRustProgramRecordBuilder();
   const declaration = {};
-  let completions = 0;
-  const walk = { context: { semanticsFor: subject => ({ operations: { callableCompletion() {
-    assert.equal(subject === declaration, true);
-    completions++;
-    return { canFallThrough: false };
-  } } }) } };
-  parent.sourceCallableReturns.inferred(walk, declaration, integer);
+  assert.equal(parent.sourceCallableReturns.inferred === undefined, true, "the incomplete constructor is removed");
+  parent.sourceCallableReturns.setter(declaration);
   const original = parent.sourceCallableReturn.get(declaration);
-  assert.equal(original.returnCarrier === integer, true);
-  assert.equal(original.canFallThrough, false);
-  assert.equal(completions, 1);
   const child = createRustProgramRecordBuilder(undefined, parent.seal());
-  child.sourceCallableReturns.inferred(walk, declaration, text);
+  const noSelection = new Proxy({}, { get() { throw new Error("the complete inherited query must be a lookup"); } });
+  assert.equal(child.sourceCallableReturns.resolve(noSelection, declaration), true);
   child.sourceCallableReturns.setter(declaration);
   assert.equal(child.sourceCallableReturn.get(declaration) === original, true);
-  assert.equal(completions, 1, "the existing fact is not recalculated or replaced");
   const setter = {};
   child.sourceCallableReturns.setter(setter);
   assert.equal(isRustUnitCarrier(child.sourceCallableReturn.get(setter).returnCarrier), true);
   assert.deepEqual(child.sourceCallableReturn.get(setter).returnCarrier, { kind: "tuple", elements: [] });
   assert.equal(parent.sourceCallableReturn.get(setter) === undefined, true);
+  child.seal();
+  assert.equal(child.sourceCallableReturns.inferred === undefined, true);
 });
 
 test("missing suspension evidence rejects through the actual source-return producer before source inspection", () => {

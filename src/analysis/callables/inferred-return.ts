@@ -20,6 +20,7 @@ import { rustCallableProtocol } from "../../target-model/types/carriers/callable
 import { rustNativeCallableResultMatches } from "../../policy/ownership/callable-result-contract.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
+import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 
 export function selectRustInferredReturn(
   walk: RustFactWalk,
@@ -112,12 +113,8 @@ export function selectRustInferredReturn(
           const target = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
           if (target !== undefined && ast.body(target) !== undefined && !ast.hasModifierKind(target, "async") &&
             walk.context.semanticsFor(target).operations.generator(target) === undefined) {
-            const sourceResult = call === undefined ? undefined : semantics.operations.callResult(call);
-            const carrier = records.sourceCallableReturn.get(target)?.returnCarrier ??
-              resolveRustTargetTypeRef(Node_Type(ast, target) ?? sourceResult?.selectedReturnType, context, walk.operationOptions);
-            const selected = selectRustInferredReturn(walk, target, carrier);
-            if (selected === undefined) return undefined;
-            records.sourceCallableReturns.inferred(walk, target, selected);
+            recordCallableParameterSignatureFacts(probe, target);
+            if (!records.sourceCallableReturns.resolve(probe, target)) return undefined;
             const sourceFile = ast.getSourceFile(expression);
             if (sourceFile === undefined) return undefined;
             return resolveExpressionCarrier(probe, expression, sourceFile, undefined);

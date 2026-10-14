@@ -96,7 +96,8 @@ export function createRustProgramRecordBuilder(
   const nativeUnreachableNodes = createRustNativeUnreachableProducer(assertOpen, parent?.nativeUnreachable);
   const awaitValues = createRustAwaitValueProducer(assertOpen, requireFoundation, definitions, parent?.awaitValue);
   const compileTimeSources = createRustCompileTimeSourceProducer(assertOpen, parent?.compileTimeSource);
-  const sourceCallableReturns = createRustSourceCallableReturnProducer(assertOpen, parent?.sourceCallableReturn);
+  const retainedEnvironments = createRustRetainedEnvironmentProducer(assertOpen, parent?.retainedEnvironment);
+  const sourceCallableReturns = createRustSourceCallableReturnProducer(assertOpen, retainedEnvironments, parent?.sourceCallableReturn);
   const errorEffectPlans = createRustErrorEffectsProducer(assertOpen, parent?.errorEffects);
   const sourceErrorEdges = createRustSourceErrorEffectsProducer(assertOpen, parent?.sourceErrorEffects);
   const deferredProducerChannels = createRustDeferredProducerEffectsProducer(assertOpen, requireFoundation, parent?.deferredProducerEffects);
@@ -136,7 +137,6 @@ export function createRustProgramRecordBuilder(
   const indexedFieldKeys = createRustIndexedFieldKeyArgumentProducer(assertOpen, parent?.indexedFieldKeyArgument);
   const objectReferenceViews = createRustObjectReferenceViewProducer(assertOpen, parent?.objectReferenceView);
   const projectCallableAdapterPlans = createRustProjectCallableAdapterProducer(assertOpen, parent?.projectCallableAdapters);
-  const retainedEnvironments = createRustRetainedEnvironmentProducer(assertOpen, parent?.retainedEnvironment);
   const retainedCalls = createRustRetainedCallLifetimesProducer(assertOpen, parent?.retainedCallLifetimes);
   const genericNumerics = createRustGenericNumericOperandsProducer(assertOpen, parent?.genericNumericOperands);
   const moduleCallableStoragePlans = createRustModuleCallableStorageProducer(assertOpen, parent?.moduleCallableStorage);
