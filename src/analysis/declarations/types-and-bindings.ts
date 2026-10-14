@@ -98,10 +98,6 @@ export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): vo
   walk.sourceTypes.reserveSourceUnion(declaration, absent ? rustSourceOptionalTargetType(reference) : reference);
 }
 
-export function registerTypeAlias(walk: RustFactWalk, declaration: Node): void {
-  walk.context.records.typeAliasDeclarations.register(walk, declaration);
-}
-
 export function selectRustTypeAliasDeclaration(
   walk: RustFactWalk,
   declaration: Node,

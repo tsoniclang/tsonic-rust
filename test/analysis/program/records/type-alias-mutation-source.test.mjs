@@ -35,6 +35,7 @@ export function pick(mode: Mode): Mode { return mode; }
 export function add(left: Count, right: Count): Count { return left + right; }
 export function keep<Region extends Life>(value: Borrowed<Region>): Borrowed<Region> { return value; }
 export function first(chain: Chain): number { return chain === undefined ? 0 : chain.value; }
+export function local(): number { type Local = number; const value: Local = 3; return value; }
 `;
 
 const familySource = `
@@ -62,6 +63,7 @@ for (const surfaces of [[], ["js"]]) {
     const chain = program.records.typeAliasDeclaration.get(alias("Chain"));
     assert.equal(chain?.kind, "runtime");
     assert.equal(chain.variants.length > 0, true);
+    assert.equal(program.records.typeAliasDeclaration.get(alias("Local"))?.kind, "erased", "a function-local alias is registered by the statement owner");
     for (const name of ["Mode", "Count", "Borrowed", "Item"]) {
       assert.equal(program.records.runtimeCarrier.get(alias(name)) !== undefined, true, `${name}: declaration carrier recorded`);
     }
@@ -180,12 +182,13 @@ test("removed general writes, leaked producers and malformed producer inputs fai
   assert.deepEqual(codes, [...Array(6).fill(2339), ...Array(3).fill(2551), 2740, 2345, 2554], result.stdout);
 });
 
-test("the three superseded keys are deleted rather than kept as an alternate registration vocabulary", () => {
+test("the three superseded keys and the type-alias forwarder are deleted rather than kept as alternate routes", () => {
   const result = compile("removed-keys", `
     import { rustTypeAliasDeclarationFactKey } from "../../dist/analysis/program/records/keys/callables-and-resources.js";
     import { rustMutatedBindingFactKey, rustMutatedReferentFactKey } from "../../dist/analysis/program/records/keys/value-projections.js";
+    import { registerTypeAlias } from "../../dist/analysis/declarations/types-and-bindings.js";
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
-  assert.equal(result.status === 0, false, "no removed key has a surviving import path");
-  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2305, 2724, 2305], result.stdout);
+  assert.equal(result.status === 0, false, "no removed key or forwarder has a surviving import path");
+  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2305, 2724, 2305, 2305], result.stdout);
 });
