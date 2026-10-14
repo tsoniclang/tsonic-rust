@@ -8,6 +8,7 @@ import { sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSuspendedOwnedReceiver } from "../../target-model/records/callables-and-resources.js";
+import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -19,6 +20,7 @@ export type RustSuspendedCallableStorageResolution =
       readonly capturedParameters: readonly Node[];
       readonly storage: RustSuspendedCallableStorage;
       readonly ownedReceiver?: RustSuspendedOwnedReceiver;
+      readonly retainedEnvironment?: RustRetainedEnvironment;
     }
   | { readonly kind: "rejected"; readonly reason: string };
 
@@ -29,6 +31,7 @@ export function resolveRustSuspendedCallableStorage(
   ownedInputReceiver?: TargetTypeRef,
   requiredLifetime?: RustLifetimeRef,
 ): RustSuspendedCallableStorageResolution {
+  walk.context.records.assertOpen();
   const { ast } = walk.context;
   const body = ast.body(declaration);
   if (body === undefined) {
@@ -131,8 +134,6 @@ export function resolveRustSuspendedCallableStorage(
       kind: "rejected", reason: "A selected native promise lifetime requires every captured carrier to outlive its declared storage contract.",
     };
   }
-  if (environment.kind === "selected" && requiredLifetime === undefined) walk.context.records.retainedEnvironments.retain(declaration,
-    environment.environment.lifetime, environment.environment.parameters);
   const lifetime = requiredLifetime ?? (environment.kind === "selected" ? environment.environment.lifetime
     : inputCarriers.some(carrier => carrier === undefined) ? undefined
     : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract));
@@ -142,12 +143,15 @@ export function resolveRustSuspendedCallableStorage(
       reason: "A suspended callable's captured lifetimes require one exact native storage lifetime from its authored contract or unambiguous input elision.",
     };
   }
+  const retainedEnvironment = environment.kind === "selected" && requiredLifetime === undefined
+    ? environment.environment : undefined;
   if (lifetime.kind === "static") {
     return {
       kind: "resolved",
       capturedParameters: Object.freeze(capturedParameters),
       storage: Object.freeze({ kind: "static" }),
       ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
+      ...(retainedEnvironment === undefined ? {} : { retainedEnvironment }),
     };
   }
   return {
@@ -155,5 +159,6 @@ export function resolveRustSuspendedCallableStorage(
     capturedParameters: Object.freeze(capturedParameters),
     storage: Object.freeze({ kind: "lifetime", lifetime }),
     ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
+    ...(retainedEnvironment === undefined ? {} : { retainedEnvironment }),
   };
 }

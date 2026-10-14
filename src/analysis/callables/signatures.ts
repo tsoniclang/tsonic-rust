@@ -389,6 +389,8 @@ export function recordCallableSuspensionFacts(
         );
         return;
       }
+      if (storage.retainedEnvironment !== undefined) walk.context.records.retainedEnvironments.retain(declaration,
+        storage.retainedEnvironment.lifetime, storage.retainedEnvironment.parameters);
       walk.context.records.generators.suspend(declaration, protocol, storage);
       const typeNode = Node_Type(ast, declaration);
       if (typeNode !== undefined) {

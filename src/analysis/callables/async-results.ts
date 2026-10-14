@@ -141,5 +141,7 @@ export function recordRustAsyncBodyFacts(
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
     return;
   }
+  if (storage.retainedEnvironment !== undefined) walk.context.records.retainedEnvironments.retain(declaration,
+    storage.retainedEnvironment.lifetime, storage.retainedEnvironment.parameters);
   walk.context.records.asyncFunctions.promise(declaration, closedFutureCarrier, selected.outputCarrier, storage);
 }
