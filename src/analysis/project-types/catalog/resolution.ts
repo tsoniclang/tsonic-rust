@@ -1,4 +1,6 @@
-import { rustProjectClassLineage, rustProjectClassContracts } from "../../../target-model/types/project-heritage.js";
+import { projectClassLineage, projectContractsForLineage } from "./declaration-heritage.js";
+import { createSourceDeclarationMembership } from "@tsonic/target-api/analysis";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { allocateRustGeneratedName as allocateGeneratedName, rustGeneratedNameComponent } from "../../../target-model/names/generated.js";
 import { compareProjectDefinitions, definitionKey, denseNodes, projectDefinition, projectMemberNames, sourceFileIdentifierNames } from "./helpers.js";
 import {
@@ -28,7 +30,7 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustSourceTypeDeclarations } from "../../../policy/types/model/source-declarations.js";
 import { rustLocalClassIssue } from "../local-classes.js";
 import { projectGenericSubstitutions } from "../../../policy/types/project/generic-substitutions.js";
-import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { closedMetadataKey, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { rustJsErrorTargetType } from "../../../target-model/types/carriers/js.js";
 import { rustSourceErrorTargetType } from "../../../target-model/types/carriers/source-error.js";
@@ -42,7 +44,7 @@ export function createRustProjectTypePolicy(
 ): RustProjectTypePolicy {
   const definitions: RustProjectTypeDefinition[] = [];
   const issues: RustProjectTypeIssue[] = [];
-  const byDeclaration = new WeakMap<Node, RustProjectTypeDefinition>();
+  const byDeclaration = new Map<Node, RustProjectTypeDefinition>();
   const byKey = new Map<string, RustProjectTypeDefinition>();
   const usedModuleNamesBySourceFile = new WeakMap<SourceFile, Set<string>>();
 
@@ -241,16 +243,14 @@ export function createRustProjectTypePolicy(
       : [...project, external.targetType]);
   };
 
-  const openCarrier = (definition: RustProjectTypeDefinition): TargetTypeRef =>
-    rustSourceTypeCarrier(
-      definition.fileName,
-      definition.sourceName,
-      "object",
-      Object.freeze(definition.genericParameters.map((parameter) =>
-        parameter.kind === "lifetime"
-          ? rustLifetimeGenericArgument(parameter.lifetime)
-          : rustTypeGenericArgument({ kind: "type-parameter", identity: parameter.identity, name: parameter.targetName }))),
-    );
+  const openCarriers = new WeakMap<RustProjectTypeDefinition, TargetTypeRef>();
+  const openCarrier = (definition: RustProjectTypeDefinition): TargetTypeRef => {
+    const carrier = openCarriers.get(definition);
+    if (carrier === undefined) {
+      failTargetAnalysisInvariant("tsonic-rust", "An open project carrier requires an exact admitted definition.", definition.declaration);
+    }
+    return carrier;
+  };
 
   const relationship = (
     source: TargetTypeRef,
@@ -271,15 +271,7 @@ export function createRustProjectTypePolicy(
   function definitionContainingDeclaration(
     declaration: Node | undefined,
   ): RustProjectTypeDefinition | undefined {
-    let current = declaration;
-    while (current !== undefined) {
-      const definition = byDeclaration.get(current);
-      if (definition !== undefined) {
-        return definition;
-      }
-      current = host.ast.parent(current);
-    }
-    return undefined;
+    return declaration === undefined ? undefined : containingDefinitions.get(declaration);
   }
 
   const polymorphic = new Set<RustProjectTypeDefinition>();
@@ -306,6 +298,24 @@ export function createRustProjectTypePolicy(
     if (externalBaseByDeclaration.get(definition.declaration) !== undefined) {
       polymorphic.add(definition);
     }
+  }
+
+  const containingDefinitions = createSourceDeclarationMembership(host.ast, host.sourceNodes, byDeclaration);
+  const classLineages = new WeakMap<RustProjectTypeDefinition, readonly RustProjectTypeDefinition[] | undefined>();
+  const classContracts = new WeakMap<RustProjectTypeDefinition, readonly RustProjectTypeDefinition[] | undefined>();
+  for (const definition of definitions) {
+    openCarriers.set(definition, snapshotClosedMetadata(rustSourceTypeCarrier(
+      definition.fileName,
+      definition.sourceName,
+      "object",
+      definition.genericParameters.map(parameter => parameter.kind === "lifetime"
+        ? rustLifetimeGenericArgument(parameter.lifetime)
+        : rustTypeGenericArgument({ kind: "type-parameter", identity: parameter.identity, name: parameter.targetName })),
+    )));
+    if (host.ast.hasModifierKind(definition.declaration, "abstract")) polymorphic.add(definition);
+    const lineage = projectClassLineage(definition, heritageForDeclaration);
+    classLineages.set(definition, lineage);
+    classContracts.set(definition, projectContractsForLineage(lineage, heritageForDeclaration));
   }
 
   const inheritedExternalBases = new WeakMap<RustProjectTypeDefinition, {
@@ -365,10 +375,10 @@ export function createRustProjectTypePolicy(
     return heritageByDeclaration.get(declaration) ?? [];
   }
   function classLineage(definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined {
-    return rustProjectClassLineage(definition, heritageForDeclaration);
+    return classLineages.get(definition);
   }
   const contractsForClass = (definition: RustProjectTypeDefinition): readonly RustProjectTypeDefinition[] | undefined =>
-    rustProjectClassContracts(definition, heritageForDeclaration);
+    classContracts.get(definition);
 
   const constructorsByDefinition = new WeakMap<
     RustProjectTypeDefinition,
@@ -817,7 +827,7 @@ export function createRustProjectTypePolicy(
       );
     },
     isPolymorphic(definition) {
-      return polymorphic.has(definition) || host.ast.hasModifierKind(definition.declaration, "abstract");
+      return polymorphic.has(definition);
     },
     classLineage,
     contractsForClass,

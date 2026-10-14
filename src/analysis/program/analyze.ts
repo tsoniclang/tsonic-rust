@@ -206,6 +206,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
+    sourceNodes: context.sourceStorage.nodes,
     sourceLifetimes: context.sourceLifetimes,
     isRepresentationAlias(declaration) {
       return context.records.typeOnlyDeclaration.get(declaration)?.reason === "representation-alias";

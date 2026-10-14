@@ -23,6 +23,7 @@ export interface RustProjectTypePolicyHost {
   readonly names: RustNamePlan;
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
+  readonly sourceNodes: readonly Node[];
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly thrownClassDeclarations: ReadonlySet<Node>;
   readonly sourceCreatedErrorOrigins: readonly Node[];
