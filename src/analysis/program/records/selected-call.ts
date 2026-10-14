@@ -1,7 +1,7 @@
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
-import { rustSelectedTargetSignatureEquals } from "../../../target-model/types/equality.js";
+import { rustSelectedTargetSignatureEquals } from "../../../target-model/types/selected-call-equality.js";
 import type { RustSelectedTargetSignature, RustTargetMember } from "../../../target-model/types/model.js";
 import { rustFoundationForSelectedCall } from "../../foundation/requirements.js";
 import { createRustRecordFamily } from "./family.js";

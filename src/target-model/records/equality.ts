@@ -144,6 +144,7 @@ export function rustFlowReadProjectionEquals(left: RustFlowReadProjectionFact, r
     (left.kind !== "source-union" && left.kind !== "runtime-union" ||
       (right.kind === left.kind && left.variant === right.variant &&
         rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
+        Object.prototype.hasOwnProperty.call(left, "project") === Object.prototype.hasOwnProperty.call(right, "project") &&
         closedMetadataEquals(left.project, right.project))) &&
     (left.kind !== "project-downcast" ||
       (right.kind === "project-downcast" &&

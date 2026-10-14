@@ -5,7 +5,6 @@ import {
 } from "../metadata/closed-data.js";
 import type {
   RustSelectedTargetOperation,
-  RustSelectedTargetSignature,
   RustTargetConstArgument,
   RustTargetGenericArgument,
   RustTargetTypeRef,
@@ -94,48 +93,6 @@ export function rustSelectedTargetOperationEquals(
     operationProvenanceEquals(left.provenance, right.provenance);
 }
 
-export function rustSelectedTargetSignatureEquals(
-  left: RustSelectedTargetSignature,
-  right: RustSelectedTargetSignature,
-): boolean {
-  return closedMetadataEquals(left.member, right.member) &&
-    rustTargetTypeRefEquals(left.sourceConstructorCarrier, right.sourceConstructorCarrier) &&
-    rustTargetTypeRefEquals(left.sourceSelectedOwnerCarrier, right.sourceSelectedOwnerCarrier) &&
-    rustTargetTypeRefEquals(
-      left.sourceSelectedReceiverCarrier,
-      right.sourceSelectedReceiverCarrier,
-    ) &&
-    rustTargetTypeRefEquals(
-      left.sourceCallableCarrier,
-      right.sourceCallableCarrier,
-    ) &&
-    closedMetadataEquals(
-      left.sourceCallableParameterIndexes,
-      right.sourceCallableParameterIndexes,
-    ) &&
-    closedMetadataEquals(
-      left.sourceStructuralMethod,
-      right.sourceStructuralMethod,
-    ) &&
-    closedMetadataEquals(left.targetGenericArguments, right.targetGenericArguments) &&
-    closedMetadataEquals(left.providerDeclaration, right.providerDeclaration) &&
-    closedMetadataEquals(left.argumentConversions, right.argumentConversions) &&
-    left.sourceSignature === right.sourceSignature &&
-    left.sourceDeclaration === right.sourceDeclaration &&
-    left.sourceCalleeSymbol === right.sourceCalleeSymbol &&
-    left.sourceCalleeDeclaration === right.sourceCalleeDeclaration &&
-    left.sourceReturnType === right.sourceReturnType &&
-    sourceArgumentBindingsEqual(left.sourceArgumentBindings, right.sourceArgumentBindings) &&
-    sourceSelectedSignatureParametersEqual(
-      left.sourceSelectedSignatureParameters,
-      right.sourceSelectedSignatureParameters,
-    ) &&
-    sourceSelectedMethodTypeArgumentsEqual(
-      left.sourceSelectedMethodTypeArguments,
-      right.sourceSelectedMethodTypeArguments,
-    );
-}
-
 function operationProvenanceEquals(
   left: RustSelectedTargetOperation["provenance"],
   right: RustSelectedTargetOperation["provenance"],
@@ -156,65 +113,6 @@ function operationProvenanceEquals(
     left.sourceResultType === right.sourceResultType &&
     left.sourceReturnType === right.sourceReturnType &&
     closedMetadataEquals(left.providerDeclaration, right.providerDeclaration);
-}
-
-function sourceArgumentBindingsEqual(
-  left: RustSelectedTargetSignature["sourceArgumentBindings"],
-  right: RustSelectedTargetSignature["sourceArgumentBindings"],
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right;
-  }
-  return left.length === right.length && left.every((entry, index) => {
-    const other = right[index];
-    return other !== undefined &&
-      entry.sourceArgumentIndex === other.sourceArgumentIndex &&
-      entry.effectiveArgumentIndex === other.effectiveArgumentIndex &&
-      entry.sourceForm === other.sourceForm &&
-      entry.spreadElementIndex === other.spreadElementIndex &&
-      entry.sourceParameterIndex === other.sourceParameterIndex &&
-      entry.sourceParameterForm === other.sourceParameterForm &&
-      entry.selectedArgumentType === other.selectedArgumentType &&
-      entry.selectedParameterType === other.selectedParameterType;
-  });
-}
-
-function sourceSelectedSignatureParametersEqual(
-  left: RustSelectedTargetSignature["sourceSelectedSignatureParameters"],
-  right: RustSelectedTargetSignature["sourceSelectedSignatureParameters"],
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right;
-  }
-  return left.length === right.length && left.every((entry, index) => {
-    const other = right[index];
-    return other !== undefined &&
-      entry.parameterIndex === other.parameterIndex &&
-      entry.parameterName === other.parameterName &&
-      entry.parameterSymbol === other.parameterSymbol &&
-      entry.parameterDeclaration === other.parameterDeclaration &&
-      entry.selectedType === other.selectedType &&
-      entry.authoredTypeNode === other.authoredTypeNode &&
-      entry.acceptsOmission === other.acceptsOmission &&
-      entry.rest === other.rest;
-  });
-}
-
-function sourceSelectedMethodTypeArgumentsEqual(
-  left: RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"],
-  right: RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"],
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right;
-  }
-  return left.length === right.length && left.every((entry, index) => {
-    const other = right[index];
-    return other !== undefined &&
-      entry.typeParameterName === other.typeParameterName &&
-      entry.typeParameter === other.typeParameter &&
-      entry.selectedType === other.selectedType &&
-      entry.explicitTypeNode === other.explicitTypeNode;
-  });
 }
 
 function rustTargetTypeRefEqualsValidated(

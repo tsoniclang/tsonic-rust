@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { rustSelectedTargetSignatureEquals } from "../../../../dist/target-model/types/equality.js";
+import { rustSelectedTargetSignatureEquals } from "../../../../dist/target-model/types/selected-call-equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };
@@ -22,6 +22,86 @@ test("selected callable identity includes the exact generic owner independently 
   assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true);
   assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: text }), false);
   assert.equal(rustSelectedTargetSignatureEquals(signature, { ...signature, sourceSelectedOwnerCarrier: undefined }), false);
+});
+
+test("selected callable equality includes complete result projection correspondence", () => {
+  const member = { id: "union.read", sourceName: "read", targetName: "read", kind: "method", parameters: [], returnType: integer };
+  const projections = [
+    ...["builtin-error", "option-value", "option-reference", "closed-native"].map(kind => ({ kind })),
+    { kind: "source-union", dispatchCarrier: text, variant: "First" },
+    { kind: "runtime-union", dispatchCarrier: text, variant: "First", project: undefined },
+    { kind: "project-downcast", dispatchCarrier: text, projection: { kind: "closed", slot: "payload" } },
+    { kind: "program-error-variant", variant: "First" },
+    { kind: "union-map", dispatchCarrier: text, arms: [] },
+  ].map(projection => ({ ...projection, sourceCarrier: text, selectedCarrier: integer }));
+  for (const projection of projections) {
+    const signature = { member, sourceResultProjection: projection };
+    assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true, projection.kind);
+    const changes = [undefined, { ...projection, sourceCarrier: integer }, { ...projection, selectedCarrier: text },
+      { ...projection, kind: projection.kind === "closed-native" ? "option-value" : "closed-native" }];
+    if ("dispatchCarrier" in projection) changes.push({ ...projection, dispatchCarrier: integer });
+    if ("variant" in projection) changes.push({ ...projection, variant: "Second" });
+    if ("projection" in projection) changes.push({ ...projection, projection: { ...projection.projection, slot: "other" } });
+    if ("arms" in projection) changes.push({ ...projection, arms: [{ carrier: integer, source: [], target: [] }] });
+    if (projection.kind === "source-union") changes.push({ ...projection, project: undefined });
+    if (projection.kind === "runtime-union") {
+      const { project: ignored, ...absent } = projection;
+      changes.push(absent);
+    }
+    for (const [index, changed] of changes.entries()) {
+      assert.equal(rustSelectedTargetSignatureEquals(signature, { member, sourceResultProjection: changed }), false,
+        `${projection.kind} changed dimension ${index}`);
+      assert.equal(rustSelectedTargetSignatureEquals({ member, sourceResultProjection: changed }, signature), false,
+        `${projection.kind} reverse correspondence ${index}`);
+    }
+  }
+});
+
+test("selected callable equality retains ordered union methods, opaque declarations and conversions", () => {
+  const member = { id: "union.read", sourceName: "read", targetName: "read", kind: "method", parameters: [], returnType: integer };
+  const variant = { name: "First", carrier: integer, declaration: first, targetName: "read",
+    returnType: integer, resultConversion: { kind: "numeric-promotion", source: "int32", target: "number" } };
+  const other = { ...variant, name: "Second", carrier: text, declaration: second, targetName: "read_other" };
+  const signature = { member, sourceUnionMethods: { receiverCarrier: text, variants: [variant, other] } };
+  assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true);
+  const variants = [
+    [other, variant], [variant],
+    ...[{ name: "Changed" }, { carrier: text }, { declaration: second }, { targetName: "changed" },
+      { returnType: text }, { resultConversion: undefined },
+      { resultConversion: { ...variant.resultConversion, target: "int64" } }]
+      .map(change => [{ ...variant, ...change }, other]),
+  ];
+  const changes = [undefined, { ...signature.sourceUnionMethods, receiverCarrier: integer },
+    ...variants.map(variants => ({ receiverCarrier: text, variants }))];
+  for (const [index, sourceUnionMethods] of changes.entries()) {
+    const changed = { ...signature, sourceUnionMethods };
+    assert.equal(rustSelectedTargetSignatureEquals(signature, changed), false, `union method mutation ${index}`);
+    assert.equal(rustSelectedTargetSignatureEquals(changed, signature), false, `reverse union method mutation ${index}`);
+  }
+});
+
+test("selected-call admission rejects changed completion proof without replacing canonical evidence", () => {
+  const builder = createRustProgramRecordBuilder();
+  const subject = {};
+  const signature = {
+    member: { id: "union.read", sourceName: "read", targetName: "read", kind: "method", parameters: [], returnType: integer },
+    sourceResultProjection: { kind: "closed-native", sourceCarrier: text, selectedCarrier: integer },
+    sourceUnionMethods: { receiverCarrier: text, variants: [
+      { name: "First", carrier: text, declaration: first, targetName: "read", returnType: integer, resultConversion: undefined },
+    ] },
+  };
+  const request = { source: { call: subject } };
+  const admit = selectedSignature => builder.selectedCalls.checked(request,
+    { kind: "accept", value: { kind: "runtime", selectedSignature }, evidence: [] });
+  admit(signature);
+  admit(copyMetadata(signature));
+  for (const changed of [
+    { ...signature, sourceResultProjection: { ...signature.sourceResultProjection, selectedCarrier: text } },
+    { ...signature, sourceUnionMethods: { ...signature.sourceUnionMethods, variants: [] } },
+  ]) {
+    assert.throws(() => admit(changed), /Conflicting Rust semantic plan 'tsonic.rust.selectedCall'/u);
+    assert.equal(builder.selectedCall.get(subject) === signature, true);
+  }
 });
 
 function copyMetadata(value, replace = undefined) {

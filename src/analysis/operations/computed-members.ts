@@ -6,9 +6,10 @@ export function recordRustComputedCallEvaluation(
   ast: AstReader, records: RustProgramRecordWriter, source: ResolvedSourceCallInfo | undefined,
   callee: Node, evaluateReceiver: boolean,
 ): Node | undefined {
+  records.assertOpen();
   const access = source?.sourceCalleeAccess;
   if (access?.kind !== "element" || access.expression !== callee) return undefined;
-  records.computedMembers.evaluate(ast, access.expression,
+  const evaluation = records.computedMembers.evaluate(ast, access.expression,
     access.receiver.expression, access.argument.expression, "read", evaluateReceiver);
-  return access.argument.expression;
+  return evaluation.key;
 }

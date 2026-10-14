@@ -65,6 +65,11 @@ test("flow construction preserves optional project-property presence without los
     builder.flowReadProjections.project(subject, source, selected, { kind: "source-union", dispatchCarrier: dispatch,
       variant: "Some", ...(present ? { project: undefined } : {}) });
     assert.equal(Object.hasOwn(builder.flowReadProjection.get(subject), "project"), present);
+    const opposite = { kind: "source-union", dispatchCarrier: dispatch, variant: "Some",
+      ...(!present ? { project: undefined } : {}) };
+    assert.throws(() => builder.flowReadProjections.project(subject, source, selected, opposite),
+      /Conflicting Rust semantic plan/u);
+    assert.equal(Object.hasOwn(builder.flowReadProjection.get(subject), "project"), present);
   }
 });
 
