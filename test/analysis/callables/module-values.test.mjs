@@ -2,6 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recordRustModuleCallableStorage } from "../../../dist/analysis/callables/module-values.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 
 
 
@@ -16,8 +17,10 @@ const target = rustCallableTargetType([number], number);
 function classify({ exported = false, kind = "first-class", direct = source, conversion = true } = {}) {
   const declaration = {};
   const reference = {};
+  const builder = createRustProgramRecordBuilder();
+  builder.moduleBindings.function(declaration, "step", { name: "step", carrier: source,
+    parameterCarriers: [], resultCarrier: number });
   const values = new Map([
-    [declaration, new Map([["moduleBinding", { storage: "native-callable", value: { carrier: source } }]])],
     [reference, new Map([
       ["directCallableReference", direct === null ? undefined : { carrier: direct }],
       ["contextualValueConversion", conversion ? { targetCarrier: target,
@@ -29,17 +32,12 @@ function classify({ exported = false, kind = "first-class", direct = source, con
     source: { navigation: { declarationUseSummary() { return { exported }; },
       expressionValueFlow() { return { aliasDeclarations: [] }; },
       declarationUses() { return [{ kind, reference }]; } } },
-    records: createRustRecordFixture({
-      moduleBinding: { get: node => values.get(node)?.get("moduleBinding") },
+    records: { ...createRustRecordFixture({
       directCallableReference: { get: node => values.get(node)?.get("directCallableReference") },
       contextualValueConversion: { get: node => values.get(node)?.get("contextualValueConversion") },
-      moduleCallableStorage: {
-        get: node => values.get(node)?.get("moduleCallableStorage"),
-        set: (node, value) => values.get(node).set("moduleCallableStorage", value),
-      },
-    }),
+    }, builder), moduleCallableStoragePlans: builder.moduleCallableStoragePlans },
   } });
-  return values.get(declaration).get("moduleCallableStorage");
+  return builder.moduleCallableStorage.get(declaration);
 }
 
 test("private immutable native adapters need no unused cached callable storage", () => {

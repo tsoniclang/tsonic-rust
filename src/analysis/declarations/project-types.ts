@@ -19,13 +19,13 @@ import { resolveTypeNodeCarrier } from "./types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
-import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { sourceTypeCarrierForDeclaration } from "../operations/inputs.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustCapturedFieldStorageFact } from "../../target-model/records/receiver-captures.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
@@ -91,23 +91,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
             ["target.capability=rust.field.suspended-storage"]);
         } else {
           setCarrierFact(walk, member, storage);
-          if (walk.context.objectRepresentations.receiverCaptures.isCaptured(member)) {
-            const captures = walk.context.objectRepresentations.receiverCaptures;
-            const storageDeclaration = captures.storageDeclaration(member);
-            const storageCarrier = storageDeclaration === member ? storage : resolveRustTargetTypeRef(
-              storageDeclaration, rustResolutionContext(walk, storageDeclaration), walk.operationOptions);
-            if (storageCarrier === undefined) {
-              appendRustDiagnostic(walk, "RUST_CAPTURED_FIELD_STORAGE_NOT_CLOSED",
-                "A retained override family has no exact physical declaration carrier.", member,
-                ["target.capability=rust.field.capture-storage"]);
-              continue;
-            }
-            walk.context.records.capturedFieldStorage.set(member, {
-              storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member),
-                captures.storageImmutable(member)),
-              valueCarrier: storage,
-            }, [{ message: "rust exact live receiver field storage" }]);
-          }
+          walk.context.records.capturedFieldStoragePlans.resolve(walk, member, storage);
         }
       }
       continue;
@@ -142,15 +126,28 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
       if (memberKind !== "KindConstructor") {
         recordCallableSuspensionFacts(walk, member);
         recordCallableReturnFact(walk, member);
-        if (memberKind === "KindSetAccessor" &&
-          walk.context.records.sourceCallableReturn.get(member) === undefined) {
-          walk.context.records.sourceCallableReturn.set(member, {
-            returnCarrier: rustUnitTargetType(),
-          }, [{ message: "rust setter unit return carrier" }]);
-        }
+        if (memberKind === "KindSetAccessor") walk.context.records.sourceCallableReturns.setter(member);
       }
     }
   }
+}
+
+export function selectRustCapturedFieldStorageFact(
+  walk: RustFactWalk, member: Node, carrier: TargetTypeRef,
+): RustCapturedFieldStorageFact | undefined {
+  const captures = walk.context.objectRepresentations.receiverCaptures;
+  if (!captures.isCaptured(member)) return undefined;
+  const storageDeclaration = captures.storageDeclaration(member);
+  const storageCarrier = storageDeclaration === member ? carrier : resolveRustTargetTypeRef(
+    storageDeclaration, rustResolutionContext(walk, storageDeclaration), walk.operationOptions);
+  if (storageCarrier === undefined) {
+    appendRustDiagnostic(walk, "RUST_CAPTURED_FIELD_STORAGE_NOT_CLOSED",
+      "A retained override family has no exact physical declaration carrier.", member,
+      ["target.capability=rust.field.capture-storage"]);
+    return undefined;
+  }
+  return { storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member),
+    captures.storageImmutable(member)), valueCarrier: carrier };
 }
 
 export function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {

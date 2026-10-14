@@ -15,6 +15,11 @@ import type { RustClassValueProducer } from "./class-value.js";
 import type { RustObjectLiteralMethodAdapterProducer } from "./object-literal-method-adapter.js";
 import type { RustProjectCallableAdapterProducer } from "./project-callable-adapters.js";
 import type { RustObjectReferenceViewProducer } from "./object-reference-view.js";
+import type { RustTypeOnlyDeclarationProducer } from "./type-only-declaration.js";
+import type { RustModuleBindingProducer } from "./module-binding.js";
+import type { RustModuleCallableStorageProducer } from "./module-callable-storage.js";
+import type { RustSourceCallableReturnProducer } from "./source-callable-return.js";
+import type { RustCapturedFieldStorageProducer } from "./captured-field-storage.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -22,7 +27,8 @@ export interface RustRecordWriter<T> extends RustRecordFamily<T> {
 
 type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "selectedCall" | "targetOperation" |
   "nativeArrayStorage" | "nativeBacking" | "rawLocationPlan" | "memoryBindingPlan" | "rawAddressPlan" |
-  "receiverIndependentMethod" | "classValue" | "objectLiteralMethodAdapter" | "projectCallableAdapters" | "objectReferenceView";
+  "receiverIndependentMethod" | "classValue" | "objectLiteralMethodAdapter" | "projectCallableAdapters" | "objectReferenceView" |
+  "typeOnlyDeclaration" | "moduleBinding" | "moduleCallableStorage" | "sourceCallableReturn" | "capturedFieldStorage";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -41,6 +47,11 @@ export type RustProgramRecordWriter = {
   readonly objectLiteralMethodAdapters: RustObjectLiteralMethodAdapterProducer;
   readonly projectCallableAdapterPlans: RustProjectCallableAdapterProducer;
   readonly objectReferenceViews: RustObjectReferenceViewProducer;
+  readonly typeOnlyDeclarations: RustTypeOnlyDeclarationProducer;
+  readonly moduleBindings: RustModuleBindingProducer;
+  readonly moduleCallableStoragePlans: RustModuleCallableStorageProducer;
+  readonly sourceCallableReturns: RustSourceCallableReturnProducer;
+  readonly capturedFieldStoragePlans: RustCapturedFieldStorageProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

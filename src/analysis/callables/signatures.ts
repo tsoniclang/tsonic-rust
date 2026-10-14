@@ -42,6 +42,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustSourceFunctionValueCarrier } from "./function-values.js";
 import { selectRustPointerReturnContract } from "../../policy/operations/pointers/return.js";
@@ -143,13 +144,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
       const value = finalizedNativeCallableValue(walk, statement, valueName);
       if (valueName !== undefined && implementationName !== undefined && value !== undefined) {
         setCarrierFact(walk, statement, value.carrier);
-        walk.context.records.moduleBinding.set(statement, {
-          declarationKind: "function",
-          storage: "native-callable",
-          callableDeclaration: statement,
-          name: implementationName,
-          value,
-        }, [{ message: "rust finalized hoisted module callable value" }]);
+        walk.context.records.moduleBindings.function(statement, implementationName, value);
       }
       continue;
     }
@@ -193,17 +188,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
       if (value !== undefined) {
         setCarrierFact(walk, declaration, value.carrier);
       }
-      walk.context.records.moduleBinding.set(declaration, {
-        declarationKind: "const",
-        storage: "native-callable",
-        callableDeclaration: candidate.callableDeclaration,
-        name: candidate.name,
-        ...(value !== undefined
-          ? { value }
-          : {}),
-      }, [
-        { message: "rust finalized native module callable storage" },
-      ]);
+      walk.context.records.moduleBindings.callable(declaration, candidate.callableDeclaration, candidate.name, value);
     }
   }
 }
@@ -486,11 +471,19 @@ export function recordCallableReturnFact(
   declaration: Node,
   selectedCarrier?: TargetTypeRef,
 ): boolean {
+  return walk.context.records.sourceCallableReturns.resolve(walk, declaration, selectedCarrier);
+}
+
+export function selectRustSourceCallableReturn(
+  walk: RustFactWalk,
+  declaration: Node,
+  selectedCarrier?: TargetTypeRef,
+): RustSourceCallableReturnFact | undefined {
   const generator = walk.context.records.generator.get(declaration);
   const asynchronous = walk.context.records.asyncFunction.get(declaration);
   if (walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined
     ? generator === undefined
-    : asynchronous === undefined && walk.context.ast.hasModifierKind(declaration, "async")) return false;
+    : asynchronous === undefined && walk.context.ast.hasModifierKind(declaration, "async")) return undefined;
   const sourceReturn = selectedSourceCallableReturn(walk, declaration);
   const baseline = selectedCarrier ?? generator?.resultCarrier ?? asynchronous?.outputCarrier ??
     resolveRustTargetTypeRef(
@@ -503,7 +496,7 @@ export function recordCallableReturnFact(
   const pointer = selectRustPointerReturnContract(declaration, rustResolutionContext(walk, declaration), walk.operationOptions);
   if (selectedCarrier !== undefined && pointer !== undefined &&
     !rustTargetTypeRefEquals(selectedCarrier, pointer.returnCarrier)) {
-    return false;
+    return undefined;
   }
   const rawCarrier = pointer?.returnCarrier ?? rustGenericCallableValueOwner(walk.context.ast, declaration, selected);
   const parameterCarriers = walk.context.ast.parameters(declaration).map(parameter =>
@@ -522,7 +515,7 @@ export function recordCallableReturnFact(
       rustUnionPayloadAdmission(rustAbsenceTargetType(), carrier, walk.context.typeDefinitions) !== undefined;
     const implementationResult = asynchronous !== undefined || generator !== undefined || sourceReturn === undefined
       ? undefined : resolveRustTargetTypeRef(sourceReturn, rustResolutionContext(walk, declaration), walk.operationOptions);
-    walk.context.records.sourceCallableReturn.set(declaration, {
+    return {
       returnCarrier: carrier,
       ...(borrowedParameter !== undefined && borrowedAbi?.mode === "ref" && borrowedAbi.inputLifetime !== undefined &&
         rustTargetTypeRefEquals(borrowedAbi.valueCarrier, carrier) ? { borrowedParameter } : {}),
@@ -531,8 +524,7 @@ export function recordCallableReturnFact(
       ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
       ...(absence || pointer?.undefinedReturn ? { undefinedReturn: true } : {}),
       ...(absence && completion?.canFallThrough || pointer?.fallthroughUndefined ? { fallthroughUndefined: true } : {}),
-    }, [{ message: "rust finalized source callable return carrier" }]);
-    return true;
+    };
   }
-  return false;
+  return undefined;
 }

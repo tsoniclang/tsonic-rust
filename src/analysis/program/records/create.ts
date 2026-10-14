@@ -20,27 +20,29 @@ import { createRustProjectCallableAdapterProducer } from "./project-callable-ada
 import { createRustObjectReferenceViewProducer } from "./object-reference-view.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "./keys/native-control-flow.js";
 import { rustAwaitValueFactKey } from "./keys/await-values.js";
-import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
+import { rustCompileTimeSourceKey } from "./keys/source-declarations.js";
 import { rustErrorEffectsFactKey } from "./keys/error-effects.js";
 import { rustSourceErrorEffectsFactKey } from "./keys/source-error-effects.js";
 import { rustDeferredProducerEffectsFactKey } from "./keys/deferred-producer-effects.js";
 import { rustAwaitSourceErrorEffectsFactKey } from "./keys/await-source-error-effects.js";
 import { rustFallibleFactKey, rustSourceCallEffectsFactKey, rustSourceAccessorEffectsFactKey, rustFutureValueFactKey } from "./keys/object-methods.js";
 import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
-import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
-import { rustTypeOnlyDeclarationFactKey } from "./keys/type-only.js";
+import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
 import { createRustRawLocationProducer } from "./raw-locations.js";
 import { rustIndexedFieldKeyArgument } from "./keys/indexed-field-keys.js";
 import { rustRetainedEnvironmentFactKey, rustRetainedCallLifetimesFactKey } from "./keys/retained-environments.js";
 import { rustGenericNumericOperandsKey } from "./keys/generic-numeric.js";
-import { rustModuleCallableStorageFactKey } from "./keys/module-values.js";
 import { rustGenericCallableInvocationFactKey } from "./keys/generic-callable-effects.js";
-import { rustCapturedFieldStorageFactKey } from "./keys/receiver-captures.js";
 import { rustPropertyProjectionFactKey } from "./keys/property-projections.js";
 import { createRustMemoryBindingProducer } from "./memory-bindings.js";
 import { createRustRawAddressProducer } from "./raw-addresses.js";
+import { createRustTypeOnlyDeclarationProducer } from "./type-only-declaration.js";
+import { createRustModuleBindingProducer } from "./module-binding.js";
+import { createRustModuleCallableStorageProducer } from "./module-callable-storage.js";
+import { createRustSourceCallableReturnProducer } from "./source-callable-return.js";
+import { createRustCapturedFieldStorageProducer } from "./captured-field-storage.js";
 import { rustMemoryLayoutObservationKey } from "./keys/memory-layout.js";
 
 export function createRustProgramRecordBuilder(
@@ -91,7 +93,7 @@ export function createRustProgramRecordBuilder(
     return foundation;
   });
   const compileTimeSource = createFamily(rustCompileTimeSourceKey, parent?.compileTimeSource);
-  const sourceCallableReturn = createFamily(rustSourceCallableReturnFactKey, parent?.sourceCallableReturn);
+  const sourceCallableReturns = createRustSourceCallableReturnProducer(assertOpen, parent?.sourceCallableReturn);
   const errorEffects = createFamily(rustErrorEffectsFactKey, parent?.errorEffects);
   const sourceErrorEffects = createFamily(rustSourceErrorEffectsFactKey, parent?.sourceErrorEffects);
   const deferredProducerEffects = createFamily(rustDeferredProducerEffectsFactKey, parent?.deferredProducerEffects,
@@ -131,8 +133,8 @@ export function createRustProgramRecordBuilder(
   const closureCapture = createFamily(rustClosureCaptureFactKey, parent?.closureCapture);
   const sourceCallableValue = createFamily(rustSourceCallableValueFactKey, parent?.sourceCallableValue);
   const directCallableReference = createFamily(rustDirectCallableReferenceFactKey, parent?.directCallableReference);
-  const moduleBinding = createFamily(rustModuleBindingFactKey, parent?.moduleBinding);
-  const typeOnlyDeclaration = createFamily(rustTypeOnlyDeclarationFactKey, parent?.typeOnlyDeclaration);
+  const moduleBindings = createRustModuleBindingProducer(assertOpen, parent?.moduleBinding);
+  const typeOnlyDeclarations = createRustTypeOnlyDeclarationProducer(assertOpen, parent?.typeOnlyDeclaration);
   const nativeArrays = createRustNativeArrayStorageProducer(assertOpen, parent?.nativeArrayStorage);
   const nativeBackings = createRustNativeBackingProducer(assertOpen, parent?.nativeBacking);
   const rawLocations = createRustRawLocationProducer(assertOpen, parent?.rawLocationPlan);
@@ -142,9 +144,9 @@ export function createRustProgramRecordBuilder(
   const retainedEnvironment = createFamily(rustRetainedEnvironmentFactKey, parent?.retainedEnvironment);
   const retainedCallLifetimes = createFamily(rustRetainedCallLifetimesFactKey, parent?.retainedCallLifetimes);
   const genericNumericOperands = createFamily(rustGenericNumericOperandsKey, parent?.genericNumericOperands);
-  const moduleCallableStorage = createFamily(rustModuleCallableStorageFactKey, parent?.moduleCallableStorage);
+  const moduleCallableStoragePlans = createRustModuleCallableStorageProducer(assertOpen, parent?.moduleCallableStorage);
   const genericCallableInvocation = createFamily(rustGenericCallableInvocationFactKey, parent?.genericCallableInvocation);
-  const capturedFieldStorage = createFamily(rustCapturedFieldStorageFactKey, parent?.capturedFieldStorage);
+  const capturedFieldStoragePlans = createRustCapturedFieldStorageProducer(assertOpen, parent?.capturedFieldStorage);
   const propertyProjection = createFamily(rustPropertyProjectionFactKey, parent?.propertyProjection);
   const memoryBindings = createRustMemoryBindingProducer(assertOpen, parent?.memoryBindingPlan);
   const rawAddresses = createRustRawAddressProducer(assertOpen, parent?.rawAddressPlan);
@@ -167,7 +169,7 @@ export function createRustProgramRecordBuilder(
     nativeUnreachable: nativeUnreachable.reader,
     awaitValue: awaitValue.reader,
     compileTimeSource: compileTimeSource.reader,
-    sourceCallableReturn: sourceCallableReturn.reader,
+    sourceCallableReturn: sourceCallableReturns.records,
     errorEffects: errorEffects.reader,
     sourceErrorEffects: sourceErrorEffects.reader,
     deferredProducerEffects: deferredProducerEffects.reader,
@@ -199,8 +201,8 @@ export function createRustProgramRecordBuilder(
     closureCapture: closureCapture.reader,
     sourceCallableValue: sourceCallableValue.reader,
     directCallableReference: directCallableReference.reader,
-    moduleBinding: moduleBinding.reader,
-    typeOnlyDeclaration: typeOnlyDeclaration.reader,
+    moduleBinding: moduleBindings.records,
+    typeOnlyDeclaration: typeOnlyDeclarations.records,
     nativeArrayStorage: nativeArrays.records,
     nativeBacking: nativeBackings.records,
     rawLocationPlan: rawLocations.records,
@@ -210,9 +212,9 @@ export function createRustProgramRecordBuilder(
     retainedEnvironment: retainedEnvironment.reader,
     retainedCallLifetimes: retainedCallLifetimes.reader,
     genericNumericOperands: genericNumericOperands.reader,
-    moduleCallableStorage: moduleCallableStorage.reader,
+    moduleCallableStorage: moduleCallableStoragePlans.records,
     genericCallableInvocation: genericCallableInvocation.reader,
-    capturedFieldStorage: capturedFieldStorage.reader,
+    capturedFieldStorage: capturedFieldStoragePlans.records,
     propertyProjection: propertyProjection.reader,
     memoryBindingPlan: memoryBindings.records,
     rawAddressPlan: rawAddresses.records,
@@ -238,7 +240,8 @@ export function createRustProgramRecordBuilder(
     nativeUnreachable: nativeUnreachable.writer,
     awaitValue: awaitValue.writer,
     compileTimeSource: compileTimeSource.writer,
-    sourceCallableReturn: sourceCallableReturn.writer,
+    sourceCallableReturn: sourceCallableReturns.records,
+    sourceCallableReturns,
     errorEffects: errorEffects.writer,
     sourceErrorEffects: sourceErrorEffects.writer,
     deferredProducerEffects: deferredProducerEffects.writer,
@@ -273,8 +276,10 @@ export function createRustProgramRecordBuilder(
     closureCapture: closureCapture.writer,
     sourceCallableValue: sourceCallableValue.writer,
     directCallableReference: directCallableReference.writer,
-    moduleBinding: moduleBinding.writer,
-    typeOnlyDeclaration: typeOnlyDeclaration.writer,
+    moduleBinding: moduleBindings.records,
+    moduleBindings,
+    typeOnlyDeclaration: typeOnlyDeclarations.records,
+    typeOnlyDeclarations,
     nativeArrayStorage: nativeArrays.records,
     nativeArrays,
     nativeBacking: nativeBackings.records,
@@ -289,9 +294,11 @@ export function createRustProgramRecordBuilder(
     retainedEnvironment: retainedEnvironment.writer,
     retainedCallLifetimes: retainedCallLifetimes.writer,
     genericNumericOperands: genericNumericOperands.writer,
-    moduleCallableStorage: moduleCallableStorage.writer,
+    moduleCallableStorage: moduleCallableStoragePlans.records,
+    moduleCallableStoragePlans,
     genericCallableInvocation: genericCallableInvocation.writer,
-    capturedFieldStorage: capturedFieldStorage.writer,
+    capturedFieldStorage: capturedFieldStoragePlans.records,
+    capturedFieldStoragePlans,
     propertyProjection: propertyProjection.writer,
     memoryBindingPlan: memoryBindings.records,
     memoryBindings,

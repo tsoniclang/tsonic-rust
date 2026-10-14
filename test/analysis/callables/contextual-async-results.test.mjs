@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { contextualAsyncResultSource, inlineContextualAsyncResultSource, ordinaryAsyncResultSource } from "../../../../tsonic/test/fixtures/contextual-async-results.mjs";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 
@@ -59,7 +59,7 @@ test("suspended return publication rejects missing generator and ordinary async 
     ["ordinary async", true, false], ["generator", false, true], ["async generator", true, true],
   ]) {
     const walk = { context: {
-      records: createRustRecordFixture(),
+      records: createRustProgramRecordBuilder(),
       ast: { hasModifierKind: () => asynchronous },
       semanticsFor: () => ({ operations: { generator: () => generator ? {} : undefined } }),
     } };

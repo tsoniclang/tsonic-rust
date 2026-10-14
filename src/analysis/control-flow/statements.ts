@@ -178,8 +178,7 @@ function recordVariableDeclarationListFacts(
       }
       const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
       if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
-        const binding = walk.moduleBindings.classifyValue(declaration, declarationKind, effective);
-        if (binding !== undefined) walk.context.records.moduleBinding.set(declaration, binding, [{ message: "rust finalized project module binding storage" }]);
+        walk.context.records.moduleBindings.value(walk, declaration, declarationKind, effective);
       }
     }
   }
@@ -217,12 +216,7 @@ export function recordExportAssignmentFacts(
   if (finalized === undefined) {
     return undefined;
   }
-  walk.context.records.moduleBinding.set(declaration, {
-    declarationKind: "const",
-    storage: "module-cell",
-    initialization: "value",
-    valueCarrier: finalized,
-  }, [{ message: "rust finalized default export snapshot storage" }]);
+  walk.context.records.moduleBindings.defaultExport(declaration, finalized);
   return finalized;
 }
 
