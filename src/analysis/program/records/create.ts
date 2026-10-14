@@ -47,7 +47,10 @@ import { createRustProjectUpcastProducer } from "./project-upcast.js";
 import { createRustProjectDowncastProducer } from "./project-downcast.js";
 import { rustCompileTimeSourceKey } from "./keys/source-declarations.js";
 import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
-import { rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
+import { rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
+import { createRustPreparedOperationResultProducer } from "./prepared-operation-result.js";
+import { createRustOptionalChainProducer } from "./optional-chain.js";
+import { createRustClosureCaptureProducer } from "./closure-capture.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
 import { createRustRawLocationProducer } from "./raw-locations.js";
@@ -132,11 +135,11 @@ export function createRustProgramRecordBuilder(
   const compoundWrites = createRustCompoundWriteProducer(assertOpen, parent?.compoundWrite);
   const computedMembers = createRustComputedMemberProducer(assertOpen, parent?.computedMember);
   const receiverIndependentMethods = createRustReceiverIndependentMethodProducer(assertOpen, parent?.receiverIndependentMethod);
-  const preparedOperationResult = createFamily(rustPreparedOperationResultFactKey, parent?.preparedOperationResult);
-  const optionalChain = createFamily(rustOptionalChainFactKey, parent?.optionalChain);
+  const preparedOperations = createRustPreparedOperationResultProducer(assertOpen, parent?.preparedOperationResult);
+  const optionalChains = createRustOptionalChainProducer(assertOpen, parent?.optionalChain);
   const typedLocations = createRustTypedLocationProducer(assertOpen, parent?.typedLocationPlan);
   const bindingStoragePlans = createRustBindingStorageProducer(assertOpen, parent?.bindingStorage);
-  const closureCapture = createFamily(rustClosureCaptureFactKey, parent?.closureCapture);
+  const closureCaptures = createRustClosureCaptureProducer(assertOpen, parent?.closureCapture);
   const sourceCallableValue = createFamily(rustSourceCallableValueFactKey, parent?.sourceCallableValue);
   const directCallableReference = createFamily(rustDirectCallableReferenceFactKey, parent?.directCallableReference);
   const moduleBindings = createRustModuleBindingProducer(assertOpen, parent?.moduleBinding);
@@ -200,11 +203,11 @@ export function createRustProgramRecordBuilder(
     compoundWrite: compoundWrites.records,
     computedMember: computedMembers.records,
     receiverIndependentMethod: receiverIndependentMethods.records,
-    preparedOperationResult: preparedOperationResult.reader,
-    optionalChain: optionalChain.reader,
+    preparedOperationResult: preparedOperations.records,
+    optionalChain: optionalChains.records,
     typedLocationPlan: typedLocations.records,
     bindingStorage: bindingStoragePlans.records,
-    closureCapture: closureCapture.reader,
+    closureCapture: closureCaptures.records,
     sourceCallableValue: sourceCallableValue.reader,
     directCallableReference: directCallableReference.reader,
     moduleBinding: moduleBindings.records,
@@ -299,13 +302,16 @@ export function createRustProgramRecordBuilder(
     computedMembers,
     receiverIndependentMethod: receiverIndependentMethods.records,
     receiverIndependentMethods,
-    preparedOperationResult: preparedOperationResult.writer,
-    optionalChain: optionalChain.writer,
+    preparedOperationResult: preparedOperations.records,
+    preparedOperations,
+    optionalChain: optionalChains.records,
+    optionalChains,
     typedLocationPlan: typedLocations.records,
     typedLocations,
     bindingStorage: bindingStoragePlans.records,
     bindingStoragePlans,
-    closureCapture: closureCapture.writer,
+    closureCapture: closureCaptures.records,
+    closureCaptures,
     sourceCallableValue: sourceCallableValue.writer,
     directCallableReference: directCallableReference.writer,
     moduleBinding: moduleBindings.records,
