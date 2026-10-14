@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
+import { nativeFunction, nativeNodes } from "../../helpers/native-ast.mjs";
 
 import {
   artifactText,
   compileRust,
 } from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("native pointer operations lower inside one explicit unsafe block", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -288,9 +290,9 @@ export function read(pointer: NativePointer<int32>): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.doesNotMatch(source, /allow\(unused_unsafe/u);
-  assert.match(source, /unsafe \{[\s\S]*Ok::<_, rt::TsonicError>\(\*capture_pointer\)/u);
+  const read = nativeFunction(result, "read");
+  assert.equal(nativeNodes(read, node => node.kind === "word" && node.path === "unused_unsafe").length, 0);
+  assert.equal(nativeNodes(read, node => node.kind === "dereference").length, 1);
   validateGeneratedProject("explicit-safety-closure-requirement", result.artifacts);
 });
 
@@ -312,10 +314,38 @@ export function read(value: int32): int32 {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /allow\(unused_unsafe, reason = "explicit source unsafe region"\)/u);
-  assert.match(source, /Ok::<_, rt::TsonicError>\(unsafe \{ capture_value \}\)/u);
-  validateGeneratedProject("explicit-safety-closure-unused", result.artifacts);
+  const proofArtifacts = result.artifacts.map(artifact => artifact.path !== "src/index.rs" ? artifact : {
+    ...artifact,
+    text: artifact.text + `
+#[cfg(test)]
+mod explicit_safety_closure_contract {
+    #[test]
+    fn read_retains_native_values() {
+        for value in [i32::MIN, -1, 0, 1, i32::MAX] {
+            assert_eq!(super::read(std::hint::black_box(value)), value);
+        }
+    }
+}
+`,
+  });
+  const directory = writeGeneratedProject("explicit-safety-closure-unused", proofArtifacts);
+  runCargo(directory, ["generate-lockfile", "--offline"]);
+  runCargo(directory, ["fmt", "--all", "--check"]);
+  runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  const valueRun = runCargo(directory, ["test", "--locked", "--offline", "--", "--test-threads=1"]);
+  assert.equal(valueRun.status, 0, valueRun.stderr);
+  assert.equal(valueRun.stdout.includes("explicit_safety_closure_contract::read_retains_native_values ... ok"), true,
+    "the native value test runs and passes");
+  runCargo(directory, ["rustc", "--lib", "--locked", "--offline", "--", "-D", "warnings"]);
+  const forbidden = spawnSync("cargo", ["rustc", "--lib", "--locked", "--offline", "--message-format=json", "--",
+    "--forbid=unsafe_code"], { cwd: directory, encoding: "utf8", timeout: 300_000 });
+  assert.equal(forbidden.error === undefined, true, "native compiler starts normally");
+  assert.equal(forbidden.status, 101, "the retained explicit region is forbidden only by the canary");
+  const diagnostics = forbidden.stdout.trim().split("\n").map(line => JSON.parse(line))
+    .filter(message => message.reason === "compiler-message").map(message => message.message);
+  assert.equal(diagnostics.filter(diagnostic => diagnostic.level === "error" && diagnostic.code?.code === "unsafe_code").length,
+    1, "exactly one explicit unsafe region remains");
 });
 
 test("unsupported safe declaration contracts fail at the Rust declaration boundary", () => {

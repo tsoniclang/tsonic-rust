@@ -128,7 +128,7 @@ export function fakeAstReader(sourceFiles = []) {
 
 export function fakeCompileInput({
   sourceFiles = [],
-  target = { id: "rust", options: {} },
+  target = { id: "rust", options: { outputType: "lib" } },
   runtimeReferences = [],
   runtimeActivatedCapabilityIds = [],
 } = {}) {

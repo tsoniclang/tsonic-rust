@@ -15,7 +15,8 @@ import { createRustCallableValuePlanRegistry } from "../../../dist/analysis/call
 import { rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
 
 
-import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
+import { fakeAstReader, fakeCompileInput, fakeSourcePackageGraph } from "../../helpers/fake-compile-input.mjs";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 
 const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
 function input() {
@@ -33,6 +34,8 @@ function input() {
     forEachChild: (node, visit) => { for (const child of node.nodes ?? []) visit(child); },
     getSourceFile: node => node.file,
     getFileName: file => file.name,
+    getPath: file => file.name,
+    kind: () => 1,
     pos: node => node.position,
     end: node => node.position + 1,
     parent: node => node.file,
@@ -82,7 +85,9 @@ closureCapture: { get: (node) => {
   const names = { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined };
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
-  return { closures, planInput: { ast, sourceFiles: files, records, names, navigation,
+  return { closures, planInput: { ast, sourceFiles: files, sourcePackages: fakeSourcePackageGraph(
+    files.map(file => ({ fileName: file.name })),
+  ), sourceStorage: createSourceStorageQuery(fakeCompileInput().source, []), records, names, navigation,
     lifetimes: { contractFor: () => undefined }, classValueAdapters: [], closedSourceFiles: new Set(),
     ownership: { components: [], activations: [], failureReason: () => undefined } },
     create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names, navigation, [], closed) };

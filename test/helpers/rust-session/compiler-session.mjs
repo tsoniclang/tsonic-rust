@@ -24,10 +24,15 @@ import {
 import { createRustTargetPack } from "../../../dist/index.js";
 import { createRustCompilationSession } from "../../../dist/compilation/session.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { runTargetCompilationStages, rejectedTargetStage } from "@tsonic/target-api/artifacts";
+import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
+import { planRustOutput } from "../../../dist/backend/planner/program/index.js";
+import { materializeRustOutputPlan } from "../../../dist/backend/emission/materialize.js";
+import { RustFormattingError } from "../../../dist/backend/emission/rustfmt.js";
 
 export function createRustSession({
   files,
-  target = { id: "rust", options: {} },
+  target = { id: "rust", options: { outputType: "lib" } },
   packages = [],
   capabilities = [],
   surfaces = [],
@@ -37,6 +42,7 @@ export function createRustSession({
   compileTarget,
 } = {}) {
   const pack = createRustTargetPack();
+  target = { ...target, options: { outputType: "lib", ...target.options } };
   target = surfaces.length === 0 || target.surfaces !== undefined
     ? target
     : { ...target, surfaces };
@@ -258,7 +264,34 @@ function createRustCompileInputFromSession({
 }
 
 export function compileRust(options) {
-  const harness = createRustSession(options);
+  let program;
+  let plan;
+  const harness = createRustSession({ ...options, compileTarget: options.compileTarget ?? (request => {
+    try {
+      return runTargetCompilationStages({
+        analyze: () => {
+          const analyzed = analyzeRustTargetProgram(request);
+          if (analyzed.kind === "resolved") program = analyzed.value;
+          return analyzed;
+        },
+        plan: analyzed => {
+          const planned = planRustOutput(createRustPlanningContext(analyzed));
+          if (planned.kind === "resolved") plan = planned.value;
+          return planned;
+        },
+        materialize: materializeRustOutputPlan,
+      });
+    } catch (error) {
+      if (!(error instanceof RustFormattingError)) throw error;
+      return rejectedTargetStage([{
+        code: "RUST_SOURCE_FORMATTING_FAILED",
+        category: "error",
+        source: "tsonic-rust",
+        message: error.message,
+        evidence: ["target.capability=rust.toolchain.rustfmt"],
+      }]);
+    }
+  }) });
   const sourceDiagnostics = rustSourceDiagnosticsText(harness);
   if (sourceDiagnostics !== "") {
     harness.targetSession.close();
@@ -315,6 +348,8 @@ export function compileRust(options) {
   const result = {
     artifacts: compiled.kind === "resolved" ? compiled.value.artifacts : [],
     diagnostics: withBoundedDiagnosticInspection(compiled.diagnostics),
+    program,
+    plan,
   };
   return {
     result,

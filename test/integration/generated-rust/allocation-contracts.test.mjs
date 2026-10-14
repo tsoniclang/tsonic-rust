@@ -1,6 +1,8 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeFunction, nativeSource, nativeType, nativeBorrow, nativeMethods,
+  assertNoNativeCalls } from "../../helpers/native-ast.mjs";
 import { capturedStringOwnershipSource } from "../../../../tsonic/test/fixtures/captured-string-ownership.mjs";
 import { compileRust, artifactText, analyzeRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -40,17 +42,22 @@ main();
 ` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
-  const output = artifactText(result, "src/index.rs");
-  assert.match(output, /const separator: &str/u);
-  assert.match(output, /fn rightParen\(value: &str\)/u);
-  assert.match(output, /fn checkToken\(value: &str\)/u);
-  assert.match(output, /fn dispatch\(kind: &str, payload: &str\)/u);
-  assert.match(output, /fn retained\(value: String\)/u);
-  assert.match(output, /borrow_number_element/u);
-  assert.match(output, /sort_borrowed/u);
-  assert.match(output, /fn ensureSlash\(value: String\) -> String/u);
-  const ensure = output.slice(output.indexOf("fn ensureSlash"), output.indexOf("fn dispatch"));
-  assert.doesNotMatch(ensure, /value\.clone\(\)/u);
+  const model = nativeSource(result);
+  const separator = model.items.filter(item => item.kind === "const" && item.name === "separator");
+  assert.equal(separator.length, 1);
+  assert.deepEqual(separator[0].type, nativeBorrow(nativeType("str")));
+  for (const name of ["rightParen", "checkToken"]) {
+    assert.deepEqual(nativeFunction(result, name).params.map(parameter => parameter.type), [nativeBorrow(nativeType("str"))]);
+  }
+  assert.deepEqual(nativeFunction(result, "dispatch").params.map(parameter => parameter.type),
+    [nativeBorrow(nativeType("str")), nativeBorrow(nativeType("str"))]);
+  assert.deepEqual(nativeFunction(result, "retained").params.map(parameter => parameter.type), [nativeType("String")]);
+  assert.equal(nativeMethods(model, "borrow_number_element").length, 1);
+  assert.equal(nativeMethods(model, "sort_borrowed").length, 1);
+  const ensure = nativeFunction(result, "ensureSlash");
+  assert.deepEqual(ensure.params.map(parameter => parameter.type), [nativeType("String")]);
+  assert.deepEqual(ensure.returnType, nativeType("String"));
+  assertNoNativeCalls(ensure.body, ["clone"], "owned exits do not copy the input");
   validateGeneratedProject("native-allocation-contracts", result.artifacts, { run: true });
 });
 

@@ -1,5 +1,6 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeType, nativeBorrow } from "../../helpers/native-ast.mjs";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 
@@ -312,25 +313,58 @@ export async function* borrowedAsyncValues<L extends Life>(
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(
-    source,
-    /#\[allow\(clippy::needless_lifetimes, reason = "explicit lifetime contract"\)\]\n#\[allow\(non_snake_case, reason = "preserves the authored source name"\)\]\npub async fn retain<'L>/u,
-  );
-  assert.match(source, /pub async fn retain<'L>\(value: &'L i32\) -> &'L i32/u);
-  assert.match(source, /reader: impl for<'L> Fn\(&'L i32\) -> i32/u);
-  assert.match(source, /pub fn acceptReader\(reader: impl for<'L> Fn\(&'L i32\) -> i32\) -> i32/u);
-  assert.match(source, /reader\(&value\)/u);
-  assert.match(source, /pub fn staticReader\(value: &'static i32\)/u);
-  assert.match(source, /pub fn invokeCaptured\(value: &'static i32\)/u);
-  assert.match(source, /value: &'static i32/u);
-  assert.match(source, /\*value/u);
-  assert.match(source, /pub fn borrowedValues<'L>\(value: &'L i32\) -> rt::BorrowedGenerator<'L, i32, \(\), \(\)>/u);
-  assert.match(source, /let mut generator: rt::BorrowedGenerator<'_, i32, \(\), \(\)> = borrowedValues\(&value\);/u);
-  assert.match(source, /pub fn borrowedPair<'Short, 'Middle: 'Short, 'Long: 'Middle>/u);
-  assert.match(source, /-> rt::BorrowedGenerator<'Short, i32, i32, \(\)>/u);
-  assert.match(source, /pub fn borrowedAsyncValues<'L>\(value: &'L i32\) -> rt::BorrowedAsyncGenerator<'L, i32, \(\), \(\)>/u);
-  assert.match(source, /rt::BorrowedGenerator::new/u);
+  const retain = nativeFunction(result, "retain");
+  assert.equal(retain.isAsync, true);
+  assert.deepEqual(retain.params.map(parameter => parameter.type), [nativeBorrow(nativeType("i32"), { kind: "named", name: "L" })]);
+  assert.deepEqual(retain.returnType, retain.params[0].type);
+  for (const [path, reason] of [["clippy::needless_lifetimes", "explicit lifetime contract"],
+    ["non_snake_case", "preserves the authored source name"]]) {
+    assert.equal(retain.attrs.some(attribute => attribute.kind === "list" && attribute.path === "allow" &&
+      attribute.arguments.some(argument => argument.path === path) &&
+      attribute.arguments.some(argument => argument.path === "reason" && argument.value.value === reason)), true);
+  }
+  const reader = nativeFunction(result, "acceptReader");
+  assert.equal(reader.visibility, "public");
+  const bounds = nativeNodes(reader.params[0].type, node => node.kind === "callable" && node.trait === "Fn");
+  assert.equal(bounds.length, 1, "one higher-ranked checked callback bound");
+  assert.deepEqual(bounds[0].binder.map(parameter => parameter.name), ["L"]);
+  assert.deepEqual(bounds[0].parameters, [retain.params[0].type]);
+  assert.deepEqual(bounds[0].result, nativeType("i32"));
+  assert.deepEqual(reader.returnType, nativeType("i32"));
+  const invoked = nativeNodes(reader.body, node => node.kind === "invoke" && node.callee.path === "reader");
+  assert.equal(invoked.length, 1);
+  assert.equal(invoked[0].args[0].kind, "reference");
+  for (const name of ["staticReader", "invokeCaptured"]) {
+    assert.deepEqual(nativeFunction(result, name).params[0].type, nativeBorrow(nativeType("i32"), { kind: "static" }));
+  }
+  const model = nativeSource(result);
+  assert.equal(nativeNodes(model, node => node.kind === "dereference" && node.pointer.path === "value").length > 0, true);
+  for (const [name, path] of [["borrowedValues", "rt::BorrowedGenerator"], ["borrowedAsyncValues", "rt::BorrowedAsyncGenerator"]]) {
+    const generator = nativeFunction(result, name);
+    assert.deepEqual(generator.params[0].type, retain.params[0].type);
+    assert.equal(generator.returnType.path, path);
+    assert.deepEqual(generator.returnType.genericArguments[0], { kind: "lifetime", lifetime: { kind: "named", name: "L" } });
+    assert.deepEqual(generator.returnType.genericArguments.slice(1).map(argument => argument.type), [nativeType("i32"), nativeType("()"), nativeType("()")]);
+  }
+  const pair = nativeFunction(result, "borrowedPair");
+  assert.deepEqual(pair.generics.parameters.filter(parameter => parameter.kind === "lifetime").map(parameter =>
+    ({ name: parameter.name, outlives: parameter.outlives })), [
+    { name: "Short", outlives: [] }, { name: "Middle", outlives: [{ kind: "named", name: "Short" }] },
+    { name: "Long", outlives: [{ kind: "named", name: "Middle" }] },
+  ]);
+  assert.equal(pair.returnType.path, "rt::BorrowedGenerator");
+  assert.deepEqual(pair.returnType.genericArguments, [
+    { kind: "lifetime", lifetime: { kind: "named", name: "Short" } },
+    ...[nativeType("i32"), nativeType("i32"), nativeType("()")].map(type => ({ kind: "type", type })),
+  ]);
+  const consume = nativeFunction(result, "consumeBorrowedValues");
+  const local = nativeNodes(consume.body, node => node.kind === "let" && node.name === "generator");
+  assert.equal(local.length, 1);
+  assert.equal(local[0].mutable, true);
+  assert.equal(local[0].type.path, "rt::BorrowedGenerator");
+  assert.deepEqual(local[0].type.genericArguments[0], { kind: "lifetime", lifetime: { kind: "placeholder" } });
+  assert.equal(nativeCalls(local[0].init, "borrowedValues").length, 1);
+  assert.equal(nativeCalls(model, "rt::BorrowedGenerator::new").length > 0, true);
   validateGeneratedProject("native-lifetime-retention-proof", result.artifacts);
 });
 

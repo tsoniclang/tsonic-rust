@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerErrorRecords }
+import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerFailurePackage }
   from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -25,13 +25,21 @@ function fixtureSource() {
   const pureFixture = nativeClosureProducerFixture();
   const pure = printNativeClosureProducer(pureFixture);
   const throws = printNativeClosureProducer(nativeClosureProducerFixture({
-    selectRecords: nativeClosureProducerErrorRecords(failure),
+    packages: [nativeClosureProducerFailurePackage(failure)], source: `
+import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => int32 { return (): int32 => fail(); }
+`,
     body: context => ({ kind: "try", expr: { kind: "call", path: "fail", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   }));
   const pending = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"] }));
   const rejected = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"],
-    selectRecords: nativeClosureProducerErrorRecords(promiseFailure),
+    packages: [nativeClosureProducerFailurePackage(promiseFailure, { path: "reject" })], source: `
+import { fail as reject } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => Promise<int32> { return async (): Promise<int32> => reject(); }
+`,
     body: context => ({ kind: "try", expr: { kind: "call", path: "reject", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   }));

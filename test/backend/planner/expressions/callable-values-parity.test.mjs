@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeMethods, nativeType,
+  nativeCallableContract, assertNoNativeCalls } from "../../../helpers/native-ast.mjs";
 import { test } from "node:test";
 
 import {
@@ -54,9 +56,12 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /action: &impl rt::CallableImplementation<\(i32,\), Output = rt::TsonicResult<i32>>/u);
-  assert.match(source, /action\.invoke\(\(value,\)\)/u);
+  const invoke = nativeCallableContract(result, "invoke", 0, [nativeType("i32")], nativeType("i32"));
+  assert.equal(invoke.params[0].type.kind, "reference");
+  assert.equal(invoke.params[0].type.mutable, false, "ordinary callback input is borrowed");
+  const calls = nativeNodes(invoke.body, node => node.kind === "associated-call" && node.method === "invoke");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args, [{ kind: "path", path: "action" }, { kind: "path", path: "value" }]);
   validateGeneratedProject("callable-value", result.artifacts, { run: true });
 });
 
@@ -96,11 +101,16 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn invoke\(\s*action: &impl rt::CallableImplementation<\(i32,\), Output = rt::TsonicResult<i32>>,\s*value: i32,\s*\) -> Result<i32, rt::TsonicError>/u);
-  assert.match(source, /action\.invoke\(\(value,\)\)/u);
-  assert.match(source, /invoke\(\s*&\{\s*\|callable_arguments: \(i32,\)\| risky\(callable_arguments\.0\)\s*\}/u);
-  assert.doesNotMatch(source, /rt::Callable(?:::)?[^\n]*::new/u);
+  const invoke = nativeCallableContract(result, "invoke", 0, [nativeType("i32")], nativeType("i32"));
+  assert.equal(invoke.params[0].type.kind, "reference");
+  assert.deepEqual(invoke.params[1].type, nativeType("i32"));
+  assert.deepEqual(invoke.returnType, nativeType("i32"));
+  assert.equal(nativeNodes(invoke.body, node => node.kind === "associated-call" && node.method === "invoke").length, 1);
+  const main = nativeFunction(result, "main");
+  const calls = nativeCalls(main.body, "invoke");
+  assert.equal(calls.length, 2, "success and throwing calls retain the same implementation ABI");
+  assert.equal(calls.every(call => call.args[0].kind === "reference"), true, "both implementations are borrowed");
+  assertNoNativeCalls(nativeSource(result), ["rt::Callable::new"], "direct callable adapters do not allocate an identity wrapper");
   validateGeneratedProject("callable-throw", result.artifacts, { run: true });
 });
 
@@ -164,9 +174,10 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.doesNotMatch(source, /type TextTransform/u);
-  assert.match(source, /rt::Callable<\(String,\), rt::TsonicResult<String>>/u);
+  const apply = nativeCallableContract(result, "apply", 1, [nativeType("String")], nativeType("String"));
+  assert.deepEqual(apply.params[0].type, nativeType("String"));
+  assert.deepEqual(apply.returnType, nativeType("String"));
+  assert.equal(nativeNodes(nativeSource(result), node => node.kind === "type-alias" && node.name === "TextTransform").length, 0);
   validateGeneratedProject("callable-alias", result.artifacts, { run: true });
 });
 
@@ -233,10 +244,14 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /core::cell::Cell::new\(seed\)/u);
-  assert.doesNotMatch(source, /Location::allocate|capture_value = value\.clone/u);
-  assert.match(source, /rt::Callable::<\(\), rt::TsonicResult<i32>>::new/u);
+  const counter = nativeFunction(result, "counter");
+  assert.equal(nativeCalls(counter.body, "core::cell::Cell::new").length, 1, "one shared mutable capture cell");
+  assertNoNativeCalls(counter.body, ["rt::Location::allocate", "clone"], "no extra location or copied capture");
+  const constructions = nativeNodes(counter.body, node => node.kind === "associated-call" && node.owner.path === "rt::Callable" && node.method === "new");
+  assert.equal(constructions.length, 1, "one identity-bearing closure owner");
+  const tuples = constructions[0].owner.genericArguments.filter(argument => argument.kind === "type").map(argument => argument.type);
+  assert.deepEqual(tuples[0], nativeType("()"));
+  assert.deepEqual(tuples[1].genericArguments[0].type, nativeType("i32"));
   validateGeneratedProject("callable-capture", result.artifacts, { run: true });
 });
 
@@ -331,9 +346,17 @@ main();
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /callable_arguments\.0\.unwrap_or\(7\)/u);
-  assert.doesNotMatch(source, /unnecessary_lazy_evaluations|let_and_return/u);
+  const defaulted = nativeFunction(result, "defaulted");
+  assert.equal(defaulted.params[0].type.path, "Option");
+  assert.deepEqual(defaulted.params[0].type.genericArguments[0].type, nativeType("i32"));
+  const defaults = nativeMethods(defaulted.body, "unwrap_or");
+  assert.equal(defaults.length, 1);
+  assert.deepEqual(defaults[0].args, [{ kind: "int-literal", text: "7" }]);
+  const total = nativeFunction(result, "total");
+  assert.equal(total.params[1].type.path, "Vec");
+  assert.deepEqual(total.params[1].type.genericArguments[0].type, nativeType("i32"));
+  assert.equal(nativeNodes(nativeSource(result), node => node.kind === "word" &&
+    ["unnecessary_lazy_evaluations", "let_and_return"].includes(node.path)).length, 0);
   validateGeneratedProject("callable-parameters", result.artifacts, { run: true });
 });
 

@@ -3,7 +3,7 @@ import test from "node:test";
 import { realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nativeClosureProducerFixture, nativeClosureProducerErrorRecords } from "../../helpers/native-closure-producers.mjs";
+import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { planRustCallableInputProducer, planRustCallableConversion }
@@ -89,7 +89,11 @@ fn main() {
 
 function fixtureExpressions(throwing) {
   const fixture = nativeClosureProducerFixture(throwing ? {
-    selectRecords: nativeClosureProducerErrorRecords(failure), body: context => ({
+    packages: [nativeClosureProducerFailurePackage(failure)], source: `
+import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => int32 { return (): int32 => fail(); }
+`, body: context => ({
       kind: "try", expr: { kind: "call", path: "fail", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType,
     }),

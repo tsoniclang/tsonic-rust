@@ -1,5 +1,6 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeMethods } from "../../helpers/native-ast.mjs";
 import { test } from "node:test";
 import {
   artifactText,
@@ -82,16 +83,30 @@ export function run(value: int32): int32 { return apply(value); }
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const api = artifactText(result, "src/api.rs");
-  assert.match(api, /pub type IncrementCallableCallable = rt::Callable/u);
-  assert.match(api, /ModuleCell<IncrementCallableCallable>/u);
-  assert.doesNotMatch(api, /type_complexity/u);
-  assert.match(api, /pub static INCREMENT_CALLABLE/u);
-  assert.match(api, /pub fn increment/u);
-  assert.doesNotMatch(api, /#\[doc\(hidden\)\]\npub(?:\(crate\))? fn increment/u);
-  const index = artifactText(result, "src/index.rs");
-  assert.match(index, /crate::api::INCREMENT_CALLABLE\.with\(\|module_binding\| module_binding\.load\(\)\)/u);
-  assert.match(index, /crate::api::increment\(value\)/u);
+  const api = nativeSource(result, "src/api.rs");
+  const aliases = api.items.filter(item => item.kind === "type-alias" && item.name === "IncrementCallableCallable");
+  assert.equal(aliases.length, 1);
+  assert.equal(aliases[0].visibility, "public");
+  assert.equal(aliases[0].target.path, "rt::Callable");
+  const storage = api.items.filter(item => item.kind === "thread-local" && item.name === "INCREMENT_CALLABLE");
+  assert.equal(storage.length, 1, "one identity-bearing public module slot");
+  assert.equal(storage[0].visibility, "public");
+  assert.equal(storage[0].type.path, "rt::ModuleCell");
+  assert.deepEqual(storage[0].type.genericArguments[0].type, { kind: "named", path: aliases[0].name });
+  assert.equal(nativeNodes(api, node => node.kind === "word" && node.path === "type_complexity").length, 0);
+  const increment = nativeFunction(result, "increment", "src/api.rs");
+  assert.equal(increment.visibility, "public");
+  assert.equal(nativeNodes(increment.attrs, node => node.kind === "list" && node.path === "doc" &&
+    node.arguments.some(argument => argument.kind === "word" && argument.path === "hidden")).length, 0);
+  const index = nativeSource(result);
+  const reads = nativeMethods(index, "with").filter(call => call.receiver.path === "crate::api::INCREMENT_CALLABLE");
+  assert.equal(reads.length, 1);
+  const loads = nativeMethods(reads[0].args[0], "load");
+  assert.equal(loads.length, 1, "the exact module slot supplies the retained identity");
+  assert.equal(loads[0].receiver.path, reads[0].args[0].params[0].name, "the load uses this slot's exact lexical binding");
+  const direct = nativeCalls(nativeFunction(result, "run"), "crate::api::increment");
+  assert.equal(direct.length, 1);
+  assert.deepEqual(direct[0].args, [{ kind: "path", path: "value" }]);
 });
 
 test("callback, return, and collection observations retain callable-value storage", { timeout: 300_000 }, () => {

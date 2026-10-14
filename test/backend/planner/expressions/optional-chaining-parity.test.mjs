@@ -1,5 +1,6 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeNodes, nativeCalls, assertNoNativeCalls } from "../../../helpers/native-ast.mjs";
 import { test } from "node:test";
 
 import {
@@ -225,12 +226,14 @@ main();
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value\s*\.as_ref\(\)\s*\.map\(\s*\|optional_receiver/u);
-  assert.match(
-    source,
-    /js_string::includes_from_start\(\s*core::convert::AsRef::<str>::as_ref\(optional_receiver\),\s*&needle\(\),?\s*\)/u,
-  );
-  assert.doesNotMatch(source, /optional_receiver\.clone\(\)/u);
+  const includes = nativeFunction(result, "includes");
+  const guarded = nativeNodes(includes.body, node => node.kind === "method-call" && node.method === "map");
+  assert.equal(guarded.length, 1, "one optional receiver guard");
+  assert.equal(nativeCalls(guarded[0].args[0], "needle").length, 1, "argument evaluated within the selected arm only");
+  assert.equal(nativeCalls(includes.body, "needle").length, 1, "no eager or duplicated argument invocation");
+  const calls = nativeCalls(guarded[0].args[0], "js_string::includes_from_start");
+  assert.equal(calls.length, 1, "selected native string operation");
+  assert.equal(calls[0].args.length, 2);
+  assertNoNativeCalls(guarded[0].args[0], ["clone"], "optional receiver is borrowed rather than cloned");
   validateGeneratedProject("optional-js-method", result.artifacts, { run: true });
 });
