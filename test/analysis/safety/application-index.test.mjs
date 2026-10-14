@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { compileRust } from "../../helpers/rust-session.mjs";
+import { createRustSafetyApplicationFactIndex } from "../../../dist/analysis/safety/application-index.js";
 
 // Paired with the C# owner test test/analysis/safety/application-index.test.mjs: the same sources and the same
 // expected membership. Membership is decided once by @tsonic/target-api's createTargetSafetyApplicationIndex.
@@ -41,20 +43,26 @@ export function read(value: Value): int32 { return unsafecontext(value.current);
     { index: ["getter:requires-unsafe"] }],
 ];
 
-function membership(body) {
+function safetyIndex(body) {
   const { result, source } = compileRust({ files: { "index.ts": `${header}${body}\n` } });
-  const program = result.program;
-  assert.ok(program, "Rust analysis publishes the program");
-  const { ast } = source;
+  const program = createTargetSourceProgram(source);
+  const { ast } = program;
+  const sourceFiles = program.sourceFiles.filter(file => file !== undefined && !ast.isDeclarationFile(file));
+  const index = createRustSafetyApplicationFactIndex({ ast, sourceFiles, sourceFacts: program.sourceFacts, navigation: program.navigation });
+  return { result, ast, sourceFiles, index };
+}
+
+function membership(body) {
+  const { ast, sourceFiles, index } = safetyIndex(body);
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
+  sourceFiles.forEach(visit);
   const find = predicate => {
     const found = nodes.find(predicate);
     assert.ok(found);
     return found;
   };
-  const placements = node => program.safetyApplications.forDeclaration(node)
+  const placements = node => index.safetyApplication.get(node)
     .map(application => `${application.applicationPlacement}:${application.contract}`);
   const parenthesized = nodes.filter(node => ast.is.IsExpressionStatement(node))
     .map(node => ast.as.AsExpressionStatement(node).Expression)
@@ -66,8 +74,8 @@ function membership(body) {
     constructor: placements(find(node => ast.is.IsConstructorDeclaration(node))),
     index: placements(find(node => ast.is.IsIndexSignatureDeclaration(node))),
     parenthesizedOperations: parenthesized.map(expression => ({
-      exact: program.safetyApplications.operationForSubject(expression)?.kind,
-      expression: program.safetyApplications.operationForExpression(expression)?.kind,
+      exact: index.safetySubjectOperation.get(expression)?.kind,
+      expression: index.safetyOperation.get(expression)?.kind,
     })),
   };
 }
@@ -105,23 +113,22 @@ safety<Value>().property(value => value.current).setter().requiresunsafe();`,
 
 for (const [name, body, codes] of findingCases) {
   test(`Rust reports exactly the shared safety findings: ${name}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ files: { "index.ts": `${header}${body}\n` } });
-    const program = result.program;
-    assert.ok(program, "Rust analysis publishes the program");
-    const expected = program.sourceFiles.flatMap(sourceFile => {
-      const findings = program.safetyApplications.findings(sourceFile);
+    const { result, sourceFiles, index } = safetyIndex(body);
+    const expected = sourceFiles.flatMap(sourceFile => {
+      const findings = index.findings.get(sourceFile);
       return [
-        ...findings.conflicts.map(() => "RUST_SAFETY_CONTRACT_CONFLICT"),
+        ...findings.conflicts.map(conflict => ({ code: "RUST_SAFETY_CONTRACT_CONFLICT", node: conflict.first.sourceSubject })),
         ...findings.applications.filter(entry => entry.status === "target-not-resolved")
-          .map(() => "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED"),
+          .map(entry => ({ code: "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED", node: entry.application.sourceSubject })),
       ];
     });
-    assert.deepEqual(expected, codes, "the shared findings name the expected classes");
+    assert.deepEqual(expected.map(entry => entry.code), codes, "the shared findings name the expected classes");
     const shared = new Set(["RUST_SAFETY_CONTRACT_CONFLICT", "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED"]);
-    assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code).filter(code => shared.has(code)), expected);
-    const statuses = program.sourceFiles.flatMap(sourceFile =>
-      program.safetyApplications.findings(sourceFile).applications.map(entry => entry.status));
-    assert.equal(statuses.length, program.sourceFiles.reduce((count, sourceFile) =>
-      count + program.safetyApplications.forSourceFile(sourceFile).length, 0), "every application has one status");
+    const reported = result.diagnostics.filter(diagnostic => shared.has(diagnostic.code));
+    assert.deepEqual(reported.map(diagnostic => diagnostic.code), codes);
+    assert.deepEqual(reported.map((diagnostic, position) => diagnostic.sourceNode === expected[position].node), codes.map(() => true),
+      "each diagnostic is reported at its finding's application subject");
+    const statuses = sourceFiles.flatMap(sourceFile => index.findings.get(sourceFile).applications.map(entry => entry.status));
+    assert.equal(statuses.length, (body.match(/\.(?:safe|requiresunsafe)\(\)/gu) ?? []).length, "every application has one status");
   });
 }

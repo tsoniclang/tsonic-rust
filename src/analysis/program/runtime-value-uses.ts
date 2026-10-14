@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import { sourceMayReadBeforeInitialization } from "@tsonic/target-api/source";
-import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
+import type { RustSafetyApplicationFactIndex } from "../../target-model/records/safety.js";
 
 export interface RustRuntimeValueUsePlan {
   isRuntimeReference(declaration: Node, reference: Node): boolean;
@@ -17,7 +17,7 @@ export function createRustRuntimeValueUsePlan(input: {
   const firstClassUseByDeclaration = new WeakMap<Node, boolean>();
   const earlyRuntimeUseByDeclaration = new WeakMap<Node, boolean>();
   const isRuntimeReference = (declaration: Node, reference: Node): boolean =>
-    !input.safetyApplications.isCompileTimeApplicationReference(declaration, reference);
+    !input.safetyApplications.compileTimeApplicationReference.get(declaration, reference);
   return Object.freeze({
     isRuntimeReference,
     hasFirstClassUse(declaration: Node) {

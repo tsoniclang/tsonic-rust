@@ -1,13 +1,12 @@
 import { type RustAttribute } from "../../target-ast/syntax/attributes.js";
 import type {
   Node,
-  SourceFile,
 } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type {
   RustSafetyApplication,
   RustSafetyOperation,
-} from "../../../analysis/safety/application-index.js";
+} from "../../../target-model/records/safety.js";
 import type {
   RustPlanningContext,
 } from "../context.js";
@@ -110,10 +109,10 @@ export function rustDeclarationRequiresUnsafe(
   additionalDeclaration?: Node,
 ): boolean {
   const applications = uniqueApplications([
-    ...input.program.safetyApplications.forDeclaration(declaration),
+    ...input.program.safetyApplications.safetyApplication.get(declaration),
     ...(additionalDeclaration === undefined
       ? []
-      : input.program.safetyApplications.forDeclaration(additionalDeclaration)),
+      : input.program.safetyApplications.safetyApplication.get(additionalDeclaration)),
   ]).filter((application) => application.applicationPlacement === placement);
   return applications.length > 0 &&
     applications.every((application) => application.contract === "requires-unsafe");
@@ -128,7 +127,7 @@ export function rustSelectedCallRequiresUnsafe(
   if (declaration === undefined) {
     return false;
   }
-  return input.program.safetyApplications.forDeclaration(declaration).some(
+  return input.program.safetyApplications.safetyApplication.get(declaration).some(
     (application) =>
       application.contract === "requires-unsafe" &&
       (application.applicationPlacement === "declaration" ||
@@ -145,7 +144,7 @@ export function rustSelectedAccessorRequiresUnsafe(
   const declaration = role === "getter"
     ? selected?.provenance?.sourceSelectedReadDeclaration
     : selected?.provenance?.sourceSelectedWriteDeclaration;
-  return declaration !== undefined && input.program.safetyApplications.forDeclaration(declaration).some(
+  return declaration !== undefined && input.program.safetyApplications.safetyApplication.get(declaration).some(
     (application) =>
       application.contract === "requires-unsafe" &&
       application.applicationPlacement === role,
@@ -160,7 +159,7 @@ export function rustSafetyAttributesForDeclaration(
   let hasNativePointerOperation = false;
   let hasUnusedExplicitUnsafeContext = false;
   walkDeclarationSubtree(declaration, input, (node) => {
-    const safetyOperation = input.program.safetyApplications.operationForSubject(node);
+    const safetyOperation = input.program.safetyApplications.safetySubjectOperation.get(node);
     if (safetyOperation?.kind === "unsafe-context" &&
       !unsafeRegionRequiresUnsafe(node, safetyOperation, input)) {
       hasUnusedExplicitUnsafeContext = true;
@@ -219,7 +218,7 @@ function regionContainsDirectUnsafeRequirement(
     const node = pending.pop();
     if (node === undefined) continue;
     if (isIndependentSafetyBoundary(node, input)) continue;
-    if (input.program.safetyApplications.operationForSubject(node)?.kind === "unsafe-context") {
+    if (input.program.safetyApplications.safetySubjectOperation.get(node)?.kind === "unsafe-context") {
       continue;
     }
     if (nodeRequiresUnsafe(node, input)) return true;
@@ -307,129 +306,17 @@ function isIndependentSafetyBoundary(
   }
 }
 
-export function diagnoseRustSafetyApplications(
-  sourceFile: SourceFile,
-  input: RustPlanningContext,
-  diagnostics: TargetDiagnostic[],
-): void {
-  const conflicts = diagnoseConflictingSafetyApplications(
-    sourceFile,
-    input,
-    diagnostics,
-  );
-  for (const application of input.program.safetyApplications.forSourceFile(sourceFile)) {
-    if (application.targetDeclarations.length === 0) {
-      diagnostics.push(targetDiagnostic(
-        "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED",
-        "The finalized safety application has no exact emitted Rust declaration target.",
-        application.sourceSubject,
-      ));
-      continue;
-    }
-    if (application.targetDeclarations.some((declaration) => conflicts.has(declaration))) {
-      continue;
-    }
-    if (application.contract === "safe") {
-      diagnostics.push(targetDiagnostic(
-        "RUST_SAFE_DECLARATION_TARGET_UNSUPPORTED",
-        "Rust 'safe' is not an explicit modifier on ordinary function declarations; the selected source declaration has no Rust boundary where this contract can be emitted.",
-        application.sourceSubject,
-      ));
-      continue;
-    }
-    if (!applicationHasRustUnsafeBoundary(application, input)) {
-      diagnostics.push(targetDiagnostic(
-        "RUST_SAFETY_APPLICATION_TARGET_UNSUPPORTED",
-        "The selected source declaration has no emitted Rust function boundary that can carry an explicit unsafe contract.",
-        application.sourceSubject,
-      ));
-    }
-  }
-}
-
-function diagnoseConflictingSafetyApplications(
-  sourceFile: SourceFile,
-  input: RustPlanningContext,
-  diagnostics: TargetDiagnostic[],
-): ReadonlySet<Node> {
-  const conflicts = new Set<Node>();
-  for (const application of input.program.safetyApplications.forSourceFile(sourceFile)) {
-    for (const declaration of application.targetDeclarations) {
-      if (conflicts.has(declaration)) {
-        continue;
-      }
-      const related = input.program.safetyApplications.forDeclaration(declaration)
-        .filter((candidate) =>
-          candidate.applicationPlacement === application.applicationPlacement);
-      if (new Set(related.map((candidate) => candidate.contract)).size <= 1) {
-        continue;
-      }
-      conflicts.add(declaration);
-      const first = [...related].sort((left, right) =>
-        compareSafetyApplications(left, right, input))[0];
-      if (first?.sourceFile !== sourceFile) {
-        continue;
-      }
-      diagnostics.push(targetDiagnostic(
-        "RUST_SAFETY_CONTRACT_CONFLICT",
-        "One exact Rust declaration received conflicting finalized safe and requires-unsafe contracts.",
-        first.sourceSubject,
-      ));
-    }
-  }
-  return conflicts;
-}
-
-function applicationHasRustUnsafeBoundary(
-  application: RustSafetyApplication,
-  input: RustPlanningContext,
-): boolean {
-  return application.targetDeclarations.some((declaration) => {
-    const kind = input.program.source.ast.kindName(declaration);
-    if (application.applicationPlacement === "constructor") {
-      return kind === "KindClassDeclaration" ||
-        kind === "KindConstructor" ||
-        kind === "KindConstructorDeclaration";
-    }
-    if (application.applicationPlacement === "getter") {
-      return kind === "KindGetAccessor";
-    }
-    if (application.applicationPlacement === "setter") {
-      return kind === "KindSetAccessor";
-    }
-    if (application.applicationPlacement !== "declaration") {
-      return false;
-    }
-    return kind === "KindFunctionDeclaration" ||
-      kind === "KindMethodDeclaration" ||
-      kind === "KindMethodSignature";
-  });
-}
-
 function exactSafetyOperation(
   expression: Node,
   input: RustPlanningContext,
 ): RustSafetyOperation | undefined {
-  return input.program.safetyApplications.operationForExpression(expression);
+  return input.program.safetyApplications.safetyOperation.get(expression);
 }
 
 function uniqueApplications(
   applications: readonly RustSafetyApplication[],
 ): readonly RustSafetyApplication[] {
   return [...new Set(applications)];
-}
-
-function compareSafetyApplications(
-  left: RustSafetyApplication,
-  right: RustSafetyApplication,
-  input: RustPlanningContext,
-): number {
-  const pathOrder = input.program.source.ast.getPath(left.sourceFile).localeCompare(
-    input.program.source.ast.getPath(right.sourceFile),
-  );
-  return pathOrder !== 0
-    ? pathOrder
-    : input.program.source.ast.pos(left.sourceSubject) - input.program.source.ast.pos(right.sourceSubject);
 }
 
 function targetDiagnostic(

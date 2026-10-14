@@ -60,6 +60,7 @@ import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
 import { analyzeRustReachability } from "../reachability/plan.js";
+import { admitRustSafetyApplications } from "../safety/admission.js";
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 
 export function analyzeRustTargetProgram(
@@ -171,6 +172,11 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents.plan });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
+  const safetyIssues = admitRustSafetyApplications({ ast: context.ast, sourceFiles: context.sourceFiles,
+    safety: context.safetyApplications });
+  if (safetyIssues.length > 0) return rejectedTargetStage(safetyIssues.map(issue => ({
+    code: issue.code, category: "error" as const, source: "tsonic-rust", sourceNode: issue.node, message: issue.message,
+  })));
   const records = context.records.seal();
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     typeDefinitions: context.typeDefinitions,

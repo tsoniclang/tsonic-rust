@@ -55,7 +55,7 @@ import { createRustFrozenDataWriteRegistry, type RustFrozenDataWriteRegistry } f
 import {
   createRustSafetyApplicationFactIndex,
 } from "../safety/application-index.js";
-import type { RustSafetyApplicationFactIndex } from "../safety/application-index.js";
+import type { RustSafetyApplicationFactIndex } from "../../target-model/records/safety.js";
 import {
   createRustObjectRepresentationPlanRegistry,
   type RustObjectRepresentationPlanRegistry,

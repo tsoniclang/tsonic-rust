@@ -156,7 +156,7 @@ function classifyModuleInitialization(
           "Top-level expression statement has no exact expression.",
         );
       }
-      const operation = input.safetyApplications.operationForExpression(expression);
+      const operation = input.safetyApplications.safetyOperation.get(expression);
       if (input.records.compileTimeSource.get(expression)) continue;
       if (operation?.kind === "safety-builder" ||
         (operation?.kind === "unsafe-context" && operation.fact.kind === "remaining-block")) {
