@@ -29,6 +29,26 @@ function admitFamily(model, family, subject, fact) {
 test("sealed records publish only frozen typed family readers without a native key or writer API", () => {
   const model = createModel();
   const records = model.seal();
+  const subject = {};
+  const carrier = { kind: "source-primitive", name: "uint32" };
+  const layout = { kind: "scalar", pointeeCarrier: carrier, size: 4, alignment: 4,
+    width: 64, littleEndian: true, fields: [] };
+  const producerAdmissions = {
+    selectedOperation: () => model.selectedOperations.checked(subject, { kind: "accept", value: {} }),
+    runtimeCarrier: () => admitFamily(model, "runtimeCarrier", subject, { carrier }),
+    selectedCall: () => admitFamily(model, "selectedCall", subject, {}),
+    targetOperation: () => admitFamily(model, "targetOperation", subject, {}),
+    nativeArrayStorage: () => model.nativeArrays.promote([[subject, "binding"]], subject, layout, 4),
+    nativeBacking: () => model.nativeBackings.require(subject, layout),
+    rawLocationPlan: () => model.rawLocations.conversion(subject, "to-raw", subject, carrier, layout),
+    memoryBindingPlan: () => model.memoryBindings.field(subject, carrier, subject),
+    rawAddressPlan: () => model.rawAddresses.identity(subject, "same", carrier, []),
+    receiverIndependentMethod: () => model.receiverIndependentMethods.finalize({}, [], () => ""),
+    classValue: () => model.classValues.resolve({}, subject, undefined),
+    objectLiteralMethodAdapter: () => model.objectLiteralMethodAdapters.finalize({ expressions: [] }),
+    projectCallableAdapters: () => model.projectCallableAdapterPlans.finalize({}),
+    objectReferenceView: () => model.objectReferenceViews.select({}, subject, carrier, carrier),
+  };
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {
@@ -37,16 +57,12 @@ test("sealed records publish only frozen typed family readers without a native k
     assert.equal(family.get(undefined) === undefined, true, name + ": absent source identity");
     assert.equal(family.get({}) === undefined, true, name + ": foreign source identity");
     assert.equal(family.get === model[name].get, true, name + ": one getter implementation");
-    if (name === "selectedOperation") {
+    const admission = producerAdmissions[name];
+    if (admission !== undefined) {
       assert.equal(model[name].set === undefined, true, name + ": no general writer");
-      assert.throws(() => model.selectedOperations.checked({}, {
-        kind: "accept", value: {},
-      }), /after analysis is sealed/u, name + ": producer is closed");
-    } else if (["runtimeCarrier", "selectedCall", "targetOperation"].includes(name)) {
-      assert.equal(model[name].set === undefined, true, name + ": no general writer");
-      assert.throws(() => admitFamily(model, name, {}, name === "runtimeCarrier" ? { carrier: {} } : {}),
-        /after analysis is sealed/u, name + ": producer is closed");
+      assert.throws(admission, /after analysis is sealed/u, name + ": producer is closed");
     } else {
+      assert.equal(typeof model[name].set, "function", name + ": unconverted family has its one current writer");
       assert.throws(() => model[name].set({}, undefined), /after analysis is sealed/u, name + ": writer is closed");
     }
   }
