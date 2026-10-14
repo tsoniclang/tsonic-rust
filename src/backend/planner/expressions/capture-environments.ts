@@ -1,3 +1,4 @@
+import { requireRustCaptureOwnership } from "./typed-locations.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
 
@@ -18,7 +19,7 @@ export function planRustCapturedEnvironment(
   const capturedBindings = [...(context.capturedBindings ?? [])];
   for (const [index, capture] of captures.entries()) {
     const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
-      context.input.program.valueLifetimes.canMoveCapture(owner, capture.declaration);
+      (requireRustCaptureOwnership(owner, capture.declaration, context).read.kind !== "clone");
     if (context.syntheticNames === undefined || !requireRustCarrierRequirements(capture.carrier,
       [...(move ? [] : ["clone" as const]), ...(options.staticStorage ? ["static" as const] : [])],
       capture.reference, context)) return undefined;
@@ -43,7 +44,7 @@ export function planRustCapturedEnvironment(
     }
     const name = allocateRustSyntheticName(context.syntheticNames, `capture_${sourceName}`);
     if (options.sharedStateName === undefined)
-      bindings.push({ name, value: planRustCaptureValue(capture.reference, sourcePath, capture.storage, move, context) });
+      bindings.push({ name, value: planRustCaptureValue(owner, capture, sourcePath, capture.storage, context) });
     capturedBindings.push({ declaration: capture.declaration,
       expression: options.sharedStateName === undefined ? { kind: "path", path: name } : {
         kind: "reference", expr: { kind: "field", receiver: {

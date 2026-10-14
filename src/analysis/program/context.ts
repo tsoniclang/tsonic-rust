@@ -76,7 +76,8 @@ import {
   type RustGeneratedDeclarationUseRegistry,
 } from "./generated-declaration-uses.js";
 import { createRustErrorStorageDemandQuery } from "../objects/error-storage-demands.js";
-import { createSourceStorageQuery, type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
+import { analyzeSourceReceiverOccurrences, createSourceStorageQuery,
+  type SourceErrorStorageDemandQueries, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { createRustRetainedErrorDemandSelection } from "../objects/retained-error-demands.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
@@ -86,6 +87,7 @@ import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/ret
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
+  readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
   readonly callableOwnership: RustCallableOwnershipRegistry;
   readonly errorStorageDemands: SourceErrorStorageDemandQueries;
   readonly typeDefinitions: RustTypeDefinitionRegistry;
@@ -151,6 +153,7 @@ export function createRustAnalysisContext(
   const sourceStorage = createSourceStorageQuery(input.source, sourceFiles, undefined,
     createRustSourceProfileStorageEffects(input.source, sourceProfiles));
   const sourceStorageFailure = sourceStorage.failureReason();
+  const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const records = createRustProgramRecordBuilder(typeDefinitions);
   const names = createRustNamePlan({
@@ -173,6 +176,7 @@ export function createRustAnalysisContext(
   return Object.freeze({
     callableRepresentation: "storage" as const,
     sourceStorage,
+    receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage),
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
       sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
@@ -212,6 +216,9 @@ export function createRustAnalysisContext(
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
     diagnostics: [...names.diagnostics, ...lifetimes.diagnostics,
+      ...(receiverOccurrences.kind === "unresolved" ? [{ code: "RUST_RECEIVER_OCCURRENCES_UNRESOLVED",
+        category: "error" as const, source: "tsonic-rust", message: receiverOccurrences.reason,
+        evidence: ["target.capability=rust.analysis.ownership"] }] : []),
       ...(sourceStorageFailure === undefined ? [] : [{ code: "RUST_SOURCE_STORAGE_NOT_PROVEN",
         category: "error" as const, source: "tsonic-rust", message: sourceStorageFailure }]),
       ...memoryBindings.issues.map(issue => ({

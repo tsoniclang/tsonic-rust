@@ -3,7 +3,6 @@ import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression } from "../expressions/entry.js";
-import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 
 export function planRustBorrowedInitializer(
   expression: Node, context: RustPlanContext,
@@ -12,8 +11,8 @@ export function planRustBorrowedInitializer(
   const plannedReceiver = selection === undefined ? undefined : planExpression(selection.receiver, context);
   if (selection !== undefined && plannedReceiver === undefined) return undefined;
   const receiver = selection === undefined || plannedReceiver === undefined ? undefined
-    : planRustNonConsumingValue(selection.receiver, plannedReceiver, context);
-  if (selection === undefined || receiver === undefined || stablePlace(receiver)) {
+    : plannedReceiver;
+  if (selection === undefined || receiver === undefined || context.input.program.ownership.reads.get(selection.receiver)?.readsStorage === true) {
     const value = planExpression(expression, context);
     return value === undefined ? undefined : { statements: [], value };
   }
@@ -26,9 +25,4 @@ export function planRustBorrowedInitializer(
   return value === undefined ? undefined : {
     statements: [{ kind: "let", name, mutable: false, init: receiver }], value,
   };
-}
-
-function stablePlace(expression: RustExpr): boolean {
-  return expression.kind === "path" || expression.kind === "field" && stablePlace(expression.receiver) ||
-    expression.kind === "dereference" && stablePlace(expression.pointer);
 }

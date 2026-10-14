@@ -12,7 +12,6 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { diagnosticInput } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
-import { planRustNonConsumingValue } from "../typed-locations.js";
 import { planRustSequenceAppend } from "../sequence-conversions.js";
 import { lowerNestedRustValueConversion } from "../value-conversions.js";
 import { rustCarrierHasCloneContract } from "../../types/generic-requirements.js";
@@ -60,7 +59,7 @@ export function planRustBorrowedSequenceAppend(
       selected.optional || contract.collection === "js-array" || selected.presentCarrier.kind === "reference"
         ? "shared-receiver" : "shared-reference");
     if (planned === undefined || context.syntheticNames === undefined) return undefined;
-    const value = planRustNonConsumingValue(selected.expression, planned, context);
+    const value = planned;
     const consume = (source: RustExpr): RustExpr | undefined => planRustSequenceAppend(contract, source,
       destination, context, node, (conversion, element) => lowerNestedRustValueConversion(conversion, element, context, node));
     if (!selected.optional) return consume(value);

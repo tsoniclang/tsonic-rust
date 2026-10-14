@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -30,7 +31,7 @@ test("stable-value queries follow exact transparent operands without admitting m
       const argument = source.ast.arguments(node)[0];
       assert.ok(name !== undefined && argument !== undefined);
       const selected = decisions.get(name) ?? [];
-      selected.push(program.valueLifetimes.canBorrowStableValue(argument));
+      selected.push(program.ownership.reads.get(argument)?.stablePlace === true);
       decisions.set(name, selected);
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
@@ -61,7 +62,7 @@ export function main(): void {
 main();
 ` },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   const start = output.indexOf("pub fn parenthesized");
   const end = output.indexOf("pub fn mutated");
@@ -75,7 +76,7 @@ test("wrapped immutable reads match handwritten native borrowing without snapsho
     target: { id: "rust", options: { outputType: "lib", crateName: "stable_wrapped_borrows" } },
     files: { "index.ts": stableSource },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   assert.doesNotMatch(output, /\.clone\(\)|\.to_owned\(\)|String::from/u);
   const root = writeGeneratedProject("stable-wrapped-borrow-cost", result.artifacts);
@@ -122,7 +123,7 @@ test("retaining a produced String before its native argument view adds no snapsh
     target: { id: "rust", options: { outputType: "lib", crateName: "produced_wrapped_borrows" } },
     files: { "index.ts": stableSource + producedWrappedBorrowSource },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("produced-wrapped-borrow-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `

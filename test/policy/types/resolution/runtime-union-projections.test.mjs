@@ -1,3 +1,4 @@
+import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
 import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
@@ -29,7 +30,7 @@ test("runtime union projections retain exact variants, absence and ownership", (
           const context = { input: { program: {
             source: { ast: fakeAstReader([sourceFile]) },
             records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
-            valueLifetimes: { canMove: () => owns },
+            ownership: createRustOwnershipFixture(node, sourceCarrier, owns ? "move" : "clone"),
             projectTypes,
             typeDefinitions: emptyRustTypeDefinitions, configuration: { edition: "2024" },
           } }, sourceFile, diagnostics: [] };

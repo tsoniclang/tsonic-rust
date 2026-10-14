@@ -32,7 +32,7 @@ import {
   shapeRustSourceCallParameters,
   sourceCallSelectedMemberMatches,
 } from "./arguments.js";
-import { planRustNonConsumingValue, planRustPromotedStorageLocation } from "../typed-locations.js";
+import { planRustPromotedStorageLocation } from "../typed-locations.js";
 import { rustBottomAfterEffect, rustBottomExpression, rustEliminateInfallibleResult } from "../../types/fallible-shape.js";
 import { rustNativeCallableOperand } from "../../../../analysis/callables/native-conversions.js";
 import {
@@ -264,7 +264,7 @@ export function planSelectedSourceCall(
       const constructor = context.input.program.structuralShapes.definitionForCarrier(fact.target.receiverCarrier)?.construction;
       const receiver = callee === undefined ? undefined : planExpression(callee, context);
       if (constructor === undefined || receiver === undefined || callee === undefined) break;
-      const selected: RustExpr = { kind: "field", receiver: planRustNonConsumingValue(callee, receiver, context), name: "dispatch" };
+      const selected: RustExpr = { kind: "field", receiver: receiver, name: "dispatch" };
       planned = { kind: "method-call", receiver: { kind: "method-call", receiver: selected, method: "clone", args: [] },
         method: constructor.targetName, args: shaped };
       break;
@@ -377,9 +377,7 @@ export function planSelectedSourceCall(
       if (receiver !== undefined) {
         planned = {
           kind: "method-call",
-          receiver: receiverNode === undefined
-            ? receiver
-            : planRustNonConsumingValue(receiverNode, receiver, context),
+          receiver,
           method: targetName,
           ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
           args: shaped,
@@ -428,7 +426,7 @@ export function planSelectedSourceCall(
       if (callee === undefined || plannedCallable === undefined) {
         break;
       }
-      const callable = planRustNonConsumingValue(callee, plannedCallable, context);
+      const callable = plannedCallable;
       if (nativeInput !== undefined) {
         planned = planRustNativeInputInvocation(nativeInput, callable, shaped, callGenericArguments, context);
         break;
@@ -462,8 +460,7 @@ export function planSelectedSourceCall(
       if (receiverNode !== undefined && receiver !== undefined) {
         planned = invokeRustStructuralObjectMethod(
           fact.target.receiverCarrier,
-          context.input.program.structuralShapes.field(fact.target.receiverCarrier, fact.target.storageIndex)?.nativeMethod === true
-            ? planRustNonConsumingValue(receiverNode, receiver, context) : receiver,
+          receiver,
           fact.target.storageIndex,
           shaped,
           fact.resultCarrier,

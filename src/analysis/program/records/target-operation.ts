@@ -50,7 +50,7 @@ export function createRustTargetOperationProducer(
     },
     unaryMinusLiteral(subject: Node, resultCarrier: TargetTypeRef): RustTargetOperationFact {
       const fact: RustTargetOperationFact = { kind: "operator-token", operationId: rustPostCheckUnaryMinusOperationId,
-        operator: "-", resultCarrier };
+        operator: "-", resultCarrier, operandModes: ["value"] };
       family.writer.set(subject, fact);
       return fact;
     },

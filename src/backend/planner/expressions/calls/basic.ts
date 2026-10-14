@@ -12,7 +12,7 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import type { RustExpressionResultUse } from "../entry.js";
-import { planRustNonConsumingValue, planRustSharedReceiver } from "../typed-locations.js";
+import { planRustSharedReceiver } from "../typed-locations.js";
 import { planRustTypedLocationCall } from "../typed-location-calls.js";
 import { planRustSourceCallArgumentEvaluation, requireProviderArgumentPassingFacts } from "./arguments.js";
 import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
@@ -118,7 +118,7 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
     const [argument] = args;
     const [argumentNode] = context.input.program.source.ast.arguments(node);
     return fact.state === "moved" && argumentNode !== undefined
-      ? planRustNonConsumingValue(argumentNode, argument!, context)
+      ? argument!
       : argument;
   }
   if (fact !== undefined && fact.kind === "object-shape-projection") {

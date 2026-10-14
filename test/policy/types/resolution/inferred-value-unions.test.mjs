@@ -1,3 +1,4 @@
+import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
 import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
@@ -36,7 +37,7 @@ test("union flow projections retain exact optional dispatch and reject altered e
         source: { ast: fakeAstReader([sourceFile]) },
         records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
         names: { nameForSourceType: (_file, name) => name },
-        valueLifetimes: { canMove: () => canMove },
+        ownership: createRustOwnershipFixture(node, sourceCarrier, canMove ? "move" : "clone"),
         projectTypes, typeDefinitions: definitions, configuration: { edition: "2024" },
       } }, sourceFile, diagnostics: [], moduleName: "index",
         moduleNameByFileName: new Map([["/src/index.ts", "index"]]),

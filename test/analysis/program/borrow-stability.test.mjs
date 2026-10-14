@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustBorrowStability } from "../../../dist/analysis/program/borrow-stability.js";
+import { analyzeRustBorrowEffects, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
+
+function analyze(input, maximumNodes) {
+  const selected = analyzeRustBorrowEffects(input, maximumNodes);
+  return selected.kind === "resolved" ? { ...selected, input } : selected;
+}
 import { fakeAstReader } from "../../helpers/fake-compile-input.mjs";
 import { argumentPassingFactKey, pointerOperationFactKey } from "@tsonic/tsts";
 
@@ -20,8 +25,11 @@ import { receiverFieldCaptureEdges } from "../../../../tsonic/test/fixtures/rece
 function allNodes(ast, files) {
   const output = [];
   const pending = [...files];
+  const visited = new Set();
   while (pending.length !== 0) {
     const node = pending.pop();
+    if (visited.has(node)) continue;
+    visited.add(node);
     output.push(node);
     ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
   }
@@ -57,7 +65,7 @@ test("native binding comparisons borrow observations and distinguish exact repla
     assert.equal(comparison !== undefined, true, name);
     const left = BinaryExpression_Left(ast, comparison);
     const right = BinaryExpression_Right(ast, comparison);
-    assert.equal(program.borrowStability.canBorrowAcross(left, right), expected, name);
+    assert.equal(program.ownership.reads.get(left).borrowedAcross.has(right), expected, name);
     let bindingNode = left;
     while (!ast.is.IsIdentifier(bindingNode)) {
       bindingNode = program.records.targetOperation.get(bindingNode)?.kind === "sequence"
@@ -69,9 +77,9 @@ test("native binding comparisons borrow observations and distinguish exact repla
 sourceBinding: { get: (node) => {
     return node === bindingNode ? { ...binding, scope: "module" } : program.records.sourceBinding.get(node);
 } }}, program.records);
-    const rejected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
+    const rejected = analyze(analysisInput(program, sourceFacts, records));
     assert.equal(rejected.kind, "resolved", name);
-    assert.equal(rejected.plan.canBorrowAcross(left, right), false, name + " foreign storage");
+    assert.equal(selectRustBorrowRelationship(left, right, rejected.input, rejected.effects), false, name + " foreign storage");
     if (name === "observableOwnedResult") {
       const operation = program.records.targetOperation.get(right);
       assert.equal(operation.kind, "provider-operation");
@@ -86,31 +94,23 @@ targetOperation: { get: (node) => {
     return node === right
         ? { ...operation, abi: { ...operation.abi, effects } } : program.records.targetOperation.get(node);
 } }}, program.records);
-        const result = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
+        const result = analyze(analysisInput(program, sourceFacts, records));
         assert.equal(result.kind, "resolved");
-        assert.equal(result.plan.canBorrowAcross(left, right), accepted, "exact native pure-input effect contract");
+        assert.equal(selectRustBorrowRelationship(left, right, result.input, result.effects), accepted, "exact native pure-input effect contract");
       }
       const carrier = operation.abi.result.carrier;
       const projection = { sourceCarrier: carrier, targetCarrier: carrier,
         conversion: { kind: "native-representation", source: carrier, target: carrier } };
       const projectedFacts = createRustRecordFixture({
-targetOperation: { get: (node) => {
-    if (node === right)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right && false ? projection : program.records.targetOperation.get(node);
-} },
-contextualValueConversion: { get: (node) => {
-    if (node === right && false)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right ? projection : program.records.contextualValueConversion.get(node);
-} }}, program.records);
-      const projected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, projectedFacts));
+        targetOperation: { get: node => node === right
+          ? { ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } } }
+          : program.records.targetOperation.get(node) },
+        contextualValueConversion: { get: node => node === right
+          ? projection : program.records.contextualValueConversion.get(node) },
+      }, program.records);
+      const projected = analyze(analysisInput(program, sourceFacts, projectedFacts));
       assert.equal(projected.kind, "resolved");
-      assert.equal(projected.plan.canBorrowAcross(left, right), false,
+      assert.equal(selectRustBorrowRelationship(left, right, projected.input, projected.effects), false,
         "pure invocation does not certify an independently projected result");
       const lift = program.records.optionProjection.get(right);
       assert.equal(lift.kind, "some", "the real owned output retains native optional construction");
@@ -120,30 +120,22 @@ contextualValueConversion: { get: (node) => {
         { ...lift, sourceCarrier: distinct }, { ...lift, elementCarrier: distinct }, { ...lift, resultCarrier: carrier },
       ]) {
         const records = createRustRecordFixture({
-targetOperation: { get: (node) => {
-    if (node === right)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right && false ? replacement : program.records.targetOperation.get(node);
-} },
-optionProjection: { get: (node) => {
-    if (node === right && false)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right ? replacement : program.records.optionProjection.get(node);
-} }}, program.records);
-        const rejected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
+          targetOperation: { get: node => node === right
+            ? { ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } } }
+            : program.records.targetOperation.get(node) },
+          optionProjection: { get: node => node === right
+            ? replacement : program.records.optionProjection.get(node) },
+        }, program.records);
+        const rejected = analyze(analysisInput(program, sourceFacts, records));
         assert.equal(rejected.kind, "resolved");
-        assert.equal(rejected.plan.canBorrowAcross(left, right), false, "only exact native Some construction is a pure result lift");
+        assert.equal(selectRustBorrowRelationship(left, right, rejected.input, rejected.effects), false, "only exact native Some construction is a pure result lift");
       }
     }
   }
 });
 
 function analysisInput(program, sourceFacts, records = program.records) {
-  return { ast: program.source.ast, sourceFiles: program.sourceFiles, sourceFacts, records, navigation: program.sourceNavigation,
+  return { ast: program.source.ast, nodes: allNodes(program.source.ast, program.sourceFiles), sourceFacts, records, navigation: program.sourceNavigation,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
     structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
 }
@@ -197,25 +189,26 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
       return { bindingWritten, exported: false, uses: useNodes.map(reference => ({ reference })) };
     } },
   };
+  input.nodes = allNodes(input.ast, [root]);
   return { input, receivers, summaries: () => summaries };
 }
 
 test("indexed receiver stability has one sealed declaration proof beyond the retired per-use cutoff", () => {
   const fixture = indexedBindingFixture();
-  const result = analyzeRustBorrowStability(fixture.input, 10_000);
+  const result = analyze(fixture.input, 10_000);
   assert.equal(result.kind, "resolved", "more than2048harmless exposure visits fit the actual aggregate bound");
   assert.equal(fixture.summaries(), 1, "two demanded receivers share one exact declaration proof");
   fixture.input.navigation.declarationUseSummary = () => { throw new Error("sealed lookup cannot analyze"); };
   fixture.input.ast.parent = () => { throw new Error("sealed lookup cannot walk source syntax"); };
-  for (const receiver of fixture.receivers) assert.equal(result.plan.canBorrowLocalBinding(receiver), true);
-  assert.equal(result.plan.canBorrowLocalBinding({}), false, "foreign identity cannot obtain borrowing evidence");
+  for (const receiver of fixture.receivers) assert.equal(result.effects.stableBindings.has(receiver), true);
+  assert.equal(result.effects.stableBindings.has({}), false, "foreign identity cannot obtain borrowing evidence");
 });
 
 test("indexed binding stability rejects exhaustion rather than silently materializing a receiver", () => {
   const fixture = indexedBindingFixture();
-  const result = analyzeRustBorrowStability(fixture.input, 2_048);
+  const result = analyze(fixture.input, 2_048);
   assert.equal(result.kind, "rejected");
-  assert.equal("plan" in result, false, "an exhausted exposure proof cannot publish a partial plan");
+  assert.equal("effects" in result, false, "an exhausted exposure proof cannot publish a partial plan");
   assert.equal(result.diagnostics[0].code, "RUST_BORROW_STABILITY_BUDGET_INVALID");
 });
 
@@ -232,9 +225,9 @@ test("indexed binding stability caches negative decisions and preserves exact pa
     ["value passing", { passing: "by-value" }, true],
   ]) {
     const fixture = indexedBindingFixture({ uses: 2, ...options });
-    const result = analyzeRustBorrowStability(fixture.input, 100);
+    const result = analyze(fixture.input, 100);
     assert.equal(result.kind, "resolved", name);
-    for (const receiver of fixture.receivers) assert.equal(result.plan.canBorrowLocalBinding(receiver), expected, name);
+    for (const receiver of fixture.receivers) assert.equal(result.effects.stableBindings.has(receiver), expected, name);
     assert.equal(fixture.summaries(), options.scope === "module" ? 0 : 1, name + " completed decision is reused");
   }
 });
@@ -260,7 +253,7 @@ export function moduleUpdate(): void { moduleValues[0]++; }
     for (const demand of demands) {
       const target = ast.is.IsBinaryExpression(demand) ? BinaryExpression_Left(ast, demand) : ast.as.AsPostfixUnaryExpression(demand)?.Operand;
       const receiver = Node_Expression(ast, target);
-      assert.equal(program.borrowStability.canBorrowLocalBinding(receiver), expected, name);
+      assert.equal(program.ownership.reads.get(receiver).stablePlace, expected, name);
     }
   }
 });
@@ -276,11 +269,11 @@ for (const surfaces of [[], ["js"]]) {
       program.source.ast.is.IsBinaryExpression(node) &&
       program.records.targetOperation.get(node)?.operator === "=");
     const writes = assignments.flatMap(node => {
-      const selected = program.borrowStability.borrowedWriteFor(node);
+      const selected = program.ownership.writes.get(node);
       return selected === undefined ? [] : [[node, selected]];
     });
     assert.equal(writes.length, 2, "parameter and literal projected writes");
-    assert.equal(Object.isFrozen(program.borrowStability), true);
+    assert.equal(Object.isFrozen(program.ownership), true);
     for (const [node, selected] of writes) {
       assert.equal(Object.isFrozen(selected), true);
       assert.equal(selected.target === BinaryExpression_Left(program.source.ast, node), true);
@@ -288,10 +281,10 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(selected.receiver === Node_Expression(program.source.ast, selected.target), true);
       assert.equal(selected.location, "captured-field");
       assert.equal(program.objectRepresentations.receiverCaptures.isCaptured(selected.field.declaration), true);
-      assert.equal(program.borrowStability.isPureCopyValue(selected.value), true);
+      assert.equal(program.ownership.reads.get(selected.value).pure, true);
       assert.equal(selected.fallible, profile === "js");
     }
-    assert.equal(program.borrowStability.borrowedWriteFor({}) === undefined, true, "foreign source node");
+    assert.equal(program.ownership.writes.get({}) === undefined, true, "foreign source node");
   });
 
   test(`scalar storage stays pure while reentrant, getter and owned values retain snapshots in ${profile}`, () => {
@@ -299,24 +292,24 @@ for (const surfaces of [[], ["js"]]) {
     const sourceFacts = createTargetSourceProgram(checkedSource).sourceFacts;
     for (const name of ["parameter", "literal", "storage", "arithmetic"]) {
       const assignment = functionAssignment(program, name);
-      assert.equal(program.borrowStability.borrowedWriteFor(assignment) !== undefined, true, name);
+      assert.equal(program.ownership.writes.get(assignment) !== undefined, true, name);
     }
     for (const name of ["reentrant", "accessor"]) {
       const assignment = functionAssignment(program, name);
-      assert.equal(program.borrowStability.borrowedWriteFor(assignment) === undefined, true, name);
-      assert.equal(program.borrowStability.isPureCopyValue(BinaryExpression_Right(program.source.ast, assignment)), false, name);
+      assert.equal(program.ownership.writes.get(assignment) === undefined, true, name);
+      assert.equal((program.ownership.reads.get(BinaryExpression_Right(program.source.ast, assignment))?.pure === true), false, name);
     }
     const owned = analyzeRust({ surfaces, files: { "index.ts": ownedFieldSnapshotSource } }).program;
-    assert.equal(owned.borrowStability.borrowedWriteFor(functionAssignment(owned, "ownedWrite")) === undefined, true);
+    assert.equal(owned.ownership.writes.get(functionAssignment(owned, "ownedWrite")) === undefined, true);
   });
 
   test(`ordinary class field borrows require independent physical states in ${profile}`, () => {
     const { program, source: checkedSource } = analyzeRust({ surfaces, files: { "index.ts": ordinaryScalarFieldWritesSource } });
     const sourceFacts = createTargetSourceProgram(checkedSource).sourceFacts;
-    const distinct = program.borrowStability.borrowedWriteFor(functionAssignment(program, "distinct"));
+    const distinct = program.ownership.writes.get(functionAssignment(program, "distinct"));
     assert.equal(distinct !== undefined, true, "ordinary class scalar write");
     assert.equal(distinct.location, "stored-field");
-    assert.equal(program.borrowStability.borrowedWriteFor(functionAssignment(program, "identical")) === undefined,
+    assert.equal(program.ownership.writes.get(functionAssignment(program, "identical")) === undefined,
       true, "same carrier can alias the parent state");
   });
 
@@ -326,7 +319,7 @@ for (const surfaces of [[], ["js"]]) {
     const { program, source: checkedSource } = analyzeRust({ surfaces, files: { "index.ts": source } });
     const sourceFacts = createTargetSourceProgram(checkedSource).sourceFacts;
     const assignment = functionAssignment(program, "parameter");
-    const selected = program.borrowStability.borrowedWriteFor(assignment);
+    const selected = program.ownership.writes.get(assignment);
     assert.equal(selected !== undefined, true);
     const targetFact = program.records.targetOperation.get(selected.target);
     assert.equal(targetFact.storage, "structural-object", "the structural mutation bank targets its actual owner");
@@ -346,9 +339,9 @@ for (const surfaces of [[], ["js"]]) {
       const records = { ...program.records, [key]: {
         get: node => node === subject ? replacement : program.records[key].get(node),
       } };
-      const result = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
+      const result = analyze(analysisInput(program, sourceFacts, records));
       assert.equal(result.kind, "resolved", "mutation " + index);
-      assert.equal(result.plan.borrowedWriteFor(assignment) === undefined, true, "mutation " + index);
+      assert.equal(result.effects.fieldWrites.get(assignment) === undefined, true, "mutation " + index);
     }
     const binding = program.records.sourceBinding.get(selected.value);
     assert.equal(binding !== undefined, true);
@@ -357,13 +350,13 @@ bindingStorage: { get: (node) => {
     return node === binding.sourceDeclaration
         ? { storage: "location", valueCarrier: targetFact.resultCarrier } : program.records.bindingStorage.get(node);
 } }}, program.records);
-    assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts, locationFacts)).plan.borrowedWriteFor(assignment) === undefined, true);
+    assert.equal(analyze(analysisInput(program, sourceFacts, locationFacts)).effects.fieldWrites.get(assignment) === undefined, true);
     const unknownCopy = createRustRecordFixture({
 runtimeCarrier: { get: (node) => {
     return node === selected.value ? { carrier: { kind: "target-named", id: "external.CustomClone" } }
         : program.records.runtimeCarrier.get(node);
 } }}, program.records);
-    assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts, unknownCopy)).plan.borrowedWriteFor(assignment) === undefined, true);
+    assert.equal(analyze(analysisInput(program, sourceFacts, unknownCopy)).effects.fieldWrites.get(assignment) === undefined, true);
     for (const storage of ["bound", "property"]) {
       const input = analysisInput(program, sourceFacts);
       const shapeField = input.structuralShapes.field(targetFact.receiverCarrier, targetFact.storageIndex);
@@ -371,7 +364,7 @@ runtimeCarrier: { get: (node) => {
         return carrier === targetFact.receiverCarrier && index === targetFact.storageIndex
           ? { ...shapeField, storage } : program.structuralShapes.field(carrier, index);
       } };
-      assert.equal(analyzeRustBorrowStability(input).plan.borrowedWriteFor(assignment) === undefined, true, storage);
+      assert.equal(analyze(input).effects.fieldWrites.get(assignment) === undefined, true, storage);
     }
     for (const replacement of [
       { readonly: true }, { method: true }, { nativeLayout: {} },
@@ -382,14 +375,14 @@ runtimeCarrier: { get: (node) => {
         return carrier === targetFact.receiverCarrier && index === targetFact.storageIndex
           ? { ...shapeField, ...replacement } : program.structuralShapes.field(carrier, index);
       } };
-      assert.equal(analyzeRustBorrowStability(input).plan.borrowedWriteFor(assignment) === undefined, true, Object.keys(replacement)[0]);
+      assert.equal(analyze(input).effects.fieldWrites.get(assignment) === undefined, true, Object.keys(replacement)[0]);
     }
     const dispatched = analysisInput(program, sourceFacts);
     dispatched.structuralShapes = { ...dispatched.structuralShapes, definitionForCarrier(carrier) {
       const shape = program.structuralShapes.definitionForCarrier(carrier);
       return carrier === targetFact.receiverCarrier ? { ...shape, dispatchName: "selected_dispatch" } : shape;
     } };
-    assert.equal(analyzeRustBorrowStability(dispatched).plan.borrowedWriteFor(assignment) === undefined,
+    assert.equal(analyze(dispatched).effects.fieldWrites.get(assignment) === undefined,
       true, "structural dispatch can conceal a bound state");
   });
 }
@@ -403,7 +396,7 @@ export function provider(holder: Value, value: number): void { holder.point.x = 
   const value = BinaryExpression_Right(program.source.ast, assignment);
   const operation = program.records.targetOperation.get(value);
   assert.equal(operation?.kind, "provider-operation");
-  assert.equal(program.borrowStability.borrowedWriteFor(assignment) !== undefined, true);
+  assert.equal(program.ownership.writes.get(assignment) !== undefined, true);
   for (const [index, abi] of [
     { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "observable" } },
     { ...operation.abi, effects: { ...operation.abi.effects, safety: "requires-unsafe" } },
@@ -415,7 +408,7 @@ export function provider(holder: Value, value: number): void { holder.point.x = 
 targetOperation: { get: (node) => {
     return node === value ? { ...operation, abi } : program.records.targetOperation.get(node);
 } }}, program.records);
-    assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts, records)).plan.borrowedWriteFor(assignment) === undefined, true, String(index));
+    assert.equal(analyze(analysisInput(program, sourceFacts, records)).effects.fieldWrites.get(assignment) === undefined, true, String(index));
   }
 });
 
@@ -427,31 +420,31 @@ export function indexed(values: string[]): number { return values[0].length; }
 ` } });
   const sourceFacts = createTargetSourceProgram(checkedSource).sourceFacts;
   const constant = functionAssignment(program, "constant");
-  assert.equal(program.borrowStability.borrowedWriteFor(constant) !== undefined, true, "exact pure constant ABI");
+  assert.equal(program.ownership.writes.get(constant) !== undefined, true, "exact pure constant ABI");
   const observed = functionAssignment(program, "observed");
-  assert.equal(program.borrowStability.borrowedWriteFor(observed) === undefined, true,
+  assert.equal(program.ownership.writes.get(observed) === undefined, true,
     "an owned string observation is not an unprojected primitive Copy input");
 });
 
 test("borrow stability budgets are finite, bounded and reject cycles without AST diagnostics", () => {
   const root = { children: [{ children: [] }] };
   const input = {
-    sourceFiles: [root], ast: { ...fakeAstReader(), is: { ...fakeAstReader().is,
+    nodes: [root, ...root.children], ast: { ...fakeAstReader(), is: { ...fakeAstReader().is,
       IsPrefixUnaryExpression: () => false, IsPostfixUnaryExpression: () => false },
       forEachChild: (node, visit) => node.children.forEach(visit) },
     records: createRustRecordFixture({runtimeCarrier: { get: () => undefined }}),
   };
-  assert.equal(analyzeRustBorrowStability(input, 1).kind, "rejected");
-  assert.equal(analyzeRustBorrowStability(input, 2).kind, "resolved");
+  assert.equal(analyze(input, 1).kind, "rejected");
+  assert.equal(analyze(input, 2).kind, "resolved");
   for (const limit of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 4_194_305, Number.MAX_SAFE_INTEGER]) {
-    const result = analyzeRustBorrowStability(input, limit);
+    const result = analyze(input, limit);
     assert.equal(result.kind, "rejected", String(limit));
     assert.equal(result.diagnostics.length, 1);
     assert.equal(result.diagnostics[0].sourceNode === undefined, true);
     assert.equal(result.diagnostics[0].message.length < 160, true);
   }
   root.children.push(root);
-  assert.equal(analyzeRustBorrowStability(input, 8).kind, "rejected", "cycle");
+  assert.equal(analyze(input, 8).kind, "rejected", "cycle");
 });
 
 test("native field borrowing consumes exact disjoint scalar writes but rejects opaque calls and stale field facts", () => {
@@ -459,19 +452,19 @@ test("native field borrowing consumes exact disjoint scalar writes but rejects o
   const sourceFacts = createTargetSourceProgram(checkedSource).sourceFacts;
   const ast = program.source.ast;
   const count = allNodes(ast, program.sourceFiles).length;
-  assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts), count).kind, "rejected",
+  assert.equal(analyze(analysisInput(program, sourceFacts), count).kind, "rejected",
     "native write correspondence consumes the same finite aggregate accounting budget");
-  assert.equal(analyzeRustBorrowStability(analysisInput(program, sourceFacts), count + 128).kind, "resolved");
+  assert.equal(analyze(analysisInput(program, sourceFacts), count + 128).kind, "resolved");
   const methods = allNodes(ast, program.sourceFiles).filter(node => ast.is.IsMethodDeclaration(node));
   for (const name of ["next", "combined", "observed", "mutated"]) {
     const method = methods.find(node => ast.text(ast.name(node)) === name);
     const index = allNodes(ast, [method]).find(node => ast.is.IsElementAccessExpression(node));
     const receiver = Node_Expression(ast, index);
     const operand = ast.as.AsElementAccessExpression(index)?.ArgumentExpression;
-    assert.equal(program.borrowStability.canBorrowAcross(receiver, operand), name !== "mutated", name);
+    assert.equal(program.ownership.reads.get(receiver).borrowedAcross.has(operand), name !== "mutated", name);
     if (name !== "next") continue;
-    assert.equal(program.borrowStability.canBorrowAcross(receiver, {}), false, "foreign node");
-    assert.equal(program.borrowStability.canBorrowAcross(ast.as.AsPostfixUnaryExpression(operand)?.Operand, operand), false,
+    assert.equal(program.ownership.reads.get(receiver).borrowedAcross.has({}), false, "foreign node");
+    assert.equal(program.ownership.reads.get(ast.as.AsPostfixUnaryExpression(operand)?.Operand).borrowedAcross.has(operand), false,
       "the exact same physical field is never treated as disjoint");
     const field = program.records.targetOperation.get(receiver);
     for (const replacement of [undefined, { ...field, storageIndex: -1 },
@@ -481,9 +474,9 @@ test("native field borrowing consumes exact disjoint scalar writes but rejects o
 targetOperation: { get: (node) => {
     return node === receiver ? replacement : program.records.targetOperation.get(node);
 } }}, program.records);
-      const selected = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
+      const selected = analyze(analysisInput(program, sourceFacts, records));
       assert.equal(selected.kind, "resolved");
-      assert.equal(selected.plan.canBorrowAcross(receiver, operand), false);
+      assert.equal(selectRustBorrowRelationship(receiver, operand, selected.input, selected.effects), false);
     }
   }
 });
@@ -578,7 +571,7 @@ test("borrowed conversion effects require exact finalized input and pure native 
   const input = inputs.find(selected => selected.conversion?.kind === "semantic");
   assert.equal(input !== undefined, true);
   assert.equal(rustProviderInputBorrowMode(input), "ref");
-  assert.equal(program.borrowStability.canBorrowAcross(receiver, operand), true);
+  assert.equal(program.ownership.reads.get(receiver).borrowedAcross.has(operand), true);
   for (const replacement of [
     { ...input, mode: "mut-ref" },
     { ...input, parameterCarrier: { kind: "source-primitive", name: "float64" } },
@@ -604,8 +597,8 @@ targetOperation: { get: (node) => {
     return node === observation
         ? { ...operation, abi: { ...operation.abi, ...changes } } : program.records.targetOperation.get(node);
 } }}, program.records);
-    const result = analyzeRustBorrowStability(analysisInput(program, sourceFacts, records));
+    const result = analyze(analysisInput(program, sourceFacts, records));
     assert.equal(result.kind, "resolved");
-    assert.equal(result.plan.canBorrowAcross(receiver, operand), false, "unknown observation never extends the source borrow");
+    assert.equal(selectRustBorrowRelationship(receiver, operand, result.input, result.effects), false, "unknown observation never extends the source borrow");
   }
 });

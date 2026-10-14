@@ -1,3 +1,4 @@
+import { createRustOwnershipFixture } from "../../helpers/ownership.mjs";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { rustValueBlock } from "../../../dist/backend/target-ast/syntax/value-block.js";
@@ -20,7 +21,7 @@ for (const edition of ["2021", "2024"]) {
       input: { program: {
         source: { ast: fakeAstReader([sourceFile]) },
         records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
-        valueLifetimes: { canMove: () => true, canMoveCapture: () => false, canBorrowStableValue: () => false },
+        ownership: createRustOwnershipFixture(node, sourceCarrier),
         configuration: { edition },
       } },
       diagnostics: [], sourceFile,

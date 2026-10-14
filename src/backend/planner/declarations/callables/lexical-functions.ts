@@ -1,3 +1,4 @@
+import { requireRustCaptureOwnership } from "../../expressions/typed-locations.js";
 import type { Node } from "@tsonic/tsts";
 
 import { rustRetainedCallableStorage } from "../../../../analysis/callables/results.js";
@@ -6,7 +7,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
 import { planExpressionBeforeValueProjections } from "../../expressions/entry.js";
-import { planRustCaptureValue, planRustNonConsumingValue } from "../../expressions/typed-locations.js";
+import { planRustCaptureValue } from "../../expressions/typed-locations.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
@@ -70,9 +71,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
     if (owned) {
       const name = context.input.program.names.nameForDeclaration(capture.declaration);
       if (name === undefined) return undefined;
-      const move = !selection.valueObserved && selection.singleInvocation &&
-        context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration);
-      arguments_.push(planRustCaptureValue(capture.reference, name, storage?.storage ?? "value", move, context));
+      arguments_.push(planRustCaptureValue(declaration, capture, name, storage?.storage ?? "value", context, "invocation"));
       continue;
     }
     if (captured?.borrowed !== undefined) {
@@ -96,7 +95,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
     }
     const value = planExpressionBeforeValueProjections(capture.reference, context, "value");
     if (value === undefined) return undefined;
-    arguments_.push({ kind: "reference", expr: planRustNonConsumingValue(capture.reference, value, context),
+    arguments_.push({ kind: "reference", expr: value,
       ...(mutable ? { mutable: true } : {}) });
   }
   return arguments_;
@@ -112,5 +111,5 @@ function lexicalCaptureIsOwned(
 ): boolean {
   return rustRetainedCallableStorage(context.input.program.records, declaration) !== undefined ||
     plainStorage && !capture.mutable && (rustCarrierHasCopyContract(carrier, context) ||
-      !selection.valueObserved && context.input.program.valueLifetimes.canMoveCapture(declaration, capture.declaration));
+      !selection.valueObserved && (requireRustCaptureOwnership(declaration, capture.declaration, context).read.kind !== "clone"));
 }

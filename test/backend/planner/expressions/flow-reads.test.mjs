@@ -1,3 +1,4 @@
+import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
@@ -42,7 +43,7 @@ test("optional native associated values move or borrow without inventing Clone, 
     const result = planRustFlowReadProjection(node, { kind: "path", path: "value" }, fact, {
       input: { program: {
         records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
-        valueLifetimes: { canMove: () => canMove }, typeDefinitions: emptyRustTypeDefinitions,
+        ownership: createRustOwnershipFixture(node, sourceCarrier, canMove ? "move" : "clone"), typeDefinitions: emptyRustTypeDefinitions,
         source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1, end: () => -1, kindName: () => "KindIdentifier" } },
       } }, diagnostics, syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() },
     }, borrowedResult);

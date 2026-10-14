@@ -20,7 +20,6 @@ import type { RustSafetyApplicationFactIndex } from "../safety/application-index
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import type { RustTargetConfiguration } from "../../target-model/configuration/model.js";
-import type { RustValueLifetimePlan } from "./value-lifetimes.js";
 import type { RustRuntimeReferencePlan } from "../project/index.js";
 import type { RustBinaryHookPlan } from "../project/index.js";
 import type {
@@ -89,10 +88,9 @@ export interface RustTargetProgram {
   readonly callableValues: RustCallableValuePlan;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
-  readonly valueLifetimes: RustValueLifetimePlan;
+  readonly ownership: import("../../target-model/records/ownership.js").RustOwnershipRecords;
   readonly borrowedElementReads: import("./borrowed-element-reads.js").RustBorrowedElementReads;
   readonly borrowedInitializers: import("../storage/borrowed-initializers.js").RustBorrowedInitializerQueries;
-  readonly borrowStability: import("./borrow-stability.js").RustBorrowStabilityPlan;
   readonly providerMutableInputs: import("../storage/provider-mutable-inputs.js").RustProviderMutableInputPlan;
   readonly retainedCallableInputs: import("../callables/retained-inputs.js").RustRetainedCallableInputPlan;
   readonly structuralShapes: RustStructuralShapePlan;

@@ -12,7 +12,6 @@ import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustUnionTypePathInContext } from "../../types/render.js";
 import { planExpression } from "../entry.js";
-import { planRustNonConsumingValue } from "../typed-locations.js";
 import { applyRustValueConversion } from "../value-conversions.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../../target-model/conversions/substitution.js";
@@ -46,7 +45,7 @@ export function planRustUnionMethodCall(
     target.variants.length !== effects.unionBranches.length || !rustTargetTypeRefEquals(selected.receiverCarrier, target.receiverCarrier)) return undefined;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "union_receiver");
   const mutable = target.variants.some(variant => variant.mutatesSelf);
-  const bindings = [{ name: receiverName, value: planRustNonConsumingValue(receiverNode, receiver, context), ...(mutable ? { mutable: true } : {}) },
+  const bindings = [{ name: receiverName, value: receiver, ...(mutable ? { mutable: true } : {}) },
     ...args.map((value, index) => ({ name: allocateRustSyntheticName(context.syntheticNames!, `union_argument_${index}`), value }))];
   const arms: { pattern: RustPattern; expression: RustExpr }[] = [];
   for (const [index, method] of target.variants.entries()) {

@@ -435,6 +435,7 @@ export function resolvePostCheckBinaryCarrier(
           operationId: "tsonic.rust.assignment.nullish.write",
           operator: "=",
           resultCarrier: storage,
+          operandModes: ["mut-ref", "value"],
         },
         resultCarrier: presentResult === "value" ? inner! : left,
       };
@@ -577,6 +578,7 @@ export function resolvePostCheckBinaryCarrier(
         : `tsonic.rust.operator.${equivalentOperator}.equivalent.${rustOperatorCarrierKey(right)}`,
       operator: equivalentOperator ?? "=",
       resultCarrier: rustValueCarrierBeforeOptionProjection(walk.context.records, operands.rightNode) ?? right,
+      operandModes: ["mut-ref", "value"],
     };
   } else {
     const compound = selectRustCompoundAssignment(operatorKind, left, right,
@@ -599,6 +601,7 @@ export function resolvePostCheckBinaryCarrier(
             operationId: `tsonic.rust.operator.${compound.operator}.${rustOperatorCarrierKey(left)}`,
             operator: compound.operator,
             resultCarrier: compound.resultCarrier,
+            operandModes: compound.operandModes,
             leftConversion: compound.leftConversion,
             rightConversion: compound.rightConversion,
           };
@@ -635,6 +638,7 @@ export function resolvePostCheckBinaryCarrier(
               operationId: `tsonic.rust.operator.${binary.rustOperator}.${rustOperatorCarrierKey(binary.resultCarrier)}`,
               operator: binary.rustOperator,
               resultCarrier: binary.resultCarrier,
+              operandModes: binary.operandModes,
               leftConversion: binary.leftConversion,
               rightConversion: binary.rightConversion,
               };
@@ -800,6 +804,7 @@ export function resolvePostCheckUnaryCarrier(
         operationId: rustPostCheckUnaryMinusOperationId,
         operator: "-",
         resultCarrier: expected,
+        operandModes: ["value"],
       }
     : {
         kind: "source-conversion",

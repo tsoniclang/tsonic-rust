@@ -548,6 +548,7 @@ function operatorFact(operator: RustOperatorToken, resultCarrier: TargetTypeRef)
     operationId: `tsonic.rust.operator.${operator}.${rustCarrierIdentity(resultCarrier)}`,
     operator,
     resultCarrier,
+    operandModes: [operator === "+=" || operator === "-=" ? "mut-ref" : "value"],
   };
 }
 

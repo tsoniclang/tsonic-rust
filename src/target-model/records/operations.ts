@@ -63,6 +63,7 @@ export type RustTargetOperationFact =
       readonly operationId: string;
       readonly operator: RustOperatorToken;
       readonly resultCarrier: TargetTypeRef;
+      readonly operandModes: readonly [RustArgumentMode, RustArgumentMode?];
       readonly leftConversion?: RustValueConversion;
       readonly rightConversion?: RustValueConversion;
       readonly writeStrategy?:

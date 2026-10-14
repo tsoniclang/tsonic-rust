@@ -1,3 +1,4 @@
+import { requireRustCaptureOwnership } from "./typed-locations.js";
 import type { Node } from "@tsonic/tsts";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -37,10 +38,10 @@ export function planRustGenericCallableValue(
   for (const [index, capture] of implementation.captures.entries()) {
     const binding = context.input.program.records.sourceBinding.get(capture.reference);
     const source = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
-    const move = context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
+    const move = (requireRustCaptureOwnership(node, capture.declaration, context).read.kind !== "clone");
     if (source === undefined || !requireRustCarrierRequirements(capture.carrier,
       move ? [] : ["clone"], capture.reference, { ...context, callableDeclaration: node })) return undefined;
-    fields.push({ name: `capture_${index}`, value: planRustCaptureValue(capture.reference, source, capture.storage, move, context) });
+    fields.push({ name: `capture_${index}`, value: planRustCaptureValue(node, capture, source, capture.storage, context) });
   }
   const receivers = planRustCapturedReceiverFields(node, implementation.receiverFields, context, context,
     { staticStorage: false, offset: implementation.captures.length });

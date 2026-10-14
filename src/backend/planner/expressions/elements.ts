@@ -13,7 +13,7 @@ import {
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
-import { planRustNonConsumingValue, planRustValueRead } from "./typed-locations.js";
+import { planRustValueRead } from "./typed-locations.js";
 import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 
@@ -188,7 +188,7 @@ function planIndexedProjection(
 ): RustExpr | undefined {
   const planned = planExpression(receiverNode, context);
   if (planned === undefined) return undefined;
-  const receiver = planRustNonConsumingValue(receiverNode, planned, context);
+  const receiver = planned;
   const borrowed = receiver !== planned || expressionCarrier(receiverNode, context)?.kind === "reference" ||
     context.expressionOverrides?.get(receiverNode)?.valueForm === "shared-reference";
   const read = (owner: RustExpr): RustExpr => borrowed

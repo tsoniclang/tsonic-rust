@@ -13,7 +13,7 @@ import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpressionBeforeOptionProjection, planExpressionBeforeValueProjections } from "./entry.js";
 import { expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
-import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSharedReceiver } from "./typed-locations.js";
 import { planRustStringComparisonView } from "./string-comparison-views.js";
 import { planRustOptionPayloadView } from "./option-payload-views.js";
 
@@ -24,7 +24,7 @@ function operand(
     ? planExpressionBeforeValueProjections(node, context, "value")
     : planExpressionBeforeOptionProjection(node, context);
   if (value === undefined) return undefined;
-  let selected: RustExpr | undefined = planRustNonConsumingValue(node, value, context, later);
+  let selected: RustExpr | undefined = value;
   if (view === "str") selected = planRustStringComparisonView(node, selected, carrier, later, context);
   else if (view === "shared") selected = isRustOptionCarrier(carrier)
     ? planRustOptionPayloadView(selected, carrier, view, context)

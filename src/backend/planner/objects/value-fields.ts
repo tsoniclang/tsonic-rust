@@ -1,8 +1,9 @@
+import { requireRustReadOwnership } from "../expressions/typed-locations.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { isRustCopyCarrier, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
+import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
@@ -11,7 +12,7 @@ import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.j
 import { sourceFieldSelectedOperationMatches } from "../expressions/properties.js";
 import { planRustDirectStorage } from "../expressions/updates/target.js";
 import { findRustLocationStorageRoot, planRustSourceLocationStorage, rustExpressionHasBoundRecordField, planRustSharedReceiver,
-  planRustNonConsumingValue, rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
+  rustLocationStorageForReference, rustRawLocationRoot } from "../expressions/typed-locations.js";
 import { rustRecordFieldResult, readRustBoundRecordField, writeRustBoundRecordField } from "./record-fields.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedFieldLocation } from "../expressions/indexed-fields.js";
@@ -215,8 +216,9 @@ export function planRustValueFieldLocation(
     ({ kind: "field", receiver, name }), value);
   const read = (value: RustExpr): RustExpr => {
     const selected = project(value);
-    return isRustCopyCarrier(resultCarrier) || access === "read" && context.input.program.valueLifetimes.canMove(node)
-      ? selected : { kind: "method-call", receiver: selected, method: "clone", args: [] };
+    const ownership = requireRustReadOwnership(node, context);
+    return (access === "read" ? ownership.value : ownership.snapshot)?.kind === "clone"
+      ? { kind: "method-call", receiver: selected, method: "clone", args: [] } : selected;
   };
   const capturedRoot = context.valueFieldLocations?.get(current);
   if (capturedRoot !== undefined) {
@@ -290,7 +292,7 @@ export function planRustCapturedFieldOwner(node: Node, context: RustPlanContext,
   const receiverNode = Node_Expression(context.input.program.source.ast, node);
   const planned = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const receiver = receiverNode === undefined || planned === undefined ? undefined
-    : planRustNonConsumingValue(receiverNode, planned, context);
+    : planned;
   if (receiver !== undefined && operation.dispatch !== undefined) {
     const slot = context.input.program.projectTypes.memberSlotName(operation.declaration, "capture");
     return slot === undefined ? undefined : { kind: "method-call", receiver: {

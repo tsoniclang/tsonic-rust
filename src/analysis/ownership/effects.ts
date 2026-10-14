@@ -1,43 +1,36 @@
-import type { AstReader, Node, SourceFile, ReadonlySourceFactResolver } from "@tsonic/tsts";
+import type { AstReader, Node, ReadonlySourceFactResolver } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand,
-  sourceBindingHasMutableExposure } from "@tsonic/target-api/source";
+  sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import type { RustTargetProgram } from "./model.js";
-import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
+import type { RustTargetProgram } from "../program/model.js";
+import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "../storage/native-paths.js";
-import { rustNativeWriteTargets, rustNoNativeWrites } from "./borrow-stability-effects.js";
+import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
+import { rustCallArgumentMode } from "../callables/parameter-passing.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
-export interface RustBorrowedFieldWrite {
-  readonly target: Node;
-  readonly value: Node;
-  readonly receiver: Node;
-  readonly owner: Node;
-  readonly field: StoredField;
-  readonly fallible: boolean;
-  readonly location: "captured-field" | "stored-field";
+import type { RustBorrowedFieldWrite } from "../../target-model/records/ownership.js";
+
+export interface RustBorrowEffects {
+  readonly pureValues: ReadonlySet<Node>;
+  readonly fieldWrites: ReadonlyMap<Node, RustBorrowedFieldWrite>;
+  readonly stableBindings: ReadonlySet<Node>;
+  readonly nativeWrites: ReadonlyMap<Node, readonly Node[]>;
 }
 
-export interface RustBorrowStabilityPlan {
-  isPureCopyValue(node: Node): boolean;
-  borrowedWriteFor(node: Node): RustBorrowedFieldWrite | undefined;
-  canBorrowAcross(source: Node, later: Node): boolean;
-  canBorrowLocalBinding(reference: Node): boolean;
-}
-
-interface RustBorrowStabilityInput {
+export interface RustBorrowEffectsInput {
   readonly ast: AstReader;
   readonly sourceFacts: Pick<ReadonlySourceFactResolver, "getFact">;
-  readonly sourceFiles: readonly SourceFile[];
+  readonly nodes: readonly Node[];
   readonly records: RustTargetProgram["records"];
   readonly projectTypes: RustTargetProgram["projectTypes"];
   readonly objectRepresentations: RustTargetProgram["objectRepresentations"];
@@ -46,17 +39,17 @@ interface RustBorrowStabilityInput {
   readonly navigation: RustTargetProgram["sourceNavigation"];
 }
 
-export type AnalyzeRustBorrowStabilityResult =
-  | { readonly kind: "resolved"; readonly plan: RustBorrowStabilityPlan }
+export type AnalyzeRustBorrowEffectsResult =
+  | { readonly kind: "resolved"; readonly effects: RustBorrowEffects }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
 
 const maximumBorrowStabilityNodes = 4_194_304;
 
-export function analyzeRustBorrowStability(
-  input: RustBorrowStabilityInput,
+export function analyzeRustBorrowEffects(
+  input: RustBorrowEffectsInput,
   maximumNodes = maximumBorrowStabilityNodes,
-): AnalyzeRustBorrowStabilityResult {
-  const rejected = (message: string): AnalyzeRustBorrowStabilityResult => ({
+): AnalyzeRustBorrowEffectsResult {
+  const rejected = (message: string): AnalyzeRustBorrowEffectsResult => ({
     kind: "rejected", diagnostics: [{
       code: "RUST_BORROW_STABILITY_BUDGET_INVALID", category: "error", source: "tsonic-rust", message,
       evidence: ["target.capability=rust.backend.borrow-stability"],
@@ -65,30 +58,14 @@ export function analyzeRustBorrowStability(
   if (!Number.isSafeInteger(maximumNodes) || maximumNodes < 1 || maximumNodes > maximumBorrowStabilityNodes) {
     return rejected("Rust borrow stability requires a positive finite node budget within its analysis bound.");
   }
-  const pending: { readonly node: Node; readonly complete: boolean }[] = [];
-  const visited = new WeakSet<Node>();
-  const active = new WeakSet<Node>();
-  const pure = new WeakSet<Node>();
-  const writes = new WeakMap<Node, RustBorrowedFieldWrite>();
-  const nativeWrites = new WeakMap<Node, readonly Node[]>();
-  const stableBindings = new WeakSet<Node>();
+  const pure = new Set<Node>();
+  const writes = new Map<Node, RustBorrowedFieldWrite>();
+  const nativeWrites = new Map<Node, readonly Node[]>();
+  const stableBindings = new Set<Node>();
   const bindingDecisions = new WeakMap<Node, boolean>();
-  const directField = (node: Node): boolean => {
-    const field = ordinaryStoredField(node, input);
-    if (field === undefined || field.storage !== "project-object") return false;
-    const receiver = Node_Expression(input.ast, node);
-    return rustTargetTypeRefEquals(field.resultCarrier, input.records.runtimeCarrier.get(node)?.carrier) &&
-      receiver !== undefined && rustTargetTypeRefEquals(field.receiverCarrier, input.records.runtimeCarrier.get(receiver)?.carrier) &&
-      input.objectRepresentations.representationFor(input.projectTypes.definitionForCarrier(field.receiverCarrier))?.kind === "value" &&
-      (field.declaration === undefined || !input.objectRepresentations.receiverCaptures.isCaptured(field.declaration));
-  };
+  const directField = (node: Node): boolean => rustDirectBorrowField(node, input);
   let reservations = 0;
   let exhausted = false;
-  const reserve = (node: Node): void => {
-    if (exhausted) return;
-    if (++reservations > maximumNodes) { exhausted = true; return; }
-    pending.push({ node, complete: false });
-  };
   const reserveTargets = (count: number): boolean => {
     reservations += count;
     if (reservations > maximumNodes) exhausted = true;
@@ -114,68 +91,98 @@ export function analyzeRustBorrowStability(
     }
     if (stable) stableBindings.add(receiver);
   };
-  input.sourceFiles.forEach(reserve);
-  while (pending.length !== 0 && !exhausted) {
-    const entry = pending.pop()!;
-    if (entry.complete) {
-      active.delete(entry.node);
-      visited.add(entry.node);
-      selectStableBinding(entry.node);
-      if (rustBorrowPureCopyValue(entry.node, input.ast, input.records, child => pure.has(child))) pure.add(entry.node);
-      const selected = selectBorrowedWrite(entry.node, pure, input);
-      if (selected !== undefined) writes.set(entry.node, selected);
-      if (!pure.has(entry.node)) {
-        const targets = rustNativeWriteTargets(entry.node, input,
-          node => pure.has(node) ? rustNoNativeWrites : nativeWrites.get(node), directField, reserveTargets);
-        if (targets !== undefined) nativeWrites.set(entry.node, targets);
+  for (const node of input.nodes) {
+    if (["KindStringLiteral", "KindNoSubstitutionTemplateLiteral", "KindNumericLiteral", "KindBigIntLiteral",
+      "KindTrueKeyword", "KindFalseKeyword"].includes(input.ast.kindName(node))) stableBindings.add(node);
+    if (!(input.ast.is.IsVariableDeclaration(node) || input.ast.is.IsParameterDeclaration(node) || input.ast.is.IsBindingElement(node)) ||
+      sourceEnclosingCallable(node, input.ast) === undefined) continue;
+    const summary = input.navigation.declarationUseSummary(node);
+    if (summary.captured || summary.exported || summary.bindingWritten || summary.memberWritten || summary.hasUnclassifiedValueUse) continue;
+    let stable = true;
+    for (const use of summary.uses) {
+      if (!reserveTargets(1)) break;
+      if (use.kind === "source-linkage" || use.kind === "type-only") continue;
+      let argument = use.reference;
+      for (let parent = input.ast.parent(argument); parent !== undefined &&
+        sourceTransparentExpressionOperand(input.ast, parent) === argument; parent = input.ast.parent(argument)) argument = parent;
+      if (!["comparison", "condition", "return", "storage"].includes(use.role) &&
+        !(use.role === "argument" && rustCallArgumentMode(argument, input.ast, input.records) === "ref")) {
+        stable = false;
+        break;
       }
-    } else {
-      if (active.has(entry.node)) return rejected("Rust borrow stability encountered a cyclic source-node graph.");
-      if (visited.has(entry.node)) continue;
-      active.add(entry.node);
-      pending.push({ node: entry.node, complete: true });
-      input.ast.forEachChild(entry.node, child => { if (child !== undefined && !exhausted) reserve(child); });
+    }
+    if (stable) for (const use of summary.uses) if (input.ast.is.IsIdentifier(use.reference)) stableBindings.add(use.reference);
+  }
+  const positions = new Map(input.nodes.map((node, index) => [node, index]));
+  if (positions.size !== input.nodes.length) return rejected("Rust borrow effects require unique checked source-node identities.");
+  for (let index = input.nodes.length - 1; index >= 0 && !exhausted; index -= 1) {
+    const node = input.nodes[index]!;
+    if (!reserveTargets(1)) break;
+    let invalid = false;
+    input.ast.forEachChild(node, child => {
+      if (child !== undefined && (positions.get(child) === undefined || positions.get(child)! <= index)) invalid = true;
+    });
+    if (invalid) return rejected("Rust borrow effects require the canonical acyclic checked-node inventory.");
+    selectStableBinding(node);
+    const operand = sourceTransparentExpressionOperand(input.ast, node);
+    if (operand !== undefined && stableBindings.has(operand)) stableBindings.add(node);
+    if (rustBorrowPureCopyValue(node, input.ast, input.records, child => pure.has(child))) pure.add(node);
+    const selected = selectBorrowedWrite(node, pure, input);
+    if (selected !== undefined) writes.set(node, selected);
+    if (!pure.has(node)) {
+      const targets = rustNativeWriteTargets(node, input,
+        child => pure.has(child) ? rustNoNativeWrites : nativeWrites.get(child), directField, reserveTargets);
+      if (targets !== undefined) nativeWrites.set(node, targets);
     }
   }
   if (exhausted) return rejected("Rust borrow stability exceeds its finite source-node accounting bound.");
-  return { kind: "resolved", plan: Object.freeze({
-    isPureCopyValue: (node: Node) => pure.has(node),
-    borrowedWriteFor: (node: Node) => writes.get(node),
-    canBorrowLocalBinding: (reference: Node) => stableBindings.has(reference),
-    canBorrowAcross(source: Node, later: Node): boolean {
-      const visitedValues = new Set<Node>();
-      for (let depth = 0; depth < 256 && !visitedValues.has(source); depth += 1) {
-        visitedValues.add(source);
-        const inner = Node_Expression(input.ast, source);
-        if (inner !== undefined && rustSourceValueWrapperContains(source, inner, input.ast)) {
-          source = inner;
-          continue;
-        }
-        const sequence = input.records.targetOperation.get(source);
-        if (sequence?.kind !== "sequence") break;
-        const tail = BinaryExpression_Right(input.ast, source);
-        if (tail === undefined || !rustBorrowValueIsUnprojected(source, input.records) ||
-          !rustTargetTypeRefEquals(sequence.resultCarrier, sequence.rightCarrier) ||
-          !rustTargetTypeRefEquals(sequence.rightCarrier, input.records.runtimeCarrier.get(tail)?.carrier)) return false;
-        source = tail;
-      }
-      const root = rustNativeStorageRoot(source, input);
-      const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
-      const binding = path?.length === 0 && input.records.sourceBinding.get(source)?.scope === "lexical";
-      const field = input.records.targetOperation.get(source);
-      if (!binding && (!directField(source) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
-      const targets = pure.has(later) ? rustNoNativeWrites : nativeWrites.get(later);
-      return root !== undefined && path !== undefined && targets !== undefined && targets.every(target => {
-        const targetRoot = rustNativeStorageRoot(target, input);
-        if (binding && input.ast.is.IsIdentifier(target) && targetRoot !== undefined) return targetRoot !== root;
-        const targetPath = targetRoot === root ? rustNativeStorageProjections(target, root, input) : undefined;
-        return targetPath !== undefined && rustNativeStoragePathsDisjoint(path, targetPath);
-      });
-    },
-  }) };
+  return { kind: "resolved", effects: Object.freeze({ pureValues: pure, fieldWrites: writes, stableBindings, nativeWrites }) };
 }
 
-function ordinaryStoredField(node: Node, input: RustBorrowStabilityInput): StoredField | undefined {
+export function selectRustBorrowRelationship(source: Node, later: Node,
+  input: RustBorrowEffectsInput, effects: RustBorrowEffects): boolean {
+  const visitedValues = new Set<Node>();
+  for (let depth = 0; depth < 256 && !visitedValues.has(source); depth += 1) {
+    visitedValues.add(source);
+    const inner = Node_Expression(input.ast, source);
+    if (inner !== undefined && rustSourceValueWrapperContains(source, inner, input.ast)) {
+      source = inner;
+      continue;
+    }
+    const sequence = input.records.targetOperation.get(source);
+    if (sequence?.kind !== "sequence") break;
+    const tail = BinaryExpression_Right(input.ast, source);
+    if (tail === undefined || !rustBorrowValueIsUnprojected(source, input.records) ||
+      !rustTargetTypeRefEquals(sequence.resultCarrier, sequence.rightCarrier) ||
+      !rustTargetTypeRefEquals(sequence.rightCarrier, input.records.runtimeCarrier.get(tail)?.carrier)) return false;
+    source = tail;
+  }
+  const root = rustNativeStorageRoot(source, input);
+  const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
+  const binding = path?.length === 0 && input.records.sourceBinding.get(source)?.scope === "lexical";
+  const field = input.records.targetOperation.get(source);
+  if (!binding && (!rustDirectBorrowField(source, input) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
+  const targets = effects.pureValues.has(later) ? rustNoNativeWrites : effects.nativeWrites.get(later);
+  return root !== undefined && path !== undefined && targets !== undefined && targets.every(target => {
+    const targetRoot = rustNativeStorageRoot(target, input);
+    if (binding && input.ast.is.IsIdentifier(target) && targetRoot !== undefined) return targetRoot !== root;
+    const targetPath = targetRoot === root ? rustNativeStorageProjections(target, root, input) : undefined;
+    return targetPath !== undefined && rustNativeStoragePathsDisjoint(path, targetPath);
+  });
+}
+
+function rustDirectBorrowField(node: Node, input: RustBorrowEffectsInput): boolean {
+  const field = ordinaryStoredField(node, input);
+  if (field === undefined || field.storage !== "project-object") return false;
+  const receiver = Node_Expression(input.ast, node);
+  return rustTargetTypeRefEquals(field.resultCarrier, input.records.runtimeCarrier.get(node)?.carrier) &&
+    receiver !== undefined && rustTargetTypeRefEquals(field.receiverCarrier, input.records.runtimeCarrier.get(receiver)?.carrier) &&
+    input.objectRepresentations.representationFor(input.projectTypes.definitionForCarrier(field.receiverCarrier))?.kind === "value" &&
+    (field.declaration === undefined || !input.objectRepresentations.receiverCaptures.isCaptured(field.declaration));
+
+}
+
+function ordinaryStoredField(node: Node, input: RustBorrowEffectsInput): StoredField | undefined {
   const selected = input.records.targetOperation.get(node);
   return input.ast.is.IsPropertyAccessExpression(node) && rustBorrowValueIsUnprojected(node, input.records) &&
     selected?.kind === "source-field" && selected.valueSemantics.kind === "stored" && selected.dispatch === undefined &&
@@ -185,7 +192,7 @@ function ordinaryStoredField(node: Node, input: RustBorrowStabilityInput): Store
 }
 
 function selectBorrowedWrite(
-  node: Node, pure: WeakSet<Node>, input: RustBorrowStabilityInput,
+  node: Node, pure: ReadonlySet<Node>, input: RustBorrowEffectsInput,
 ): RustBorrowedFieldWrite | undefined {
   const { ast, records, projectTypes, objectRepresentations } = input;
   const assignment = records.targetOperation.get(node);

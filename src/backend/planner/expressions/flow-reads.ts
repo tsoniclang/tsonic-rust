@@ -1,3 +1,4 @@
+import { requireRustReadOwnership } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -19,7 +20,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustProjectProjection } from "../objects/project-downcasts.js";
 import { planRustClosedNativeProjection } from "../objects/closed-native-values.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
@@ -64,7 +64,7 @@ export function planRustFlowReadProjection(
     return override.expression;
   }
   return planRustValueProjection(node, expression, fact, context,
-    borrowedResult ? "borrow" : context.input.program.valueLifetimes.canMove(node) ? "move" : "clone");
+    borrowedResult ? "borrow" : (requireRustReadOwnership(node, context).value.kind === "move") ? "move" : "clone");
 }
 
 export function planRustValueProjection(
@@ -83,7 +83,7 @@ export function planRustValueProjection(
   const ownsValue = ownership === "move";
   const borrowedResult = ownership === "borrow";
   if (fact.kind === "builtin-error") {
-    const exactSource = ownsValue ? expression : planRustNonConsumingValue(node, expression, context);
+    const exactSource = expression;
     if (isRustClosedValueCarrier(fact.sourceCarrier)) {
       const native: RustExpr = ownsValue ? { kind: "method-call", receiver: {
         kind: "method-call", receiver: exactSource, method: "into_error", args: [],

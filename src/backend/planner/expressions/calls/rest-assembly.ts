@@ -1,3 +1,4 @@
+import { requireRustReadOwnership } from "../typed-locations.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { rustVecRestAssembly } from "../../../../target-model/operations/rest-assembly.js";
@@ -5,7 +6,6 @@ import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { Node } from "@tsonic/tsts";
 import { createRustSharedReferenceArgument } from "../input-shaping.js";
-import { rustExpressionReadsStorage } from "../typed-locations.js";
 import { planExpression } from "../entry.js";
 import { isRustStringCarrier } from "../../../../target-model/types/index.js";
 
@@ -23,9 +23,9 @@ export function planRustBorrowedSingletonSlice(
 export function canBorrowRustSingletonSlice(
   node: Node, context: RustPlanContext, later: readonly Node[],
 ): boolean {
-  if (!rustExpressionReadsStorage(node, context) || context.expressionOverrides?.has(node) === true) return false;
-  if (!context.input.program.valueLifetimes.canBorrowStableValue(node) &&
-    later.some(value => !context.input.program.borrowStability.canBorrowAcross(node, value))) return false;
+  if (context.input.program.ownership.reads.get(node)?.readsStorage !== true || context.expressionOverrides?.has(node) === true) return false;
+  if (!requireRustReadOwnership(node, context).stablePlace &&
+    later.some(value => !requireRustReadOwnership(node, context).borrowedAcross.has(value))) return false;
   const declaration = context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
   const parameter = context.input.program.records.sourceParameterAbi.get(node) ??
     context.input.program.records.sourceParameterAbi.get(declaration);

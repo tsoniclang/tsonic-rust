@@ -51,7 +51,6 @@ import {
 import {
   planRustIdentifierValue,
   planRustValueRead,
-  planRustNonConsumingValue,
 } from "./typed-locations.js";
 
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -358,7 +357,7 @@ export function planExpressionInner(
         const carrier = context.input.program.records.runtimeCarrier.get(operandNode)?.carrier;
         const planned = operand === undefined ? undefined
           : planRustRuntimeCategory(createRustSharedReferenceArgument(context,
-            planRustNonConsumingValue(operandNode, operand, context), operandNode), fact.result, context, true);
+            operand, operandNode), fact.result, context, true);
         if (carrier === undefined || !rustTargetTypeRefEquals(carrier, fact.result.sourceCarrier) || planned === undefined) {
           context.diagnostics.push(missingFactDiagnostic(
             diagnosticInput(context, node), "rust.backend.runtime-union-typeof",
@@ -373,9 +372,7 @@ export function planExpressionInner(
         ? undefined
         : {
             kind: "evaluate-then",
-            effect: discarded.discard === "value"
-              ? planRustNonConsumingValue(operandNode, discarded.expression, context)
-              : discarded.expression,
+            effect: discarded.expression,
             discard: discarded.discard,
             value: { kind: "string-literal", value: fact.result },
           };

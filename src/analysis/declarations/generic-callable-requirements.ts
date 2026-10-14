@@ -23,7 +23,7 @@ import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/ca
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
-import type { RustValueLifetimePlan } from "../program/value-lifetimes.js";
+import type { RustOwnershipFlow } from "../ownership/flow.js";
 import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
@@ -62,7 +62,7 @@ import { rustStructuralViewRequirementUses } from "./structural-view-requirement
 import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
 
 interface ClassifyCallableInput {
-  readonly valueLifetimes: RustValueLifetimePlan;
+  readonly ownershipFlow: RustOwnershipFlow;
   readonly isStoredValue: (node: Node) => boolean;
   readonly readsValue: (node: Node) => boolean;
   readonly typeDefinitions: RustTypeDefinitions;
@@ -343,7 +343,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     if (carrier !== undefined && ast.is.IsIdentifier(node) &&
-      !input.valueLifetimes.canMove(node) &&
+      !input.ownershipFlow.movingReads.has(node) &&
       (isRustReturnedValue(node, declaration, ast) || input.isStoredValue(node))) {
       const error = addUse(node, carrier, ["clone"]);
       if (error !== undefined) return error;
@@ -386,7 +386,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     const indexedField = records.targetOperation.get(node);
     if (indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored" &&
-      input.readsValue(node) && !input.valueLifetimes.canMove(node) &&
+      input.readsValue(node) && !input.ownershipFlow.movingReads.has(node) &&
       !isRustBorrowedValueRead(node, ast, records)) {
       const fieldError = addUse(node, indexedField.resultCarrier, ["clone"]);
       if (fieldError !== undefined) return fieldError;
@@ -523,7 +523,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     const projection = records.flowReadProjection.get(node);
     if ((projection?.kind === "option-value" || projection?.kind === "source-union") &&
-      !input.valueLifetimes.canMove(node)) {
+      !input.ownershipFlow.movingReads.has(node)) {
       const error = addUse(node, projection.selectedCarrier, ["clone"]);
       if (error !== undefined) return error;
     }
@@ -550,7 +550,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
           : ast.is.IsElementAccessExpression(node) && argument.role === "index" && argument.sourceIndex === 0
             ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
-          input.valueLifetimes.canMove(expression)) continue;
+          input.ownershipFlow.movingReads.has(expression)) continue;
         const carrier = records.runtimeCarrier.get(expression)?.carrier;
         if (carrier === undefined) return "A provider argument lost its exact source storage carrier.";
         if (isRustCopyCarrier(carrier)) continue;
@@ -588,7 +588,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
       for (const capture of captures?.captures ?? []) {
         const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
-          input.valueLifetimes.canMoveCapture(sourceValue.sourceDeclaration, capture.declaration);
+          input.ownershipFlow.captureTransfers.get(sourceValue.sourceDeclaration)?.has(capture.declaration) === true;
         const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), ...storage], true);
         if (error !== undefined) return error;
       }
@@ -616,14 +616,14 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       for (const capture of captures.captures) {
         const error = addUse(capture.reference, capture.carrier,
           capture.storage === "cell" || capture.storage === "borrow-cell" ||
-            input.valueLifetimes.canMoveCapture(node, capture.declaration)
+            input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true
             ? required.filter(requirement => requirement !== "clone") : required, true);
         if (error !== undefined) return error;
       }
     }
     if (ast.kindName(node) === "KindClassDeclaration" || ast.kindName(node) === "KindClassExpression") {
       for (const capture of records.closureCapture.get(node)?.captures ?? []) {
-        if (input.valueLifetimes.canMoveCapture(node, capture.declaration)) continue;
+        if (input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true) continue;
         const error = addUse(node, capture.carrier, ["clone"]);
         if (error !== undefined) return error;
       }
@@ -646,7 +646,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
           if (argument.sourceForm !== "value") continue;
           const expression = ast.arguments(node)[argument.sourceArgumentIndex];
           if (expression === undefined || !ast.is.IsIdentifier(expression) ||
-            input.valueLifetimes.canMove(expression)) continue;
+            input.ownershipFlow.movingReads.has(expression)) continue;
           const argumentCarrier = records.runtimeCarrier.get(expression)?.carrier;
           if (argumentCarrier === undefined || isRustCopyCarrier(argumentCarrier)) continue;
           const error = addUse(expression, argumentCarrier, ["clone"]);

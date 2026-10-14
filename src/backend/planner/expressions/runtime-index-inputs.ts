@@ -1,3 +1,4 @@
+import { requireRustReadOwnership } from "./typed-locations.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
@@ -20,7 +21,7 @@ export function planRustRuntimeIndexInputs(
   const borrowReceiver = abi.targetReceiver.kind === "input" &&
     abi.targetReceiver.input.mode === "ref" &&
     abi.targetReceiver.input.conversion.kind === "identity" &&
-    context.input.program.borrowStability.canBorrowLocalBinding(receiver);
+    requireRustReadOwnership(receiver, context).stablePlace;
   const overrides = new Map(context.expressionOverrides ?? []);
   const bindings: { name: string; value: RustExpr }[] = [];
   for (const [subject, suffix] of [[receiver, "receiver"], [index, "index"]] as const) {

@@ -96,11 +96,11 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
   const borrowed = new Map();
   const visit = node => {
     if (source.ast.is.IsIdentifier(node) && source.ast.text(node) === "snapshot" &&
-      source.ast.is.IsCallExpression(source.ast.parent(node))) snapshots.push(program.valueLifetimes.canMove(node));
+      source.ast.is.IsCallExpression(source.ast.parent(node))) snapshots.push((program.ownership.reads.get(node)?.value.kind === "move"));
     if (source.ast.is.IsIdentifier(node) && source.ast.text(node) === "value" &&
-      source.ast.is.IsCallExpression(source.ast.parent(node))) retained.push(program.valueLifetimes.canMove(node));
+      source.ast.is.IsCallExpression(source.ast.parent(node))) retained.push((program.ownership.reads.get(node)?.value.kind === "move"));
     if (source.ast.is.IsIdentifier(node) && ["returnedValue", "breakValue"].includes(source.ast.text(node)) &&
-      source.ast.is.IsCallExpression(source.ast.parent(node))) terminal.push(program.valueLifetimes.canMove(node));
+      source.ast.is.IsCallExpression(source.ast.parent(node))) terminal.push((program.ownership.reads.get(node)?.value.kind === "move"));
     const parent = source.ast.parent(node);
     if (source.ast.is.IsIdentifier(node) && source.ast.is.IsPropertyAccessExpression(parent) &&
       source.ast.as.AsPropertyAccessExpression(parent)?.Expression === node && source.ast.text(source.ast.name(parent)) === "push") {
@@ -108,7 +108,7 @@ test("last-use facts move loop-local strings on terminal branches but retain rep
       while (owner !== undefined && !source.ast.is.IsFunctionDeclaration(owner)) owner = source.ast.parent(owner);
       const name = owner === undefined ? "" : source.ast.text(source.ast.name(owner));
       const decisions = borrowed.get(name) ?? [];
-      decisions.push(program.valueLifetimes.canBorrowStableValue(node));
+      decisions.push(program.ownership.reads.get(node)?.stablePlace === true);
       borrowed.set(name, decisions);
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
@@ -140,7 +140,7 @@ export function run(values: string[]): void {
       const name = source.ast.text(node);
       if (["fresh", "repeated", "outer", "inner", "scoped", "captured"].includes(name)) {
         const uses = decisions.get(name) ?? [];
-        uses.push(program.valueLifetimes.canMove(node));
+        uses.push((program.ownership.reads.get(node)?.value.kind === "move"));
         decisions.set(name, uses);
       }
     }

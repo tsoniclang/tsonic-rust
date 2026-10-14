@@ -32,7 +32,6 @@ import { planRustNativeIntegerIdentity } from "./native-integer-identities.js";
 import { planExpression, planExpressionBeforeValueProjections } from "./entry.js";
 import { planRustDiscardedValue } from "./discarded-values.js";
 import type { RustExpressionAccess, RustExpressionResultUse } from "./entry.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustScopedStringComparison } from "./scoped-comparisons.js";
 import { planNullishAssignment } from "./nullish-assignment.js";
 import { planCompoundAssignmentExpression } from "./compound-assignment.js";
@@ -75,7 +74,7 @@ export function planSelectedRustProjectTypeTest(
   const plannedLeft = leftNode === undefined ? undefined : planExpression(leftNode, context);
   const left = leftNode === undefined || plannedLeft === undefined
     ? undefined
-    : planRustNonConsumingValue(leftNode, plannedLeft, context);
+    : plannedLeft;
   if (leftNode === undefined || left === undefined ||
     !rustProjectTypeTestMatches(fact, context.input.program.projectTypes) ||
     !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(leftNode, context), fact.sourceCarrier) ||
@@ -224,7 +223,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       ));
       return undefined;
     }
-    return planRustProgramErrorTypeTest(node, planRustNonConsumingValue(leftNode, left, context), fact, context);
+    return planRustProgramErrorTypeTest(node, left, fact, context);
   }
   if (fact?.kind === "project-type-test") {
     return planSelectedRustProjectTypeTest(node, context)?.test;
@@ -322,14 +321,14 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       return fact.negated ? { kind: "unary", operator: "!", operand: matched } : matched;
     };
     if (isExplicitRustNullishValue(nullish)) {
-      return check(rustErrorFieldOptionalView(optionNode, planRustNonConsumingValue(optionNode, option, context), context));
+      return check(rustErrorFieldOptionalView(optionNode, option, context));
     }
     if (fact.optionOperand === "right") {
       return {
         kind: "evaluate-then",
         effect: nullish,
         discard: isRustUnitCarrier(expressionCarrier(nullishNode, context)) ? "unit" : "value",
-        value: check(planRustNonConsumingValue(optionNode, option, context)),
+        value: check(option),
       };
     }
     const optionName = allocateRustSyntheticName(
@@ -366,7 +365,7 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       return undefined;
     }
     const evaluate = (operandNode: Node, operand: RustExpr, value: RustExpr): RustExpr => {
-      const effect = planRustNonConsumingValue(operandNode, operand, context);
+      const effect = operand;
       if (effect.kind === "tuple-literal" && effect.elements.length === 0 || effect.kind === "path") return value;
       return { kind: "evaluate-then", effect,
         discard: isRustUnitCarrier(effectivePlannedExpressionCarrier(operandNode, context)) ? "unit" : "value", value };
@@ -399,11 +398,11 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
   }
   if (fact.kind === "string-concat") {
     const parts: RustExpr[] = [];
-    for (const [sideNode, side] of [[leftNode, left], [rightNode, right]] as const) {
+    for (const side of [left, right]) {
       if (side.kind === "string-concat") {
         parts.push(...side.parts);
       } else {
-        parts.push(planRustNonConsumingValue(sideNode, side, context));
+        parts.push(side);
       }
     }
     return rustStringConcat(parts);
@@ -438,12 +437,8 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
         },
       };
     }
-    const comparisonLeft = comparison && leftNode !== undefined
-      ? planRustNonConsumingValue(leftNode, convertedLeft, context)
-      : convertedLeft;
-    const comparisonRight = comparison && rightNode !== undefined
-      ? planRustNonConsumingValue(rightNode, convertedRight, context)
-      : convertedRight;
+    const comparisonLeft = convertedLeft;
+    const comparisonRight = convertedRight;
     const borrowLiteral = (side: RustExpr, source: Node | undefined, later: Node | undefined): RustExpr => {
       const borrowed = comparison ? rustErrorFieldComparisonView(source, side, later, context) : side;
       return comparison && borrowed.kind === "string-literal"
@@ -550,10 +545,7 @@ export function planRustOperatorCallExpression(
     if (converted === undefined) {
       return undefined;
     }
-    const nonConsuming = mode === "value" || operandNode === undefined
-      ? converted
-      : planRustNonConsumingValue(operandNode, converted, context);
-    return applyRustArgumentMode(context, nonConsuming, mode, operandNode);
+    return applyRustArgumentMode(context, converted, mode, operandNode);
   });
   if (operands.some((operand) => operand === undefined)) {
     return undefined;

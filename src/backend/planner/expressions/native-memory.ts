@@ -4,7 +4,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 
 import type { RustNativeMemoryLayout } from "../../../target-model/operations/native-memory.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -29,7 +28,7 @@ export function tryPlanRustRawLocation(
   const value = planExpression(plan.expression, context);
   if (value === undefined) return { handled: true };
   if (value.kind === "bottom") return { handled: true, expression: value };
-  const borrowed = planRustNonConsumingValue(plan.expression, value, context);
+  const borrowed = value;
   const argument: RustExpr = rustOptionElementCarrier(plan.inputCarrier) === undefined
     ? { kind: "call", path: "Some", args: [{ kind: "reference", expr: borrowed }] }
     : { kind: "method-call", receiver: borrowed, method: "as_ref", args: [] };

@@ -11,7 +11,7 @@ import { planRustSharedReceiver } from "./typed-locations.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import type { RustValueFieldLocation } from "../objects/value-fields.js";
 
-import { rustLocationStorageForReference, planRustNonConsumingValue } from "./typed-locations.js";
+import { rustLocationStorageForReference } from "./typed-locations.js";
 
 export type RustIndexedFieldOperation = Extract<RustTargetOperationFact, { readonly kind: "source-indexed-field" }>;
 
@@ -24,7 +24,7 @@ export function planRustIndexedFieldLocation(
   const keyNode = ElementAccessExpression_ArgumentExpression(ast, node);
   const plannedReceiver = receiverNode === undefined ? undefined : planExpression(receiverNode, context);
   const direct = receiverNode === undefined || plannedReceiver === undefined ? undefined
-    : planRustNonConsumingValue(receiverNode, plannedReceiver, context);
+    : plannedReceiver;
   const binding = receiverNode === undefined ? undefined : context.input.program.records.sourceBinding.get(receiverNode);
   const stable = (direct?.kind === "path" || direct?.kind === "reference") && binding !== undefined &&
     context.input.program.records.mutatedBinding.get(binding.sourceDeclaration) === undefined &&
