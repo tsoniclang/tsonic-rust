@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
-// Paired with the C# owner test test/analysis/operations/typeof-comparisons.test.mjs: the same sources.
-// Rust recognizes typeof guards through the shared selectSourceNativeValueGuard, so every wrapped form
-// must produce exactly the result of its unwrapped form. Rust keeps source operand order, so a reversed
-// form is paired with the reversed unwrapped form.
 const forms = [
   ["reversed parenthesized", `("string") === (typeof x)`, `"string" === typeof x`],
   ["parenthesized typeof", `(typeof x) === "string"`, `typeof x === "string"`],
