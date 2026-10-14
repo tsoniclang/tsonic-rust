@@ -23,7 +23,8 @@ import { readRustSourceKeepAlive } from "../../../../policy/operations/pointers/
 import { acceptProjectSourceCall, mapSelectedJsSpecialCall } from "../object-shapes.js";
 import { selectRustArrayTypeTest } from "../type-tests.js";
 import { isRustArrayTypeTestMember } from "../../../../policy/operations/source-profiles/js/type-tests.js";
-import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../properties.js";
+import { checkedPropertySelectionInput } from "../properties.js";
+import { selectRustCheckedPropertyAccess } from "../../selected-members.js";
 import { acceptRustPolicy } from "../../../../policy/operations/contracts.js";
 import { acceptSelectedCall, checkedCallIsConstruction, instantiateSelectedCallTemplate, selectedCallReceiverValueCarrier, selectedProjectConstructor, selectRustOptionalCallResult } from "./instantiation.js";
 import { selectedImplicitSuperConstructorClass } from "./implicit-super.js";
@@ -453,8 +454,6 @@ function acceptRuntimeCallableCall(
       context,
       options,
     );
-    context.records.targetOperations.checked(callee, selection);
-    context.records.selectedOperations.checked(callee, selection);
     if (selection.kind === "reject") return selection;
   }
   const optionalInvocation = context.ast.as.AsCallExpression(request.source.call)?.QuestionDotToken !== undefined;

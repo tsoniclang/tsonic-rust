@@ -187,7 +187,7 @@ function selectExternalProjectFieldAccess(
   });
 }
 
-export function selectRustCheckedPropertyAccess(
+export function resolveRustCheckedPropertyAccess(
   request: RustCheckedPropertySelectionInput,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,

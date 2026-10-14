@@ -49,7 +49,7 @@ function unionMethodsEqual(left: RustSelectedTargetSignature, right: RustSelecte
     });
 }
 
-function sourceArgumentBindingsEqual(
+export function sourceArgumentBindingsEqual(
   left: RustSelectedTargetSignature["sourceArgumentBindings"],
   right: RustSelectedTargetSignature["sourceArgumentBindings"],
 ): boolean {
@@ -68,7 +68,7 @@ function sourceArgumentBindingsEqual(
   });
 }
 
-function sourceSelectedSignatureParametersEqual(
+export function sourceSelectedSignatureParametersEqual(
   left: RustSelectedTargetSignature["sourceSelectedSignatureParameters"],
   right: RustSelectedTargetSignature["sourceSelectedSignatureParameters"],
 ): boolean {
@@ -87,7 +87,7 @@ function sourceSelectedSignatureParametersEqual(
   });
 }
 
-function sourceSelectedMethodTypeArgumentsEqual(
+export function sourceSelectedMethodTypeArgumentsEqual(
   left: RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"],
   right: RustSelectedTargetSignature["sourceSelectedMethodTypeArguments"],
 ): boolean {

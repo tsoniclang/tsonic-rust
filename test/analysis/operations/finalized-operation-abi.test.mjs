@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { createInputFactory, finalizeSourceArguments } from "../../../dist/analysis/operations/finalized-operation/inputs.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import {
   closedMetadataKey,
@@ -31,6 +32,30 @@ const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
+
+test("native target-input fanout has one source row and rejects mixed source modes", () => {
+  const factory = createInputFactory(undefined, [int32]);
+  const input = factory.argument(0, "value");
+  assert.equal(input !== undefined, true);
+  const containers = [
+    { source: { kind: "argument-slice", sourceIndexes: [0] }, elements: [input], elementCarrier: int32, mode: "ref", parameterCarrier: int32 },
+    { source: { kind: "argument-array", sourceIndexes: [0] }, elements: [input], elementCarrier: int32, mode: "value" },
+    { source: { kind: "argument-tagged-array", sourceIndexes: [0] }, elements: [{ input, constructorPath: "Value::Int32" }], elementCarrier: int32, mode: "value" },
+  ];
+  for (const container of containers) {
+    const mapping = { targetReceiver: { kind: "none" }, targetArguments: [input, container] };
+    const rows = finalizeSourceArguments("method", [int32], mapping, undefined);
+    assert.equal(rows?.length, 1, container.source.kind);
+    assert.equal(rows[0].sourceIndex, 0);
+    assert.equal(rows[0].mode, "value");
+    assert.equal(rows[0].carrier === int32, true);
+    assert.equal(finalizeSourceArguments("method", [int32], mapping, [0]) === undefined, true,
+      "a runtime source cannot simultaneously be evaluation-only");
+    const mixed = { ...mapping, targetReceiver: { kind: "input", input: factory.argument(0, "ref") } };
+    assert.equal(finalizeSourceArguments("method", [int32], mixed, undefined) === undefined, true,
+      "all target uses of a source must agree on native passing mode");
+  }
+});
 
 test("identical closed-value inputs retain native ownership without redundant conversions", () => {
   for (const form of ["call-value-array", "call-value-slice"]) {

@@ -12,7 +12,8 @@ import { rustSourceOptionalElementCarrier } from "../../target-model/types/carri
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
-import { checkedPropertySelectionInput, selectRustCheckedPropertyAccess } from "../operations/provider/properties.js";
+import { checkedPropertySelectionInput } from "../operations/provider/properties.js";
+import { selectRustCheckedPropertyAccess } from "../operations/selected-members.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
@@ -132,8 +133,6 @@ export function selectRustInferredReturn(
             checkedPropertySelectionInput(rustOperationContext(probe, expression), expression, source),
             rustOperationContext(probe, expression), probe.operationOptions,
           );
-          records.targetOperations.checked(expression, selection);
-          records.selectedOperations.checked(expression, selection);
           return selection.kind === "accept" ? selection.value.resultType : undefined;
         }
         const operands = kind === "KindBinaryExpression"

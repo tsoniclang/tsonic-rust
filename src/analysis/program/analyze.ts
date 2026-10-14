@@ -167,7 +167,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourceTypes,
     sourceCallableAbi,
     operationOptions,
-    operationAttempts: new WeakSet<object>(),
+    operationAttempts: new WeakMap(),
     inferredReturns: new Map(),
     resolvingReturns: new Set(),
     resolvingCallableSignatures: new Set(),

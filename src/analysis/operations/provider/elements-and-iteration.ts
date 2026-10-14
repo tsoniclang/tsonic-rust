@@ -48,12 +48,12 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { selectedRustForInKeys } from "./for-in-keys.js";
-import { selectRustCheckedPropertyAccess } from "./properties.js";
+import { resolveRustCheckedPropertyAccess } from "./properties.js";
 import { resolveRustIndexedField } from "../../../policy/types/resolution/indexed-fields.js";
 import { selectRustRecordElement } from "./records.js";
 import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
 
-export function selectRustCheckedElementAccess(
+export function resolveRustCheckedElementAccess(
   request: RustCheckedElementSelectionInput,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
@@ -101,7 +101,7 @@ export function selectRustCheckedElementAccess(
       const matches = declarations?.kind === "available" ? declarations.members.filter(pair =>
         pair.kind === "present" && pair.source.property.symbol === request.sourceSelectedSymbol) : [];
       const selectedMember = matches.length === 1 && matches[0]?.kind === "present" ? matches[0].source : undefined;
-      const result = selectRustCheckedPropertyAccess({ ...request,
+      const result = resolveRustCheckedPropertyAccess({ ...request,
         ...(selectedMember?.getters.length === 1 ? { sourceSelectedReadDeclaration: selectedMember.getters[0]! } : {}),
         ...(selectedMember?.setters.length === 1 ? { sourceSelectedWriteDeclaration: selectedMember.setters[0]! } : {}),
       }, context, options);

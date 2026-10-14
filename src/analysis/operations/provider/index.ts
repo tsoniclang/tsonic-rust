@@ -8,10 +8,9 @@ export {
 export { selectRustCheckedValue } from "./values.js";
 export {
   selectRustCheckedDelete,
-  selectRustCheckedPropertyAccess,
 } from "./properties.js";
 export {
-  selectRustCheckedElementAccess,
   selectRustCheckedIteration,
 } from "./elements-and-iteration.js";
+export { selectRustCheckedElementAccess, selectRustCheckedPropertyAccess } from "../selected-members.js";
 export { selectRustCheckedConversion } from "./conversions.js";

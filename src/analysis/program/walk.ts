@@ -48,6 +48,7 @@ import type { RustCaptureStorage } from "../callables/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import type { RustOperationAttempt } from "./operation-attempts.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -62,7 +63,7 @@ export interface RustFactWalk {
   readonly sourceTypes: RustSourceTypeRegistry;
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly operationOptions: RustOperationsProviderOptions;
-  readonly operationAttempts: WeakSet<object>;
+  readonly operationAttempts: WeakMap<Node, RustOperationAttempt>;
   readonly inferredReturns: Map<Node, TargetTypeRef | undefined>;
   readonly resolvingReturns: Set<Node>;
   readonly resolvingCallableSignatures: Set<Node>;
@@ -142,6 +143,7 @@ export function rustOperationContext(
   return {
     ...rustScopedContext(walk, node),
     extensionId: rustTargetSemanticsExtensionId,
+    operationAttempts: walk.operationAttempts,
   };
 }
 
@@ -152,9 +154,7 @@ export function recordPolicySelection<T extends { readonly operation?: RustSelec
   selection: import("../../policy/operations/contracts.js").RustPolicySelection<T>,
 ): void {
   if (selection.kind === "reject") {
-    const diagnostic = rustPolicyTargetDiagnostic(selection.diagnostic);
-    if (diagnostic.category === "error") recordTerminalExpressionFailure(walk, diagnostic.sourceNode);
-    walk.context.diagnostics.push(diagnostic);
+    recordPolicyRejection(walk, selection);
     return;
   }
   const fact = selection.value.targetFact;
@@ -179,15 +179,24 @@ export function recordPolicySelection<T extends { readonly operation?: RustSelec
   }
 }
 
+function recordPolicyRejection(walk: RustFactWalk,
+  selection: import("../../policy/operations/contracts.js").RustPolicySelection<unknown>): void {
+  if (selection.kind !== "reject") return;
+  const diagnostic = rustPolicyTargetDiagnostic(selection.diagnostic);
+  if (diagnostic.category === "error") recordTerminalExpressionFailure(walk, diagnostic.sourceNode);
+  walk.context.diagnostics.push(diagnostic);
+}
+
 export function selectExpressionOperation(
   walk: RustFactWalk,
   expression: Node,
   sourceFile: SourceFile,
 ): void {
+  walk.context.records.assertOpen();
   if (walk.operationAttempts.has(expression)) {
     return;
   }
-  walk.operationAttempts.add(expression);
+  walk.operationAttempts.set(expression, { kind: "attempted" });
   const { ast } = walk.context;
   const semantics = walk.context.semantics(sourceFile);
   const context = rustOperationContext(walk, expression);
@@ -245,7 +254,7 @@ export function selectExpressionOperation(
     if (source === undefined || source.callCallee && !hasSelectedRuntimeCallableUse(walk, expression)) {
       return;
     }
-    recordPolicySelection(walk, expression, selectRustCheckedPropertyAccess(
+    recordPolicyRejection(walk, selectRustCheckedPropertyAccess(
       checkedPropertySelectionInput(context, expression, source),
       context,
       walk.operationOptions,
@@ -260,7 +269,7 @@ export function selectExpressionOperation(
     const receiverReference = walk.context.source.navigation.sourceReferenceFor(
       source.receiver.expression,
     );
-    recordPolicySelection(walk, expression, selectRustCheckedElementAccess({
+    recordPolicyRejection(walk, selectRustCheckedElementAccess({
       target: "rust",
       expression,
       receiver: source.receiver.expression,

@@ -37,7 +37,7 @@ test("selected callable equality includes complete result projection corresponde
   for (const projection of projections) {
     const signature = { member, sourceResultProjection: projection };
     assert.equal(rustSelectedTargetSignatureEquals(signature, copyMetadata(signature)), true, projection.kind);
-    const changes = [undefined, { ...projection, sourceCarrier: integer }, { ...projection, selectedCarrier: text },
+    const changes = [undefined, { ...projection, extra: true }, { ...projection, sourceCarrier: integer }, { ...projection, selectedCarrier: text },
       { ...projection, kind: projection.kind === "closed-native" ? "option-value" : "closed-native" }];
     if ("dispatchCarrier" in projection) changes.push({ ...projection, dispatchCarrier: integer });
     if ("variant" in projection) changes.push({ ...projection, variant: "Second" });

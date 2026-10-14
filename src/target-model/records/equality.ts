@@ -136,7 +136,7 @@ export function rustCapturedFieldStorageEquals(left: RustCapturedFieldStorageFac
     rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier);
 }
 export function rustFlowReadProjectionEquals(left: RustFlowReadProjectionFact, right: RustFlowReadProjectionFact): boolean {
-  return left.kind === right.kind &&
+  return flowReadProjectionShapeMatches(left) && flowReadProjectionShapeMatches(right) && left.kind === right.kind &&
     rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
     rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier) &&
     (left.kind !== "union-map" || right.kind === "union-map" &&
@@ -152,4 +152,25 @@ export function rustFlowReadProjectionEquals(left: RustFlowReadProjectionFact, r
         closedMetadataEquals(left.projection, right.projection))) &&
     (left.kind !== "program-error-variant" ||
       (right.kind === "program-error-variant" && left.variant === right.variant));
+}
+
+function flowReadProjectionShapeMatches(value: RustFlowReadProjectionFact): boolean {
+  const common = ["kind", "sourceCarrier", "selectedCarrier"];
+  switch (value.kind) {
+    case "union-map":
+      return hasExactObjectKeys(value, [...common, "dispatchCarrier", "arms"]);
+    case "source-union":
+    case "runtime-union":
+      return hasExactObjectKeys(value, [...common, "dispatchCarrier", "variant",
+        ...(Object.prototype.hasOwnProperty.call(value, "project") ? ["project"] : [])]);
+    case "project-downcast":
+      return hasExactObjectKeys(value, [...common, "dispatchCarrier", "projection"]);
+    case "program-error-variant":
+      return hasExactObjectKeys(value, [...common, "variant"]);
+    case "builtin-error":
+    case "option-value":
+    case "option-reference":
+    case "closed-native":
+      return hasExactObjectKeys(value, common);
+  }
 }
