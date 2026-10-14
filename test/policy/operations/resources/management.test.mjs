@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
-import { rustOperationContext } from "../../../dist/analysis/program/walk.js";
-import { selectRustResourceManagement } from "../../../dist/analysis/resources/management.js";
+import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.mjs";
+import { rustOperationContext } from "../../../../dist/analysis/program/walk.js";
+import { selectRustResourceManagement } from "../../../../dist/analysis/resources/management.js";
 
 test("resource alternatives retain complete native source-method dispatch correspondence", () => {
   const { context, walk } = analyzeRustOperations(`
