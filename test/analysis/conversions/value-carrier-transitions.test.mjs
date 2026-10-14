@@ -23,10 +23,10 @@ conversion: { get: () => undefined }});
   assert.equal(rustValueCarrierTransitionTarget(records, subject, value) === target, true);
   assert.equal(rustValueCarrierTransitionTarget(records, subject, target) === undefined, true);
   assert.equal(rustValueCarrierTransitionTarget(records, subject, { kind: "source-primitive", name: "int32" }) === undefined, true);
-  const unprojected = createRustRecordFixture({ ...records,
+  const unprojected = createRustRecordFixture({
     flowReadProjection: { get: () => undefined },
     contextualValueConversion: { get: () => conversion },
-  });
+  }, records);
   assert.equal(unprojected.flowReadProjection.get(subject) === undefined, true, "the adverse fixture removes its actual projection");
   assert.equal(rustValueCarrierTransitionTarget(unprojected, subject, value) === undefined, true);
 });

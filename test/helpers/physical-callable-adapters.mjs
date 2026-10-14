@@ -26,8 +26,8 @@ export function create(): (value: int32) => int64 {
   const conversion = selectRustCallableConversion(source, target, selectRustExactIntegerConversion, current.program.typeDefinitions);
   assert.equal(conversion !== undefined, true, "checked integer adaptation selected");
   const records = current.program.records;
-  const program = { ...current.program, records: createRustRecordFixture({...records,
-contextualValueConversion: { get: (node) => node === current.node ? { conversion } : records.contextualValueConversion.get(node) }}) };
+  const program = { ...current.program, records: createRustRecordFixture({
+contextualValueConversion: { get: (node) => node === current.node ? { conversion } : records.contextualValueConversion.get(node) }}, records) };
   current.context.input = { program, errorRegions: createRustErrorRegionCatalog(program) };
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "physical fallible producer plans");

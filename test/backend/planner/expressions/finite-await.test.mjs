@@ -110,9 +110,9 @@ export async function read(value: uint64 | Promise<uint64>): Promise<uint64> { r
           future: { ...alternative.selection.value.future, errorBoundary: "none" } } } }) } },
   ];
   for (const mutation of mutations) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 awaitValue: { get: (subject) => subject === node
-    ? mutation : program.records.awaitValue.get(subject) }});
+    ? mutation : program.records.awaitValue.get(subject) }}, program.records);
     const selected = contextFor(program, node, records);
     assert.equal(planRustAwaitExpression(node, selected, () => {
       assert.fail("an invalid await contract must not reach operand planning");

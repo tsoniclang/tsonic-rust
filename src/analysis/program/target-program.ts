@@ -53,6 +53,8 @@ import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../errors/regions.js";
+import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
@@ -312,7 +314,19 @@ export function analyzeRustTargetProgram(
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
     effectsFor: declaration => records.sourceCallEffects.get(declaration) });
   if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
+  const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
+    names: context.names, callables: context.callableValues,
+    producers: context.callableValues.nativeProducers, definitions: typeDefinitions,
+    components: sourcePackageComponents.plan });
+  if (errorRegions.kind === "rejected") return errorRegions;
+  const initializationErrors = analyzeRustInitializationErrors({ ast: context.ast, sourceFiles: context.sourceFiles,
+    navigation: context.source.navigation, moduleInitialization, sourceModules: sourceModuleConstructions.index,
+    components: sourcePackageComponents.plan, facades: sourcePackageFacades.plan, regions: errorRegions.value,
+    binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
+    entryPoint: input.project.entryPoint });
+  if (initializationErrors.kind === "rejected") return initializationErrors;
   const program: RustTargetProgram = Object.freeze({
+    errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
     lexicalFunctions,

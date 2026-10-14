@@ -66,9 +66,9 @@ test("normalization rejects incomplete producer effects, recursive aliases and e
   const declaration = current.producer("failLeft").declaration;
   const carrier = current.error("failLeft");
   for (const effects of [undefined, { localErrors: false, nativeErrors: [{ identity: "cycle", errorType: carrier }] }]) {
-    const input = { ...current.input, records: createRustRecordFixture({...current.input.records,
+    const input = { ...current.input, records: createRustRecordFixture({
 errorEffects: { get: (node) => node === declaration
-    ? effects : current.input.records.errorEffects.get(node) }}) };
+    ? effects : current.input.records.errorEffects.get(node) }}, current.input.records) };
     assert.equal(normalizeRustErrorType(carrier, input) === undefined, true);
   }
   assert.equal(rustProducerErrorReference(carrier).identity.length > 0, true);

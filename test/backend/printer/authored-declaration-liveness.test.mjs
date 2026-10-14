@@ -468,6 +468,7 @@ for (const surfaces of [[], ["js"]]) {
               const options = create();
               if (options.value !== 42) throw new Error("interface liveness");
             }
+            ${outputType === "bin" ? "main();" : ""}
           `,
         },
       });

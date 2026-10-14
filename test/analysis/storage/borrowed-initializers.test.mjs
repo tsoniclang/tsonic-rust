@@ -46,10 +46,10 @@ for (const surfaces of [[], ["js"]]) {
         rawCarrier: { kind: "reference", mutable: false, referent: { kind: "source-primitive", name: "string" }, lifetime: { kind: "static" } } } } },
     ];
     for (const mutation of [undefined, ...invalid]) {
-      const records = createRustRecordFixture({...program.records,
+      const records = createRustRecordFixture({
 targetOperation: { get: (node) => {
     return node === initializer ? mutation : program.records.targetOperation.get(node);
-} }});
+} }}, program.records);
       const selected = analyzeRustBorrowedInitializers(ast, program.sourceFiles, records);
       assert.equal(selected.forExpression(initializer) === undefined, true, "missing or incompatible borrowing evidence is never manufactured");
     }

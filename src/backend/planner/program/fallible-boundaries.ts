@@ -13,7 +13,7 @@ export type RustFallibleBoundary =
   | { readonly kind: "native"; readonly errorType: RustType; readonly join: RustNativeErrorJoinPlan;
       readonly local: RustLocalErrorChannel | undefined };
 
-export function rustErrorType(owner: RustSourcePackageErrorBoundary): RustType {
+export function rustErrorType(owner: RustSourcePackageErrorBoundary): Extract<RustType, { readonly kind: "named" }> {
   return { kind: "named", path: owner.errorTypePath, identity: owner.errorTypeIdentity };
 }
 
@@ -65,6 +65,7 @@ export function rustPropagateMappedErrorJoin(
   if (mapped === undefined) return undefined;
   const result: RustExpr = mapped === error && rustTypeEquals(operand.errorType, region.errorType) ? expression
     : { kind: "method-call", receiver: expression, method: "map_err",
+      genericArguments: [{ kind: "type", type: region.errorType }, { kind: "type", type: { kind: "infer" } }],
       args: [{ kind: "closure", params: [{ name: errorName }], body: mapped }] };
   return { kind: "try", expr: result, operandErrorType: region.errorType, resultErrorType: region.errorType };
 }

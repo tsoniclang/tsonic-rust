@@ -21,12 +21,12 @@ test("destructured defaults consume the sealed initialized value and reject conf
   assert.equal(abi.valueCarrier.kind, "tuple");
   assert.equal(abi.parameterCarrier.kind, "target-named");
   const plan = (selectedAbi, sourceCarrier = abi.valueCarrier) => {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 sourceParameterAbi: { get: (subject) => subject === parameter
     ? selectedAbi : program.records.sourceParameterAbi.get(subject) },
 runtimeCarrier: { get: (subject) => subject === parameter
     ? sourceCarrier === undefined ? undefined : { carrier: sourceCarrier }
-    : program.records.runtimeCarrier.get(subject) }});
+    : program.records.runtimeCarrier.get(subject) }}, program.records);
     const names = createRustSyntheticNameState(ast, callable, []);
     const context = { input: { program: { ...program, records } }, sourceFile,
       diagnostics: [], usedAliases: new Set(), syntheticNames: names,

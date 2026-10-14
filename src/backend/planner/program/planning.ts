@@ -1,4 +1,3 @@
-import type { SourceFile } from "@tsonic/tsts";
 import {
   rejectedTargetStage,
   resolvedTargetStage,
@@ -6,6 +5,8 @@ import {
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
+import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
+import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/cargo.js";
@@ -24,23 +25,18 @@ import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.
 import { rustTypeFromCarrier } from "../types/render.js";
 import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
-import {
-  resolveProjectEntrySourceFile,
-} from "./entry-point.js";
 import type {
   RustPlannedArtifact,
   RustOutputPlan,
 } from "../../artifact-model/output.js";
 import { materializeRustSourcePackageFacades } from "./source-package-facades.js";
-import type { RustSourcePackageFacadeExport } from "./source-package-facades.js";
 import {
   planRustSourcePackageInitializers,
-  type RustSourcePackageInitializerPlan,
 } from "./source-package-initializers.js";
 import {
   planRustSourcePackageErrors,
 } from "./source-package-errors.js";
-import { planRustSourcePackageComponents } from "./source-package-components.js";
+import { createRustSourcePackageTypeRenderingContext, planRustSourcePackageComponents } from "./source-package-components.js";
 import {
   materializeRustSourcePackageCrateArtifacts,
   planRustSourcePackageCargo,
@@ -170,7 +166,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     });
     return rejectedTargetStage(diagnostics);
   }
-  const crateInitializerFunctionName = allocateRustComponentSupportModuleName(
+  const crateInitializerFunctionBase = allocateRustComponentSupportModuleName(
     identityPlan.identities,
     facadePlan.rootComponentId,
     "initialize",
@@ -222,6 +218,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     return rejectedTargetStage(diagnostics);
   }
   const externalItemPathByIdentity = reconstructedSources.externalItemPathByIdentity;
+  const typeRenderingContextFor = (component: (typeof componentPlans)[number]) =>
+    createRustSourcePackageTypeRenderingContext(input, component, sourcePackageErrors, {
+      moduleNameByFileName, externalCrateNameByFileName, externalItemPathByIdentity, externalStructuralShapeModuleByFileName,
+    });
   const crateContentByComponentId = new Map(componentPlans.flatMap((component) => {
     const content = planRustSourcePackageCrateContent(
       input,
@@ -261,27 +261,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   }
 
   const outputType = input.program.configuration.outputType;
-  const entrySourceFile = outputType === "bin"
-    ? resolveProjectEntrySourceFile(input, diagnostics)
-    : undefined;
-  const initializationRoots = outputType === "bin"
-    ? entrySourceFile === undefined ? [] : [entrySourceFile]
-    : resolveLibraryInitializationRoots(
-        input,
-        facadePlan.rootExports,
-        packageInitializers,
-        facadePlan.rootComponentId,
-        diagnostics,
-      );
-  const moduleInitializers = initializationRoots.length === 0
+  const initialization = input.program.errorRegions.initialization;
+  const entrySourceFile = initialization.entrySourceFile;
+  const moduleInitializers = initialization.root.modules.length === 0
     ? []
     : planRustModuleInitializers(
-        input,
         rootPlannedSources,
-        initializationRoots,
+        initialization.root,
         packageInitializers,
-        sourcePackageErrors,
-        facadePlan.rootComponentId,
+        typeRenderingContextFor(rootComponentPlan),
         diagnostics,
       );
 
@@ -320,16 +308,29 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     rootComponentId: facadePlan.rootComponentId,
     rootCrateName: input.program.configuration.crateName,
     rootErrorType: rootCrateErrorType,
+    typeRenderingContextFor,
     diagnostics,
   });
   if (workerEntries === undefined || diagnostics.length > 0) {
     return rejectedTargetStage(diagnostics);
   }
+  const rootBindings = new Set([...rootCrateContent.libraryItems,
+    ...(workerEntries.itemsByComponentId.get(rootComponentPlan.componentId) ?? [])].flatMap(rustItemBindingNames));
+  const crateInitializerFunctionName = allocateRustGeneratedName(rootBindings, crateInitializerFunctionBase);
   const crateInitializer = planRustCrateInitializer(
+    initialization.root,
     moduleInitializers ?? [],
     crateInitializerFunctionName,
-    rootCrateErrorType,
+    typeRenderingContextFor(rootComponentPlan),
+    rootBindings,
   );
+  if (initialization.root.modules.length > 0 && crateInitializer === undefined) {
+    return rejectedTargetStage([{
+      code: "RUST_INITIALIZER_ERROR_RECONSTRUCTION_MISSING", category: "error", source: "tsonic-rust",
+      message: "The completed root initializer error composition has no exact native reconstruction.",
+      evidence: ["target.capability=rust.backend.source-package-initialization"],
+    }]);
+  }
   const lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
     kind: "named",
     path: rootErrorDomain.errorDomain === "runtime"
@@ -348,7 +349,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         ? {}
         : { manifest: sourcePackageCargo.rootManifest }),
       additionalLibraryItems: [
-        ...(crateInitializer === undefined ? [] : [crateInitializer.item]),
+        ...(crateInitializer?.items ?? []),
         ...(workerEntries.itemsByComponentId.get(rootComponentPlan.componentId) ?? []),
       ],
     },
@@ -396,7 +397,19 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   }
   if (outputType === "bin" && entrySourceFile !== undefined) {
     const crateName = input.program.configuration.crateName;
-    const errors = planRustBinaryErrors(lifecycleErrorType);
+    const initializerError = initialization.root.error.kind !== "native" ? undefined : {
+      identity: "initialization", errorType: {
+        ...crateInitializer!.errorType!, path: `${crateName}::${crateInitializer!.errorName}`,
+      },
+    };
+    const workerBySource = new Map(workerEntries.entries.map(entry => [entry.sourceFile, entry]));
+    const errors = planRustBinaryErrors(initialization.binary, lifecycleErrorType, [
+      ...(initializerError === undefined ? [] : [initializerError]),
+      ...initialization.binary.sources.filter(source => source.kind === "worker").map(source => {
+        const entry = workerBySource.get(source.sourceFile)!;
+        return { identity: source.identity, errorType: entry.operandErrorType! };
+      }),
+    ]);
     const mainErrorType = errors.errorType;
     const executor = executors[0];
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
@@ -414,12 +427,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr = {
       kind: "path", path: "()",
     };
+    const propagateInitialization = (expression: import("../../target-ast/syntax/nodes.js").RustExpr) =>
+      initializerError === undefined ? errors.lifecycle(expression, lifecycleErrorType)
+        : errors.propagate(initializerError, expression);
     const initializationStatements = crateInitializer === undefined
       ? []
       : [{
           kind: "expr" as const,
           expr: crateInitializer.errorType !== undefined
-            ? errors.lifecycle(crateInitializer.asynchronous
+            ? propagateInitialization(crateInitializer.asynchronous
                   ? executeAsync({
                         kind: "call" as const,
                         path: `${crateName}::${crateInitializer.functionName}`,
@@ -429,7 +445,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                       kind: "call" as const,
                       path: `${crateName}::${crateInitializer.functionName}`,
                       args: [],
-                    }, lifecycleErrorType)
+                    })
             : crateInitializer.asynchronous
               ? executeAsync({
                     kind: "call" as const,
@@ -505,7 +521,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",
-      createRustCrateRootSourceFile(input.program.configuration.foundation, [mainItem]),
+      createRustCrateRootSourceFile(input.program.configuration.foundation, [...errors.items, mainItem]),
     ));
   }
   const finalizedArtifacts = Object.freeze(artifacts.map((artifact) =>
@@ -631,7 +647,8 @@ function planRustWorkerDispatch(
               : call;
             const invoke = entry.operandErrorType === undefined
               ? execution
-              : errors.lifecycle(execution, entry.operandErrorType);
+              : entry.nativeError ? errors.propagate({ identity: entry.errorIdentity, errorType: entry.operandErrorType }, execution)
+                : errors.lifecycle(execution, entry.operandErrorType);
             return {
               kind: "if",
               condition: {
@@ -682,55 +699,9 @@ function okReturn(
   };
 }
 
-function compareRustArtifactNames(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
 function rustSourceArtifact(
   path: string,
   model: import("../../target-ast/syntax/nodes.js").RustSourceFileModel,
 ): RustPlannedArtifact {
   return Object.freeze({ kind: "source", path, model });
-}
-
-function resolveLibraryInitializationRoots(
-  input: RustPlanningContext,
-  exports: readonly RustSourcePackageFacadeExport[],
-  packageInitializers: RustSourcePackageInitializerPlan,
-  rootComponentId: string,
-  diagnostics: TargetDiagnostic[],
-): readonly SourceFile[] {
-  const sourceFileByName = new Map(input.program.sourceFiles.map((sourceFile) =>
-    [normalizeSourcePath(input.program.source.ast.getFileName(sourceFile)), sourceFile] as const));
-  const roots = new Map<string, SourceFile>();
-  for (const exported of exports) {
-    const fileName = normalizeSourcePath(exported.sourceModuleFileName);
-    const sourceFile = sourceFileByName.get(fileName);
-    if (sourceFile === undefined) {
-      diagnostics.push({
-        code: "RUST_SOURCE_PACKAGE_INITIALIZATION_ROOT_MISSING",
-        category: "error",
-        source: "tsonic-rust",
-        message: `Public source-package module '${exported.sourceModuleFileName}' has no checked initialization root.`,
-        evidence: ["target.capability=rust.backend.source-package-initialization"],
-      });
-      continue;
-    }
-    roots.set(fileName, sourceFile);
-  }
-  if (roots.size > 0 || diagnostics.length > 0) {
-    return Object.freeze([...roots.entries()]
-      .sort(([left], [right]) => compareRustArtifactNames(left, right))
-      .map(([, sourceFile]) => sourceFile));
-  }
-  if (![...packageInitializers.byFileName.values()].some((initializer) =>
-    initializer.componentId === rootComponentId)) {
-    return Object.freeze([]);
-  }
-  const entrySourceFile = resolveProjectEntrySourceFile(input, diagnostics);
-  return entrySourceFile === undefined ? [] : Object.freeze([entrySourceFile]);
-}
-
-function normalizeSourcePath(path: string): string {
-  return path.split("\\").join("/");
 }

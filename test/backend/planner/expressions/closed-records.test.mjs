@@ -44,9 +44,9 @@ export function run(first: unknown, second: unknown): unknown {
     assert.equal(context.diagnostics.length !== 0, true);
   }
   for (const subject of [literal, first.expression]) {
-    const context = makeContext(createRustRecordFixture({...program.records,
+    const context = makeContext(createRustRecordFixture({
 runtimeCarrier: { get: (node) => node === subject
-    ? { carrier: integer } : program.records.runtimeCarrier.get(node) }}));
+    ? { carrier: integer } : program.records.runtimeCarrier.get(node) }}, program.records));
     assert.equal(planRustClosedRecordLiteral(literal, fact, context) === undefined, true);
     assert.equal(context.diagnostics.length !== 0, true);
   }

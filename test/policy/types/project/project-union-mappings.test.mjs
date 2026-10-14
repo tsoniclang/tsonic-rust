@@ -327,9 +327,9 @@ conversion: { get: () => undefined }}) } },
       if (!absent && !owned) {
         const direct = planExpression(node, { ...context,
           expressionOverrides: new Map([[node, { expression, carrier: source, valueForm: "owned" }]]),
-          input: { program: { ...context.input.program, records: createRustRecordFixture({...context.input.program.records,
+          input: { program: { ...context.input.program, records: createRustRecordFixture({
 flowReadProjection: { get: (subject) => undefined },
-runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : undefined }}) } },
+runtimeCarrier: { get: (subject) => subject === node ? { carrier: source } : undefined }}, context.input.program.records) } },
         });
         assert.equal(direct.kind, "match");
         assert.deepEqual(direct.expression, { kind: "reference", expr: original });

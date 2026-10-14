@@ -16,6 +16,8 @@ import type {
 import type {
   RustSourcePackageFacadePlan,
 } from "./source-package-facades.js";
+import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustTypeRenderingContext } from "../types/render.js";
 
 export interface RustSourcePackageComponentPlan {
   readonly componentId: string;
@@ -31,6 +33,20 @@ export interface RustSourcePackageComponentPlan {
   readonly errorDomain: RustErrorDomain;
   readonly errorOwnerComponentId: string | undefined;
   readonly root: boolean;
+}
+
+export function createRustSourcePackageTypeRenderingContext(
+  input: RustPlanningContext,
+  component: RustSourcePackageComponentPlan,
+  sourcePackageErrors: RustSourcePackageErrorPlan,
+  paths: Pick<RustTypeRenderingContext, "moduleNameByFileName" | "externalCrateNameByFileName" |
+    "externalItemPathByIdentity" | "externalStructuralShapeModuleByFileName">,
+): RustTypeRenderingContext & { readonly input: RustPlanningContext } {
+  return {
+    input, ...paths, sourcePackageErrors, sourcePackageComponentId: component.componentId,
+    moduleName: component.programModuleName, structuralShapesModuleName: component.structuralShapesModuleName,
+    ...(component.crateName === undefined ? {} : { crateName: component.crateName }),
+  };
 }
 
 export function planRustSourcePackageComponents(

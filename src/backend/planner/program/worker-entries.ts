@@ -5,9 +5,12 @@ import type { RustPlanningContext } from "../context.js";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
+import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
+import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type { RustSourcePackageCrateContentPlan } from "./source-package-crates.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
+import type { RustTypeRenderingContext } from "../types/render.js";
 import {
   planRustCrateInitializer,
   planRustModuleInitializers,
@@ -25,6 +28,8 @@ export interface RustWorkerEntryPlan {
   readonly callPath: string;
   readonly asynchronous: boolean;
   readonly operandErrorType?: RustType;
+  readonly nativeError: boolean;
+  readonly errorIdentity: string;
 }
 
 export interface RustWorkerEntryPlans {
@@ -48,6 +53,7 @@ export function planRustWorkerEntries(input: {
   readonly rootComponentId: string;
   readonly rootCrateName: string;
   readonly rootErrorType: RustType;
+  readonly typeRenderingContextFor: (component: RustSourcePackageComponentPlan) => RustTypeRenderingContext;
   readonly diagnostics: TargetDiagnostic[];
 }): RustWorkerEntryPlans | undefined {
   const componentById = new Map(input.components.map((component) =>
@@ -92,36 +98,40 @@ export function planRustWorkerEntries(input: {
       ));
       continue;
     }
-    const componentErrorType: RustType = {
-      kind: "named",
-      path: componentErrorDomain.errorDomain === "runtime"
-        ? "tsonic_rust_runtime::TsonicError"
-        : `crate::${component.programModuleName}::TsonicError`,
-      identity: componentErrorDomain.errorTypeIdentity,
-    };
+    const selection = input.planning.program.errorRegions.initialization.workerFor(target.sourceFile);
+    if (selection === undefined) {
+      input.diagnostics.push(workerDiagnostic("RUST_WORKER_ENTRY_ERROR_REGION_MISSING",
+        "A worker initializer has no completed exact error composition.", target.sourceFile));
+      continue;
+    }
     const initializers = planRustModuleInitializers(
-      input.planning,
       content.sources,
-      [target.sourceFile],
+      selection,
       input.packageInitializers,
-      input.sourcePackageErrors,
-      component.componentId,
+      input.typeRenderingContextFor(component),
       input.diagnostics,
     );
     if (initializers === undefined) continue;
 
     const occupied = occupiedNamesByComponent.get(component.componentId) ?? new Set(
-      content.libraryItems.flatMap((item) => "name" in item ? [item.name] : []),
+      content.libraryItems.flatMap(rustItemBindingNames),
     );
     occupiedNamesByComponent.set(component.componentId, occupied);
     const baseName = `tsonic_worker_${identity.moduleSegments.join("_")}`;
-    const functionName = allocateName(baseName, occupied);
+    const functionName = allocateRustGeneratedName(occupied, baseName);
     const initializer = planRustCrateInitializer(
+      selection,
       initializers,
       functionName,
-      componentErrorType,
+      input.typeRenderingContextFor(component),
+      occupied,
     );
-    const item: RustItem = initializer?.item ?? {
+    if (selection.modules.length > 0 && initializer === undefined) {
+      input.diagnostics.push(workerDiagnostic("RUST_WORKER_ENTRY_ERROR_RECONSTRUCTION_MISSING",
+        "A completed worker error composition has no exact native reconstruction.", target.sourceFile));
+      continue;
+    }
+    const emptyItem: RustItem = {
       kind: "function",
       name: functionName,
       visibility: "public",
@@ -130,18 +140,21 @@ export function planRustWorkerEntries(input: {
       params: [],
       body: { statements: [] },
     };
+    const selectedItems = initializer?.items ?? [emptyItem];
+    for (const name of selectedItems.flatMap(rustItemBindingNames)) occupied.add(name);
     const items = itemsByComponentId.get(component.componentId) ?? [];
-    items.push(item);
+    items.push(...selectedItems);
     itemsByComponentId.set(component.componentId, items);
 
-    const errorBoundary = initializer?.errorType === undefined
+    const nativeError = selection.error.kind === "native";
+    const errorBoundary = initializer?.errorType === undefined || nativeError
       ? undefined
       : resolveRustSourcePackageErrorBoundary(
           input.sourcePackageErrors,
           input.rootComponentId,
           component.componentId,
         );
-    if (initializer?.errorType !== undefined && errorBoundary === undefined) {
+    if (initializer?.errorType !== undefined && !nativeError && errorBoundary === undefined) {
       input.diagnostics.push(workerDiagnostic(
         "RUST_WORKER_ENTRY_ERROR_BOUNDARY_MISSING",
         `Worker source module '${target.fileName}' has no exact error conversion into the root executable.`,
@@ -158,10 +171,16 @@ export function planRustWorkerEntries(input: {
         ? `${input.rootCrateName}::${functionName}`
         : `${component.crateName}::${functionName}`,
       asynchronous: initializer?.asynchronous === true,
+      nativeError,
+      errorIdentity: target.fileName,
       ...(initializer?.errorType === undefined
         ? {}
         : {
-            operandErrorType: component.componentId === input.rootComponentId
+            operandErrorType: nativeError ? {
+              kind: "named" as const,
+              path: `${component.root ? input.rootCrateName : component.crateName}::${initializer.errorName}`,
+              identity: initializer.errorType.identity,
+            } : component.componentId === input.rootComponentId
               ? input.rootErrorType
               : {
                   kind: "named" as const,
@@ -177,17 +196,6 @@ export function planRustWorkerEntries(input: {
     itemsByComponentId: new Map([...itemsByComponentId].map(([componentId, items]) =>
       [componentId, Object.freeze(items)] as const)),
   });
-}
-
-function allocateName(baseName: string, occupied: Set<string>): string {
-  let candidate = baseName;
-  let suffix = 2;
-  while (occupied.has(candidate)) {
-    candidate = `${baseName}_${suffix}`;
-    suffix += 1;
-  }
-  occupied.add(candidate);
-  return candidate;
 }
 
 function workerDiagnostic(

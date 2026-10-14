@@ -61,9 +61,9 @@ for (const surfaces of [[], ["js"]]) {
         assert.equal(records[key].get(row.field) === replacement, true, "projection mutation is effective");
         assert.equal(plan(records) === undefined, true, "projected value retains its owning conversion");
       }
-      const records = createRustRecordFixture({...program.records,
+      const records = createRustRecordFixture({
 conversion: { get: (subject) => subject === row.field
-    ? { convertedType: carrier } : program.records.conversion.get(subject) }});
+    ? { convertedType: carrier } : program.records.conversion.get(subject) }}, program.records);
       assert.equal(plan(records) === undefined, true, "target-converted value");
       const noBorrow = context(program.records);
       noBorrow.valueFieldLocations.set(row.field, { ...location, withRead: undefined });

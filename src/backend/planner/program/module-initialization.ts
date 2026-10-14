@@ -1,246 +1,128 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import type { RustPlanningContext } from "../context.js";
-import { stronglyConnectedSourceFiles } from "../../../analysis/program/module-graph.js";
+import type { RustInitializerSelection } from "../../../target-model/records/error-regions.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
-import {
-  resolveRustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorPlan,
-} from "./source-package-errors.js";
+import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors.js";
+import type { RustTypeRenderingContext } from "../types/render.js";
+import { planRustSelectedErrorRegion } from "./error-regions.js";
+import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
+import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
+import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
+  rustPropagateLocalError, rustPropagateNativeError, type RustFallibleBoundary } from "./fallible-boundaries.js";
 
 export interface RustModuleInitializer {
   readonly sourceFile: SourceFile;
+  readonly identity: string;
   readonly path: string;
   readonly asynchronous: boolean;
-  readonly errorBoundary?: RustSourcePackageErrorBoundary;
+  readonly errorBoundary?: RustFallibleBoundary;
 }
 
 export function planRustModuleInitializers(
-  input: RustPlanningContext,
   plannedSources: readonly PlannedRustSourceFile[],
-  roots: readonly SourceFile[],
+  selection: RustInitializerSelection,
   packageInitializers: RustSourcePackageInitializerPlan,
-  sourcePackageErrors: RustSourcePackageErrorPlan,
-  consumerComponentId: string,
+  rendering: RustTypeRenderingContext,
   diagnostics: TargetDiagnostic[],
 ): readonly RustModuleInitializer[] | undefined {
-  const plannedBySourceFile = new Map(
-    plannedSources.map((source) => [source.sourceFile, source]),
-  );
-  if (!validateRuntimeModuleGraph(
-    input,
-    plannedBySourceFile,
-    roots,
-    packageInitializers,
-    diagnostics,
-  )) {
-    return undefined;
-  }
-  const visited = new Set<SourceFile>();
-  const active = new Set<SourceFile>();
+  const plannedBySourceFile = new Map(plannedSources.map(source => [source.sourceFile, source]));
   const ordered: RustModuleInitializer[] = [];
-  const visit = (sourceFile: SourceFile): void => {
-    if (visited.has(sourceFile) || active.has(sourceFile)) {
-      return;
-    }
-    active.add(sourceFile);
-    for (const dependency of input.program.sourceNavigation.moduleDependencies(sourceFile)) {
-      visit(dependency.sourceFile);
-    }
-    active.delete(sourceFile);
-    visited.add(sourceFile);
-    const planned = plannedBySourceFile.get(sourceFile);
+  for (const selected of selection.modules) {
+    const planned = plannedBySourceFile.get(selected.sourceFile);
     const initialization = planned?.moduleInitialization;
-    const contract = packageInitializers.byFileName.get(input.program.source.ast.getFileName(sourceFile));
-    if (planned !== undefined && initialization !== undefined) {
-      ordered.push({
-        sourceFile,
-        path: `crate::${planned.moduleName}::${initialization.functionName}`,
-        asynchronous: initialization.asynchronous,
-        ...(initialization.errorBoundary === undefined
-          ? {}
-          : { errorBoundary: initialization.errorBoundary }),
-      });
-    } else if (planned === undefined && contract?.crateName !== undefined) {
-      const errorBoundary = contract.fallible
-        ? resolveRustSourcePackageErrorBoundary(
-            sourcePackageErrors,
-            consumerComponentId,
-            contract.componentId,
-          )
-        : undefined;
-      if (contract.fallible && errorBoundary === undefined) {
-        diagnostics.push({
-          code: "RUST_SOURCE_PACKAGE_INITIALIZER_ERROR_BOUNDARY_MISSING",
-          category: "error",
-          source: "tsonic-rust",
-          message: `External source module '${contract.fileName}' has no exact initializer error ABI from component '${consumerComponentId}'.`,
-          sourceNode: sourceFile,
-          evidence: ["target.capability=rust.backend.source-package-initialization"],
-        });
-        return;
-      }
-      ordered.push({
-        sourceFile,
-        path: `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}`,
-        asynchronous: contract.asynchronous,
-        ...(errorBoundary === undefined ? {} : { errorBoundary }),
-      });
+    const contract = packageInitializers.byFileName.get(selected.identity);
+    const path = planned !== undefined && initialization !== undefined
+      ? `crate::${planned.moduleName}::${initialization.functionName}`
+      : planned === undefined && contract?.crateName !== undefined
+        ? `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}` : undefined;
+    const region = planRustSelectedErrorRegion(selected.region, rendering);
+    if (path === undefined || region === undefined) {
+      diagnostics.push({ code: "RUST_SOURCE_PACKAGE_INITIALIZER_RECONSTRUCTION_MISSING", category: "error",
+        source: "tsonic-rust", sourceNode: selected.sourceFile,
+        message: `Completed initializer '${selected.identity}' has no exact native symbol or rendered error payload.`,
+        evidence: ["target.capability=rust.backend.source-package-initialization"] });
+      continue;
     }
-  };
-  for (const root of roots) {
-    visit(root);
+    ordered.push(Object.freeze({ sourceFile: selected.sourceFile, identity: selected.identity, path,
+      asynchronous: selected.asynchronous, ...(region.boundary === undefined ? {} : { errorBoundary: region.boundary }) }));
   }
-  return Object.freeze(ordered);
+  return diagnostics.length > 0 ? undefined : Object.freeze(ordered);
 }
 
 export interface RustCrateInitializer {
   readonly functionName: string;
   readonly asynchronous: boolean;
-  readonly errorType?: RustType;
-  readonly item: RustItem;
+  readonly errorType?: Extract<RustType, { readonly kind: "named" }>;
+  readonly errorName?: string;
+  readonly items: readonly RustItem[];
 }
 
 export function planRustCrateInitializer(
+  selection: RustInitializerSelection,
   initializers: readonly RustModuleInitializer[],
   functionName: string,
-  errorType: RustType,
+  rendering: RustTypeRenderingContext,
+  occupiedNames: ReadonlySet<string>,
 ): RustCrateInitializer | undefined {
-  if (initializers.length === 0) {
-    return undefined;
-  }
-  const asynchronous = initializers.some((initializer) => initializer.asynchronous);
-  const fallible = initializers.some((initializer) => initializer.errorBoundary !== undefined);
-  const statements: RustStmt[] = initializers.map((initializer) => {
-    const call = {
-      kind: "call" as const,
-      path: initializer.path,
-      args: [],
-    };
-    const execution = initializer.asynchronous
-      ? { kind: "await" as const, expr: call }
-      : call;
-    return {
-      kind: "expr" as const,
-      expr: initializer.errorBoundary !== undefined
-        ? {
-            kind: "try" as const,
-            expr: execution,
-            resultErrorType: errorType,
-            operandErrorType: {
-              kind: "named" as const,
-              path: initializer.errorBoundary.errorTypePath,
-              identity: initializer.errorBoundary.errorTypeIdentity,
-            },
-          }
-        : execution,
-    };
+  if (selection.modules.length === 0) return undefined;
+  const selected = selection.error;
+  const owner = selected.kind === "infallible" || rendering.sourcePackageErrors === undefined ? undefined
+    : resolveRustPhysicalProgramErrorBoundary(rendering.sourcePackageErrors, rendering.sourcePackageComponentId, selected.owner);
+  if (selected.kind !== "infallible" && owner === undefined) return undefined;
+  const names = new Set(occupiedNames);
+  names.add(functionName);
+  const errorName = selected.kind === "native" ? allocateRustGeneratedName(names, "InitializationError") : undefined;
+  const joinName = selected.kind === "native" ? allocateRustGeneratedName(names, "InitializationErrors") : undefined;
+  const bySourceFile = new Map(initializers.map(initializer => [initializer.sourceFile, initializer]));
+  const local = selected.kind === "native" ? selected.sources.find(source => source.kind === "package") : undefined;
+  const sources = selected.kind === "native" ? selected.sources.map(source => {
+    const errorType = source.kind === "package" ? rustErrorType(owner!) : bySourceFile.get(source.sourceFile)?.errorBoundary?.errorType;
+    return errorType === undefined ? undefined : { identity: source.identity, variant: source.variant, errorType };
+  }) : [];
+  if (sources.some(source => source === undefined)) return undefined;
+  const join = selected.kind !== "native" ? undefined : planRustNativeErrorJoin({
+    identity: `initializer:${rendering.sourcePackageComponentId}:${functionName}`, name: joinName!,
+    referencePath: `crate::${joinName!}`, visibility: "public", sources: sources as NonNullable<typeof sources[number]>[],
   });
-  if (fallible) {
-    statements.push({
-      kind: "tail",
-      expr: {
-        kind: "call",
-        path: "Ok",
-        genericArguments: [
-          { kind: "type", type: { kind: "unit" } },
-          { kind: "type", type: errorType },
-        ],
-        args: [{ kind: "path", path: "()" }],
-      },
-    });
+  const boundary = selected.kind === "infallible" ? undefined : selected.kind === "package"
+    ? rustPackageFallibleBoundary(owner!) : join === undefined ? undefined : rustNativeFallibleBoundary(join,
+      local === undefined ? undefined : { owner: owner!, source: { identity: local.identity, errorType: rustErrorType(owner!) } });
+  if (selected.kind !== "infallible" && boundary === undefined) return undefined;
+  const items: RustItem[] = [...(join?.items ?? [])];
+  const errorType: Extract<RustType, { readonly kind: "named" }> | undefined = selected.kind === "infallible" ? undefined
+    : errorName === undefined ? rustErrorType(owner!) : {
+      kind: "named", path: `crate::${errorName}`, identity: `initializer-error:${rendering.sourcePackageComponentId}:${functionName}`,
+    };
+  if (errorName !== undefined) items.push({ kind: "type-alias", name: errorName, visibility: "public",
+    generics: emptyRustGenerics, target: boundary!.errorType, attrs: [rustHiddenAttribute] });
+  const statements: RustStmt[] = [];
+  for (const selectedModule of selection.modules) {
+    const initializer = bySourceFile.get(selectedModule.sourceFile);
+    if (initializer === undefined) return undefined;
+    const call = { kind: "call" as const, path: initializer.path, args: [] };
+    const execution = selectedModule.asynchronous ? { kind: "await" as const, expr: call } : call;
+    const propagated = selectedModule.region.kind === "infallible" ? execution
+      : boundary === undefined || initializer.errorBoundary === undefined ? undefined
+        : selectedModule.region.kind === "package"
+          ? rustPropagateLocalError(boundary, initializer.errorBoundary.errorType, execution)
+          : rustPropagateNativeError(boundary, { identity: selectedModule.identity,
+            errorType: initializer.errorBoundary.errorType }, execution);
+    if (propagated === undefined) return undefined;
+    statements.push({ kind: "expr", expr: propagated });
   }
-  const item: RustItem = {
-    kind: "function",
-    name: functionName,
-    visibility: "public",
-    generics: emptyRustGenerics,
-    attrs: [rustHiddenAttribute],
-    ...(asynchronous ? { isAsync: true } : {}),
-    params: [],
-    ...(fallible
-      ? { errorType }
-      : {}),
-    body: { statements },
-  };
-  return {
-    functionName,
-    asynchronous,
-    ...(fallible ? { errorType } : {}),
-    item,
-  };
-}
-
-function validateRuntimeModuleGraph(
-  input: RustPlanningContext,
-  plannedBySourceFile: ReadonlyMap<SourceFile, PlannedRustSourceFile>,
-  roots: readonly SourceFile[],
-  packageInitializers: RustSourcePackageInitializerPlan,
-  diagnostics: TargetDiagnostic[],
-): boolean {
-  const reachable = collectReachableSourceFiles(input, roots);
-  const components = stronglyConnectedSourceFiles(input.program.sourceNavigation, reachable);
-  if (components.kind === "unresolved") {
-    diagnostics.push({ code: "RUST_SOURCE_MODULE_GRAPH_NOT_PROVEN", category: "error", source: "tsonic-rust", message: components.reason });
-    return false;
-  }
-  let valid = true;
-  for (const component of components.components) {
-    const cyclic = component.length > 1 || input.program.sourceNavigation
-      .moduleDependencies(component[0]!)
-      .some((dependency) => dependency.sourceFile === component[0]);
-    if (!cyclic) {
-      continue;
-    }
-    const initialized = component.filter((sourceFile) =>
-      plannedBySourceFile.get(sourceFile)?.moduleInitialization !== undefined ||
-      packageInitializers.byFileName.has(input.program.source.ast.getFileName(sourceFile)));
-    if (initialized.length === 0) {
-      continue;
-    }
-    if (component.every(sourceFile => input.program.moduleInitialization.hasStateIndependentCycle(sourceFile))) {
-      continue;
-    }
-    valid = false;
-    const files = component
-      .map((sourceFile) => input.program.source.ast.getFileName(sourceFile))
-      .sort((left, right) => left.localeCompare(right, "en"));
-    diagnostics.push({
-      code: "RUST_UNSUPPORTED_RUNTIME_MODULE_CYCLE",
-      category: "error",
-      source: "tsonic-rust",
-      message:
-        `Runtime ES module dependency component '${files.join(" -> ")}' contains ${initialized.length} module initializer${initialized.length === 1 ? "" : "s"} and cannot be executed without finalized cyclic call, live-binding, and temporal-dead-zone evidence.`,
-      evidence: [
-        "target.capability=rust.backend.module-initialization",
-        ...initialized
-          .map((sourceFile) => input.program.source.ast.getFileName(sourceFile))
-          .sort((left, right) => left.localeCompare(right, "en"))
-          .map((fileName) => `runtime.initializer=${fileName}`),
-      ],
-    });
-  }
-  return valid;
-}
-
-function collectReachableSourceFiles(
-  input: RustPlanningContext,
-  roots: readonly SourceFile[],
-): ReadonlySet<SourceFile> {
-  const reachable = new Set<SourceFile>();
-  const pending = [...roots];
-  while (pending.length > 0) {
-    const sourceFile = pending.pop()!;
-    if (reachable.has(sourceFile)) continue;
-    reachable.add(sourceFile);
-    for (const dependency of input.program.sourceNavigation.moduleDependencies(sourceFile)) {
-      if (!reachable.has(dependency.sourceFile)) pending.push(dependency.sourceFile);
-    }
-  }
-  return reachable;
+  if (errorType !== undefined) statements.push({ kind: "tail", expr: { kind: "call", path: "Ok",
+    genericArguments: [{ kind: "type", type: { kind: "unit" } }, { kind: "type", type: errorType }],
+    args: [{ kind: "path", path: "()" }],
+  } });
+  items.push({ kind: "function", name: functionName, visibility: "public", generics: emptyRustGenerics,
+    attrs: [rustHiddenAttribute], ...(selection.asynchronous ? { isAsync: true } : {}), params: [],
+    ...(errorType === undefined ? {} : { errorType }), body: { statements } });
+  return Object.freeze({ functionName, asynchronous: selection.asynchronous,
+    ...(errorType === undefined ? {} : { errorType }), ...(errorName === undefined ? {} : { errorName }),
+    items: Object.freeze(items),
+  });
 }

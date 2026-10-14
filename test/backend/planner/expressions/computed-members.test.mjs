@@ -34,9 +34,9 @@ ${source}
     const changed = mutation === "missing" ? undefined
       : { ...original, [mutation]: selected };
     const context = {
-      input: { program: { ...program, records: createRustRecordFixture({...program.records,
+      input: { program: { ...program, records: createRustRecordFixture({
 computedMember: { get: (node) => node === selected
-    ? changed : program.records.computedMember.get(node) }}) } },
+    ? changed : program.records.computedMember.get(node) }}, program.records) } },
       sourceFile: ast.getSourceFile(selected), diagnostics: [],
     };
     assert.equal(prepareRustComputedMemberEvaluation(selected, context) === undefined, true,

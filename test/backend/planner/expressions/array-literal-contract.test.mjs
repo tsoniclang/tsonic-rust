@@ -25,9 +25,9 @@ export function copy(values: int32[]): int32[] { return [...values]; }
   const { node, fact } = operations[0];
   assert.ok(Object.isFrozen(fact.contributions));
   const context = selected => ({ input: { program: { ...program,
-    records: createRustRecordFixture({...program.records,
+    records: createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? selected : program.records.targetOperation.get(subject) }}) } }, diagnostics: [],
+    ? selected : program.records.targetOperation.get(subject) }}, program.records) } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), usedAliases: new Set(),
     syntheticNames: createRustSyntheticNameState(ast, node, []),
     moduleName: "index", structuralShapesModuleName: "shapes",

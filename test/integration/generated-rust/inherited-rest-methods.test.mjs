@@ -23,7 +23,7 @@ export function run(): boolean {
 `;
 
 test("inherited native rest slots forward the selected array without reassembly", { timeout: 300_000 }, () => {
-  const files = { "index.ts": `import { check } from "@acme/testing";\n${source}\nexport function main(): void { check(run()); }` };
+  const files = { "index.ts": `import { check } from "@acme/testing";\n${source}\nexport function main(): void { check(run()); }\nmain();` };
   const { result } = compileRust({ surfaces: ["js"], packages: [acmeTestingPackage()], files,
     target: { id: "rust", options: { outputType: "bin" } } });
   assertNoTargetDiagnostics(result.diagnostics);

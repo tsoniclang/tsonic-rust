@@ -42,17 +42,17 @@ for (const surfaces of [[], ["js"]]) {
       assert.doesNotMatch(printed, /ErrorObject::error_\w+\(&optional_receiver\)/u);
       const wrong = rustSourcePrimitiveTargetType("int32");
       const mutations = [
-        createRustRecordFixture({...program.records,
-optionalChain: { get: (subject) => subject === node ? undefined : program.records.optionalChain.get(subject) }}),
-        createRustRecordFixture({...program.records,
+        createRustRecordFixture({
+optionalChain: { get: (subject) => subject === node ? undefined : program.records.optionalChain.get(subject) }}, program.records),
+        createRustRecordFixture({
 optionalChain: { get: (subject) => subject === node
-    ? { ...optional, innerResultCarrier: wrong } : program.records.optionalChain.get(subject) }}),
-        createRustRecordFixture({...program.records,
+    ? { ...optional, innerResultCarrier: wrong } : program.records.optionalChain.get(subject) }}, program.records),
+        createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? { ...fact, resultCarrier: wrong } : program.records.targetOperation.get(subject) }}),
-        createRustRecordFixture({...program.records,
+    ? { ...fact, resultCarrier: wrong } : program.records.targetOperation.get(subject) }}, program.records),
+        createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
-    ? { ...fact, receiverCarrier: wrong } : program.records.targetOperation.get(subject) }}),
+    ? { ...fact, receiverCarrier: wrong } : program.records.targetOperation.get(subject) }}, program.records),
         createRustRecordFixture({runtimeCarrier: { get: (subject) => subject === node ? { carrier: wrong } : program.records.runtimeCarrier.get(subject) }}),
         createRustRecordFixture({selectedOperation: { get: (subject) => subject === node
     ? { ...program.records.selectedOperation.get(subject), resultType: wrong } : program.records.selectedOperation.get(subject) }}),

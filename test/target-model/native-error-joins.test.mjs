@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustNativeErrorJoinTargetType, rustNativeErrorJoinReference, selectRustNativeErrorJoin }
+import { rustNativeErrorJoinTargetType, rustNativeErrorJoinReference, snapshotRustNativeErrorSources }
   from "../../dist/target-model/types/native-error-joins.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
 import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/children.js";
@@ -76,9 +76,9 @@ test("native error joins reject malformed cyclic accessor and excessive metadata
 test("join source selection retains identity and rejects colliding variants", () => {
   const first = { identity: "first", variant: "First", errorType: failure };
   const second = { identity: "second", variant: "Second", errorType: failure };
-  assert.equal(selectRustNativeErrorJoin([first, second], isRustTargetTypeRef).kind, "joined");
+  assert.equal(snapshotRustNativeErrorSources([first, second], isRustTargetTypeRef).length, 2);
   for (const sources of [[first, first], [first, { ...second, variant: "First" }],
     [first, { ...second, variant: "r#First" }], [first, { ...second, errorType: {} }],
     [{ ...first, extra: true }], [{ ...first, variant: "bad-name" }]])
-    assert.equal(selectRustNativeErrorJoin(sources, isRustTargetTypeRef) === undefined, true);
+    assert.equal(snapshotRustNativeErrorSources(sources, isRustTargetTypeRef) === undefined, true);
 });

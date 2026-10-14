@@ -554,7 +554,8 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.doesNotMatch(semantics, /sourceReceiverDeclaration/u);
   assert.match(semantics, /request\.optionalChain/u);
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
-  assert.match(semantics, /rustOptionalChainFactKey/u);
+  assert.match(semantics, /records\.optionalChain\.set\(request\.expression, selection\.fact/u);
+  assert.doesNotMatch(semantics, /rustOptionalChainFactKey/u);
 
   const selector = readFileSync(join(sourceRoot, "policy/operations/optional-chains.ts"), "utf8");
   assert.match(selector, /rustOptionNestingDepth\(sourceGuardCarrier, selectedGuardCarrier\)/u);
@@ -996,8 +997,8 @@ test("Rust dead-code obligations are planner-local and normalized before output 
     join(sourceRoot, "backend/planner/program/planning.ts"),
     "utf8",
   );
-  const entryPoint = readFileSync(
-    join(sourceRoot, "backend/planner/program/entry-point.ts"),
+  const initializationAnalysis = readFileSync(
+    join(sourceRoot, "analysis/errors/initialization.ts"),
     "utf8",
   );
   const lintPolicy = readFileSync(
@@ -1011,8 +1012,10 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(livenessPlan, /deadComponentRoots\(/u);
   assert.match(livenessPlan, /analyzeRustGeneratedItemUsage\(/u);
   assert.match(livenessPlan, /publishesImplementationAbi/u);
-  assert.match(livenessPlan, /rustBinaryEntryDeclaration\(program\)/u);
-  assert.match(generatedUsage, /rustTargetOperationFactKey/u);
+  assert.match(livenessPlan, /program\.moduleInitialization\.requirementFor\(sourceFile\)\.kind === "required"/u);
+  assert.doesNotMatch(livenessPlan, /rustBinaryEntryDeclaration/u);
+  assert.match(generatedUsage, /input\.records\.targetOperation\.get\(node\)/u);
+  assert.doesNotMatch(generatedUsage, /rustTargetOperationFactKey/u);
   assert.equal(generatedUsage.match(/createRustGeneratedItemUsageState\(input\)/gu)?.length, 1);
   for (const query of ["isStructuralFieldRead", "isStructuralFieldWritten", "isProjectTypeConstructed",
     "isProjectGeneratedFieldUsed", "isStructuralShapeConstructed", "isVariantUsed"]) {
@@ -1037,13 +1040,21 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(normalization, /rustDeadCodeAttribute\(deadCode\)/u);
   assert.match(normalization, /const \{ deadCode, \.\.\.withoutDeadCode \} = owner/u);
   assert.match(outputPlanning, /finalizeRustDeadCode\(/u);
-  assert.match(outputPlanning, /resolveBinaryEntry\(input, moduleNameByFileName, diagnostics\)/u);
-  assert.match(entryPoint, /rustBinaryEntryDeclaration\(input\.program\)/u);
-  assert.match(entryPoint, /rustProjectEntrySourceFile/u);
-  assert.match(entryPoint, /hasModifierKind\(statement, "export"\)/u);
-  assert.match(entryPoint, /returnCarrier !== undefined/u);
-  assert.match(entryPoint, /parameters\(statement\)\.length === 0/u);
-  assert.match(entryPoint, /typeParameters\(statement\)\.length === 0/u);
+  assert.equal(/const entrySourceFile = initialization\.entrySourceFile/u.test(outputPlanning), true,
+    "binary startup consumes the sealed authored entry module");
+  assert.equal(/roots\.set\(input\.ast\.getFileName\(file\), file\)/u.test(initializationAnalysis), true,
+    "initialization analysis retains the exact selected source identity");
+  assert.equal(/resolveProjectEntrySourceFile|resolveLibraryInitializationRoots/u.test(outputPlanning), false,
+    "native planning never independently reselects semantic initialization roots");
+  assert.equal(/resolveBinaryEntry/u.test(outputPlanning), false, "binary startup never selects an implicit callable");
+  assert.equal(existsSync(join(sourceRoot, "backend/planner/program/entry-point.ts")), false,
+    "the superseded planner entry selector is removed");
+  assert.equal(/byFileName = new Map\(input\.sourceFiles\.map/u.test(initializationAnalysis), true,
+    "entry selection uses the exact checked source collection");
+  assert.equal(/const file = byFileName\.get\(path\)/u.test(initializationAnalysis), true,
+    "the selected entry retains the checked source object");
+  assert.equal(/rustBinaryEntryDeclaration|hasModifierKind|returnCarrier|parameters\(statement\)|typeParameters\(statement\)/u.test(initializationAnalysis), false,
+    "entry source selection does not reconstruct a main declaration contract");
   for (const [attribute, level, reason] of [
     [rustLintAttributes.authoredDeadCode, "allow", "retains an unused authored declaration"],
     [rustLintAttributes.authoredUnreadField, "allow", "retains an unread authored field"],

@@ -36,11 +36,11 @@ test("borrowed indexed reads require their own exact pure operation, not owned C
       abi: { ...operation.abi, effects: { ...operation.abi.effects, ...effects } } })),
     { ...operation, abi: { ...operation.abi, result: { ...operation.abi.result, kind: "async" } } },
   ]) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 targetOperation: { get: (subject) => {
     return subject === element
         ? replacement : program.records.targetOperation.get(subject);
-} }});
+} }}, program.records);
     assert.equal(rustBorrowedElementRead(receiver, source.ast, records), undefined);
   }
 });

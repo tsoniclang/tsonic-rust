@@ -38,14 +38,14 @@ export function read(values: Record<string, string> | undefined): string | undef
     { ...selected, resultType: fact.resultCarrier },
     { ...selected, resultType: fact.receiverCarrier },
   ]) {
-    const changed = context(createRustRecordFixture({...program.records,
-selectedOperation: { get: (subject) => subject === node ? mutation : program.records.selectedOperation.get(subject) }}));
+    const changed = context(createRustRecordFixture({
+selectedOperation: { get: (subject) => subject === node ? mutation : program.records.selectedOperation.get(subject) }}, program.records));
     assert.equal(sourceIndexSelectedOperationMatches(node, fact, changed), false);
   }
   for (const innerResultCarrier of [fact.receiverCarrier, optional.resultCarrier]) {
-    const changed = context(createRustRecordFixture({...program.records,
+    const changed = context(createRustRecordFixture({
 optionalChain: { get: (subject) => subject === node
-    ? { ...optional, innerResultCarrier } : program.records.optionalChain.get(subject) }}));
+    ? { ...optional, innerResultCarrier } : program.records.optionalChain.get(subject) }}, program.records));
     assert.equal(sourceIndexSelectedOperationMatches(node, fact, changed), false);
     assert.equal(changed.diagnostics.length, 1);
     assert.equal(changed.diagnostics[0].evidence.includes("target.capability=rust.backend.optional-chain-inner-result"), true);

@@ -61,10 +61,10 @@ export function read(value: int32): int32 { return (effect(), value); }
     ["selection identity", original, { ...selected, operationId: "invalid" }],
     ["selection completion", original, { ...selected, resultType: changed }],
   ]) {
-    const records = createRustRecordFixture({...program.records,
+    const records = createRustRecordFixture({
 targetOperation: { get: (node) => node === subject
     ? operation : program.records.targetOperation.get(node) },
-selectedOperation: { get: (node) => node === subject ? selection : program.records.selectedOperation.get(node) }});
+selectedOperation: { get: (node) => node === subject ? selection : program.records.selectedOperation.get(node) }}, program.records);
     const context = { input: { program: { ...program, records } }, diagnostics: [], sourceFile: ast.getSourceFile(subject) };
     assert.equal(planBinaryExpression(subject, context) === undefined, true, label);
     assert.ok(context.diagnostics.some(diagnostic => diagnostic.code === "RUST_MISSING_TARGET_FACT"), label);
