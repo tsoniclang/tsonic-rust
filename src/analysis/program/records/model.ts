@@ -137,6 +137,7 @@ export type RustProgramRecordWriter = RustProgramRecords & {
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
+  readonly assertOpen: () => void;
   seal(): RustProgramRecords;
   minimumFoundation(): RustFoundation;
 }

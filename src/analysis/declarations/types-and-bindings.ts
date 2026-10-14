@@ -15,9 +15,10 @@ import {
 } from "@tsonic/target-api/source";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import { flowStateFactKey } from "@tsonic/tsts";
-import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { closedMetadataEquals, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustBindingPatternFacts } from "../control-flow/binding-patterns.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -37,7 +38,7 @@ import { rustSourceUnionValueTypes } from "../../policy/types/resolution/source-
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 
-import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+import { resolveRustContextualParameterAbi, type RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) return undefined;
@@ -323,8 +324,24 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, sel
     );
     return;
   }
-  setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
-  walk.context.records.sourceParameterAbis.parameter(parameter, parameterAbi);
+  recordRustParameterAbiSelection(walk, parameter, parameterAbi);
+}
+
+export function recordRustParameterAbiSelection(
+  walk: RustFactWalk,
+  parameter: Node,
+  parameterAbi: RustSourceParameterAbi,
+): boolean {
+  const { records } = walk.context;
+  records.assertOpen();
+  const finalized = records.sourceParameterAbi.get(parameter);
+  if (finalized !== undefined && !closedMetadataEquals(finalized, parameterAbi)) {
+    failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.sourceParameterAbi' for one exact source subject.", parameter);
+  }
+  if (walk.finalizedParameters.has(parameter)) return true;
+  if (setCarrierFact(walk, parameter, parameterAbi.valueCarrier) === undefined) return false;
+  if (finalized === undefined) records.sourceParameterAbis.parameter(parameter, parameterAbi);
   const name = Node_Name(walk.context.ast, parameter);
   const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
   if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
@@ -336,7 +353,10 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, sel
       name,
       ["target.capability=rust.binding-pattern.parameter"],
     );
+    return false;
   }
+  walk.finalizedParameters.add(parameter);
+  return true;
 }
 
 export function recordBindingPatternFacts(

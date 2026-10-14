@@ -4,10 +4,8 @@ import { appendRustDiagnostic } from "../program/walk.js";
 import {
   KindBlock,
   KindFunctionExpression,
-  KindArrayBindingPattern,
   KindBindingElement,
   KindNonNullExpression,
-  KindObjectBindingPattern,
   KindParameter,
   KindParenthesizedExpression,
   KindSatisfiesExpression,
@@ -28,7 +26,7 @@ import {
   rustCallableTargetType,
   rustClosureProtocol,
 } from "../../target-model/types/index.js";
-import { recordBindingPatternFacts, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -189,8 +187,7 @@ export function resolveFunctionExpressionCarrier(
       (targetParameterCarrier.kind === "opaque" && targetParameterCarrier.id === "tsonic.rust.infer")) {
       return undefined;
     }
-    const finalizedAbi = walk.context.records.sourceParameterAbi.get(parameter);
-    const parameterAbi = finalizedAbi ?? resolveRustContextualParameterAbi(
+    const parameterAbi = resolveRustContextualParameterAbi(
       parameter,
       targetParameterCarrier,
       rustResolutionContext(walk, parameter),
@@ -209,16 +206,7 @@ export function resolveFunctionExpressionCarrier(
       )) {
       return undefined;
     }
-    if (finalizedAbi === undefined) {
-      setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
-      walk.context.records.sourceParameterAbis.parameter(parameter, parameterAbi);
-      const name = Node_Name(ast, parameter);
-      const nameKind = name === undefined ? "" : ast.kindName(name);
-      if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
-        !recordBindingPatternFacts(walk, name, parameterAbi.valueCarrier)) {
-        return undefined;
-      }
-    }
+    if (!recordRustParameterAbiSelection(walk, parameter, parameterAbi)) return undefined;
     parameterAbis.push(parameterAbi);
     byRefCopyParams.push(false);
   }

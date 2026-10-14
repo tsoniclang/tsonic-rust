@@ -171,6 +171,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     inferredReturns: new Map(),
     resolvingReturns: new Set(),
     resolvingCallableSignatures: new Set(),
+    finalizedParameters: new WeakSet(),
     callableSignatureCarrierFor: resolveRustCallableSignatureCarrier,
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
     capturedBindingStorage: new Map(),

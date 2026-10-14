@@ -66,6 +66,7 @@ export interface RustFactWalk {
   readonly inferredReturns: Map<Node, TargetTypeRef | undefined>;
   readonly resolvingReturns: Set<Node>;
   readonly resolvingCallableSignatures: Set<Node>;
+  readonly finalizedParameters: WeakSet<Node>;
   readonly callableSignatureCarrierFor: (walk: RustFactWalk, declaration: Node) => TargetTypeRef | undefined;
   readonly postCheckOperations: WeakMap<object, "binary" | "unary-minus" | "unary-plus">;
   readonly deferredCallbackCalls: WeakMap<Node, {

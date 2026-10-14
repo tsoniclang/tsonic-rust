@@ -218,6 +218,7 @@ export function createRustProgramRecordBuilder(
   });
   return Object.freeze({
     ...records,
+    assertOpen,
     typeAliasDeclarations,
     asyncFunctions,
     generators,

@@ -71,7 +71,10 @@ function admitFamily(model, family, subject, fact) {
 
 test("sealed records publish only frozen typed family readers without a native key or writer API", () => {
   const model = createModel();
+  model.assertOpen();
   const records = model.seal();
+  assert.equal(Object.hasOwn(records, "assertOpen"), false, "the analysis lifecycle guard is not a backend capability");
+  assert.throws(model.assertOpen, /after analysis is sealed/u);
   const subject = {};
   const carrier = { kind: "source-primitive", name: "uint32" };
   const location = rustSourceLocationTargetType(carrier);

@@ -5,16 +5,13 @@ import { rustAbsenceTargetType } from "../../target-model/types/carriers/native.
 import {
   KindFunctionExpression,
   KindFunctionDeclaration,
-  KindArrayBindingPattern,
   KindNonNullExpression,
-  KindObjectBindingPattern,
   KindParenthesizedExpression,
   KindSatisfiesExpression,
   KindVariableDeclaration,
   KindVariableStatement,
   Node_Expression,
   Node_Initializer,
-  Node_Name,
   Node_Type,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
@@ -32,7 +29,7 @@ import {
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { recordBindingPatternFacts, recordParameterAbiFacts } from "../declarations/types-and-bindings.js";
+import { recordRustParameterAbiSelection, recordParameterAbiFacts } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -346,14 +343,7 @@ function recordCallableValueSignatureFacts(
     if (parameterAbi === undefined) {
       return;
     }
-    setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
-    walk.context.records.sourceParameterAbis.parameter(parameter, parameterAbi);
-    const name = Node_Name(ast, parameter);
-    const nameKind = name === undefined ? "" : ast.kindName(name);
-    if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
-      !recordBindingPatternFacts(walk, name, parameterAbi.valueCarrier)) {
-      return;
-    }
+    if (!recordRustParameterAbiSelection(walk, parameter, parameterAbi)) return;
     parameterAbis.push(parameterAbi);
   }
   recordCallableSuspensionFacts(walk, expression, undefined, selectedReturnCarrier);
