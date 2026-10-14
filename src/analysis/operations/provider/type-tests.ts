@@ -2,7 +2,7 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionResult, RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "./model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustSelectedTargetOperation, TargetTypeRef } from "../../../target-model/types/model.js";
 import { resolveRustInstanceType } from "../../../policy/types/resolution/instance-tests.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { rustSourcePrimitiveTargetType } from "../../../target-model/types/index.js";
@@ -39,15 +39,15 @@ export function selectRustArrayTypeTest(
   context.records.targetOperation.set(request.source.call, {
     kind: "closed-type-test", operationId, sourceCarrier, predicate, resultCarrier, test,
   }, evidence);
-  context.records.selectedOperation.set(request.source.call, {
+  const operation: RustSelectedTargetOperation = {
     operationId, operationKind: "method", targetOperation: "closed-type-test", resultType: resultCarrier,
     provenance: { sourceExpression: request.source.call, sourceReceiver: argument.expression,
       sourceCallee: request.source.sourceCallee.expression, sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration },
-  }, evidence);
+  };
   context.records.argumentPassing.set(argument.expression, { mode: "borrow-shared", storageExpression: argument.expression }, evidence);
   context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature }, evidence);
+  return acceptRustPolicy({ selectedSignature, operation }, evidence);
 }
 
 export function selectRustClosedTypeTest(

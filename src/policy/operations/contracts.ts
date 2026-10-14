@@ -89,9 +89,10 @@ export type RustCheckedValueSelectionResult =
   | RustCheckedOperationSelectionResult;
 
 export type RustCheckedCallSelectionResult =
-  | { readonly kind: "source" }
+  | { readonly kind: "source"; readonly operation?: undefined }
   | {
       readonly kind: "deferred-callback";
+      readonly operation?: undefined;
       readonly callback: RustCallbackOperationTemplate;
       readonly sourceName: string;
       readonly providerDeclaration?: ProviderDeclarationIdentity;
@@ -100,6 +101,7 @@ export type RustCheckedCallSelectionResult =
     }
   | {
       readonly kind?: "target";
+      readonly operation?: RustTargetOperationSelection;
       readonly selectedSignature: RustSelectedTargetSignature;
       readonly argumentConversions?: readonly RustTargetCallArgumentSlot[];
     };

@@ -23,7 +23,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
 import { recordRustComputedCallEvaluation } from "../operations/computed-members.js";
@@ -772,8 +772,7 @@ function applySelectedRuntimeCallableCall(
         storageIndex: structuralMethod.storageIndex,
         callableCarrier: carrier,
       };
-  recordTargetOperation(
-    walk,
+  walk.context.records.selectedOperations.project(
     expression,
     selectedSignature.member.id,
     "method",
