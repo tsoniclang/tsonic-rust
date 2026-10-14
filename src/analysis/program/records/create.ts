@@ -33,8 +33,11 @@ import { createRustNativeUnreachableProducer } from "./native-unreachable.js";
 import { createRustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
 import { createRustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
 import { createRustPropertyProjectionProducer } from "./property-projection.js";
+import { createRustCallScopedLifetimeReconciliationProducer } from "./call-scoped-lifetime-reconciliation.js";
+import { createRustProjectUpcastProducer } from "./project-upcast.js";
+import { createRustProjectDowncastProducer } from "./project-downcast.js";
 import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
-import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
+import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
 import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
 import { rustTypeOnlyDeclarationFactKey } from "./keys/type-only.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
@@ -103,9 +106,9 @@ export function createRustProgramRecordBuilder(
   const contextualValueConversion = createFamily(rustContextualValueConversionFactKey, parent?.contextualValueConversion,
     fact => maximumRustFoundation(rustFoundationForContextualConversion(fact.conversion, definitions),
       maximumRustFoundation(rustFoundationForCarrier(fact.sourceCarrier), rustFoundationForCarrier(fact.targetCarrier))));
-  const callScopedLifetimeReconciliation = createFamily(rustCallScopedLifetimeReconciliationFactKey, parent?.callScopedLifetimeReconciliation);
-  const projectUpcast = createFamily(rustProjectUpcastFactKey, parent?.projectUpcast);
-  const projectDowncast = createFamily(rustProjectDowncastFactKey, parent?.projectDowncast);
+  const callScopedLifetimes = createRustCallScopedLifetimeReconciliationProducer(assertOpen, parent?.callScopedLifetimeReconciliation);
+  const projectUpcasts = createRustProjectUpcastProducer(assertOpen, parent?.projectUpcast);
+  const projectDowncasts = createRustProjectDowncastProducer(assertOpen, parent?.projectDowncast);
   const sourceBinding = createFamily(rustSourceBindingFactKey, parent?.sourceBinding);
   const bindingProjection = createFamily(rustBindingProjectionFactKey, parent?.bindingProjection);
   const mutatedBinding = createFamily(rustMutatedBindingFactKey, parent?.mutatedBinding);
@@ -171,9 +174,9 @@ export function createRustProgramRecordBuilder(
     optionProjection: optionProjection.reader,
     flowReadProjection: flowReadProjection.reader,
     contextualValueConversion: contextualValueConversion.reader,
-    callScopedLifetimeReconciliation: callScopedLifetimeReconciliation.reader,
-    projectUpcast: projectUpcast.reader,
-    projectDowncast: projectDowncast.reader,
+    callScopedLifetimeReconciliation: callScopedLifetimes.records,
+    projectUpcast: projectUpcasts.records,
+    projectDowncast: projectDowncasts.records,
     sourceBinding: sourceBinding.reader,
     bindingProjection: bindingProjection.reader,
     mutatedBinding: mutatedBinding.reader,
@@ -255,9 +258,12 @@ export function createRustProgramRecordBuilder(
     optionProjection: optionProjection.writer,
     flowReadProjection: flowReadProjection.writer,
     contextualValueConversion: contextualValueConversion.writer,
-    callScopedLifetimeReconciliation: callScopedLifetimeReconciliation.writer,
-    projectUpcast: projectUpcast.writer,
-    projectDowncast: projectDowncast.writer,
+    callScopedLifetimeReconciliation: callScopedLifetimes.records,
+    callScopedLifetimes,
+    projectUpcast: projectUpcasts.records,
+    projectUpcasts,
+    projectDowncast: projectDowncasts.records,
+    projectDowncasts,
     sourceBinding: sourceBinding.writer,
     bindingProjection: bindingProjection.writer,
     mutatedBinding: mutatedBinding.writer,

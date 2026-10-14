@@ -27,21 +27,17 @@ export function recordRustValueCarrierReconciliation(
   reconciliation: RustAppliedValueCarrierReconciliation,
 ): void {
   if (reconciliation.kind === "call-scoped-lifetime") {
-    records.callScopedLifetimeReconciliation.set(subject, reconciliation.fact, [
-      { message: "rust exact call-scoped lifetime reconciliation" },
-    ]);
+    records.callScopedLifetimes.reconcile(subject, reconciliation.fact.sourceCarrier, reconciliation.fact.selectedCarrier);
     return;
   }
   if (reconciliation.kind === "project-upcast") {
-    records.projectUpcast.set(subject, reconciliation.fact, [
-      { message: "rust exact project-type upcast" },
-    ]);
+    records.projectUpcasts.project(subject, reconciliation.fact.sourceCarrier, reconciliation.fact.targetCarrier,
+      reconciliation.fact.sourceVariants);
     return;
   }
   if (reconciliation.upcast !== undefined) {
-    records.projectUpcast.set(subject, reconciliation.upcast, [
-      { message: "rust exact project payload upcast before contextual conversion" },
-    ]);
+    records.projectUpcasts.project(subject, reconciliation.upcast.sourceCarrier, reconciliation.upcast.targetCarrier,
+      reconciliation.upcast.sourceVariants);
   }
   const { sourceCarrier, targetCarrier, conversion } = reconciliation.fact;
   if (conversion.kind === "option-some") {

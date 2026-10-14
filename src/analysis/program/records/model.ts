@@ -31,6 +31,9 @@ import type { RustNativeUnreachableProducer } from "./native-unreachable.js";
 import type { RustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
 import type { RustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
 import type { RustPropertyProjectionProducer } from "./property-projection.js";
+import type { RustCallScopedLifetimeReconciliationProducer } from "./call-scoped-lifetime-reconciliation.js";
+import type { RustProjectUpcastProducer } from "./project-upcast.js";
+import type { RustProjectDowncastProducer } from "./project-downcast.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -42,7 +45,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "awaitSourceErrorEffects" | "errorEffects" | "fallible" | "genericCallableInvocation" |
   "sourceAccessorEffects" | "sourceCallEffects" | "sourceErrorEffects" | "awaitValue" |
   "futureValue" | "resourceManagement" | "deferredProducerEffects" |
-  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection";
+  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection" |
+  "callScopedLifetimeReconciliation" | "projectUpcast" | "projectDowncast";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -77,6 +81,9 @@ export type RustProgramRecordWriter = {
   readonly genericNumerics: RustGenericNumericOperandsProducer;
   readonly indexedFieldKeys: RustIndexedFieldKeyArgumentProducer;
   readonly propertyProjections: RustPropertyProjectionProducer;
+  readonly callScopedLifetimes: RustCallScopedLifetimeReconciliationProducer;
+  readonly projectUpcasts: RustProjectUpcastProducer;
+  readonly projectDowncasts: RustProjectDowncastProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

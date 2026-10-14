@@ -208,12 +208,7 @@ function selectProjectDowncast(
     projection === undefined) {
     return false;
   }
-  context.records.projectDowncast.set(subject, {
-    sourceCarrier,
-    dispatchCarrier,
-    targetCarrier,
-    projection,
-  }, [{ message: "rust exact project-type downcast" }]);
+  context.records.projectDowncasts.project(subject, sourceCarrier, dispatchCarrier, targetCarrier, projection);
   return true;
 }
 
