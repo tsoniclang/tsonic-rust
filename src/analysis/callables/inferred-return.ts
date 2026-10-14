@@ -117,13 +117,7 @@ export function selectRustInferredReturn(
               resolveRustTargetTypeRef(Node_Type(ast, target) ?? sourceResult?.selectedReturnType, context, walk.operationOptions);
             const selected = selectRustInferredReturn(walk, target, carrier);
             if (selected === undefined) return undefined;
-            if (records.sourceCallableReturn.get(target) === undefined) {
-              const completion = walk.context.semanticsFor(target).operations.callableCompletion(target);
-              records.sourceCallableReturn.set(target, {
-                returnCarrier: selected,
-                ...(completion === undefined ? {} : { canFallThrough: completion.canFallThrough }),
-              });
-            }
+            records.sourceCallableReturns.inferred(walk, target, selected);
             const sourceFile = ast.getSourceFile(expression);
             if (sourceFile === undefined) return undefined;
             return resolveExpressionCarrier(probe, expression, sourceFile, undefined);

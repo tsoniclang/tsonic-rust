@@ -31,6 +31,11 @@ import type { RustNativeUnreachableProducer } from "./native-unreachable.js";
 import type { RustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
 import type { RustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
 import type { RustPropertyProjectionProducer } from "./property-projection.js";
+import type { RustTypeOnlyDeclarationProducer } from "./type-only-declaration.js";
+import type { RustModuleBindingProducer } from "./module-binding.js";
+import type { RustModuleCallableStorageProducer } from "./module-callable-storage.js";
+import type { RustSourceCallableReturnProducer } from "./source-callable-return.js";
+import type { RustCapturedFieldStorageProducer } from "./captured-field-storage.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -42,7 +47,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "awaitSourceErrorEffects" | "errorEffects" | "fallible" | "genericCallableInvocation" |
   "sourceAccessorEffects" | "sourceCallEffects" | "sourceErrorEffects" | "awaitValue" |
   "futureValue" | "resourceManagement" | "deferredProducerEffects" |
-  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection";
+  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection" |
+  "typeOnlyDeclaration" | "moduleBinding" | "moduleCallableStorage" | "sourceCallableReturn" | "capturedFieldStorage";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -77,6 +83,11 @@ export type RustProgramRecordWriter = {
   readonly genericNumerics: RustGenericNumericOperandsProducer;
   readonly indexedFieldKeys: RustIndexedFieldKeyArgumentProducer;
   readonly propertyProjections: RustPropertyProjectionProducer;
+  readonly typeOnlyDeclarations: RustTypeOnlyDeclarationProducer;
+  readonly moduleBindings: RustModuleBindingProducer;
+  readonly moduleCallableStoragePlans: RustModuleCallableStorageProducer;
+  readonly sourceCallableReturns: RustSourceCallableReturnProducer;
+  readonly capturedFieldStoragePlans: RustCapturedFieldStorageProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

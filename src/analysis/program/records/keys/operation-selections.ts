@@ -6,7 +6,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import type { RustOptionalChainFact } from "../../../../target-model/operations/model.js";
 import type { RustPlanKey } from "../key.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../../target-model/records/operations.js";
-import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact, RustComputedMemberFact } from "../../../../target-model/records/operation-selections.js";
+import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustComputedMemberFact } from "../../../../target-model/records/operation-selections.js";
 
 export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
   defineRustPlanKey("compoundWrite", closedMetadataEquals);
@@ -47,36 +47,6 @@ export const rustSourceCallableValueFactKey: RustPlanKey<RustSourceCallableValue
 export const rustDirectCallableReferenceFactKey: RustPlanKey<RustSourceCallableValueFact> = defineRustPlanKey(
   "directCallableReference", rustSourceCallableValueEquals,
 );
-
-export const rustModuleBindingFactKey: RustPlanKey<RustModuleBindingFact> = defineRustPlanKey(
-  "moduleBinding",
-  (left, right) => left.declarationKind === right.declarationKind &&
-    left.storage === right.storage &&
-    (left.storage === "native-callable"
-      ? right.storage === "native-callable" &&
-        left.callableDeclaration === right.callableDeclaration &&
-        left.name === right.name &&
-        nativeCallableValuesEqual(left.value, right.value)
-      : right.storage !== "native-callable" &&
-        (left.storage !== "module-cell" || right.storage === "module-cell" &&
-          left.initialization === right.initialization) &&
-        rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier)),
-);
-
-function nativeCallableValuesEqual(
-  left: Extract<RustModuleBindingFact, { readonly storage: "native-callable" }>["value"],
-  right: Extract<RustModuleBindingFact, { readonly storage: "native-callable" }>["value"],
-): boolean {
-  return left === undefined
-    ? right === undefined
-    : right !== undefined &&
-      rustTargetTypeRefEquals(left.carrier, right.carrier) &&
-      left.name === right.name &&
-      left.parameterCarriers.length === right.parameterCarriers.length &&
-      left.parameterCarriers.every((carrier, index) =>
-        rustTargetTypeRefEquals(carrier, right.parameterCarriers[index])) &&
-      rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier);
-}
 
 function rustTypedLocationPlanEquals(
   left: RustTypedLocationPlan,
