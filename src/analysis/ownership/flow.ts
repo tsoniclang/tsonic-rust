@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { analyzeSourceLiveness, createSourceControlFlow, type SourceFlowLimits,
   type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { Node_Expression, sourceEnclosingCallable, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand,
+import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand,
   type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
@@ -23,9 +23,6 @@ export interface RustOwnershipFlowInput {
   readonly limits?: Partial<SourceFlowLimits>;
 }
 
-const callableKinds: ReadonlySet<string> = new Set(["KindArrowFunction", "KindFunctionExpression",
-  "KindFunctionDeclaration", "KindMethodDeclaration", "KindGetAccessor", "KindSetAccessor", "KindConstructor"]);
-
 export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   | { readonly kind: "resolved"; readonly flow: RustOwnershipFlow }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
@@ -35,7 +32,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const movingReads = new Set<Node>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
   for (const declaration of storage.nodes) {
-    if (!callableKinds.has(ast.kindName(declaration)) || ast.body(declaration) === undefined) continue;
+    if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
     const selected = createSourceControlFlow(source, declaration, { limits: input.limits });
     const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, input.limits) : selected;
     if (liveness.kind === "unresolved") return { kind: "rejected", diagnostics: [{
@@ -102,7 +99,7 @@ function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: Rus
   if (input.mayBorrowArgument === undefined) return false;
   const { ast, navigation } = input.source;
   const invocations = new Set<Node>();
-  for (let parent = ast.parent(reference); parent !== undefined && !callableKinds.has(ast.kindName(parent)); parent = ast.parent(parent)) {
+  for (let parent = ast.parent(reference); parent !== undefined && !isSourceCallableBodyBoundary(ast, parent); parent = ast.parent(parent)) {
     if (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent)) invocations.add(parent);
   }
   if (invocations.size === 0) return false;
@@ -113,7 +110,7 @@ function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: Rus
     const other = ast.authoredRange(use.reference);
     if (other.kind !== "authored" || other.end > range.start) return false;
     let argument = use.reference;
-    for (let parent = ast.parent(argument); parent !== undefined && !callableKinds.has(ast.kindName(parent)); parent = ast.parent(argument)) {
+    for (let parent = ast.parent(argument); parent !== undefined && !isSourceCallableBodyBoundary(ast, parent); parent = ast.parent(argument)) {
       if (invocations.has(parent)) return input.mayBorrowArgument!(argument, use.reference);
       argument = parent;
     }
