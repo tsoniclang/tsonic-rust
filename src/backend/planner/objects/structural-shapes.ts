@@ -42,7 +42,9 @@ import { rustLifetimeToAst } from "../types/lifetime-syntax.js";
 import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "./structural-generics.js";
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
+import { rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
 
 export function planRustStructuralShapeModule(
@@ -154,15 +156,10 @@ export function planRustStructuralShapeModule(
       continue;
     }
     const fields: RustStructField[] = [];
-    const nativeCallableType = (carrier: import("../../../target-model/types/model.js").TargetTypeRef): RustType | undefined => {
+    const nativeCallableCarrier = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
       const protocol = rustCallableProtocol(carrier);
-      const parameters = protocol?.parameters.map(parameter => rustTypeFromCarrierInContext(parameter, definitionContext));
-      const result = protocol === undefined ? undefined : rustTypeFromCarrierInContext(protocol.result, definitionContext);
-      const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext);
-      return parameters === undefined || parameters.some(parameter => parameter === undefined) || result === undefined || error === undefined
-        ? undefined : { kind: "function-pointer", parameters: parameters as readonly RustType[], result: {
-          kind: "named", path: "Result", genericArguments: [{ kind: "type", type: result }, { kind: "type", type: error }],
-        } };
+      return protocol === undefined ? undefined
+        : rustRuntimeNativeMethodTargetType(protocol.parameters, protocol.result, rustProgramErrorTargetType());
     };
     for (const [storageIndex, field] of definition.fields.entries()) {
       const methodStorageCarrier = field.methodStorageCarrier;
@@ -178,8 +175,11 @@ export function planRustStructuralShapeModule(
         });
         return undefined;
       }
-      const renderedStorageType = field.nativeMethod === true ? nativeCallableType(field.carrier)
-        : rustTypeFromCarrierInContext(storageCarrier, definitionContext);
+      const fieldCarrier = field.nativeMethod === true ? nativeCallableCarrier(field.carrier) : storageCarrier;
+      const directMethod = field.method === true && field.nativeMethod !== true;
+      const physicalCarrier = fieldCarrier === undefined ? undefined : field.storage === "bound" && !directMethod
+        ? rustRuntimeRecordFieldTargetType(fieldCarrier, rustProgramErrorTargetType()) : fieldCarrier;
+      const renderedStorageType = rustTypeFromCarrierInContext(physicalCarrier, definitionContext);
       if (renderedStorageType === undefined) {
         diagnostics.push({
           code: "RUST_STRUCTURAL_SHAPE_FIELD_TYPE_MISSING",
@@ -191,11 +191,7 @@ export function planRustStructuralShapeModule(
         return undefined;
       }
       if (field.storage === "stored" || field.storage === "bound") {
-        const errorType = field.storage === "bound"
-          ? rustTypeFromCarrierInContext(rustProgramErrorTargetType(), definitionContext) : undefined;
-        if (field.storage === "bound" && errorType === undefined) return undefined;
-        if (field.storage === "bound") usedAliases.add("rt");
-        const type = field.method === true && field.nativeMethod !== true
+        const type = directMethod
           ? structuralCallableAlias(
               callableAliases,
               `${definition.targetName}${rustPascalCaseIdentifier(field.sourceName)}Method`,
@@ -204,12 +200,7 @@ export function planRustStructuralShapeModule(
               renderedStorageType,
               visibility,
             )
-          : field.storage === "bound" ? {
-            kind: "named" as const, path: "rt::RecordField", genericArguments: [
-              { kind: "type" as const, type: renderedStorageType },
-              { kind: "type" as const, type: errorType! },
-            ],
-          } : renderedStorageType;
+          : renderedStorageType;
         const deadCode = rustStructuralFieldDeadCodeDisposition(
           context,
           definition.sourceCarriers,

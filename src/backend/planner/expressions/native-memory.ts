@@ -7,6 +7,8 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustOptionElementCarrier, rustStructuralObjectCarrierValue, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustRuntimeNativeLayoutTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
+import { rustNativeMemoryPaths } from "../../../target-model/names/native-memory.js";
 
 export function planRustNativeAllocation(node: Node, initial: RustExpr, context: RustPlanContext, errorCarrier?: TargetTypeRef): RustExpr | undefined {
   const layout = context.input.program.records.nativeBacking.get(node);
@@ -44,21 +46,19 @@ export function planRustNativeMemoryCall(method: "allocate_native_location" | "l
     : rustTypeFromCarrierInContext(errorCarrier, context);
   if (error === undefined) return undefined;
   context.usedAliases?.add("rt");
-  return { kind: "call", path: `rt::raw_memory::${method}`,
+  return { kind: "call", path: rustNativeMemoryPaths[method],
     genericArguments: [{ kind: "type", type: pointee },
       { kind: "type", type: method === "location_to_raw" ? { kind: "infer" } : error }],
     args: [value, codec] };
 }
 
 export function planRustNativeLayout(layout: RustNativeMemoryLayout, context: RustPlanContext): RustExpr | undefined {
-  const pointee = rustTypeFromCarrierInContext(layout.pointeeCarrier, context);
-  if (pointee === undefined) return undefined;
+  const owner = rustTypeFromCarrierInContext(rustRuntimeNativeLayoutTargetType(layout.pointeeCarrier), context);
+  if (owner === undefined) return undefined;
   const dimensions: RustExpr[] = [{ kind: "int-literal", text: `${layout.size}usize` },
       { kind: "int-literal", text: `${layout.alignment}usize` },
       { kind: "int-literal", text: `${layout.width}u32` },
       { kind: "bool-literal", value: layout.littleEndian }];
-  const owner = { kind: "named" as const, path: "rt::raw_memory::NativeLayout",
-    genericArguments: [{ kind: "type" as const, type: pointee }] };
   if (layout.kind === "scalar") return { kind: "associated-call", owner, method: "scalar", args: dimensions };
   const integer = (value: string | number): RustExpr => ({ kind: "int-literal", text: `${value}usize` });
   const addOffset = (offset: RustExpr, value: RustExpr): RustExpr =>

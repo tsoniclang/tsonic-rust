@@ -3,12 +3,14 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { carrierDeclarationId, loadCarrierRegistry, validateCarrierRegistry } from "../../../../../tsonic/test/helpers/carrier-registry.mjs";
-import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
+import { rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
 import { rustFutureTargetType } from "../../../../dist/target-model/types/carriers/primitives.js";
 import { rustJsPromiseTargetTypeWithLifetime, rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/projections.js";
 import { rustNativeFutureOutputType } from "../../../../dist/target-model/types/callable-completions.js";
 import { rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
+import { rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../../dist/target-model/types/carriers/indexed-fields.js";
+import { rustTypeFromCarrier } from "../../../../dist/backend/planner/types/render.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const current = await loadCarrierRegistry(root);
@@ -72,4 +74,23 @@ test("retained E71 vocabulary is explicitly frozen, without admitting additional
     const row = current.rows.find(entry => entry.declaration.symbol === symbol);
     assert.equal(row?.frozen, true, symbol);
   }
+});
+
+test("native array const extents and trait-associated projections retain exact Rust syntax rather than phantom counterparts", () => {
+  const value = { kind: "source-primitive", name: "int64" };
+  const key = { kind: "source-primitive", name: "uint32" };
+  const extent = { kind: "integer", value: "9007199254740993" };
+  const fixed = rustFixedArrayTargetType(value, extent);
+  assert.equal(fixed.value.element === value, true);
+  assert.equal(fixed.value.length === extent, true);
+  assert.deepEqual(rustTypeFromCarrier(fixed), { kind: "fixed-array", element: { kind: "primitive", name: "i64" },
+    length: { kind: "integer", value: 9007199254740993n } });
+  const projection = rustIndexedFieldProjection(value, key);
+  assert.equal(projection.owner === value, true);
+  assert.equal(projection.trait.genericArguments[0].type === key, true);
+  assert.deepEqual(rustTypeFromCarrier(rustIndexedFieldTrait), { kind: "named", path: "rt::Field" });
+  assert.deepEqual(rustTypeFromCarrier(projection), { kind: "qualified", owner: { kind: "primitive", name: "i64" },
+    trait: { kind: "named", path: "rt::Field", genericArguments: [{ kind: "type", type: { kind: "primitive", name: "u32" } }] },
+    member: "Output" });
+  assert.equal(rustTypeFromCarrier({ ...projection, owner: { kind: "opaque", id: "unrenderable" } }) === undefined, true);
 });

@@ -9,15 +9,10 @@ import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { rustStructuralObjectCarrierValue, rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
+import { rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 
 export function rustRecordFieldStorageType(field: RustStructuralShapeField, context: RustPlanContext): RustType | undefined {
-  const value = rustTypeFromCarrierInContext(field.carrier, context);
-  const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType(), context);
-  return value === undefined || error === undefined ? undefined : {
-    kind: "named", path: "rt::RecordField", genericArguments: [
-      { kind: "type", type: value }, { kind: "type", type: error },
-    ],
-  };
+  return rustTypeFromCarrierInContext(rustRuntimeRecordFieldTargetType(field.carrier, rustProgramErrorTargetType()), context);
 }
 
 export function rustRecordFieldSelector(field: RustStructuralShapeField, mutable: boolean): RustExpr {
