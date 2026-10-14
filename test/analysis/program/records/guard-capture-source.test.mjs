@@ -84,7 +84,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(captures !== undefined, true);
     assert.equal(captures.captures.length, 1);
     const selected = captures.captures[0];
-    assert.equal(source.ast.is.IsParameter(selected.declaration), true);
+    assert.equal(source.ast.kindName(selected.declaration), "KindParameter");
     assert.equal(source.ast.text(source.ast.name(selected.declaration)), "value");
     assert.equal(nodes.includes(selected.reference), true);
     assert.equal(selected.storage, "value");
