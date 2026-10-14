@@ -41,7 +41,7 @@ export function analyzeRustReadOwnership(input: {
   }] });
   const storageReads = new Map<Node, boolean>();
   for (let index = storage.nodes.length - 1; index >= 0; index -= 1) {
-    if (!budget.step() || !budget.row()) return rejectedBudget();
+    if (!budget.node() || !budget.step() || !budget.row()) return rejectedBudget();
     const node = storage.nodes[index]!;
     const operand = sourceTransparentExpressionOperand(ast, node);
     const inherited = operand === undefined ? undefined : storageReads.get(operand);

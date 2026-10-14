@@ -55,10 +55,12 @@ test("an incomplete or unordered transparent inventory never silently selects a 
   }
 });
 
-test("storage-read materialization respects the finite row budget before publishing any records", async () => {
+test("storage-read materialization respects finite node, work and row budgets before publication", async () => {
   const { input } = await fixture();
-  const result = analyzeRustReadOwnership({ ...input, limits: { maximumTransportRows: 1 } });
-  assert.equal(result.kind, "rejected");
-  assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED");
-  assert.equal("ownership" in result, false);
+  for (const limits of [{ maximumNodes: 1 }, { maximumSteps: 1 }, { maximumTransportRows: 1 }]) {
+    const result = analyzeRustReadOwnership({ ...input, limits });
+    assert.equal(result.kind, "rejected");
+    assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED");
+    assert.equal("ownership" in result, false);
+  }
 });
