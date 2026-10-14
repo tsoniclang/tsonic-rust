@@ -62,6 +62,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;
   readonly genericCallableErrors: import("../callables/generic-errors.js").RustGenericCallableErrorIndex;
   readonly callableOwnership: import("../callables/ownership-plan.js").RustCallableOwnershipPlan;
   readonly lexicalFunctions: import("../callables/lexical-functions.js").RustLexicalFunctionQueries;

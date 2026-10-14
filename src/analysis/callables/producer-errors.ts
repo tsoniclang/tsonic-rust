@@ -1,13 +1,12 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import { rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
-import { rustTargetGenericArgumentEquals } from "../../target-model/types/equality.js";
 import { rustProducerErrorReference, type RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
-import type { RustTargetConstArgument, RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { bindRustGenericArguments } from "../../target-model/types/carriers/generic-argument-bindings.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
@@ -33,27 +32,9 @@ export function selectRustProducerError(
   const producer = input.producers.forIdentity(reference.identity);
   if (producer === undefined || producer.fileName !== reference.fileName ||
     producer.environment.length !== reference.genericArguments.length) return undefined;
-  const types = new Map<string, TargetTypeRef>();
-  const lifetimes = new Map<string, RustLifetimeRef>();
-  const consts = new Map<string, RustTargetConstArgument>();
-  const argumentsByIdentity = new Map<string, RustTargetGenericArgument>();
-  for (const [index, parameter] of producer.environment.entries()) {
-    const argument = reference.genericArguments[index]!;
-    let identity: string;
-    if (parameter.kind === "type" && parameter.type.kind === "type-parameter" && argument.kind === "type") {
-      identity = `type:${parameter.type.identity}`;
-      types.set(parameter.type.identity, argument.type);
-    } else if (parameter.kind === "lifetime" && argument.kind === "lifetime") {
-      identity = `lifetime:${rustLifetimeKey(parameter.lifetime)}`;
-      lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
-    } else if (parameter.kind === "const" && parameter.value.kind === "parameter" && argument.kind === "const") {
-      identity = `const:${parameter.value.identity}`;
-      consts.set(parameter.value.identity, argument.value);
-    } else return undefined;
-    const previous = argumentsByIdentity.get(identity);
-    if (previous !== undefined && !rustTargetGenericArgumentEquals(previous, argument)) return undefined;
-    argumentsByIdentity.set(identity, argument);
-  }
+  const bindings = bindRustGenericArguments(producer.environment, reference.genericArguments);
+  if (bindings === undefined) return undefined;
+  const { types, lifetimes, consts } = bindings;
   const asynchronous = input.records.asyncFunction.get(producer.declaration);
   const suspended = asynchronous !== undefined || input.records.generator.get(producer.declaration) !== undefined;
   if (reference.channel === "invoke" && suspended) return Object.freeze({ kind: "carrier",

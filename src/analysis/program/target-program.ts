@@ -53,6 +53,7 @@ import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { analyzeRustErrorRegions } from "../errors/regions.js";
 
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
@@ -312,7 +313,13 @@ export function analyzeRustTargetProgram(
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
     effectsFor: declaration => records.sourceCallEffects.get(declaration) });
   if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
+  const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
+    names: context.names, callables: context.callableValues,
+    producers: context.callableValues.nativeProducers, definitions: typeDefinitions,
+    components: sourcePackageComponents.plan });
+  if (errorRegions.kind === "rejected") return errorRegions;
   const program: RustTargetProgram = Object.freeze({
+    errorRegions: errorRegions.value,
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
     lexicalFunctions,
