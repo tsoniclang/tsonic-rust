@@ -105,8 +105,11 @@ test("sealed records publish only frozen typed family readers without a native k
     bindingStorage: () => model.bindingStoragePlans.location(subject, carrier),
     retainedCallLifetimes: () => model.retainedCalls.finalize(subject, new Map([["region", { kind: "static" }]])),
     bindingProjection: () => model.bindingProjections.resolve(subject, carrier, carrier, { kind: "tuple-element", index: 0 }),
+    compileTimeSource: () => model.compileTimeSources.erase(subject),
+    selfMode: () => model.selfModes.method(subject, "ref"),
+    memoryLayoutObservation: () => model.memoryLayoutObservations.observe(subject, 0),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 50, "every integrated producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 53, "every integrated producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {
