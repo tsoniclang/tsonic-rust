@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustSelectedOperationProducer } from "../../../../dist/analysis/operations/records/selected-operation.js";
+import { createRustSelectedOperationProducer } from "../../../../dist/analysis/program/records/selected-operation.js";
+import * as selectedOperationModule from "../../../../dist/analysis/program/records/selected-operation.js";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import {
   rustPostCheckBinaryOperationId,
@@ -18,6 +19,10 @@ const operation = (changes = {}) => ({
   ...changes,
 });
 const accepted = value => ({ kind: "accept", value, evidence: [] });
+
+test("the typed record owner exposes no source-call selection or deferred orchestration entrypoint", () => {
+  assert.deepEqual(Object.keys(selectedOperationModule), ["createRustSelectedOperationProducer"]);
+});
 
 test("selected-operation records have one typed immutable reader and no general writer", () => {
   const builder = createRustProgramRecordBuilder();
