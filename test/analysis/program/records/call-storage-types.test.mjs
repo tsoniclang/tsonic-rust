@@ -68,7 +68,6 @@ builder.bindingStorage.get(node);
 builder.retainedCallLifetimes.get(node);
 builder.bindingProjection.get(node);
 import { rustConversionKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";
-import { rustRetainedEnvironmentFactKey } from "${join(root, "dist/analysis/program/records/keys/retained-environments.js")}";
 `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [

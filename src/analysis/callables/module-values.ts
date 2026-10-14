@@ -62,10 +62,13 @@ export function recordRustInlineModuleCallableUses(
   if (selection.declarationValue) for (const use of selection.uses) {
     if (use.kind !== "first-class") continue;
     const value = records.directCallableReference.get(use.reference);
-    if (value !== undefined) records.sourceCallableValue.set(use.reference, value, [{ message: "rust exact immutable declaration-owned callable value" }]);
+    if (value !== undefined) records.sourceCallableValues.function(use.reference, value.sourceDeclaration,
+      value.fileName, value.name, value.carrier, value.parameterCarriers, value.resultCarrier);
   }
   if (!selection.stored) for (const alias of selection.aliases) {
     for (const declaration of alias.declarations) records.compileTimeSource.set(declaration, true, [{ message: "rust exact immutable invocation-only native callable alias" }]);
-    for (const reference of alias.references) records.directCallableReference.set(reference, alias.producer, [{ message: "rust exact immutable invocation-only native callable producer" }]);
+    for (const reference of alias.references) records.directCallableReferences.function(reference,
+      alias.producer.sourceDeclaration, alias.producer.fileName, alias.producer.name,
+      alias.producer.carrier, alias.producer.parameterCarriers, alias.producer.resultCarrier);
   }
 }

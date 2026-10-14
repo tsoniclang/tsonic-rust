@@ -138,15 +138,9 @@ export function resolveIdentifierCarrier(
         const closedParameterAbis = parameterAbis as import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
         const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
         if (callableCarrier === undefined) return undefined;
-        walk.context.records.sourceCallableValue.set(identifier, {
-          form: "function",
-          sourceDeclaration: declaration,
-          fileName: ast.getFileName(ast.getSourceFile(declaration)),
-          name: targetName,
-          carrier: callableCarrier,
-          parameterCarriers: closedParameterAbis.map((abi) => abi.parameterCarrier),
-          resultCarrier: returnCarrier,
-        }, [{ message: "rust exact project-source callable value" }]);
+        walk.context.records.sourceCallableValues.function(identifier, declaration,
+          ast.getFileName(ast.getSourceFile(declaration)), targetName, callableCarrier,
+          closedParameterAbis.map((abi) => abi.parameterCarrier), returnCarrier);
         return setCarrierFact(walk, identifier, callableCarrier);
       }
     }
@@ -197,12 +191,8 @@ export function recordProjectSourceBinding(
   const module = walk.context.records.moduleBinding.get(declaration);
   if (binding.scope === "module" && module?.storage === "native-callable" && module.value !== undefined &&
     !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {
-    walk.context.records.directCallableReference.set(identifier, {
-      form: "function", sourceDeclaration: module.callableDeclaration,
-      fileName: binding.fileName, name: module.name, carrier: module.value.carrier,
-      parameterCarriers: module.value.parameterCarriers,
-      resultCarrier: module.value.resultCarrier,
-    }, [{ message: "rust immutable finalized native callable reference" }]);
+    walk.context.records.directCallableReferences.function(identifier, module.callableDeclaration,
+      binding.fileName, module.name, module.value.carrier, module.value.parameterCarriers, module.value.resultCarrier);
   }
   return binding;
 }
