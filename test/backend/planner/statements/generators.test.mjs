@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeNodes } from "../../../helpers/native-ast.mjs";
 import { acmeTestingPackage, artifactText, compileRust } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
@@ -244,8 +245,13 @@ export function* exchange<A, B, C>(initial: A, completed: B): Generator<A, B, C>
   });
 
   assertNoTargetDiagnostics(result.diagnostics);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /exchange<A: 'static, B: 'static, C: 'static>/u);
+  const exchange = nativeFunction(result, "exchange");
+  for (const name of ["A", "B", "C"]) {
+    const parameter = exchange.generics.parameters.find(value => value.kind === "type" && value.name === name);
+    assert.equal(parameter !== undefined, true, `exact generic ${name}`);
+    assert.equal(nativeNodes(parameter.bounds, value => value.kind === "lifetime" && value.lifetime?.kind === "static").length,
+      1, `${name} retains the required static obligation`);
+  }
   validateGeneratedProject("generic-generator", result.artifacts);
 });
 

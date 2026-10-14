@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeCallableContract, nativeFunction, nativeType, assertNoNativeCalls } from "../../helpers/native-ast.mjs";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { optionalInvocationInputsSource } from "../../../../tsonic/test/fixtures/optional-invocation-inputs.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
-import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 
@@ -14,9 +15,14 @@ for (const surfaces of [[], ["js"]]) {
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
       files: { "index.ts": optionalInvocationInputsSource + '\nexport function main(): void { if (!run()) throw new Error("optional invocation input"); }\nmain();\n' } });
     assertNoTargetDiagnostics(result.diagnostics);
-    const source = artifactText(result, "src/index.rs");
-    assert.match(source, /Option<&impl\s+(?:for<[^>]+>\s+)?rt::CallableImplementation/u);
-    assert.doesNotMatch(source, /action\.clone\(\)|action:\s*Option<&dyn/u);
+    const invoke = nativeCallableContract(result, "invoke", 0, [nativeType("i64")], nativeType("i64"));
+    assert.equal(invoke.params[0].type.path, "Option");
+    const input = invoke.params[0].type.genericArguments[0].type;
+    assert.equal(input.kind, "reference");
+    assert.equal(input.mutable, false);
+    assert.equal(input.referent.kind, "named", "an optional implementation is not erased to a trait object");
+    assertNoNativeCalls(invoke.body, ["clone"], "optional invocation does not clone its implementation");
+    assert.deepEqual(nativeFunction(result, "integerArgument").returnType, nativeType("i64"));
     validateGeneratedProject(`optional-invocation-inputs-${lane}`, result.artifacts, { run: true });
     const directory = writeGeneratedProject(`optional-invocation-input-cost-${lane}`, result.artifacts);
     appendFileSync(join(directory, "src/index.rs"), `

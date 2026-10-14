@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerErrorRecords }
+import { nativeClosureProducerFixture, printNativeClosureProducer, planNativeClosureProducer, nativeClosureProducerFailurePackage }
   from "../../../helpers/native-closure-producers.mjs";
+import { nativeNodes, nativeCalls, assertNoNativeCalls, nativeType } from "../../../helpers/native-ast.mjs";
 
 import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
 import { printRustType } from "../../../../dist/print/source/types.js";
@@ -15,7 +16,6 @@ import { rustNativeCompletionFutureType } from "../../../../dist/target-model/ty
 import { rustTypeGenericArguments } from "../../../../dist/target-model/types/generic-arguments.js";
 
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
-const ownFailure = nativeClosureProducerErrorRecords(failure);
 
 function producerCarrierRecords(carrier) {
   return (records, producer) => ({ ...records,
@@ -27,37 +27,92 @@ function producerCarrierRecords(carrier) {
 
 test("pure closure construction owns Infallible instead of inheriting the consumer's error", () => {
   const fixture = nativeClosureProducerFixture();
-  const text = printNativeClosureProducer(fixture);
-  assert.match(text, /rt::Callable::<\(\), Result<i32, core::convert::Infallible>>::new/u);
-  assert.match(text, /Ok::<_, core::convert::Infallible>\(3\)/u);
-  assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult|clone|Box/u);
+  const expression = planNativeClosureProducer(fixture);
+  assert.equal(expression.kind, "associated-call");
+  assert.equal(expression.method, "new");
+  assert.equal(expression.owner.path, "rt::Callable");
+  const types = expression.owner.genericArguments.filter(argument => argument.kind === "type").map(argument => argument.type);
+  assert.deepEqual(types[0], nativeType("()"));
+  assert.equal(types[1].path, "Result");
+  assert.deepEqual(types[1].genericArguments.map(argument => argument.type), [nativeType("i32"), { kind: "named", path: "core::convert::Infallible" }]);
+  const completed = nativeCalls(expression, "Ok");
+  assert.equal(completed.length, 1);
+  assert.deepEqual(completed[0].args, [{ kind: "int-literal", text: "3" }]);
+  assertNoNativeCalls(expression, ["clone", "Box::new"], "pure construction introduces no extra owner or clone");
+  assert.equal(nativeNodes(expression, node => node.kind === "named" && ["ConsumerFailure", "rt::TsonicError", "rt::TsonicResult"].includes(node.path)).length, 0);
   assert.equal(fixture.bodyContexts.length, 1);
   assert.equal(fixture.bodyContexts[0].fallibleBoundary === undefined, true, "pure body has no invented error region");
 });
 
 test("fallible closure construction and body retain the producer's exact native error", () => {
-  const fixture = nativeClosureProducerFixture({ selectRecords: ownFailure });
-  const text = printNativeClosureProducer(fixture);
-  assert.match(text, /rt::Callable::<\(\), Result<i32, ProducerFailure>>::new/u);
-  assert.match(text, /Ok::<_, ProducerFailure>\(3\)/u);
+  const fixture = nativeClosureProducerFixture({ packages: [nativeClosureProducerFailurePackage(failure)], source: `
+import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => int32 {
+  return (): int32 => { fail(); return 3; };
+}
+` });
+  const effects = fixture.original.records.errorEffects.get(fixture.node);
+  assert.equal(effects.nativeErrors.length, 1, "one checked native producer error");
+  assert.deepEqual(effects.nativeErrors[0].errorType, failure,
+    "the checked provider supplies the exact producer error before sealing");
+  const expression = planNativeClosureProducer(fixture);
+  assert.equal(expression.kind, "associated-call");
+  assert.equal(expression.method, "new");
+  assert.equal(expression.owner.path, "rt::Callable");
+  const results = nativeNodes(expression.owner, node => node.kind === "named" && node.path === "Result");
+  assert.equal(results.length, 1);
+  assert.deepEqual(results[0].genericArguments.map(argument => argument.type), [nativeType("i32"), { kind: "named", path: "ProducerFailure", identity: "fixture:ProducerFailure" }]);
+  const completed = nativeCalls(expression, "Ok");
+  assert.equal(completed.length, 1);
+  assert.deepEqual(completed[0].args, [{ kind: "int-literal", text: "3" }]);
   assert.equal(printRustType(fixture.bodyContexts[0].fallibleBoundary.errorType), "ProducerFailure");
-  assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult|clone|Box/u);
+  assertNoNativeCalls(expression, ["clone", "Box::new"], "producer errors add no wrapper or clone");
+  assert.equal(nativeNodes(expression, node => node.kind === "named" && ["ConsumerFailure", "rt::TsonicError", "rt::TsonicResult"].includes(node.path)).length, 0);
 });
 
 for (const throwing of [false, true]) {
     test(`JS Promise creation separates pure invocation from ${throwing ? "fallible" : "pure"} body`, () => {
       const fixture = nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"],
-        ...(throwing ? { selectRecords: ownFailure } : {}),
+        ...(throwing ? { packages: [nativeClosureProducerFailurePackage(failure)], source: `
+import { fail } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => Promise<int32> {
+  return async (): Promise<int32> => { fail(); return 3; };
+}
+` } : {}),
       });
-      const text = printNativeClosureProducer(fixture);
+      const expression = planNativeClosureProducer(fixture);
       const error = throwing ? "ProducerFailure" : "core::convert::Infallible";
-      assert.match(text, new RegExp(`Ok::<_, ${error}>\\(3\\)`, "u"));
-      assert.match(text, /Ok::<_, core::convert::Infallible>\(/u);
+      const completed = nativeCalls(expression, "Ok");
+      assert.equal(completed.filter(call => call.genericArguments?.[1].type.path === "core::convert::Infallible" &&
+        call.args[0]?.kind !== "int-literal").length, 1, "constructing the Promise is infallible regardless of body errors");
       assert.equal(fixture.bodyContexts[0].asyncContext, true);
       assert.equal(fixture.bodyContexts[0].fallibleBoundary === undefined, !throwing);
-      assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult|Box|\.clone\(/u);
-      assert.match(text, /from_fallible_factory/u);
-      assert.match(text, new RegExp(`JsPromise<'static, i32, ${error}>`, "u"));
+      assertNoNativeCalls(expression, ["clone", "Box::new"], "no additional Promise owner");
+      assert.equal(nativeNodes(expression, node => node.kind === "named" && ["ConsumerFailure", "rt::TsonicError", "rt::TsonicResult"].includes(node.path)).length, 0);
+      const factories = nativeNodes(expression, node => node.kind === "call" &&
+        node.path === `js_abi::JsPromise::${throwing ? "from_fallible_factory" : "from_infallible_factory"}`);
+      assert.equal(factories.length, 1);
+      const promiseTypes = nativeNodes(expression, node => node.kind === "named" && node.path === "js_abi::JsPromise");
+      assert.equal(promiseTypes.length, 1);
+      assert.deepEqual(promiseTypes[0].genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } });
+      assert.deepEqual(promiseTypes[0].genericArguments[1].type, nativeType("i32"));
+      assert.equal(promiseTypes[0].genericArguments[2].type.path, error);
+      const body = factories[0].args[0];
+      assert.equal(body.kind, "closure-block");
+      assert.equal(body.async, true);
+      assert.equal(body.move, true);
+      assert.deepEqual(body.params, []);
+      if (throwing) {
+        const completedBody = nativeCalls(body, "Ok");
+        assert.equal(completedBody.length, 1);
+        assert.equal(completedBody[0].genericArguments[1].type.path, error);
+        assert.deepEqual(completedBody[0].args, [{ kind: "int-literal", text: "3" }]);
+      } else {
+        assert.deepEqual(body.body.statements, [{ kind: "tail", expr: { kind: "int-literal", text: "3" } }]);
+        assert.equal(nativeCalls(body, "Ok").length, 0, "an infallible body needs no synthetic Result wrapper");
+      }
     });
 }
 
@@ -101,18 +156,25 @@ export function create(value: int32): () => Promise<int32> {
 });
 
 test("recursive closure construction retains one recursive owner with the exact error channel", () => {
-  const fixture = nativeClosureProducerFixture({ selectRecords: ownFailure, source: `
+  const fixture = nativeClosureProducerFixture({ packages: [nativeClosureProducerFailurePackage(failure)], source: `
+import { fail } from "test:producer";
 import type { int32 } from "@tsonic/core/types.js";
 export function create(): () => int32 {
-  const callback: () => int32 = (): int32 => { return callback(); };
+  const callback: () => int32 = (): int32 => { fail(); return callback(); };
   return callback;
 }
 ` });
   const capture = fixture.program.records.closureCapture.get(fixture.node);
   assert.equal(capture.recursiveDeclaration !== undefined, true);
-  const text = printNativeClosureProducer(fixture);
-  assert.match(text, /rt::Callable::<\(\), Result<i32, ProducerFailure>>::recursive/u);
-  assert.doesNotMatch(text, /ConsumerFailure|TsonicError|TsonicResult/u);
+  const expression = planNativeClosureProducer(fixture);
+  assert.equal(expression.kind, "associated-call");
+  assert.equal(expression.method, "recursive");
+  assert.equal(expression.owner.path, "rt::Callable");
+  const results = nativeNodes(expression.owner, node => node.kind === "named" && node.path === "Result");
+  assert.equal(results.length, 1);
+  assert.deepEqual(results[0].genericArguments[0].type, nativeType("i32"));
+  assert.equal(results[0].genericArguments[1].type.path, "ProducerFailure");
+  assert.equal(nativeNodes(expression, node => node.kind === "named" && ["ConsumerFailure", "rt::TsonicError", "rt::TsonicResult"].includes(node.path)).length, 0);
 });
 
 for (const [label, carrier, expected] of [

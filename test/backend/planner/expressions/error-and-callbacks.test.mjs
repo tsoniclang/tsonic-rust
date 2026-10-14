@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeNodes, nativeCalls, nativeType, nativeBorrow, assertNoNativeCalls } from "../../../helpers/native-ast.mjs";
 import { acmeTestingPackage, artifactText, compileRust, nodejsCapability } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
 
@@ -226,10 +227,16 @@ export function roundtrip(text: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(text: &str\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /js_abi::json_parse\(text\)\?/u);
-  assert.match(text, /js_abi::json_stringify\(&value\)\?/u);
+  const roundtrip = nativeFunction(result, "roundtrip");
+  assert.deepEqual(roundtrip.params.map(parameter => parameter.type), [nativeBorrow(nativeType("str"))]);
+  assert.deepEqual(roundtrip.returnType, nativeType("String"));
+  assert.equal(roundtrip.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  const propagated = nativeNodes(roundtrip.body, node => node.kind === "try");
+  assert.equal(propagated.length, 2, "both fallible JSON operations propagate");
+  assert.deepEqual(propagated.map(node => node.expr.path), ["js_abi::json_parse", "js_abi::json_stringify"]);
+  assert.equal(propagated[0].expr.args[0].path, "core::convert::AsRef::<str>::as_ref");
+  assert.deepEqual(propagated[0].expr.args[0].args, [{ kind: "path", path: "text" }]);
+  assert.deepEqual(propagated[1].expr.args, [{ kind: "reference", expr: { kind: "path", path: "value" } }]);
 });
 
 test("node fs read lowers through the fallible provider row", async () => {
@@ -248,10 +255,19 @@ export function load(path: string): string {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn load\(path: &str\) -> Result<String, rt::TsonicError> \{/u);
-  assert.match(text, /tsonic_rust_node::fs::read_file_sync_string\(\s*core::convert::AsRef::<str>::as_ref\(path\),\s*core::convert::AsRef::<str>::as_ref\("utf8"\),?\s*\)/u);
-  assert.doesNotMatch(text, /Ok\(tsonic_rust_node::fs::read_file_sync_string/u);
+  const load = nativeFunction(result, "load");
+  assert.deepEqual(load.params.map(parameter => parameter.type), [nativeBorrow(nativeType("str"))]);
+  assert.deepEqual(load.returnType, nativeType("String"));
+  assert.equal(load.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  const calls = nativeCalls(load.body, "tsonic_rust_node::fs::read_file_sync_string");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args, [
+    { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [{ kind: "path", path: "path" }] },
+    { kind: "str-literal", value: "utf8" },
+  ]);
+  assert.equal(nativeCalls(load.body, "Ok").filter(call => nativeCalls(call, "tsonic_rust_node::fs::read_file_sync_string").length !== 0).length,
+    0, "a Result-returning provider operation is not wrapped as a successful Result payload");
+  assertNoNativeCalls(load.body, ["clone", "to_owned", "to_string"], "provider arguments stay borrowed");
 });
 
 test("caught provider failures do not make project-source callers fallible", () => {

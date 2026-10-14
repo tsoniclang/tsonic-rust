@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeCalls, nativeNodes, nativeType, nativeBorrow, nativeDispatchBinding } from "../../helpers/native-ast.mjs";
 import {
   acmeTestingPackage,
   artifactText,
@@ -280,11 +281,28 @@ export async function roundtrip(dir: string, file: string): Promise<int32> {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn roundtrip\(dir: String, file: String\) -> js_abi::JsPromise<'static, i32, rt::TsonicError> \{/u);
-  assert.match(text, /js_abi::JsPromise::from_fallible_factory\(move \|\| async move \{/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::mkdir_async\(&dir\)\.await\?/u);
-  assert.match(text, /tsonic_rust_node::fs_promises::read_file_string_async\(&file, "utf8"\)\.await\?/u);
+  const roundtrip = nativeFunction(result, "roundtrip");
+  assert.equal(roundtrip.visibility, "public");
+  assert.deepEqual(roundtrip.params.map(parameter => parameter.type), [nativeType("String"), nativeType("String")]);
+  assert.equal(roundtrip.returnType.path, "js_abi::JsPromise");
+  assert.deepEqual(roundtrip.returnType.genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } });
+  assert.deepEqual(roundtrip.returnType.genericArguments[1].type, nativeType("i32"));
+  assert.equal(roundtrip.returnType.genericArguments[2].type.identity, "tsonic-rust-runtime:TsonicError");
+  const factory = nativeCalls(roundtrip.body, "js_abi::JsPromise::from_fallible_factory");
+  assert.equal(factory.length, 1);
+  assert.equal(factory[0].args[0].move, true);
+  for (const [path, arguments_] of [
+    ["tsonic_rust_node::fs_promises::mkdir_async", [{ kind: "reference", expr: { kind: "path", path: "dir" } }]],
+    ["tsonic_rust_node::fs_promises::read_file_string_async", [
+      { kind: "reference", expr: { kind: "path", path: "file" } }, { kind: "str-literal", value: "utf8" },
+    ]],
+  ]) {
+    const calls = nativeCalls(roundtrip.body, path);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].args, arguments_);
+    assert.equal(nativeNodes(roundtrip.body, node => node.kind === "try" && node.expr.kind === "await" &&
+      nativeCalls(node.expr, path).length === 1).length, 1, `${path} is awaited and propagates the exact failure`);
+  }
   validateGeneratedProject("r7-async-fs-lib", result.artifacts);
 });
 
@@ -358,11 +376,29 @@ export function closeStreams(inputPath: string, outputPath: string): void {
     },
   });
   assert.deepEqual(result.diagnostics, []);
-  const text = artifactText(result, "src/index.rs");
-  assert.match(text, /pub fn closeStreams\(inputPath: &str, outputPath: &str\)/u);
-  assert.match(text, /tsonic_rust_node::fs::create_read_stream\(\s*dispatch_root,\s*core::convert::AsRef::<str>::as_ref\(inputPath\),?\s*\)/u);
-  assert.match(text, /tsonic_rust_node::fs::create_write_stream\(\s*dispatch_root_2,\s*core::convert::AsRef::<str>::as_ref\(outputPath\),?\s*\)/u);
-  assert.match(text, /readable\.close\(\)\?/u);
-  assert.match(text, /writable\.close\(\)\?/u);
+  const close = nativeFunction(result, "closeStreams");
+  assert.equal(close.visibility, "public");
+  assert.deepEqual(close.params.map(parameter => parameter.type), [nativeBorrow(nativeType("str")), nativeBorrow(nativeType("str"))]);
+  for (const [operation, parameter, hasTasks] of [["create_read_stream", "inputPath", true], ["create_write_stream", "outputPath", false]]) {
+    const path = `tsonic_rust_node::fs::${operation}`;
+    const calls = nativeCalls(close.body, path);
+    assert.equal(calls.length, 1);
+    const selectedCall = calls[0];
+    assert.equal(selectedCall.args.length, hasTasks ? 3 : 2);
+    nativeDispatchBinding(result, close.body, selectedCall, selectedCall.args[0].path, "tsonic_rust_node::background::BackgroundTasks");
+    if (hasTasks) {
+      const tasks = selectedCall.args[1];
+      assert.equal(tasks.kind, "method-call");
+      assert.equal(tasks.method, "handle");
+      assert.deepEqual(tasks.args, []);
+      nativeDispatchBinding(result, close.body, selectedCall, tasks.receiver.path, "tsonic_rust_node::runtime_tasks::RuntimeTasks");
+    }
+    assert.deepEqual(selectedCall.args.at(-1), { kind: "call", path: "core::convert::AsRef::<str>::as_ref",
+      args: [{ kind: "path", path: parameter }] });
+  }
+  for (const receiver of ["readable", "writable"]) {
+    assert.equal(nativeNodes(close.body, node => node.kind === "try" && node.expr.kind === "method-call" &&
+      node.expr.method === "close" && node.expr.receiver.path === receiver).length, 1, `${receiver} close failure propagates`);
+  }
   validateGeneratedProject("r9-node-stream-constructors", result.artifacts);
 });

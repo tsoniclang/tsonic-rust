@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { nativeFunction, nativeSource, nativeNodes, nativeCalls, nativeType, nativeBorrow } from "../../helpers/native-ast.mjs";
 import {
   acmeTestingPackage,
   artifactText,
@@ -81,12 +82,22 @@ export async function chooseAliasedAsync(flag: boolean): Promise<int32> {
   });
 
   assert.deepEqual(result.diagnostics, []);
-  const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn stop\([^)]*message: &str\) -> Result<\(\), rt::TsonicError>/u);
-  assert.match(source, /\.stop\("sync"\)\?/u);
-  assert.match(source, /unreachable!/u);
-  assert.match(source, /fn stopAsync\(\) -> js_abi::JsPromise<'static, \(\), rt::TsonicError>/u);
-  assert.match(source, /stopAsync\(\)\.into_result\(\)\.await\?/u);
+  const stop = nativeFunction(result, "stop");
+  assert.deepEqual(stop.params.find(parameter => parameter.name === "message").type, nativeBorrow(nativeType("str")));
+  assert.equal(stop.returnType === undefined || stop.returnType.kind === "unit", true);
+  assert.equal(stop.errorType.identity, "tsonic-rust-runtime:TsonicError");
+  const model = nativeSource(result);
+  assert.equal(nativeNodes(model, node => node.kind === "try" && node.expr.kind === "method-call" && node.expr.method === "stop" &&
+    node.expr.args[0]?.kind === "str-literal" && node.expr.args[0].value === "sync").length, 1);
+  assert.equal(nativeNodes(model, node => node.kind === "unreachable").length > 0, true, "bottom never becomes a fabricated result");
+  const asynchronous = nativeFunction(result, "stopAsync");
+  assert.equal(asynchronous.returnType.path, "js_abi::JsPromise");
+  assert.deepEqual(asynchronous.returnType.genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } });
+  assert.deepEqual(asynchronous.returnType.genericArguments[1].type, nativeType("()"));
+  assert.equal(asynchronous.returnType.genericArguments[2].type.identity, "tsonic-rust-runtime:TsonicError");
+  assert.equal(nativeNodes(nativeFunction(result, "chooseAsync"), node => node.kind === "try" && node.expr.kind === "await" &&
+    node.expr.expr.kind === "method-call" && node.expr.expr.method === "into_result" &&
+    nativeCalls(node.expr, "stopAsync").length === 1).length, 1, "awaited bottom propagates the original rejection");
   validateGeneratedProject("never-fallible", result.artifacts);
 });
 

@@ -1,6 +1,7 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeFunction, nativeSource, nativeNodes, nativeType, nativeBorrow, assertNoNativeCalls } from "../../helpers/native-ast.mjs";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { conflictingNativeCallableSource, nativeModuleCallableFiles, relocatedModuleCallableFiles } from "../../../../tsonic/test/fixtures/native-module-callables.mjs";
@@ -35,15 +36,30 @@ main();
       "index.ts": nativeModuleCallableFiles["index.ts"] + '\nexport async function main(): Promise<void> { if (!await run()) throw new Error("module callable contract"); }\nawait main();\n',
     } });
     assertNoTargetDiagnostics(result.diagnostics);
-    const output = artifactText(result, "src/api.rs");
-    assert.match(output, surfaces.length === 0 ? /pub async fn exact\(value: i64\) -> i64/u
-      : /pub fn exact\(value: i64\) -> js_abi::JsPromise<'static, i64, rt::TsonicError>/u);
-    assert.match(output, /pub fn unsigned\(value: u64\) -> u64/u);
-    assert.doesNotMatch(output, /ModuleCell|GenericCallable|CallableEnvironment|Box::pin/u);
+    const exact = nativeFunction(result, "exact", "src/api.rs");
+    assert.equal(exact.visibility, "public");
+    assert.deepEqual(exact.params.map(parameter => parameter.type), [nativeType("i64")]);
     if (surfaces.length === 0) {
-      assert.match(output, /pub fn count\(value: &str\)/u);
-      const calls = artifactText(result, "src/index.rs");
-      assert.doesNotMatch(calls, /count\(text\.clone\(\)\)/u);
+      assert.equal(exact.isAsync, true);
+      assert.deepEqual(exact.returnType, nativeType("i64"));
+    } else {
+      assert.equal(exact.isAsync === true, false);
+      assert.equal(exact.returnType.path, "js_abi::JsPromise");
+      assert.deepEqual(exact.returnType.genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } });
+      assert.deepEqual(exact.returnType.genericArguments[1].type, nativeType("i64"));
+      assert.equal(exact.returnType.genericArguments[2].type.identity, "tsonic-rust-runtime:TsonicError");
+    }
+    const unsigned = nativeFunction(result, "unsigned", "src/api.rs");
+    assert.equal(unsigned.visibility, "public");
+    assert.deepEqual(unsigned.params.map(parameter => parameter.type), [nativeType("u64")]);
+    assert.deepEqual(unsigned.returnType, nativeType("u64"));
+    const api = nativeSource(result, "src/api.rs");
+    assert.equal(nativeNodes(api, node => node.kind === "named" &&
+      ["ModuleCell", "GenericCallable", "CallableEnvironment"].includes(node.path.split("::").at(-1))).length, 0);
+    assertNoNativeCalls(api, ["Box::pin"], "native module bodies need no boxed future");
+    if (surfaces.length === 0) {
+      assert.deepEqual(nativeFunction(result, "count", "src/api.rs").params.map(parameter => parameter.type), [nativeBorrow(nativeType("str"))]);
+      assertNoNativeCalls(nativeFunction(result, "run"), ["clone"], "forwarded native text is not copied");
     }
     validateGeneratedProject("typed-native-module-callables", result.artifacts, { run: true });
   });
