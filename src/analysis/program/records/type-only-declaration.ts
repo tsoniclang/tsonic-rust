@@ -1,4 +1,5 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import { rustSourceTypeDeclarations } from "../../../policy/types/model/source-declarations.js";
 import { selectRustInterfaceRepresentationAlias } from "../../declarations/interface-aliases.js";
@@ -22,6 +23,14 @@ export function createRustTypeOnlyDeclarationProducer(
 ): RustTypeOnlyDeclarationProducer {
   const family = createRustRecordFamily<RustTypeOnlyDeclaration>({ id: "tsonic.rust.typeOnlyDeclaration",
     equals: (left, right) => left.reason === right.reason }, assertOpen, inherited);
+  const finalizedStatements = new WeakSet<Node>();
+  const representedWalks = new WeakMap<Node, RustFactWalk>();
+  const recordReason = (subject: Node, reason: RustTypeOnlyDeclaration["reason"]): void => {
+    const existing = family.reader.get(subject);
+    if (existing !== undefined && existing.reason !== reason) failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.typeOnlyDeclaration' for one exact source subject.");
+    if (existing === undefined) family.writer.set(subject, { reason });
+  };
   return Object.freeze({
     records: family.reader,
     finalize(walk: RustFactWalk, files: readonly SourceFile[]): void {
@@ -30,14 +39,15 @@ export function createRustTypeOnlyDeclarationProducer(
         selected.kind === "conditional" ? [selected.declaration] : []));
       for (const file of files) for (const statement of walk.context.ast.statements(file)) {
         if (statement === undefined) throw new Error("Type-only declaration analysis received an incomplete checked source file.");
+        if (finalizedStatements.has(statement)) continue;
         const reason = selectRustTypeOnlyDeclaration(walk, statement, families);
         if (reason === undefined) continue;
-        family.writer.set(statement, { reason });
-        if (reason !== "ambient") continue;
-        for (const declaration of rustAmbientVariableDeclarations(walk, statement)) {
+        recordReason(statement, reason);
+        if (reason === "ambient") for (const declaration of rustAmbientVariableDeclarations(walk, statement)) {
           checkRustAmbientVariableUses(walk, declaration);
-          family.writer.set(declaration, { reason });
+          recordReason(declaration, reason);
         }
+        finalizedStatements.add(statement);
       }
     },
     representationAliases(walk: RustFactWalk, files: readonly SourceFile[]): void {
@@ -50,7 +60,8 @@ export function createRustTypeOnlyDeclarationProducer(
 
       function visit(declaration: Node): boolean {
         if (rejected.has(declaration)) return false;
-        if (ast.kindName(declaration) !== "KindInterfaceDeclaration" || visited.has(declaration)) return true;
+        if (visited.has(declaration) || representedWalks.get(declaration) === walk ||
+          ast.kindName(declaration) !== "KindInterfaceDeclaration") return true;
         if (visiting.has(declaration)) {
           rejected.add(declaration);
           appendRustDiagnostic(walk, "RUST_INTERFACE_REPRESENTATION_CYCLE",
@@ -69,7 +80,9 @@ export function createRustTypeOnlyDeclarationProducer(
         const selection = selectRustInterfaceRepresentationAlias(walk, declaration, visit);
         if (selection === false) return false;
         if (selection === undefined) return true;
-        for (const merged of selection.declarations) {
+        const declarations = new Set(selection.declarations);
+        const pending: Node[] = [];
+        for (const merged of declarations) {
           if (selection.registrationCarrier !== undefined &&
             (!walk.sourceTypes.registerRepresentationAlias(merged, selection.registrationCarrier) ||
               setCarrierFact(walk, merged, selection.registrationCarrier) === undefined)) {
@@ -77,7 +90,15 @@ export function createRustTypeOnlyDeclarationProducer(
               "Merged interfaces require one exact native representation.", merged, []);
             return false;
           }
-          family.writer.set(merged, { reason: "representation-alias" });
+          const existing = family.reader.get(merged);
+          if (existing !== undefined && existing.reason !== "representation-alias") failTargetAnalysisInvariant("tsonic-rust",
+            "Conflicting Rust semantic plan 'tsonic.rust.typeOnlyDeclaration' for one exact source subject.");
+          if (existing === undefined) pending.push(merged);
+        }
+        for (const merged of pending) family.writer.set(merged, { reason: "representation-alias" });
+        for (const merged of declarations) {
+          visited.add(merged);
+          representedWalks.set(merged, walk);
         }
         return true;
       }

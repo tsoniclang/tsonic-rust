@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { RustTypeAliasDeclarationFact } from "../../../target-model/records/callables-and-resources.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
@@ -16,16 +17,25 @@ export function createRustTypeAliasDeclarationProducer(
   assertOpen: () => void,
   inherited?: RustRecordFamily<RustTypeAliasDeclarationFact>,
 ): RustTypeAliasDeclarationProducer {
-  const family = createRustRecordFamily<RustTypeAliasDeclarationFact>({ id: "tsonic.rust.typeAliasDeclaration",
-    equals: (left, right) => left.kind === right.kind && (left.kind !== "native-alias" ||
+  const corresponds = (left: RustTypeAliasDeclarationFact, right: RustTypeAliasDeclarationFact) =>
+    left.kind === right.kind && (left.kind !== "native-alias" ||
       right.kind === "native-alias" && rustTargetTypeRefEquals(left.target, right.target)) &&
-      (left.kind === "native-alias" || closedMetadataEquals(left, right)) }, assertOpen, inherited);
+    (left.kind === "native-alias" || closedMetadataEquals(left, right));
+  const family = createRustRecordFamily<RustTypeAliasDeclarationFact>({ id: "tsonic.rust.typeAliasDeclaration",
+    equals: corresponds }, assertOpen, inherited);
+  const completedRequests = new WeakMap<Node, RustFactWalk>();
   return Object.freeze({
     records: family.reader,
     register(walk: RustFactWalk, declaration: Node): void {
       assertOpen();
+      const existing = family.reader.get(declaration);
+      if (existing !== undefined && completedRequests.get(declaration) === walk) return;
       const selected = selectRustTypeAliasDeclaration(walk, declaration);
-      if (selected !== undefined) family.writer.set(declaration, selected);
+      if (selected === undefined) return;
+      if (existing !== undefined && !corresponds(existing, selected)) failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.typeAliasDeclaration' for one exact source subject.");
+      if (existing === undefined) family.writer.set(declaration, selected);
+      completedRequests.set(declaration, walk);
     },
   });
 }

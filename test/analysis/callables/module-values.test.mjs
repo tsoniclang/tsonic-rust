@@ -35,7 +35,7 @@ function classify({ exported = false, kind = "first-class", direct = source, con
     records: { ...createRustRecordFixture({
       directCallableReference: { get: node => values.get(node)?.get("directCallableReference") },
       contextualValueConversion: { get: node => values.get(node)?.get("contextualValueConversion") },
-    }, builder), moduleCallableStoragePlans: builder.moduleCallableStoragePlans },
+    }, builder), assertOpen: builder.assertOpen, moduleCallableStoragePlans: builder.moduleCallableStoragePlans },
   } });
   return builder.moduleCallableStorage.get(declaration);
 }

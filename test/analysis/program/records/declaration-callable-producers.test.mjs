@@ -239,7 +239,7 @@ function ambientFixture(builder, { malformed = false, runtime = false } = {}) {
       assert.equal(builder.typeOnlyDeclaration.get(declaration) === undefined, true, "use diagnostics precede declaration admission");
       return runtime ? [{ kind: "first-class", reference }] : [{ kind: "type-only", reference }];
     } } } }, rejectedExpressions: new WeakSet(), resolving: new Set() };
-  return { file, statement, declaration, reference, walk, events };
+  return { file, statement, declaration, reference, walk, events, list };
 }
 
 test("ambient finalization preserves statement admission, then diagnostics, then declaration admission", () => {
@@ -253,6 +253,9 @@ test("ambient finalization preserves statement admission, then diagnostics, then
   assert.equal(diagnostics[0].code, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING");
   assert.equal(diagnostics[0].sourceNode === selected.reference, true);
   assert.equal(selected.walk.rejectedExpressions.has(selected.reference), true);
+  builder.typeOnlyDeclarations.finalize(selected.walk, [selected.file]);
+  assert.deepEqual(selected.events, ["ambient"], "a complete ambient query does not recheck uses");
+  assert.equal(diagnostics.length, 1, "the original diagnostic is not duplicated");
 });
 
 test("malformed ambient declarations retain the original early statement admission and invariant refusal", () => {
@@ -263,4 +266,19 @@ test("malformed ambient declarations retain the original early statement admissi
   assert.equal(builder.typeOnlyDeclaration.get(selected.statement).reason, "ambient");
   assert.equal(builder.typeOnlyDeclaration.get(selected.declaration) === undefined, true);
   assert.equal(selected.walk.context.diagnostics.length, 0);
+});
+
+test("an incomplete ambient query retains its earlier statement fact and can finish without re-admission", () => {
+  const builder = createRustProgramRecordBuilder();
+  const selected = ambientFixture(builder, { malformed: true });
+  assert.throws(() => builder.typeOnlyDeclarations.finalize(selected.walk, [selected.file]),
+    /Ambient declaration analysis received an incomplete checked declaration list/u);
+  const statement = builder.typeOnlyDeclaration.get(selected.statement);
+  selected.list.Declarations.Nodes = [selected.declaration];
+  builder.typeOnlyDeclarations.finalize(selected.walk, [selected.file]);
+  assert.equal(builder.typeOnlyDeclaration.get(selected.statement) === statement, true);
+  assert.equal(builder.typeOnlyDeclaration.get(selected.declaration).reason, "ambient");
+  assert.deepEqual(selected.events, ["ambient"]);
+  builder.typeOnlyDeclarations.finalize(selected.walk, [selected.file]);
+  assert.deepEqual(selected.events, ["ambient"], "only complete finalization is cached");
 });

@@ -110,7 +110,6 @@ function moduleStringCanUseStaticStorage(declaration: Node, context: RustAnalysi
   const summary = context.source.navigation.declarationUseSummary(declaration);
   if (summary.exported || summary.bindingWritten) return false;
   return summary.uses.every(use =>
-    context.source.sourceFacts.getFact(use.reference, flowStateFactKey) === undefined &&
     context.source.sourceFacts.getFact(use.reference, flowStateFactKey) === undefined);
 }
 

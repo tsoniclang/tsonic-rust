@@ -126,8 +126,9 @@ test("type-alias registration publishes the selected declaration fact and keeps 
 test("type-alias registration publishes nothing when the selector finds no declaration form", () => {
   const builder = createRustProgramRecordBuilder();
   const declaration = {};
+  let selections = 0;
   const walk = {
-    sourceTypes: { enumVariantsForDeclaration: () => undefined },
+    sourceTypes: { enumVariantsForDeclaration() { selections++; return undefined; } },
     context: {
       records: builder,
       ast: { typeParameters: () => [], name: () => undefined, text: () => "", getSourceFile: () => ({}), getFileName: () => "" },
@@ -137,6 +138,9 @@ test("type-alias registration publishes nothing when the selector finds no decla
   };
   builder.typeAliasDeclarations.register(walk, declaration);
   assert.equal(builder.typeAliasDeclaration.get(declaration) === undefined, true);
+  builder.typeAliasDeclarations.register(walk, declaration);
+  assert.equal(builder.typeAliasDeclaration.get(declaration) === undefined, true);
+  assert.equal(selections, 2, "an unavailable declaration query does not become completed state");
 });
 
 test("inherited type-alias facts reject a different selection without publishing over the parent", () => {
@@ -155,4 +159,26 @@ test("inherited type-alias facts reject a different selection without publishing
   const fresh = {};
   child.typeAliasDeclarations.register(stringLiteralWalk(child, variants), fresh);
   assert.equal(sealed.typeAliasDeclaration.get(fresh) === undefined, true);
+});
+
+test("successful type-alias queries select once per actual walk and still validate a different requester", () => {
+  const builder = createRustProgramRecordBuilder();
+  const declaration = {};
+  const variants = [{ name: "On", literal: "on" }];
+  const walk = stringLiteralWalk(builder, variants);
+  let selections = 0;
+  walk.sourceTypes.enumVariantsForDeclaration = () => { selections++; return variants; };
+  builder.typeAliasDeclarations.register(walk, declaration);
+  const canonical = builder.typeAliasDeclaration.get(declaration);
+  builder.typeAliasDeclarations.register(walk, declaration);
+  assert.equal(selections, 1);
+  assert.equal(builder.typeAliasDeclaration.get(declaration) === canonical, true);
+  const requester = { ...walk };
+  builder.typeAliasDeclarations.register(requester, declaration);
+  builder.typeAliasDeclarations.register(requester, declaration);
+  assert.equal(selections, 2, "a distinct requesting walk validates once without re-admission");
+  assert.equal(builder.typeAliasDeclaration.get(declaration) === canonical, true);
+  builder.seal();
+  assert.throws(() => builder.typeAliasDeclarations.register(requester, declaration), /after analysis is sealed/u);
+  assert.equal(selections, 2, "closed analysis rejects before cached work");
 });

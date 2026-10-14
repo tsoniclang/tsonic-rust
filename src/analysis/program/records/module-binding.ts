@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustModuleBindingFact } from "../../../target-model/records/operation-selections.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
@@ -20,7 +21,7 @@ export function createRustModuleBindingProducer(
   assertOpen: () => void,
   inherited?: RustRecordFamily<RustModuleBindingFact>,
 ): RustModuleBindingProducer {
-  const family = createRustRecordFamily({ id: "tsonic.rust.moduleBinding", equals: (
+  const corresponds = (
     left: RustModuleBindingFact, right: RustModuleBindingFact,
   ) => left.declarationKind === right.declarationKind && left.storage === right.storage &&
     (left.storage === "native-callable"
@@ -28,13 +29,22 @@ export function createRustModuleBindingProducer(
         left.name === right.name && nativeCallableValuesEqual(left.value, right.value)
       : right.storage !== "native-callable" &&
         (left.storage !== "module-cell" || right.storage === "module-cell" && left.initialization === right.initialization) &&
-        rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier)) }, assertOpen, inherited);
+        rustTargetTypeRefEquals(left.valueCarrier, right.valueCarrier));
+  const family = createRustRecordFamily({ id: "tsonic.rust.moduleBinding", equals: corresponds }, assertOpen, inherited);
+  const completedPolicies = new WeakMap<Node, RustFactWalk["moduleBindings"]>();
   return Object.freeze({
     records: family.reader,
     value(walk: RustFactWalk, declaration: Node, kind: "const" | "let" | "var", carrier: TargetTypeRef): void {
       assertOpen();
+      const existing = family.reader.get(declaration);
+      if (existing !== undefined && existing.storage !== "native-callable" && existing.declarationKind === kind &&
+        rustTargetTypeRefEquals(existing.valueCarrier, carrier) && completedPolicies.get(declaration) === walk.moduleBindings) return;
       const binding = walk.moduleBindings.classifyValue(declaration, kind, carrier);
-      if (binding !== undefined) family.writer.set(declaration, binding);
+      if (binding === undefined) return;
+      if (existing !== undefined && !corresponds(existing, binding)) failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.moduleBinding' for one exact source subject.");
+      if (existing === undefined) family.writer.set(declaration, binding);
+      completedPolicies.set(declaration, walk.moduleBindings);
     },
     function(declaration: Node, name: string, value: Exclude<RustNativeModuleCallable["value"], undefined>): void {
       family.writer.set(declaration, { declarationKind: "function", storage: "native-callable",

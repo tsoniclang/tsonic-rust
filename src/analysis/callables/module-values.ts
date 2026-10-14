@@ -1,11 +1,14 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import { rustCallableConversionMatches } from "../../target-model/conversions/callable.js";
 import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
 
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
+import type { RustRecordFamily } from "../../target-model/records/program.js";
+import { rustSourceCallableValueEquals } from "../../target-model/records/equality.js";
 import { selectRustInlineModuleCallableAliases } from "./module-aliases.js";
 
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -59,16 +62,31 @@ export function recordRustInlineModuleCallableUses(
   walk: RustFactWalk, selection: RustModuleCallableStorageSelection,
 ): void {
   const { records } = walk.context;
+  records.assertOpen();
+  const values = new Map<Node, RustSourceCallableValueFact>();
+  const references = new Map<Node, RustSourceCallableValueFact>();
   if (selection.declarationValue) for (const use of selection.uses) {
     if (use.kind !== "first-class") continue;
     const value = records.directCallableReference.get(use.reference);
-    if (value !== undefined) records.sourceCallableValues.function(use.reference, value.sourceDeclaration,
-      value.fileName, value.name, value.carrier, value.parameterCarriers, value.resultCarrier);
+    if (value !== undefined) collect(use.reference, value, records.sourceCallableValue, values, "sourceCallableValue");
   }
   if (!selection.stored) for (const alias of selection.aliases) {
+    for (const reference of alias.references) collect(reference, alias.producer,
+      records.directCallableReference, references, "directCallableReference");
+  }
+  for (const [reference, value] of values) records.sourceCallableValues.function(reference, value.sourceDeclaration,
+    value.fileName, value.name, value.carrier, value.parameterCarriers, value.resultCarrier);
+  if (!selection.stored) for (const alias of selection.aliases) {
     for (const declaration of alias.declarations) records.compileTimeSources.erase(declaration);
-    for (const reference of alias.references) records.directCallableReferences.function(reference,
-      alias.producer.sourceDeclaration, alias.producer.fileName, alias.producer.name,
-      alias.producer.carrier, alias.producer.parameterCarriers, alias.producer.resultCarrier);
+  }
+  for (const [reference, value] of references) records.directCallableReferences.function(reference, value.sourceDeclaration,
+    value.fileName, value.name, value.carrier, value.parameterCarriers, value.resultCarrier);
+
+  function collect(reference: Node, value: RustSourceCallableValueFact, family: RustRecordFamily<RustSourceCallableValueFact>,
+    pending: Map<Node, RustSourceCallableValueFact>, id: "sourceCallableValue" | "directCallableReference"): void {
+    const existing = pending.get(reference) ?? family.get(reference);
+    if (existing !== undefined && !rustSourceCallableValueEquals(existing, value)) failTargetAnalysisInvariant("tsonic-rust",
+      `Conflicting Rust semantic plan 'tsonic.rust.${id}' for one exact source subject.`);
+    if (existing === undefined) pending.set(reference, value);
   }
 }
