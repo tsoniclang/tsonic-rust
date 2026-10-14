@@ -24,7 +24,7 @@ import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
 import { rustProjectGenericContractCorrespondence } from "../../../policy/types/project/project-generic-contract.js";
 import { selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "./operators.js";
 import { selectedValueCarrier } from "../selected-values.js";
-import { selectedRustCallSignature } from "./calls/signatures.js";
+import { selectedRustCallSignature } from "../../program/records/selected-call.js";
 import {
   selectedAuthoredObjectFields,
   selectObjectAssignmentFields,
@@ -385,16 +385,12 @@ function mapSelectedObjectShapeProjection(
     })),
     returnType: innerResultCarrier,
   };
-  const selectedSignature = {
-    ...selectedRustCallSignature(request, member),
-    ...(!selection.static ? { sourceSelectedReceiverCarrier: sourceValueCarrier } : {}),
-  };
-  context.records.targetOperation.set(request.source.call, fact, evidence);
+  const selectedSignature = selectedRustCallSignature(request, member,
+    selection.static ? undefined : { sourceSelectedReceiverCarrier: sourceValueCarrier });
   if (optionalResult.fact !== undefined) {
     context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional Object.${selection.sourceName} projection` }]);
   }
-  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature, operation }, evidence);
+  return acceptRustPolicy({ selectedSignature, targetFact: fact, operation }, evidence);
 }
 
 export function acceptProjectSourceCall(
@@ -720,8 +716,7 @@ export function acceptProjectSourceCall(
               }),
         }),
   };
-  const selectedSignature = {
-    member,
+  const selectedSignature = selectedRustCallSignature(request, member, {
     ...(sourceResult.projection === undefined ? {} : { sourceResultProjection: sourceResult.projection }),
     ...(ownerCarrier === undefined ? {} : { sourceSelectedOwnerCarrier: ownerCarrier }),
     ...(unionContract === undefined ? {} : { sourceUnionMethods: { receiverCarrier: receiverCarrier!, variants: unionContract.methods } }),
@@ -729,19 +724,11 @@ export function acceptProjectSourceCall(
       ? {}
       : { sourceSelectedReceiverCarrier: receiverCarrier }),
     sourceDeclaration: selectedConstructor?.implicit === true ? selectedDeclaration : callableDeclaration,
-    ...(request.source.selectedSignature === undefined ? {} : { sourceSignature: request.source.selectedSignature }),
-    ...(selectedCallCalleeSymbol(request) === undefined ? {} : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-    ...(selectedCallCalleeDeclaration(request) === undefined ? {} : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-    ...(request.source.sourceResultType === undefined ? {} : { sourceReturnType: request.source.sourceResultType }),
-    sourceArgumentBindings: request.source.sourceArgumentBindings,
-    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-    ...(request.source.sourceSelectedMethodTypeArguments === undefined ? {} : { sourceSelectedMethodTypeArguments: request.source.sourceSelectedMethodTypeArguments }),
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
-  };
+  });
   if (optionalResult.fact !== undefined) {
     context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
   }
-  context.records.selectedCall.set(request.source.call, selectedSignature);
   return acceptRustPolicy({
     selectedSignature,
   }, [{ message: `rust selected project-source call ${member.id}` }]);

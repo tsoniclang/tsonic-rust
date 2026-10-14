@@ -2,6 +2,7 @@ import { rustBindingStorageEquals } from "../../../dist/target-model/records/equ
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram, sourceBindingHasSingleCaptureOwner } from "@tsonic/target-api/source";
 import { rustCapturedBindingStorage } from "../../../dist/analysis/callables/capture-storage.js";
@@ -10,20 +11,25 @@ import { rustCapturedBindingStorage } from "../../../dist/analysis/callables/cap
 
 
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
-import { rustBorrowedStrTargetType } from "../../../dist/target-model/types/index.js";
+import { rustBorrowedStrTargetType, rustFutureTargetType } from "../../../dist/target-model/types/index.js";
 
 const scalarCarrier = { kind: "source-primitive", name: "float64" };
 const stringCarrier = { kind: "target-named", id: "rust.std.String" };
 
 test("single captured native strings retain inline storage through exact pure borrowed observations", () => {
   const borrowed = rustBorrowedStrTargetType();
+  const size = { kind: "source-primitive", name: "native-uint" };
+  const conversion = { kind: "identity", sourceCarrier: size, targetCarrier: size, fallible: false };
   const input = { source: { kind: "receiver" }, sourceCarrier: stringCarrier, mode: "value",
     parameterCarrier: borrowed, conversion: { kind: "semantic",
       conversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" },
       sourceCarrier: stringCarrier, targetCarrier: borrowed, fallible: false } };
-  const original = { kind: "provider-operation", abi: {
-    effects: { evaluation: "pure", safety: "safe", invocation: "infallible" },
-    result: { kind: "sync", carrier: { kind: "source-primitive", name: "native-uint" } },
+  const original = { kind: "provider-operation", operationId: "fixture.string.length", abi: {
+    operationKind: "property", target: { form: "field", name: "length" },
+    sourceReceiver: { kind: "receiver", carrier: stringCarrier, declaredCarrier: stringCarrier, disposition: "runtime" },
+    sourceArguments: [], targetGenericArguments: [], dispatchInputs: [],
+    effects: { evaluation: "pure", safety: "safe", invocation: "infallible", awaiting: "not-applicable", errorBoundary: "none" },
+    result: { kind: "sync", rawCarrier: size, conversion, carrier: size },
     targetReceiver: { kind: "input", input }, targetArguments: [],
   } };
   for (const [label, operation, expected] of [
@@ -32,7 +38,8 @@ test("single captured native strings retain inline storage through exact pure bo
     ["observable", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, evaluation: "observable" } } }, "location"],
     ["unsafe", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, safety: "requires-unsafe" } } }, "location"],
     ["fallible", { ...original, abi: { ...original.abi, effects: { ...original.abi.effects, invocation: "fallible" } } }, "location"],
-    ["suspended", { ...original, abi: { ...original.abi, result: { ...original.abi.result, kind: "async" } } }, "location"],
+    ["suspended", { ...original, abi: { ...original.abi, result: { kind: "async", futureCarrier: rustFutureTargetType(size),
+      awaitedRawCarrier: size, awaitedConversion: conversion, awaitedCarrier: size } } }, "location"],
     ["retained result", { ...original, abi: { ...original.abi, result: { ...original.abi.result, carrier: stringCarrier } } }, "location"],
     ["missing receiver", { ...original, abi: { ...original.abi, targetReceiver: { kind: "none" } } }, "location"],
     ["mutable mode", { ...original, abi: { ...original.abi, targetReceiver: { kind: "input", input: { ...input, mode: "mut-ref" } } } }, "location"],
@@ -48,7 +55,7 @@ test("single captured native strings retain inline storage through exact pure bo
     };
     visit(current.owner);
     assert.equal(property !== undefined, true, label);
-    if (operation !== undefined) current.records.targetOperation.set(property, operation);
+    if (operation !== undefined) current.records.targetOperations.source(property, operation);
     assert.equal(current.select()?.storage, expected, label);
   }
 });
@@ -157,12 +164,8 @@ function fixture(text, options = {}) {
   const summary = source.navigation.declarationUseSummary(declaration);
   const reference = summary.uses.find(use => use.kind !== "type-only")?.reference;
   assert.equal(reference !== undefined, true, "exact retained reference");
-  const records = createRustRecordFixture({
-    bindingStorage: new WeakMap(),
-    mutatedBinding: new WeakMap(),
-    argumentPassing: new WeakMap(),
-    targetOperation: new WeakMap(),
-  });
+  const records = createRustProgramRecordBuilder();
+  const readers = createRustRecordFixture({}, records);
   const navigation = options.summary === undefined ? source.navigation : {
     ...source.navigation,
     declarationUseSummary: selected => {
@@ -171,7 +174,7 @@ function fixture(text, options = {}) {
     },
   };
   const walk = {
-    context: { ast: source.ast, source: { ...source, navigation }, records },
+    context: { ast: source.ast, source: { ...source, navigation }, records: readers },
     capturedBindingStorage: new Map(),
   };
   const select = (settings = {}) => rustCapturedBindingStorage(walk, declaration,
@@ -317,15 +320,21 @@ test("direct lexical roots retain reachability and first-class alias guards", ()
 });
 
 test("native call argument evidence must prove ownership rather than an address-bearing or macro use", () => {
+  const sourceCall = { kind: "source-call", operationId: "fixture.observe", target: { form: "function",
+    fileName: "/project/index.ts", name: "observe", selectedTargetName: "observe" }, parameters: [], resultCarrier: scalarCarrier };
   for (const [mode, operation, storage] of [
-    ["by-value", { kind: "source-call" }, "cell"],
-    ["borrow-shared", { kind: "source-call" }, "location"],
-    ["borrow-mut", { kind: "source-call" }, "location"],
-    [undefined, { kind: "source-call" }, "location"],
+    ["by-value", sourceCall, "cell"],
+    ["borrow-shared", sourceCall, "location"],
+    ["borrow-mut", sourceCall, "location"],
+    [undefined, sourceCall, "location"],
     ["by-value", undefined, "location"],
-    ["by-value", { kind: "provider-operation", abi: {
-      effects: { evaluation: "observable", safety: "safe", invocation: "infallible" },
-      target: { form: "expression-macro" },
+    ["by-value", { kind: "provider-operation", operationId: "fixture.macro", abi: {
+      operationKind: "method", sourceReceiver: { kind: "none" }, sourceArguments: [],
+      targetReceiver: { kind: "none" }, targetArguments: [], targetGenericArguments: [], dispatchInputs: [],
+      result: { kind: "sync", rawCarrier: scalarCarrier, carrier: scalarCarrier,
+        conversion: { kind: "identity", sourceCarrier: scalarCarrier, targetCarrier: scalarCarrier, fallible: false } },
+      effects: { evaluation: "observable", safety: "safe", invocation: "infallible", awaiting: "not-applicable", errorBoundary: "none" },
+      target: { form: "expression-macro", path: "fixture_macro" },
     } }, "location"],
   ]) {
     const current = fixture(`
@@ -339,7 +348,7 @@ test("native call argument evidence must prove ownership rather than an address-
     assert.equal(argument !== undefined, true, "exact selected argument");
     if (mode !== undefined) current.records.argumentPassing.set(argument, { mode });
     if (operation !== undefined)
-      current.records.targetOperation.set(current.source.ast.parent(argument), operation);
+      current.records.targetOperations.source(current.source.ast.parent(argument), operation);
     assert.deepEqual(current.select(), { storage });
   }
 });

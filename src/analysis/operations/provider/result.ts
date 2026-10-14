@@ -41,14 +41,11 @@ import type { RustProviderOperationRow } from "../../../providers/packages/model
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 export function acceptRustOperation(
-  subject: ExtensionFactSubject,
   fact: RustTargetOperationFact,
-  context: RustOperationAnalysisContext,
   provenance: NonNullable<RustTargetOperationSelection["provenance"]>,
   resultType: TargetTypeRef | undefined = rustTargetOperationResultCarrier(fact),
 ): RustPolicySelection<RustCheckedOperationSelectionResult> {
   const evidence = [{ message: `rust selected operation ${fact.operationId}` }];
-  context.records.targetOperation.set(subject, fact, evidence);
   const operation: RustTargetOperationSelection = {
     operationId: fact.operationId,
     operationKind: genericOperationKind(fact),
@@ -57,6 +54,7 @@ export function acceptRustOperation(
     provenance,
   };
   return acceptRustPolicy({
+    targetFact: fact,
     operation,
     ...(resultType === undefined ? {} : { resultType }),
     provenance,
@@ -304,7 +302,7 @@ export function acceptRustMemberOperation(
     }
   }
   if (request.optionalChain !== true) {
-    return acceptRustOperation(request.expression, fact, context, provenance, innerResultCarrier);
+    return acceptRustOperation(fact, provenance, innerResultCarrier);
   }
   const sourceGuardCarrier = resolveRustTargetTypeRef(
     request.receiver,
@@ -330,17 +328,13 @@ export function acceptRustMemberOperation(
   }
   if (selection.kind === "direct") {
     return acceptRustOperation(
-      request.expression,
       fact,
-      context,
       provenance,
       selection.resultCarrier,
     );
   }
   const accepted = acceptRustOperation(
-    request.expression,
     fact,
-    context,
     provenance,
     selection.fact.resultCarrier,
   );

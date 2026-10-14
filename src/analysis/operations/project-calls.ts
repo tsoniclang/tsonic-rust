@@ -662,7 +662,7 @@ export function applySelectedProjectSourceCall(
     target.form,
     finalResultCarrier,
   );
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "source-call",
     operationId,
     target,
@@ -774,33 +774,22 @@ function selectedSpreadArgumentMatches(
   });
 }
 
-export function setRustOperationFact(walk: RustFactWalk, expression: Node, fact: RustTargetOperationFact): void {
-  walk.context.records.targetOperation.set(expression, fact, [
-    { message: `rust operation ${fact.operationId}` },
-  ]);
-}
-
 export function setCarrierFact(walk: RustFactWalk, subject: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
   const records = walk.context.records;
-  const existing = records.runtimeCarrier.get(subject) ??
-    walk.context.records.runtimeCarrier.get(subject);
-  if (existing !== undefined) {
-    if (!rustTargetTypeRefEquals(existing.carrier, carrier)) {
-      appendRustDiagnostic(
-        walk,
-        "RUST_RUNTIME_CARRIER_CONFLICT",
-        "Selected source evidence and Rust analysis produced incompatible runtime carriers for the same source subject.",
-        subject,
-        [
-          "target.capability=rust.runtime-carrier.single-owner",
-          `existing=${JSON.stringify(existing.carrier)}`,
-          `incoming=${JSON.stringify(carrier)}`,
-        ],
-      );
-      return undefined;
-    }
-    return existing.carrier;
+  const conflict = records.runtimeCarriers.source(subject, carrier);
+  if (conflict !== undefined) {
+    appendRustDiagnostic(
+      walk,
+      "RUST_RUNTIME_CARRIER_CONFLICT",
+      "Selected source evidence and Rust analysis produced incompatible runtime carriers for the same source subject.",
+      subject,
+      [
+        "target.capability=rust.runtime-carrier.single-owner",
+        `existing=${JSON.stringify(conflict.existing.carrier)}`,
+        `incoming=${JSON.stringify(carrier)}`,
+      ],
+    );
+    return undefined;
   }
-  records.runtimeCarrier.set(subject, { carrier }, [{ message: "rust carrier" }]);
-  return carrier;
+  return records.runtimeCarrier.get(subject)?.carrier;
 }

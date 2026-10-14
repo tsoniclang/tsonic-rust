@@ -59,7 +59,7 @@ import { resolveExpressionCarrierUncached } from "./value-resolution.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { recordRustCompoundWrite } from "../operations/provider/compound-writes.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -592,7 +592,7 @@ function applyOptionLane(
   if (isRustUnitCarrier(projected)) {
     const existing = walk.context.records.targetOperation.get(expression);
     if (existing === undefined) {
-      setRustOperationFact(walk, expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
+      walk.context.records.targetOperations.source(expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
     if (projected !== undefined) {
       walk.context.records.optionProjection.set(expression, {

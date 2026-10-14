@@ -1,4 +1,4 @@
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -12,7 +12,7 @@ export function resolveRegExpCreation(
   if (!walk.jsEnabled) {
     return undefined;
   }
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "regexp-create",
     operationId: "tsonic.rust.js.regexp.create",
     pattern,

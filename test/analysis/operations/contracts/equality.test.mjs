@@ -129,8 +129,8 @@ test("repeated switch selection retains one contract and rejects every clause mu
   const model = createRustProgramRecordBuilder();
   const subject = {};
   const fact = facts.find(item => item.kind === "switch");
-  model.targetOperation.set(subject, fact);
-  model.targetOperation.set(subject, copyMetadata(fact));
+  model.targetOperations.source(subject, fact);
+  model.targetOperations.source(subject, copyMetadata(fact));
   const clauses = fact.clauses;
   for (const mutation of [
     { clauses: [...clauses].reverse() },
@@ -141,9 +141,9 @@ test("repeated switch selection retains one contract and rejects every clause mu
     { clauses: [clauses[0], { ...clauses[1], expression: first, carrier: text }] },
     { discriminantCarrier: integer },
   ]) {
-    assert.throws(() => model.targetOperation.set(subject, { ...fact, ...mutation }),
+    assert.throws(() => model.targetOperations.source(subject, { ...fact, ...mutation }),
       /Conflicting Rust semantic plan/u);
   }
   assert.equal(model.seal().targetOperation.get(subject), fact);
-  assert.throws(() => model.targetOperation.set(subject, fact), /sealed/u);
+  assert.throws(() => model.targetOperations.source(subject, fact), /sealed/u);
 });

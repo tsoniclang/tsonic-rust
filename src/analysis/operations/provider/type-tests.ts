@@ -10,7 +10,8 @@ import { selectRustClosedTypeTestPlan } from "../../../policy/operations/operato
 import { acceptRustOperation, rejectSelectedOperation } from "./result.js";
 import { selectedValueCarrier } from "../selected-values.js";
 
-import { selectedRustCallSignature } from "./calls/signatures.js";
+import { selectedRustCallSignature } from "../../program/records/selected-call.js";
+import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { selectRustArrayTypeGuard } from "../../../policy/operations/source-profiles/js/type-tests.js";
 
 export function selectRustArrayTypeTest(
@@ -36,9 +37,9 @@ export function selectRustArrayTypeTest(
     id: operationId, sourceName: "isArray", targetName: "closed-type-test", kind: "method", static: true,
     parameters: [{ name: "value", type: sourceCarrier, passingMode: "borrow-shared" }], returnType: resultCarrier,
   });
-  context.records.targetOperation.set(request.source.call, {
+  const targetFact: RustTargetOperationFact = {
     kind: "closed-type-test", operationId, sourceCarrier, predicate, resultCarrier, test,
-  }, evidence);
+  };
   const operation: RustSelectedTargetOperation = {
     operationId, operationKind: "method", targetOperation: "closed-type-test", resultType: resultCarrier,
     provenance: { sourceExpression: request.source.call, sourceReceiver: argument.expression,
@@ -46,8 +47,7 @@ export function selectRustArrayTypeTest(
       sourceSelectedDeclaration: request.sourceSelectedDeclaration },
   };
   context.records.argumentPassing.set(argument.expression, { mode: "borrow-shared", storageExpression: argument.expression }, evidence);
-  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature, operation }, evidence);
+  return acceptRustPolicy({ selectedSignature, targetFact, operation }, evidence);
 }
 
 export function selectRustClosedTypeTest(
@@ -63,9 +63,9 @@ export function selectRustClosedTypeTest(
   const test = selectRustClosedTypeTestPlan(sourceCarrier, predicate, options.projectTypes, context.typeDefinitions);
   if (test === undefined) return undefined;
   const resultCarrier = rustSourcePrimitiveTargetType("bool");
-  return acceptRustOperation(request.expression, {
+  return acceptRustOperation({
     kind: "closed-type-test", operationId: `tsonic.rust.closed-type-test.${closedMetadataKey(predicate)}`,
     sourceCarrier, predicate, resultCarrier, test,
-  }, context, { sourceExpression: request.expression, sourceReceiver: request.left,
+  }, { sourceExpression: request.expression, sourceReceiver: request.left,
     sourceSelectedDeclaration: request.sourceRightDeclaration }, resultCarrier);
 }

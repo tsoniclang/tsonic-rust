@@ -90,7 +90,9 @@ test("the owning seal blocks all admissions before reads, equality or foundation
   family.writer.set(subject, false);
   assert.equal(inheritedReads, 1);
   sealed = true;
-  for (const target of [subject, {}]) assert.throws(() => family.writer.set(target, false), /owner sealed/u);
+  for (const publish of [family.writer.set, family.admit, family.reuse]) {
+    for (const target of [subject, {}]) assert.throws(() => publish(target, false), /owner sealed/u);
+  }
   assert.equal(inheritedReads, 1);
   assert.equal(comparisons, 0);
   assert.equal(admissions, 1);
@@ -116,4 +118,73 @@ test("admission has constant family work and reads never recompute accounting", 
   assert.equal(guards, subjects.length * 2);
   assert.equal(comparisons, subjects.length);
   assert.equal(admissions, subjects.length * 2);
+});
+
+test("typed conflict outcomes and strict failures share exactly one comparison and admission path", () => {
+  let comparisons = 0;
+  let admissions = 0;
+  let sealed = false;
+  const family = createRustRecordFamily({ id: "channels", equals: (left, right) => {
+    comparisons += 1;
+    return left.value === right.value;
+  } }, () => { if (sealed) throw new Error("owner sealed"); }, undefined, () => { admissions += 1; });
+  const subject = {};
+  const original = { value: 1 };
+  assert.equal(family.admit(subject, original) === undefined, true, "success has no result object");
+  assert.equal(comparisons, 0);
+  assert.equal(admissions, 1);
+  assert.equal(family.admit(subject, { value: 1 }) === undefined, true, "equal admission remains allowed");
+  assert.equal(comparisons, 1);
+  assert.equal(admissions, 2);
+  const incoming = { value: 2 };
+  const conflict = family.admit(subject, incoming);
+  assert.equal(conflict?.existing === original, true);
+  assert.equal(conflict?.incoming === incoming, true);
+  assert.equal(comparisons, 2);
+  assert.equal(admissions, 2, "conflicting admission never accounts");
+  assert.equal(family.reader.get(subject) === original, true, "conflict never publishes");
+  assert.throws(() => family.writer.set(subject, incoming), /Conflicting Rust semantic plan 'channels'/u);
+  assert.equal(comparisons, 3, "strict channel does not compare a second time");
+  assert.equal(admissions, 2);
+  sealed = true;
+  assert.throws(() => family.admit(subject, original), /owner sealed/u);
+  assert.throws(() => family.writer.set(subject, original), /owner sealed/u);
+  assert.equal(comparisons, 3);
+  assert.equal(admissions, 2);
+});
+
+test("validated reuse compares inherited input without publishing or accounting an equal record", () => {
+  const subject = {};
+  const inherited = { value: 1 };
+  let comparisons = 0;
+  let admissions = 0;
+  let sealed = false;
+  const family = createRustRecordFamily({ id: "reuse", equals: (left, right) => {
+    comparisons += 1;
+    return left.value === right.value;
+  } }, () => { if (sealed) throw new Error("owner sealed"); },
+  { get: candidate => candidate === subject ? inherited : undefined }, () => { admissions += 1; });
+  assert.equal(family.reuse(subject, { value: 1 }) === undefined, true);
+  assert.equal(family.reader.get(subject) === inherited, true);
+  assert.equal(comparisons, 1);
+  assert.equal(admissions, 0, "reuse does not account an inherited record");
+  const conflict = family.reuse(subject, { value: 2 });
+  assert.equal(conflict?.existing === inherited, true);
+  assert.equal(comparisons, 2);
+  assert.equal(admissions, 0);
+  family.writer.set(subject, { value: 1 });
+  assert.equal(comparisons, 3);
+  assert.equal(admissions, 1, "strict equal publication retains accounting");
+  const foreign = {};
+  const selected = { value: 3 };
+  assert.equal(family.reuse(foreign, selected) === undefined, true);
+  assert.equal(family.reader.get(foreign) === selected, true);
+  assert.equal(admissions, 2, "first source selection is a publication");
+  assert.equal(family.reuse(foreign, { value: 3 }) === undefined, true);
+  assert.equal(admissions, 2);
+  sealed = true;
+  assert.throws(() => family.reuse(subject, inherited), /owner sealed/u);
+  assert.throws(() => family.reuse({}, selected), /owner sealed/u);
+  assert.equal(admissions, 2);
+  assert.equal(comparisons, 4, "closed queries never compare");
 });

@@ -9,7 +9,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { rustNamedTargetType, rustNamedTypeCarrierValue, rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 
 interface RustNativeControl extends RustLanguageCall {
   readonly operation: "range" | "propagate";
@@ -51,7 +51,7 @@ export function resolveRustNativeControl(
       operands.length === 2 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, element))) {
       const resultCarrier = rustNamedTargetType(native.id, native.path,
         [{ kind: "type", type: element }], native.genericDefaults, native.traits, native.upcasts);
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "native-range", operationId: "tsonic.rust.range",
         operands: operands.map(operand => operand.expression), elementCarrier: element,
         resultCarrier,
@@ -77,7 +77,7 @@ export function resolveRustNativeControl(
       (explicitArguments.length === 0 || explicitArguments.length === 2 &&
         explicitArguments.every((argument, index) => argument !== undefined &&
           rustTargetTypeRefEquals(argument, argumentsList[index])))) {
-      setRustOperationFact(walk, expression, {
+      walk.context.records.targetOperations.source(expression, {
         kind: "native-propagation", operationId: "tsonic.rust.propagate",
         callableDeclaration: declaration, callableReturnCarrier: returnCarrier,
         operandExpression: operands[0]!.expression, operandCarrier,

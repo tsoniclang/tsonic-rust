@@ -74,7 +74,7 @@ import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptio
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustNumericPromotionConversion } from "../../policy/operations/numeric/promotion.js";
-import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
+import { setCarrierFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { RustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustFactWalk } from "../program/walk.js";
@@ -688,7 +688,7 @@ export function resolvePostCheckBinaryCarrier(
   if (resultCarrier === undefined) {
     return undefined;
   }
-  setRustOperationFact(walk, expression, fact);
+  walk.context.records.targetOperations.source(expression, fact);
   walk.context.records.selectedOperations.operator(expression, fact, resultCarrier);
   if ((fact.kind === "operator-token" || fact.kind === "operator-call") &&
     fact.operator !== "=" && isRustAssignmentOperator(fact.operator)) {
@@ -806,7 +806,7 @@ export function resolvePostCheckUnaryCarrier(
         operationId: rustPostCheckUnaryPlusOperationId,
         resultCarrier: expected,
       };
-  setRustOperationFact(walk, expression, fact);
+  walk.context.records.targetOperations.source(expression, fact);
   walk.context.records.selectedOperations.operator(expression, fact, expected);
   return setCarrierFact(walk, expression, expected);
 }

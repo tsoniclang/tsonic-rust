@@ -12,6 +12,7 @@ import type {
   RustCallbackOperationTemplate,
   RustProviderOperationTemplate,
 } from "../../target-model/operations/model.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
 type ResolvedSourceCallInfo = NonNullable<
   ReturnType<SourceFileSemantics["operations"]["call"]>
@@ -85,14 +86,15 @@ export interface RustCheckedValueSelectionInput {
 }
 
 export type RustCheckedValueSelectionResult =
-  | { readonly kind: "source"; readonly operation?: undefined }
+  | { readonly kind: "source"; readonly operation?: undefined; readonly targetFact?: undefined }
   | RustCheckedOperationSelectionResult;
 
 export type RustCheckedCallSelectionResult =
-  | { readonly kind: "source"; readonly operation?: undefined }
+  | { readonly kind: "source"; readonly operation?: undefined; readonly targetFact?: undefined }
   | {
       readonly kind: "deferred-callback";
       readonly operation?: undefined;
+      readonly targetFact?: undefined;
       readonly callback: RustCallbackOperationTemplate;
       readonly sourceName: string;
       readonly providerDeclaration?: ProviderDeclarationIdentity;
@@ -103,6 +105,11 @@ export type RustCheckedCallSelectionResult =
       readonly kind?: "target";
       readonly operation?: RustTargetOperationSelection;
       readonly selectedSignature: RustSelectedTargetSignature;
+      readonly targetFact?: RustTargetOperationFact;
+      readonly sourceGuard?: {
+        readonly guard: Node;
+        readonly sourceGuardCarrier: TargetTypeRef;
+      };
       readonly argumentConversions?: readonly RustTargetCallArgumentSlot[];
     };
 
@@ -183,11 +190,13 @@ export type RustCheckedConversionSelectionInput =
 export interface RustCheckedConversionSelectionResult {
   readonly convertedType?: TargetTypeRef;
   readonly operation?: RustTargetOperationSelection;
+  readonly targetFact?: RustTargetOperationFact;
   readonly providerDeclaration?: ProviderDeclarationIdentity;
 }
 
 export interface RustCheckedOperationSelectionResult {
   readonly operation: RustTargetOperationSelection;
+  readonly targetFact?: RustTargetOperationFact;
   readonly resultType?: TargetTypeRef;
   readonly providerDeclaration?: ProviderDeclarationIdentity;
   readonly provenance?: RustTargetOperationSelection["provenance"];

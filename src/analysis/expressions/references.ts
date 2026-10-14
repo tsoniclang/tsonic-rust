@@ -23,7 +23,7 @@ import {
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, setCarrierFact } from "../operations/project-calls.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
 import { recordRustComputedCallEvaluation } from "../operations/computed-members.js";
@@ -531,7 +531,7 @@ function resolvedNativePointerCarrier(
       break;
     }
   }
-  setRustOperationFact(walk, expression, fact);
+  walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
 
@@ -779,7 +779,7 @@ function applySelectedRuntimeCallableCall(
     target.form,
     finalResultCarrier,
   );
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "source-call",
     operationId: selectedSignature.member.id,
     target,

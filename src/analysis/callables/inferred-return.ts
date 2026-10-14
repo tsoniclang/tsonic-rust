@@ -135,11 +135,12 @@ export function selectRustInferredReturn(
           const receiver = source.receiver.expression;
           const receiverCarrier = expressionCarrier(receiver);
           if (receiverCarrier === undefined) return undefined;
-          records.runtimeCarrier.set(receiver, { carrier: receiverCarrier });
+          records.runtimeCarriers.selected(receiver, receiverCarrier);
           const selection = selectRustCheckedPropertyAccess(
             checkedPropertySelectionInput(rustOperationContext(probe, expression), expression, source),
             rustOperationContext(probe, expression), walk.operationOptions,
           );
+          records.targetOperations.checked(expression, selection);
           records.selectedOperations.checked(expression, selection);
           return selection.kind === "accept" ? selection.value.resultType : undefined;
         }
@@ -150,7 +151,7 @@ export function selectRustInferredReturn(
           if (operand === undefined) return undefined;
           const carrier = expressionCarrier(operand);
           if (carrier === undefined) return undefined;
-          records.runtimeCarrier.set(operand, { carrier });
+          records.runtimeCarriers.selected(operand, carrier);
         }
         const sourceFile = ast.getSourceFile(expression);
         return sourceFile !== undefined && kind !== "KindIdentifier"

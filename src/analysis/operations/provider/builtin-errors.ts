@@ -35,14 +35,14 @@ export function selectRustBuiltinErrorTypeTest(
     );
   }
   const resultCarrier = rustSourcePrimitiveTargetType("bool");
-  return acceptRustOperation(request.expression, {
+  return acceptRustOperation({
     kind: "closed-type-test",
     operationId: `tsonic.rust.closed-type-test.${closedMetadataKey(predicate)}`,
     sourceCarrier,
     resultCarrier,
     predicate,
     test,
-  }, context, {
+  }, {
     sourceExpression: request.expression,
     sourceReceiver: request.left,
     sourceSelectedDeclaration: request.sourceRightDeclaration,

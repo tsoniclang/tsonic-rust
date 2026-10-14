@@ -164,7 +164,7 @@ test("selected-operation native foundation accounting is retained by its owner",
     assert.equal(builder.minimumFoundation(), expected, targetOperation + " after seal");
   }
   const builder = createRustProgramRecordBuilder();
-  builder.runtimeCarrier.set({}, { carrier: text });
+  builder.runtimeCarriers.selected({}, text);
   builder.selectedOperations.project({}, "core", "method", "core::mem::size_of", integer);
   assert.equal(builder.minimumFoundation(), "alloc", "other families remain in the same maximum");
 });

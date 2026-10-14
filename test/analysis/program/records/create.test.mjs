@@ -18,6 +18,14 @@ function createModel() {
   return createRustProgramRecordBuilder();
 }
 
+function admitFamily(model, family, subject, fact) {
+  if (family === "runtimeCarrier") model.runtimeCarriers.selected(subject, fact.carrier);
+  else if (family === "targetOperation") model.targetOperations.source(subject, fact);
+  else if (family === "selectedCall") model.selectedCalls.checked({ source: { call: subject } },
+    { kind: "accept", value: { selectedSignature: fact } });
+  else model[family].set(subject, fact);
+}
+
 test("sealed records publish only frozen typed family readers without a native key or writer API", () => {
   const model = createModel();
   const records = model.seal();
@@ -34,6 +42,10 @@ test("sealed records publish only frozen typed family readers without a native k
       assert.throws(() => model.selectedOperations.checked({}, {
         kind: "accept", value: {},
       }), /after analysis is sealed/u, name + ": producer is closed");
+    } else if (["runtimeCarrier", "selectedCall", "targetOperation"].includes(name)) {
+      assert.equal(model[name].set === undefined, true, name + ": no general writer");
+      assert.throws(() => admitFamily(model, name, {}, name === "runtimeCarrier" ? { carrier: {} } : {}),
+        /after analysis is sealed/u, name + ": producer is closed");
     } else {
       assert.throws(() => model[name].set({}, undefined), /after analysis is sealed/u, name + ": writer is closed");
     }
@@ -80,7 +92,7 @@ test("every finalized contextual conversion family contributes its actual native
   for (const [family, fact] of cases) {
     const model = createModel();
     assert.equal(model.minimumFoundation(), "core");
-    model[family].set({}, fact);
+    admitFamily(model, family, {}, fact);
     assert.equal(model.minimumFoundation(), "alloc", family);
   }
 });
@@ -114,17 +126,20 @@ test("all nine foundation-bearing families account through their typed admission
     const builder = createModel();
     const subject = {};
     assert.equal(builder.minimumFoundation(), "core", family + ": initially core");
-    builder[family].set(subject, fact);
+    admitFamily(builder, family, subject, fact);
     assert.equal(builder.minimumFoundation(), expected, family);
-    assert.equal(builder[family].get(subject) === fact, true, family + ": no evidence copy");
-    assert.doesNotThrow(() => builder[family].set(subject, fact), family + ": repeat remains allowed");
+    const admitted = builder[family].get(subject);
+    assert.equal(family === "runtimeCarrier" ? admitted?.carrier === fact.carrier : admitted === fact,
+      true, family + ": exact producer input retained");
+    assert.doesNotThrow(() => admitFamily(builder, family, subject, fact), family + ": repeat remains allowed");
+    assert.equal(builder[family].get(subject) === admitted, true, family + ": same canonical record");
     builder.seal();
     assert.equal(builder.minimumFoundation(), expected, family + ": sealed accounting");
   }
   for (const [family, fact] of [["conversion", {}], ["deferredProducerEffects", { kind: "no-future" }],
     ["deferredProducerEffects", { kind: "futures", channels: [] }]]) {
     const builder = createModel();
-    builder[family].set({}, fact);
+    admitFamily(builder, family, {}, fact);
     assert.equal(builder.minimumFoundation(), "core", family + ": absent native requirement");
   }
 });
@@ -154,7 +169,7 @@ test("all definition-dependent foundation admissions retain the supplied source-
     } };
     const builder = createRustProgramRecordBuilder(definitions);
     const subject = {};
-    builder[family].set(subject, fact);
+    admitFamily(builder, family, subject, fact);
     assert.equal(definitionReads > 0, true, family + ": actual source definitions used");
     const beforeReads = definitionReads;
     for (let read = 0; read < 32; read += 1) {
@@ -163,7 +178,7 @@ test("all definition-dependent foundation admissions retain the supplied source-
     }
     builder.seal();
     assert.equal(definitionReads, beforeReads, family + ": reads and seal do not recompute");
-    assert.throws(() => createModel()[family].set({}, fact), /no valid (?:lowering|foundation) contract/u,
+    assert.throws(() => admitFamily(createModel(), family, {}, fact), /no valid (?:lowering|foundation) contract/u,
       family + ": missing source definitions cannot silently substitute");
   }
 });
@@ -172,17 +187,18 @@ test("inherited foundation accounting happens on successful admission, never on 
   const subject = {};
   const value = { carrier: { kind: "target-named", id: "rust.std.String" } };
   const parent = createModel();
-  parent.runtimeCarrier.set(subject, value);
+  parent.runtimeCarriers.selected(subject, value.carrier);
+  const original = parent.runtimeCarrier.get(subject);
   const records = parent.seal();
   const child = createRustProgramRecordBuilder(undefined, records);
-  assert.equal(child.runtimeCarrier.get(subject) === value, true);
+  assert.equal(child.runtimeCarrier.get(subject) === original, true);
   assert.equal(child.minimumFoundation(), "core", "inheritance alone retains the original accounting rule");
-  child.runtimeCarrier.set(subject, { carrier: { ...value.carrier } });
+  child.runtimeCarriers.selected(subject, { ...value.carrier });
   assert.equal(child.minimumFoundation(), "alloc");
-  assert.throws(() => child.runtimeCarrier.set(subject,
-    { carrier: { kind: "target-named", id: "acme.external.Type" } }), /Conflicting Rust semantic plan/u);
+  assert.throws(() => child.runtimeCarriers.selected(subject,
+    { kind: "target-named", id: "acme.external.Type" }), /Conflicting Rust semantic plan/u);
   assert.equal(child.minimumFoundation(), "alloc", "rejected evidence cannot raise the requirement");
-  assert.equal(child.runtimeCarrier.get(subject) === value, true, "no inherited evidence replacement");
+  assert.equal(child.runtimeCarrier.get(subject) === original, true, "no inherited evidence replacement");
 });
 
 test("present contextual conversions retain one scalar conversion followed by presence", () => {
@@ -220,16 +236,18 @@ test("analysis result probes retain parent facts without mutating the final plan
   const parent = createModel();
   const subject = {};
   const value = { carrier: { kind: "source-primitive", name: "uint64" } };
-  parent.runtimeCarrier.set(subject, value);
+  parent.runtimeCarriers.selected(subject, value.carrier);
+  const original = parent.runtimeCarrier.get(subject);
   const probe = createRustProgramRecordBuilder(undefined, parent);
-  assert.equal(probe.runtimeCarrier.get(subject), value);
-  assert.throws(() => probe.runtimeCarrier.set(subject, { carrier: { kind: "source-primitive", name: "float64" } }), /Conflicting Rust semantic plan/u);
+  assert.equal(probe.runtimeCarrier.get(subject) === original, true);
+  assert.throws(() => probe.runtimeCarriers.selected(subject, { kind: "source-primitive", name: "float64" }), /Conflicting Rust semantic plan/u);
   const selected = {};
-  probe.runtimeCarrier.set(selected, value);
+  probe.runtimeCarriers.selected(selected, value.carrier);
+  const specialized = probe.runtimeCarrier.get(selected);
   assert.equal(parent.runtimeCarrier.get(selected), undefined);
-  assert.equal(probe.seal().runtimeCarrier.get(selected), value);
-  assert.throws(() => probe.runtimeCarrier.set({}, value), /after analysis is sealed/u);
-  assert.equal(parent.seal().runtimeCarrier.get(subject), value);
+  assert.equal(probe.seal().runtimeCarrier.get(selected) === specialized, true);
+  assert.throws(() => probe.runtimeCarriers.selected({}, value.carrier), /after analysis is sealed/u);
+  assert.equal(parent.seal().runtimeCarrier.get(subject) === original, true);
 });
 
 test("source fields retain exact declaration identity when reselected", () => {
@@ -244,13 +262,13 @@ test("source fields retain exact declaration identity when reselected", () => {
     valueSemantics: { kind: "stored" },
   };
   const subject = {};
-  model.targetOperation.set(subject, fact);
-  assert.doesNotThrow(() => model.targetOperation.set(subject, { ...fact, resultCarrier: { ...fact.resultCarrier }, valueSemantics: { ...fact.valueSemantics } }));
+  model.targetOperations.source(subject, fact);
+  assert.doesNotThrow(() => model.targetOperations.source(subject, { ...fact, resultCarrier: { ...fact.resultCarrier }, valueSemantics: { ...fact.valueSemantics } }));
   for (const mutation of [
     { declaration: { ...declaration } }, { storageIndex: 1 }, { accessMode: "write" },
     { resultCarrier: { kind: "source-primitive", name: "uint32" } },
   ]) {
-    assert.throws(() => model.targetOperation.set(subject, { ...fact, ...mutation }), /Conflicting Rust semantic plan/u);
+    assert.throws(() => model.targetOperations.source(subject, { ...fact, ...mutation }), /Conflicting Rust semantic plan/u);
   }
 });
 
@@ -274,11 +292,11 @@ test("closed Rust carrier and conversion facts are allocation-independent", () =
     }],
   };
 
-  model.runtimeCarrier.set(subject, { carrier: firstCarrier });
-  assert.doesNotThrow(() => model.runtimeCarrier.set(subject, { carrier: equivalentCarrier }));
+  model.runtimeCarriers.selected(subject, firstCarrier);
+  assert.doesNotThrow(() => model.runtimeCarriers.selected(subject, equivalentCarrier));
   assert.equal(model.runtimeCarrier.get(subject)?.carrier, firstCarrier);
   assert.throws(
-    () => model.runtimeCarrier.set(subject, { carrier: { kind: "source-primitive", name: "uint8" } }),
+    () => model.runtimeCarriers.selected(subject, { kind: "source-primitive", name: "uint8" }),
     /Conflicting Rust semantic plan/u,
   );
 
@@ -352,10 +370,10 @@ test("selected calls preserve exact checker evidence while accepting equivalent 
     sourceArgumentBindings: [{ ...first.sourceArgumentBindings[0] }],
   };
 
-  model.selectedCall.set(subject, first);
-  assert.doesNotThrow(() => model.selectedCall.set(subject, equivalent));
+  admitFamily(model, "selectedCall", subject, first);
+  assert.doesNotThrow(() => admitFamily(model, "selectedCall", subject, equivalent));
   assert.throws(
-    () => model.selectedCall.set(subject, {
+    () => admitFamily(model, "selectedCall", subject, {
       ...equivalent,
       sourceArgumentBindings: [{ ...equivalent.sourceArgumentBindings[0], selectedArgumentType: {} }],
     }),

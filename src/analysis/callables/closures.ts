@@ -37,7 +37,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { rustResolutionContext } from "../program/walk.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -363,7 +363,7 @@ export function resolveFunctionExpressionCarrier(
   }, [
     { message: "rust exact callable-expression captures" },
   ]);
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "closure",
     operationId: "tsonic.rust.closure",
     parameterForms: options?.preserveSourceParameterForms === true

@@ -9,7 +9,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 
 interface IndexedRecordContract {
   readonly key: TargetTypeRef;
@@ -68,7 +68,7 @@ export function resolveRustIndexedRecordLiteral(
     if (initializer === undefined || resolveExpressionCarrier(walk, initializer, sourceFile, value) === undefined) return undefined;
     contributions.push({ kind: "property", property, sourceName, expression: initializer });
   }
-  setRustOperationFact(walk, expression, {
+  walk.context.records.targetOperations.source(expression, {
     kind: "record-index-literal", operationId: "tsonic.rust.record.index-literal",
     resultCarrier, keyCarrier: key, valueCarrier: value, storage, contributions,
   });

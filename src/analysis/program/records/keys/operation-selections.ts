@@ -7,11 +7,7 @@ import type { RustOptionalChainFact } from "../../../../target-model/operations/
 import type { RustPlanKey } from "../key.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
-import { rustTargetOperationFactEquals } from "../../../operations/contracts/equality.js";
 import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact, RustComputedMemberFact } from "../../../../target-model/records/operation-selections.js";
-
-export const rustTargetOperationFactKey: RustPlanKey<RustTargetOperationFact> =
-  defineRustPlanKey("targetOperation", rustTargetOperationFactEquals);
 
 export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
   defineRustPlanKey("compoundWrite", closedMetadataEquals);

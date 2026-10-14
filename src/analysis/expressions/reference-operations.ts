@@ -7,7 +7,7 @@ import {
 
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { appendRustDiagnostic } from "../program/walk.js";
-import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { recordBindingWrite } from "../declarations/types-and-bindings.js";
@@ -201,7 +201,7 @@ export function resolvedRustReferenceOperationCarrier(
       referenceCarrier: operandCarrier,
       resultCarrier: operandCarrier.referent,
     };
-    setRustOperationFact(walk, expression, fact);
+    walk.context.records.targetOperations.source(expression, fact);
     return { carrier: setCarrierFact(walk, expression, fact.resultCarrier) };
   }
   if (!operandCarrier.mutable) {
@@ -248,7 +248,7 @@ export function resolvedRustReferenceOperationCarrier(
     ),
     resultCarrier,
   };
-  setRustOperationFact(walk, expression, fact);
+  walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
 
@@ -373,7 +373,7 @@ function resolvedRustReferenceConstruction(
     referenceCarrier,
     resultCarrier: referenceCarrier,
   };
-  setRustOperationFact(walk, expression, fact);
+  walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, referenceCarrier) };
 }
 

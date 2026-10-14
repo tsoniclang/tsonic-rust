@@ -2,7 +2,6 @@ import type { RustOperationAnalysisContext } from "../../program/operation-conte
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from "../../../target-model/types/carriers/array-entries.js";
 import {
-  asNode,
   isProjectSourceDeclaration,
   resolveSelectedProviderDeclaration,
 } from "../../../policy/identities/selected-source.js";
@@ -28,7 +27,6 @@ import {
   Node_Expression,
   Node_Type,
   sourceParameterIsProperty,
-  VariableDeclarationList_Declarations,
 } from "@tsonic/target-api/source";
 import {
   rustFixedArrayCarrierValue,
@@ -40,7 +38,6 @@ import {
 import { acceptDeclarationOperation, acceptRustMemberOperation, acceptRustOperation, elementProvenance, isDeclarationFileSubject, normalizeSelectedOperationInputCarrier, rejectSelectedOperation, selectedArgumentMatchScore, selectedMemberReceiverCarrier, sourceOperationId } from "./result.js";
 import { normalizeSelectedLiteralCarrier } from "../../expressions/selected-literals.js";
 import { finalizeProviderOperationFromSubjects, mapProviderCheckedOperation } from "./conversions.js";
-import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { selectRustNativeIndex } from "../../../policy/operations/native-indices.js";
 import { rustProjectObjectIndexSignature } from "../../project-types/object-layout.js";
@@ -55,7 +52,7 @@ import { selectRustFixedArrayElementAccess } from "./structural-properties.js";
 import { isIntrinsicSourceQualifier } from "./source-qualifiers.js";
 import { tsonicFixedArrayProviderMember } from "@tsonic/source-core/facts";
 import type { RustCheckedElementSelectionInput, RustCheckedIterationSelectionInput, RustCheckedOperationSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
-import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
@@ -121,7 +118,7 @@ export function selectRustCheckedElementAccess(
         ...(selectedMember?.setters.length === 1 ? { sourceSelectedWriteDeclaration: selectedMember.setters[0]! } : {}),
       }, context, options);
       if (result.kind === "accept") {
-        const selected = context.records.targetOperation.get(request.expression);
+        const selected = result.value.targetFact;
         if (selected === undefined) return rejectSelectedOperation(request.expression, context,
           "RUST_COMPUTED_MEMBER_OPERATION_NOT_CLOSED",
           "Computed project member requires its exact sealed target operation.");
@@ -377,8 +374,7 @@ export function selectRustCheckedIteration(
       elementCarrier,
       lowering,
     };
-    recordIterationInitializerCarrier(request.initializer, elementCarrier, context);
-    return acceptRustOperation(request.statement, fact, context, {
+    return acceptRustOperation(fact, {
       sourceExpression: request.expression,
       sourceResultType: source.sourceElementType,
     }, elementCarrier);
@@ -414,8 +410,7 @@ export function selectRustCheckedIteration(
     elementCarrier: targetIteration.elementCarrier,
     lowering,
   };
-  recordIterationInitializerCarrier(request.initializer, targetIteration.elementCarrier, context);
-  return acceptRustOperation(request.statement, fact, context, {
+  return acceptRustOperation(fact, {
     sourceExpression: request.expression,
     sourceResultType: source.sourceElementType,
   }, targetIteration.elementCarrier);
@@ -614,26 +609,4 @@ function isFreshRustIterationValue(
   }
   const inner = Node_Expression(ast, expression);
   return inner !== undefined && isFreshRustIterationValue(inner, ast);
-}
-
-function recordIterationInitializerCarrier(
-  initializer: ExtensionFactSubject | undefined,
-  carrier: TargetTypeRef,
-  context: RustOperationAnalysisContext,
-): void {
-  const root = asNode(initializer, context);
-  if (root === undefined) {
-    return;
-  }
-  const evidence = [{ message: "rust selected iteration binding carrier" }];
-  context.records.runtimeCarrier.set(root, { carrier }, evidence);
-  const declarations = VariableDeclarationList_Declarations(context.ast, root);
-  if (declarations === undefined || !isDenseDataArray(declarations)) {
-    return;
-  }
-  for (const declaration of declarations) {
-    if (declaration !== undefined && context.ast.kindName(declaration) === "KindVariableDeclaration") {
-      context.records.runtimeCarrier.set(declaration, { carrier }, evidence);
-    }
-  }
 }

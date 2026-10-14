@@ -4,13 +4,15 @@ import { createRustRecordFamily } from "./family.js";
 import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
-import { rustFoundationForCarrier, rustFoundationForSelectedCall } from "../../foundation/requirements.js";
-import { rustFoundationForTargetOperationFact } from "../../foundation/operation-requirements.js";
+import { rustFoundationForCarrier } from "../../foundation/requirements.js";
 import { rustFoundationForContextualConversion, rustFoundationForFinalizedConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
 import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
 import { rustTypeAliasDeclarationFactKey, rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustResourceManagementFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
-import { rustRuntimeCarrierKey, rustSelectedCallKey, rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
+import { rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
 import { createRustSelectedOperationProducer } from "./selected-operation.js";
+import { createRustRuntimeCarrierProducer } from "./runtime-carrier.js";
+import { createRustSelectedCallProducer } from "./selected-call.js";
+import { createRustTargetOperationProducer } from "./target-operation.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "./keys/native-control-flow.js";
 import { rustAwaitValueFactKey } from "./keys/await-values.js";
 import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
@@ -20,7 +22,7 @@ import { rustDeferredProducerEffectsFactKey } from "./keys/deferred-producer-eff
 import { rustAwaitSourceErrorEffectsFactKey } from "./keys/await-source-error-effects.js";
 import { rustObjectLiteralMethodAdapterFactKey, rustFallibleFactKey, rustSourceCallEffectsFactKey, rustSourceAccessorEffectsFactKey, rustFutureValueFactKey } from "./keys/object-methods.js";
 import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
-import { rustTargetOperationFactKey, rustCompoundWriteFactKey, rustComputedMemberFactKey, rustReceiverIndependentMethodFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
+import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustReceiverIndependentMethodFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
 import { rustTypeOnlyDeclarationFactKey } from "./keys/type-only.js";
 import { rustNativeArrayStorageKey, rustNativeBackingKey, rustRawLocationPlanKey } from "./keys/native-memory.js";
 import { rustIndexedFieldKeyArgument } from "./keys/indexed-field-keys.js";
@@ -46,12 +48,15 @@ export function createRustProgramRecordBuilder(
   const assertOpen = (): void => {
     if (sealed) throw new Error("Rust semantic plans cannot be written after analysis is sealed.");
   };
+  const requireFoundation = (foundation: RustFoundation): void => {
+    minimumFoundation = maximumRustFoundation(minimumFoundation, foundation);
+  };
   const createFamily = <T>(
     key: RustPlanKey<T>,
     inherited?: RustRecordFamily<T>,
     foundation?: (value: T) => RustFoundation,
   ) => createRustRecordFamily(key, assertOpen, inherited, foundation === undefined ? undefined : value => {
-    minimumFoundation = maximumRustFoundation(minimumFoundation, foundation(value));
+    requireFoundation(foundation(value));
   });
 
   const typeAliasDeclaration = createFamily(rustTypeAliasDeclarationFactKey, parent?.typeAliasDeclaration);
@@ -65,9 +70,8 @@ export function createRustProgramRecordBuilder(
     return fact.entryConversion === undefined ? carriers : maximumRustFoundation(carriers,
       rustFoundationForValueConversion(fact.entryConversion, definitions));
   });
-  const runtimeCarrier = createFamily(rustRuntimeCarrierKey, parent?.runtimeCarrier,
-    value => rustFoundationForCarrier(value.carrier));
-  const selectedCall = createFamily(rustSelectedCallKey, parent?.selectedCall, rustFoundationForSelectedCall);
+  const runtimeCarriers = createRustRuntimeCarrierProducer(assertOpen, requireFoundation, parent?.runtimeCarrier);
+  const selectedCalls = createRustSelectedCallProducer(assertOpen, requireFoundation, parent?.selectedCall);
   const selectedOperations = createRustSelectedOperationProducer(parent?.selectedOperation);
   const conversion = createFamily(rustConversionKey, parent?.conversion,
     value => value.convertedType === undefined ? "core" : rustFoundationForCarrier(value.convertedType));
@@ -112,8 +116,7 @@ export function createRustProgramRecordBuilder(
   const mutatedBinding = createFamily(rustMutatedBindingFactKey, parent?.mutatedBinding);
   const mutatedReferent = createFamily(rustMutatedReferentFactKey, parent?.mutatedReferent);
   const selfMode = createFamily(rustSelfModeFactKey, parent?.selfMode);
-  const targetOperation = createFamily(rustTargetOperationFactKey, parent?.targetOperation,
-    value => rustFoundationForTargetOperationFact(value, definitions));
+  const targetOperations = createRustTargetOperationProducer(assertOpen, requireFoundation, definitions, parent?.targetOperation);
   const compoundWrite = createFamily(rustCompoundWriteFactKey, parent?.compoundWrite);
   const computedMember = createFamily(rustComputedMemberFactKey, parent?.computedMember);
   const receiverIndependentMethod = createFamily(rustReceiverIndependentMethodFactKey, parent?.receiverIndependentMethod);
@@ -151,8 +154,8 @@ export function createRustProgramRecordBuilder(
     yield: yielded.reader,
     resourceManagement: resourceManagement.reader,
     sourceParameterAbi: sourceParameterAbi.reader,
-    runtimeCarrier: runtimeCarrier.reader,
-    selectedCall: selectedCall.reader,
+    runtimeCarrier: runtimeCarriers.records,
+    selectedCall: selectedCalls.records,
     selectedOperation: selectedOperations.records,
     conversion: conversion.reader,
     argumentPassing: argumentPassing.reader,
@@ -181,7 +184,7 @@ export function createRustProgramRecordBuilder(
     mutatedBinding: mutatedBinding.reader,
     mutatedReferent: mutatedReferent.reader,
     selfMode: selfMode.reader,
-    targetOperation: targetOperation.reader,
+    targetOperation: targetOperations.records,
     compoundWrite: compoundWrite.reader,
     computedMember: computedMember.reader,
     receiverIndependentMethod: receiverIndependentMethod.reader,
@@ -219,8 +222,10 @@ export function createRustProgramRecordBuilder(
     yield: yielded.writer,
     resourceManagement: resourceManagement.writer,
     sourceParameterAbi: sourceParameterAbi.writer,
-    runtimeCarrier: runtimeCarrier.writer,
-    selectedCall: selectedCall.writer,
+    runtimeCarrier: runtimeCarriers.records,
+    runtimeCarriers,
+    selectedCall: selectedCalls.records,
+    selectedCalls,
     selectedOperation: selectedOperations.records,
     selectedOperations,
     conversion: conversion.writer,
@@ -250,7 +255,8 @@ export function createRustProgramRecordBuilder(
     mutatedBinding: mutatedBinding.writer,
     mutatedReferent: mutatedReferent.writer,
     selfMode: selfMode.writer,
-    targetOperation: targetOperation.writer,
+    targetOperation: targetOperations.records,
+    targetOperations,
     compoundWrite: compoundWrite.writer,
     computedMember: computedMember.writer,
     receiverIndependentMethod: receiverIndependentMethod.writer,

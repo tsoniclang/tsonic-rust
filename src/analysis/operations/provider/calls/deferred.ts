@@ -15,13 +15,13 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/in
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol } from "../operators.js";
 import { selectRustTypedLocationCall } from "../../typed-locations.js";
+import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/operations/contracts.js";
 import type { Node, ProviderDeclarationIdentity, SourceCallMarkerKind } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
 import type {
-  RustSelectedTargetSignature,
   RustTargetMember,
   TargetTypeRef,
 } from "../../../../target-model/types/model.js";
@@ -369,8 +369,8 @@ export function mapRustSourceMarkerCall(
     state: expectedState,
   };
   const evidence = [{ message: `rust selected flow marker ${markerName}` }];
-  context.records.targetOperation.set(request.source.call, fact, evidence);
   return acceptRustPolicy({
+    targetFact: fact,
     selectedSignature: {
       member: {
         id: fact.operationId,
@@ -456,31 +456,10 @@ function mapRustDefaultValueCall(
     }],
     providerDeclaration: provider,
   };
-  const selectedSignature: RustSelectedTargetSignature = {
-    member,
+  const selectedSignature = selectedRustCallSignature(request, member, {
     providerDeclaration: provider,
     targetGenericArguments: [{ kind: "type", type: targetTypeArguments[0]! }],
-    ...(request.source.selectedSignature === undefined
-      ? {}
-      : { sourceSignature: request.source.selectedSignature }),
-    ...(request.sourceSelectedDeclaration === undefined
-      ? {}
-      : { sourceDeclaration: request.sourceSelectedDeclaration }),
-    ...(selectedCallCalleeSymbol(request) === undefined
-      ? {}
-      : { sourceCalleeSymbol: selectedCallCalleeSymbol(request) }),
-    ...(selectedCallCalleeDeclaration(request) === undefined
-      ? {}
-      : { sourceCalleeDeclaration: selectedCallCalleeDeclaration(request) }),
-    ...(request.source.sourceResultType === undefined
-      ? {}
-      : { sourceReturnType: request.source.sourceResultType }),
-    sourceArgumentBindings: request.source.sourceArgumentBindings,
-    sourceSelectedSignatureParameters: request.source.sourceSelectedSignatureParameters,
-    sourceSelectedMethodTypeArguments: sourceTypeArguments,
-  };
+  });
   const evidence = [{ message: `rust selected source-core native default initialization (${marker})` }];
-  context.records.targetOperation.set(request.source.call, fact, evidence);
-  context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature, operation }, evidence);
+  return acceptRustPolicy({ selectedSignature, targetFact: fact, operation }, evidence);
 }

@@ -15,6 +15,8 @@ import {
   KindPropertyAccessExpression,
   Node_Expression,
   Node_Type,
+  ForInOrOfStatement_Initializer,
+  VariableDeclarationList_Declarations,
 } from "@tsonic/target-api/source";
 import {
   selectRustCheckedCall,
@@ -44,6 +46,8 @@ import type { RustTargetTypeResolutionContext } from "../../policy/types/resolut
 import type { RustSelectedTargetOperation, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCaptureStorage } from "../callables/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -137,7 +141,8 @@ export function rustOperationContext(
   };
 }
 
-export function recordPolicySelection<T extends { readonly operation?: RustSelectedTargetOperation }>(
+export function recordPolicySelection<T extends { readonly operation?: RustSelectedTargetOperation;
+  readonly targetFact?: RustTargetOperationFact }>(
   walk: RustFactWalk,
   subject: Node,
   selection: import("../../policy/operations/contracts.js").RustPolicySelection<T>,
@@ -148,6 +153,22 @@ export function recordPolicySelection<T extends { readonly operation?: RustSelec
     walk.context.diagnostics.push(diagnostic);
     return;
   }
+  const fact = selection.value.targetFact;
+  if (fact?.kind === "iteration") {
+    const initializer = ForInOrOfStatement_Initializer(walk.context.ast, subject);
+    if (initializer !== undefined) {
+      walk.context.records.runtimeCarriers.selected(initializer, fact.elementCarrier);
+      const declarations = VariableDeclarationList_Declarations(walk.context.ast, initializer);
+      if (declarations !== undefined && isDenseDataArray(declarations)) {
+        for (const declaration of declarations) {
+          if (declaration !== undefined && walk.context.ast.kindName(declaration) === "KindVariableDeclaration") {
+            walk.context.records.runtimeCarriers.selected(declaration, fact.elementCarrier);
+          }
+        }
+      }
+    }
+  }
+  walk.context.records.targetOperations.checked(subject, selection);
   const deferredKind = walk.context.records.selectedOperations.checked(subject, selection);
   if (deferredKind !== undefined) {
     walk.postCheckOperations.set(subject, deferredKind);
