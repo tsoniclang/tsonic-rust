@@ -1,6 +1,6 @@
-import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustPlanKey } from "./key.js";
-import type { RustProgramRecordBuilder, RustRecordWriter } from "./model.js";
+import type { RustProgramRecordBuilder } from "./model.js";
+import { createRustRecordFamily } from "./family.js";
 import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
@@ -41,123 +41,69 @@ export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
   parent?: RustProgramRecords,
 ): RustProgramRecordBuilder {
-  const values = new Map<RustPlanKey<unknown>, WeakMap<object, unknown>>();
   let sealed = false;
   let minimumFoundation: RustFoundation = "core";
-
-  const accountFoundation = <T>(subject: ExtensionFactSubject, key: RustPlanKey<T>, value: T): void => {
-    if (key === rustRuntimeCarrierKey) {
-      minimumFoundation = maximumRustFoundation(
-        minimumFoundation,
-        rustFoundationForCarrier((value as { readonly carrier: import("../../../target-model/types/model.js").RustTargetTypeRef }).carrier),
-      );
-    } else if (key === rustSelectedCallKey) {
-      minimumFoundation = maximumRustFoundation(
-        minimumFoundation,
-        rustFoundationForSelectedCall(value as import("../../../target-model/types/model.js").RustSelectedTargetSignature),
-      );
-    } else if (key === rustConversionKey) {
-      const convertedType = (value as { readonly convertedType?: import("../../../target-model/types/model.js").RustTargetTypeRef }).convertedType;
-      if (convertedType !== undefined) {
-        minimumFoundation = maximumRustFoundation(
-          minimumFoundation,
-          rustFoundationForCarrier(convertedType),
-        );
-      }
-    } else if (key === rustTargetOperationFactKey) {
-      minimumFoundation = maximumRustFoundation(
-        minimumFoundation,
-        rustFoundationForTargetOperationFact(
-          value as import("../../../target-model/records/operations.js").RustTargetOperationFact, definitions,
-        ),
-      );
-    } else if (key === rustContextualValueConversionFactKey) {
-      const fact = contextualValueConversion.reader.get(subject)!;
-      minimumFoundation = maximumRustFoundation(minimumFoundation,
-        maximumRustFoundation(rustFoundationForContextualConversion(fact.conversion, definitions),
-          maximumRustFoundation(rustFoundationForCarrier(fact.sourceCarrier), rustFoundationForCarrier(fact.targetCarrier))));
-    } else if (key === rustSourceParameterAbiFactKey) {
-      const fact = sourceParameterAbi.reader.get(subject)!;
-      minimumFoundation = maximumRustFoundation(minimumFoundation,
-        maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier), rustFoundationForCarrier(fact.parameterCarrier)));
-      if (fact.entryConversion !== undefined) minimumFoundation = maximumRustFoundation(minimumFoundation,
-        rustFoundationForValueConversion(fact.entryConversion, definitions));
-    } else if (key === rustFutureValueFactKey) {
-      const fact = futureValue.reader.get(subject)!;
-      minimumFoundation = maximumRustFoundation(minimumFoundation,
-        rustFoundationForFinalizedConversion(fact.awaitedConversion, definitions));
-      if (fact.errorCarrier !== undefined) minimumFoundation = maximumRustFoundation(minimumFoundation,
-        rustFoundationForCarrier(fact.errorCarrier));
-    } else if (key === rustDeferredProducerEffectsFactKey) {
-      const fact = deferredProducerEffects.reader.get(subject)!;
-      if (fact.kind === "futures") for (const channel of fact.channels)
-        minimumFoundation = maximumRustFoundation(minimumFoundation, rustFoundationForCarrier(channel.errorCarrier));
-    } else if (key === rustAwaitValueFactKey) {
-      for (const leaf of rustAwaitSelectionLeaves(awaitValue.reader.get(subject)!.selection)) {
-        if (leaf.completion.kind === "value") minimumFoundation = maximumRustFoundation(minimumFoundation,
-          rustFoundationForFinalizedConversion(leaf.completion.conversion, definitions));
-      }
-    }
+  const assertOpen = (): void => {
+    if (sealed) throw new Error("Rust semantic plans cannot be written after analysis is sealed.");
   };
-
-  const createFamily = <T>(key: RustPlanKey<T>, inherited?: RustRecordFamily<T>): {
-    readonly reader: RustRecordFamily<T>;
-    readonly writer: RustRecordWriter<T>;
-  } => {
-    const get = (subject: ExtensionFactSubject | undefined): T | undefined =>
-      subject === undefined ? undefined :
-        (values.get(key as RustPlanKey<unknown>)?.get(subject) as T | undefined) ?? inherited?.get(subject);
-    const reader: RustRecordFamily<T> = Object.freeze({ get });
-    const writer: RustRecordWriter<T> = Object.freeze({
-      get,
-      set(subject: ExtensionFactSubject, value: T): void {
-        if (sealed) throw new Error("Rust semantic plans cannot be written after analysis is sealed.");
-        let bySubject = values.get(key as RustPlanKey<unknown>);
-        if (bySubject === undefined) {
-          bySubject = new WeakMap<object, unknown>();
-          values.set(key as RustPlanKey<unknown>, bySubject);
-        }
-        const existing = bySubject.get(subject) ?? inherited?.get(subject);
-        if (existing !== undefined && !key.equals(existing as T, value)) {
-          throw new Error(
-            `Conflicting Rust semantic plan '${key.id}' for one exact source subject.`,
-          );
-        }
-        if (existing === undefined) bySubject.set(subject, value);
-        accountFoundation(subject, key, value);
-      },
-    });
-    return { reader, writer };
-  };
+  const createFamily = <T>(
+    key: RustPlanKey<T>,
+    inherited?: RustRecordFamily<T>,
+    foundation?: (value: T) => RustFoundation,
+  ) => createRustRecordFamily(key, assertOpen, inherited, foundation === undefined ? undefined : value => {
+    minimumFoundation = maximumRustFoundation(minimumFoundation, foundation(value));
+  });
 
   const typeAliasDeclaration = createFamily(rustTypeAliasDeclarationFactKey, parent?.typeAliasDeclaration);
   const asyncFunction = createFamily(rustAsyncFunctionFactKey, parent?.asyncFunction);
   const generator = createFamily(rustGeneratorFactKey, parent?.generator);
   const yielded = createFamily(rustYieldFactKey, parent?.yield);
   const resourceManagement = createFamily(rustResourceManagementFactKey, parent?.resourceManagement);
-  const sourceParameterAbi = createFamily(rustSourceParameterAbiFactKey, parent?.sourceParameterAbi);
-  const runtimeCarrier = createFamily(rustRuntimeCarrierKey, parent?.runtimeCarrier);
-  const selectedCall = createFamily(rustSelectedCallKey, parent?.selectedCall);
+  const sourceParameterAbi = createFamily(rustSourceParameterAbiFactKey, parent?.sourceParameterAbi, fact => {
+    const carriers = maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier),
+      rustFoundationForCarrier(fact.parameterCarrier));
+    return fact.entryConversion === undefined ? carriers : maximumRustFoundation(carriers,
+      rustFoundationForValueConversion(fact.entryConversion, definitions));
+  });
+  const runtimeCarrier = createFamily(rustRuntimeCarrierKey, parent?.runtimeCarrier,
+    value => rustFoundationForCarrier(value.carrier));
+  const selectedCall = createFamily(rustSelectedCallKey, parent?.selectedCall, rustFoundationForSelectedCall);
   const selectedOperations = createRustSelectedOperationProducer(parent?.selectedOperation);
-  const conversion = createFamily(rustConversionKey, parent?.conversion);
+  const conversion = createFamily(rustConversionKey, parent?.conversion,
+    value => value.convertedType === undefined ? "core" : rustFoundationForCarrier(value.convertedType));
   const argumentPassing = createFamily(rustArgumentPassingKey, parent?.argumentPassing);
   const nativeGuardResult = createFamily(rustNativeGuardResultFactKey, parent?.nativeGuardResult);
   const nativeUnreachable = createFamily(rustNativeUnreachableFactKey, parent?.nativeUnreachable);
-  const awaitValue = createFamily(rustAwaitValueFactKey, parent?.awaitValue);
+  const awaitValue = createFamily(rustAwaitValueFactKey, parent?.awaitValue, fact => {
+    let foundation: RustFoundation = "core";
+    for (const leaf of rustAwaitSelectionLeaves(fact.selection)) {
+      if (leaf.completion.kind === "value") foundation = maximumRustFoundation(foundation,
+        rustFoundationForFinalizedConversion(leaf.completion.conversion, definitions));
+    }
+    return foundation;
+  });
   const compileTimeSource = createFamily(rustCompileTimeSourceKey, parent?.compileTimeSource);
   const sourceCallableReturn = createFamily(rustSourceCallableReturnFactKey, parent?.sourceCallableReturn);
   const errorEffects = createFamily(rustErrorEffectsFactKey, parent?.errorEffects);
   const sourceErrorEffects = createFamily(rustSourceErrorEffectsFactKey, parent?.sourceErrorEffects);
-  const deferredProducerEffects = createFamily(rustDeferredProducerEffectsFactKey, parent?.deferredProducerEffects);
+  const deferredProducerEffects = createFamily(rustDeferredProducerEffectsFactKey, parent?.deferredProducerEffects,
+    fact => fact.kind === "no-future" ? "core" : fact.channels.reduce<RustFoundation>((foundation, channel) =>
+      maximumRustFoundation(foundation, rustFoundationForCarrier(channel.errorCarrier)), "core"));
   const awaitSourceErrorEffects = createFamily(rustAwaitSourceErrorEffectsFactKey, parent?.awaitSourceErrorEffects);
   const objectLiteralMethodAdapter = createFamily(rustObjectLiteralMethodAdapterFactKey, parent?.objectLiteralMethodAdapter);
   const fallible = createFamily(rustFallibleFactKey, parent?.fallible);
   const sourceCallEffects = createFamily(rustSourceCallEffectsFactKey, parent?.sourceCallEffects);
   const sourceAccessorEffects = createFamily(rustSourceAccessorEffectsFactKey, parent?.sourceAccessorEffects);
-  const futureValue = createFamily(rustFutureValueFactKey, parent?.futureValue);
+  const futureValue = createFamily(rustFutureValueFactKey, parent?.futureValue, fact => {
+    const conversion = rustFoundationForFinalizedConversion(fact.awaitedConversion, definitions);
+    return fact.errorCarrier === undefined ? conversion : maximumRustFoundation(conversion,
+      rustFoundationForCarrier(fact.errorCarrier));
+  });
   const optionProjection = createFamily(rustOptionProjectionFactKey, parent?.optionProjection);
   const flowReadProjection = createFamily(rustFlowReadProjectionFactKey, parent?.flowReadProjection);
-  const contextualValueConversion = createFamily(rustContextualValueConversionFactKey, parent?.contextualValueConversion);
+  const contextualValueConversion = createFamily(rustContextualValueConversionFactKey, parent?.contextualValueConversion,
+    fact => maximumRustFoundation(rustFoundationForContextualConversion(fact.conversion, definitions),
+      maximumRustFoundation(rustFoundationForCarrier(fact.sourceCarrier), rustFoundationForCarrier(fact.targetCarrier))));
   const callScopedLifetimeReconciliation = createFamily(rustCallScopedLifetimeReconciliationFactKey, parent?.callScopedLifetimeReconciliation);
   const projectUpcast = createFamily(rustProjectUpcastFactKey, parent?.projectUpcast);
   const projectDowncast = createFamily(rustProjectDowncastFactKey, parent?.projectDowncast);
@@ -166,7 +112,8 @@ export function createRustProgramRecordBuilder(
   const mutatedBinding = createFamily(rustMutatedBindingFactKey, parent?.mutatedBinding);
   const mutatedReferent = createFamily(rustMutatedReferentFactKey, parent?.mutatedReferent);
   const selfMode = createFamily(rustSelfModeFactKey, parent?.selfMode);
-  const targetOperation = createFamily(rustTargetOperationFactKey, parent?.targetOperation);
+  const targetOperation = createFamily(rustTargetOperationFactKey, parent?.targetOperation,
+    value => rustFoundationForTargetOperationFact(value, definitions));
   const compoundWrite = createFamily(rustCompoundWriteFactKey, parent?.compoundWrite);
   const computedMember = createFamily(rustComputedMemberFactKey, parent?.computedMember);
   const receiverIndependentMethod = createFamily(rustReceiverIndependentMethodFactKey, parent?.receiverIndependentMethod);
