@@ -6,9 +6,7 @@ import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
-import { rustCallableInvocationResult } from "../callables/results.js";
-import { rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -95,7 +93,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     parameterAbiFor: parameter => context.records.sourceParameterAbi.get(parameter),
   });
   let finalizedProjectTypes: RustProjectTypePolicy | undefined;
-  const resolvingCallableSignatures = new Set<Node>();
   const operationOptions: RustOperationsProviderOptions = {
     dispatchContextInputFor: context.dispatchContexts.resolveInput,
     providerExports: providerSemantics.exports,
@@ -105,20 +102,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourceProfiles,
     sourceTypes,
     callableSignatureCarrier(declaration) {
-      if (resolvingCallableSignatures.has(declaration) || ast.body(declaration) === undefined ||
-        !ast.is.IsFunctionDeclaration(declaration) && !ast.is.IsArrowFunction(declaration) && !ast.is.IsFunctionExpression(declaration) ||
-        ast.typeParameters(declaration).length !== 0) return undefined;
-      resolvingCallableSignatures.add(declaration);
-      try {
-        recordFunctionSignatureFacts(walk, declaration);
-        const parameters = ast.parameters(declaration).map(parameter => parameter === undefined ? undefined
-          : context.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
-        const result = rustCallableInvocationResult(context.records, declaration);
-        return result === undefined || parameters.some(parameter => parameter === undefined) ? undefined
-          : rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
-      } finally {
-        resolvingCallableSignatures.delete(declaration);
-      }
+      return walk.callableSignatureCarrierFor(walk, declaration);
     },
     callableStorageCarrier(subject, logicalCarrier, environmentFor, instanceFor) {
       const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
@@ -186,6 +170,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     operationAttempts: new WeakSet<object>(),
     inferredReturns: new Map(),
     resolvingReturns: new Set(),
+    resolvingCallableSignatures: new Set(),
+    callableSignatureCarrierFor: resolveRustCallableSignatureCarrier,
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
     capturedBindingStorage: new Map(),
     objectLiteralMethodExpressions: [],
