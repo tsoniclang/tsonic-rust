@@ -269,7 +269,6 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const moduleInitializers = initialization.root.modules.length === 0
     ? []
     : planRustModuleInitializers(
-        input,
         rootPlannedSources,
         initialization.root,
         packageInitializers,
@@ -402,7 +401,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const crateName = input.program.configuration.crateName;
     const initializerError = initialization.root.error.kind !== "native" ? undefined : {
       identity: "initialization", errorType: {
-        ...crateInitializer.errorType!, path: `${crateName}::${crateInitializer.errorName}`,
+        ...crateInitializer!.errorType!, path: `${crateName}::${crateInitializer!.errorName}`,
       },
     };
     const workerBySource = new Map(workerEntries.entries.map(entry => [entry.sourceFile, entry]));
@@ -700,10 +699,6 @@ function okReturn(
       args: [successfulCompletion],
     },
   };
-}
-
-function compareRustArtifactNames(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function rustSourceArtifact(

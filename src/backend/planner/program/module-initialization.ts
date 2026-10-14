@@ -2,7 +2,6 @@ import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustInitializerSelection } from "../../../target-model/records/error-regions.js";
-import type { RustPlanningContext } from "../context.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
@@ -24,7 +23,6 @@ export interface RustModuleInitializer {
 }
 
 export function planRustModuleInitializers(
-  input: RustPlanningContext,
   plannedSources: readonly PlannedRustSourceFile[],
   selection: RustInitializerSelection,
   packageInitializers: RustSourcePackageInitializerPlan,

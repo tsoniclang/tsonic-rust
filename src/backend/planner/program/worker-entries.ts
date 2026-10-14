@@ -103,7 +103,6 @@ export function planRustWorkerEntries(input: {
       continue;
     }
     const initializers = planRustModuleInitializers(
-      input.planning,
       content.sources,
       selection,
       input.packageInitializers,
