@@ -13,13 +13,15 @@ import type {
   RustTargetAnalysisRequest,
   RustTargetProgram,
 } from "../analysis/program/index.js";
-import type { RustOutputPlan } from "./artifact-model/output.js";
 import { materializeRustOutputPlan } from "./emission/materialize.js";
 import { RustFormattingError } from "./emission/rustfmt.js";
 
 export function compileRustTarget(
   request: RustTargetAnalysisRequest,
-  observer?: TargetCompilationObserver<RustTargetProgram, RustOutputPlan>,
+  observer?: TargetCompilationObserver<
+    RustTargetProgram,
+    Extract<ReturnType<typeof planRustOutput>, { readonly kind: "resolved" }>["value"]
+  >,
 ): TargetCompileResult {
   try {
     return runTargetCompilationStages({
