@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import {
   ForStatement_Condition,
+  isSourceCallableBodyBoundary,
   KindForStatement,
   Node_Expression,
   sourceNodesEqual,
@@ -240,7 +241,7 @@ function bodyPreservesStableBound(
   }
   let stable = true;
   input.ast.forEachChild(body, (child) => {
-    if (child !== undefined && stable && !isCallableKind(input.ast.kindName(child)) &&
+    if (child !== undefined && stable && !isSourceCallableBodyBoundary(input.ast, child) &&
       !bodyPreservesStableBound(child, input)) {
       stable = false;
     }
@@ -488,13 +489,6 @@ function nodeIsWithin(
     current = ast.parent(current);
   }
   return false;
-}
-
-function isCallableKind(kind: string | undefined): boolean {
-  return kind === "KindFunctionDeclaration" || kind === "KindFunctionExpression" ||
-    kind === "KindArrowFunction" || kind === "KindMethodDeclaration" ||
-    kind === "KindConstructor" || kind === "KindGetAccessor" ||
-    kind === "KindSetAccessor";
 }
 
 const assignmentOperatorKinds: ReadonlySet<string> = new Set([
