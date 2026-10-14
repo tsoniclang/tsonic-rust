@@ -40,7 +40,7 @@ import {
 import {
   planRustSourcePackageErrors,
 } from "./source-package-errors.js";
-import { planRustSourcePackageComponents } from "./source-package-components.js";
+import { createRustSourcePackageTypeRenderingContext, planRustSourcePackageComponents } from "./source-package-components.js";
 import {
   materializeRustSourcePackageCrateArtifacts,
   planRustSourcePackageCargo,
@@ -222,6 +222,10 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     return rejectedTargetStage(diagnostics);
   }
   const externalItemPathByIdentity = reconstructedSources.externalItemPathByIdentity;
+  const typeRenderingContextFor = (component: (typeof componentPlans)[number]) =>
+    createRustSourcePackageTypeRenderingContext(input, component, sourcePackageErrors, {
+      moduleNameByFileName, externalCrateNameByFileName, externalItemPathByIdentity, externalStructuralShapeModuleByFileName,
+    });
   const crateContentByComponentId = new Map(componentPlans.flatMap((component) => {
     const content = planRustSourcePackageCrateContent(
       input,
@@ -280,8 +284,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         rootPlannedSources,
         initializationRoots,
         packageInitializers,
-        sourcePackageErrors,
-        facadePlan.rootComponentId,
+        typeRenderingContextFor(rootComponentPlan),
         diagnostics,
       );
 
@@ -320,6 +323,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     rootComponentId: facadePlan.rootComponentId,
     rootCrateName: input.program.configuration.crateName,
     rootErrorType: rootCrateErrorType,
+    typeRenderingContextFor,
     diagnostics,
   });
   if (workerEntries === undefined || diagnostics.length > 0) {
@@ -328,7 +332,11 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const crateInitializer = planRustCrateInitializer(
     moduleInitializers ?? [],
     crateInitializerFunctionName,
-    rootCrateErrorType,
+    { componentId: rootComponentPlan.componentId, errorDomain: rootErrorDomain.errorDomain,
+      errorTypeIdentity: rootErrorTypeIdentity, errorTypePath: rootCrateErrorType.path },
+    new Set([...rootCrateContent.libraryItems,
+      ...(workerEntries.itemsByComponentId.get(rootComponentPlan.componentId) ?? [])]
+      .flatMap(item => "name" in item ? [item.name] : [])),
   );
   const lifecycleErrorType: import("../../target-ast/syntax/nodes.js").RustType = {
     kind: "named",
@@ -348,7 +356,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         ? {}
         : { manifest: sourcePackageCargo.rootManifest }),
       additionalLibraryItems: [
-        ...(crateInitializer === undefined ? [] : [crateInitializer.item]),
+        ...(crateInitializer?.items ?? []),
         ...(workerEntries.itemsByComponentId.get(rootComponentPlan.componentId) ?? []),
       ],
     },
@@ -396,7 +404,18 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   }
   if (outputType === "bin" && entrySourceFile !== undefined) {
     const crateName = input.program.configuration.crateName;
-    const errors = planRustBinaryErrors(lifecycleErrorType);
+    const initializerError = crateInitializer?.errorName === undefined ? undefined : {
+      identity: "initialization", variant: "Initialization", errorType: {
+        ...crateInitializer.errorType!, path: `${crateName}::${crateInitializer.errorName}`,
+      },
+    };
+    const errors = planRustBinaryErrors(lifecycleErrorType, [
+      ...(initializerError === undefined ? [] : [initializerError]),
+      ...workerEntries.entries.filter(entry => entry.nativeError).map((entry, index) => ({
+        identity: entry.identity, variant: `Worker${index}`, errorType: entry.operandErrorType!,
+      })),
+    ], initializerError === undefined || activeHooks.some(hook => hook.isFallible === true) ||
+      workerEntries.entries.length > 0);
     const mainErrorType = errors.errorType;
     const executor = executors[0];
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
@@ -414,12 +433,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     const successfulCompletion: import("../../target-ast/syntax/nodes.js").RustExpr = {
       kind: "path", path: "()",
     };
+    const propagateInitialization = (expression: import("../../target-ast/syntax/nodes.js").RustExpr) =>
+      initializerError === undefined ? errors.lifecycle(expression, lifecycleErrorType)
+        : errors.propagate(initializerError, expression);
     const initializationStatements = crateInitializer === undefined
       ? []
       : [{
           kind: "expr" as const,
           expr: crateInitializer.errorType !== undefined
-            ? errors.lifecycle(crateInitializer.asynchronous
+            ? propagateInitialization(crateInitializer.asynchronous
                   ? executeAsync({
                         kind: "call" as const,
                         path: `${crateName}::${crateInitializer.functionName}`,
@@ -429,7 +451,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
                       kind: "call" as const,
                       path: `${crateName}::${crateInitializer.functionName}`,
                       args: [],
-                    }, lifecycleErrorType)
+                    })
             : crateInitializer.asynchronous
               ? executeAsync({
                     kind: "call" as const,
@@ -505,7 +527,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",
-      createRustCrateRootSourceFile(input.program.configuration.foundation, [mainItem]),
+      createRustCrateRootSourceFile(input.program.configuration.foundation, [...errors.items, mainItem]),
     ));
   }
   const finalizedArtifacts = Object.freeze(artifacts.map((artifact) =>
@@ -631,7 +653,8 @@ function planRustWorkerDispatch(
               : call;
             const invoke = entry.operandErrorType === undefined
               ? execution
-              : errors.lifecycle(execution, entry.operandErrorType);
+              : entry.nativeError ? errors.propagate({ identity: entry.identity, errorType: entry.operandErrorType }, execution)
+                : errors.lifecycle(execution, entry.operandErrorType);
             return {
               kind: "if",
               condition: {

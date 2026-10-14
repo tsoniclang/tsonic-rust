@@ -1,5 +1,6 @@
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import type { RustErrorEffectsFact } from "../../../target-model/records/error-effects.js";
 
 import {
   allocateRustComponentSupportModuleName,
@@ -21,7 +22,7 @@ export interface RustSourcePackageModuleInitializer {
   readonly facadeModuleName: string;
   readonly facadeFunctionName: string;
   readonly asynchronous: boolean;
-  readonly fallible: boolean;
+  readonly errorEffects: RustErrorEffectsFact;
 }
 
 export interface RustSourcePackageInitializerPlan {
@@ -94,6 +95,14 @@ export function planRustSourcePackageInitializers(
       ));
       continue;
     }
+    const errorEffects = input.program.records.errorEffects.get(sourceFile);
+    if (errorEffects === undefined) {
+      diagnostics.push({ ...initializerDiagnostic(
+        "RUST_SOURCE_PACKAGE_INITIALIZER_FACT_MISSING",
+        `Source module '${fileName}' has no exact finalized initializer error effects.`,
+      ), sourceNode: sourceFile });
+      continue;
+    }
     pending.push({
       sourceFile,
       fileName,
@@ -105,7 +114,7 @@ export function planRustSourcePackageInitializers(
       implementationFunctionName: rustModuleInitializerFunctionName(input, sourceFile),
       facadeModuleName,
       asynchronous: input.program.sourceNavigation.moduleHasTopLevelAwait(sourceFile),
-      fallible: input.program.records.fallible.get(sourceFile) !== undefined,
+      errorEffects,
     });
   }
   if (diagnostics.length > 0) {

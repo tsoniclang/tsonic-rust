@@ -15,7 +15,7 @@ import { planRustStructuralShapeModule } from "../objects/structural-shapes.js";
 import { planRustProgramErrorModule } from "./errors.js";
 import { planRustDispatchContextRoots } from "./dispatch-contexts.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
-import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
+import { createRustSourcePackageTypeRenderingContext, type RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type {
   RustSourcePackageFacadeExport,
   RustSourcePackageFacadePlan,
@@ -23,6 +23,8 @@ import type {
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
+import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
+import { rustRuntimeAliasUseItems } from "./plan-context.js";
 
 export interface RustSourcePackageCrateContentPlan {
   readonly component: RustSourcePackageComponentPlan;
@@ -106,12 +108,10 @@ export function planRustSourcePackageCrateContent(
     errorDomain,
     diagnostics,
   );
-  const dispatchRoots = planRustDispatchContextRoots({
-    sourcePackageErrors, sourcePackageComponentId: component.componentId,
-    input, moduleName: component.programModuleName, moduleNameByFileName,
-    externalCrateNameByFileName, externalItemPathByIdentity, externalStructuralShapeModuleByFileName,
-    structuralShapesModuleName: component.structuralShapesModuleName,
-  }, errorDomain, component.programModuleName, diagnostics);
+  const dispatchRoots = planRustDispatchContextRoots(createRustSourcePackageTypeRenderingContext(
+    input, component, sourcePackageErrors,
+    { moduleNameByFileName, externalCrateNameByFileName, externalItemPathByIdentity, externalStructuralShapeModuleByFileName },
+  ), errorDomain, component.programModuleName, diagnostics);
   if (dispatchRoots === undefined) return undefined;
   const programModel = programErrorModel === undefined && dispatchRoots.length === 0
     ? undefined : createRustSourceFile([...(programErrorModel?.items ?? []), ...dispatchRoots], programErrorModel?.innerAttrs ?? []);
@@ -233,6 +233,8 @@ export function materializeRustSourcePackageCrateArtifacts(
     prefixedPath(options.prefix, "src/lib.rs"),
     createRustCrateRootSourceFile(input.program.configuration.foundation, [
       ...plan.libraryItems,
+      ...rustRuntimeAliasUseItems(new Set(rustItemsReferenceModuleAlias(options.additionalLibraryItems ?? [], "rt")
+        ? ["rt"] : []), plan.component.errorDomain === "project" ? plan.component.programModuleName : undefined),
       ...(options.additionalLibraryItems ?? []),
     ]),
   ));
@@ -480,9 +482,7 @@ function planRustInitializerFacadeModule(
     .sort((left, right) => compareNames(left.facadeFunctionName, right.facadeFunctionName))) {
     const source = sourceByFile.get(contract.sourceFile);
     const initialization = source?.moduleInitialization;
-    const errorContractMatches = contract.fallible
-      ? initialization?.errorBoundary?.componentId === contract.componentId
-      : initialization?.errorBoundary === undefined;
+    const errorContractMatches = initialization?.errorEffects === contract.errorEffects;
     if (source === undefined || initialization === undefined ||
       initialization.functionName !== contract.implementationFunctionName ||
       initialization.asynchronous !== contract.asynchronous || !errorContractMatches) {

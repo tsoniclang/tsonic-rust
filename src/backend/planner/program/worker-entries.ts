@@ -8,6 +8,7 @@ import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type { RustSourcePackageCrateContentPlan } from "./source-package-crates.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
+import type { RustTypeRenderingContext } from "../types/render.js";
 import {
   planRustCrateInitializer,
   planRustModuleInitializers,
@@ -25,6 +26,7 @@ export interface RustWorkerEntryPlan {
   readonly callPath: string;
   readonly asynchronous: boolean;
   readonly operandErrorType?: RustType;
+  readonly nativeError: boolean;
 }
 
 export interface RustWorkerEntryPlans {
@@ -48,6 +50,7 @@ export function planRustWorkerEntries(input: {
   readonly rootComponentId: string;
   readonly rootCrateName: string;
   readonly rootErrorType: RustType;
+  readonly typeRenderingContextFor: (component: RustSourcePackageComponentPlan) => RustTypeRenderingContext;
   readonly diagnostics: TargetDiagnostic[];
 }): RustWorkerEntryPlans | undefined {
   const componentById = new Map(input.components.map((component) =>
@@ -104,8 +107,7 @@ export function planRustWorkerEntries(input: {
       content.sources,
       [target.sourceFile],
       input.packageInitializers,
-      input.sourcePackageErrors,
-      component.componentId,
+      input.typeRenderingContextFor(component),
       input.diagnostics,
     );
     if (initializers === undefined) continue;
@@ -119,9 +121,11 @@ export function planRustWorkerEntries(input: {
     const initializer = planRustCrateInitializer(
       initializers,
       functionName,
-      componentErrorType,
+      { componentId: component.componentId, errorDomain: componentErrorDomain.errorDomain,
+        errorTypeIdentity: componentErrorDomain.errorTypeIdentity, errorTypePath: componentErrorType.path },
+      occupied,
     );
-    const item: RustItem = initializer?.item ?? {
+    const emptyItem: RustItem = {
       kind: "function",
       name: functionName,
       visibility: "public",
@@ -130,18 +134,21 @@ export function planRustWorkerEntries(input: {
       params: [],
       body: { statements: [] },
     };
+    const selectedItems = initializer?.items ?? [emptyItem];
+    for (const item of selectedItems) if ("name" in item) occupied.add(item.name);
     const items = itemsByComponentId.get(component.componentId) ?? [];
-    items.push(item);
+    items.push(...selectedItems);
     itemsByComponentId.set(component.componentId, items);
 
-    const errorBoundary = initializer?.errorType === undefined
+    const nativeError = initializer?.errorName !== undefined;
+    const errorBoundary = initializer?.errorType === undefined || nativeError
       ? undefined
       : resolveRustSourcePackageErrorBoundary(
           input.sourcePackageErrors,
           input.rootComponentId,
           component.componentId,
         );
-    if (initializer?.errorType !== undefined && errorBoundary === undefined) {
+    if (initializer?.errorType !== undefined && !nativeError && errorBoundary === undefined) {
       input.diagnostics.push(workerDiagnostic(
         "RUST_WORKER_ENTRY_ERROR_BOUNDARY_MISSING",
         `Worker source module '${target.fileName}' has no exact error conversion into the root executable.`,
@@ -158,10 +165,15 @@ export function planRustWorkerEntries(input: {
         ? `${input.rootCrateName}::${functionName}`
         : `${component.crateName}::${functionName}`,
       asynchronous: initializer?.asynchronous === true,
+      nativeError,
       ...(initializer?.errorType === undefined
         ? {}
         : {
-            operandErrorType: component.componentId === input.rootComponentId
+            operandErrorType: nativeError ? {
+              kind: "named" as const,
+              path: `${component.root ? input.rootCrateName : component.crateName}::${initializer.errorName}`,
+              identity: initializer.errorType.identity,
+            } : component.componentId === input.rootComponentId
               ? input.rootErrorType
               : {
                   kind: "named" as const,

@@ -2,16 +2,14 @@ import type { Node } from "@tsonic/tsts";
 import type { RustSourceErrorEffectEdge } from "../../../../target-model/records/source-error-effects.js";
 
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
-import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
+import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { planRustSelectedErrorRegion } from "../../program/error-regions.js";
 import { rustInjectLocalError, rustInjectNativeError, rustLocalErrorOwner, rustErrorType,
   rustPropagateLocalError, rustPropagateMappedErrorJoin } from "../../program/fallible-boundaries.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
-import { rustInfallibleTargetId } from "../../../../target-model/types/carriers/source-types.js";
 
 export function planRustSourceErrorPropagation(
   node: Node,
@@ -55,12 +53,10 @@ export function planRustSourceErrorPropagation(
       return rustInjectLocalError(active, imported);
     }
     const channel = channels.get(selected.identity);
-    if (channel?.target.errorType.kind === "target-named" && channel.target.errorType.id === rustInfallibleTargetId)
+    if (channel !== undefined && rustTypeEquals(selected.errorType, { kind: "named", path: "core::convert::Infallible" }))
       return { kind: "match", expression: payload, arms: [] };
-    const targetType: RustType | undefined = channel === undefined ? undefined
-      : rustTypeFromCarrierInContext(channel.target.errorType, context);
-    return channel === undefined || targetType === undefined ? undefined : rustInjectNativeError(active,
-      { identity: channel.target.identity, errorType: targetType }, payload);
+    return channel === undefined ? undefined : rustInjectNativeError(active,
+      { identity: channel.target.identity, errorType: selected.errorType }, payload);
   }) ?? reject(node, context);
 }
 

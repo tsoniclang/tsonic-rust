@@ -1,5 +1,7 @@
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
-import { rustPackageFallibleBoundary } from "./fallible-boundaries.js";
+import type { RustFallibleBoundary } from "./fallible-boundaries.js";
+import { planRustErrorRegion } from "./error-regions.js";
+import type { RustErrorEffectsFact } from "../../../target-model/records/error-effects.js";
 
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { planRustNativeCallableProtocolItems } from "../declarations/callables/native-protocols.js";
@@ -45,8 +47,6 @@ import {
   diagnosticInput,
   isUpperSnakeName,
   isValidRustIdentifier,
-  rustCurrentErrorBoundary,
-  rustErrorType,
   rustSourceItemIsPubliclyReachable,
   rustRuntimeAliasUseItems,
 } from "./plan-context.js";
@@ -96,7 +96,8 @@ export interface PlannedRustSourceFile {
   readonly moduleInitialization?: {
     readonly functionName: string;
     readonly asynchronous: boolean;
-    readonly errorBoundary?: import("./source-package-errors.js").RustSourcePackageErrorBoundary;
+    readonly errorEffects: RustErrorEffectsFact;
+    readonly errorBoundary?: RustFallibleBoundary;
   };
 }
 
@@ -220,7 +221,8 @@ interface PlannedRustModuleItems {
   readonly initialization?: {
     readonly functionName: string;
     readonly asynchronous: boolean;
-    readonly errorBoundary?: import("./source-package-errors.js").RustSourcePackageErrorBoundary;
+    readonly errorEffects: RustErrorEffectsFact;
+    readonly errorBoundary?: RustFallibleBoundary;
   };
 }
 
@@ -254,16 +256,18 @@ function planModuleItems(
   const asynchronous = context.input.program.sourceNavigation.moduleHasTopLevelAwait(
     context.sourceFile,
   );
-  const fallible = context.input.program.records.fallible.get(context.sourceFile) !== undefined;
-  const errorBoundary = fallible ? rustCurrentErrorBoundary(context) : undefined;
-  if (fallible && errorBoundary === undefined) {
+  const errorEffects = context.input.program.records.errorEffects.get(context.sourceFile);
+  const region = planRustErrorRegion(context.sourceFile, context);
+  if (errorEffects === undefined || region === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, context.sourceFile),
       "rust.backend.module-initializer-error-boundary",
-      "Module initializer has no exact source-package error boundary.",
+      "Module initializer has no exact finalized error region.",
     ));
     return { items };
   }
+  const errorBoundary = region.boundary;
+  const fallible = errorBoundary !== undefined;
   const initializationContext: RustPlanContext = {
     ...context,
     syntheticNames,
@@ -271,7 +275,7 @@ function planModuleItems(
     functionReturnType: { kind: "unit" },
     functionAbsenceReturnCarrier: undefined,
     ...(asynchronous ? { asyncContext: true } : {}),
-    fallibleBoundary: errorBoundary === undefined ? undefined : rustPackageFallibleBoundary(errorBoundary),
+    fallibleBoundary: errorBoundary,
   };
   for (const statement of ast.statements(context.sourceFile)) {
     if (statement === undefined) {
@@ -498,6 +502,7 @@ function planModuleItems(
   const initialization: NonNullable<PlannedRustModuleItems["initialization"]> = {
     functionName: initializationFunctionName,
     asynchronous,
+    errorEffects,
     ...(errorBoundary === undefined ? {} : { errorBoundary }),
   };
   items.push({
@@ -509,7 +514,7 @@ function planModuleItems(
       rustHiddenAttribute,
     ],
     ...(asynchronous ? { isAsync: true } : {}),
-    ...(errorBoundary === undefined ? {} : { errorType: rustErrorType(errorBoundary) }),
+    ...(errorBoundary === undefined ? {} : { errorType: errorBoundary.errorType }),
     params: [],
     body: applyFallibleShape(
       { statements: initializationStatements },
@@ -517,7 +522,7 @@ function planModuleItems(
         ? {
             fallible: true,
             hasReturnValue: false,
-            errorType: rustErrorType(errorBoundary!),
+            errorType: errorBoundary!.errorType,
             inferErrorTypeFromReturnType: true,
           }
         : { fallible: false, hasReturnValue: false },

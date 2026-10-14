@@ -7,17 +7,20 @@ import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { PlannedRustSourceFile } from "./source-file.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
-import {
-  resolveRustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorPlan,
-} from "./source-package-errors.js";
+import type { RustSourcePackageErrorBoundary } from "./source-package-errors.js";
+import type { RustTypeRenderingContext } from "../types/render.js";
+import { planRustSelectedErrorRegion } from "./error-regions.js";
+import { planRustNativeErrorJoin } from "../types/native-error-joins.js";
+import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
+import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
+  rustPropagateLocalError, rustPropagateNativeError, type RustFallibleBoundary } from "./fallible-boundaries.js";
 
 export interface RustModuleInitializer {
   readonly sourceFile: SourceFile;
+  readonly identity: string;
   readonly path: string;
   readonly asynchronous: boolean;
-  readonly errorBoundary?: RustSourcePackageErrorBoundary;
+  readonly errorBoundary?: RustFallibleBoundary;
 }
 
 export function planRustModuleInitializers(
@@ -25,8 +28,7 @@ export function planRustModuleInitializers(
   plannedSources: readonly PlannedRustSourceFile[],
   roots: readonly SourceFile[],
   packageInitializers: RustSourcePackageInitializerPlan,
-  sourcePackageErrors: RustSourcePackageErrorPlan,
-  consumerComponentId: string,
+  rendering: RustTypeRenderingContext,
   diagnostics: TargetDiagnostic[],
 ): readonly RustModuleInitializer[] | undefined {
   const plannedBySourceFile = new Map(
@@ -60,6 +62,7 @@ export function planRustModuleInitializers(
     if (planned !== undefined && initialization !== undefined) {
       ordered.push({
         sourceFile,
+        identity: input.program.source.ast.getFileName(sourceFile),
         path: `crate::${planned.moduleName}::${initialization.functionName}`,
         asynchronous: initialization.asynchronous,
         ...(initialization.errorBoundary === undefined
@@ -67,26 +70,22 @@ export function planRustModuleInitializers(
           : { errorBoundary: initialization.errorBoundary }),
       });
     } else if (planned === undefined && contract?.crateName !== undefined) {
-      const errorBoundary = contract.fallible
-        ? resolveRustSourcePackageErrorBoundary(
-            sourcePackageErrors,
-            consumerComponentId,
-            contract.componentId,
-          )
-        : undefined;
-      if (contract.fallible && errorBoundary === undefined) {
+      const region = planRustSelectedErrorRegion(sourceFile, contract.errorEffects, rendering);
+      if (region === undefined) {
         diagnostics.push({
           code: "RUST_SOURCE_PACKAGE_INITIALIZER_ERROR_BOUNDARY_MISSING",
           category: "error",
           source: "tsonic-rust",
-          message: `External source module '${contract.fileName}' has no exact initializer error ABI from component '${consumerComponentId}'.`,
+          message: `External source module '${contract.fileName}' has no exact initializer error ABI from component '${rendering.sourcePackageComponentId}'.`,
           sourceNode: sourceFile,
           evidence: ["target.capability=rust.backend.source-package-initialization"],
         });
         return;
       }
+      const errorBoundary = region.boundary;
       ordered.push({
         sourceFile,
+        identity: contract.fileName,
         path: `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}`,
         asynchronous: contract.asynchronous,
         ...(errorBoundary === undefined ? {} : { errorBoundary }),
@@ -102,20 +101,46 @@ export function planRustModuleInitializers(
 export interface RustCrateInitializer {
   readonly functionName: string;
   readonly asynchronous: boolean;
-  readonly errorType?: RustType;
-  readonly item: RustItem;
+  readonly errorType?: Extract<RustType, { readonly kind: "named" }>;
+  readonly errorName?: string;
+  readonly items: readonly RustItem[];
 }
 
 export function planRustCrateInitializer(
   initializers: readonly RustModuleInitializer[],
   functionName: string,
-  errorType: RustType,
+  owner: RustSourcePackageErrorBoundary,
+  occupiedNames: ReadonlySet<string>,
 ): RustCrateInitializer | undefined {
   if (initializers.length === 0) {
     return undefined;
   }
   const asynchronous = initializers.some((initializer) => initializer.asynchronous);
   const fallible = initializers.some((initializer) => initializer.errorBoundary !== undefined);
+  const native = initializers.filter(initializer => initializer.errorBoundary?.kind === "native");
+  const local = initializers.some(initializer => initializer.errorBoundary?.kind === "source-package")
+    ? { identity: `package:${owner.errorTypeIdentity}`, variant: "Local", errorType: rustErrorType(owner) }
+    : undefined;
+  const names = new Set(occupiedNames);
+  names.add(functionName);
+  const errorName = native.length === 0 ? undefined : allocateRustGeneratedName(names, "InitializationError");
+  const joinName = native.length === 0 ? undefined : allocateRustGeneratedName(names, "InitializationErrors");
+  const join = joinName === undefined ? undefined : planRustNativeErrorJoin({
+    identity: `initializer:${owner.componentId}:${functionName}`,
+    name: joinName, referencePath: `crate::${joinName}`, visibility: "public",
+    sources: [...(local === undefined ? [] : [local]), ...native.map((initializer, index) => ({
+      identity: initializer.identity, variant: `Module${index}`, errorType: initializer.errorBoundary!.errorType,
+    }))],
+  });
+  const boundary = native.length === 0 ? rustPackageFallibleBoundary(owner) : join === undefined ? undefined
+    : rustNativeFallibleBoundary(join, local === undefined ? undefined : { owner, source: local });
+  if (boundary === undefined) throw new Error("Finalized module initializers require an exact native error composition.");
+  const items: RustItem[] = [...(join?.items ?? [])];
+  const errorType: Extract<RustType, { readonly kind: "named" }> = errorName === undefined ? rustErrorType(owner) : {
+    kind: "named", path: `crate::${errorName}`, identity: `initializer-error:${owner.componentId}:${functionName}`,
+  };
+  if (errorName !== undefined) items.push({ kind: "type-alias", name: errorName, visibility: "public",
+    generics: emptyRustGenerics, target: boundary.errorType, attrs: [rustHiddenAttribute] });
   const statements: RustStmt[] = initializers.map((initializer) => {
     const call = {
       kind: "call" as const,
@@ -125,20 +150,14 @@ export function planRustCrateInitializer(
     const execution = initializer.asynchronous
       ? { kind: "await" as const, expr: call }
       : call;
+    const operand = initializer.errorBoundary;
+    const propagated = operand === undefined ? execution : operand.kind === "source-package"
+      ? rustPropagateLocalError(boundary, operand.errorType, execution)
+      : rustPropagateNativeError(boundary, { identity: initializer.identity, errorType: operand.errorType }, execution);
+    if (propagated === undefined) throw new Error("Module initializer propagation requires its exact selected error channel.");
     return {
       kind: "expr" as const,
-      expr: initializer.errorBoundary !== undefined
-        ? {
-            kind: "try" as const,
-            expr: execution,
-            resultErrorType: errorType,
-            operandErrorType: {
-              kind: "named" as const,
-              path: initializer.errorBoundary.errorTypePath,
-              identity: initializer.errorBoundary.errorTypeIdentity,
-            },
-          }
-        : execution,
+      expr: propagated,
     };
   });
   if (fallible) {
@@ -168,11 +187,13 @@ export function planRustCrateInitializer(
       : {}),
     body: { statements },
   };
+  items.push(item);
   return {
     functionName,
     asynchronous,
     ...(fallible ? { errorType } : {}),
-    item,
+    ...(errorName === undefined ? {} : { errorName }),
+    items: Object.freeze(items),
   };
 }
 
