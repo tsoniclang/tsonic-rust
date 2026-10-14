@@ -1,7 +1,7 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { RustCallScopedLifetimeReconciliationFact } from "../../../target-model/records/value-projections.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustCallScopedLifetimeReconciliationEquals } from "../../../target-model/records/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { createRustRecordFamily } from "./family.js";
 
@@ -16,9 +16,7 @@ export function createRustCallScopedLifetimeReconciliationProducer(
 ): RustCallScopedLifetimeReconciliationProducer {
   const family = createRustRecordFamily({
     id: "tsonic.rust.callScopedLifetimeReconciliation",
-    equals: (left: RustCallScopedLifetimeReconciliationFact, right: RustCallScopedLifetimeReconciliationFact) =>
-      rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
-      rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier),
+    equals: rustCallScopedLifetimeReconciliationEquals,
   }, assertOpen, inherited);
   return Object.freeze({
     records: family.reader,

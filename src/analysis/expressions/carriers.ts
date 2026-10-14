@@ -40,7 +40,7 @@ import { rustSourceValueWrapperContains } from "../../policy/ownership/source-va
 import { selectRustIntegerTruncationConversion } from "../../policy/conversions/integer-truncation.js";
 
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
+import { recordRustConversionSelection, recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
 
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustTargetOperationResultCarrier } from "../../target-model/records/operations.js";
@@ -530,7 +530,8 @@ function applyOptionLane(
       const truncation = selectRustIntegerTruncationConversion(walk.context.ast, expression,
         operation?.kind === "provider-operation" ? operation.operationId : undefined, resolved, scalarTarget);
       if (truncation !== undefined) {
-        walk.context.records.contextualValueConversions.convert(expression, resolved, scalarTarget, truncation);
+        recordRustValueCarrierReconciliation(walk.context.records, expression, { kind: "conversion",
+          fact: { sourceCarrier: resolved, targetCarrier: scalarTarget, conversion: truncation } });
         projected = scalarTarget;
       }
       const reconciliationTarget = expectedOptionElement !== undefined && !isRustOptionCarrier(resolved)
@@ -566,7 +567,7 @@ function applyOptionLane(
         recordRustValueCarrierReconciliation(walk.context.records, expression, reconciliation);
         projected = reconciliationTarget;
         if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
-          walk.context.records.conversions.converted(expression, reconciliationTarget);
+          recordRustConversionSelection(walk.context.records, expression, reconciliationTarget);
         }
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated") {
@@ -591,12 +592,13 @@ function applyOptionLane(
       walk.context.records.targetOperations.source(expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
     if (projected !== undefined) {
-      walk.context.records.optionProjections.none(expression, projected, expected);
+      recordRustOptionProjection(walk.context.records, expression, { kind: "none", sourceCarrier: projected, resultCarrier: expected });
     }
     return expected;
   }
   if (projected !== undefined && rustTargetTypeRefEquals(projected, inner)) {
-    walk.context.records.optionProjections.some(expression, projected, inner, expected);
+    recordRustOptionProjection(walk.context.records, expression, { kind: "some", sourceCarrier: projected,
+      elementCarrier: inner, resultCarrier: expected });
     return expected;
   }
   return resolved;

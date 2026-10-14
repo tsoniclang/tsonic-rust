@@ -1,11 +1,19 @@
 import type { RustBindingStorageFact, RustComputedMemberFact, RustClosureCaptureFact, RustSourceCallableValueFact } from "./operation-selections.js";
 import type { RustCapturedFieldStorageFact } from "./receiver-captures.js";
-import type { RustFlowReadProjectionFact, RustProjectDowncastFact } from "./value-projections.js";
+import type { RustCallScopedLifetimeReconciliationFact, RustFlowReadProjectionFact, RustProjectDowncastFact } from "./value-projections.js";
 import { closedMetadataEquals, hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../metadata/closed-data.js";
 import { isRustCapturedFieldStorage } from "../types/field-storage.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustLifetimesEqual } from "../lifetimes/index.js";
 import type { RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "./callables-and-resources.js";
+
+export function rustCallScopedLifetimeReconciliationEquals(
+  left: RustCallScopedLifetimeReconciliationFact,
+  right: RustCallScopedLifetimeReconciliationFact,
+): boolean {
+  return rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier);
+}
 
 export function rustProjectDowncastEquals(left: RustProjectDowncastFact, right: RustProjectDowncastFact): boolean {
   return rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&

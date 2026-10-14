@@ -27,7 +27,7 @@ import { providerFormRequiresSourceReceiver } from "./calls/instantiation.js";
 import { instantiateProviderOperationTemplate } from "./calls/template-instantiation.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { resolveRustExactNullishValueCarrier } from "../../../policy/types/resolution/target.js";
-import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { rustSourcePrimitiveTargetType, rustUnitTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
@@ -476,7 +476,8 @@ function mapSelectedProviderAssignment(
       : selectRustExactIntegerConversion(actual, rustOptionElementCarrier(actual) === undefined
         ? rustOptionElementCarrier(expected) ?? expected : expected);
     if (conversion === undefined) return selected;
-    context.records.contextualValueConversions.convert(argument, conversion.source, conversion.target, conversion);
+    recordRustValueCarrierReconciliation(context.records, argument, { kind: "conversion",
+      fact: { sourceCarrier: conversion.source, targetCarrier: conversion.target, conversion } });
     return expected;
   });
   const finalizedSourceArgumentCarriers = sourceArgumentCarriers.filter(

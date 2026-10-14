@@ -1,4 +1,5 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustProgramRecordWriter } from "../program/records/model.js";
@@ -8,40 +9,102 @@ import { rustCompilerOwnedContextualConversionMatches } from "../../target-model
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAppliedValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import type { RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
+import type { RustContextualValueConversionFact, RustOptionProjectionFact, RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { rustCallScopedLifetimeReconciliationEquals } from "../../target-model/records/equality.js";
 
 export function recordRustValueCarrierReconciliation(
   records: RustProgramRecordWriter,
   subject: ExtensionFactSubject,
   reconciliation: RustAppliedValueCarrierReconciliation,
 ): void {
+  records.assertOpen();
   if (reconciliation.kind === "call-scoped-lifetime") {
-    records.callScopedLifetimes.reconcile(subject, reconciliation.fact.sourceCarrier, reconciliation.fact.selectedCarrier);
+    const previous = records.callScopedLifetimeReconciliation.get(subject);
+    if (previous !== undefined) {
+      if (!rustCallScopedLifetimeReconciliationEquals(previous, reconciliation.fact)) {
+        failTargetAnalysisInvariant("tsonic-rust",
+          "Conflicting Rust semantic plan 'tsonic.rust.callScopedLifetimeReconciliation' for one exact source subject.");
+      }
+    } else records.callScopedLifetimes.reconcile(subject, reconciliation.fact.sourceCarrier, reconciliation.fact.selectedCarrier);
     return;
   }
   if (reconciliation.kind === "project-upcast") {
-    records.projectUpcasts.project(subject, reconciliation.fact.sourceCarrier, reconciliation.fact.targetCarrier,
-      reconciliation.fact.sourceVariants);
+    recordRustProjectUpcast(records, subject, reconciliation.fact);
     return;
   }
   if (reconciliation.upcast !== undefined) {
-    records.projectUpcasts.project(subject, reconciliation.upcast.sourceCarrier, reconciliation.upcast.targetCarrier,
-      reconciliation.upcast.sourceVariants);
+    recordRustProjectUpcast(records, subject, reconciliation.upcast);
   }
   const { sourceCarrier, targetCarrier, conversion } = reconciliation.fact;
   if (conversion.kind === "option-some") {
     if (!rustTargetTypeRefEquals(sourceCarrier, conversion.source) ||
       !rustTargetTypeRefEquals(rustOptionElementCarrier(targetCarrier), conversion.element)) {
-      throw new Error("Rust optional admission must retain its exact source and selected payload.");
+      failTargetAnalysisInvariant("tsonic-rust", "Rust optional admission must retain its exact source and selected payload.");
     }
     if (conversion.elementConversion !== null) {
-      records.contextualValueConversions.convert(subject, sourceCarrier, conversion.element, conversion.elementConversion);
+      recordRustContextualConversion(records, subject, { sourceCarrier, targetCarrier: conversion.element,
+        conversion: conversion.elementConversion });
     }
-    records.optionProjections.some(subject, conversion.element, conversion.element, targetCarrier);
+    recordRustOptionProjection(records, subject, { kind: "some", sourceCarrier: conversion.element,
+      elementCarrier: conversion.element, resultCarrier: targetCarrier });
     return;
   }
-  records.contextualValueConversions.convert(subject, sourceCarrier, targetCarrier, conversion);
+  recordRustContextualConversion(records, subject, reconciliation.fact);
+}
+
+function recordRustProjectUpcast(records: RustProgramRecordWriter, subject: ExtensionFactSubject, selected: RustProjectUpcastFact): void {
+  const normalized = { sourceCarrier: selected.sourceCarrier, targetCarrier: selected.targetCarrier,
+    ...(selected.sourceVariants === undefined ? {} : { sourceVariants: selected.sourceVariants }) };
+  const previous = records.projectUpcast.get(subject);
+  if (previous !== undefined) {
+    if (!closedMetadataEquals(previous, normalized)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.projectUpcast' for one exact source subject.");
+    }
+  } else records.projectUpcasts.project(subject, selected.sourceCarrier, selected.targetCarrier, selected.sourceVariants);
+}
+
+function recordRustContextualConversion(
+  records: RustProgramRecordWriter,
+  subject: ExtensionFactSubject,
+  selected: RustContextualValueConversionFact,
+): void {
+  const previous = records.contextualValueConversion.get(subject);
+  if (previous !== undefined) {
+    if (!closedMetadataEquals(previous, selected)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.contextualValueConversion' for one exact source subject.");
+    }
+  } else records.contextualValueConversions.convert(subject, selected.sourceCarrier, selected.targetCarrier, selected.conversion);
+}
+
+export function recordRustOptionProjection(records: RustProgramRecordWriter, subject: ExtensionFactSubject, selected: RustOptionProjectionFact): void {
+  records.assertOpen();
+  const previous = records.optionProjection.get(subject);
+  if (previous !== undefined) {
+    if (!closedMetadataEquals(previous, selected)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.optionProjection' for one exact source subject.");
+    }
+  } else if (selected.kind === "none") records.optionProjections.none(subject, selected.sourceCarrier, selected.resultCarrier);
+  else records.optionProjections.some(subject, selected.sourceCarrier, selected.elementCarrier, selected.resultCarrier);
+}
+
+export function recordRustConversionSelection(
+  records: RustProgramRecordWriter,
+  subject: ExtensionFactSubject,
+  convertedType: TargetTypeRef | undefined,
+): void {
+  records.assertOpen();
+  const previous = records.conversion.get(subject);
+  if (previous !== undefined) {
+    if (!rustTargetTypeRefEquals(previous.convertedType, convertedType)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.conversion' for one exact source subject.");
+    }
+  } else records.conversions.converted(subject, convertedType);
 }
 
 export function rustValueCarrierBeforeContextualConversion(

@@ -48,6 +48,7 @@ import type { RustCaptureStorage } from "../callables/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
+import { recordRustConversionSelection } from "../conversions/value-carrier-queries.js";
 import type { RustOperationAttempt } from "./operation-attempts.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
@@ -344,7 +345,7 @@ export function selectExpressionOperation(
     }, context, walk.operationOptions);
     recordPolicySelection(walk, expression, selection);
     if (selection.kind === "accept" && selection.value.convertedType !== undefined) {
-      walk.context.records.conversions.converted(expression, selection.value.convertedType);
+      recordRustConversionSelection(walk.context.records, expression, selection.value.convertedType);
     }
     return;
   }
