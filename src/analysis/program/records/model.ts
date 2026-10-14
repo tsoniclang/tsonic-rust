@@ -1,7 +1,7 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
-import type { RustSelectedOperationProducer } from "../../operations/records/selected-operation.js";
+import type { RustSelectedOperationProducer } from "./selected-operation.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;

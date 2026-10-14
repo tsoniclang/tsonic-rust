@@ -10,7 +10,7 @@ import { rustFoundationForContextualConversion, rustFoundationForFinalizedConver
 import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
 import { rustTypeAliasDeclarationFactKey, rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustResourceManagementFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
 import { rustRuntimeCarrierKey, rustSelectedCallKey, rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
-import { createRustSelectedOperationProducer } from "../../operations/records/selected-operation.js";
+import { createRustSelectedOperationProducer } from "./selected-operation.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "./keys/native-control-flow.js";
 import { rustAwaitValueFactKey } from "./keys/await-values.js";
 import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
