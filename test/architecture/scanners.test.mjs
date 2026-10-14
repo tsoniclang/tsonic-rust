@@ -1001,10 +1001,6 @@ test("Rust dead-code obligations are planner-local and normalized before output 
     join(sourceRoot, "analysis/errors/initialization.ts"),
     "utf8",
   );
-  const entryPoint = readFileSync(
-    join(sourceRoot, "backend/planner/program/entry-point.ts"),
-    "utf8",
-  );
   const lintPolicy = readFileSync(
     join(sourceRoot, "backend/target-ast/normalization/lint-policy.ts"),
     "utf8",
@@ -1051,9 +1047,13 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.equal(/resolveProjectEntrySourceFile|resolveLibraryInitializationRoots/u.test(outputPlanning), false,
     "native planning never independently reselects semantic initialization roots");
   assert.equal(/resolveBinaryEntry/u.test(outputPlanning), false, "binary startup never selects an implicit callable");
-  assert.equal(/rustProjectEntrySourceFile\(input\.program\)/u.test(entryPoint), true, "entry source resolution has one owner");
-  assert.equal(/return program\.sourceFiles\.find/u.test(entryPoint), true, "entry selection uses the exact source collection");
-  assert.equal(/rustBinaryEntryDeclaration|hasModifierKind|returnCarrier|parameters\(statement\)|typeParameters\(statement\)/u.test(entryPoint), false,
+  assert.equal(existsSync(join(sourceRoot, "backend/planner/program/entry-point.ts")), false,
+    "the superseded planner entry selector is removed");
+  assert.equal(/byFileName = new Map\(input\.sourceFiles\.map/u.test(initializationAnalysis), true,
+    "entry selection uses the exact checked source collection");
+  assert.equal(/const file = byFileName\.get\(path\)/u.test(initializationAnalysis), true,
+    "the selected entry retains the checked source object");
+  assert.equal(/rustBinaryEntryDeclaration|hasModifierKind|returnCarrier|parameters\(statement\)|typeParameters\(statement\)/u.test(initializationAnalysis), false,
     "entry source selection does not reconstruct a main declaration contract");
   for (const [attribute, level, reason] of [
     [rustLintAttributes.authoredDeadCode, "allow", "retains an unused authored declaration"],

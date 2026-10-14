@@ -5,7 +5,7 @@ import type { RustPlanningContext } from "../context.js";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
-import { rustItemBindingNames } from "../../target-ast/inspection/item-bindings.js";
+import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type { RustSourcePackageCrateContentPlan } from "./source-package-crates.js";

@@ -5,7 +5,7 @@ import {
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
-import { rustItemBindingNames } from "../../target-ast/inspection/item-bindings.js";
+import { rustItemBindingNames } from "../../target-ast/syntax/item-bindings.js";
 import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";

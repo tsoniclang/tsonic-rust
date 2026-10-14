@@ -1,4 +1,4 @@
-import type { RustItem } from "../syntax/nodes.js";
+import type { RustItem } from "./nodes.js";
 
 export function rustItemBindingNames(item: RustItem): readonly string[] {
   if ("name" in item) return [item.name];

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustItemBindingNames } from "../../../../dist/backend/target-ast/inspection/item-bindings.js";
+import { rustItemBindingNames } from "../../../../dist/backend/target-ast/syntax/item-bindings.js";
 import { emptyRustGenerics } from "../../../../dist/backend/target-ast/syntax/nodes.js";
 
 test("native item bindings include named declarations, direct imports and explicit import aliases", () => {
