@@ -1,5 +1,5 @@
 import type { ArgumentPassingMode, AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations.js";
 import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
@@ -80,6 +80,10 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     if (operation.operandModes[0] !== "value") select(left, operation.operandModes[0] === "ref" ? "shared" : "mutable", right === undefined ? [] : [right]);
     const rightMode = operation.operandModes[1];
     if (rightMode !== undefined && rightMode !== "value") select(right, rightMode === "ref" ? "shared" : "mutable");
+  } else if (operation?.kind === "source-indexed-field") {
+    const key = ElementAccessExpression_ArgumentExpression(ast, node);
+    select(receiver, "shared", key === undefined ? [] : [key], 0, true);
+    select(key, "shared");
   } else if (operation?.kind === "source-field") select(receiver, "shared");
   for (const argument of input.address?.arguments ?? []) {
     if (argument.input === "raw-ref" || argument.input === "raw-owner-ref") select(argument.expression, "shared");

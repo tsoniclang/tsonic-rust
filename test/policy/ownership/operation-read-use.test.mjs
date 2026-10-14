@@ -59,3 +59,28 @@ test("native string append and arithmetic carry their exact operand contracts be
   for (const file of program.sourceFiles) visit(file);
   assert.deepEqual(operations, ["+=", "+"]);
 });
+
+test("generic indexed field reads borrow both the receiver and key without requiring a copied key", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+    export function get<T, K extends keyof T>(value: T, key: K): T[K] { return value[key]; }
+  ` } });
+  const selected = [];
+  const visit = node => {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "source-indexed-field") {
+      const access = program.source.ast.as.AsElementAccessExpression(node);
+      assert.equal(access !== undefined, true, "checked indexed field reference");
+      const uses = select(program.source.ast, node, operation);
+      assert.equal(uses.get(access.Expression)?.mode, "shared");
+      assert.equal(uses.get(access.ArgumentExpression)?.mode, "shared");
+      assert.equal(uses.get(access.Expression)?.later[0] === access.ArgumentExpression, true);
+      for (const subject of [access.Expression, access.ArgumentExpression]) {
+        assert.equal(program.ownership.reads.get(subject)?.value.kind, "borrow");
+      }
+      selected.push(node);
+    }
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of program.sourceFiles) visit(file);
+  assert.equal(selected.length, 1);
+});

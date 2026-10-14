@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 
 import type { RustSuspendedCallableStorage } from "../../target-model/records/callables-and-resources.js";
 import { rustEnclosingStorageContract, selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
@@ -47,8 +46,9 @@ export function resolveRustSuspendedCallableStorage(
   const receiverCaptures = walk.context.objectRepresentations.receiverCaptures;
   const capturedFields = receiverCaptures.capturesFor(declaration);
   const occurrences = walk.context.receiverOccurrences?.get(declaration);
-  if (occurrences === undefined) return failTargetPlannerInvariant("tsonic-rust",
-    "A suspended callable has no exact checked receiver-occurrence inventory.", declaration);
+  if (occurrences === undefined) return {
+    kind: "rejected", reason: "Suspended input retention requires the complete checked receiver-occurrence inventory.",
+  };
   const receiverOccurrences = occurrences.filter(node => capturedFields.length === 0 || !receiverCaptures.capturesReceiver(node));
 
   const owner = walk.context.projectTypes.definitionContainingDeclaration(declaration);
