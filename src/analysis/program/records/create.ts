@@ -24,7 +24,9 @@ import { rustObjectLiteralMethodAdapterFactKey, rustFallibleFactKey, rustSourceC
 import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
 import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustReceiverIndependentMethodFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
 import { rustTypeOnlyDeclarationFactKey } from "./keys/type-only.js";
-import { rustNativeArrayStorageKey, rustNativeBackingKey, rustRawLocationPlanKey } from "./keys/native-memory.js";
+import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
+import { createRustNativeBackingProducer } from "./native-backing.js";
+import { createRustRawLocationProducer } from "./raw-locations.js";
 import { rustIndexedFieldKeyArgument } from "./keys/indexed-field-keys.js";
 import { rustObjectReferenceViewKey } from "./keys/object-reference-views.js";
 import { rustProjectCallableAdaptersKey } from "./keys/project-callable-adapters.js";
@@ -34,8 +36,8 @@ import { rustModuleCallableStorageFactKey } from "./keys/module-values.js";
 import { rustGenericCallableInvocationFactKey } from "./keys/generic-callable-effects.js";
 import { rustCapturedFieldStorageFactKey } from "./keys/receiver-captures.js";
 import { rustPropertyProjectionFactKey } from "./keys/property-projections.js";
-import { rustMemoryBindingPlanKey } from "./keys/memory-bindings.js";
-import { rustRawAddressPlanKey } from "./keys/raw-addresses.js";
+import { createRustMemoryBindingProducer } from "./memory-bindings.js";
+import { createRustRawAddressProducer } from "./raw-addresses.js";
 import { rustMemoryLayoutObservationKey } from "./keys/memory-layout.js";
 import { rustClassValueFactKey } from "./keys/class-values.js";
 
@@ -129,9 +131,9 @@ export function createRustProgramRecordBuilder(
   const directCallableReference = createFamily(rustDirectCallableReferenceFactKey, parent?.directCallableReference);
   const moduleBinding = createFamily(rustModuleBindingFactKey, parent?.moduleBinding);
   const typeOnlyDeclaration = createFamily(rustTypeOnlyDeclarationFactKey, parent?.typeOnlyDeclaration);
-  const nativeArrayStorage = createFamily(rustNativeArrayStorageKey, parent?.nativeArrayStorage);
-  const nativeBacking = createFamily(rustNativeBackingKey, parent?.nativeBacking);
-  const rawLocationPlan = createFamily(rustRawLocationPlanKey, parent?.rawLocationPlan);
+  const nativeArrays = createRustNativeArrayStorageProducer(assertOpen, parent?.nativeArrayStorage);
+  const nativeBackings = createRustNativeBackingProducer(assertOpen, parent?.nativeBacking);
+  const rawLocations = createRustRawLocationProducer(assertOpen, parent?.rawLocationPlan);
   const indexedFieldKeyArgument = createFamily(rustIndexedFieldKeyArgument, parent?.indexedFieldKeyArgument);
   const objectReferenceView = createFamily(rustObjectReferenceViewKey, parent?.objectReferenceView);
   const projectCallableAdapters = createFamily(rustProjectCallableAdaptersKey, parent?.projectCallableAdapters);
@@ -142,8 +144,8 @@ export function createRustProgramRecordBuilder(
   const genericCallableInvocation = createFamily(rustGenericCallableInvocationFactKey, parent?.genericCallableInvocation);
   const capturedFieldStorage = createFamily(rustCapturedFieldStorageFactKey, parent?.capturedFieldStorage);
   const propertyProjection = createFamily(rustPropertyProjectionFactKey, parent?.propertyProjection);
-  const memoryBindingPlan = createFamily(rustMemoryBindingPlanKey, parent?.memoryBindingPlan);
-  const rawAddressPlan = createFamily(rustRawAddressPlanKey, parent?.rawAddressPlan);
+  const memoryBindings = createRustMemoryBindingProducer(assertOpen, parent?.memoryBindingPlan);
+  const rawAddresses = createRustRawAddressProducer(assertOpen, parent?.rawAddressPlan);
   const memoryLayoutObservation = createFamily(rustMemoryLayoutObservationKey, parent?.memoryLayoutObservation);
   const classValue = createFamily(rustClassValueFactKey, parent?.classValue);
 
@@ -197,9 +199,9 @@ export function createRustProgramRecordBuilder(
     directCallableReference: directCallableReference.reader,
     moduleBinding: moduleBinding.reader,
     typeOnlyDeclaration: typeOnlyDeclaration.reader,
-    nativeArrayStorage: nativeArrayStorage.reader,
-    nativeBacking: nativeBacking.reader,
-    rawLocationPlan: rawLocationPlan.reader,
+    nativeArrayStorage: nativeArrays.records,
+    nativeBacking: nativeBackings.records,
+    rawLocationPlan: rawLocations.records,
     indexedFieldKeyArgument: indexedFieldKeyArgument.reader,
     objectReferenceView: objectReferenceView.reader,
     projectCallableAdapters: projectCallableAdapters.reader,
@@ -210,8 +212,8 @@ export function createRustProgramRecordBuilder(
     genericCallableInvocation: genericCallableInvocation.reader,
     capturedFieldStorage: capturedFieldStorage.reader,
     propertyProjection: propertyProjection.reader,
-    memoryBindingPlan: memoryBindingPlan.reader,
-    rawAddressPlan: rawAddressPlan.reader,
+    memoryBindingPlan: memoryBindings.records,
+    rawAddressPlan: rawAddresses.records,
     memoryLayoutObservation: memoryLayoutObservation.reader,
     classValue: classValue.reader,
   });
@@ -269,9 +271,12 @@ export function createRustProgramRecordBuilder(
     directCallableReference: directCallableReference.writer,
     moduleBinding: moduleBinding.writer,
     typeOnlyDeclaration: typeOnlyDeclaration.writer,
-    nativeArrayStorage: nativeArrayStorage.writer,
-    nativeBacking: nativeBacking.writer,
-    rawLocationPlan: rawLocationPlan.writer,
+    nativeArrayStorage: nativeArrays.records,
+    nativeArrays,
+    nativeBacking: nativeBackings.records,
+    nativeBackings,
+    rawLocationPlan: rawLocations.records,
+    rawLocations,
     indexedFieldKeyArgument: indexedFieldKeyArgument.writer,
     objectReferenceView: objectReferenceView.writer,
     projectCallableAdapters: projectCallableAdapters.writer,
@@ -282,8 +287,10 @@ export function createRustProgramRecordBuilder(
     genericCallableInvocation: genericCallableInvocation.writer,
     capturedFieldStorage: capturedFieldStorage.writer,
     propertyProjection: propertyProjection.writer,
-    memoryBindingPlan: memoryBindingPlan.writer,
-    rawAddressPlan: rawAddressPlan.writer,
+    memoryBindingPlan: memoryBindings.records,
+    memoryBindings,
+    rawAddressPlan: rawAddresses.records,
+    rawAddresses,
     memoryLayoutObservation: memoryLayoutObservation.writer,
     classValue: classValue.writer,
     minimumFoundation(): RustFoundation {
