@@ -324,7 +324,7 @@ export function recordParameterAbiFacts(walk: RustFactWalk, parameter: Node, sel
     return;
   }
   setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
-  setParameterAbiFact(walk, parameter, parameterAbi);
+  walk.context.records.sourceParameterAbis.parameter(parameter, parameterAbi);
   const name = Node_Name(walk.context.ast, parameter);
   const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
   if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
@@ -379,23 +379,6 @@ export function recordBindingPatternFacts(
       setCarrierFact(walk, subject, carrier);
     },
   });
-}
-
-export function setParameterAbiFact(
-  walk: RustFactWalk,
-  parameter: Node,
-  abi: import("../../policy/ownership/source-callable-abi.js").RustSourceParameterAbi,
-): void {
-  walk.context.records.sourceParameterAbi.set(parameter, {
-    form: abi.form,
-    valueCarrier: abi.valueCarrier,
-    parameterCarrier: abi.parameterCarrier,
-    mode: abi.mode,
-    ...(abi.inputLifetime === undefined ? {} : { inputLifetime: abi.inputLifetime }),
-    ...(abi.entryConversion === undefined ? {} : { entryConversion: abi.entryConversion }),
-  }, [
-    { message: "rust finalized source parameter ABI" },
-  ]);
 }
 
 export function recordCallableDefaultParameterFacts(walk: RustFactWalk, declaration: Node): boolean {

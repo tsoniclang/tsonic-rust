@@ -88,12 +88,7 @@ export function resolveIdentifierCarrier(
       }
     }
     if (declarationKind === KindParameter) {
-      const parameterAbi = walk.context.records.sourceParameterAbi.get(declaration);
-      if (parameterAbi !== undefined) {
-        walk.context.records.sourceParameterAbi.set(identifier, parameterAbi, [
-          { message: "rust project-source parameter ABI use" },
-        ]);
-      }
+      walk.context.records.sourceParameterAbis.use(identifier, declaration);
     }
     if (declarationKind === KindVariableDeclaration &&
       sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation)) {
@@ -184,16 +179,8 @@ export function recordProjectSourceBinding(
     return undefined;
   }
   const binding: RustSourceBindingFact = sourceDeclarationIsModuleScoped(declaration, ast)
-    ? {
-        scope: "module",
-        sourceName,
-        fileName: ast.getFileName(ast.getSourceFile(declaration)),
-        sourceDeclaration: declaration,
-      }
-    : { scope: "lexical", sourceName, sourceDeclaration: declaration };
-  walk.context.records.sourceBinding.set(identifier, binding, [
-    { message: `rust project-source ${binding.scope} binding` },
-  ]);
+    ? walk.context.records.sourceBindings.module(identifier, declaration, sourceName, ast.getFileName(ast.getSourceFile(declaration)))
+    : walk.context.records.sourceBindings.lexical(identifier, declaration, sourceName);
   const module = walk.context.records.moduleBinding.get(declaration);
   if (binding.scope === "module" && module?.storage === "native-callable" && module.value !== undefined &&
     !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {

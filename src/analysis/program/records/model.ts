@@ -51,6 +51,9 @@ import type { RustBindingStorageProducer } from "./binding-storage.js";
 import type { RustRetainedCallLifetimesProducer } from "./retained-call-lifetimes.js";
 import type { RustBindingProjectionProducer } from "./binding-projection.js";
 import type { RustTypedLocationProducer } from "./typed-location-plan.js";
+import type { RustGeneratorProducer } from "./generator.js";
+import type { RustSourceParameterAbiProducer } from "./source-parameter-abi.js";
+import type { RustSourceBindingProducer } from "./source-binding.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -67,7 +70,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "callScopedLifetimeReconciliation" | "projectUpcast" | "projectDowncast" |
   "asyncFunction" | "yield" | "computedMember" | "compoundWrite" |
   "typeAliasDeclaration" | "mutatedBinding" | "mutatedReferent" |
-  "argumentPassing" | "bindingStorage" | "retainedCallLifetimes" | "bindingProjection" | "typedLocationPlan";
+  "argumentPassing" | "bindingStorage" | "retainedCallLifetimes" | "bindingProjection" | "typedLocationPlan" |
+  "generator" | "sourceParameterAbi" | "sourceBinding";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -122,6 +126,9 @@ export type RustProgramRecordWriter = {
   readonly retainedCalls: RustRetainedCallLifetimesProducer;
   readonly bindingProjections: RustBindingProjectionProducer;
   readonly typedLocations: RustTypedLocationProducer;
+  readonly generators: RustGeneratorProducer;
+  readonly sourceParameterAbis: RustSourceParameterAbiProducer;
+  readonly sourceBindings: RustSourceBindingProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

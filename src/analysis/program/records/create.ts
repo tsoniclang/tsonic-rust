@@ -5,8 +5,10 @@ import type { RustProgramRecords, RustRecordFamily } from "../../../target-model
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForCarrier } from "../../foundation/requirements.js";
-import { rustFoundationForContextualConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
-import { rustGeneratorFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
+import { rustFoundationForContextualConversion } from "../../foundation/conversion-requirements.js";
+import { createRustGeneratorProducer } from "./generator.js";
+import { createRustSourceParameterAbiProducer } from "./source-parameter-abi.js";
+import { createRustSourceBindingProducer } from "./source-binding.js";
 import { createRustAsyncFunctionProducer } from "./async-function.js";
 import { createRustYieldProducer } from "./yield.js";
 import { createRustComputedMemberProducer } from "./computed-member.js";
@@ -46,7 +48,7 @@ import { createRustCallScopedLifetimeReconciliationProducer } from "./call-scope
 import { createRustProjectUpcastProducer } from "./project-upcast.js";
 import { createRustProjectDowncastProducer } from "./project-downcast.js";
 import { rustCompileTimeSourceKey } from "./keys/source-declarations.js";
-import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
+import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
 import { rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
@@ -86,15 +88,10 @@ export function createRustProgramRecordBuilder(
 
   const typeAliasDeclarations = createRustTypeAliasDeclarationProducer(assertOpen, parent?.typeAliasDeclaration);
   const asyncFunctions = createRustAsyncFunctionProducer(assertOpen, parent?.asyncFunction);
-  const generator = createFamily(rustGeneratorFactKey, parent?.generator);
+  const generators = createRustGeneratorProducer(assertOpen, parent?.generator);
   const yields = createRustYieldProducer(assertOpen, parent?.yield);
   const resourceManagementPlans = createRustResourceManagementProducer(assertOpen, parent?.resourceManagement);
-  const sourceParameterAbi = createFamily(rustSourceParameterAbiFactKey, parent?.sourceParameterAbi, fact => {
-    const carriers = maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier),
-      rustFoundationForCarrier(fact.parameterCarrier));
-    return fact.entryConversion === undefined ? carriers : maximumRustFoundation(carriers,
-      rustFoundationForValueConversion(fact.entryConversion, definitions));
-  });
+  const sourceParameterAbis = createRustSourceParameterAbiProducer(assertOpen, requireFoundation, definitions, parent?.sourceParameterAbi);
   const runtimeCarriers = createRustRuntimeCarrierProducer(assertOpen, requireFoundation, parent?.runtimeCarrier);
   const selectedCalls = createRustSelectedCallProducer(assertOpen, requireFoundation, parent?.selectedCall);
   const selectedOperations = createRustSelectedOperationProducer(parent?.selectedOperation);
@@ -123,7 +120,7 @@ export function createRustProgramRecordBuilder(
   const callScopedLifetimes = createRustCallScopedLifetimeReconciliationProducer(assertOpen, parent?.callScopedLifetimeReconciliation);
   const projectUpcasts = createRustProjectUpcastProducer(assertOpen, parent?.projectUpcast);
   const projectDowncasts = createRustProjectDowncastProducer(assertOpen, parent?.projectDowncast);
-  const sourceBinding = createFamily(rustSourceBindingFactKey, parent?.sourceBinding);
+  const sourceBindings = createRustSourceBindingProducer(assertOpen, parent?.sourceBinding);
   const bindingProjections = createRustBindingProjectionProducer(assertOpen, parent?.bindingProjection);
   const mutatedBindings = createRustMutatedBindingProducer(assertOpen, parent?.mutatedBinding);
   const mutatedReferents = createRustMutatedReferentProducer(assertOpen, parent?.mutatedReferent);
@@ -162,10 +159,10 @@ export function createRustProgramRecordBuilder(
   const records: RustProgramRecords = Object.freeze({
     typeAliasDeclaration: typeAliasDeclarations.records,
     asyncFunction: asyncFunctions.records,
-    generator: generator.reader,
+    generator: generators.records,
     yield: yields.records,
     resourceManagement: resourceManagementPlans.records,
-    sourceParameterAbi: sourceParameterAbi.reader,
+    sourceParameterAbi: sourceParameterAbis.records,
     runtimeCarrier: runtimeCarriers.records,
     selectedCall: selectedCalls.records,
     selectedOperation: selectedOperations.records,
@@ -191,7 +188,7 @@ export function createRustProgramRecordBuilder(
     callScopedLifetimeReconciliation: callScopedLifetimes.records,
     projectUpcast: projectUpcasts.records,
     projectDowncast: projectDowncasts.records,
-    sourceBinding: sourceBinding.reader,
+    sourceBinding: sourceBindings.records,
     bindingProjection: bindingProjections.records,
     mutatedBinding: mutatedBindings.records,
     mutatedReferent: mutatedReferents.records,
@@ -232,12 +229,14 @@ export function createRustProgramRecordBuilder(
     typeAliasDeclarations,
     asyncFunction: asyncFunctions.records,
     asyncFunctions,
-    generator: generator.writer,
+    generator: generators.records,
+    generators,
     yield: yields.records,
     yields,
     resourceManagement: resourceManagementPlans.records,
     resourceManagementPlans,
-    sourceParameterAbi: sourceParameterAbi.writer,
+    sourceParameterAbi: sourceParameterAbis.records,
+    sourceParameterAbis,
     runtimeCarrier: runtimeCarriers.records,
     runtimeCarriers,
     selectedCall: selectedCalls.records,
@@ -283,7 +282,8 @@ export function createRustProgramRecordBuilder(
     projectUpcasts,
     projectDowncast: projectDowncasts.records,
     projectDowncasts,
-    sourceBinding: sourceBinding.writer,
+    sourceBinding: sourceBindings.records,
+    sourceBindings,
     bindingProjection: bindingProjections.records,
     bindingProjections,
     mutatedBinding: mutatedBindings.records,

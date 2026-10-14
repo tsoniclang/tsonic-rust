@@ -28,7 +28,7 @@ import {
   rustCallableTargetType,
   rustClosureProtocol,
 } from "../../target-model/types/index.js";
-import { recordBindingPatternFacts, recordCallableDefaultParameterFacts, setParameterAbiFact } from "../declarations/types-and-bindings.js";
+import { recordBindingPatternFacts, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -211,7 +211,7 @@ export function resolveFunctionExpressionCarrier(
     }
     if (finalizedAbi === undefined) {
       setCarrierFact(walk, parameter, parameterAbi.valueCarrier);
-      setParameterAbiFact(walk, parameter, parameterAbi);
+      walk.context.records.sourceParameterAbis.parameter(parameter, parameterAbi);
       const name = Node_Name(ast, parameter);
       const nameKind = name === undefined ? "" : ast.kindName(name);
       if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
