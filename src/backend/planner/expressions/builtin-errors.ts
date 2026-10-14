@@ -15,7 +15,7 @@ import { planExpressionBeforeValueProjections } from "./entry.js";
 
 import { rustFlowReadProjectionMatches } from "../../../analysis/control-flow/flow-read-projections.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
-import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustCarrierProvidesErrorObservation } from "../../../target-model/types/carriers/error-protocols.js";
 import { effectiveMemberResultCarrier } from "./special.js";
 import { isRustClosedValueCarrier } from "../../../target-model/types/carriers/closed-value-kind.js";
@@ -62,7 +62,7 @@ export function planRustBuiltinErrorProperty(
         "rust.backend.builtin-error-boundary", "Builtin Error observation requires its exact native error domain."));
       return undefined;
     }
-    const observed: RustExpr = { kind: "method-call", receiver: planRustNonConsumingValue(receiverNode, receiver, context),
+    const observed: RustExpr = { kind: "method-call", receiver: receiver,
       method: closed ? "as_error" : "source_error", args: [] };
     const borrowed: RustExpr = boundary?.errorDomain === "runtime" ? observed
       : { kind: "method-call", receiver: observed, method: "expect", args: [{ kind: "str-literal", value: "exact checked flow selected a non-Error observation" }] };

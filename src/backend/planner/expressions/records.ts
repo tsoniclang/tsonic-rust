@@ -28,7 +28,6 @@ import {
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { parseSourceIntegerLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { planRustProviderRecordAbsentFields } from "./provider-record-absence.js";
 import { planRustRecordSpread } from "./record-spreads.js";
 import { rustObjectLiteralRequiresDispatchImplementation } from "../objects/object-literal-implementations.js";
@@ -650,7 +649,7 @@ function planIndexedRecordLiteral(
       return undefined;
     }
     effects.push({ expression: sourceStorage.copyEntries(
-      planRustNonConsumingValue(contribution.expression, spread, context), entries,
+      spread, entries,
     ), discard: "unit" });
   }
   if (effects.length === 0) {

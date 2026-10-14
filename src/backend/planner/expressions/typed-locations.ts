@@ -37,7 +37,6 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustProjectObjectRepresentation } from "../objects/project-storage.js";
 import { rustModuleCellAccess } from "../project/module-storage.js";
-import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import {
   readRustProjectDispatchedField,
   writeRustProjectDispatchedField,
@@ -55,10 +54,14 @@ import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/
 import { rustExpressionHasReferenceObjectField, planRustReferenceObjectFieldLocation } from "./object-field-locations.js";
 import { rustPreparedValueLocation } from "../objects/value-fields.js";
 import type { RustExpressionAccess } from "./entry.js";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import type { RustCaptureReadOwnership, RustReadOwnershipFact } from "../../../target-model/records/ownership.js";
 
 export type RustExpressionPlanner = (
   node: Node,
   context: RustPlanContext,
+  resultUse?: import("./entry.js").RustExpressionResultUse,
+  access?: RustExpressionAccess,
 ) => RustExpr | undefined;
 
 export function fallibleLocationAccess(node: Node, expression: RustExpr, context: RustPlanContext): RustExpr | undefined {
@@ -87,7 +90,7 @@ export function planRustIdentifierValue(
   const storage = rustLocationStorageForReference(node, context);
   const value: RustExpr = captured?.expression ?? { kind: "path", path };
   if (context.input.program.records.nativeArrayStorage.get(node)?.kind === "reference") {
-    return cloneRustExpression(value);
+    return access === "value" ? planRustValueRead(node, value, context) : value;
   }
   const bindingStorage = captured !== undefined && captured.storage !== "value" ? captured.storage
     : storage?.storage === "local-location" ? "location"
@@ -109,7 +112,7 @@ export function planRustIdentifierValue(
       return access === "value" ? { kind: "owned-string-from-borrowed-str", expression: value } : value;
     }
     if (access !== "value") return referent ?? { kind: "dereference", pointer: value };
-    return rustCarrierHasCopyContract(captured.valueCarrier, context)
+    return requireRustReadOwnership(node, context).snapshot?.kind === "copy"
       ? referent ?? { kind: "dereference", pointer: value }
       : cloneRustExpression(referent ?? value);
   }
@@ -121,66 +124,44 @@ export function planRustValueRead(
   value: RustExpr,
   context: RustPlanContext,
 ): RustExpr {
-  const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
-  return rustReadRequiresClone(carrier, context) &&
-      !context.input.program.valueLifetimes.canMove(node)
-    ? cloneRustExpression(value)
-    : value;
+  return requireRustReadOwnership(node, context).source.kind === "clone" ? cloneRustExpression(value) : value;
+}
+
+export function requireRustReadOwnership(node: Node, context: RustPlanContext): RustReadOwnershipFact {
+  const selected = context.input.program.ownership.reads.get(node);
+  if (selected === undefined) return failTargetPlannerInvariant("tsonic-rust",
+    "A value read has no selected ownership record at the sealed-program boundary.", node);
+  return selected;
+}
+
+export function requireRustCaptureOwnership(owner: Node, declaration: Node, context: RustPlanContext): RustCaptureReadOwnership {
+  const selected = context.input.program.ownership.captures.get(owner)?.find(capture => capture.declaration === declaration);
+  if (selected === undefined) return failTargetPlannerInvariant("tsonic-rust",
+    "A capture read has no selected ownership record at the sealed-program boundary.", owner);
+  return selected;
 }
 
 export function planRustCaptureValue(
+  owner: Node,
   node: Node,
   path: string,
   storage: "value" | "location" | "cell" | "borrow-cell",
-  move: boolean,
   context: RustPlanContext,
+  use: "read" | "invocation" = "read",
 ): RustExpr {
   const captured = rustCapturedBinding(node, context);
   const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path };
   const capturedValue = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
   if (storage === "cell" || storage === "borrow-cell") return capturedValue;
-  if (storage === "location") {
-    return cloneRustExpression(capturedValue);
-  }
-  if (move && captured?.borrowed === undefined) return capturedValue;
-  const value = planRustIdentifierValue(node, path, context);
-  const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
-  return rustReadRequiresClone(carrier, context) &&
-      !(value.kind === "method-call" && value.method === "clone" && value.args.length === 0)
-    ? cloneRustExpression(value)
-    : value;
-}
-
-export function planRustNonConsumingValue(
-  node: Node,
-  expression: RustExpr,
-  context: RustPlanContext,
-  later?: Node,
-): RustExpr {
-  if (!rustExpressionReadsStorage(node, context)) return expression;
-  if (later !== undefined && !context.input.program.valueLifetimes.canBorrowStableValue(node) &&
-    !context.input.program.borrowStability.canBorrowAcross(node, later)) return expression;
-  return expression.kind === "method-call" && expression.method === "clone" &&
-      expression.args.length === 0
-    ? expression.receiver
-    : expression;
-}
-
-export function rustExpressionReadsStorage(node: Node, context: RustPlanContext): boolean {
-  const { ast } = context.input.program.source;
-  let source = node;
-  while (ast.is.IsParenthesizedExpression(source) || ast.is.IsAsExpression(source) ||
-    ast.is.IsSatisfiesExpression(source) || ast.is.IsNonNullExpression(source) ||
-    ast.is.IsTypeAssertion(source)) {
-    const inner = Node_Expression(ast, source);
-    if (inner === undefined) return false;
-    source = inner;
-  }
-  const operation = context.input.program.records.targetOperation.get(source);
-  const kind = ast.kindName(source);
-  return ast.is.IsIdentifier(source) || ast.is.IsElementAccessExpression(source) ||
-    kind === "KindThisExpression" || kind === "KindThisKeyword" ||
-    operation?.kind === "source-field" && operation.valueSemantics.kind === "stored";
+  const declaration = context.input.program.records.sourceBinding.get(node)?.sourceDeclaration ??
+    context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
+  if (declaration === undefined) return failTargetPlannerInvariant("tsonic-rust",
+    "A captured value requires its exact checked source declaration.", node);
+  const selected = requireRustCaptureOwnership(owner, declaration, context);
+  const read = captured?.borrowed === undefined ? selected[use] : selected.borrowed;
+  if (read === undefined) return failTargetPlannerInvariant("tsonic-rust",
+    "A borrowed capture has no selected native snapshot operation.", node);
+  return read.kind === "clone" ? cloneRustExpression(capturedValue) : capturedValue;
 }
 
 export function planRustSharedReceiver(
@@ -189,7 +170,11 @@ export function planRustSharedReceiver(
   context: RustPlanContext,
   later?: Node,
 ): RustExpr {
-  const value = planRustNonConsumingValue(node, expression, context, later);
+  const value = expression;
+  if (later !== undefined && !requireRustReadOwnership(node, context).borrowedAcross.has(later) &&
+    requireRustReadOwnership(node, context).value.kind === "borrow") {
+    return failTargetPlannerInvariant("tsonic-rust", "A shared receiver lost its selected source evaluation-order borrow.", node);
+  }
   const override = context.expressionOverrides?.get(node);
   if (override?.valueForm === "shared-reference") {
     return value;
@@ -200,27 +185,12 @@ export function planRustSharedReceiver(
       ? captured.expression.kind === "reference" ? { kind: "reference", expr: value } : value
       : { kind: "reference", expr: { kind: "dereference", pointer: value } };
   }
-  const loaded = planRustLoadedSharedReference(node, value, context);
-  if (loaded !== undefined) return loaded;
+  if (context.input.program.ownership.reads.get(node)?.sharedReference === true) return value;
   const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")
     ? value
     : { kind: "reference", expr: value };
-}
-
-export function planRustLoadedSharedReference(
-  node: Node,
-  value: RustExpr,
-  context: RustPlanContext,
-): RustExpr | undefined {
-  const operation = context.input.program.records.targetOperation.get(node);
-  if (operation?.kind !== "reference-operation" || operation.operation !== "load" || operation.operandCarrier.mutable) {
-    return undefined;
-  }
-  return value.kind === "dereference" ? value.pointer
-    : value.kind === "owned-string-from-borrowed-str" && isRustStringCarrier(operation.resultCarrier)
-      ? value.expression : undefined;
 }
 
 export function planRustMutableProjectReceiver(
@@ -233,17 +203,12 @@ export function planRustMutableProjectReceiver(
   if (representation?.kind !== "value") {
     return planRustSharedReceiver(node, expression, context);
   }
-  const value = planRustNonConsumingValue(node, expression, context);
+  const value = expression;
   const kind = context.input.program.source.ast.kindName(node);
   const target = kind === "KindThisExpression" || kind === "KindThisKeyword"
     ? { kind: "dereference" as const, pointer: value }
     : value;
   return { kind: "reference", expr: target, mutable: true };
-}
-
-function rustReadRequiresClone(carrier: TargetTypeRef | undefined, context: RustPlanContext): boolean {
-  return carrier !== undefined && !rustCarrierHasCopyContract(carrier, context) &&
-    rustCarrierHasCloneContract(carrier, context);
 }
 
 export function rustLocationStorageForReference(

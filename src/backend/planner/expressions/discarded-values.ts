@@ -8,7 +8,6 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
 import { expressionCarrier } from "./fundamentals.js";
-import { rustExpressionReadsStorage } from "./typed-locations.js";
 
 export interface RustDiscardedValue {
   readonly expression: RustExpr;
@@ -21,7 +20,7 @@ export function planRustDiscardedValue(
 ): RustDiscardedValue | undefined {
   const carrier = expressionCarrier(node, context);
   const nativeFuture = isRustNativeFutureCarrier(rustOptionElementCarrier(carrier) ?? carrier);
-  if (rustExpressionReadsStorage(node, context)) {
+  if (context.input.program.ownership.reads.get(node)?.readsStorage === true) {
     const expression = planExpression(node, context, "value", "shared-reference");
     return expression === undefined ? undefined : { expression, discard: "value" };
   }

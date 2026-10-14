@@ -1,10 +1,9 @@
+import { requireRustReadOwnership } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import {
-  isRustCopyCarrier,
   isRustUnitCarrier,
-  rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
   rustStructuralObjectCarrierValue,
@@ -26,10 +25,9 @@ import { planRustEmptyRecordConversion } from "./empty-record-conversion.js";
 import { planRustObjectReferenceView } from "./object-reference-views.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import { findRustUpdateSourceAccessor } from "./updates/source.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { missingFactDiagnostic } from "../diagnostics.js";
 import { planExpressionInner } from "./dispatch.js";
 import { planRustFlowReadProjection } from "./flow-reads.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
@@ -85,6 +83,9 @@ function planProjectedExpression(
   finalStage: "source" | "contextual" | "option",
   access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
+  const ownership = context.input.program.ownership.reads.get(node);
+  const selectedBorrow = access === "value" && ownership?.value.kind === "borrow";
+  if (selectedBorrow) access = "shared-place";
   const override = context.expressionOverrides?.get(node);
   const key = context.input.program.records.indexedFieldKeyArgument.get(node);
   if (key !== undefined && finalStage !== "source" && override === undefined) {
@@ -98,7 +99,8 @@ function planProjectedExpression(
     const effect = planExpressionBeforeValueProjections(node, context, "discarded");
     return effect === undefined ? undefined : { kind: "evaluate-then", effect, discard: "value", value: selected };
   }
-  const planned = planExpressionBeforeValueProjections(node, context, resultUse, access);
+  const planned = planExpressionBeforeValueProjections(node, context, resultUse,
+    ownership?.source.kind === "borrow" ? "shared-place" : selectedBorrow ? "value" : access);
   if (planned === undefined || resultUse === "discarded") {
     return planned;
   }
@@ -128,16 +130,16 @@ function planProjectedExpression(
     rustTargetTypeRefEquals(flowRead?.selectedCarrier, contextualConversion.sourceCarrier) &&
     (rustContextualRuntimeConversionContract(contextualConversion.conversion,
       context.input.program.typeDefinitions)?.sourceMode === "ref" ||
-      contextualConversion.conversion.kind === "project-union-map" && !context.input.program.valueLifetimes.canMove(node));
+      contextualConversion.conversion.kind === "project-union-map" && !(requireRustReadOwnership(node, context).value.kind === "move"));
   let borrowedFlowApplied = false;
   const referenceReborrow = rustValueReferenceReborrow(context.input.program.records, node,
     context.input.program.typeDefinitions);
-  const finish = (value: RustExpr): RustExpr => access === "shared-receiver" ? planRustNonConsumingValue(node, value, context)
+  const finish = (value: RustExpr): RustExpr => access === "shared-receiver" ? value
     : access === "shared-place"
-    ? borrowedFlowApplied ? { kind: "dereference", pointer: value } : planRustNonConsumingValue(node, value, context)
+    ? borrowedFlowApplied ? { kind: "dereference", pointer: value } : value
     : access !== "shared-reference" || borrowFlow || projection === undefined &&
       referenceReborrow !== undefined && rustTargetTypeRefEquals(referenceReborrow.target, currentCarrier) ? value
-      : createRustSharedReferenceArgument(context, planRustNonConsumingValue(node, value, context), node);
+      : createRustSharedReferenceArgument(context, value, node);
   let currentCarrier = override?.carrier ??
     flowRead?.sourceCarrier ??
     upcast?.sourceCarrier ??
@@ -159,7 +161,7 @@ function planProjectedExpression(
     if (rustTargetTypeRefEquals(currentCarrier, flowRead.sourceCarrier)) {
       const selected = planRustFlowReadProjection(
         node,
-        planRustNonConsumingValue(node, flowSelected, context),
+        flowSelected,
         flowRead,
         context,
         borrowFlow || borrowConversionInput,
@@ -318,19 +320,11 @@ export function planExpressionBeforeValueProjections(
   access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   const override = context.expressionOverrides?.get(node);
-  if (override === undefined || override.valueForm !== "storage" ||
-    isRustCopyCarrier(override.carrier) || access !== "value") {
+  if (override === undefined || override.valueForm !== "storage" || access !== "value") {
     return override?.expression ?? planRawExpression(node, context, resultUse, access);
   }
-  if (!rustCarrierSupportsClone(override.carrier, context.input.program.typeDefinitions)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.preconstruction-field-read",
-      "A preconstruction field value must be Copy or Clone when read before the complete object exists.",
-    ));
-    return undefined;
-  }
-  return cloneRustExpression(override.expression);
+  return requireRustReadOwnership(node, context).snapshot?.kind === "clone"
+    ? cloneRustExpression(override.expression) : override.expression;
 }
 
 export function planRawExpression(
@@ -440,9 +434,8 @@ function applyRustContextualValueConversion(
   }
   if (fact.conversion.kind === "project-union-map") {
     const owned = !sourceIsSharedReference && context.expressionOverrides?.get(node)?.valueForm !== "shared-reference" &&
-      context.input.program.valueLifetimes.canMove(node);
-    const source = owned || sourceIsSharedReference ? expression : planRustNonConsumingValue(node, expression, context);
-    return planRustProjectUnionMapping(node, source, fact.conversion, fact.sourceCarrier,
+      (requireRustReadOwnership(node, context).value.kind === "move");
+    return planRustProjectUnionMapping(node, expression, fact.conversion, fact.sourceCarrier,
       fact.targetCarrier, context, owned,
       (value, upcast, owned) => planRustProjectUpcast(node, value, upcast, upcast.sourceCarrier,
         context, owned ? "owned" : "borrowed"), upstream);
@@ -543,7 +536,7 @@ export function planRustProjectUpcast(
         expression: projected,
       });
     }
-    return { kind: "match", expression: { kind: "reference", expr: planRustNonConsumingValue(node, expression, context) }, arms };
+    return { kind: "match", expression: { kind: "reference", expr: expression }, arms };
   }
   const targetDefinition = context.input.program.projectTypes.definitionForCarrier(fact.targetCarrier);
   const targetValue = rustSourceTypeCarrierValue(fact.targetCarrier);

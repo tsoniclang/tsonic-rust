@@ -9,11 +9,11 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { requireRustCarrierRequirements, requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustLocationCallback } from "./location-callbacks.js";
-import { locationMethodReceiver, optionReference, typedLocationFactMatchesPlan } from "./location-expressions.js";
+import { optionReference, typedLocationFactMatchesPlan } from "./location-expressions.js";
 import { planRustNativeAllocation } from "./native-memory.js";
 import {
   fallibleLocationAccess,
-  planRustNonConsumingValue,
+
   planRustSourceLocationStorage,
 } from "./typed-locations.js";
 import type { RustExpressionPlanner } from "./typed-locations.js";
@@ -40,7 +40,7 @@ export function planRustTypedLocationCall(
       const owner = rustTypeFromCarrierInContext(fact.locationCarrier, context);
       return pointer === undefined || owner === undefined ? undefined : {
         kind: "associated-call", owner, method: "hash",
-        args: [optionReference(planRustNonConsumingValue(plan.pointerExpression, pointer, context))],
+        args: [optionReference(pointer)],
       };
     }
     case "bind-pointer": {
@@ -62,7 +62,7 @@ export function planRustTypedLocationCall(
       if (pointer === undefined || read === undefined || write === undefined ||
         !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
         !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
-      const source = planRustNonConsumingValue(plan.pointerExpression, pointer, context);
+      const source = pointer;
       return plan.optional
         ? { kind: "call", path: "rt::Location::try_view_optional", args: [{ kind: "reference", expr: source }, read, write] }
         : { kind: "method-call", receiver: source, method: "try_view", args: [read, write] };
@@ -76,7 +76,7 @@ export function planRustTypedLocationCall(
       if (pointer === undefined || read === undefined || write === undefined ||
         !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
         !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
-      const source = planRustNonConsumingValue(plan.pointerExpression, pointer, context);
+      const source = pointer;
       return plan.optional
         ? { kind: "call", path: "rt::Location::try_map_optional", args: [optionReference(source), read, write] }
         : { kind: "method-call", receiver: source, method: "try_map", args: [read, write] };
@@ -100,17 +100,13 @@ export function planRustTypedLocationCall(
         : { kind: "associated-call", owner, method: "allocate", args: [initial] };
     }
     case "load": {
-      const pointer = locationMethodReceiver(
-        planExpression(plan.pointerExpression, context),
-      );
+      const pointer = planExpression(plan.pointerExpression, context, "value", "shared-place");
       return pointer === undefined
         ? undefined
         : fallibleLocationAccess(node, { kind: "method-call", receiver: pointer, method: "try_load", args: [] }, context);
     }
     case "store": {
-      const pointer = locationMethodReceiver(
-        planExpression(plan.pointerExpression, context),
-      );
+      const pointer = planExpression(plan.pointerExpression, context, "value", "shared-place");
       const value = planExpression(plan.valueExpression, context);
       return pointer === undefined || value === undefined
         ? undefined
@@ -128,8 +124,8 @@ export function planRustTypedLocationCall(
         owner: locationType,
         method: "same",
         args: [
-          optionReference(planRustNonConsumingValue(plan.leftExpression, left, context)),
-          optionReference(planRustNonConsumingValue(plan.rightExpression, right, context)),
+          optionReference(left),
+          optionReference(right),
         ],
       };
     }

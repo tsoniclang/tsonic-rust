@@ -32,7 +32,9 @@ export function escaped(value: string): (depth: number) => string {
       const node = implementation.declaration;
       const capture = implementation.captures[0];
       assert.equal(capture !== undefined && implementation.captures.length === 1, true, "one exact string capture");
-      assert.equal(program.valueLifetimes.canMoveCapture(node, capture.declaration), !retained);
+      const ownership = program.ownership.captures.get(node)?.find(value => value.declaration === capture.declaration);
+      assert.equal(ownership !== undefined, true, "the exact capture has a selected ownership record");
+      assert.equal(ownership.read.kind !== "clone", !retained);
       const carrier = implementation.carrier;
       const definition = program.callableValues.frames.definitionFor(carrier);
       const context = {

@@ -14,7 +14,6 @@ import {
   rustActiveErrorType,
 } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
@@ -89,7 +88,7 @@ export function applyRustValueConversion(
     ? planRustCallableInputProducer(expression, contract.source, context, node) : expression;
   if (producer === undefined) return undefined;
   const nonConsumingSource = !sourceIsSharedReference && contract.sourceMode === "ref" && node !== undefined && producer === expression
-    ? planRustNonConsumingValue(node, producer, context)
+    ? producer
     : producer;
   const source = contract.sourceMode === "ref" && !sourceIsSharedReference
     ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)

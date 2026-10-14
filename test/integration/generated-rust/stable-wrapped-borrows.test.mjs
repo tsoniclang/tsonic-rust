@@ -30,7 +30,7 @@ test("stable-value queries follow exact transparent operands without admitting m
       const argument = source.ast.arguments(node)[0];
       assert.ok(name !== undefined && argument !== undefined);
       const selected = decisions.get(name) ?? [];
-      selected.push(program.valueLifetimes.canBorrowStableValue(argument));
+      selected.push(program.ownership.reads.get(argument)?.stablePlace === true);
       decisions.set(name, selected);
     }
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

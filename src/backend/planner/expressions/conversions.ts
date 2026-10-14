@@ -11,7 +11,6 @@ import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } fro
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustValueCarrierTransitionTarget } from "../../../analysis/conversions/value-carrier-queries.js";
@@ -764,7 +763,7 @@ export function planFinalizedSourceInput(
     : undefined;
   const rawExpression = input.conversion.kind === "identity" &&
       (position === "target-receiver" || input.mode !== "value")
-    ? directStorage ?? planRustNonConsumingValue(sourceNode, plannedExpression, context)
+    ? directStorage ?? plannedExpression
     : plannedExpression;
   if (!directCarrierMatch) {
     context.diagnostics.push(missingFactDiagnostic(

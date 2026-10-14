@@ -11,8 +11,6 @@ import type { RustProjectTypeTestPlan } from "../../../target-model/operations/t
 import { checkedProjectProjectionResultType, planCheckedProjectProjectionCall } from "./checked-project-projections.js";
 import type { RustProjectDowncastFact } from "../../../target-model/types/project-projections.js";
 import {
-  isRustCopyCarrier,
-  rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceTypeCarrierValue,
 } from "../../../target-model/types/index.js";
@@ -91,7 +89,7 @@ export function planRustProjectProjection(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "downcast_value",
   );
-  const sourceExpression = planRustNonConsumingProjectValue(node, expression, context);
+  const sourceExpression = expression;
   const sourceReference: RustExpr = { kind: "reference", expr: sourceExpression };
   const valuePath: RustExpr = optionalElement === undefined
     ? { kind: "path", path: valueName }
@@ -128,19 +126,6 @@ export function planRustProjectProjection(
         args: [{ kind: "method-call", receiver: valuePath, method: "clone", args: [] }],
       }, method: "unwrap", args: [] };
   return rustValueBlock([{ name: valueName, value: sourceReference }], result);
-}
-
-function planRustNonConsumingProjectValue(
-  node: Node,
-  expression: RustExpr,
-  context: RustPlanContext,
-): RustExpr {
-  const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
-  return !isRustCopyCarrier(carrier) && rustCarrierSupportsClone(carrier, context.input.program.typeDefinitions) &&
-      expression.kind === "method-call" && expression.method === "clone" &&
-      expression.args.length === 0
-    ? expression.receiver
-    : expression;
 }
 
 export function planRustProjectTypeTest(
@@ -234,7 +219,7 @@ export function planRustProjectTypeTestSelection(
     ));
     return undefined;
   }
-  const sourceExpression = planRustNonConsumingProjectValue(node, expression, context);
+  const sourceExpression = expression;
   const projected = projectDowncastDispatch(sourceExpression, route, context);
   if (projected === undefined) return undefined;
   return {

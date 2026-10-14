@@ -20,7 +20,7 @@ export function compound(text: string): Holder { const holder = new Holder(); ho
           const owner = ast.parent(declaration);
           const name = ast.text(ast.name(owner));
           const previous = observed.get(name) ?? [];
-          previous.push(program.valueLifetimes.canMove(node));
+          previous.push((program.ownership.reads.get(node)?.value.kind === "move"));
           observed.set(name, previous);
         }
       }

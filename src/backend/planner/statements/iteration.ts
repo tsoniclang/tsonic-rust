@@ -26,7 +26,6 @@ import { isRustUnitCarrier } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
-import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/operations/finalized-operation/validation.js";
@@ -458,7 +457,7 @@ export function planForOfStatement(
   }
   const nonConsumingIterable = iterableNode === undefined
     ? iterable
-    : planRustNonConsumingValue(iterableNode, iterable, context);
+    : iterable;
   if (fact.lowering.kind === "borrowed" && borrowedBinding === undefined) {
     context.usedAliases?.add("rt");
   }

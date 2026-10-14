@@ -21,7 +21,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   planRustMutableProjectReceiver,
-  planRustNonConsumingValue,
+
   planRustPromotedStorageLocation,
   planRustPromotedStorageWrite,
   planRustModuleBindingStore,
@@ -242,7 +242,7 @@ export function planRustAssignmentWrite(
     return undefined;
   }
   const sourceField = context.input.program.records.targetOperation.get(left);
-  const borrowedWrite = context.input.program.borrowStability.borrowedWriteFor(expression);
+  const borrowedWrite = context.input.program.ownership.writes.get(expression);
   if (borrowedWrite !== undefined && context.expressionOverrides?.has(borrowedWrite.receiver) !== true) {
     if (borrowedWrite.target !== left || borrowedWrite.value !== valueNode ||
       !sourceFieldSelectedOperationMatches(borrowedWrite.receiver, borrowedWrite.field, context)) {
@@ -282,7 +282,7 @@ export function planRustAssignmentWrite(
         borrowedWrite.field.storageIndex, context);
       const representation = rustProjectObjectRepresentation(borrowedWrite.field.receiverCarrier, context);
       if (plannedOwner === undefined || path === undefined || representation === undefined) return undefined;
-      const owner = planRustNonConsumingValue(borrowedWrite.owner, plannedOwner, context);
+      const owner = plannedOwner;
       selected = withRustProjectStoredField(owner, path, representation, write);
     } else {
       context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, expression),
@@ -728,13 +728,13 @@ export function planRustAssignmentWrite(
       if (location.kind !== "promoted" || location.expression === undefined) return undefined;
       const receiver = location.expression.kind === "reference" ? location.expression.expr : location.expression;
       return planInPlaceStringAppend({ kind: "method-call", receiver,
-        method: "borrow_mut", args: [] }, planRustNonConsumingValue(valueNode, value, context), true);
+        method: "borrow_mut", args: [] }, value, true);
     }
     if (target !== undefined && (fact.writeStrategy === "in-place-string-append-parts" ||
       fact.writeStrategy === "in-place-string-append-value")) {
       return planInPlaceStringAppend(
         target,
-        planRustNonConsumingValue(valueNode, value, context),
+        value,
         fact.writeStrategy === "in-place-string-append-parts",
       );
     }

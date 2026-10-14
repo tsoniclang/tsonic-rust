@@ -2,15 +2,6 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../target-model/records/operations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-export function locationMethodReceiver(
-  expression: RustExpr | undefined,
-): RustExpr | undefined {
-  return expression?.kind === "method-call" &&
-      expression.method === "clone" && expression.args.length === 0
-    ? expression.receiver
-    : expression;
-}
-
 export function typedLocationFactMatchesPlan(
   fact: Extract<RustTargetOperationFact, { readonly kind: "typed-location" }>,
   plan: RustTypedLocationPlan,

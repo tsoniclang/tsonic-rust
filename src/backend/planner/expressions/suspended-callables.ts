@@ -1,3 +1,4 @@
+import { requireRustCaptureOwnership } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 
@@ -27,11 +28,11 @@ export function planRustSuspendedCallableConstruction(node: Node, context: RustP
   for (const [index, capture] of implementation.captures.entries()) {
     const binding = context.input.program.records.sourceBinding.get(capture.reference);
     const source = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
-    const move = context.input.program.valueLifetimes.canMoveCapture(node, capture.declaration);
+    const move = (requireRustCaptureOwnership(node, capture.declaration, context).read.kind !== "clone");
     if (source === undefined || !requireRustCarrierRequirements(capture.carrier,
       move ? ["static"] : ["clone", "static"], capture.reference, { ...context, callableDeclaration: node })) return undefined;
     bindings.push({ name: allocateRustSyntheticName(context.syntheticNames, `capture_${index}`),
-      value: planRustCaptureValue(capture.reference, source, capture.storage, move, context),
+      value: planRustCaptureValue(node, capture.reference, source, capture.storage, context),
     });
   }
   const receivers = planRustCapturedReceiverFields(node, implementation.receiverFields, context, context,

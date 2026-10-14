@@ -83,9 +83,11 @@ import { createRustSourceProfileStorageEffects } from "../../policy/operations/s
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
 import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
+import { analyzeRustReceiverOccurrences } from "../ownership/receivers.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
+  readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
   readonly callableOwnership: RustCallableOwnershipRegistry;
   readonly errorStorageDemands: SourceErrorStorageDemandQueries;
   readonly typeDefinitions: RustTypeDefinitionRegistry;
@@ -151,6 +153,7 @@ export function createRustAnalysisContext(
   const sourceStorage = createSourceStorageQuery(input.source, sourceFiles, undefined,
     createRustSourceProfileStorageEffects(input.source, sourceProfiles));
   const sourceStorageFailure = sourceStorage.failureReason();
+  const receiverOccurrences = analyzeRustReceiverOccurrences(sourceStorage);
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const records = createRustProgramRecordBuilder(typeDefinitions);
   const names = createRustNamePlan({
@@ -173,6 +176,7 @@ export function createRustAnalysisContext(
   return Object.freeze({
     callableRepresentation: "storage" as const,
     sourceStorage,
+    receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage),
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
       sourceLifetimes: lifetimes.index ?? emptyRustLifetimeIndex }),
@@ -212,6 +216,7 @@ export function createRustAnalysisContext(
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
     diagnostics: [...names.diagnostics, ...lifetimes.diagnostics,
+      ...(receiverOccurrences.kind === "rejected" ? receiverOccurrences.diagnostics : []),
       ...(sourceStorageFailure === undefined ? [] : [{ code: "RUST_SOURCE_STORAGE_NOT_PROVEN",
         category: "error" as const, source: "tsonic-rust", message: sourceStorageFailure }]),
       ...memoryBindings.issues.map(issue => ({

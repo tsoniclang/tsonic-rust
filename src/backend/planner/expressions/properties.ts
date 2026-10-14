@@ -15,7 +15,7 @@ import { finishProviderOperationExpression, planProviderOperationExpression } fr
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { planExpression } from "./entry.js";
-import { planRustNonConsumingValue, planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSharedReceiver } from "./typed-locations.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField } from "./unions.js";
 import { planRustBuiltinErrorProperty } from "./builtin-errors.js";
 import { readRustProjectDispatchedField, rustProjectObjectDispatchField } from "../objects/project-objects.js";
@@ -158,7 +158,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       return readRustStoredObjectField(
         fact.storage,
         fact.receiverCarrier,
-        planRustNonConsumingValue(receiverNode, plannedReceiver, context),
+        plannedReceiver,
         fact.storageIndex,
         fact.resultCarrier,
         context,
@@ -468,7 +468,7 @@ function planRustSourceUnionFieldRead(
   }
   return planRustSourceUnionFieldProjection(
     node,
-    planRustNonConsumingValue(receiverNode, receiver, context),
+    receiver,
     fact,
     context,
     (payload, field, variantIndex) => {
@@ -567,7 +567,7 @@ export function planRustSourceAccessorCall(
     : planExpression(receiverNode, context));
   const receiver = receiverNode === undefined || plannedReceiver === undefined
     ? plannedReceiver
-    : planRustNonConsumingValue(receiverNode, plannedReceiver, context);
+    : plannedReceiver;
   if (receiver === undefined) {
     return undefined;
   }

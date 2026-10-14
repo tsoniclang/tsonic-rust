@@ -20,13 +20,12 @@ import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
-import { analyzeRustValueLifetimes } from "./value-lifetimes.js";
+import { analyzeRustOwnershipFlow } from "../ownership/flow.js";
+import { analyzeRustReadOwnership } from "../ownership/reads.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
-import { rustCallArgumentIsOwned, rustCallArgumentMode } from "../callables/parameter-passing.js";
-import { rustRetainedCallableStorage } from "../callables/results.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
-import { analyzeRustBorrowStability } from "./borrow-stability.js";
+import { analyzeRustBorrowEffects } from "../ownership/effects.js";
 import {
   analyzeRustBinaryHooks,
   analyzeRustDispatchContextCatalog,
@@ -51,7 +50,6 @@ import { analyzeRustFoundation } from "../foundation/plan.js";
 import { rustFoundationForCarrier } from "../foundation/requirements.js";
 import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
-import { isRustJsArrayCarrier, isRustStringCarrier } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../errors/regions.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
@@ -63,6 +61,7 @@ import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
 import { analyzeRustReachability } from "../reachability/plan.js";
+import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -110,6 +109,7 @@ export function analyzeRustTargetProgram(
     rootPublishesLibrary,
     dispatchContexts.plan,
   );
+  if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
   const lexicalFunctions = analyzeRustProgram(context);
   if (context.diagnostics.length > 0) {
     return rejectedTargetStage(context.diagnostics);
@@ -193,23 +193,7 @@ export function analyzeRustTargetProgram(
     binaryHooks, sourcePackageComponents.plan, dispatchContexts.plan, dispatchContextDemand.plan,
   );
   if (binaryDispatchDemand.kind === "rejected") return rejectedTargetStage(binaryDispatchDemand.diagnostics);
-  const valueLifetimes = analyzeRustValueLifetimes({
-    ast: context.ast,
-    sourceFiles: context.sourceFiles,
-    navigation: context.source.navigation,
-    isOwnedString: (declaration) => isRustStringCarrier(records.runtimeCarrier.get(declaration)?.carrier),
-    isInstanceFieldUse: (reference, declaration) => {
-      const operation = records.targetOperation.get(reference);
-      return operation?.kind === "source-field" && operation.declaration === declaration;
-    },
-    hasSharedIdentityStorage: (declaration) => isRustJsArrayCarrier(records.runtimeCarrier.get(declaration)?.carrier),
-    mayBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
-      rustCallArgumentMode(argument, context.ast, records) !== "value",
-    isOwnedCallArgument: (argument) => projectConstructions.ownsExternalArgument(argument) ||
-      rustCallArgumentIsOwned(argument, context.ast, records),
-    isSharedBorrowArgument: (argument) => !projectConstructions.ownsExternalArgument(argument) &&
-      rustCallArgumentMode(argument, context.ast, records) === "ref",
-    capturesFor: (closure) => {
+  const capturesFor = (closure: import("@tsonic/tsts").Node) => {
       const existing = records.closureCapture.get(closure);
       if (existing !== undefined) return existing;
       const selection = lexicalFunctions.forDeclaration(closure);
@@ -223,15 +207,16 @@ export function analyzeRustTargetProgram(
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage });
       }
       return { receivers: [], receiverFields: [], captures };
-    },
-    captureRootsFor: (closure) => {
-      const selection = lexicalFunctions.forDeclaration(closure);
-      return selection?.kind === "resolved" ? selection.captureRoots : [closure];
-    },
-    ownsCaptureEnvironment: closure => {
-      const selection = lexicalFunctions.forDeclaration(closure);
-      return selection?.kind === "resolved" && (selection.valueObserved || selection.singleInvocation &&
-        rustRetainedCallableStorage(records, closure) !== undefined);
+  };
+  const ownershipFlow = analyzeRustOwnershipFlow({
+    source: context.source,
+    storage: context.sourceStorage,
+    capturesFor,
+    mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
+      rustNativeArgumentBorrowsRead(argument, reference, context.ast, records),
+    isInstanceFieldUse: (reference, declaration) => {
+      const operation = records.targetOperation.get(reference);
+      return operation?.kind === "source-field" && operation.declaration === declaration;
     },
     isOnceCallable: (closure) => {
       const carrier = records.runtimeCarrier.get(closure)?.carrier;
@@ -244,7 +229,8 @@ export function analyzeRustTargetProgram(
     },
     isOwnedOperationResult: (expression) => {
       const operation = records.targetOperation.get(expression);
-      return operation?.kind === "provider-operation" &&
+      return operation?.kind === "source-field" && operation.valueSemantics.kind === "accessor" && operation.accessMode === "read" ||
+        operation?.kind === "provider-operation" &&
         (operation.abi.target.form === "method" || operation.abi.target.form === "call" ||
           operation.abi.target.form === "receiver-method" || operation.abi.target.form === "associated-call") &&
         operation.abi.result.kind === "sync" && operation.abi.result.carrier.kind !== "reference" &&
@@ -262,6 +248,7 @@ export function analyzeRustTargetProgram(
       return declaration !== undefined && records.bindingStorage.get(declaration) === undefined;
     },
   });
+  if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,
@@ -272,7 +259,7 @@ export function analyzeRustTargetProgram(
     context.projectTypes,
     context.structuralShapes,
     context.typeDefinitions,
-    valueLifetimes,
+    ownershipFlow.flow,
     objectRepresentations,
     context.callableValues.generic,
     classValues.instanceViews,
@@ -299,13 +286,22 @@ export function analyzeRustTargetProgram(
     })));
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, records, context.source.navigation);
-  const borrowStability = analyzeRustBorrowStability({
+  const borrowEffectsInput = {
     sourceFacts: context.source.sourceFacts,
-    ast: context.ast, sourceFiles: context.sourceFiles, records, navigation: context.source.navigation,
+    ast: context.ast, nodes: context.sourceStorage.nodes, records, navigation: context.source.navigation,
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
     structuralShapes: context.structuralShapes,
-  });
-  if (borrowStability.kind === "rejected") return rejectedTargetStage(borrowStability.diagnostics);
+  };
+  const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
+  if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
+  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, records,
+    flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
+    capturesFor, invocationTransfersCapture: owner => {
+      const selected = lexicalFunctions.forDeclaration(owner);
+      return selected?.kind !== "resolved" || !selected.valueObserved && selected.singleInvocation;
+    } });
+  if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
@@ -360,10 +356,9 @@ export function analyzeRustTargetProgram(
     callableOwnership: context.callableOwnership.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
-    valueLifetimes,
+    ownership: ownership.ownership,
     borrowedElementReads,
     borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, records),
-    borrowStability: borrowStability.plan,
     providerMutableInputs,
     retainedCallableInputs: retainedCallableInputs.value,
     structuralShapes: context.structuralShapes.seal(),

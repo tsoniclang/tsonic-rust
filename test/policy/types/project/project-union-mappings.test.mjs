@@ -1,3 +1,4 @@
+import { createRustOwnershipFixture } from "../../../helpers/ownership.mjs";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
@@ -165,7 +166,7 @@ test("canonical nominal union emission moves owned fields and borrows views with
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName, text: "value", statements: [node] });
   const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
-    projectTypes, valueLifetimes: { canMove: () => true }, declarationGenericRequirements,
+    projectTypes, ownership: createRustOwnershipFixture(node, source), declarationGenericRequirements,
     callableValues: { native: { protocolForSourceItem: () => undefined } },
     names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
     sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([[fileName, "index"]]),
@@ -300,9 +301,9 @@ test("dispatcher fuses finalized narrowing and heritage without intermediate enu
     for (const owned of [true, false]) {
       const original = { kind: "path", path: "value" };
       const expression = owned ? { kind: "call", path: "produce", args: [] }
-        : { kind: "method-call", receiver: original, method: "clone", args: [] };
+        : original;
       const context = { input: { program: { source: { ast }, typeDefinitions: definitions, projectTypes,
-        valueLifetimes: { canMove: () => owned }, declarationGenericRequirements,
+        ownership: createRustOwnershipFixture(node, rawCarrier, owned ? "move" : "clone"), declarationGenericRequirements,
         callableValues: { generic: { definitionFor: () => undefined }, native: { protocolForSourceItem: () => undefined } },
         names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" },
         records: createRustRecordFixture({flowReadProjection: { get: (subject) => subject !== node ? undefined

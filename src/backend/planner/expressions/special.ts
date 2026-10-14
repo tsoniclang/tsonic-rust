@@ -13,7 +13,6 @@ import {
 } from "@tsonic/target-api/source";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, planRawExpression } from "./entry.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { isRustUnitCarrier, rustOptionElementCarrier, rustOptionNestingDepth, rustStructuralMethodCallableCarrier } from "../../../target-model/types/index.js";
@@ -205,7 +204,7 @@ export function planOptionalChainExpression(
   if (plannedGuard === undefined) {
     return undefined;
   }
-  const guard = planRustNonConsumingValue(fact.guard, plannedGuard, context);
+  const guard = plannedGuard;
   const receiverName = allocateRustSyntheticName(context.syntheticNames, "optional_receiver");
   const overrides = new Map(context.expressionOverrides ?? []);
   overrides.set(fact.guard, {
@@ -347,7 +346,7 @@ function planOptionalStructuralMethodStorageGuard(
     ? undefined
     : readRustStructuralObjectMethodStorage(
         guard.receiverCarrier,
-        planRustNonConsumingValue(guard.receiverNode, receiver, context),
+        receiver,
         guard.storageIndex,
         context,
       );

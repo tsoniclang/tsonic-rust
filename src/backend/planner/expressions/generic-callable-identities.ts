@@ -1,3 +1,4 @@
+import { requireRustReadOwnership } from "./typed-locations.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustGenericCallableIdentityComparison } from "../../../analysis/callables/generic-identities.js";
 import { rustCallableIdentityPredicate } from "../../target-ast/syntax/callable-identities.js";
@@ -21,13 +22,13 @@ export function planRustGenericCallableIdentity(
       "rust.backend.generic-callable-identity", "Native callable comparison requires its sealed identity selection and native type paths."));
     return undefined;
   }
-  const stableLeft = context.input.program.valueLifetimes.canBorrowStableValue(selected.leftNode) ||
-    context.input.program.borrowStability.canBorrowAcross(selected.leftNode, selected.rightNode);
+  const stableLeft = requireRustReadOwnership(selected.leftNode, context).stablePlace ||
+    requireRustReadOwnership(selected.leftNode, context).borrowedAcross.has(selected.rightNode);
   const left = planExpression(selected.leftNode, context, "value", stableLeft ? "shared-place" : "value");
   const right = planExpression(selected.rightNode, context, "value", "shared-place");
   if (left === undefined || right === undefined) return undefined;
-  const stableRight = context.input.program.valueLifetimes.canBorrowStableValue(selected.rightNode) ||
-    context.input.program.borrowStability.canBorrowAcross(selected.rightNode, selected.rightNode);
+  const stableRight = requireRustReadOwnership(selected.rightNode, context).stablePlace ||
+    requireRustReadOwnership(selected.rightNode, context).borrowedAcross.has(selected.rightNode);
   const expression: RustExpr = { kind: "tuple-literal", elements: [
     stableLeft ? rustReferenceToPlace(left) : { kind: "reference", expr: left },
     stableRight ? rustReferenceToPlace(right) : { kind: "reference", expr: right },

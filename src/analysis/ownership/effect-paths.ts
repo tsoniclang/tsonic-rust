@@ -1,9 +1,9 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 
-import type { RustTargetProgram } from "./model.js";
+import type { RustTargetProgram } from "../program/model.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs,
-  rustBorrowValueIsUnprojected } from "./borrowed-element-purity.js";
+  rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 
 export const rustNoNativeWrites: readonly Node[] = Object.freeze([]);

@@ -28,7 +28,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(parameters.length, 1);
       const name = ast.name(parameters[0]);
       const className = ast.text(ast.name(definition.declaration));
-      observed.set(className, program.valueLifetimes.canMove(name));
+      observed.set(className, (program.ownership.reads.get(name)?.value.kind === "move"));
     }
     assert.deepEqual([...observed], [["Unused", true], ["FieldCapture", true], ["FieldRewrite", true], ["Retained", false], ["LocalCapture", false]]);
   });

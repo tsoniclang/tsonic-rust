@@ -13,7 +13,6 @@ import { rustFrameCallableTypes } from "../types/frame-callables.js";
 import { requireRustLocationValueCarrier, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { rustCallableCaptureStorageType } from "../types/capture-storage.js";
 import { planRustFrameCallableEntry, publishRustFrameCallable } from "../expressions/frame-callables.js";
-import { planRustNonConsumingValue } from "../expressions/typed-locations.js";
 
 import { rustBindingStorageOperations, rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { projectRustFrameOwnerData, rustFrameOwnerReference, type RustLiveFrameOwner } from "../program/frame-owners.js";
@@ -126,8 +125,8 @@ export function planRustFrameBindingInput(
   const value = planValue();
   if (value === undefined) return undefined;
   if (types.entry.hasIndependent) return { kind: "method-call",
-    receiver: planRustNonConsumingValue(node, value, context), method: "into_entry", args: [] };
-  const borrowed: RustExpr = { kind: "method-call", receiver: planRustNonConsumingValue(node, value, context), method: "entry", args: [] };
+    receiver: value, method: "into_entry", args: [] };
+  const borrowed: RustExpr = { kind: "method-call", receiver: value, method: "entry", args: [] };
   return binding.entry?.copy === true ? { kind: "dereference", pointer: borrowed }
     : { kind: "method-call", receiver: borrowed, method: "clone", args: [] };
 }

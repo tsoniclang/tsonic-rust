@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 
 import type { RustSuspendedCallableStorage } from "../../target-model/records/callables-and-resources.js";
 import { rustEnclosingStorageContract, selectRustCallableStorageLifetime, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
@@ -43,20 +44,12 @@ export function resolveRustSuspendedCallableStorage(
   if (capturedParameters === undefined) return {
     kind: "rejected", reason: "Suspended input retention requires exact checked parameter-use evidence.",
   };
-  const receiverOccurrences: Node[] = [];
   const receiverCaptures = walk.context.objectRepresentations.receiverCaptures;
   const capturedFields = receiverCaptures.capturesFor(declaration);
-  const visit = (node: Node): void => {
-    if (ast.is.IsFunctionExpression(node) || ast.is.IsFunctionDeclaration(node) ||
-      ast.is.IsClassDeclaration(node) || ast.is.IsClassExpression(node)) return;
-    if (ast.kindName(node) === "KindThisKeyword" || ast.kindName(node) === "KindThisExpression") {
-      if (capturedFields.length === 0 || !receiverCaptures.capturesReceiver(node)) receiverOccurrences.push(node);
-    }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) visit(child);
-    });
-  };
-  visit(body);
+  const occurrences = walk.context.receiverOccurrences?.get(declaration);
+  if (occurrences === undefined) return failTargetPlannerInvariant("tsonic-rust",
+    "A suspended callable has no exact checked receiver-occurrence inventory.", declaration);
+  const receiverOccurrences = occurrences.filter(node => capturedFields.length === 0 || !receiverCaptures.capturesReceiver(node));
 
   const owner = walk.context.projectTypes.definitionContainingDeclaration(declaration);
   const representation = walk.context.objectRepresentations.representationFor(owner);

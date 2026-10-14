@@ -571,7 +571,9 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   );
   assert.match(planner, /optionalChain\.get\(node\)/u);
   assert.match(planner, /planRawExpression\(fact\.guard, context, "value"\)/u);
-  assert.match(planner, /planRustNonConsumingValue\(fact\.guard, plannedGuard, context\)/u);
+  assert.doesNotMatch(planner, /planRustNonConsumingValue|rustReadRequiresClone/u);
+  const ownershipUses = readFileSync(join(sourceRoot, "analysis/ownership/uses.ts"), "utf8");
+  assert.match(ownershipUses, /records\.optionalChain\.get\(node\)\?\.guard/u);
   assert.match(planner, /overrides\.set\(fact\.guard/u);
   assert.match(planner, /guardDepth !== fact\.guardDepth/u);
   assert.doesNotMatch(planner, /getResolved|getSymbolAtLocation|getTypeAtLocation|getPropertyOfType/u);

@@ -16,7 +16,6 @@ import { planRustSourceCallableValue } from "./source-callable-value.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { rustNativeCallableOperand, type RustNativeCallablePhysicalSource } from "../../../analysis/callables/native-conversions.js";
 import { planRustNativeProtocolInvocation } from "./calls/native-input.js";
@@ -142,7 +141,7 @@ function planSelectedRustCallableConversion(
   };
   const value = borrowed
     ? createRustSharedReferenceArgument(context,
-      planRustNonConsumingValue(node, producer.value, context), node)
+      producer.value, node)
     : producer.value;
   const adapted: RustExpr = { kind: "block", body: { statements: [...producer.statements, {
     kind: "let", mutable: false, name: callable, init: value,

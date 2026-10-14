@@ -1,0 +1,96 @@
+import type { ArgumentPassingMode, AstReader, Node } from "@tsonic/tsts";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
+import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations.js";
+import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
+import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
+import { isRustStringCarrier } from "../../target-model/types/index.js";
+
+export interface RustReadUse {
+  readonly mode: "value" | "shared" | "mutable" | "move";
+  readonly later: readonly Node[];
+  readonly laterStart: number;
+  readonly stableAcrossEffects: boolean;
+}
+
+export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
+  readonly operation: RustTargetOperationFact | undefined;
+  readonly arguments: readonly (Node | undefined)[] | undefined;
+  readonly nativeInputs: readonly { readonly source: RustFinalizedSourceInput["source"]; readonly mode: "ref" | "mut-ref" | undefined }[];
+  readonly argumentModes: readonly (ArgumentPassingMode | undefined)[];
+  readonly address: RustRawAddressPlan | undefined;
+  readonly location: RustTypedLocationPlan | undefined;
+  readonly guard: Node | undefined;
+  readonly callableMode: RustReadUse["mode"] | undefined;
+}): ReadonlyMap<Node, RustReadUse> {
+  const uses = new Map<Node, RustReadUse>();
+  const select = (subject: Node | undefined, mode: RustReadUse["mode"], later: readonly Node[] = [],
+    laterStart = 0, stableAcrossEffects = false): void => {
+    if (subject !== undefined) uses.set(subject, Object.freeze({ mode, later, laterStart, stableAcrossEffects }));
+  };
+  const operation = input.operation;
+  const callee = Node_Expression(ast, node);
+  const receiver = ast.is.IsCallExpression(node) ? callee === undefined ? undefined : Node_Expression(ast, callee) : callee;
+  const argumentsList = Object.freeze((input.arguments ?? []).filter((value): value is Node => value !== undefined));
+  if (operation?.kind === "provider-operation") {
+    const modes = new Map<number, Set<"ref" | "mut-ref" | undefined>>();
+    for (const selected of input.nativeInputs) {
+      const index = selected.source.kind === "argument" ? selected.source.sourceIndex
+        : selected.source.kind === "receiver" ? -1 : undefined;
+      if (index === undefined) continue;
+      const selectedModes = modes.get(index) ?? new Set();
+      selectedModes.add(selected.mode);
+      modes.set(index, selectedModes);
+    }
+    for (const [index, selectedModes] of modes) {
+      const subject = index === -1 ? receiver : input.arguments?.[index];
+      if (selectedModes.size === 1 && selectedModes.has("ref")) select(subject, "shared", argumentsList, index + 1, true);
+      else if (selectedModes.size === 1 && selectedModes.has("mut-ref")) select(subject, "mutable", argumentsList, index + 1);
+    }
+  } else if (operation?.kind === "source-call") {
+    for (let index = 0; index < argumentsList.length; index += 1) {
+      const mode = input.argumentModes[index];
+      if (mode === "borrow-shared") select(argumentsList[index], "shared", argumentsList, index + 1, true);
+      else if (mode === "borrow-mut") select(argumentsList[index], "mutable", argumentsList, index + 1);
+    }
+    if (operation.target.form === "method") select(receiver, operation.target.mutatesSelf ? "mutable" : "shared",
+      argumentsList, 0, !operation.target.mutatesSelf);
+    else if (operation.target.form === "union-method") {
+      const mutable = operation.target.variants.some(variant => variant.mutatesSelf);
+      select(receiver, mutable ? "mutable" : "shared", argumentsList, 0, !mutable);
+    } else if (operation.target.form === "structural-method") select(receiver, "shared", argumentsList, 0, true);
+    else if (operation.target.form === "callable" && input.callableMode !== undefined) {
+      select(callee, input.callableMode, argumentsList, 0, input.callableMode === "shared");
+    }
+  } else if (operation?.kind === "reference-operation") {
+    if (operation.operation === "shared-reference") select(operation.operandExpression, "shared");
+    else if (operation.operation === "mutable-reference") select(operation.operandExpression, "mutable");
+  } else if (operation?.kind === "flow-marker") {
+    select(ast.arguments(node)[0], operation.state === "moved" ? "move" : operation.state === "borrowed-mut" ? "mutable" : "shared");
+  } else if (operation?.kind === "project-type-test" || operation?.kind === "closed-type-test") {
+    select(BinaryExpression_Left(ast, node), "shared");
+  } else if (operation?.kind === "option-equality" || operation?.kind === "union-equality" ||
+    operation?.kind === "string-concat" || operation?.kind === "operator-token" &&
+    ["==", "!=", "<", "<=", ">", ">="].includes(operation.operator)) {
+    const left = BinaryExpression_Left(ast, node);
+    const right = BinaryExpression_Right(ast, node);
+    select(left, "shared", right === undefined ? [] : [right]);
+    select(right, "shared");
+  } else if (operation?.kind === "operator-token" && operation.operator === "+=" && isRustStringCarrier(operation.resultCarrier)) {
+    select(BinaryExpression_Right(ast, node), "shared");
+  } else if (operation?.kind === "operator-call") {
+    const left = BinaryExpression_Left(ast, node);
+    const right = BinaryExpression_Right(ast, node);
+    if (operation.operandModes[0] !== "value") select(left, operation.operandModes[0] === "ref" ? "shared" : "mutable", right === undefined ? [] : [right]);
+    if (operation.operandModes[1] !== "value") select(right, operation.operandModes[1] === "ref" ? "shared" : "mutable");
+  } else if (operation?.kind === "source-field") select(receiver, "shared");
+  for (const argument of input.address?.arguments ?? []) {
+    if (argument.input === "raw-ref" || argument.input === "raw-owner-ref") select(argument.expression, "shared");
+  }
+  if (input.location !== undefined && "pointerExpression" in input.location) select(input.location.pointerExpression, "shared");
+  if (input.location?.operation === "equal-pointer") {
+    select(input.location.leftExpression, "shared", [input.location.rightExpression]);
+    select(input.location.rightExpression, "shared");
+  }
+  select(input.guard, "shared");
+  return uses;
+}

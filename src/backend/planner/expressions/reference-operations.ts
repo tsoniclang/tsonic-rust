@@ -7,7 +7,6 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustValueCarrierBeforeOptionProjection } from "../../../analysis/conversions/value-carrier-queries.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 
@@ -51,11 +50,12 @@ export function planRustReferenceOperationCall(
   if (operand === undefined) return undefined;
   switch (fact.operation) {
     case "shared-reference":
-      return { kind: "reference", expr: planRustNonConsumingValue(fact.operandExpression, operand, context) };
+      return { kind: "reference", expr: operand };
     case "mutable-reference":
-      return { kind: "reference", expr: planRustNonConsumingValue(fact.operandExpression, operand, context), mutable: true };
+      return { kind: "reference", expr: operand, mutable: true };
     case "load":
-      return !fact.operandCarrier.mutable && isRustStringCarrier(fact.operandCarrier.referent)
+      return context.input.program.ownership.reads.get(call)?.sharedReference === true ? operand
+        : !fact.operandCarrier.mutable && isRustStringCarrier(fact.operandCarrier.referent)
         ? { kind: "owned-string-from-borrowed-str", expression: operand }
         : { kind: "dereference", pointer: operand };
     case "store": {

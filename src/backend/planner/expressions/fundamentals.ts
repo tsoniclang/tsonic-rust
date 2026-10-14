@@ -31,7 +31,6 @@ import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/
 import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
 import { planRustReturnExpression } from "../statements/completion-exits.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 import { rustArgumentPassingMode } from "../../../analysis/callables/parameter-passing.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
@@ -166,7 +165,7 @@ export function planTemplateExpression(node: Node, context: RustPlanContext): Ru
     if (value === undefined) {
       return undefined;
     }
-    const selectedValue = planRustNonConsumingValue(expression, value, context);
+    const selectedValue = value;
     if (isRustStringCarrier(substitution.carrier)) {
       parts.push(selectedValue);
     } else {

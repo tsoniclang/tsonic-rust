@@ -1,3 +1,4 @@
+import { requireRustReadOwnership } from "../expressions/typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import {
@@ -403,7 +404,7 @@ function providerInputStabilizationKeys(
         rustProviderInputBorrowMode(input) === "ref" &&
         !rustErrorFieldHasGuardedBorrow(slot.node, context) &&
         !providerInputUsesExistingBorrow(input, slot.node, context) &&
-        !context.input.program.borrowStability.canBorrowAcross(slot.node, later.node))) {
+        !requireRustReadOwnership(slot.node, context).borrowedAcross.has(later.node))) {
         keys.add(slot.key);
       }
       if (inputs.some((input) => rustProviderInputBorrowMode(input) === "mut-ref")) {
@@ -432,7 +433,7 @@ function providerInputUsesExistingBorrow(
     rustTargetTypeRefEquals(context.input.program.records.runtimeCarrier.get(node)?.carrier, input.sourceCarrier)) {
     return true;
   }
-  if (rustProviderInputBorrowMode(input) === "ref" && context.input.program.valueLifetimes.canBorrowStableValue(node)) {
+  if (rustProviderInputBorrowMode(input) === "ref" && requireRustReadOwnership(node, context).stablePlace) {
     return true;
   }
   const sourceParameter = context.input.program.records.sourceParameterAbi.get(node);

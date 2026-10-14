@@ -2,7 +2,6 @@ import type { Node } from "@tsonic/tsts";
 
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { planRustNonConsumingValue } from "./typed-locations.js";
 import { rustPrimitiveTypeName } from "../../../target-model/types/carriers/primitives.js";
 
 export function tryPlanRustRawAddress(
@@ -16,9 +15,9 @@ export function tryPlanRustRawAddress(
     const value = planExpression(argument.expression, context);
     if (value === undefined) return { handled: true };
     args.push(argument.input === "raw-ref"
-      ? { kind: "method-call", receiver: planRustNonConsumingValue(argument.expression, value, context), method: "as_ref", args: [] }
+      ? { kind: "method-call", receiver: value, method: "as_ref", args: [] }
       : argument.input === "raw-owner-ref"
-        ? { kind: "reference", expr: planRustNonConsumingValue(argument.expression, value, context) }
+        ? { kind: "reference", expr: value }
       : argument.carrier.kind === "source-primitive" && rustPrimitiveTypeName(argument.carrier.name) === argument.input ||
           isUnsuffixedIntegerLiteral(value)
         ? value : { kind: "numeric-cast", expression: value, target: argument.input });

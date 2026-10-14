@@ -11,7 +11,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
-import { planRustLoadedSharedReference, planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustErrorFieldSharedView } from "./error-field-borrows.js";
 
 export function planRustCallArguments(
@@ -126,8 +126,7 @@ export function createRustSharedReferenceArgument(
   argument: RustExpr,
   node: Node | undefined,
 ): RustExpr {
-  const loaded = node === undefined ? undefined : planRustLoadedSharedReference(node, argument, context);
-  if (loaded !== undefined) return loaded;
+  if (node !== undefined && context.input.program.ownership.reads.get(node)?.sharedReference === true) return argument;
   const errorField = node === undefined ? undefined : rustErrorFieldSharedView(node, argument, context);
   if (errorField !== undefined) return errorField;
   const borrowedString = rustBorrowedStringView(argument);
