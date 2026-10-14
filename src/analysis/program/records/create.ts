@@ -45,8 +45,9 @@ import { createRustPropertyProjectionProducer } from "./property-projection.js";
 import { createRustCallScopedLifetimeReconciliationProducer } from "./call-scoped-lifetime-reconciliation.js";
 import { createRustProjectUpcastProducer } from "./project-upcast.js";
 import { createRustProjectDowncastProducer } from "./project-downcast.js";
-import { rustCompileTimeSourceKey } from "./keys/source-declarations.js";
-import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
+import { createRustCompileTimeSourceProducer } from "./compile-time-source.js";
+import { createRustSelfModeProducer } from "./self-mode.js";
+import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey } from "./keys/value-projections.js";
 import { rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
@@ -62,7 +63,7 @@ import { createRustCapturedFieldStorageProducer } from "./captured-field-storage
 import { createRustTypeAliasDeclarationProducer } from "./type-alias-declaration.js";
 import { createRustMutatedBindingProducer } from "./mutated-binding.js";
 import { createRustMutatedReferentProducer } from "./mutated-referent.js";
-import { rustMemoryLayoutObservationKey } from "./keys/memory-layout.js";
+import { createRustMemoryLayoutObservationProducer } from "./memory-layout-observation.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
@@ -104,7 +105,7 @@ export function createRustProgramRecordBuilder(
   const nativeGuardResults = createRustNativeGuardResultProducer(assertOpen, parent?.nativeGuardResult);
   const nativeUnreachableNodes = createRustNativeUnreachableProducer(assertOpen, parent?.nativeUnreachable);
   const awaitValues = createRustAwaitValueProducer(assertOpen, requireFoundation, definitions, parent?.awaitValue);
-  const compileTimeSource = createFamily(rustCompileTimeSourceKey, parent?.compileTimeSource);
+  const compileTimeSources = createRustCompileTimeSourceProducer(assertOpen, parent?.compileTimeSource);
   const sourceCallableReturns = createRustSourceCallableReturnProducer(assertOpen, parent?.sourceCallableReturn);
   const errorEffectPlans = createRustErrorEffectsProducer(assertOpen, parent?.errorEffects);
   const sourceErrorEdges = createRustSourceErrorEffectsProducer(assertOpen, parent?.sourceErrorEffects);
@@ -127,7 +128,7 @@ export function createRustProgramRecordBuilder(
   const bindingProjections = createRustBindingProjectionProducer(assertOpen, parent?.bindingProjection);
   const mutatedBindings = createRustMutatedBindingProducer(assertOpen, parent?.mutatedBinding);
   const mutatedReferents = createRustMutatedReferentProducer(assertOpen, parent?.mutatedReferent);
-  const selfMode = createFamily(rustSelfModeFactKey, parent?.selfMode);
+  const selfModes = createRustSelfModeProducer(assertOpen, parent?.selfMode);
   const targetOperations = createRustTargetOperationProducer(assertOpen, requireFoundation, definitions, parent?.targetOperation);
   const compoundWrites = createRustCompoundWriteProducer(assertOpen, parent?.compoundWrite);
   const computedMembers = createRustComputedMemberProducer(assertOpen, parent?.computedMember);
@@ -156,7 +157,7 @@ export function createRustProgramRecordBuilder(
   const propertyProjections = createRustPropertyProjectionProducer(assertOpen, parent?.propertyProjection);
   const memoryBindings = createRustMemoryBindingProducer(assertOpen, parent?.memoryBindingPlan);
   const rawAddresses = createRustRawAddressProducer(assertOpen, parent?.rawAddressPlan);
-  const memoryLayoutObservation = createFamily(rustMemoryLayoutObservationKey, parent?.memoryLayoutObservation);
+  const memoryLayoutObservations = createRustMemoryLayoutObservationProducer(assertOpen, parent?.memoryLayoutObservation);
   const classValues = createRustClassValueProducer(assertOpen, parent?.classValue);
 
   const records: RustProgramRecords = Object.freeze({
@@ -174,7 +175,7 @@ export function createRustProgramRecordBuilder(
     nativeGuardResult: nativeGuardResults.records,
     nativeUnreachable: nativeUnreachableNodes.records,
     awaitValue: awaitValues.records,
-    compileTimeSource: compileTimeSource.reader,
+    compileTimeSource: compileTimeSources.records,
     sourceCallableReturn: sourceCallableReturns.records,
     errorEffects: errorEffectPlans.records,
     sourceErrorEffects: sourceErrorEdges.records,
@@ -195,7 +196,7 @@ export function createRustProgramRecordBuilder(
     bindingProjection: bindingProjections.records,
     mutatedBinding: mutatedBindings.records,
     mutatedReferent: mutatedReferents.records,
-    selfMode: selfMode.reader,
+    selfMode: selfModes.records,
     targetOperation: targetOperations.records,
     compoundWrite: compoundWrites.records,
     computedMember: computedMembers.records,
@@ -224,7 +225,7 @@ export function createRustProgramRecordBuilder(
     propertyProjection: propertyProjections.records,
     memoryBindingPlan: memoryBindings.records,
     rawAddressPlan: rawAddresses.records,
-    memoryLayoutObservation: memoryLayoutObservation.reader,
+    memoryLayoutObservation: memoryLayoutObservations.records,
     classValue: classValues.records,
   });
   return Object.freeze({
@@ -253,7 +254,8 @@ export function createRustProgramRecordBuilder(
     nativeUnreachableNodes,
     awaitValue: awaitValues.records,
     awaitValues,
-    compileTimeSource: compileTimeSource.writer,
+    compileTimeSource: compileTimeSources.records,
+    compileTimeSources,
     sourceCallableReturn: sourceCallableReturns.records,
     sourceCallableReturns,
     errorEffects: errorEffectPlans.records,
@@ -290,7 +292,8 @@ export function createRustProgramRecordBuilder(
     mutatedBindings,
     mutatedReferent: mutatedReferents.records,
     mutatedReferents,
-    selfMode: selfMode.writer,
+    selfMode: selfModes.records,
+    selfModes,
     targetOperation: targetOperations.records,
     targetOperations,
     compoundWrite: compoundWrites.records,
@@ -341,7 +344,8 @@ export function createRustProgramRecordBuilder(
     memoryBindings,
     rawAddressPlan: rawAddresses.records,
     rawAddresses,
-    memoryLayoutObservation: memoryLayoutObservation.writer,
+    memoryLayoutObservation: memoryLayoutObservations.records,
+    memoryLayoutObservations,
     classValue: classValues.records,
     classValues,
     minimumFoundation(): RustFoundation {

@@ -279,7 +279,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     if (ast.is.IsVariableDeclaration(node)) {
       const alias = callableAlias(node);
       if (alias !== undefined) {
-        for (const declaration of alias.declarations) context.records.compileTimeSource.set(declaration, true);
+        for (const declaration of alias.declarations) context.records.compileTimeSources.erase(declaration);
         return;
       }
     }
@@ -287,7 +287,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);
     if (metadata !== undefined || context.memoryMetadata.isCompileTimeExpression(node)) {
-      context.records.compileTimeSource.set(node, true);
+      context.records.compileTimeSources.erase(node);
       for (const issue of metadata?.issues ?? []) appendRustDiagnostic(walk,
         "RUST_MEMORY_METADATA_RUNTIME_ESCAPE", issue.reason, issue.node, []);
       return;

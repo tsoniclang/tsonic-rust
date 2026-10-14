@@ -65,7 +65,7 @@ export function recordRustInlineModuleCallableUses(
     if (value !== undefined) records.sourceCallableValue.set(use.reference, value, [{ message: "rust exact immutable declaration-owned callable value" }]);
   }
   if (!selection.stored) for (const alias of selection.aliases) {
-    for (const declaration of alias.declarations) records.compileTimeSource.set(declaration, true, [{ message: "rust exact immutable invocation-only native callable alias" }]);
+    for (const declaration of alias.declarations) records.compileTimeSources.erase(declaration);
     for (const reference of alias.references) records.directCallableReference.set(reference, alias.producer, [{ message: "rust exact immutable invocation-only native callable producer" }]);
   }
 }

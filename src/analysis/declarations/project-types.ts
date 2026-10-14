@@ -47,9 +47,7 @@ export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: reado
             ast.kindName(member) === "KindSetAccessor") &&
           !ast.hasModifierKind(member, "static")) {
           const mode = walk.context.objectRepresentations.methodSelfMode(member);
-          walk.context.records.selfMode.set(member, { mode }, [
-            { message: `rust ${mode} project object method self mode` },
-          ]);
+          walk.context.records.selfModes.method(member, mode);
         }
       }
     }
@@ -290,9 +288,7 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       setCarrierFact(walk, keyParameter, keyCarrier);
       setCarrierFact(walk, member, valueCarrier);
     } else if (memberKind === "KindMethodSignature" || memberKind === "KindConstructSignature") {
-      if (memberKind === "KindMethodSignature") walk.context.records.selfMode.set(member, { mode: "ref" }, [
-        { message: "rust reference-backed project interface method self mode" },
-      ]);
+      if (memberKind === "KindMethodSignature") walk.context.records.selfModes.method(member, "ref");
       const parameters = requireDenseSourceNodes(
         walk,
         ast.parameters(member),

@@ -47,8 +47,7 @@ builder.callScopedLifetimeReconciliation.get(subject);
 builder.projectUpcast.get(subject);
 builder.projectDowncast.get(subject);
 import { rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustContextualValueConversionFactKey,
-  rustSourceBindingFactKey,
-  rustSelfModeFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";
+  rustSourceBindingFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";
 `);
   assert.equal(positive.status, 0, positive.diagnostics);
   const invalid = [
