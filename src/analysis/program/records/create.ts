@@ -13,7 +13,11 @@ import { createRustSelectedOperationProducer } from "./selected-operation.js";
 import { createRustRuntimeCarrierProducer } from "./runtime-carrier.js";
 import { createRustSelectedCallProducer } from "./selected-call.js";
 import { createRustTargetOperationProducer } from "./target-operation.js";
-import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "./keys/native-control-flow.js";
+import { createRustNativeGuardResultProducer } from "./native-guard-result.js";
+import { createRustNativeUnreachableProducer } from "./native-unreachable.js";
+import { createRustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
+import { createRustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
+import { createRustPropertyProjectionProducer } from "./property-projection.js";
 import { rustAwaitValueFactKey } from "./keys/await-values.js";
 import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
 import { rustErrorEffectsFactKey } from "./keys/error-effects.js";
@@ -25,15 +29,12 @@ import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContext
 import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustReceiverIndependentMethodFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
 import { rustTypeOnlyDeclarationFactKey } from "./keys/type-only.js";
 import { rustNativeArrayStorageKey, rustNativeBackingKey, rustRawLocationPlanKey } from "./keys/native-memory.js";
-import { rustIndexedFieldKeyArgument } from "./keys/indexed-field-keys.js";
 import { rustObjectReferenceViewKey } from "./keys/object-reference-views.js";
 import { rustProjectCallableAdaptersKey } from "./keys/project-callable-adapters.js";
 import { rustRetainedEnvironmentFactKey, rustRetainedCallLifetimesFactKey } from "./keys/retained-environments.js";
-import { rustGenericNumericOperandsKey } from "./keys/generic-numeric.js";
 import { rustModuleCallableStorageFactKey } from "./keys/module-values.js";
 import { rustGenericCallableInvocationFactKey } from "./keys/generic-callable-effects.js";
 import { rustCapturedFieldStorageFactKey } from "./keys/receiver-captures.js";
-import { rustPropertyProjectionFactKey } from "./keys/property-projections.js";
 import { rustMemoryBindingPlanKey } from "./keys/memory-bindings.js";
 import { rustRawAddressPlanKey } from "./keys/raw-addresses.js";
 import { rustMemoryLayoutObservationKey } from "./keys/memory-layout.js";
@@ -76,8 +77,8 @@ export function createRustProgramRecordBuilder(
   const conversion = createFamily(rustConversionKey, parent?.conversion,
     value => value.convertedType === undefined ? "core" : rustFoundationForCarrier(value.convertedType));
   const argumentPassing = createFamily(rustArgumentPassingKey, parent?.argumentPassing);
-  const nativeGuardResult = createFamily(rustNativeGuardResultFactKey, parent?.nativeGuardResult);
-  const nativeUnreachable = createFamily(rustNativeUnreachableFactKey, parent?.nativeUnreachable);
+  const nativeGuardResults = createRustNativeGuardResultProducer(assertOpen, parent?.nativeGuardResult);
+  const nativeUnreachableNodes = createRustNativeUnreachableProducer(assertOpen, parent?.nativeUnreachable);
   const awaitValue = createFamily(rustAwaitValueFactKey, parent?.awaitValue, fact => {
     let foundation: RustFoundation = "core";
     for (const leaf of rustAwaitSelectionLeaves(fact.selection)) {
@@ -132,16 +133,16 @@ export function createRustProgramRecordBuilder(
   const nativeArrayStorage = createFamily(rustNativeArrayStorageKey, parent?.nativeArrayStorage);
   const nativeBacking = createFamily(rustNativeBackingKey, parent?.nativeBacking);
   const rawLocationPlan = createFamily(rustRawLocationPlanKey, parent?.rawLocationPlan);
-  const indexedFieldKeyArgument = createFamily(rustIndexedFieldKeyArgument, parent?.indexedFieldKeyArgument);
+  const indexedFieldKeys = createRustIndexedFieldKeyArgumentProducer(assertOpen, parent?.indexedFieldKeyArgument);
   const objectReferenceView = createFamily(rustObjectReferenceViewKey, parent?.objectReferenceView);
   const projectCallableAdapters = createFamily(rustProjectCallableAdaptersKey, parent?.projectCallableAdapters);
   const retainedEnvironment = createFamily(rustRetainedEnvironmentFactKey, parent?.retainedEnvironment);
   const retainedCallLifetimes = createFamily(rustRetainedCallLifetimesFactKey, parent?.retainedCallLifetimes);
-  const genericNumericOperands = createFamily(rustGenericNumericOperandsKey, parent?.genericNumericOperands);
+  const genericNumerics = createRustGenericNumericOperandsProducer(assertOpen, parent?.genericNumericOperands);
   const moduleCallableStorage = createFamily(rustModuleCallableStorageFactKey, parent?.moduleCallableStorage);
   const genericCallableInvocation = createFamily(rustGenericCallableInvocationFactKey, parent?.genericCallableInvocation);
   const capturedFieldStorage = createFamily(rustCapturedFieldStorageFactKey, parent?.capturedFieldStorage);
-  const propertyProjection = createFamily(rustPropertyProjectionFactKey, parent?.propertyProjection);
+  const propertyProjections = createRustPropertyProjectionProducer(assertOpen, parent?.propertyProjection);
   const memoryBindingPlan = createFamily(rustMemoryBindingPlanKey, parent?.memoryBindingPlan);
   const rawAddressPlan = createFamily(rustRawAddressPlanKey, parent?.rawAddressPlan);
   const memoryLayoutObservation = createFamily(rustMemoryLayoutObservationKey, parent?.memoryLayoutObservation);
@@ -159,8 +160,8 @@ export function createRustProgramRecordBuilder(
     selectedOperation: selectedOperations.records,
     conversion: conversion.reader,
     argumentPassing: argumentPassing.reader,
-    nativeGuardResult: nativeGuardResult.reader,
-    nativeUnreachable: nativeUnreachable.reader,
+    nativeGuardResult: nativeGuardResults.records,
+    nativeUnreachable: nativeUnreachableNodes.records,
     awaitValue: awaitValue.reader,
     compileTimeSource: compileTimeSource.reader,
     sourceCallableReturn: sourceCallableReturn.reader,
@@ -200,16 +201,16 @@ export function createRustProgramRecordBuilder(
     nativeArrayStorage: nativeArrayStorage.reader,
     nativeBacking: nativeBacking.reader,
     rawLocationPlan: rawLocationPlan.reader,
-    indexedFieldKeyArgument: indexedFieldKeyArgument.reader,
+    indexedFieldKeyArgument: indexedFieldKeys.records,
     objectReferenceView: objectReferenceView.reader,
     projectCallableAdapters: projectCallableAdapters.reader,
     retainedEnvironment: retainedEnvironment.reader,
     retainedCallLifetimes: retainedCallLifetimes.reader,
-    genericNumericOperands: genericNumericOperands.reader,
+    genericNumericOperands: genericNumerics.records,
     moduleCallableStorage: moduleCallableStorage.reader,
     genericCallableInvocation: genericCallableInvocation.reader,
     capturedFieldStorage: capturedFieldStorage.reader,
-    propertyProjection: propertyProjection.reader,
+    propertyProjection: propertyProjections.records,
     memoryBindingPlan: memoryBindingPlan.reader,
     rawAddressPlan: rawAddressPlan.reader,
     memoryLayoutObservation: memoryLayoutObservation.reader,
@@ -230,8 +231,10 @@ export function createRustProgramRecordBuilder(
     selectedOperations,
     conversion: conversion.writer,
     argumentPassing: argumentPassing.writer,
-    nativeGuardResult: nativeGuardResult.writer,
-    nativeUnreachable: nativeUnreachable.writer,
+    nativeGuardResult: nativeGuardResults.records,
+    nativeGuardResults,
+    nativeUnreachable: nativeUnreachableNodes.records,
+    nativeUnreachableNodes,
     awaitValue: awaitValue.writer,
     compileTimeSource: compileTimeSource.writer,
     sourceCallableReturn: sourceCallableReturn.writer,
@@ -272,16 +275,19 @@ export function createRustProgramRecordBuilder(
     nativeArrayStorage: nativeArrayStorage.writer,
     nativeBacking: nativeBacking.writer,
     rawLocationPlan: rawLocationPlan.writer,
-    indexedFieldKeyArgument: indexedFieldKeyArgument.writer,
+    indexedFieldKeyArgument: indexedFieldKeys.records,
+    indexedFieldKeys,
     objectReferenceView: objectReferenceView.writer,
     projectCallableAdapters: projectCallableAdapters.writer,
     retainedEnvironment: retainedEnvironment.writer,
     retainedCallLifetimes: retainedCallLifetimes.writer,
-    genericNumericOperands: genericNumericOperands.writer,
+    genericNumericOperands: genericNumerics.records,
+    genericNumerics,
     moduleCallableStorage: moduleCallableStorage.writer,
     genericCallableInvocation: genericCallableInvocation.writer,
     capturedFieldStorage: capturedFieldStorage.writer,
-    propertyProjection: propertyProjection.writer,
+    propertyProjection: propertyProjections.records,
+    propertyProjections,
     memoryBindingPlan: memoryBindingPlan.writer,
     rawAddressPlan: rawAddressPlan.writer,
     memoryLayoutObservation: memoryLayoutObservation.writer,
