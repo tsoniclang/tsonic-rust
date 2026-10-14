@@ -7,6 +7,7 @@ import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from 
 
 
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
+import { rustSourceLocationTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustSourceUnionTargetType } from "../../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
@@ -50,6 +51,7 @@ test("sealed records publish only frozen typed family readers without a native k
   const records = model.seal();
   const subject = {};
   const carrier = { kind: "source-primitive", name: "uint32" };
+  const location = rustSourceLocationTargetType(carrier);
   const layout = { kind: "scalar", pointeeCarrier: carrier, size: 4, alignment: 4,
     width: 64, littleEndian: true, fields: [] };
   const producerAdmissions = {
@@ -95,8 +97,16 @@ test("sealed records publish only frozen typed family readers without a native k
     yield: () => model.yields.value(subject, subject, {}),
     computedMember: () => model.computedMembers.evaluate({}, subject, subject, subject, "read"),
     compoundWrite: () => model.compoundWrites.index(subject, "native.index-set", {}),
+    typeAliasDeclaration: () => model.typeAliasDeclarations.register({}, subject),
+    mutatedBinding: () => model.mutatedBindings.written(subject),
+    mutatedReferent: () => model.mutatedReferents.written(subject),
+    argumentPassing: () => model.argumentPassingPlans.pass(subject, "by-value"),
+    typedLocationPlan: () => model.typedLocations.finalize(subject, carrier, location, { operation: "load", pointerExpression: subject }),
+    bindingStorage: () => model.bindingStoragePlans.location(subject, carrier),
+    retainedCallLifetimes: () => model.retainedCalls.finalize(subject, new Map([["region", { kind: "static" }]])),
+    bindingProjection: () => model.bindingProjections.resolve(subject, carrier, carrier, { kind: "tuple-element", index: 0 }),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 42, "every integrated producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 50, "every integrated producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {

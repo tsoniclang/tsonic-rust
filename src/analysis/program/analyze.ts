@@ -19,7 +19,7 @@ import {
   KindFunctionDeclaration,
   KindVariableStatement,
 } from "@tsonic/target-api/source";
-import { recordEnumFacts, registerTypeAlias, reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
+import { recordEnumFacts, reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
 import { recordFallibilityFacts } from "../resources/fallibility.js";
 import { recordFunctionSignatureFacts, recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
@@ -352,7 +352,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       if (kind === "KindInterfaceDeclaration") {
         recordInterfaceFacts(walk, statement);
       } else if (kind === "KindTypeAliasDeclaration") {
-        registerTypeAlias(walk, statement);
+        walk.context.records.typeAliasDeclarations.register(walk, statement);
       }
     }
   }

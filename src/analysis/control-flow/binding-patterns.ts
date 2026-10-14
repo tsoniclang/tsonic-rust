@@ -37,7 +37,6 @@ import type {
 } from "../project-types/source-type-registry.js";
 import { isRustStructuralObjectFieldDeclaration } from "../../policy/types/objects/source-shapes.js";
 import { rustProjectObjectLayout } from "../project-types/object-layout.js";
-import { rustBindingNormalizationContract } from "../../target-model/types/binding-normalization.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
@@ -106,18 +105,10 @@ export function recordRustBindingPatternFacts(
     const defaultCarrier = initializer === undefined ? undefined
       : context.resolveExpressionCarrier(initializer, isRustAbsenceCarrier(defaultExpected) ? undefined : defaultExpected);
     if (initializer !== undefined && defaultCarrier === undefined) return false;
-    const normalized = rustBindingNormalizationContract(
-      selected.projectedCarrier, defaultCarrier, selected.checkedArrayElement);
-    if (normalized === undefined) return false;
-    const { bindingCarrier } = normalized;
-    context.records.bindingProjection.set(element, {
-      sourceCarrier,
-      projectedCarrier: selected.projectedCarrier,
-      storageCarrier: normalized.storageCarrier,
-      bindingCarrier,
-      projection: selected.projection,
-      normalization: normalized.normalization,
-    }, [{ message: "rust finalized binding projection" }]);
+    const projected = context.records.bindingProjections.resolve(element, sourceCarrier,
+      selected.projectedCarrier, selected.projection, defaultCarrier, selected.checkedArrayElement);
+    if (projected === undefined) return false;
+    const { bindingCarrier } = projected;
     context.setCarrier(element, bindingCarrier);
     context.setCarrier(name, bindingCarrier);
     const nameKind = context.ast.kindName(name);

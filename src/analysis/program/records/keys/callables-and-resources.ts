@@ -3,13 +3,7 @@ import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustPlanKey } from "../key.js";
 import { rustSuspendedCallableStorageEquals, rustSuspendedOwnedReceiverEquals } from "../../../../target-model/records/equality.js";
-import type { RustTypeAliasDeclarationFact, RustGeneratorFact, RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
-
-export const rustTypeAliasDeclarationFactKey: RustPlanKey<RustTypeAliasDeclarationFact> =
-  defineRustPlanKey("typeAliasDeclaration", (left, right) =>
-    left.kind === right.kind && (left.kind !== "native-alias" ||
-      right.kind === "native-alias" && rustTargetTypeRefEquals(left.target, right.target)) &&
-    (left.kind === "native-alias" || closedMetadataEquals(left, right)));
+import type { RustGeneratorFact, RustSourceParameterAbiFact } from "../../../../target-model/records/callables-and-resources.js";
 
 export const rustGeneratorFactKey: RustPlanKey<RustGeneratorFact> =
   defineRustPlanKey("generator", (left, right) =>
