@@ -33,7 +33,7 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
     const carrier = rustSourceLocationTargetType(pointee);
     const pointer = resolveExpressionCarrier(walk, operation.pointerExpression, file, carrier);
     if (!rustTargetTypeRefEquals(pointer, carrier)) return reject("The bound field and selected location have different native value carriers.");
-    walk.context.records.memoryBindingPlan.set(expression, Object.freeze({ kind: "field", carrier, expression: operation.pointerExpression }));
+    walk.context.records.memoryBindings.field(expression, carrier, operation.pointerExpression);
     return { handled: true as const, carrier: setCarrierFact(walk, expression, carrier) };
   }
   if (record?.kind !== "resolved") return reject("The selected record binding has no finalized operation.");
@@ -41,7 +41,7 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
   const carrier = resolveRustTargetTypeRef(operation.layout.explicitTypeNode ?? operation.sourceType, resolution, walk.operationOptions);
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (carrier !== undefined && rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) && operation.fields.length === 0) {
-    walk.context.records.memoryBindingPlan.set(expression, Object.freeze({ kind: "record", carrier, fields: Object.freeze([]) }));
+    walk.context.records.memoryBindings.record(expression, carrier, []);
     return { handled: true as const, carrier: setCarrierFact(walk, expression, carrier) };
   }
   if (carrier === undefined || structural === undefined || structural.fields.length !== operation.fields.length) {
@@ -65,6 +65,6 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
     used.add(selection.field.storageIndex);
     fields.push(Object.freeze({ expression: entry.expression, storageIndex: selection.field.storageIndex, carrier: pointer }));
   }
-  walk.context.records.memoryBindingPlan.set(expression, Object.freeze({ kind: "record", carrier, fields: Object.freeze(fields) }));
+  walk.context.records.memoryBindings.record(expression, carrier, fields);
   return { handled: true as const, carrier: setCarrierFact(walk, expression, carrier) };
 }

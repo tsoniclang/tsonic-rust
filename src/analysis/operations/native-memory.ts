@@ -36,9 +36,7 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
   const expected = selected.operation.operation === "to-raw" ? location : raw;
   const inputCarrier = resolveExpressionCarrier(walk, selected.expression, file, expected);
   if (inputCarrier === undefined) return reject("The raw conversion operand has no exact native carrier.");
-  context.records.rawLocationPlan.set(expression, Object.freeze({
-    operation: selected.operation.operation, expression: selected.expression, inputCarrier, layout,
-  }));
+  context.records.rawLocations.conversion(expression, selected.operation.operation, selected.expression, inputCarrier, layout);
   return { handled: true as const, carrier: setCarrierFact(walk, expression,
     selected.operation.operation === "to-raw" ? raw : location) };
 }
@@ -95,14 +93,11 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
           const receiver = context.records.runtimeCarrier.get(element.receiver.expression)?.carrier;
           return receiver?.kind === "array" && rustTargetTypeRefEquals(receiver.element, layout.pointeeCarrier) &&
             value?.kind === "provider-operation" && value.abi.target.form === "index" && value.abi.targetArguments.length === 1;
-        }) && subjects.every(([node]) => {
-          const previous = context.records.nativeArrayStorage.get(node);
-          return previous === undefined || previous.stride === descriptor.stride && rustNativeMemoryLayoutsEqual(previous.layout, layout);
         });
-        if (!valid) { reject(origin.call, "Native array aliases require one exact element carrier, stride and layout."); continue; }
-        for (const [node, kind] of subjects) context.records.nativeArrayStorage.set(node, Object.freeze(kind === "element"
-            ? { kind, declaration: component.declarations[0]!, layout, stride: descriptor.stride }
-            : { kind, layout, stride: descriptor.stride }));
+        if (!valid || !context.records.nativeArrays.promote(subjects, component.declarations[0]!, layout, descriptor.stride)) {
+          reject(origin.call, "Native array aliases require one exact element carrier, stride and layout.");
+          continue;
+        }
         continue;
       }
       const field = context.records.targetOperation.get(origin.storageExpression);
@@ -153,10 +148,9 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
       }
       subject = declaration;
     }
-    const previous = context.records.nativeBacking.get(subject);
-    if (previous !== undefined && !rustNativeMemoryLayoutsEqual(previous, layout)) {
+    if (!context.records.nativeBackings.require(subject, layout)) {
       reject(origin.call, "One exact storage declaration has incompatible native layout requirements.");
-    } else context.records.nativeBacking.set(subject, layout);
+    }
   }
   return Object.freeze(fields);
 }

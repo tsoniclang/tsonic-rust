@@ -59,7 +59,6 @@ import { resolveRustRawAddressCarrier, resolveRustRawPointerIdentityCarrier } fr
 import { readRustSourceRawPointerIdentity } from "../../policy/operations/pointers/source-raw-pointers.js";
 import { selectRustMemoryLayoutObservation } from "../../policy/operations/pointers/layout-observations.js";
 
-import { resolveRustClassValue } from "../objects/class-values.js";
 import { readRustNativeControl, resolveRustNativeControl } from "./native-controls.js";
 import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes } from "../callables/source-call-lifetimes.js";
 import { retainRustSelectedSourceCallResultStorage } from "../../policy/types/resolution/call-results.js";
@@ -79,7 +78,7 @@ export function resolveIdentifierCarrier(
     const declarationKind = ast.kindName(declaration);
     recordProjectSourceBinding(walk, identifier);
     if (declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") {
-      const value = resolveRustClassValue(walk, identifier, expected);
+      const value = walk.context.records.classValues.resolve(walk, identifier, expected);
       if (value !== undefined) return value;
     }
     if (declarationKind === KindExportAssignment) {

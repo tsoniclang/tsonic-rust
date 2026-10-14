@@ -5,8 +5,6 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/index.js";
-import { setCarrierFact } from "../operations/project-calls.js";
-import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { sourceCallableInterface, sourceInterfaceRepresentationBase } from "@tsonic/target-api/source";
 
@@ -14,78 +12,49 @@ export function recordRustInterfaceRepresentationAliases(
   walk: RustFactWalk,
   sourceFiles: readonly SourceFile[],
 ): void {
-  const { ast, source, records } = walk.context;
-  const visiting = new Set<Node>();
-  const visited = new Set<Node>();
-  const rejected = new Set<Node>();
-  for (const sourceFile of sourceFiles) {
-    for (const declaration of rustSourceTypeDeclarations(sourceFile, ast)) visit(declaration);
-  }
+  walk.context.records.typeOnlyDeclarations.representationAliases(walk, sourceFiles);
+}
 
-  function visit(declaration: Node): boolean {
-    if (rejected.has(declaration)) return false;
-    if (ast.kindName(declaration) !== "KindInterfaceDeclaration" || visited.has(declaration)) return true;
-    if (visiting.has(declaration)) {
-      rejected.add(declaration);
-      appendRustDiagnostic(walk, "RUST_INTERFACE_REPRESENTATION_CYCLE",
-        "Recursive interface facades require a closed recursive representation, not an erased native alias.", declaration, []);
+export interface RustInterfaceRepresentationAliasSelection {
+  readonly declarations: readonly Node[];
+  readonly registrationCarrier?: TargetTypeRef;
+}
+
+export function selectRustInterfaceRepresentationAlias(
+  walk: RustFactWalk, declaration: Node, visit: (declaration: Node) => boolean,
+): RustInterfaceRepresentationAliasSelection | false | undefined {
+  const { ast, source, records } = walk.context;
+  const semantics = walk.context.semanticsFor(declaration);
+  const declaredType = semantics.declarations.declaredType(declaration);
+  const symbol = declaredType === undefined ? undefined : semantics.declarations.typeSymbol(declaredType);
+  const declarations = symbol === undefined ? undefined : semantics.declarations.symbolDeclarations(symbol);
+  const callable = sourceCallableInterface(declaredType, semantics, ast);
+  if (callable !== undefined && declarations !== undefined) return { declarations };
+  if (declaredType !== undefined && declarations !== undefined && declarations.length > 0 &&
+    declarations.every(member => ast.kindName(member) === "KindInterfaceDeclaration") &&
+    semantics.types.constructSignatures(declaredType).length !== 0) {
+    const carrier = resolveRustTargetTypeRef(declaredType,
+      { ...rustResolutionContext(walk, declaration), callableRepresentation: "signature" }, walk.operationOptions);
+    if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) {
+      appendRustDiagnostic(walk, "RUST_CONSTRUCTOR_INTERFACE_NOT_CLOSED",
+        "An interface representation requires its complete checked callable, construction and member contract.", declaration, []);
       return false;
     }
-    visiting.add(declaration);
-    const accepted = classify(declaration);
-    visiting.delete(declaration);
-    visited.add(declaration);
-    if (!accepted) rejected.add(declaration);
-    return accepted;
+    return { declarations, registrationCarrier: carrier };
   }
-
-  function classify(declaration: Node): boolean {
-    const semantics = walk.context.semanticsFor(declaration);
-    const declaredType = semantics.declarations.declaredType(declaration);
-    const symbol = declaredType === undefined ? undefined : semantics.declarations.typeSymbol(declaredType);
-    const declarations = symbol === undefined ? undefined : semantics.declarations.symbolDeclarations(symbol);
-    const callable = sourceCallableInterface(declaredType, semantics, ast);
-    if (callable !== undefined && declarations !== undefined) {
-      for (const merged of declarations) records.typeOnlyDeclaration.set(merged, { reason: "representation-alias" });
-      return true;
-    }
-    if (declaredType !== undefined && declarations !== undefined && declarations.length > 0 &&
-      declarations.every(member => ast.kindName(member) === "KindInterfaceDeclaration") &&
-      semantics.types.constructSignatures(declaredType).length !== 0) {
-      const carrier = resolveRustTargetTypeRef(declaredType,
-        { ...rustResolutionContext(walk, declaration), callableRepresentation: "signature" }, walk.operationOptions);
-      if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) {
-        appendRustDiagnostic(walk, "RUST_CONSTRUCTOR_INTERFACE_NOT_CLOSED",
-          "An interface representation requires its complete checked callable, construction and member contract.", declaration, []);
-        return false;
-      }
-      for (const merged of declarations) {
-        if (!walk.sourceTypes.registerRepresentationAlias(merged, carrier) || setCarrierFact(walk, merged, carrier) === undefined) {
-          appendRustDiagnostic(walk, "RUST_INTERFACE_REPRESENTATION_CONFLICT",
-            "Merged interfaces require one exact native representation.", merged, []);
-          return false;
-        }
-        records.typeOnlyDeclaration.set(merged, { reason: "representation-alias" });
-      }
-      return true;
-    }
-    const edge = sourceInterfaceRepresentationBase(declaration, ast, source.navigation, semantics);
-    if (edge === undefined || declarations === undefined) return true;
-    if (edge.target.project) {
-      if (!visit(edge.target.declaration)) return false;
-      if (records.typeOnlyDeclaration.get(edge.target.declaration)?.reason !== "representation-alias") return true;
-    }
-    const logicalContext = { ...rustResolutionContext(walk, edge.heritage), callableRepresentation: "signature" as const };
-    const initialCarrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
-    if (initialCarrier === undefined || rustSourceTypeCarrierValue(initialCarrier) !== undefined) return true;
-    if (!visitCarrierDependencies(initialCarrier, new Set())) return false;
-    const carrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
-    if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) return false;
-    for (const merged of declarations) {
-      records.typeOnlyDeclaration.set(merged, { reason: "representation-alias" });
-    }
-    return true;
+  const edge = sourceInterfaceRepresentationBase(declaration, ast, source.navigation, semantics);
+  if (edge === undefined || declarations === undefined) return undefined;
+  if (edge.target.project) {
+    if (!visit(edge.target.declaration)) return false;
+    if (records.typeOnlyDeclaration.get(edge.target.declaration)?.reason !== "representation-alias") return undefined;
   }
+  const logicalContext = { ...rustResolutionContext(walk, edge.heritage), callableRepresentation: "signature" as const };
+  const initialCarrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
+  if (initialCarrier === undefined || rustSourceTypeCarrierValue(initialCarrier) !== undefined) return undefined;
+  if (!visitCarrierDependencies(initialCarrier, new Set())) return false;
+  const carrier = resolveRustTargetTypeRef(edge.selectedType, logicalContext, walk.operationOptions);
+  if (carrier === undefined || rustSourceTypeCarrierValue(carrier) !== undefined) return false;
+  return { declarations };
 
   function visitCarrierDependencies(carrier: TargetTypeRef, seen: Set<TargetTypeRef>): boolean {
     if (seen.has(carrier)) return true;

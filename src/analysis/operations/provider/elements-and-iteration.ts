@@ -60,7 +60,6 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustNumberArrayUnionMember } from "./number-array-unions.js";
 import { selectedRustForInKeys } from "./for-in-keys.js";
 import { selectRustCheckedPropertyAccess } from "./properties.js";
-import { recordRustComputedMemberEvaluation } from "../computed-members.js";
 import { resolveRustIndexedField } from "../../../policy/types/resolution/indexed-fields.js";
 import { selectRustRecordElement } from "./records.js";
 import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
@@ -125,7 +124,7 @@ export function selectRustCheckedElementAccess(
         const evaluateReceiver = selected.kind === "source-static-field" ? selected.classReceiver !== undefined
           : selected.kind !== "source-accessor" || selected.receiver.kind !== "static" ||
             request.sourceReceiverValueDeclaration !== options.projectTypes.definitionContainingDeclaration(request.sourceSelectedDeclaration)?.declaration;
-        recordRustComputedMemberEvaluation(context.ast, context.records, request.expression,
+        context.records.computedMembers.evaluate(context.ast, request.expression,
           request.receiver, request.argument, request.accessMode, evaluateReceiver);
       }
       return result;

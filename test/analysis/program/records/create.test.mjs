@@ -10,6 +10,7 @@ import { rustOptionTargetType } from "../../../../dist/target-model/types/carrie
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustSourceUnionTargetType } from "../../../../dist/target-model/types/carriers/source-types.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { closedMetadataEquals } from "../../../../dist/target-model/metadata/closed-data.js";
 
 
 import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../../../../dist/analysis/operations/target-operation.js";
@@ -23,12 +24,79 @@ function admitFamily(model, family, subject, fact) {
   else if (family === "targetOperation") model.targetOperations.source(subject, fact);
   else if (family === "selectedCall") model.selectedCalls.checked({ source: { call: subject } },
     { kind: "accept", value: { selectedSignature: fact } });
+  else if (family === "futureValue") return model.futureValues.resolve(subject, () => fact);
+  else if (family === "deferredProducerEffects") model.deferredProducerChannels.finalize(new Map([[subject, fact]]));
+  else if (family === "callScopedLifetimeReconciliation") model.callScopedLifetimes.reconcile(subject,
+    fact.sourceCarrier, fact.selectedCarrier);
+  else if (family === "projectUpcast") model.projectUpcasts.project(subject,
+    fact.sourceCarrier, fact.targetCarrier, fact.sourceVariants);
+  else if (family === "projectDowncast") model.projectDowncasts.project(subject,
+    fact.sourceCarrier, fact.dispatchCarrier, fact.targetCarrier, fact.projection);
+  else if (family === "awaitValue") {
+    assert.equal(fact.selection.kind, "leaf", "the fixture supplies one exact completion");
+    const leaf = fact.selection.value;
+    assert.equal(leaf.completion.kind, "value", "the fixture supplies a native conversion");
+    const conversion = leaf.completion.conversion;
+    assert.equal(conversion.kind === "identity" || conversion.kind === "semantic", true, "exact fixture conversion kind");
+    return model.awaitValues.finalize(subject, fact.operandCarrier, fact.resultCarrier,
+      () => leaf.future, () => conversion.kind === "semantic" ? conversion.conversion : undefined);
+  }
   else model[family].set(subject, fact);
+  return fact;
 }
 
 test("sealed records publish only frozen typed family readers without a native key or writer API", () => {
   const model = createModel();
   const records = model.seal();
+  const subject = {};
+  const carrier = { kind: "source-primitive", name: "uint32" };
+  const layout = { kind: "scalar", pointeeCarrier: carrier, size: 4, alignment: 4,
+    width: 64, littleEndian: true, fields: [] };
+  const producerAdmissions = {
+    selectedOperation: () => model.selectedOperations.checked(subject, { kind: "accept", value: {} }),
+    runtimeCarrier: () => admitFamily(model, "runtimeCarrier", subject, { carrier }),
+    selectedCall: () => admitFamily(model, "selectedCall", subject, {}),
+    targetOperation: () => admitFamily(model, "targetOperation", subject, {}),
+    nativeArrayStorage: () => model.nativeArrays.promote([[subject, "binding"]], subject, layout, 4),
+    nativeBacking: () => model.nativeBackings.require(subject, layout),
+    rawLocationPlan: () => model.rawLocations.conversion(subject, "to-raw", subject, carrier, layout),
+    memoryBindingPlan: () => model.memoryBindings.field(subject, carrier, subject),
+    rawAddressPlan: () => model.rawAddresses.identity(subject, "same", carrier, []),
+    receiverIndependentMethod: () => model.receiverIndependentMethods.finalize({}, [], () => ""),
+    classValue: () => model.classValues.resolve({}, subject, undefined),
+    objectLiteralMethodAdapter: () => model.objectLiteralMethodAdapters.finalize({ expressions: [] }),
+    projectCallableAdapters: () => model.projectCallableAdapterPlans.finalize({}),
+    objectReferenceView: () => model.objectReferenceViews.select({}, subject, carrier, carrier),
+    awaitSourceErrorEffects: () => model.awaitSourceErrors.selected(subject, []),
+    errorEffects: () => model.errorEffectPlans.selected(subject, {}),
+    fallible: () => model.fallibleSubjects.selected(subject),
+    genericCallableInvocation: () => model.genericCallableInvocations.selected(subject, {}),
+    sourceAccessorEffects: () => model.sourceAccessorEffectPlans.selected(subject, false, undefined),
+    sourceCallEffects: () => model.sourceCallEffectPlans.selected(subject, "infallible", "not-applicable"),
+    sourceErrorEffects: () => model.sourceErrorEdges.invocation(subject, []),
+    awaitValue: () => model.awaitValues.finalize(subject, carrier, carrier, () => undefined, () => undefined),
+    futureValue: () => model.futureValues.resolve(subject, () => undefined),
+    resourceManagement: () => model.resourceManagementPlans.select(subject, {}, {}, () => undefined),
+    deferredProducerEffects: () => model.deferredProducerChannels.finalize(new Map()),
+    nativeGuardResult: () => model.nativeGuardResults.resolve(subject, () => false),
+    nativeUnreachable: () => model.nativeUnreachableNodes.resolve(subject, () => true),
+    genericNumericOperands: () => model.genericNumerics.comparison(subject, carrier, carrier, undefined),
+    indexedFieldKeyArgument: () => model.indexedFieldKeys.bind({}, [], new Map(), () => false),
+    propertyProjection: () => model.propertyProjections.finalize(subject, undefined, []),
+    typeOnlyDeclaration: () => model.typeOnlyDeclarations.finalize({}, []),
+    moduleBinding: () => model.moduleBindings.defaultExport(subject, carrier),
+    moduleCallableStorage: () => model.moduleCallableStoragePlans.finalize({}),
+    sourceCallableReturn: () => model.sourceCallableReturns.setter(subject),
+    capturedFieldStorage: () => model.capturedFieldStoragePlans.resolve({}, subject, carrier),
+    callScopedLifetimeReconciliation: () => model.callScopedLifetimes.reconcile(subject, carrier, carrier),
+    projectUpcast: () => model.projectUpcasts.project(subject, carrier, carrier),
+    projectDowncast: () => model.projectDowncasts.project(subject, carrier, carrier, carrier, { kind: "generic" }),
+    asyncFunction: () => model.asyncFunctions.native(subject, carrier),
+    yield: () => model.yields.value(subject, subject, {}),
+    computedMember: () => model.computedMembers.evaluate({}, subject, subject, subject, "read"),
+    compoundWrite: () => model.compoundWrites.index(subject, "native.index-set", {}),
+  };
+  assert.equal(Object.keys(producerAdmissions).length, 42, "every integrated producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {
@@ -37,16 +105,12 @@ test("sealed records publish only frozen typed family readers without a native k
     assert.equal(family.get(undefined) === undefined, true, name + ": absent source identity");
     assert.equal(family.get({}) === undefined, true, name + ": foreign source identity");
     assert.equal(family.get === model[name].get, true, name + ": one getter implementation");
-    if (name === "selectedOperation") {
+    const admission = producerAdmissions[name];
+    if (admission !== undefined) {
       assert.equal(model[name].set === undefined, true, name + ": no general writer");
-      assert.throws(() => model.selectedOperations.checked({}, {
-        kind: "accept", value: {},
-      }), /after analysis is sealed/u, name + ": producer is closed");
-    } else if (["runtimeCarrier", "selectedCall", "targetOperation"].includes(name)) {
-      assert.equal(model[name].set === undefined, true, name + ": no general writer");
-      assert.throws(() => admitFamily(model, name, {}, name === "runtimeCarrier" ? { carrier: {} } : {}),
-        /after analysis is sealed/u, name + ": producer is closed");
+      assert.throws(admission, /after analysis is sealed/u, name + ": producer is closed");
     } else {
+      assert.equal(typeof model[name].set, "function", name + ": unconverted family has its one current writer");
       assert.throws(() => model[name].set({}, undefined), /after analysis is sealed/u, name + ": writer is closed");
     }
   }
@@ -56,23 +120,27 @@ test("sealed records publish only frozen typed family readers without a native k
   assert.throws(() => model.seal(), /only once/u);
 });
 
-test("scoped native records preserve false values, exact subjects and original conflict checks", () => {
+test("scoped guard producers preserve false, exact subjects and parent isolation without reselecting", () => {
   const parent = createModel();
   const subject = {};
-  parent.nativeGuardResult.set(subject, false);
+  parent.nativeGuardResults.resolve(subject, () => false);
   const inherited = parent.seal();
   const scoped = createRustProgramRecordBuilder(undefined, inherited);
   assert.equal(scoped.nativeGuardResult.get(subject), false, "false is present evidence");
   assert.equal(scoped.nativeGuardResult.get({}) === undefined, true, "equal-looking source is not the owner");
-  assert.doesNotThrow(() => scoped.nativeGuardResult.set(subject, false));
-  assert.throws(() => scoped.nativeGuardResult.set(subject, true), /Conflicting Rust semantic plan/u);
+  let reselections = 0;
+  for (const value of [false, true]) {
+    assert.equal(scoped.nativeGuardResults.resolve(subject, () => { reselections += 1; return value; }), false,
+      "a checked inherited guard is the canonical decision");
+  }
+  assert.equal(reselections, 0, "the producer does not recompute or replace inherited evidence");
   const specialized = {};
-  scoped.nativeGuardResult.set(specialized, true);
+  scoped.nativeGuardResults.resolve(specialized, () => true);
   assert.equal(inherited.nativeGuardResult.get(specialized) === undefined, true, "specialization cannot mutate its parent");
   const records = scoped.seal();
   assert.equal(records.nativeGuardResult.get(subject), false);
   assert.equal(records.nativeGuardResult.get(specialized), true);
-  assert.throws(() => scoped.nativeGuardResult.set(specialized, true), /after analysis is sealed/u);
+  assert.throws(() => scoped.nativeGuardResults.resolve(specialized, () => true), /after analysis is sealed/u);
 });
 
 test("every finalized contextual conversion family contributes its actual native foundation", () => {
@@ -126,10 +194,11 @@ test("all nine foundation-bearing families account through their typed admission
     const builder = createModel();
     const subject = {};
     assert.equal(builder.minimumFoundation(), "core", family + ": initially core");
-    admitFamily(builder, family, subject, fact);
+    const selected = admitFamily(builder, family, subject, fact);
     assert.equal(builder.minimumFoundation(), expected, family);
     const admitted = builder[family].get(subject);
-    assert.equal(family === "runtimeCarrier" ? admitted?.carrier === fact.carrier : admitted === fact,
+    assert.equal(closedMetadataEquals(selected, fact), true, family + ": full original native evidence retained");
+    assert.equal(family === "runtimeCarrier" ? admitted?.carrier === fact.carrier : admitted === selected,
       true, family + ": exact producer input retained");
     assert.doesNotThrow(() => admitFamily(builder, family, subject, fact), family + ": repeat remains allowed");
     assert.equal(builder[family].get(subject) === admitted, true, family + ": same canonical record");
@@ -169,17 +238,28 @@ test("all definition-dependent foundation admissions retain the supplied source-
     } };
     const builder = createRustProgramRecordBuilder(definitions);
     const subject = {};
-    admitFamily(builder, family, subject, fact);
+    const selected = admitFamily(builder, family, subject, fact);
     assert.equal(definitionReads > 0, true, family + ": actual source definitions used");
     const beforeReads = definitionReads;
     for (let read = 0; read < 32; read += 1) {
-      assert.equal(builder[family].get(subject) === fact, true, family + ": same admitted evidence");
+      assert.equal(closedMetadataEquals(selected, fact), true, family + ": full original native evidence retained");
+      assert.equal(builder[family].get(subject) === selected, true, family + ": same admitted evidence");
       assert.equal(builder.minimumFoundation(), "core", family + ": no unused union payload cost");
     }
     builder.seal();
     assert.equal(definitionReads, beforeReads, family + ": reads and seal do not recompute");
-    assert.throws(() => admitFamily(createModel(), family, {}, fact), /no valid (?:lowering|foundation) contract/u,
-      family + ": missing source definitions cannot silently substitute");
+    const missingDefinitions = createModel();
+    const rejectedSubject = {};
+    if (family === "awaitValue") {
+      assert.equal(admitFamily(missingDefinitions, family, rejectedSubject, fact) === undefined, true,
+        family + ": missing definitions reject during native completion selection");
+      assert.equal(missingDefinitions[family].get(rejectedSubject) === undefined, true,
+        family + ": no unproven completion is published");
+      assert.equal(missingDefinitions.minimumFoundation(), "core", family + ": rejected completion adds no demand");
+    } else {
+      assert.throws(() => admitFamily(missingDefinitions, family, rejectedSubject, fact), /no valid (?:lowering|foundation) contract/u,
+        family + ": missing source definitions cannot silently substitute");
+    }
   }
 });
 

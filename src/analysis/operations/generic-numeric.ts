@@ -55,7 +55,5 @@ export function selectRustGenericNumericOperation(
     operand, carrier, rustResolutionContext(walk, operand), walk.operationOptions,
   );
   if (!valid(leftNode, left) || !valid(rightNode, right)) return undefined;
-  const selected = selectRustNumericConstraintComparison(operator);
-  if (selected !== undefined) walk.context.records.genericNumericOperands.set(node, Object.freeze([left, right]));
-  return selected;
+  return walk.context.records.genericNumerics.comparison(node, left, right, selectRustNumericConstraintComparison(operator));
 }

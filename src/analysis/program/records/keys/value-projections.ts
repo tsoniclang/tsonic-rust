@@ -3,7 +3,7 @@ import { closedMetadataEquals } from "../../../../target-model/metadata/closed-d
 import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustPlanKey } from "../key.js";
-import type { RustBindingProjectionFact, RustCallScopedLifetimeReconciliationFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustOptionProjectionFact, RustProjectDowncastFact, RustProjectUpcastFact, RustSourceBindingFact } from "../../../../target-model/records/value-projections.js";
+import type { RustBindingProjectionFact, RustContextualValueConversionFact, RustFlowReadProjectionFact, RustOptionProjectionFact, RustSourceBindingFact } from "../../../../target-model/records/value-projections.js";
 
 export const rustOptionProjectionFactKey: RustPlanKey<RustOptionProjectionFact> =
   defineRustPlanKey("optionProjection", closedMetadataEquals);
@@ -13,22 +13,6 @@ export const rustFlowReadProjectionFactKey: RustPlanKey<RustFlowReadProjectionFa
 
 export const rustContextualValueConversionFactKey: RustPlanKey<RustContextualValueConversionFact> =
   defineRustPlanKey("contextualValueConversion", closedMetadataEquals);
-
-export const rustCallScopedLifetimeReconciliationFactKey:
-  RustPlanKey<RustCallScopedLifetimeReconciliationFact> =
-  defineRustPlanKey("callScopedLifetimeReconciliation", (left, right) =>
-    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
-    rustTargetTypeRefEquals(left.selectedCarrier, right.selectedCarrier));
-
-export const rustProjectUpcastFactKey: RustPlanKey<RustProjectUpcastFact> =
-  defineRustPlanKey("projectUpcast", closedMetadataEquals);
-
-export const rustProjectDowncastFactKey: RustPlanKey<RustProjectDowncastFact> =
-  defineRustPlanKey("projectDowncast", (left, right) =>
-    rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
-    rustTargetTypeRefEquals(left.dispatchCarrier, right.dispatchCarrier) &&
-    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier) &&
-    closedMetadataEquals(left.projection, right.projection));
 
 export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
   defineRustPlanKey("sourceBinding", (left, right) =>

@@ -21,46 +21,17 @@ export interface RustObjectLiteralMethodAdapterIssue {
   readonly message: string;
 }
 
-export function recordRustObjectLiteralMethodAdapterFacts(input: {
+export interface RustObjectLiteralMethodAdapterInput {
   readonly ast: AstReader;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly records: RustProgramRecordBuilder;
   readonly projectTypes: RustProjectTypePolicy;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
-  readonly expressions: readonly Node[];
-}): readonly RustObjectLiteralMethodAdapterIssue[] {
-  const issues: RustObjectLiteralMethodAdapterIssue[] = [];
-  for (const expression of input.expressions) {
-    const operation = input.records.targetOperation.get(expression);
-    if (operation?.kind !== "record-literal") {
-      issues.push({
-        expression,
-        subject: expression,
-        message: "Object literal method implementations require one finalized record-literal operation.",
-      });
-      continue;
-    }
-    const fact = createObjectLiteralMethodAdapterFact(input, expression, operation, issues);
-    if (fact === undefined) {
-      continue;
-    }
-    input.records.objectLiteralMethodAdapter.set(expression, fact, [
-      { message: "rust exact object-literal method implementation and dispatch adapters" },
-    ]);
-  }
-  return Object.freeze(issues);
 }
 
-function createObjectLiteralMethodAdapterFact(
-  input: {
-    readonly ast: AstReader;
-    readonly sourceLifetimes: RustLifetimeIndex;
-    readonly records: RustProgramRecordBuilder;
-    readonly projectTypes: RustProjectTypePolicy;
-    readonly typeDefinitions: RustTypeDefinitions;
-    readonly projectMethodDispatch: RustProjectMethodDispatchPlan;
-  },
+export function selectRustObjectLiteralMethodAdapter(
+  input: RustObjectLiteralMethodAdapterInput,
   expression: Node,
   operation: Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>,
   issues: RustObjectLiteralMethodAdapterIssue[],

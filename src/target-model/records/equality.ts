@@ -4,6 +4,27 @@ import type { RustFlowReadProjectionFact } from "./value-projections.js";
 import { closedMetadataEquals, hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../metadata/closed-data.js";
 import { isRustCapturedFieldStorage } from "../types/field-storage.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
+import { rustLifetimesEqual } from "../lifetimes/index.js";
+import type { RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "./callables-and-resources.js";
+
+export function rustSuspendedOwnedReceiverEquals(
+  left: RustSuspendedOwnedReceiver | undefined,
+  right: RustSuspendedOwnedReceiver | undefined,
+): boolean {
+  return left === undefined ? right === undefined : right !== undefined &&
+    rustTargetTypeRefEquals(left.carrier, right.carrier) &&
+    left.occurrences.length === right.occurrences.length &&
+    left.occurrences.every((node, index) => node === right.occurrences[index]);
+}
+
+export function rustSuspendedCallableStorageEquals(
+  left: RustSuspendedCallableStorage,
+  right: RustSuspendedCallableStorage,
+): boolean {
+  return left.kind === right.kind &&
+    (left.kind !== "lifetime" ||
+      right.kind === "lifetime" && rustLifetimesEqual(left.lifetime, right.lifetime));
+}
 
 export function rustClosureCaptureEquals(left: RustClosureCaptureFact, right: RustClosureCaptureFact): boolean {
   return closureCaptureShapeMatches(left) && closureCaptureShapeMatches(right) &&

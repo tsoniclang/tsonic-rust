@@ -99,11 +99,7 @@ function collectFallibilityFacts(
   const isFallible = (declaration: Node): boolean => rustErrorEffectsAreFallible(declarationEffects(declaration));
   for (const nativeInput of walk.context.callableValues.native.calls) {
     budget.step();
-    walk.context.records.sourceCallEffects.set(nativeInput.node, {
-      invocation: "fallible", awaiting: nativeInput.completion === undefined ? "not-applicable" : "fallible",
-      nativeInput: { invocationError: nativeInput.invocationError, invocationErrorSource: nativeInput.invocationErrorSource,
-        awaitErrors: nativeInput.awaitErrors, awaitErrorSources: nativeInput.awaitErrorSources },
-    }, [{ message: "rust exact abstract native callable input effects" }]);
+    walk.context.records.sourceCallEffectPlans.nativeInput(nativeInput);
   }
   const genericCallables = walk.context.callableValues.generic;
   for (const definition of genericCallables.definitions) {
@@ -511,11 +507,9 @@ function collectFallibilityFacts(
     budget.step();
     const result = walk.context.records.asyncFunction.get(declaration)?.futureCarrier ??
       walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
-    walk.context.records.sourceCallEffects.set(declaration, {
-      invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
-      awaiting: !hasCompletion(result) ? "not-applicable"
-        : genericAwaitIsFallible(declaration) ? "fallible" : "infallible",
-    }, [{ message: "rust finalized callable declaration invocation and return effects" }]);
+    walk.context.records.sourceCallEffectPlans.selected(declaration,
+      genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
+      !hasCompletion(result) ? "not-applicable" : genericAwaitIsFallible(declaration) ? "fallible" : "infallible");
   }
   for (const [call, pending] of walk.preparedCallbackCalls) {
     budget.step();
@@ -562,19 +556,15 @@ function collectFallibilityFacts(
     recordSelectedOperationInputs(walk, call, sourceFile, operation);
     if (callbackAnalysis.implementationFallible) {
       for (const subject of callbackAnalysis.subjects) {
-        walk.context.records.fallible.set(subject, { fallible: true }, [
-          { message: "rust fallible callback ABI" },
-        ]);
+        walk.context.records.fallibleSubjects.selected(subject);
       }
     }
   }
   for (const declaration of new Set([...declarations, ...effectsByDeclaration.keys()])) {
     const effects = declarationEffects(declaration);
     budget.metadata(effects);
-    walk.context.records.errorEffects.set(declaration, effects, [{ message: "rust finalized exact declaration error effects" }]);
-    if (rustErrorEffectsAreFallible(effects)) walk.context.records.fallible.set(declaration, { fallible: true }, [
-      { message: "rust fallible declaration" },
-    ]);
+    walk.context.records.errorEffectPlans.selected(declaration, effects);
+    if (rustErrorEffectsAreFallible(effects)) walk.context.records.fallibleSubjects.selected(declaration);
   }
   for (const sourceFile of projectSourceFiles) {
     budget.step();
@@ -593,11 +583,9 @@ function collectFallibilityFacts(
     if (selectedEffects.some(effects => effects === undefined)) return;
     const effects = mergeEffects(selectedEffects as RustErrorEffectsFact[]);
     if (effects === undefined) return;
-    walk.context.records.errorEffects.set(sourceFile, effects, [{ message: "rust finalized exact module initialization error effects" }]);
+    walk.context.records.errorEffectPlans.selected(sourceFile, effects);
     if (rustErrorEffectsAreFallible(effects)) {
-      walk.context.records.fallible.set(sourceFile, { fallible: true }, [
-        { message: "rust fallible project module initialization" },
-      ]);
+      walk.context.records.fallibleSubjects.selected(sourceFile);
     }
   }
   for (const sourceFile of projectSourceFiles) {
@@ -611,9 +599,7 @@ function collectFallibilityFacts(
         if (operation?.kind === "closure" && effects !== undefined && rustErrorEffectsAreFallible(effects)) {
           if (rustGenericCallableValue(operation.resultCarrier) !== undefined || rustCallableProtocol(operation.resultCarrier) !== undefined ||
             operation.resultCarrier.kind === "closure" && operation.resultCarrier.fallible === true) {
-            walk.context.records.fallible.set(node, { fallible: true }, [
-              { message: "rust fallible first-class callable implementation" },
-            ]);
+            walk.context.records.fallibleSubjects.selected(node);
           } else if (!ownedCallbackClosures.has(node)) {
             appendRustDiagnostic(
               walk,
@@ -636,14 +622,9 @@ function collectFallibilityFacts(
             selected?.provenance?.sourceSelectedWriteDeclaration,
             walk.context.ast,
           );
-          walk.context.records.sourceAccessorEffects.set(node, {
-            ...(operation.read === undefined || readDeclaration === undefined
-              ? {}
-              : { read: isFallible(readDeclaration) ? "fallible" : "infallible" }),
-            ...(operation.write === undefined || writeDeclaration === undefined
-              ? {}
-              : { write: isFallible(writeDeclaration) ? "fallible" : "infallible" }),
-          }, [{ message: "rust finalized selected project accessor effects" }]);
+          walk.context.records.sourceAccessorEffectPlans.selected(node,
+            operation.read === undefined || readDeclaration === undefined ? undefined : isFallible(readDeclaration),
+            operation.write === undefined || writeDeclaration === undefined ? undefined : isFallible(writeDeclaration));
         }
       } else if (kind === KindCallExpression || kind === KindNewExpression) {
         const operation = walk.context.records.targetOperation.get(node);
@@ -669,21 +650,19 @@ function collectFallibilityFacts(
                   : genericAwaitIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
               }))
               : undefined;
-            walk.context.records.sourceCallEffects.set(node, {
-              ...(unionBranches === undefined ? {} : { unionBranches }),
-              invocation: invocation !== undefined ? invocation.effects.invocation
+            walk.context.records.sourceCallEffectPlans.selected(node,
+              invocation !== undefined ? invocation.effects.invocation
                 : runtimeCallable || (unionBranches === undefined
                   ? declaration !== undefined && genericInvocationIsFallible(declaration)
                   : unionBranches.some(branch => branch.invocation === "fallible"))
                 ? "fallible"
                 : "infallible",
-              awaiting: isAsync
+              isAsync
                   ? invocation !== undefined ? invocation.effects.awaiting
                   : runtimeCallable || (unionBranches === undefined
                     ? declaration !== undefined && genericAwaitIsFallible(declaration)
                     : unionBranches.some(branch => branch.awaiting === "fallible")) ? "fallible" : "infallible"
-                : "not-applicable",
-            }, [{ message: "rust finalized selected project-source call effects" }]);
+                : "not-applicable", unionBranches);
           }
         }
       }
@@ -697,15 +676,15 @@ function collectFallibilityFacts(
   }
   for (const [region, effects] of effectsByRegion) {
     budget.metadata(effects);
-    walk.context.records.errorEffects.set(region, effects, [{ message: "rust finalized exact lexical region error effects" }]);
+    walk.context.records.errorEffectPlans.selected(region, effects);
   }
   for (const [node, invocation] of genericInvocations) {
     budget.metadata(invocation);
-    walk.context.records.genericCallableInvocation.set(node, invocation, [{ message: "rust finalized physical generic invocation and exact producer error channels" }]);
+    walk.context.records.genericCallableInvocations.selected(node, invocation);
   }
   for (const [node, effects] of effectsByExpression) {
     budget.metadata(effects);
-    walk.context.records.errorEffects.set(node, effects, [{ message: "rust finalized exact selected invocation or await errors" }]);
+    walk.context.records.errorEffectPlans.selected(node, effects);
   }
   for (const [node, edges] of sourceErrorEdges) {
     budget.step();
@@ -713,7 +692,7 @@ function collectFallibilityFacts(
       budget.metadata(edge.effects);
       budget.metadata(edge.nativeErrors);
     }
-    walk.context.records.sourceErrorEffects.set(node, Object.freeze({ edges: Object.freeze(edges) }), [{ message: "rust exact selected source error identity correspondence" }]);
+    walk.context.records.sourceErrorEdges.invocation(node, edges);
   }
-  for (const [node, branches] of awaitSourceEdges) walk.context.records.awaitSourceErrorEffects.set(node, Object.freeze({ branches }), [{ message: "rust exact awaited branch and producer error correspondence" }]);
+  for (const [node, branches] of awaitSourceEdges) walk.context.records.awaitSourceErrors.selected(node, branches);
 }

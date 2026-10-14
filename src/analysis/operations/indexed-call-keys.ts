@@ -43,17 +43,8 @@ export function selectRustIndexedCallKeys(
   };
   if (!selected.member.parameters.every(parameter => visit(parameter.type)) ||
     selected.member.returnType !== undefined && !visit(selected.member.returnType)) return false;
-  for (const binding of selected.sourceArgumentBindings ?? []) {
-    const parameter = selected.member.parameters[binding.sourceParameterIndex];
-    const argument = callArguments[binding.sourceArgumentIndex];
-    const type = parameter?.type;
-    const carrier = type?.kind === "type-parameter" ? keys.get(type.identity) : undefined;
-    if (carrier === undefined || carrier.kind === "type-parameter") continue;
-    if (argument === undefined || binding.sourceForm !== "value") return false;
+  return walk.context.records.indexedFieldKeys.bind(selected, callArguments, keys, argument => {
     const kind = walk.context.ast.kindName(argument);
-    walk.context.records.indexedFieldKeyArgument.set(argument, {
-      carrier, evaluate: kind !== "KindStringLiteral" && kind !== "KindNoSubstitutionTemplateLiteral",
-    }, [{ message: "rust exact checker-selected indexed field key argument" }]);
-  }
-  return true;
+    return kind !== "KindStringLiteral" && kind !== "KindNoSubstitutionTemplateLiteral";
+  });
 }

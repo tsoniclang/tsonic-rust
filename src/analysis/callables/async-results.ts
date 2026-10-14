@@ -9,7 +9,6 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import {
   isRustNeverCarrier,
   rustFutureOutputCarrier,
-  rustFutureTargetType,
   rustJsPromiseOutputTargetType,
   rustJsPromiseTargetId,
   rustJsPromiseTargetTypeWithLifetime,
@@ -106,9 +105,7 @@ export function recordRustAsyncBodyFacts(
   if (!isJsPromise) {
     const inner = !isRustNeverCarrier(inferred) || selectedContext === undefined ? inferred
       : rustFutureOutputCarrier(rustOptionElementCarrier(selectedContext) ?? selectedContext);
-    if (inner !== undefined) walk.context.records.asyncFunction.set(declaration, {
-      kind: "native-future", isAsync: true, futureCarrier: rustFutureTargetType(inner), outputCarrier: inner,
-    }, [{ message: "rust async function" }]);
+    if (inner !== undefined) walk.context.records.asyncFunctions.native(declaration, inner);
     return;
   }
   const selected = selectRustAsyncBodyPromise(futureCarrier, inferred, selectedContext, walk.context.typeDefinitions);
@@ -144,10 +141,5 @@ export function recordRustAsyncBodyFacts(
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
     return;
   }
-  walk.context.records.asyncFunction.set(declaration, {
-    kind: "js-promise", isAsync: true, futureCarrier: closedFutureCarrier,
-    outputCarrier: selected.outputCarrier, capturedParameters: storage.capturedParameters,
-    storage: storage.storage,
-    ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
-  }, [{ message: "rust async function" }]);
+  walk.context.records.asyncFunctions.promise(declaration, closedFutureCarrier, selected.outputCarrier, storage);
 }

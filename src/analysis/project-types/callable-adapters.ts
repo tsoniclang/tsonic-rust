@@ -18,56 +18,57 @@ import {
   rustCallableValueAdapterIsFallible,
 } from "../callables/adapters.js";
 
-export function recordRustProjectCallableAdapterFacts(walk: RustFactWalk): void {
+export function selectRustProjectCallableAdapters(
+  walk: RustFactWalk,
+  concrete: RustProjectTypeDefinition,
+): readonly RustProjectCallableAdapter[] | undefined {
   const { ast, projectTypes } = walk.context;
-  for (const concrete of projectTypes.definitions) {
-    if (concrete.kind !== "class" || !projectTypes.isPolymorphic(concrete)) continue;
-    const contracts = projectTypes.contractsForClass(concrete);
-    if (contracts === undefined) continue;
-    const receiver = projectTypes.openCarrier(concrete);
-    const adapters: RustProjectCallableAdapter[] = [];
-    for (const owner of contracts) {
-      const members = ast.members(owner.declaration);
-      if (!isDenseDataArray(members) || members.some(member => member === undefined)) {
-        reject(walk, owner.declaration, "Project dispatch requires a dense member inventory.");
-        continue;
-      }
-      for (const member of members as readonly Node[]) {
-        if (ast.hasModifierKind(member, "static")) continue;
-        const kind = ast.kindName(member);
-        if (kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature" &&
-          kind !== "KindGetAccessor" && kind !== "KindSetAccessor") continue;
-        const selected = projectTypes.memberImplementation(concrete, member);
-        if (selected.kind !== "resolved") continue;
-        const implementation = selected.implementation.declaration;
-        if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
-          const slot = projectTypes.memberSlotName(member, kind === "KindGetAccessor" ? "read" : "write");
-          if (slot !== undefined) record(member, implementation, slot);
-        } else {
-          for (const variant of walk.context.projectMethodDispatch.variantsForMember(member)) {
-            record(member, implementation, variant.virtualSlot, variant);
-            if (owner.kind === "class" && !ast.hasModifierKind(member, "abstract")) {
-              const inherited = projectTypes.classLineage(concrete)?.includes(owner) === true;
-              const exact = inherited ? projectTypes.memberImplementation(owner, member) : selected;
-              if (exact.kind !== "resolved") {
-                reject(walk, member, "Exact project dispatch has no checked implementation in its declaring class.");
-              } else {
-                record(member, exact.implementation.declaration, variant.exactSlot, variant);
-              }
+  if (concrete.kind !== "class" || !projectTypes.isPolymorphic(concrete)) return undefined;
+  const contracts = projectTypes.contractsForClass(concrete);
+  if (contracts === undefined) return undefined;
+  const receiver = projectTypes.openCarrier(concrete);
+  const adapters: RustProjectCallableAdapter[] = [];
+  for (const owner of contracts) {
+    const members = ast.members(owner.declaration);
+    if (!isDenseDataArray(members) || members.some(member => member === undefined)) {
+      reject(walk, owner.declaration, "Project dispatch requires a dense member inventory.");
+      continue;
+    }
+    for (const member of members as readonly Node[]) {
+      if (ast.hasModifierKind(member, "static")) continue;
+      const kind = ast.kindName(member);
+      if (kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature" &&
+        kind !== "KindGetAccessor" && kind !== "KindSetAccessor") continue;
+      const selected = projectTypes.memberImplementation(concrete, member);
+      if (selected.kind !== "resolved") continue;
+      const implementation = selected.implementation.declaration;
+      if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
+        const slot = projectTypes.memberSlotName(member, kind === "KindGetAccessor" ? "read" : "write");
+        if (slot !== undefined) record(member, implementation, slot);
+      } else {
+        for (const variant of walk.context.projectMethodDispatch.variantsForMember(member)) {
+          record(member, implementation, variant.virtualSlot, variant);
+          if (owner.kind === "class" && !ast.hasModifierKind(member, "abstract")) {
+            const inherited = projectTypes.classLineage(concrete)?.includes(owner) === true;
+            const exact = inherited ? projectTypes.memberImplementation(owner, member) : selected;
+            if (exact.kind !== "resolved") {
+              reject(walk, member, "Exact project dispatch has no checked implementation in its declaring class.");
+            } else {
+              record(member, exact.implementation.declaration, variant.exactSlot, variant);
             }
           }
         }
       }
     }
-    walk.context.records.projectCallableAdapters.set(concrete.declaration, Object.freeze(adapters));
+  }
+  return Object.freeze(adapters);
 
-    function record(contract: Node, implementation: Node, slot: string, variant?: RustProjectMethodDispatchVariant): void {
-      const adapter = classifyAdapter(walk, receiver, contract, implementation, slot, variant);
-      if (adapter === undefined) {
-        reject(walk, implementation, "The selected project override has no exact native parameter/result adapter.");
-      } else {
-        adapters.push(adapter);
-      }
+  function record(contract: Node, implementation: Node, slot: string, variant?: RustProjectMethodDispatchVariant): void {
+    const adapter = classifyAdapter(walk, receiver, contract, implementation, slot, variant);
+    if (adapter === undefined) {
+      reject(walk, implementation, "The selected project override has no exact native parameter/result adapter.");
+    } else {
+      adapters.push(adapter);
     }
   }
 }
