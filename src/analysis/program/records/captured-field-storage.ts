@@ -1,8 +1,10 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { RustCapturedFieldStorageFact } from "../../../target-model/records/receiver-captures.js";
 import { rustCapturedFieldStorageEquals } from "../../../target-model/records/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustCapturedFieldStorageFact } from "../../declarations/project-types.js";
 import type { RustFactWalk } from "../walk.js";
 import { createRustRecordFamily } from "./family.js";
@@ -22,6 +24,14 @@ export function createRustCapturedFieldStorageProducer(
     records: family.reader,
     resolve(walk: RustFactWalk, declaration: Node, carrier: TargetTypeRef): void {
       assertOpen();
+      const existing = family.reader.get(declaration);
+      if (existing !== undefined) {
+        if (!rustTargetTypeRefEquals(existing.valueCarrier, carrier)) {
+          failTargetAnalysisInvariant("tsonic-rust",
+            "Conflicting Rust semantic plan 'tsonic.rust.capturedFieldStorage' for one exact source subject.", declaration);
+        }
+        return;
+      }
       const selection = selectRustCapturedFieldStorageFact(walk, declaration, carrier);
       if (selection !== undefined) family.writer.set(declaration, selection);
     },

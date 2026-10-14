@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import { maximumRustFoundation } from "../../../target-model/foundation/model.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
@@ -44,7 +45,16 @@ export function createRustSourceParameterAbiProducer(
     use(expression: Node, source: Node): void {
       assertOpen();
       const selected = family.reader.get(source);
-      if (selected !== undefined) family.writer.set(expression, selected);
+      if (selected === undefined) return;
+      const existing = family.reader.get(expression);
+      if (existing !== undefined) {
+        if (!closedMetadataEquals(existing, selected)) {
+          failTargetAnalysisInvariant("tsonic-rust",
+            "Conflicting Rust semantic plan 'tsonic.rust.sourceParameterAbi' for one exact source subject.", expression);
+        }
+        return;
+      }
+      family.writer.set(expression, selected);
     },
   });
 }

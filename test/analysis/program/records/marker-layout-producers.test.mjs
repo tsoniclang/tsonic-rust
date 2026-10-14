@@ -78,10 +78,17 @@ test("compile-time erasure constructs true without admitting arbitrary flags or 
   const initializer = {};
   builder.compileTimeSources.erase(declaration);
   builder.compileTimeSources.erase(initializer);
+  builder.compileTimeSources.erase(declaration);
   assert.equal(builder.compileTimeSource.get(declaration), true);
   assert.equal(builder.compileTimeSource.get(initializer), true);
   assert.equal(builder.selfMode.get(declaration) === undefined, true);
   assert.equal(builder.memoryLayoutObservation.get(initializer) === undefined, true);
+  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  child.compileTimeSources.erase(declaration);
+  assert.equal(child.compileTimeSource.get(declaration), true);
+  child.seal();
+  assert.throws(() => child.compileTimeSources.erase(declaration), /after analysis is sealed/u);
+  assert.throws(() => child.compileTimeSources.erase({}), /after analysis is sealed/u);
 });
 
 for (const mode of ["ref", "mut-ref"]) {

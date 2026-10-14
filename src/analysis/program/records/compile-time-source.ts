@@ -17,7 +17,8 @@ export function createRustCompileTimeSourceProducer(
   return Object.freeze({
     records: family.reader,
     erase(node: Node): void {
-      family.writer.set(node, true);
+      assertOpen();
+      if (family.reader.get(node) === undefined) family.writer.set(node, true);
     },
   });
 }

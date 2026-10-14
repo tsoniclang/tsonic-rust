@@ -194,6 +194,10 @@ for (const [name, input, kind, initialization] of [
   assert.equal(builder.minimumFoundation(), "core", "native storage selection does not double-account its carrier");
   selected.resolve();
   assert.equal(builder.capturedFieldStorage.get(selected.declaration) === fact, true);
+  const noSelection = new Proxy({}, { get() { throw new Error("captured storage was already selected"); } });
+  builder.capturedFieldStoragePlans.resolve({ context: { objectRepresentations: noSelection } },
+    selected.declaration, { ...fact.valueCarrier });
+  assert.equal(builder.capturedFieldStorage.get(selected.declaration) === fact, true, "same complete native field query is a lookup");
   builder.seal();
   assert.throws(selected.resolve, /after analysis is sealed/u);
 });
@@ -211,6 +215,17 @@ test("uncaptured fields do not manufacture storage and inherited captures keep t
   assert.equal(child.capturedFieldStorage.get(selected.declaration) === fact, true);
   assert.throws(() => child.capturedFieldStoragePlans.resolve(selected.walk, selected.declaration, text), /Conflicting Rust semantic plan/u);
   assert.equal(child.capturedFieldStorage.get(selected.declaration) === fact, true);
+});
+
+test("an unavailable captured-field query stays retryable until its receiver evidence is complete", () => {
+  const builder = createRustProgramRecordBuilder();
+  const selected = capturedField(builder, { captured: false });
+  selected.resolve();
+  assert.equal(builder.capturedFieldStorage.get(selected.declaration) === undefined, true);
+  selected.walk.context.objectRepresentations.receiverCaptures.isCaptured = () => true;
+  selected.resolve();
+  assert.equal(builder.capturedFieldStorage.get(selected.declaration) !== undefined, true,
+    "an earlier unavailable query must not be cached as completed");
 });
 
 function ambientFixture(builder, { malformed = false, runtime = false } = {}) {

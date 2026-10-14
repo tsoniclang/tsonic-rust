@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
+import { createRustSourceParameterAbiProducer } from "../../../../dist/analysis/program/records/source-parameter-abi.js";
 import { getRustGeneratorProtocol, rustGeneratorStorageTargetType, rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { selectRustSourceValueConversion } from "../../../../dist/policy/conversions/selection.js";
@@ -189,6 +190,45 @@ test("parameter ABI retains carrier foundation requirements and all existing con
   child.sourceParameterAbis.parameter(conflictingUse, { ...abi, valueCarrier: wide });
   assert.throws(() => child.sourceParameterAbis.use(conflictingUse, subject), /Conflicting Rust semantic plan 'tsonic\.rust\.sourceParameterAbi'/u);
   assert.equal(child.sourceParameterAbi.get(conflictingUse)?.valueCarrier === wide, true);
+});
+
+test("derived parameter use queries validate the complete ABI without admitting it twice", () => {
+  let admissions = 0;
+  let sealed = false;
+  const producer = createRustSourceParameterAbiProducer(() => {
+    if (sealed) throw new Error("after analysis is sealed");
+  }, () => { admissions += 1; }, emptyRustTypeDefinitions);
+  const source = {};
+  const use = {};
+  const entryConversion = selectRustSourceValueConversion(integer, wide);
+  const selected = { ...abi, inputLifetime: lifetime, entryConversion };
+  producer.parameter(source, selected);
+  producer.use(use, source);
+  const canonical = producer.records.get(use);
+  assert.equal(canonical === producer.records.get(source), true, "first use retains the entire canonical ABI");
+  assert.equal(admissions, 2, "one source admission and one derived-use admission");
+  producer.use(use, source);
+  producer.use(source, source);
+  assert.equal(admissions, 2, "matching use requests are not further admissions");
+  const changes = [{ form: "optional" }, { valueCarrier: wide }, { parameterCarrier: wide }, { mode: "mut-ref" },
+    { inputLifetime: { ...lifetime, identity: "other" } }, { inputLifetime: undefined }, { entryConversion: undefined }];
+  for (const change of changes) {
+    const other = {};
+    producer.parameter(other, { ...selected, ...change });
+    const before = admissions;
+    assert.throws(() => producer.use(use, other), /Conflicting Rust semantic plan 'tsonic\.rust\.sourceParameterAbi'/u);
+    assert.equal(producer.records.get(use) === canonical, true, Object.keys(change).join());
+    assert.equal(admissions, before, "a rejected request performs no admission");
+  }
+  let inheritedAdmissions = 0;
+  const child = createRustSourceParameterAbiProducer(() => {}, () => { inheritedAdmissions += 1; },
+    emptyRustTypeDefinitions, producer.records);
+  child.use(use, source);
+  assert.equal(child.records.get(use) === canonical, true, "inherited canonical use is not shadowed");
+  assert.equal(inheritedAdmissions, 0, "inherited correspondence is a query, not an admission");
+  sealed = true;
+  assert.throws(() => producer.use(use, source), /after analysis is sealed/u);
+  assert.throws(() => producer.use({}, {}), /after analysis is sealed/u);
 });
 
 test("parameter ABI foundation uses entry conversions and the exact provided source union definitions", () => {
