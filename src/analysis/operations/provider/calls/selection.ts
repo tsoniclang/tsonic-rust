@@ -648,7 +648,8 @@ function acceptRuntimeCallableCarrierCall(
       : { sourceDeclaration: sourceDeclaration ?? request.sourceSelectedDeclaration }),
   });
   if (optionalResult.fact !== undefined) {
-    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
+    context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
+      optionalResult.fact.operationKind, optionalResult.fact);
   }
   return acceptRustPolicy({ selectedSignature,
     ...(optionalGuard === undefined ? {} : { sourceGuard: optionalGuard }) }, [{

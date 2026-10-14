@@ -383,7 +383,8 @@ function mapSelectedObjectShapeProjection(
   const selectedSignature = selectedRustCallSignature(request, member,
     selection.static ? undefined : { sourceSelectedReceiverCarrier: sourceValueCarrier });
   if (optionalResult.fact !== undefined) {
-    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional Object.${selection.sourceName} projection` }]);
+    context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
+      optionalResult.fact.operationKind, optionalResult.fact);
   }
   return acceptRustPolicy({ selectedSignature, targetFact: fact, operation }, evidence);
 }
@@ -722,7 +723,8 @@ export function acceptProjectSourceCall(
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
   });
   if (optionalResult.fact !== undefined) {
-    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
+    context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
+      optionalResult.fact.operationKind, optionalResult.fact);
   }
   return acceptRustPolicy({
     selectedSignature,

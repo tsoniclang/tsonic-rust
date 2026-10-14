@@ -338,7 +338,7 @@ export function acceptRustMemberOperation(
     provenance,
     selection.fact.resultCarrier,
   );
-  context.records.optionalChain.set(request.expression, selection.fact, [{ message: `rust optional chain ${selection.fact.lowering}` }]);
+  context.records.optionalChains.guard(request.expression, selection.fact.guard, selection.fact.operationKind, selection.fact);
   return accepted;
 }
 

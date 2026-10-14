@@ -353,16 +353,12 @@ export function resolveFunctionExpressionCarrier(
   const closureCarrier = resolveRustCallableStorageCarrier(logicalCarrier,
     rustResolutionContext(walk, expression, "value"), walk.operationOptions, new Set());
   if (closureCarrier === undefined) return undefined;
-  walk.context.records.closureCapture.set(expression, {
-    ...captures,
-    ...((generator !== undefined || asynchronous !== undefined) &&
+  walk.context.records.closureCaptures.capture(expression, captures.captures, captures.receivers, captures.receiverFields,
+    captures, (generator !== undefined || asynchronous !== undefined) &&
         rustFrameCallableValue(closureCarrier) === undefined &&
         rustCallableProtocol(closureCarrier) !== undefined &&
         (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.receivers.length > 0 || captures.recursiveDeclaration !== undefined)
-      ? { invocationOwner: "shared-state" as const } : {}),
-  }, [
-    { message: "rust exact callable-expression captures" },
-  ]);
+      ? "shared-state" : undefined);
   walk.context.records.targetOperations.source(expression, {
     kind: "closure",
     operationId: "tsonic.rust.closure",

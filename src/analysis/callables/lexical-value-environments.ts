@@ -12,7 +12,7 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
   const { ast, source, records } = walk.context;
   const visit = (node: Node): void => {
     if (ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined && sourceDeclarationIsModuleScoped(node, ast)) {
-      records.closureCapture.set(node, { receivers: [], receiverFields: [], captures: [] });
+      records.closureCaptures.capture(node, []);
     }
     const selection = lexical.forDeclaration(node);
     const retained = rustRetainedCallableStorage(records, node) !== undefined;
@@ -37,7 +37,7 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
         records.bindingStoragePlans.capture(capture.declaration, carrier, storage);
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage: storage.storage });
       }
-      records.closureCapture.set(node, { receivers: [], receiverFields: [], captures });
+      records.closureCaptures.capture(node, captures);
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

@@ -238,11 +238,7 @@ export function resolveCallLikeCarrier(
       request: deferred.request,
       prepared: prepared.value,
     });
-    walk.context.records.preparedOperationResult.set(expression, {
-      operationId: prepared.value.template.operationId,
-      operationKind: prepared.value.template.operationKind,
-      resultCarrier: prepared.value.resultCarrier,
-    }, [{ message: "rust exact prepared callback operation result" }]);
+    walk.context.records.preparedOperations.prepare(expression, prepared.value.template, prepared.value.resultCarrier);
     return setCarrierFact(walk, expression, prepared.value.resultCarrier);
   }
   const selectedSignature = walk.context.records.selectedCall.get(expression);
@@ -696,7 +692,8 @@ function applySelectedRuntimeCallableCall(
       return undefined;
     }
     if (optionalResult.fact !== undefined) {
-      walk.context.records.optionalChain.set(expression, optionalResult.fact, [{ message: "rust exact runtime-callable optional guard" }]);
+      walk.context.records.optionalChains.guard(expression, optionalResult.fact.guard,
+        optionalResult.fact.operationKind, optionalResult.fact);
     }
   }
   const optionalCall = walk.context.records.optionalChain.get(expression);

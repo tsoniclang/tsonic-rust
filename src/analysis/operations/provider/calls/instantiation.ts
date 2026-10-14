@@ -475,7 +475,8 @@ export function acceptSelectedCall(
     context.records.argumentPassingPlans.pass(argument, mode);
   }
   if (optionalResult.fact !== undefined) {
-    context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
+    context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
+      optionalResult.fact.operationKind, optionalResult.fact);
   }
   const member: RustTargetMember = {
     id: fact.operationId,
