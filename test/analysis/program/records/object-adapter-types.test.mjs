@@ -30,6 +30,7 @@ const imports = `
   import type { RustFactWalk } from "../../dist/analysis/program/walk.js";
   import type { RustProgramRecords } from "../../dist/target-model/records/program.js";
   import type { RustObjectLiteralMethodAdapterInput } from "../../dist/analysis/objects/method-adapters.js";
+  import type { RustObjectReferenceView } from "../../dist/target-model/records/object-reference-views.js";
   import type { TargetTypeRef } from "../../dist/target-model/types/model.js";
   declare const builder: RustProgramRecordBuilder;
   declare const records: RustProgramRecords;
@@ -46,7 +47,7 @@ test("typed object and adapter producers accept only their actual checked constr
     const classValue: TargetTypeRef | undefined = builder.classValues.resolve(walk, subject, carrier);
     builder.objectLiteralMethodAdapters.finalize({ ...input, expressions: [subject] });
     builder.projectCallableAdapterPlans.finalize(walk);
-    const view: boolean = builder.objectReferenceViews.select(walk, subject, carrier, carrier);
+    const view: RustObjectReferenceView | undefined = builder.objectReferenceViews.select(walk, subject, carrier, carrier);
     const readers: RustProgramRecords = builder;
     const selected: TargetTypeRef | undefined = readers.classValue.get(subject)?.carrier;
   `);
@@ -66,11 +67,12 @@ test("superseded generic writers, leaked producers and malformed construction in
     builder.objectLiteralMethodAdapters.finalize({ ...input, expressions: [carrier] });
     builder.projectCallableAdapterPlans.finalize(carrier);
     builder.objectReferenceViews.select(walk, subject, subject, carrier);
+    const oldBoolean: boolean = builder.objectReferenceViews.select(walk, subject, carrier, carrier);
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "all removed or malformed forms must fail source checking");
   const codes = [...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1]));
-  assert.deepEqual(codes, [...Array(10).fill(2339), ...Array(5).fill(2551), 2322, 2345, 2322, 2345, 2345]);
+  assert.deepEqual(codes, [...Array(10).fill(2339), ...Array(5).fill(2551), 2322, 2345, 2322, 2345, 2345, 2322]);
 });
 
 test("removed private key modules and owned key exports have no surviving alternate import path", () => {

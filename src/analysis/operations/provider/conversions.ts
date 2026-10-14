@@ -18,9 +18,8 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
 import { selectRustSourceAssertionConversion } from "../../../policy/conversions/selection.js";
-import { selectRustProjectProjection } from "../../../policy/types/project/project-projections.js";
 import type { RustCheckedConversionSelectionInput, RustCheckedConversionSelectionResult, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
-import type { ExtensionFactSubject, Node, ProviderDeclarationIdentity } from "@tsonic/tsts";
+import type { ExtensionFactSubject, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderFactOperationKind, RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
@@ -129,13 +128,12 @@ export function selectRustCheckedConversion(
   if (projectUpcast) {
     recordRustValueCarrierReconciliation(context.records, request.expression, reconciliation);
   }
-  const projectDowncast = !identity && !projectUpcast && selectProjectDowncast(
+  const projectDowncast = !identity && !projectUpcast && context.records.projectDowncasts.resolve(
     request.expression,
     sourceCarrier,
     targetCarrier,
-    context,
-    options,
-  );
+    options.projectTypes,
+  ) !== undefined;
   const conversion = identity || projectUpcast || projectDowncast
     ? undefined
     : selectRustSourceAssertionConversion(sourceCarrier, targetCarrier, context.typeDefinitions);
@@ -186,30 +184,6 @@ export function selectRustCheckedConversion(
         ? "rust selected assertion project-type downcast"
       : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
   return acceptRustPolicy({ convertedType: targetCarrier, targetFact: fact, operation }, evidence);
-}
-
-function selectProjectDowncast(
-  subject: Node,
-  sourceCarrier: TargetTypeRef,
-  targetCarrier: TargetTypeRef,
-  context: RustOperationAnalysisContext,
-  options: RustOperationsProviderOptions,
-): boolean {
-  const dispatchCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
-  const sourceDefinition = options.projectTypes.definitionForCarrier(dispatchCarrier);
-  const targetDefinition = options.projectTypes.definitionForCarrier(targetCarrier);
-  const relationship = sourceDefinition === undefined || targetDefinition === undefined ||
-      targetDefinition.kind !== "class"
-    ? { kind: "unrelated" as const }
-    : options.projectTypes.relationship(targetCarrier, sourceDefinition);
-  const projection = selectRustProjectProjection(dispatchCarrier, targetCarrier, options.projectTypes);
-  if (sourceDefinition === undefined || relationship.kind !== "related" ||
-    !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) ||
-    projection === undefined) {
-    return false;
-  }
-  context.records.projectDowncasts.project(subject, sourceCarrier, dispatchCarrier, targetCarrier, projection);
-  return true;
 }
 
 export function mapProviderCheckedOperation(

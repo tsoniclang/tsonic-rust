@@ -9,6 +9,59 @@ import { selectRustStructuralFieldProjection } from "../../policy/types/objects/
 import { selectRustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { selectRustClassValueView } from "../objects/class-values.js";
+import type { RustRecordFamily } from "../../target-model/records/program.js";
+import { rustProjectMemberSelectionEquals } from "../operations/contracts/equality.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+
+export type RustObjectReferenceViewQuery = (
+  walk: RustFactWalk,
+  expression: Node,
+  sourceCarrier: TargetTypeRef,
+  targetCarrier: TargetTypeRef,
+) => RustObjectReferenceView | undefined;
+
+export function createRustObjectReferenceViewQuery(input: {
+  readonly assertOpen: () => void;
+  readonly records: RustRecordFamily<RustObjectReferenceView>;
+  readonly publish: (expression: Node, view: RustObjectReferenceView) => void;
+}): RustObjectReferenceViewQuery {
+  const completed = new WeakMap<Node, { readonly canonical: RustObjectReferenceView;
+    readonly walks: WeakSet<RustFactWalk> }>();
+  return (walk, expression, sourceCarrier, targetCarrier) => {
+    input.assertOpen();
+    const previous = input.records.get(expression);
+    const completion = completed.get(expression);
+    if (previous !== undefined && completion?.canonical === previous && completion.walks.has(walk) &&
+      rustTargetTypeRefEquals(previous.sourceCarrier, sourceCarrier) &&
+      rustTargetTypeRefEquals(previous.targetCarrier, targetCarrier)) return previous;
+    const selected = selectRustObjectReferenceView(walk, expression, sourceCarrier, targetCarrier);
+    if (selected === undefined) return undefined;
+    if (previous !== undefined && !rustObjectReferenceViewEquals(previous, selected)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.objectReferenceView' for one exact source subject.",
+      );
+    }
+    if (previous === undefined) input.publish(expression, selected);
+    const canonical = previous ?? input.records.get(expression)!;
+    const walks = completion?.canonical === canonical ? completion.walks : new WeakSet<RustFactWalk>();
+    walks.add(walk);
+    completed.set(expression, { canonical, walks });
+    return canonical;
+  };
+}
+
+export function rustObjectReferenceViewEquals(left: RustObjectReferenceView, right: RustObjectReferenceView): boolean {
+  return rustTargetTypeRefEquals(left.sourceCarrier, right.sourceCarrier) &&
+    rustTargetTypeRefEquals(left.targetCarrier, right.targetCarrier) &&
+    left.kind === right.kind && (left.kind !== "structural" && right.kind !== "structural"
+      ? left.declaration === right.declaration
+      : left.kind === "structural" && right.kind === "structural" && left.fields.length === right.fields.length &&
+        left.fields.every((field, index) => {
+          const other = right.fields[index];
+          return other !== undefined && field.destinationIndex === other.destinationIndex &&
+            field.writable === other.writable && rustProjectMemberSelectionEquals(field.source, other.source);
+        }));
+}
 
 export function selectRustObjectReferenceView(
   walk: RustFactWalk, expression: Node, sourceCarrier: TargetTypeRef, targetCarrier: TargetTypeRef,
@@ -21,9 +74,9 @@ export function selectRustObjectReferenceView(
   if (instance !== undefined) {
     const definition = walk.context.projectTypes.definitionForCarrier(instance);
     if (definition?.kind !== "class" || !selectRustClassValueView(walk, expression, definition.declaration, targetCarrier)) return undefined;
-    return {
+    return Object.freeze({
       kind: "constructor", declaration: definition.declaration, sourceCarrier, targetCarrier,
-    };
+    });
   }
   const sourceStructural = rustStructuralObjectCarrierValue(sourceCarrier);
   const project = walk.context.projectTypes.definitionForCarrier(sourceCarrier);
@@ -34,9 +87,9 @@ export function selectRustObjectReferenceView(
   if (sourceType === undefined) return undefined;
   if (project !== undefined) {
     if (!selectRustProjectStructuralView(walk, project.declaration, sourceCarrier, targetCarrier, semantics, sourceType)) return undefined;
-    return {
+    return Object.freeze({
       kind: "project", declaration: project.declaration, sourceCarrier, targetCarrier,
-    };
+    });
   }
   const correspondence = semantics.types.structuralMembers(sourceType, target.sourceType);
   if (correspondence.kind !== "available" || correspondence.destination.calls.length !== 0 ||
@@ -50,14 +103,14 @@ export function selectRustObjectReferenceView(
     const source = selectRustStructuralFieldProjection(walk.sourceTypes, pair.source.property.symbol, pair.source.declarations, sourceCarrier);
     const selected: Extract<RustObjectReferenceView, { readonly kind: "structural" }>["fields"][number]["source"] | undefined = source === undefined
       ? undefined
-      : { kind: "source-field", storage: source.shape.storage, storageIndex: source.field.storageIndex,
+      : Object.freeze({ kind: "source-field", storage: source.shape.storage, storageIndex: source.field.storageIndex,
           receiverCarrier: sourceCarrier, resultCarrier: source.field.resultCarrier,
-          valueSemantics: { kind: source.field.method === true ? "method" : "stored" } };
+          valueSemantics: Object.freeze({ kind: source.field.method === true ? "method" : "stored" }) });
     if (selected === undefined || !rustTargetTypeRefEquals(selected.resultCarrier, destination.field.resultCarrier) ||
       source !== undefined && (source.field.method !== destination.field.method || source.field.presence !== destination.field.presence ||
         source.field.readonly && !destination.field.readonly)) return undefined;
     destinations.add(destination.field.storageIndex);
-    fields.push({ destinationIndex: destination.field.storageIndex, source: selected, writable: !destination.field.readonly });
+    fields.push(Object.freeze({ destinationIndex: destination.field.storageIndex, source: selected, writable: !destination.field.readonly }));
   }
   if (fields.length !== target.fields.length) return undefined;
   fields.sort((left, right) => left.destinationIndex - right.destinationIndex);
@@ -65,5 +118,5 @@ export function selectRustObjectReferenceView(
     if (!walk.sourceTypes.registerStructuralFieldImplementation({carrier: targetCarrier,
       storageIndex: field.destinationIndex, kind: "accessor"})) return undefined;
   }
-  return {kind: "structural", sourceCarrier, targetCarrier, fields: Object.freeze(fields)};
+  return Object.freeze({kind: "structural", sourceCarrier, targetCarrier, fields: Object.freeze(fields)});
 }

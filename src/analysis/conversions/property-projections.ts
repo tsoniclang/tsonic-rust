@@ -15,9 +15,11 @@ import type { RustProjectFieldSelection } from "../../target-model/records/proje
 import { resolveRustProjectAccessor } from "../operations/provider/project-accessors.js";
 import type { RustProjectAccessorSelection } from "../../target-model/records/project-accessors.js";
 
-import type { RustPropertyProjectionCase } from "../../target-model/records/property-projections.js";
+import type { RustPropertyProjectionCase, RustPropertyProjectionFact } from "../../target-model/records/property-projections.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
+import { rustProjectMemberSelectionEquals } from "../operations/contracts/equality.js";
 
 const maximumPropertyProjectionMembers = 1_048_576;
 
@@ -27,10 +29,11 @@ export function createRustPropertyProjectionSelector(
   options: RustOperationsProviderOptions,
   carriers: readonly (TargetTypeRef | undefined)[],
 ): (argumentIndex: number) => RustValueConversion | undefined {
-  const cache = new Map<number, RustValueConversion | undefined>();
+  const cache = new Map<number, RustPropertyProjectionFact | undefined>();
   let accounting = 0;
   return argumentIndex => {
-    if (cache.has(argumentIndex)) return cache.get(argumentIndex);
+    context.records.propertyProjections.assertOpen();
+    if (cache.has(argumentIndex)) return cache.get(argumentIndex)?.conversion;
     const argument = request.source.sourceArguments[argumentIndex];
     const carrier = carriers[argumentIndex];
     const bindings = request.source.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex === argumentIndex);
@@ -64,11 +67,32 @@ export function createRustPropertyProjectionSelector(
       cases.push(projection);
       return projection.conversion;
     });
-    const conversion = context.records.propertyProjections.finalize(argument.expression, selectedConversion, cases);
-    if (selectedConversion !== undefined && conversion === undefined) return undefined;
-    cache.set(argumentIndex, conversion);
-    return conversion;
+    if (selectedConversion === undefined) {
+      cache.set(argumentIndex, undefined);
+      return undefined;
+    }
+    const selected = Object.freeze({ conversion: selectedConversion, cases: Object.freeze(cases) });
+    let canonical = context.records.propertyProjection.get(argument.expression);
+    if (canonical !== undefined) {
+      if (!rustPropertyProjectionFactEquals(canonical, selected)) return undefined;
+    } else {
+      if (context.records.propertyProjections.finalize(argument.expression, selectedConversion, cases) === undefined) return undefined;
+      canonical = context.records.propertyProjection.get(argument.expression)!;
+    }
+    cache.set(argumentIndex, canonical);
+    return canonical.conversion;
   };
+}
+
+export function rustPropertyProjectionFactEquals(left: RustPropertyProjectionFact, right: RustPropertyProjectionFact): boolean {
+  return closedMetadataEquals(left.conversion, right.conversion) && left.cases.length === right.cases.length &&
+    left.cases.every((selected, index) => {
+      const other = right.cases[index];
+      return other !== undefined && rustTargetTypeRefEquals(selected.source, other.source) &&
+        closedMetadataEquals(selected.conversion, other.conversion) && selected.reads.length === other.reads.length &&
+        selected.reads.every((read, offset) => other.reads[offset] !== undefined &&
+          rustProjectMemberSelectionEquals(read, other.reads[offset]!));
+    });
 }
 
 export function selectRustPropertyProjectionCase(

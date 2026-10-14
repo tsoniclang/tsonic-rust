@@ -1,11 +1,29 @@
 import type { Node } from "@tsonic/tsts";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustProjectFieldSelection } from "../../../target-model/records/project-fields.js";
+import type { RustProjectAccessorSelection } from "../../../target-model/records/project-accessors.js";
+
+type RustOperationComparisonInput = RustTargetOperationFact | RustProjectFieldSelection | RustProjectAccessorSelection;
 
 export function rustTargetOperationFactEquals(
   left: RustTargetOperationFact,
   right: RustTargetOperationFact,
 ): boolean {
+  return operationMetadataEquals(left, right);
+}
+
+export function rustProjectMemberSelectionEquals(
+  left: RustProjectFieldSelection | RustProjectAccessorSelection,
+  right: RustProjectFieldSelection | RustProjectAccessorSelection,
+): boolean {
+  const optionalKeys = left.kind === "source-field" ? ["declaration", "dispatch"] : ["read", "write", "dispatch"];
+  return optionalKeys.every(key => Object.prototype.hasOwnProperty.call(left, key) ===
+    Object.prototype.hasOwnProperty.call(right, key)) &&
+    operationMetadataEquals(left, right);
+}
+
+function operationMetadataEquals(left: RustOperationComparisonInput, right: RustOperationComparisonInput): boolean {
   if (left.kind !== right.kind) return false;
   const leftReferences: Node[] = [];
   const rightReferences: Node[] = [];
@@ -16,7 +34,7 @@ export function rustTargetOperationFactEquals(
     closedMetadataEquals(leftMetadata, rightMetadata);
 }
 
-function projectOperationMetadata(fact: RustTargetOperationFact, references: Node[]): unknown {
+function projectOperationMetadata(fact: RustOperationComparisonInput, references: Node[]): unknown {
   const reference = (node: Node | undefined): number | undefined => {
     if (node === undefined) return undefined;
     references.push(node);

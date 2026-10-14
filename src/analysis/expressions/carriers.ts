@@ -569,8 +569,10 @@ function applyOptionLane(
           walk.context.records.conversions.converted(expression, reconciliationTarget);
         }
       }
-      if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated" &&
-        walk.context.records.objectReferenceViews.select(walk, expression, resolved, reconciliationTarget)) projected = reconciliationTarget;
+      if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated") {
+        const view = walk.context.records.objectReferenceViews.select(walk, expression, resolved, reconciliationTarget);
+        if (view !== undefined) projected = view.targetCarrier;
+      }
     }
   }
   if (expected === undefined || !isRustOptionCarrier(expected)) {
@@ -612,7 +614,8 @@ export function reconcileRequiredCarrier(
     walk.context.projectTypes, walk.context.typeDefinitions,
   );
   if (reconciliation.kind === "incompatible") {
-    return reconciliation.reason === "unrelated" && walk.context.records.objectReferenceViews.select(walk, expression, sourceCarrier, targetCarrier);
+    return reconciliation.reason === "unrelated" &&
+      walk.context.records.objectReferenceViews.select(walk, expression, sourceCarrier, targetCarrier) !== undefined;
   }
   if (reconciliation.kind === "call-scoped-lifetime" ||
     reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {

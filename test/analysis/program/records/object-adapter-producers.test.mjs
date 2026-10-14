@@ -4,6 +4,7 @@ import { createRustProgramRecordBuilder } from "../../../../dist/analysis/progra
 import { rustCallableTargetType, rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustClassConstructorTargetType } from "../../../../dist/target-model/types/carriers/class-constructors.js";
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
+import { rustObjectReferenceViewEquals } from "../../../../dist/analysis/expressions/object-reference-views.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -255,30 +256,69 @@ function viewFixture(builder, { expression = {}, sourceCarrier = rustStructuralO
 test("object-reference producer preserves exact native carriers, parent identity and incompatible view refusal", () => {
   const parent = createRustProgramRecordBuilder();
   const selected = viewFixture(parent);
-  assert.equal(selected.select(), true);
+  assert.equal(selected.select() !== undefined, true);
   const fact = parent.objectReferenceView.get(selected.expression);
   assert.equal(fact?.kind, "structural");
   assert.equal(fact.sourceCarrier === selected.sourceCarrier, true);
   assert.equal(fact.targetCarrier === selected.targetCarrier, true);
   assert.equal(Object.isFrozen(fact.fields), true);
   const child = createRustProgramRecordBuilder(undefined, parent.seal());
-  assert.equal(viewFixture(child, selected).select(), true);
+  assert.equal(viewFixture(child, selected).select() === fact, true);
   assert.equal(child.objectReferenceView.get(selected.expression) === fact, true);
   const changed = viewFixture(child, { ...selected, targetCarrier: rustStructuralObjectTargetType("/foreign.ts", viewFields) });
   assert.throws(changed.select, /Conflicting Rust semantic plan 'tsonic\.rust\.objectReferenceView'/u);
   assert.equal(child.objectReferenceView.get(selected.expression) === fact, true);
   const fresh = viewFixture(child);
-  assert.equal(fresh.select(), true);
+  assert.equal(fresh.select() !== undefined, true);
   assert.equal(parent.objectReferenceView.get(fresh.expression) === undefined, true);
   assert.equal(child.minimumFoundation(), "core");
 });
 
-test("a missing structural-view proof returns false without inventing a record", () => {
+test("a missing structural-view proof returns undefined without inventing a record", () => {
   const builder = createRustProgramRecordBuilder();
   const selected = viewFixture(builder);
+  const target = selected.walk.sourceTypes.structuralObjectForCarrier;
   selected.walk.sourceTypes.structuralObjectForCarrier = () => undefined;
-  assert.equal(selected.select(), false);
+  assert.equal(selected.select() === undefined, true);
   assert.equal(builder.objectReferenceView.get(selected.expression) === undefined, true);
+  selected.walk.sourceTypes.structuralObjectForCarrier = target;
+  assert.equal(selected.select() !== undefined, true, "missing correspondence stays retryable");
+});
+
+test("object view queries retain full canonical evidence and select once in each actual walk", () => {
+  const builder = createRustProgramRecordBuilder();
+  const selected = viewFixture(builder);
+  let implementations = 0;
+  selected.walk.sourceTypes.registerStructuralFieldImplementation = () => { implementations += 1; return true; };
+  const first = selected.select();
+  assert.equal(first === builder.objectReferenceView.get(selected.expression), true);
+  assert.equal(selected.select() === first, true);
+  assert.equal(implementations, 1, "same walk does not repeat native implementation admission");
+  assert.equal(Object.isFrozen(first) && Object.isFrozen(first.fields[0]) &&
+    Object.isFrozen(first.fields[0].source) && Object.isFrozen(first.fields[0].source.valueSemantics), true);
+  const otherWalk = { ...selected.walk };
+  assert.equal(builder.objectReferenceViews.select(otherWalk, selected.expression, selected.sourceCarrier, selected.targetCarrier) === first, true);
+  assert.equal(implementations, 2, "new walk closes its own implementation demand");
+  assert.equal(selected.select() === first, true);
+  assert.equal(implementations, 2, "the first walk remains completed");
+  builder.seal();
+  assert.throws(() => selected.select(), /after analysis is sealed/u);
+});
+
+test("structural view equality retains complete ordered native field evidence", () => {
+  const selected = viewFixture(createRustProgramRecordBuilder());
+  const fact = selected.select();
+  const field = fact.fields[0];
+  assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, source: { ...field.source } }] }), true);
+  for (const source of [
+    { ...field.source, receiverCarrier: wide }, { ...field.source, resultCarrier: wide },
+    { ...field.source, storageIndex: 1 }, { ...field.source, storage: "project-object" },
+    { ...field.source, declaration: {} }, { ...field.source, declaration: undefined },
+    { ...field.source, dispatch: undefined }, { ...field.source, valueSemantics: { kind: "receiver-alias" } },
+    { ...field.source, dispatch: { read: "get", write: "set", ownerCarrier: integer } },
+  ]) assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, source }] }), false, "changed native member proof");
+  assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, writable: !field.writable }] }), false);
+  assert.equal(rustObjectReferenceViewEquals(fact, { ...fact, fields: [{ ...field, destinationIndex: 1 }] }), false);
 });
 
 test("class-value reuse is a read of exact inherited evidence, not an invented specialization", () => {

@@ -216,8 +216,8 @@ test("property projections freeze the selected cases and preserve exact conversi
   assert.equal(record.conversion === conversion && record.cases === cases, true);
   assert.equal(record.cases[0].reads[0] === read, true);
   const equivalent = projection();
-  assert.equal(builder.propertyProjections.finalize(expression, equivalent, []) === equivalent, true);
-  assert.equal(builder.propertyProjection.get(expression) === record, true, "equal requests do not replace original cases");
+  assert.equal(builder.propertyProjections.finalize(expression, equivalent, []) === undefined, true);
+  assert.equal(builder.propertyProjection.get(expression) === record, true, "a repeated constructor cannot discard original cases");
   assert.equal(builder.propertyProjections.finalize(expression, { ...conversion, source: wide }, []) === undefined, true);
   assert.equal(builder.propertyProjection.get(expression) === record, true, "conflicts fail without changing evidence");
   const absent = {};
@@ -234,7 +234,7 @@ test("property projection scopes preserve original case identity and reject inco
   const original = inherited.propertyProjection.get(subject);
   const child = createRustProgramRecordBuilder(undefined, inherited);
   const equivalent = projection();
-  assert.equal(child.propertyProjections.finalize(subject, equivalent, []) === equivalent, true);
+  assert.equal(child.propertyProjections.finalize(subject, equivalent, []) === undefined, true);
   assert.equal(child.propertyProjection.get(subject) === original, true);
   assert.equal(child.propertyProjections.finalize(subject, { ...equivalent, source: wide }, []) === undefined, true);
   assert.equal(child.propertyProjection.get(subject) === original, true);
