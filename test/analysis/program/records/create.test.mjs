@@ -95,8 +95,11 @@ test("sealed records publish only frozen typed family readers without a native k
     yield: () => model.yields.value(subject, subject, {}),
     computedMember: () => model.computedMembers.evaluate({}, subject, subject, subject, "read"),
     compoundWrite: () => model.compoundWrites.index(subject, "native.index-set", {}),
+    typeAliasDeclaration: () => model.typeAliasDeclarations.register({}, subject),
+    mutatedBinding: () => model.mutatedBindings.written(subject),
+    mutatedReferent: () => model.mutatedReferents.written(subject),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 42, "every integrated producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 45, "every integrated producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {
