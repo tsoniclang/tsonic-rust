@@ -964,17 +964,17 @@ test("source-package semantics are sealed before physical Rust planning", () => 
   );
 });
 
-test("Rust dead-code obligations are planner-local and normalized before output sealing", () => {
+test("Rust dead-code obligations consume sealed reachability and normalize before output sealing", () => {
   const livenessPlan = readFileSync(
-    join(sourceRoot, "backend/planner/liveness/plan.ts"),
+    join(sourceRoot, "analysis/reachability/plan.ts"),
     "utf8",
   );
   const generatedUsage = readFileSync(
-    join(sourceRoot, "backend/planner/liveness/generated-item-usage.ts"),
+    join(sourceRoot, "analysis/reachability/generated-item-usage.ts"),
     "utf8",
   );
   const generatedState = readFileSync(
-    join(sourceRoot, "backend/planner/liveness/generated-item-usage-state.ts"),
+    join(sourceRoot, "analysis/reachability/generated-item-usage-state.ts"),
     "utf8",
   );
   const targetProgram = readFileSync(
@@ -986,7 +986,7 @@ test("Rust dead-code obligations are planner-local and normalized before output 
     "utf8",
   );
   const directives = readFileSync(
-    join(sourceRoot, "backend/planner/liveness/directives.ts"),
+    join(sourceRoot, "backend/planner/reachability-directives.ts"),
     "utf8",
   );
   const normalization = readFileSync(
@@ -1017,22 +1017,31 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(generatedUsage, /input\.records\.targetOperation\.get\(node\)/u);
   assert.doesNotMatch(generatedUsage, /rustTargetOperationFactKey/u);
   assert.equal(generatedUsage.match(/createRustGeneratedItemUsageState\(input\)/gu)?.length, 1);
-  for (const query of ["isStructuralFieldRead", "isStructuralFieldWritten", "isProjectTypeConstructed",
-    "isProjectGeneratedFieldUsed", "isStructuralShapeConstructed", "isVariantUsed"]) {
-    const declaration = new RegExp(`\\b${query}:`, "u");
+  for (const query of ["structuralCarriers", "constructedProjectTypes", "usedProjectFields", "declarationVariants"]) {
+    const declaration = new RegExp(`\\b${query}\\s*[:,]`, "u");
     assert.match(generatedState, declaration);
     assert.doesNotMatch(generatedUsage, declaration);
   }
   assert.doesNotMatch(generatedState, /sourceNavigation|declarationUseSummary|referencesToDeclaration|forEachChild/u);
-  assert.doesNotMatch(targetProgram, /deadCode|liveness/u);
-  assert.match(planningContext, /liveness: createRustPlannerLiveness\(program\)/u);
-  assert.match(directives, /context\.input\.liveness\.requiresSuppression/u);
-  assert.match(directives, /isStructuralFieldRead/u);
-  assert.match(directives, /isStructuralFieldWritten/u);
-  assert.match(directives, /isProjectTypeConstructed/u);
-  assert.match(directives, /isProjectGeneratedFieldUsed/u);
-  assert.match(directives, /isStructuralShapeUsed/u);
-  assert.doesNotMatch(directives, /isStructuralShapeConstructed/u);
+  assert.match(targetProgram, /readonly reachability:.*RustReachability/u);
+  assert.doesNotMatch(planningContext, /createRustPlannerLiveness|analyzeRustReachability|liveness:/u);
+  assert.match(directives, /context\.input\.program\.reachability\.suppressedDeclarations\.has/u);
+  assert.match(directives, /fieldsRead\.has/u);
+  assert.match(directives, /fieldsWritten\.has/u);
+  assert.match(directives, /constructedProjectTypes\.has/u);
+  assert.match(directives, /usedProjectFields\.get/u);
+  assert.match(directives, /structuralCarriers\.get/u);
+  assert.doesNotMatch(directives, /structuralCarriers\.get\([^)]*\)\?\.constructed/u);
+  assert.equal(existsSync(join(sourceRoot, "backend/planner/liveness")), false,
+    "the superseded planner reachability implementation is removed");
+  for (const source of sourceFiles.filter(file => file.path.startsWith(join(sourceRoot, "analysis/reachability") + sep))) {
+    assert.doesNotMatch(source.text, /from\s+["'][^"']*backend\//u, source.path);
+  }
+  const reachabilityModel = readFileSync(join(sourceRoot, "analysis/reachability/model.ts"), "utf8");
+  const generatedModel = readFileSync(join(sourceRoot, "analysis/reachability/generated-item-usage-model.ts"), "utf8");
+  const recordModel = sourceSection(generatedModel, "export interface RustVariantReachability", "export interface RustGeneratedItemUsageInput");
+  assert.doesNotMatch(reachabilityModel, /readonly\s+\w+\s*:\s*\([^)]*\)\s*=>|\n\s+\w+\([^)]*\)\s*:/u);
+  assert.doesNotMatch(recordModel, /readonly\s+\w+\s*:\s*\([^)]*\)\s*=>|\n\s+\w+\([^)]*\)\s*:/u);
   assert.doesNotMatch(
     directives,
     /sourceNavigation|declarationUseSummary|referencesToDeclaration/u,

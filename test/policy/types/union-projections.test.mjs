@@ -7,7 +7,7 @@ import { rustUnionInjectionPath, rustUnionInjectionVariant, rustUnionProjectionC
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { planRustUnionProjection } from "../../../dist/backend/planner/expressions/union-mappings.js";
 import { planRustUnionConstruction } from "../../../dist/backend/planner/expressions/union-patterns.js";
-import { visitConversionContract } from "../../../dist/backend/planner/liveness/generated-item-usage-helpers.js";
+import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 
 test("nested union payload paths are exact, immutable and independently checked", () => {

@@ -12,7 +12,7 @@ import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operat
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
-import { visitConversionContract } from "../../../dist/backend/planner/liveness/generated-item-usage-helpers.js";
+import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
 
 test("union mappings require complete exact coverage and reject forged or numeric-changing arms", () => {
   const integer = rustSourcePrimitiveTargetType("int64");

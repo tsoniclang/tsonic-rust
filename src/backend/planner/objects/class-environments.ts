@@ -18,7 +18,7 @@ import { rustModuleCellAccess } from "../project/module-storage.js";
 import { rustProjectObjectIdentityImplementation } from "./project-identity.js";
 import { rustClassEnvironmentType, rustClassEnvironmentHandleType } from "./class-environment-types.js";
 import { rustProjectImplementationVisibility, rustProjectMemberStorageVisibility } from "./project-storage-abi.js";
-import { rustAuthoredFieldDeadCodeDisposition } from "../liveness/directives.js";
+import { rustAuthoredFieldDeadCodeDisposition } from "../reachability-directives.js";
 import { rustProjectTypeParameterContext } from "../names/type-parameters.js";
 
 type Environment = NonNullable<RustClassValueDefinition["environment"]>;

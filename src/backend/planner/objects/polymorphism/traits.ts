@@ -25,7 +25,7 @@ import {
   rustAuthoredDeadCodeDisposition,
   rustGeneratedDispatchDeadCodeDisposition,
   rustGeneratedDowncastDeadCodeDisposition,
-} from "../../liveness/directives.js";
+} from "../../reachability-directives.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -161,7 +161,7 @@ export function planProjectDispatchTrait(
   const functions: RustTraitFunction[] = [];
   const projectionSlot = context.input.program.projectTypes.checkedProjectionSlot(definition);
   if (projectionSlot !== undefined) {
-    const used = publiclyReachable || context.input.liveness.isCheckedProjectionUsed(definition.declaration);
+    const used = publiclyReachable || context.input.program.reachability.usedCheckedProjections.has(definition.declaration);
     functions.push({ ...checkedProjectProjectionSignature(projectionSlot),
       ...(used ? {} : { deadCode: "generated-unused-dispatch" as const }) });
   }

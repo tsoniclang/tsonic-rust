@@ -1,54 +1,26 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "../../../analysis/program/model.js";
+import type { RustReachability, RustReachabilityInput } from "./model.js";
 
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustSourceUnionDefinitionIdentity } from "../../../target-model/types/source-union-definitions.js";
-import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustSourceUnionDefinitionIdentity } from "../../target-model/types/source-union-definitions.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
 import {
   analyzeRustGeneratedItemUsage,
 } from "./generated-item-usage.js";
-import type {
-  RustDispatchMemberRole,
-  RustGeneratedProjectFieldRole,
-} from "./generated-item-usage-model.js";
-
-export interface RustPlannerLiveness {
-  isExternallyReachable(declaration: Node): boolean;
-  requiresSuppression(declaration: Node): boolean;
-  isRead(declaration: Node): boolean;
-  isProjectTypeConstructed(declaration: Node): boolean;
-  isProjectTypeReified(declaration: Node): boolean;
-  isProjectConstructorInvoked(declaration: Node): boolean;
-  isProjectGeneratedFieldUsed(
-    declaration: Node,
-    role: RustGeneratedProjectFieldRole,
-  ): boolean;
-  isDispatchMemberUsed(declaration: Node, role: RustDispatchMemberRole): boolean;
-  isDowncastUsed(source: Node, target: Node): boolean;
-  isCheckedProjectionUsed(source: Node): boolean;
-  isStructuralFieldRead(carrier: TargetTypeRef, storageIndex: number): boolean;
-  isStructuralFieldWritten(carrier: TargetTypeRef, storageIndex: number): boolean;
-  isStructuralShapeConstructed(carrier: TargetTypeRef): boolean;
-  isStructuralShapeUsed(carrier: TargetTypeRef): boolean;
-  isVariantUsed(declaration: Node, variantName: string): boolean;
-  isUnionVariantUsed(carrier: TargetTypeRef, variantName: string): boolean;
-  isUnionVariantConstructed(carrier: TargetTypeRef, variantName: string): boolean;
-  isVariantPayloadRead(declaration: Node, variantName: string): boolean;
-  isUnionVariantPayloadRead(carrier: TargetTypeRef, variantName: string): boolean;
-}
+import { transitivelyReachable, projectStandaloneItemEdges, deadComponentRoots } from "./graph.js";
 
 type DeclarationOwner =
   | { readonly kind: "declaration"; readonly declaration: Node }
   | { readonly kind: "erased" }
   | { readonly kind: "root" };
 
-export function createRustPlannerLiveness(program: RustTargetProgram): RustPlannerLiveness {
+export function analyzeRustReachability(program: RustReachabilityInput): RustReachability {
   const ast = program.source.ast;
   const declarations = collectDeclarationUnits(ast, program.sourceFiles);
   const declarationSet = new Set(declarations);
-  const canonicalByDeclaration = new WeakMap<Node, Node>();
+  const canonicalByDeclaration = new Map<Node, Node>();
   const canonical = (declaration: Node): Node => {
     const existing = canonicalByDeclaration.get(declaration);
     if (existing !== undefined) return existing;
@@ -183,7 +155,7 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
 
   for (const definition of program.projectTypes.definitions) {
     const selected = canonical(definition.declaration);
-    if (graphUnits.has(selected) && generatedUsage.isProjectTypeUsed(definition.declaration)) {
+    if (graphUnits.has(selected) && generatedUsage.usedProjectTypes.has(definition.declaration)) {
       roots.add(selected);
     }
   }
@@ -210,42 +182,27 @@ export function createRustPlannerLiveness(program: RustTargetProgram): RustPlann
   const reachable = transitivelyReachable(roots, edges);
   const itemEdges = projectStandaloneItemEdges(itemUnits, graphUnits, edges);
   const suppressionRoots = deadComponentRoots(itemUnits, reachable, itemEdges, order);
-  return Object.freeze({
-    isExternallyReachable: (declaration: Node) =>
-      externallyReachable.has(canonical(declaration)),
-    requiresSuppression: (declaration: Node) =>
-      suppressionRoots.has(canonical(declaration)),
-    isRead: (declaration: Node) =>
-      generatedUsage.isAuthoredFieldRead(canonical(declaration)),
-    isProjectTypeConstructed: generatedUsage.isProjectTypeConstructed,
-    isProjectTypeReified: generatedUsage.isProjectTypeReified,
-    isProjectConstructorInvoked: generatedUsage.isProjectConstructorInvoked,
-    isProjectGeneratedFieldUsed: generatedUsage.isProjectGeneratedFieldUsed,
-    isDispatchMemberUsed: generatedUsage.isDispatchMemberUsed,
-    isDowncastUsed: generatedUsage.isDowncastUsed,
-    isCheckedProjectionUsed: generatedUsage.isCheckedProjectionUsed,
-    isStructuralFieldRead: generatedUsage.isStructuralFieldRead,
-    isStructuralFieldWritten: generatedUsage.isStructuralFieldWritten,
-    isStructuralShapeConstructed: generatedUsage.isStructuralShapeConstructed,
-    isStructuralShapeUsed: generatedUsage.isStructuralShapeUsed,
-    isVariantUsed: generatedUsage.isVariantUsed,
-    isUnionVariantUsed: generatedUsage.isUnionVariantUsed,
-    isUnionVariantConstructed: generatedUsage.isUnionVariantConstructed,
-    isVariantPayloadRead: generatedUsage.isVariantPayloadRead,
-    isUnionVariantPayloadRead: generatedUsage.isUnionVariantPayloadRead,
-  });
+  const suppressedDeclarations = new Set(suppressionRoots);
+  const readAuthoredFields = new Set(generatedUsage.readAuthoredFields);
+  for (const declaration of declarations) {
+    const selected = canonical(declaration);
+    if (externallyReachable.has(selected)) externallyReachable.add(declaration);
+    if (suppressionRoots.has(selected)) suppressedDeclarations.add(declaration);
+    if (generatedUsage.readAuthoredFields.has(selected)) readAuthoredFields.add(declaration);
+  }
+  return Object.freeze({ ...generatedUsage, externallyReachable, suppressedDeclarations, readAuthoredFields });
 }
 
 function declarationParticipatesInRustLiveness(
   declaration: Node,
-  program: RustTargetProgram,
+  program: RustReachabilityInput,
 ): boolean {
   if (program.records.typeOnlyDeclaration.get(declaration) !== undefined) return false;
   return program.source.ast.kindName(declaration) !== "KindTypeAliasDeclaration" ||
     program.records.typeAliasDeclaration.get(declaration)?.kind !== "erased";
 }
 
-function runtimeUnionUsesDeclaration(owner: Node, target: Node, program: RustTargetProgram): boolean {
+function runtimeUnionUsesDeclaration(owner: Node, target: Node, program: RustReachabilityInput): boolean {
   const fact = program.records.typeAliasDeclaration.get(owner);
   const targetFact = program.records.typeAliasDeclaration.get(target);
   if (fact?.kind !== "runtime" || targetFact?.kind !== "runtime") return true;
@@ -266,7 +223,7 @@ function runtimeUnionUsesDeclaration(owner: Node, target: Node, program: RustTar
 
 function declarationEmitsStandaloneRustItem(
   declaration: Node,
-  program: RustTargetProgram,
+  program: RustReachabilityInput,
 ): boolean {
   if (!declarationParticipatesInRustLiveness(declaration, program)) return false;
   switch (program.source.ast.kindName(declaration)) {
@@ -388,30 +345,6 @@ function enclosingDeclarationOwner(
   return { kind: "root" };
 }
 
-function projectStandaloneItemEdges(
-  itemUnits: ReadonlySet<Node>,
-  graphUnits: ReadonlySet<Node>,
-  edges: ReadonlyMap<Node, ReadonlySet<Node>>,
-): ReadonlyMap<Node, ReadonlySet<Node>> {
-  const projected = new Map<Node, Set<Node>>();
-  for (const owner of itemUnits) {
-    const targets = new Set<Node>();
-    const visited = new Set<Node>();
-    const pending = [...(edges.get(owner) ?? [])];
-    while (pending.length > 0) {
-      const target = pending.pop()!;
-      if (!graphUnits.has(target) || visited.has(target)) continue;
-      visited.add(target);
-      if (itemUnits.has(target)) {
-        targets.add(target);
-        continue;
-      }
-      for (const dependency of edges.get(target) ?? []) pending.push(dependency);
-    }
-    if (targets.size > 0) projected.set(owner, targets);
-  }
-  return projected;
-}
 
 function enclosingMemberOwner(
   ast: AstReader,
@@ -448,106 +381,4 @@ function isConstructionReference(
     current = ast.parent(current);
   }
   return false;
-}
-
-function transitivelyReachable(
-  roots: ReadonlySet<Node>,
-  edges: ReadonlyMap<Node, ReadonlySet<Node>>,
-): ReadonlySet<Node> {
-  const reachable = new Set<Node>();
-  const pending = [...roots];
-  while (pending.length > 0) {
-    const declaration = pending.pop()!;
-    if (reachable.has(declaration)) continue;
-    reachable.add(declaration);
-    for (const dependency of edges.get(declaration) ?? []) {
-      if (!reachable.has(dependency)) pending.push(dependency);
-    }
-  }
-  return reachable;
-}
-
-function deadComponentRoots(
-  units: ReadonlySet<Node>,
-  reachable: ReadonlySet<Node>,
-  edges: ReadonlyMap<Node, ReadonlySet<Node>>,
-  order: ReadonlyMap<Node, number>,
-): ReadonlySet<Node> {
-  const position = (node: Node): number => order.get(node) ?? 0;
-  const dead = [...units]
-    .filter((declaration) => !reachable.has(declaration))
-    .sort((left, right) => position(left) - position(right));
-  const deadSet = new Set(dead);
-  const reverse = new Map<Node, Set<Node>>();
-  for (const owner of dead) {
-    for (const target of edges.get(owner) ?? []) {
-      if (!deadSet.has(target)) continue;
-      const owners = reverse.get(target) ?? new Set<Node>();
-      owners.add(owner);
-      reverse.set(target, owners);
-    }
-  }
-
-  const finishOrder: Node[] = [];
-  const visited = new Set<Node>();
-  for (const start of dead) {
-    if (visited.has(start)) continue;
-    const stack: { readonly node: Node; readonly expanded: boolean }[] = [{
-      node: start,
-      expanded: false,
-    }];
-    while (stack.length > 0) {
-      const entry = stack.pop()!;
-      if (entry.expanded) {
-        finishOrder.push(entry.node);
-        continue;
-      }
-      if (visited.has(entry.node)) continue;
-      visited.add(entry.node);
-      stack.push({ node: entry.node, expanded: true });
-      const dependencies = [...(edges.get(entry.node) ?? [])]
-        .filter((dependency) => deadSet.has(dependency))
-        .sort((left, right) => position(right) - position(left));
-      for (const dependency of dependencies) {
-        if (!visited.has(dependency)) stack.push({ node: dependency, expanded: false });
-      }
-    }
-  }
-
-  const componentByNode = new Map<Node, number>();
-  const components: Node[][] = [];
-  for (let index = finishOrder.length - 1; index >= 0; index -= 1) {
-    const start = finishOrder[index]!;
-    if (componentByNode.has(start)) continue;
-    const componentIndex = components.length;
-    const component: Node[] = [];
-    const pending = [start];
-    componentByNode.set(start, componentIndex);
-    while (pending.length > 0) {
-      const node = pending.pop()!;
-      component.push(node);
-      for (const owner of reverse.get(node) ?? []) {
-        if (!componentByNode.has(owner)) {
-          componentByNode.set(owner, componentIndex);
-          pending.push(owner);
-        }
-      }
-    }
-    component.sort((left, right) => position(left) - position(right));
-    components.push(component);
-  }
-
-  const incoming = new Array<number>(components.length).fill(0);
-  for (const owner of dead) {
-    const ownerComponent = componentByNode.get(owner);
-    for (const target of edges.get(owner) ?? []) {
-      if (!deadSet.has(target)) continue;
-      const targetComponent = componentByNode.get(target);
-      if (targetComponent !== undefined && targetComponent !== ownerComponent) {
-        incoming[targetComponent] = (incoming[targetComponent] ?? 0) + 1;
-      }
-    }
-  }
-  return new Set(components.flatMap((component, index) =>
-    incoming[index] === 0 && component[0] !== undefined ? [component[0]] : []));
 }

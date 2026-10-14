@@ -62,6 +62,7 @@ import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializer
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
+import { analyzeRustReachability } from "../reachability/plan.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -325,7 +326,7 @@ export function analyzeRustTargetProgram(
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
-  const program: RustTargetProgram = Object.freeze({
+  const program: Omit<RustTargetProgram, "reachability"> = {
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
@@ -403,8 +404,8 @@ export function analyzeRustTargetProgram(
     }),
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
-  });
-  return resolvedTargetStage(program);
+  };
+  return resolvedTargetStage(Object.freeze({ ...program, reachability: analyzeRustReachability(program) }));
 }
 
 export type {

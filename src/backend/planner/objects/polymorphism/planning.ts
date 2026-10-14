@@ -14,8 +14,8 @@ import {
   rustGeneratedExactStorageDeadCodeDisposition,
   rustGeneratedProjectInternalFieldDeadCodeDisposition,
   rustProjectInterfaceDeadCodeDisposition,
-} from "../../liveness/directives.js";
-import { rustPlannedImplementationsReferenceSelfField } from "../../liveness/planned-item-usage.js";
+} from "../../reachability-directives.js";
+import { rustPlannedImplementationsReferenceSelfField } from "../../planned-item-usage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,

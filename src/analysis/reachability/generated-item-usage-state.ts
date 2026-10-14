@@ -1,17 +1,28 @@
 import type { Node } from "@tsonic/tsts";
 
-import type { RustProjectTypeDefinition } from "../../../analysis/project-types/type-policy.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustProjectProjectionSelection } from "../../../target-model/types/project-projections.js";
-import type { RustProjectUpcastFact } from "../../../target-model/records/value-projections.js";
-import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../../target-model/types/index.js";
-import { rustTargetTypeChildren } from "../../../target-model/types/carriers/children.js";
-import { rustStructuralUsageKey, structuralFieldKey } from "./generated-item-usage-helpers.js";
-import type { RustDispatchMemberRole, RustGeneratedItemUsage, RustGeneratedItemUsageInput, RustGeneratedProjectFieldRole } from "./generated-item-usage-model.js";
+import type { RustProjectTypeDefinition } from "../project-types/type-policy.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustProjectProjectionSelection } from "../../target-model/types/project-projections.js";
+import type { RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
+import { rustOptionElementCarrier, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import { rustStructuralUsageKey } from "./generated-item-usage-helpers.js";
+import type { RustStructuralUsageKey } from "./generated-item-usage-helpers.js";
+import type { RustDispatchMemberRole, RustGeneratedItemUsage, RustGeneratedItemUsageInput, RustGeneratedProjectFieldRole, RustStructuralReachability, RustVariantReachability } from "./generated-item-usage-model.js";
 
 export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageInput) {
-  const storageOwnerKey = (carrier: TargetTypeRef): string => rustStructuralUsageKey(carrier, input.structuralShapes);
-  const carriersByDeclaration = new Map<Node, string>();
+  const storageKeys = new Map<TargetTypeRef, RustStructuralUsageKey>();
+  const storageOwnerKey = (carrier: TargetTypeRef): RustStructuralUsageKey => {
+    const existing = storageKeys.get(carrier);
+    if (existing !== undefined) return existing;
+    const key = rustStructuralUsageKey(carrier, input.structuralShapes);
+    storageKeys.set(carrier, key);
+    return key;
+  };
+  for (const definition of [...input.structuralShapes.definitions, ...input.structuralShapes.unionDefinitions]) {
+    for (const carrier of definition.sourceCarriers) storageOwnerKey(carrier);
+  }
+  const carriersByDeclaration = new Map<Node, RustStructuralUsageKey>();
   for (const declaration of input.declarations) {
     const kind = input.ast.kindName(declaration);
     if (kind !== "KindEnumDeclaration" && kind !== "KindTypeAliasDeclaration") continue;
@@ -24,22 +35,22 @@ export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageI
     carriersByDeclaration.set(declaration, storageOwnerKey(carrier));
   }
 
-  const structuralFieldReads = new Set<string>();
-  const structuralFieldWrites = new Set<string>();
-  const readVariantsByCarrier = new Map<string, Set<string>>();
-  const constructedVariantsByCarrier = new Map<string, Set<string>>();
-  const usedProjectTypes = new WeakSet<Node>();
-  const constructedProjectTypes = new WeakSet<Node>();
-  const reifiedProjectTypes = new WeakSet<Node>();
+  const structuralFieldReads = new Map<RustStructuralUsageKey, Set<number>>();
+  const structuralFieldWrites = new Map<RustStructuralUsageKey, Set<number>>();
+  const readVariantsByCarrier = new Map<RustStructuralUsageKey, Set<string>>();
+  const constructedVariantsByCarrier = new Map<RustStructuralUsageKey, Set<string>>();
+  const usedProjectTypes = new Set<Node>();
+  const constructedProjectTypes = new Set<Node>();
+  const reifiedProjectTypes = new Set<Node>();
   const reifiedCarriers = new WeakSet<TargetTypeRef>();
-  const invokedProjectConstructors = new WeakSet<Node>();
-  const readAuthoredFields = new WeakSet<Node>();
-  const usedProjectFields = new WeakMap<Node, Set<RustGeneratedProjectFieldRole>>();
-  const usedDispatchMembers = new WeakMap<Node, Set<RustDispatchMemberRole>>();
-  const usedDowncasts = new WeakMap<Node, WeakSet<Node>>();
-  const usedCheckedProjections = new WeakSet<Node>();
-  const constructedStructuralShapes = new Set<string>();
-  const accessedStructuralShapes = new Set<string>();
+  const invokedProjectConstructors = new Set<Node>();
+  const readAuthoredFields = new Set<Node>();
+  const usedProjectFields = new Map<Node, Set<RustGeneratedProjectFieldRole>>();
+  const usedDispatchMembers = new Map<Node, Set<RustDispatchMemberRole>>();
+  const usedDowncasts = new Map<Node, Set<Node>>();
+  const usedCheckedProjections = new Set<Node>();
+  const constructedStructuralShapes = new Set<RustStructuralUsageKey>();
+  const accessedStructuralShapes = new Set<RustStructuralUsageKey>();
   const markProjectTypeUsed = (carrier: TargetTypeRef | undefined): void => {
     const definition = input.projectTypes.definitionForCarrier(carrier);
     if (definition !== undefined) usedProjectTypes.add(definition.declaration);
@@ -106,7 +117,7 @@ export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageI
     if (input.projectTypes.downcastRoute(sourceDefinition, target)?.kind === "checked") {
       usedCheckedProjections.add(sourceDefinition.declaration);
     }
-    const targets = usedDowncasts.get(sourceDefinition.declaration) ?? new WeakSet<Node>();
+    const targets = usedDowncasts.get(sourceDefinition.declaration) ?? new Set<Node>();
     targets.add(targetDefinition.declaration);
     usedDowncasts.set(sourceDefinition.declaration, targets);
   };
@@ -122,14 +133,18 @@ export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageI
     if (Number.isSafeInteger(storageIndex) && storageIndex >= 0) {
       const key = storageOwnerKey(carrier);
       accessedStructuralShapes.add(key);
-      structuralFieldReads.add(structuralFieldKey(key, storageIndex));
+      const fields = structuralFieldReads.get(key) ?? new Set<number>();
+      fields.add(storageIndex);
+      structuralFieldReads.set(key, fields);
     }
   };
   const markStructuralFieldWritten = (carrier: TargetTypeRef, storageIndex: number): void => {
     if (Number.isSafeInteger(storageIndex) && storageIndex >= 0) {
       const key = storageOwnerKey(carrier);
       accessedStructuralShapes.add(key);
-      structuralFieldWrites.add(structuralFieldKey(key, storageIndex));
+      const fields = structuralFieldWrites.get(key) ?? new Set<number>();
+      fields.add(storageIndex);
+      structuralFieldWrites.set(key, fields);
     }
   };
   const markVariantRead = (carrier: TargetTypeRef, variantName: string): void => {
@@ -277,43 +292,41 @@ export function createRustGeneratedItemUsageState(input: RustGeneratedItemUsageI
       }
     }
   }
-  const usage: RustGeneratedItemUsage = Object.freeze({
-    isProjectTypeUsed: (declaration: Node) => usedProjectTypes.has(declaration),
-    isProjectTypeConstructed: (declaration: Node) =>
-      constructedProjectTypes.has(declaration),
-    isProjectTypeReified: (declaration: Node) => reifiedProjectTypes.has(declaration),
-    isProjectConstructorInvoked: (declaration: Node) =>
-      invokedProjectConstructors.has(declaration),
-    isAuthoredFieldRead: (declaration: Node) => readAuthoredFields.has(declaration),
-    isProjectGeneratedFieldUsed: (
-      declaration: Node,
-      role: RustGeneratedProjectFieldRole,
-    ) => usedProjectFields.get(declaration)?.has(role) === true,
-    isDispatchMemberUsed: (declaration: Node, role: RustDispatchMemberRole) =>
-      usedDispatchMembers.get(declaration)?.has(role) === true,
-    isDowncastUsed: (source: Node, target: Node) =>
-      usedDowncasts.get(source)?.has(target) === true,
-    isCheckedProjectionUsed: (source: Node) => usedCheckedProjections.has(source),
-    isStructuralFieldRead: (carrier: TargetTypeRef, storageIndex: number) =>
-      structuralFieldReads.has(structuralFieldKey(storageOwnerKey(carrier), storageIndex)),
-    isStructuralFieldWritten: (carrier: TargetTypeRef, storageIndex: number) =>
-      structuralFieldWrites.has(structuralFieldKey(storageOwnerKey(carrier), storageIndex)),
-    isStructuralShapeConstructed: (carrier: TargetTypeRef) =>
-      constructedStructuralShapes.has(storageOwnerKey(carrier)),
-    isStructuralShapeUsed: (carrier: TargetTypeRef) =>
-      constructedStructuralShapes.has(storageOwnerKey(carrier)) || accessedStructuralShapes.has(storageOwnerKey(carrier)),
-    isVariantUsed: (declaration: Node, variantName: string) =>
-      readVariantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true ||
-      constructedVariantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true,
-    isUnionVariantUsed: (carrier: TargetTypeRef, variantName: string) =>
-      readVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true ||
-      constructedVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true,
-    isUnionVariantConstructed: (carrier: TargetTypeRef, variantName: string) =>
-      constructedVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true,
-    isVariantPayloadRead: (declaration: Node, variantName: string) =>
-      readVariantsByCarrier.get(carriersByDeclaration.get(declaration) ?? "")?.has(variantName) === true,
-    isUnionVariantPayloadRead: (carrier: TargetTypeRef, variantName: string) =>
-      readVariantsByCarrier.get(storageOwnerKey(carrier))?.has(variantName) === true,
-  });
-  return Object.freeze({ usage, markProjectTypeUsed, markProjectTypeConstructed, markProjectTypeReified, markProjectConstructorInvoked, markProjectCarrierFieldUsed, markDowncastUsed, markProjectionUsed, markStructuralFieldRead, markStructuralFieldWritten, markVariantRead, markVariantConstructed, markStructuralShapeConstructed, markProjectIdentityUsed, markProjectWrapperCloneUsed, markProjectMemberUsed, markProjectUpcastUsed, markAuthoredFieldRead });
+  const seal = (): Omit<RustGeneratedItemUsage, "recordContributions" | "projectThisReferences"> => {
+    const emptyStrings: ReadonlySet<string> = new Set();
+    const emptyNumbers: ReadonlySet<number> = new Set();
+    const byStorage = new Map<RustStructuralUsageKey, RustStructuralReachability>();
+    const structuralCarriers = new Map<TargetTypeRef, RustStructuralReachability>();
+    for (const [carrier, key] of storageKeys) {
+      let selected = byStorage.get(key);
+      if (selected === undefined) {
+        selected = Object.freeze({
+          constructed: constructedStructuralShapes.has(key),
+          used: constructedStructuralShapes.has(key) || accessedStructuralShapes.has(key),
+          fieldsRead: structuralFieldReads.get(key) ?? emptyNumbers,
+          fieldsWritten: structuralFieldWrites.get(key) ?? emptyNumbers,
+          variants: Object.freeze({
+            used: new Set([...(readVariantsByCarrier.get(key) ?? emptyStrings),
+              ...(constructedVariantsByCarrier.get(key) ?? emptyStrings)]),
+            read: readVariantsByCarrier.get(key) ?? emptyStrings,
+            constructed: constructedVariantsByCarrier.get(key) ?? emptyStrings,
+          }),
+        });
+        byStorage.set(key, selected);
+      }
+      structuralCarriers.set(carrier, selected);
+    }
+    const declarationVariants = new Map<Node, RustVariantReachability>();
+    for (const [declaration, key] of carriersByDeclaration) {
+      const selected = byStorage.get(key);
+      if (selected === undefined) throw new Error("A source declaration lost its sealed physical usage record.");
+      declarationVariants.set(declaration, selected.variants);
+    }
+    return Object.freeze({
+      usedProjectTypes, constructedProjectTypes, reifiedProjectTypes, invokedProjectConstructors,
+      readAuthoredFields, usedProjectFields, usedDispatchMembers, usedDowncasts,
+      usedCheckedProjections, structuralCarriers, declarationVariants,
+    });
+  };
+  return Object.freeze({ seal, markProjectTypeUsed, markProjectTypeConstructed, markProjectTypeReified, markProjectConstructorInvoked, markProjectCarrierFieldUsed, markDowncastUsed, markProjectionUsed, markStructuralFieldRead, markStructuralFieldWritten, markVariantRead, markVariantConstructed, markStructuralShapeConstructed, markProjectIdentityUsed, markProjectWrapperCloneUsed, markProjectMemberUsed, markProjectUpcastUsed, markAuthoredFieldRead });
 }

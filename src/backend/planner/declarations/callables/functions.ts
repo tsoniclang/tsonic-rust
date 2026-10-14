@@ -11,7 +11,7 @@ import {
   rustCurrentErrorBoundary,
   rustSourceItemIsPubliclyReachable,
 } from "../../program/plan-context.js";
-import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
+import { rustAuthoredDeadCodeDisposition } from "../../reachability-directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";

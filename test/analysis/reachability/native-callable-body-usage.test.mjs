@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { createRustPlannerLiveness } from "../../../../dist/backend/planner/liveness/plan.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 function fixture(outputType) {
   const { program } = analyzeRust({ surfaces: [],
@@ -30,7 +29,7 @@ function fixture(outputType) {
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of program.sourceFiles) visit(file);
-  return { program, declarations, liveness: createRustPlannerLiveness(program) };
+  return { program, declarations, reachability: program.reachability };
 }
 
 test("comparison-only declaration values do not invent invocation or body reachability", () => {
@@ -40,10 +39,10 @@ test("comparison-only declaration values do not invent invocation or body reacha
   const direct = current.declarations.get("direct");
   assert.equal(current.program.callableValues.genericDispatch.usesDeclarationBody(read), true);
   assert.equal(current.program.callableValues.genericDispatch.usesDeclarationBody(other), false);
-  assert.equal(current.liveness.requiresSuppression(other), true,
+  assert.equal(current.reachability.suppressedDeclarations.has(other), true,
     "existing authored-unused-body policy preserves native checking without a fake call");
-  assert.equal(current.liveness.requiresSuppression(read), false);
-  assert.equal(current.liveness.requiresSuppression(direct), false, "actual direct-call roots stay intact");
+  assert.equal(current.reachability.suppressedDeclarations.has(read), false);
+  assert.equal(current.reachability.suppressedDeclarations.has(direct), false, "actual direct-call roots stay intact");
   for (const definition of current.program.callableValues.generic.physical.definitions()) {
     if (definition.members.every(member => member.implementation.declaration === other)) {
       assert.equal(current.program.callableValues.genericDispatch.requiredFor(definition), false);
@@ -53,8 +52,8 @@ test("comparison-only declaration values do not invent invocation or body reacha
 
 test("library declaration roots remain externally reachable regardless of local identity-only use", () => {
   const current = fixture("lib");
-  assert.equal(current.liveness.requiresSuppression(current.declarations.get("main")), false);
-  assert.equal(current.liveness.isExternallyReachable(current.declarations.get("main")), true);
+  assert.equal(current.reachability.suppressedDeclarations.has(current.declarations.get("main")), false);
+  assert.equal(current.reachability.externallyReachable.has(current.declarations.get("main")), true);
   assert.equal(Object.isFrozen(current.program.callableValues.genericDispatch), true);
   assert.equal(current.program.callableValues.genericDispatch.usesDeclarationBody({}), false);
 });

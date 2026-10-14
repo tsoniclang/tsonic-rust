@@ -13,7 +13,7 @@ import { diagnosticInput, rustErrorBoundaryForDeclaration, rustErrorType,
   rustProjectTypeHasPublicImplementationAbi, type RustPlanContext } from "../../program/plan-context.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
-import { rustProjectConstructorDeadCodeDisposition } from "../../liveness/directives.js";
+import { rustProjectConstructorDeadCodeDisposition } from "../../reachability-directives.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
 import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import type { ProjectClassStateLayer } from "./model.js";
