@@ -71,7 +71,7 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
     if (owned) {
       const name = context.input.program.names.nameForDeclaration(capture.declaration);
       if (name === undefined) return undefined;
-      arguments_.push(planRustCaptureValue(declaration, capture.reference, name, storage?.storage ?? "value", context, "invocation"));
+      arguments_.push(planRustCaptureValue(declaration, capture, name, storage?.storage ?? "value", context, "invocation"));
       continue;
     }
     if (captured?.borrowed !== undefined) {

@@ -39,6 +39,24 @@ export function analyzeRustReadOwnership(input: {
     message: budget.failure() ?? "Rust ownership reads require a complete finite source-use inventory.",
     evidence: ["target.capability=rust.analysis.ownership"],
   }] });
+  const storageReads = new Map<Node, boolean>();
+  for (let index = storage.nodes.length - 1; index >= 0; index -= 1) {
+    if (!budget.step() || !budget.row()) return rejectedBudget();
+    const node = storage.nodes[index]!;
+    const operand = sourceTransparentExpressionOperand(ast, node);
+    const inherited = operand === undefined ? undefined : storageReads.get(operand);
+    if (operand !== undefined && inherited === undefined) {
+      return { kind: "rejected", diagnostics: [{
+        code: "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID", category: "error", source: "tsonic-rust", sourceNode: node,
+        message: "Rust ownership requires the complete parent-before-child checked source inventory.",
+        evidence: ["target.capability=rust.analysis.ownership"],
+      }] };
+    }
+    const operation = records.targetOperation.get(node);
+    storageReads.set(node, inherited ?? (ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) ||
+      ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
+      operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
+  }
   const uses = analyzeRustReadUses(ast, storage.nodes, records);
   const reads = new Map<Node, RustReadOwnershipFact>();
   const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
@@ -107,7 +125,7 @@ export function analyzeRustReadOwnership(input: {
       const use = uses.get(node);
       const borrowed = use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
         use.later.every((later, index) => index < use.laterStart || borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
-      const storageRead = readsStorage(node, storage, records);
+      const storageRead = storageReads.get(node)!;
       const value = selectRustValueReadOwnership({ copy, clone, borrowed,
         transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
       const sourceCopy = isRustCopyCarrier(carrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
@@ -170,18 +188,4 @@ export function analyzeRustReadOwnership(input: {
     if (write !== undefined) writes.set(node, write);
   }
   return { kind: "resolved", ownership: Object.freeze({ reads, captures, writes }) };
-}
-
-function readsStorage(node: Node, storage: SourceStorageQueries, records: RustProgramRecords): boolean {
-  const { ast } = storage.source;
-  let source = node;
-  for (;;) {
-    const operand = sourceTransparentExpressionOperand(ast, source);
-    if (operand === undefined) break;
-    source = operand;
-  }
-  const operation = records.targetOperation.get(source);
-  return ast.is.IsIdentifier(source) || ast.is.IsElementAccessExpression(source) ||
-    ast.kindName(source) === "KindThisExpression" || ast.kindName(source) === "KindThisKeyword" ||
-    operation?.kind === "source-field" && operation.valueSemantics.kind === "stored";
 }

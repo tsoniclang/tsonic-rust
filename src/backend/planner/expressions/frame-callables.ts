@@ -43,7 +43,7 @@ function planFrameEntry(
     !validateRustCapturedReceivers(node, implementation.capture.receivers, context)) return undefined;
   const values = implementation.captures.map(capture => {
     const name = context.input.program.names.nameForDeclaration(capture.declaration);
-    return name === undefined ? undefined : planRustCaptureValue(node, capture.reference, name, capture.storage, context);
+    return name === undefined ? undefined : planRustCaptureValue(node, capture, name, capture.storage, context);
   });
   if (values.some(value => value === undefined)) return undefined;
   const fields = planRustReceiverFieldOwners(implementation.receiverFields, context, context,

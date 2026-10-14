@@ -32,7 +32,7 @@ export function planRustSuspendedCallableConstruction(node: Node, context: RustP
     if (source === undefined || !requireRustCarrierRequirements(capture.carrier,
       move ? ["static"] : ["clone", "static"], capture.reference, { ...context, callableDeclaration: node })) return undefined;
     bindings.push({ name: allocateRustSyntheticName(context.syntheticNames, `capture_${index}`),
-      value: planRustCaptureValue(node, capture.reference, source, capture.storage, context),
+      value: planRustCaptureValue(node, capture, source, capture.storage, context),
     });
   }
   const receivers = planRustCapturedReceiverFields(node, implementation.receiverFields, context, context,

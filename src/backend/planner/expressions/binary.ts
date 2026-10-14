@@ -545,10 +545,7 @@ export function planRustOperatorCallExpression(
     if (converted === undefined) {
       return undefined;
     }
-    const nonConsuming = mode === "value" || operandNode === undefined
-      ? converted
-      : converted;
-    return applyRustArgumentMode(context, nonConsuming, mode, operandNode);
+    return applyRustArgumentMode(context, converted, mode, operandNode);
   });
   if (operands.some((operand) => operand === undefined)) {
     return undefined;

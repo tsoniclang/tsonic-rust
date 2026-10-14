@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -16,7 +17,7 @@ test("selected native moves, borrows and inferred Clone have exactly their handw
       "export function hash<T>(pointer: Pointer<T> | undefined): number { return hashptr(pointer); }",
     ].join("\n") },
   });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(nativeMethods(nativeFunction(result, "single"), "clone").length, 0);
   assert.equal(nativeMethods(nativeFunction(result, "duplicated"), "clone").length, 1);
   assert.equal(nativeMethods(nativeFunction(result, "hash"), "clone").length, 0);

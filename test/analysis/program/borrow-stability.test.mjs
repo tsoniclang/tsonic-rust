@@ -102,20 +102,12 @@ targetOperation: { get: (node) => {
       const projection = { sourceCarrier: carrier, targetCarrier: carrier,
         conversion: { kind: "native-representation", source: carrier, target: carrier } };
       const projectedFacts = createRustRecordFixture({
-targetOperation: { get: (node) => {
-    if (node === right)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right && false ? projection : program.records.targetOperation.get(node);
-} },
-contextualValueConversion: { get: (node) => {
-    if (node === right && false)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right ? projection : program.records.contextualValueConversion.get(node);
-} }}, program.records);
+        targetOperation: { get: node => node === right
+          ? { ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } } }
+          : program.records.targetOperation.get(node) },
+        contextualValueConversion: { get: node => node === right
+          ? projection : program.records.contextualValueConversion.get(node) },
+      }, program.records);
       const projected = analyze(analysisInput(program, sourceFacts, projectedFacts));
       assert.equal(projected.kind, "resolved");
       assert.equal(selectRustBorrowRelationship(left, right, projected.input, projected.effects), false,
@@ -128,20 +120,12 @@ contextualValueConversion: { get: (node) => {
         { ...lift, sourceCarrier: distinct }, { ...lift, elementCarrier: distinct }, { ...lift, resultCarrier: carrier },
       ]) {
         const records = createRustRecordFixture({
-targetOperation: { get: (node) => {
-    if (node === right)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right && false ? replacement : program.records.targetOperation.get(node);
-} },
-optionProjection: { get: (node) => {
-    if (node === right && false)
-        return {
-            ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } },
-        };
-    return node === right ? replacement : program.records.optionProjection.get(node);
-} }}, program.records);
+          targetOperation: { get: node => node === right
+            ? { ...operation, abi: { ...operation.abi, effects: { ...operation.abi.effects, evaluation: "pure" } } }
+            : program.records.targetOperation.get(node) },
+          optionProjection: { get: node => node === right
+            ? replacement : program.records.optionProjection.get(node) },
+        }, program.records);
         const rejected = analyze(analysisInput(program, sourceFacts, records));
         assert.equal(rejected.kind, "resolved");
         assert.equal(selectRustBorrowRelationship(left, right, rejected.input, rejected.effects), false, "only exact native Some construction is a pure result lift");

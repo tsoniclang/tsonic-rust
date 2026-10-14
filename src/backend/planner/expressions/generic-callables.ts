@@ -41,7 +41,7 @@ export function planRustGenericCallableValue(
     const move = (requireRustCaptureOwnership(node, capture.declaration, context).read.kind !== "clone");
     if (source === undefined || !requireRustCarrierRequirements(capture.carrier,
       move ? [] : ["clone"], capture.reference, { ...context, callableDeclaration: node })) return undefined;
-    fields.push({ name: `capture_${index}`, value: planRustCaptureValue(node, capture.reference, source, capture.storage, context) });
+    fields.push({ name: `capture_${index}`, value: planRustCaptureValue(node, capture, source, capture.storage, context) });
   }
   const receivers = planRustCapturedReceiverFields(node, implementation.receiverFields, context, context,
     { staticStorage: false, offset: implementation.captures.length });

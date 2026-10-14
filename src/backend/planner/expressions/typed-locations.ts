@@ -143,21 +143,18 @@ export function requireRustCaptureOwnership(owner: Node, declaration: Node, cont
 
 export function planRustCaptureValue(
   owner: Node,
-  node: Node,
+  capture: Pick<RustCaptureReadOwnership, "declaration" | "reference">,
   path: string,
   storage: "value" | "location" | "cell" | "borrow-cell",
   context: RustPlanContext,
   use: "read" | "invocation" = "read",
 ): RustExpr {
+  const node = capture.reference;
   const captured = rustCapturedBinding(node, context);
   const selectedValue: RustExpr = captured?.expression ?? { kind: "path", path };
   const capturedValue = selectedValue.kind === "reference" ? selectedValue.expr : selectedValue;
   if (storage === "cell" || storage === "borrow-cell") return capturedValue;
-  const declaration = context.input.program.records.sourceBinding.get(node)?.sourceDeclaration ??
-    context.input.program.sourceNavigation.sourceReferenceFor(node)?.declaration;
-  if (declaration === undefined) return failTargetPlannerInvariant("tsonic-rust",
-    "A captured value requires its exact checked source declaration.", node);
-  const selected = requireRustCaptureOwnership(owner, declaration, context);
+  const selected = requireRustCaptureOwnership(owner, capture.declaration, context);
   const read = captured?.borrowed === undefined ? selected[use] : selected.borrowed;
   if (read === undefined) return failTargetPlannerInvariant("tsonic-rust",
     "A borrowed capture has no selected native snapshot operation.", node);

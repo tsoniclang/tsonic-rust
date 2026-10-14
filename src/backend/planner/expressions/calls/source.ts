@@ -377,9 +377,7 @@ export function planSelectedSourceCall(
       if (receiver !== undefined) {
         planned = {
           kind: "method-call",
-          receiver: receiverNode === undefined
-            ? receiver
-            : receiver,
+          receiver,
           method: targetName,
           ...(callGenericArguments === undefined ? {} : { genericArguments: callGenericArguments }),
           args: shaped,
@@ -462,8 +460,7 @@ export function planSelectedSourceCall(
       if (receiverNode !== undefined && receiver !== undefined) {
         planned = invokeRustStructuralObjectMethod(
           fact.target.receiverCarrier,
-          context.input.program.structuralShapes.field(fact.target.receiverCarrier, fact.target.storageIndex)?.nativeMethod === true
-            ? receiver : receiver,
+          receiver,
           fact.target.storageIndex,
           shaped,
           fact.resultCarrier,

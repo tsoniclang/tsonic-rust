@@ -26,7 +26,8 @@ export function selectRustUnionEquality(
   for (const left of leftLeaves) for (const right of rightLeaves) {
     if (isRustUnitCarrier(left.carrier) !== isRustUnitCarrier(right.carrier)) continue;
     if (isRustUnitCarrier(left.carrier)) {
-      arms.push({ left, right, operation: { kind: "operator-token", rustOperator: "==", resultCarrier: rustSourcePrimitiveTargetType("bool") } });
+      arms.push({ left, right, operation: { kind: "operator-token", rustOperator: "==",
+        resultCarrier: rustSourcePrimitiveTargetType("bool"), operandModes: ["ref", "ref"] } });
       continue;
     }
     const operation = selectRustBinaryOperator("===", left.carrier, right.carrier);

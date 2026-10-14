@@ -455,9 +455,6 @@ export function planForOfStatement(
       },
     }];
   }
-  const nonConsumingIterable = iterableNode === undefined
-    ? iterable
-    : iterable;
   if (fact.lowering.kind === "borrowed" && borrowedBinding === undefined) {
     context.usedAliases?.add("rt");
   }
@@ -472,17 +469,17 @@ export function planForOfStatement(
         path: `rt::iter_${fact.lowering.style}`,
         args: [fact.lowering.input === "reference"
           ? iterable
-          : nonConsumingIterable],
+          : iterable],
       }
     : fact.lowering.kind === "js-array"
-      ? { kind: "method-call", receiver: nonConsumingIterable.kind === "reference"
-          ? nonConsumingIterable.expr : nonConsumingIterable, method: "iter_values", args: [] }
+      ? { kind: "method-call", receiver: iterable.kind === "reference"
+          ? iterable.expr : iterable, method: "iter_values", args: [] }
       : fact.lowering.kind === "receiver-method"
-        ? { kind: "method-call", receiver: nonConsumingIterable, method: fact.lowering.name, args: [] }
+        ? { kind: "method-call", receiver: iterable, method: fact.lowering.name, args: [] }
       : fact.lowering.kind === "owned-call"
         ? { kind: "call", path: fact.lowering.path, args: [iterable] }
       : fact.lowering.kind === "fallible-owned"
-        ? { kind: "method-call", receiver: nonConsumingIterable, method: "iterator", args: [] }
+        ? { kind: "method-call", receiver: iterable, method: "iterator", args: [] }
       : iterable;
   let loopBinding = binding;
   let loopBindingMutable = bindingMutable;

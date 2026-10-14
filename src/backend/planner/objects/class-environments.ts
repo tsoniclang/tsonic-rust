@@ -110,7 +110,7 @@ export function planRustClassEnvironmentValue(declaration: Node, context: RustPl
     const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
     if (path === undefined) return undefined;
     const name = allocateRustSyntheticName(context.syntheticNames, "class_capture");
-    const value = planRustCaptureValue(declaration, capture.reference, path, capture.storage, context);
+    const value = planRustCaptureValue(declaration, capture, path, capture.storage, context);
     bindings.push({ name, value });
     fields.push({ name: capture.fieldName, value: { kind: "path", path: name } });
   }

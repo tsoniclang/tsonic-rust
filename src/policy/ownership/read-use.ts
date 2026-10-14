@@ -1,9 +1,8 @@
 import type { ArgumentPassingMode, AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations.js";
 import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
-import { isRustStringCarrier } from "../../target-model/types/index.js";
 
 export interface RustReadUse {
   readonly mode: "value" | "shared" | "mutable" | "move";
@@ -69,19 +68,18 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
   } else if (operation?.kind === "project-type-test" || operation?.kind === "closed-type-test") {
     select(BinaryExpression_Left(ast, node), "shared");
   } else if (operation?.kind === "option-equality" || operation?.kind === "union-equality" ||
-    operation?.kind === "string-concat" || operation?.kind === "operator-token" &&
-    ["==", "!=", "<", "<=", ">", ">="].includes(operation.operator)) {
+    operation?.kind === "string-concat") {
     const left = BinaryExpression_Left(ast, node);
     const right = BinaryExpression_Right(ast, node);
     select(left, "shared", right === undefined ? [] : [right]);
     select(right, "shared");
-  } else if (operation?.kind === "operator-token" && operation.operator === "+=" && isRustStringCarrier(operation.resultCarrier)) {
-    select(BinaryExpression_Right(ast, node), "shared");
-  } else if (operation?.kind === "operator-call") {
-    const left = BinaryExpression_Left(ast, node);
-    const right = BinaryExpression_Right(ast, node);
+  } else if (operation?.kind === "operator-token" || operation?.kind === "operator-call") {
+    const binary = ast.is.IsBinaryExpression(node);
+    const left = binary ? BinaryExpression_Left(ast, node) : Node_Operand(ast, node);
+    const right = binary ? BinaryExpression_Right(ast, node) : undefined;
     if (operation.operandModes[0] !== "value") select(left, operation.operandModes[0] === "ref" ? "shared" : "mutable", right === undefined ? [] : [right]);
-    if (operation.operandModes[1] !== "value") select(right, operation.operandModes[1] === "ref" ? "shared" : "mutable");
+    const rightMode = operation.operandModes[1];
+    if (rightMode !== undefined && rightMode !== "value") select(right, rightMode === "ref" ? "shared" : "mutable");
   } else if (operation?.kind === "source-field") select(receiver, "shared");
   for (const argument of input.address?.arguments ?? []) {
     if (argument.input === "raw-ref" || argument.input === "raw-owner-ref") select(argument.expression, "shared");

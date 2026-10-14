@@ -35,7 +35,7 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     const guard = records.optionalChain.get(node)?.guard;
     if (operation === undefined && address === undefined && location === undefined && guard === undefined) continue;
     const callable = operation?.kind === "source-call" && operation.target.form === "callable" ? operation.target.carrier : undefined;
-    const callTrait = callable?.kind === "closure" ? callable.callTrait : undefined;
+    const callTrait = callable?.kind === "closure" ? callable.callTrait ?? "Fn" : undefined;
     const callableMode = callTrait === "FnOnce" ? "move" : callTrait === "FnMut" ? "mutable"
       : callTrait === "Fn" || rustCallableProtocol(callable) !== undefined ? "shared" : undefined;
     const argumentsList = rustBorrowedOperationArguments(node, ast);

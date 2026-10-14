@@ -562,12 +562,9 @@ export function planRustSourceAccessorCall(
       : { kind: "call", path: `${ownerPath}::${selected.method}`, args };
   }
   const receiverNode = receiverCarrierOverride === undefined ? Node_Expression(context.input.program.source.ast, node) : undefined;
-  const plannedReceiver = receiverOverride ?? (receiverNode === undefined
+  const receiver = receiverOverride ?? (receiverNode === undefined
     ? undefined
     : planExpression(receiverNode, context));
-  const receiver = receiverNode === undefined || plannedReceiver === undefined
-    ? plannedReceiver
-    : plannedReceiver;
   if (receiver === undefined) {
     return undefined;
   }

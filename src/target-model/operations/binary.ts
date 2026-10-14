@@ -8,6 +8,7 @@ export type RustBinaryOperatorSelection =
       readonly kind: "operator-token";
       readonly rustOperator: RustBinaryOperator;
       readonly resultCarrier: TargetTypeRef;
+      readonly operandModes: readonly [RustArgumentMode, RustArgumentMode];
       readonly leftConversion?: RustValueConversion;
       readonly rightConversion?: RustValueConversion;
     }

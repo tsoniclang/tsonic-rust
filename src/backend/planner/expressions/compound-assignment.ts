@@ -104,7 +104,8 @@ export function planCompoundAssignmentExpression(
   overrides.set(right, { expression: stored, carrier: fact.resultCarrier, valueForm: "value" });
   const locationWrite = location?.write(stored, context);
   const writes = location === undefined
-    ? planRustAssignmentWrite(node, left, right, { kind: "operator-token", operator: "=", resultCarrier: fact.resultCarrier }, selected)
+    ? planRustAssignmentWrite(node, left, right, { kind: "operator-token", operator: "=",
+      resultCarrier: fact.resultCarrier, operandModes: ["mut-ref", "value"] }, selected)
     : locationWrite === undefined ? undefined : [{ kind: "expr" as const, expr: locationWrite }];
   if (writes === undefined) return undefined;
   let expression: RustExpr = result;

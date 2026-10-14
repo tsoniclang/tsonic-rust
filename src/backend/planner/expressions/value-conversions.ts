@@ -87,12 +87,9 @@ export function applyRustValueConversion(
   const producer = conversion.kind === "callable-input"
     ? planRustCallableInputProducer(expression, contract.source, context, node) : expression;
   if (producer === undefined) return undefined;
-  const nonConsumingSource = !sourceIsSharedReference && contract.sourceMode === "ref" && node !== undefined && producer === expression
-    ? producer
-    : producer;
   const source = contract.sourceMode === "ref" && !sourceIsSharedReference
-    ? applyRustArgumentMode(context, nonConsumingSource, "ref", node)
-    : nonConsumingSource;
+    ? applyRustArgumentMode(context, producer, "ref", node)
+    : producer;
   const converted = lowerRustValueConversion(contract, source, context, node);
   if (converted === undefined) {
     return undefined;

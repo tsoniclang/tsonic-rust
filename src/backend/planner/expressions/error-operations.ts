@@ -1,5 +1,4 @@
 import type { Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
@@ -69,10 +68,7 @@ export function planRustProgramErrorEquality(
     ? { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: valueName }] }
     : programErrorPattern(route!, { kind: "binding", name: valueName }, isRustSourceErrorCarrier(fact.sourceCarrier));
   const otherPattern: RustPattern = { kind: "binding", name: otherName };
-  const operand = (expression: RustExpr, side: "left" | "right"): RustExpr => {
-    const source = side === "left" ? BinaryExpression_Left(context.input.program.source.ast, node)
-      : BinaryExpression_Right(context.input.program.source.ast, node);
-    const value = source === undefined ? expression : expression;
+  const operand = (value: RustExpr, side: "left" | "right"): RustExpr => {
     if (fact.errorOperand === side) {
       if (builtin) {
         if (isRustClosedValueCarrier(fact.sourceCarrier)) {

@@ -83,7 +83,7 @@ export function planRustValueProjection(
   const ownsValue = ownership === "move";
   const borrowedResult = ownership === "borrow";
   if (fact.kind === "builtin-error") {
-  const exactSource = expression;
+    const exactSource = expression;
     if (isRustClosedValueCarrier(fact.sourceCarrier)) {
       const native: RustExpr = ownsValue ? { kind: "method-call", receiver: {
         kind: "method-call", receiver: exactSource, method: "into_error", args: [],

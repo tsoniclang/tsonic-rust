@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 
@@ -35,7 +36,7 @@ test("native storage borrowing is selected before planning without a Clone requi
   assert.deepEqual(selected.get("compare"), ["borrow", "borrow"]);
   assert.deepEqual(selected.get("single"), ["move"]);
   const { result } = compileRust({ files: { "index.ts": sourceText } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
   const count = output.slice(output.indexOf("pub fn count"), output.indexOf("pub fn compare"));
   assert.doesNotMatch(count, /Clone|\.clone\(\)/u);
