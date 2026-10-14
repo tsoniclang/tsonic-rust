@@ -83,5 +83,5 @@ test("removed private key modules and owned key exports have no surviving altern
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "every superseded key form must be gone");
-  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2307, 2307, 2307, 2305, 2305]);
+  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2307, 2307, 2307, 2305, 2307]);
 });
