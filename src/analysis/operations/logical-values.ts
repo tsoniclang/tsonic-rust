@@ -7,7 +7,7 @@ import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-uni
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustBoolCarrier } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustResolutionContext, type RustFactWalk } from "../program/walk.js";
-import { recordTargetOperation, setCarrierFact, setRustOperationFact } from "./project-calls.js";
+import { setCarrierFact, setRustOperationFact } from "./project-calls.js";
 
 export function recordRustLogicalValueFact(walk: RustFactWalk, expression: Node): boolean {
   const ast = walk.context.ast;
@@ -36,7 +36,7 @@ export function recordRustLogicalValueFact(walk: RustFactWalk, expression: Node)
   setRustOperationFact(walk, expression, { kind: "logical-value", operationId,
     operator: operator === "KindAmpersandAmpersandToken" ? "and" : "or", branch,
     leftCarrier: left!, rightCarrier: right, resultCarrier: result, leftConversion, rightConversion });
-  recordTargetOperation(walk, expression, operationId, "operator", operationId, result);
+  walk.context.records.selectedOperations.project(expression, operationId, "operator", operationId, result);
   setCarrierFact(walk, expression, result);
   return true;
 }

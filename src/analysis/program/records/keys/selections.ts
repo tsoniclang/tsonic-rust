@@ -1,7 +1,7 @@
 import type { ArgumentPassingFact } from "@tsonic/tsts";
-import type { RustSelectedTargetOperation, RustSelectedTargetSignature } from "../../../../target-model/types/model.js";
+import type { RustSelectedTargetSignature } from "../../../../target-model/types/model.js";
 import { defineRustPlanKey } from "../key.js";
-import { rustSelectedTargetOperationEquals, rustSelectedTargetSignatureEquals, rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustSelectedTargetSignatureEquals, rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustRuntimeCarrierSelection, RustConversionSelection } from "../../../../target-model/records/selections.js";
 
 export const rustRuntimeCarrierKey = defineRustPlanKey<RustRuntimeCarrierSelection>(
@@ -12,11 +12,6 @@ export const rustRuntimeCarrierKey = defineRustPlanKey<RustRuntimeCarrierSelecti
 export const rustSelectedCallKey = defineRustPlanKey<RustSelectedTargetSignature>(
   "selectedCall",
   rustSelectedTargetSignatureEquals,
-);
-
-export const rustSelectedOperationKey = defineRustPlanKey<RustSelectedTargetOperation>(
-  "selectedOperation",
-  rustSelectedTargetOperationEquals,
 );
 
 export const rustConversionKey = defineRustPlanKey<RustConversionSelection>(

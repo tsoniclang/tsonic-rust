@@ -16,6 +16,7 @@ import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, Rus
 
 import type {
   RustSelectedTargetSignature,
+  RustSelectedTargetOperation,
   RustTargetMember,
   TargetTypeRef,
 } from "../../target-model/types/model.js";
@@ -224,7 +225,7 @@ export function recordRustTypedLocationCall(
     locationCarrier,
     resultCarrier,
   }, evidence);
-  context.records.selectedOperation.set(request.source.call, {
+  const operation: RustSelectedTargetOperation = {
     operationId,
     operationKind: "method",
     targetOperation: sourceOperation.operation,
@@ -238,7 +239,7 @@ export function recordRustTypedLocationCall(
       sourceResultType: request.source.sourceResultType,
       providerDeclaration: provider,
     },
-  }, evidence);
+  };
   for (const argument of typedLocationCallArguments(request)) {
     context.records.argumentPassing.set(argument, {
       mode: "by-value",
@@ -291,7 +292,7 @@ export function recordRustTypedLocationCall(
     targetGenericArguments: genericCarriers.map(type => ({ kind: "type", type })),
   };
   context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature }, evidence);
+  return acceptRustPolicy({ selectedSignature, operation }, evidence);
 }
 
 function resolveRustTypedLocationPointee(

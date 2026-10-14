@@ -393,9 +393,8 @@ function mapSelectedObjectShapeProjection(
   if (optionalResult.fact !== undefined) {
     context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional Object.${selection.sourceName} projection` }]);
   }
-  context.records.selectedOperation.set(request.source.call, operation, evidence);
   context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature }, evidence);
+  return acceptRustPolicy({ selectedSignature, operation }, evidence);
 }
 
 export function acceptProjectSourceCall(

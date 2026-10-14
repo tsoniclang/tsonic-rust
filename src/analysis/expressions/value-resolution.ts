@@ -53,8 +53,8 @@ import { rustTargetOperationResultCarrier } from "../../target-model/records/ope
 import { appendRustDiagnostic, boolCarrier, hasSelectedRuntimeCallableUse, rustResolutionContext, selectExpressionOperation } from "../program/walk.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { parseSourceBigIntLiteral, sourceCharCodeUnit } from "../../target-model/syntax/literals.js";
-import { recordFinalizedOperatorSelection, resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
-import { recordTargetOperation, setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
+import { resolvePostCheckBinaryCarrier, resolvePostCheckUnaryCarrier } from "../operations/operators.js";
+import { setCarrierFact, setRustOperationFact } from "../operations/project-calls.js";
 import { resolveArrayLiteralCarrier } from "../operations/inputs.js";
 import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.js";
 import { resolveExpressionCarrier } from "./carriers.js";
@@ -346,7 +346,7 @@ export function resolveExpressionCarrierUncached(
           resultCarrier: carrier,
         };
         setRustOperationFact(walk, expression, fact);
-        recordFinalizedOperatorSelection(walk, expression, fact, carrier);
+        walk.context.records.selectedOperations.operator(expression, fact, carrier);
       }
       return setCarrierFact(walk, expression, carrier);
     }
@@ -495,8 +495,7 @@ export function resolveExpressionCarrierUncached(
         operationId,
         resultCarrier,
       });
-      recordTargetOperation(
-        walk,
+      walk.context.records.selectedOperations.project(
         expression,
         operationId,
         "operator",

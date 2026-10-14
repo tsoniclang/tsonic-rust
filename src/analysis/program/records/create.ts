@@ -4,12 +4,13 @@ import type { RustProgramRecordBuilder, RustRecordWriter } from "./model.js";
 import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
-import { rustFoundationForCarrier, rustFoundationForSelectedCall, rustFoundationForSelectedOperation } from "../../foundation/requirements.js";
+import { rustFoundationForCarrier, rustFoundationForSelectedCall } from "../../foundation/requirements.js";
 import { rustFoundationForTargetOperationFact } from "../../foundation/operation-requirements.js";
 import { rustFoundationForContextualConversion, rustFoundationForFinalizedConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
 import { rustAwaitSelectionLeaves } from "../../../target-model/types/await.js";
 import { rustTypeAliasDeclarationFactKey, rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustResourceManagementFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
-import { rustRuntimeCarrierKey, rustSelectedCallKey, rustSelectedOperationKey, rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
+import { rustRuntimeCarrierKey, rustSelectedCallKey, rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
+import { createRustSelectedOperationProducer } from "../../operations/records/selected-operation.js";
 import { rustNativeGuardResultFactKey, rustNativeUnreachableFactKey } from "./keys/native-control-flow.js";
 import { rustAwaitValueFactKey } from "./keys/await-values.js";
 import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
@@ -54,11 +55,6 @@ export function createRustProgramRecordBuilder(
       minimumFoundation = maximumRustFoundation(
         minimumFoundation,
         rustFoundationForSelectedCall(value as import("../../../target-model/types/model.js").RustSelectedTargetSignature),
-      );
-    } else if (key === rustSelectedOperationKey) {
-      minimumFoundation = maximumRustFoundation(
-        minimumFoundation,
-        rustFoundationForSelectedOperation(value as import("../../../target-model/types/model.js").RustSelectedTargetOperation),
       );
     } else if (key === rustConversionKey) {
       const convertedType = (value as { readonly convertedType?: import("../../../target-model/types/model.js").RustTargetTypeRef }).convertedType;
@@ -142,7 +138,7 @@ export function createRustProgramRecordBuilder(
   const sourceParameterAbi = createFamily(rustSourceParameterAbiFactKey, parent?.sourceParameterAbi);
   const runtimeCarrier = createFamily(rustRuntimeCarrierKey, parent?.runtimeCarrier);
   const selectedCall = createFamily(rustSelectedCallKey, parent?.selectedCall);
-  const selectedOperation = createFamily(rustSelectedOperationKey, parent?.selectedOperation);
+  const selectedOperations = createRustSelectedOperationProducer(parent?.selectedOperation);
   const conversion = createFamily(rustConversionKey, parent?.conversion);
   const argumentPassing = createFamily(rustArgumentPassingKey, parent?.argumentPassing);
   const nativeGuardResult = createFamily(rustNativeGuardResultFactKey, parent?.nativeGuardResult);
@@ -210,7 +206,7 @@ export function createRustProgramRecordBuilder(
     sourceParameterAbi: sourceParameterAbi.reader,
     runtimeCarrier: runtimeCarrier.reader,
     selectedCall: selectedCall.reader,
-    selectedOperation: selectedOperation.reader,
+    selectedOperation: selectedOperations.records,
     conversion: conversion.reader,
     argumentPassing: argumentPassing.reader,
     nativeGuardResult: nativeGuardResult.reader,
@@ -278,7 +274,8 @@ export function createRustProgramRecordBuilder(
     sourceParameterAbi: sourceParameterAbi.writer,
     runtimeCarrier: runtimeCarrier.writer,
     selectedCall: selectedCall.writer,
-    selectedOperation: selectedOperation.writer,
+    selectedOperation: selectedOperations.records,
+    selectedOperations,
     conversion: conversion.writer,
     argumentPassing: argumentPassing.writer,
     nativeGuardResult: nativeGuardResult.writer,
@@ -337,10 +334,11 @@ export function createRustProgramRecordBuilder(
     memoryLayoutObservation: memoryLayoutObservation.writer,
     classValue: classValue.writer,
     minimumFoundation(): RustFoundation {
-      return minimumFoundation;
+      return maximumRustFoundation(minimumFoundation, selectedOperations.minimumFoundation());
     },
     seal(): RustProgramRecords {
       if (sealed) throw new Error("Rust semantic plans can be sealed only once.");
+      selectedOperations.seal();
       sealed = true;
       return records;
     },

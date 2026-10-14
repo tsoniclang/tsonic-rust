@@ -58,7 +58,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { RustSelectedTargetSignature, RustTargetMember, TargetTypeRef } from "../../../../target-model/types/model.js";
 
-export function selectRustCheckedCall(
+export function resolveRustCheckedCall(
   request: RustCheckedCallSelectionInput,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
@@ -452,6 +452,7 @@ function acceptRuntimeCallableCall(
       context,
       options,
     );
+    context.records.selectedOperations.checked(callee, selection);
     if (selection.kind === "reject") return selection;
   }
   const optionalInvocation = context.ast.as.AsCallExpression(request.source.call)?.QuestionDotToken !== undefined;

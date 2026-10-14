@@ -29,7 +29,6 @@ import { isSharedSourceMarkerOperation } from "../expressions/references.js";
 import { resolveRegExpCreation } from "../expressions/regexp.js";
 
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
-import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { checkedPropertySelectionInput } from "../operations/provider/properties.js";
@@ -42,7 +41,7 @@ import type { RustSourceCallableAbiResolver } from "../../policy/ownership/sourc
 import type { RustSourceProfileRegistry } from "../../policy/types/model/source-profile.js";
 import type { RustSourceTypeRegistry } from "../project-types/source-type-registry.js";
 import type { RustTargetTypeResolutionContext } from "../../policy/types/resolution/index.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSelectedTargetOperation, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCaptureStorage } from "../callables/capture-storage.js";
 import { recordRustLogicalValueFact } from "../operations/logical-values.js";
 
@@ -138,7 +137,7 @@ export function rustOperationContext(
   };
 }
 
-export function recordPolicySelection<T extends { readonly operation?: unknown }>(
+export function recordPolicySelection<T extends { readonly operation?: RustSelectedTargetOperation }>(
   walk: RustFactWalk,
   subject: Node,
   selection: import("../../policy/operations/contracts.js").RustPolicySelection<T>,
@@ -149,18 +148,9 @@ export function recordPolicySelection<T extends { readonly operation?: unknown }
     walk.context.diagnostics.push(diagnostic);
     return;
   }
-  const operation = selection.value.operation;
-  const deferredKind = operation === undefined
-    ? undefined
-    : rustPostCheckOperationKind(
-        (operation as import("../../target-model/types/model.js").RustSelectedTargetOperation).operationId,
-      );
+  const deferredKind = walk.context.records.selectedOperations.checked(subject, selection);
   if (deferredKind !== undefined) {
     walk.postCheckOperations.set(subject, deferredKind);
-    return;
-  }
-  if (operation !== undefined && walk.context.records.selectedOperation.get(subject) === undefined) {
-    walk.context.records.selectedOperation.set(subject, operation as import("../../target-model/types/model.js").RustSelectedTargetOperation);
   }
 }
 

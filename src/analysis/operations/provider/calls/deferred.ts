@@ -213,7 +213,7 @@ export function prepareRustDeferredCheckedCall(
   });
 }
 
-export function finalizeRustPreparedCheckedCall(
+export function resolveRustPreparedCheckedCall(
   request: RustCheckedCallSelectionInput,
   prepared: RustPreparedDeferredCheckedCall,
   callbackFallible: boolean,
@@ -481,7 +481,6 @@ function mapRustDefaultValueCall(
   };
   const evidence = [{ message: `rust selected source-core native default initialization (${marker})` }];
   context.records.targetOperation.set(request.source.call, fact, evidence);
-  context.records.selectedOperation.set(request.source.call, operation, evidence);
   context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature }, evidence);
+  return acceptRustPolicy({ selectedSignature, operation }, evidence);
 }

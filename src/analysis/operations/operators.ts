@@ -67,7 +67,7 @@ import {
 } from "../expressions/carriers.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 
-import { rustTargetOperationSupportsAssignment, rustTargetOperationText } from "./target-operation.js";
+import { rustTargetOperationSupportsAssignment } from "./target-operation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";
@@ -689,7 +689,7 @@ export function resolvePostCheckBinaryCarrier(
     return undefined;
   }
   setRustOperationFact(walk, expression, fact);
-  recordFinalizedOperatorSelection(walk, expression, fact, resultCarrier);
+  walk.context.records.selectedOperations.operator(expression, fact, resultCarrier);
   if ((fact.kind === "operator-token" || fact.kind === "operator-call") &&
     fact.operator !== "=" && isRustAssignmentOperator(fact.operator)) {
     recordRustCompoundWrite(walk, expression, leftNode, resultCarrier);
@@ -807,21 +807,6 @@ export function resolvePostCheckUnaryCarrier(
         resultCarrier: expected,
       };
   setRustOperationFact(walk, expression, fact);
-  recordFinalizedOperatorSelection(walk, expression, fact, expected);
+  walk.context.records.selectedOperations.operator(expression, fact, expected);
   return setCarrierFact(walk, expression, expected);
-}
-
-export function recordFinalizedOperatorSelection(
-  walk: RustFactWalk,
-  expression: Node,
-  fact: RustTargetOperationFact,
-  resultType: TargetTypeRef,
-): void {
-  walk.context.records.selectedOperation.set(expression, {
-    operationId: fact.operationId,
-    operationKind: "operator",
-    targetOperation: rustTargetOperationText(fact),
-    resultType,
-    provenance: { sourceExpression: expression },
-  }, [{ message: `rust finalized operator ${fact.operationId}` }]);
 }

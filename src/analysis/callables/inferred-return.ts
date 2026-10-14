@@ -140,6 +140,7 @@ export function selectRustInferredReturn(
             checkedPropertySelectionInput(rustOperationContext(probe, expression), expression, source),
             rustOperationContext(probe, expression), walk.operationOptions,
           );
+          records.selectedOperations.checked(expression, selection);
           return selection.kind === "accept" ? selection.value.resultType : undefined;
         }
         const operands = kind === "KindBinaryExpression"

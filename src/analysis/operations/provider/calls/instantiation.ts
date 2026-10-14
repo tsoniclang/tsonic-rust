@@ -485,7 +485,6 @@ export function acceptSelectedCall(
   if (optionalResult.fact !== undefined) {
     context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);
   }
-  context.records.selectedOperation.set(request.source.call, operation, evidence);
   const member: RustTargetMember = {
     id: fact.operationId,
     sourceName: callIdentity.sourceName,
@@ -501,7 +500,7 @@ export function acceptSelectedCall(
   };
   const selectedSignature = selectedRustCallSignature(request, member);
   context.records.selectedCall.set(request.source.call, selectedSignature, evidence);
-  return acceptRustPolicy({ selectedSignature }, evidence);
+  return acceptRustPolicy({ selectedSignature, operation }, evidence);
 }
 
 type SelectedCallSourceCarriers =

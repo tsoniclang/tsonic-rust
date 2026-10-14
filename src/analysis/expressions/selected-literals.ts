@@ -10,8 +10,6 @@ import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOpera
 
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
 
-import { rustTargetOperationText } from "../operations/target-operation.js";
-
 export function sourceLiteralIsRepresentableAsPrimitive(
   node: Node,
   primitive: Extract<TargetTypeRef, { readonly kind: "source-primitive" }>["name"],
@@ -69,13 +67,7 @@ export function normalizeSelectedLiteralCarrier(
     context.records.targetOperation.set(node, fact, [
       { message: "rust finalized selected unary-minus literal carrier" },
     ]);
-    context.records.selectedOperation.set(node, {
-      operationId: fact.operationId,
-      operationKind: "operator",
-      targetOperation: rustTargetOperationText(fact),
-      resultType: expected,
-      provenance: { sourceExpression: node },
-    });
+    context.records.selectedOperations.operator(node, fact, expected);
   } else if (numericOperationId === rustPostCheckUnaryPlusOperationId) {
     const fact: RustTargetOperationFact = {
       kind: "source-conversion",
@@ -85,13 +77,7 @@ export function normalizeSelectedLiteralCarrier(
     context.records.targetOperation.set(node, fact, [
       { message: "rust finalized selected unary-plus literal carrier" },
     ]);
-    context.records.selectedOperation.set(node, {
-      operationId: fact.operationId,
-      operationKind: "operator",
-      targetOperation: rustTargetOperationText(fact),
-      resultType: expected,
-      provenance: { sourceExpression: node },
-    });
+    context.records.selectedOperations.operator(node, fact, expected);
   }
   return expected;
 }

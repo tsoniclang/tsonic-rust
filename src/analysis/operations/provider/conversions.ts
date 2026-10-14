@@ -186,7 +186,6 @@ export function selectRustCheckedConversion(
         ? "rust selected assertion project-type downcast"
       : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
   context.records.targetOperation.set(request.expression, fact, evidence);
-  context.records.selectedOperation.set(request.expression, operation, evidence);
   return acceptRustPolicy({ convertedType: targetCarrier, operation }, evidence);
 }
 

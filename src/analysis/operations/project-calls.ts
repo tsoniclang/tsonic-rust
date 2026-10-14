@@ -655,8 +655,7 @@ export function applySelectedProjectSourceCall(
     target.form !== "function" && target.form !== "static-method" || target.classReceiver !== undefined);
   if (computedKey !== undefined &&
     resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
-  recordTargetOperation(
-    walk,
+  walk.context.records.selectedOperations.project(
     expression,
     operationId,
     operationKind,
@@ -773,17 +772,6 @@ function selectedSpreadArgumentMatches(
     return selectedCarrier !== undefined &&
       rustTargetTypeRefEquals(selectedCarrier, input.carrier);
   });
-}
-
-export function recordTargetOperation(
-  walk: RustFactWalk,
-  expression: Node,
-  operationId: string,
-  operationKind: "property" | "method" | "indexer" | "operator" | "constructor",
-  targetOperation: string,
-  resultType: TargetTypeRef,
-): void {
-  walk.context.records.selectedOperation.set(expression, { operationId, operationKind, targetOperation, resultType }, [{ message: `rust target operation ${operationId}` }]);
 }
 
 export function setRustOperationFact(walk: RustFactWalk, expression: Node, fact: RustTargetOperationFact): void {

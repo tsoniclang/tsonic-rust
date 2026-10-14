@@ -56,7 +56,6 @@ export function acceptRustOperation(
     ...(resultType === undefined ? {} : { resultType }),
     provenance,
   };
-  context.records.selectedOperation.set(subject, operation, evidence);
   return acceptRustPolicy({
     operation,
     ...(resultType === undefined ? {} : { resultType }),

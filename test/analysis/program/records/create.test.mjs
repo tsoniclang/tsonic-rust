@@ -27,7 +27,14 @@ test("sealed records publish only frozen typed family readers without a native k
     assert.equal(family.get(undefined) === undefined, true, name + ": absent source identity");
     assert.equal(family.get({}) === undefined, true, name + ": foreign source identity");
     assert.equal(family.get === model[name].get, true, name + ": one getter implementation");
-    assert.throws(() => model[name].set({}, undefined), /after analysis is sealed/u, name + ": writer is closed");
+    if (name === "selectedOperation") {
+      assert.equal(model[name].set === undefined, true, name + ": no general writer");
+      assert.throws(() => model.selectedOperations.checked({}, {
+        kind: "accept", value: {},
+      }), /after analysis is sealed/u, name + ": producer is closed");
+    } else {
+      assert.throws(() => model[name].set({}, undefined), /after analysis is sealed/u, name + ": writer is closed");
+    }
   }
   for (const removed of ["get", "getFact", "resolve", "set", "seal", "minimumFoundation"]) {
     assert.equal(Object.hasOwn(records, removed), false, removed + ": no competing public API");
@@ -197,10 +204,12 @@ test("selected operations compare target data structurally and source provenance
     provenance: { sourceExpression },
   };
 
-  model.selectedOperation.set(subject, first);
-  assert.doesNotThrow(() => model.selectedOperation.set(subject, equivalent));
+  model.selectedOperations.checked(subject, { kind: "accept", value: { operation: first } });
+  assert.doesNotThrow(() => model.selectedOperations.checked(subject, { kind: "accept", value: { operation: equivalent } }));
   assert.throws(
-    () => model.selectedOperation.set(subject, { ...equivalent, provenance: { sourceExpression: {} } }),
+    () => model.selectedOperations.checked(subject, { kind: "accept", value: {
+      operation: { ...equivalent, provenance: { sourceExpression: {} } },
+    } }),
     /Conflicting Rust semantic plan/u,
   );
 });
