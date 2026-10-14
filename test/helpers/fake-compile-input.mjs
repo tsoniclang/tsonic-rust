@@ -64,6 +64,7 @@ export function fakeAstReader(sourceFiles = []) {
       IsSetAccessorDeclaration: () => false,
       IsShorthandPropertyAssignment: () => false,
       IsSourceFile: (node) => sourceFiles.includes(node),
+      IsSpreadAssignment: (node) => node.kindName === "KindSpreadAssignment",
       IsSpreadElement: () => false,
       IsThrowStatement: () => false,
       IsTryStatement: () => false,
