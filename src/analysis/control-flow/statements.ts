@@ -49,7 +49,7 @@ import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../pro
 import { recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
-import { resolveRustDeclaredBindingStorage, recordBindingPatternFacts, recordCallableDefaultParameterFacts, registerTypeAlias } from "../declarations/types-and-bindings.js";
+import { resolveRustDeclaredBindingStorage, recordBindingPatternFacts, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -235,7 +235,7 @@ export function recordStatementFacts(
   }
   if (kind === "KindClassDeclaration" && walk.context.projectTypes.definitionForDeclaration(statement) !== undefined) return;
   if (kind === "KindTypeAliasDeclaration") {
-    registerTypeAlias(walk, statement);
+    walk.context.records.typeAliasDeclarations.register(walk, statement);
     return;
   }
   if (kind === KindBlock) {

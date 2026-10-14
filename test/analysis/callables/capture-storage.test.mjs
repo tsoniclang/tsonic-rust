@@ -432,6 +432,6 @@ test("native callable traits, existing shared locations and mutation facts retai
       return callback;
     }
   `);
-  mutated.records.mutatedBinding.set(mutated.declaration, { mutated: true });
+  mutated.records.mutatedBindings.written(mutated.declaration);
   assert.deepEqual(mutated.select(), { storage: "cell" });
 });
