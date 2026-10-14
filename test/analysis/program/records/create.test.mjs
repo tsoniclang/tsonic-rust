@@ -26,6 +26,12 @@ function admitFamily(model, family, subject, fact) {
     { kind: "accept", value: { selectedSignature: fact } });
   else if (family === "futureValue") return model.futureValues.resolve(subject, () => fact);
   else if (family === "deferredProducerEffects") model.deferredProducerChannels.finalize(new Map([[subject, fact]]));
+  else if (family === "callScopedLifetimeReconciliation") model.callScopedLifetimes.reconcile(subject,
+    fact.sourceCarrier, fact.selectedCarrier);
+  else if (family === "projectUpcast") model.projectUpcasts.project(subject,
+    fact.sourceCarrier, fact.targetCarrier, fact.sourceVariants);
+  else if (family === "projectDowncast") model.projectDowncasts.project(subject,
+    fact.sourceCarrier, fact.dispatchCarrier, fact.targetCarrier, fact.projection);
   else if (family === "awaitValue") {
     assert.equal(fact.selection.kind, "leaf", "the fixture supplies one exact completion");
     const leaf = fact.selection.value;
@@ -77,7 +83,20 @@ test("sealed records publish only frozen typed family readers without a native k
     genericNumericOperands: () => model.genericNumerics.comparison(subject, carrier, carrier, undefined),
     indexedFieldKeyArgument: () => model.indexedFieldKeys.bind({}, [], new Map(), () => false),
     propertyProjection: () => model.propertyProjections.finalize(subject, undefined, []),
+    typeOnlyDeclaration: () => model.typeOnlyDeclarations.finalize({}, []),
+    moduleBinding: () => model.moduleBindings.defaultExport(subject, carrier),
+    moduleCallableStorage: () => model.moduleCallableStoragePlans.finalize({}),
+    sourceCallableReturn: () => model.sourceCallableReturns.setter(subject),
+    capturedFieldStorage: () => model.capturedFieldStoragePlans.resolve({}, subject, carrier),
+    callScopedLifetimeReconciliation: () => model.callScopedLifetimes.reconcile(subject, carrier, carrier),
+    projectUpcast: () => model.projectUpcasts.project(subject, carrier, carrier),
+    projectDowncast: () => model.projectDowncasts.project(subject, carrier, carrier, carrier, { kind: "generic" }),
+    asyncFunction: () => model.asyncFunctions.native(subject, carrier),
+    yield: () => model.yields.value(subject, subject, {}),
+    computedMember: () => model.computedMembers.evaluate({}, subject, subject, subject, "read"),
+    compoundWrite: () => model.compoundWrites.index(subject, "native.index-set", {}),
   };
+  assert.equal(Object.keys(producerAdmissions).length, 42, "every integrated producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {
