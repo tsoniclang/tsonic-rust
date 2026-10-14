@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustPlanningContext } from "./context.js";
-import type { RustDeadCodeDisposition } from "../target-ast/syntax/nodes.js";
+import type { RustPlanningContext } from "../context.js";
+import type { RustDeadCodeDisposition } from "../../target-ast/syntax/nodes.js";
 import type {
   RustDispatchMemberRole,
   RustGeneratedProjectFieldRole,
-} from "../../analysis/reachability/generated-item-usage-model.js";
-import type { TargetTypeRef } from "../../target-model/types/model.js";
+} from "../../../analysis/reachability/generated-item-usage-model.js";
+import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 interface RustLivenessPlanningContext {
   readonly input: RustPlanningContext;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
-import * as directives from "../../../dist/backend/planner/reachability-directives.js";
+import * as directives from "../../../dist/backend/planner/program/reachability-directives.js";
 
 function fixture(outputType = "bin") {
   const { program } = analyzeRust({ surfaces: [], target: { id: "rust", options: { outputType } }, files: {

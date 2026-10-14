@@ -1,10 +1,10 @@
-import { rustExpressionChildren } from "../target-ast/inspection/source-usage.js";
+import { rustExpressionChildren } from "../inspection/source-usage.js";
 import type {
   RustBlock,
   RustExpr,
   RustItem,
   RustStmt,
-} from "../target-ast/syntax/nodes.js";
+} from "./nodes.js";
 
 export function rustPlannedImplementationsReferenceSelfField(
   items: readonly RustItem[],

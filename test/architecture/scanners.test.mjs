@@ -986,7 +986,7 @@ test("Rust dead-code obligations consume sealed reachability and normalize befor
     "utf8",
   );
   const directives = readFileSync(
-    join(sourceRoot, "backend/planner/reachability-directives.ts"),
+    join(sourceRoot, "backend/planner/program/reachability-directives.ts"),
     "utf8",
   );
   const normalization = readFileSync(

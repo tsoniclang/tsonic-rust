@@ -14,8 +14,8 @@ import {
   rustGeneratedExactStorageDeadCodeDisposition,
   rustGeneratedProjectInternalFieldDeadCodeDisposition,
   rustProjectInterfaceDeadCodeDisposition,
-} from "../../reachability-directives.js";
-import { rustPlannedImplementationsReferenceSelfField } from "../../planned-item-usage.js";
+} from "../../program/reachability-directives.js";
+import { rustPlannedImplementationsReferenceSelfField } from "../../../target-ast/syntax/item-usage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import {
   rustProjectObjectDispatchField,

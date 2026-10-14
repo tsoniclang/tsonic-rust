@@ -51,7 +51,7 @@ import {
   rustSourceItemIsPubliclyReachable,
   rustRuntimeAliasUseItems,
 } from "./plan-context.js";
-import { rustAuthoredDeadCodeDisposition } from "../reachability-directives.js";
+import { rustAuthoredDeadCodeDisposition } from "./reachability-directives.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planBlockLike, planStatement } from "../statements/index.js";

@@ -1,7 +1,7 @@
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { planRustTypeFamilyDeclaration } from "./type-families.js";
 import { diagnosticInput, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../program/plan-context.js";
-import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition } from "../reachability-directives.js";
+import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition } from "../program/reachability-directives.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 
 import { rustTypeFromCarrierInContext } from "../types/render.js";

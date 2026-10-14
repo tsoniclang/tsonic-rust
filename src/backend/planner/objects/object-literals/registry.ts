@@ -30,8 +30,8 @@ import {
 } from "../../program/plan-context.js";
 import {
   rustGeneratedExactStorageDeadCodeDisposition,
-} from "../../reachability-directives.js";
-import { rustPlannedImplementationsReferenceSelfField } from "../../planned-item-usage.js";
+} from "../../program/reachability-directives.js";
+import { rustPlannedImplementationsReferenceSelfField } from "../../../target-ast/syntax/item-usage.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import type { RustSyntheticNameState } from "../../names/synthetic.js";
 
