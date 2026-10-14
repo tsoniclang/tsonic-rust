@@ -10,13 +10,19 @@ import type { RustNativeBackingProducer } from "./native-backing.js";
 import type { RustRawLocationProducer } from "./raw-locations.js";
 import type { RustMemoryBindingProducer } from "./memory-bindings.js";
 import type { RustRawAddressProducer } from "./raw-addresses.js";
+import type { RustReceiverIndependentMethodProducer } from "./receiver-independent-method.js";
+import type { RustClassValueProducer } from "./class-value.js";
+import type { RustObjectLiteralMethodAdapterProducer } from "./object-literal-method-adapter.js";
+import type { RustProjectCallableAdapterProducer } from "./project-callable-adapters.js";
+import type { RustObjectReferenceViewProducer } from "./object-reference-view.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
 }
 
 type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "selectedCall" | "targetOperation" |
-  "nativeArrayStorage" | "nativeBacking" | "rawLocationPlan" | "memoryBindingPlan" | "rawAddressPlan";
+  "nativeArrayStorage" | "nativeBacking" | "rawLocationPlan" | "memoryBindingPlan" | "rawAddressPlan" |
+  "receiverIndependentMethod" | "classValue" | "objectLiteralMethodAdapter" | "projectCallableAdapters" | "objectReferenceView";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -30,6 +36,11 @@ export type RustProgramRecordWriter = {
   readonly rawLocations: RustRawLocationProducer;
   readonly memoryBindings: RustMemoryBindingProducer;
   readonly rawAddresses: RustRawAddressProducer;
+  readonly receiverIndependentMethods: RustReceiverIndependentMethodProducer;
+  readonly classValues: RustClassValueProducer;
+  readonly objectLiteralMethodAdapters: RustObjectLiteralMethodAdapterProducer;
+  readonly projectCallableAdapterPlans: RustProjectCallableAdapterProducer;
+  readonly objectReferenceViews: RustObjectReferenceViewProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
