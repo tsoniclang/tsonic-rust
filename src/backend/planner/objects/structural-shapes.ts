@@ -22,7 +22,7 @@ import {
   rustStructuralFieldDeadCodeDisposition,
   rustStructuralShapeDeadCodeDisposition,
   rustGeneratedUnionVariantDeadCodeDisposition,
-} from "../liveness/directives.js";
+} from "../reachability-directives.js";
 import {
   rustTypeFromCarrierInContext,
 } from "../types/render.js";

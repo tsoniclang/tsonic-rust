@@ -14,7 +14,7 @@ import {
 import {
   rustAuthoredFieldDeadCodeDisposition,
   rustProjectConstructorDeadCodeDisposition,
-} from "../../liveness/directives.js";
+} from "../../reachability-directives.js";
 import {
   KindClassStaticBlockDeclaration,
   Node_Initializer,

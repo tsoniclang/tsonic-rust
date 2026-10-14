@@ -16,7 +16,7 @@ import { selectRustFlowReadProjection, selectRustValueCarrierReconciliation } fr
 import { planRustProjectUnionMapping } from "../../../../dist/backend/planner/expressions/project-union-mappings.js";
 import { planExpression, planRustProjectUpcast } from "../../../../dist/backend/planner/expressions/entry.js";
 import { applyRustCallableValueAdapterRaw } from "../../../../dist/backend/planner/declarations/callables/adapters.js";
-import { analyzeRustGeneratedItemUsage } from "../../../../dist/backend/planner/liveness/generated-item-usage.js";
+import { analyzeRustGeneratedItemUsage } from "../../../../dist/analysis/reachability/generated-item-usage.js";
 
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
@@ -230,44 +230,48 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
   const classes = [base, derived, second].map(carrier => ({ carrier, kind: "class",
     declaration: fakeStatement({ kindName: "KindClassDeclaration" }) }));
   const unused = fakeStatement({ kindName: "KindClassDeclaration" });
-  const usage = analyzeRustGeneratedItemUsage({ ast, sourceFiles: [sourceFile], declarations: [],
+  const unionCarriers = new Map([source, target, ...conversion.arms.flatMap(arm =>
+    [...arm.source, ...arm.target].map(step => step.union))].map(carrier => [
+    fakeStatement({ kindName: "KindTypeAliasDeclaration" }), carrier,
+  ]));
+  const usage = analyzeRustGeneratedItemUsage({ ast, sourceFiles: [sourceFile], declarations: [...unionCarriers.keys()],
     records: createRustRecordFixture({contextualValueConversion: { get: (subject) => subject === node
     ? { sourceCarrier: source, targetCarrier: target, conversion } : undefined },
-runtimeCarrier: { get: () => undefined }}),
+runtimeCarrier: { get: subject => unionCarriers.has(subject) ? { carrier: unionCarriers.get(subject) } : undefined }}),
     projectTypes: { ...projectTypes, definitions: classes, isPolymorphic: () => false,
       definitionForDeclaration: () => undefined,
       definitionForCarrier: carrier => classes.find(definition => rustTargetTypeRefEquals(definition.carrier, carrier)) },
     classValues: { instanceViews: [], instanceViewFor: () => undefined }, declarationGenericRequirements: { projectionImplementationsFor: () => [] },
     typeDefinitions: definitions,
     typeFamilies: { implementations: [] },
-    structuralShapes: { unionForCarrier: () => undefined, definitionForCarrier: () => undefined },
+    structuralShapes: { definitions: [], unionDefinitions: [], unionForCarrier: () => undefined, definitionForCarrier: () => undefined },
   });
   for (const arm of conversion.arms) {
     for (const step of [...arm.source, ...arm.target]) {
-      assert.equal(usage.isUnionVariantUsed(step.union, step.variant.name), true);
+      assert.equal(usage.structuralCarriers.get(step.union)?.variants.used.has(step.variant.name) === true, true);
     }
     for (const step of arm.source) {
-      assert.equal(usage.isUnionVariantConstructed(step.union, step.variant.name), false, "a match reads its input variant");
-      assert.equal(usage.isUnionVariantPayloadRead(step.union, step.variant.name), true, "mapping consumes its input payload");
+      assert.equal(usage.structuralCarriers.get(step.union)?.variants.constructed.has(step.variant.name) === true, false, "a match reads its input variant");
+      assert.equal(usage.structuralCarriers.get(step.union)?.variants.read.has(step.variant.name) === true, true, "mapping consumes its input payload");
     }
     for (const step of arm.target) {
-      assert.equal(usage.isUnionVariantConstructed(step.union, step.variant.name), true, "a mapping constructs its output variant");
-      assert.equal(usage.isUnionVariantPayloadRead(step.union, step.variant.name), false, "construction is not a payload read");
+      assert.equal(usage.structuralCarriers.get(step.union)?.variants.constructed.has(step.variant.name) === true, true, "a mapping constructs its output variant");
+      assert.equal(usage.structuralCarriers.get(step.union)?.variants.read.has(step.variant.name) === true, false, "construction is not a payload read");
     }
   }
   for (const definition of classes) {
-    assert.equal(usage.isProjectTypeUsed(definition.declaration), true);
-    assert.equal(usage.isProjectTypeConstructed(definition.declaration), rustTargetTypeRefEquals(definition.carrier, base));
-    assert.equal(usage.isProjectConstructorInvoked(definition.declaration), false);
+    assert.equal(usage.usedProjectTypes.has(definition.declaration), true);
+    assert.equal(usage.constructedProjectTypes.has(definition.declaration), rustTargetTypeRefEquals(definition.carrier, base));
+    assert.equal(usage.invokedProjectConstructors.has(definition.declaration), false);
     for (const role of ["wrapper-identity", "wrapper-dispatch"]) {
-      assert.equal(usage.isProjectGeneratedFieldUsed(definition.declaration, role),
+      assert.equal(usage.usedProjectFields.get(definition.declaration)?.has(role) === true,
         !rustTargetTypeRefEquals(definition.carrier, base));
     }
   }
-  assert.equal(usage.isProjectTypeUsed(unused), false);
-  assert.equal(usage.isUnionVariantUsed(target, "Missing"), false);
-  assert.equal(usage.isUnionVariantConstructed(target, "Missing"), false);
-  assert.equal(usage.isUnionVariantPayloadRead(target, "Missing"), false);
+  assert.equal(usage.usedProjectTypes.has(unused), false);
+  assert.equal(usage.structuralCarriers.get(target)?.variants.used.has("Missing") === true, false);
+  assert.equal(usage.structuralCarriers.get(target)?.variants.constructed.has("Missing") === true, false);
+  assert.equal(usage.structuralCarriers.get(target)?.variants.read.has("Missing") === true, false);
 });
 
 test("dispatcher fuses finalized narrowing and heritage without intermediate enum or identity clones", () => {

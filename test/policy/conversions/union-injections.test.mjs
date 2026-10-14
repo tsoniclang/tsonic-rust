@@ -4,7 +4,7 @@ import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
-import { visitConversionContract } from "../../../dist/backend/planner/liveness/generated-item-usage-helpers.js";
+import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
 import { rustUnionPayloadAdmission } from "../../../dist/target-model/conversions/union-injection.js";
 import { rustUnionInjectionPath } from "../../../dist/target-model/types/union-relations.js";
 import {

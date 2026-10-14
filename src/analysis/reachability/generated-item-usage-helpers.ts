@@ -8,13 +8,13 @@ import {
 } from "@tsonic/target-api/source";
 import type {
   RustValueConversionContract,
-} from "../../../target-model/conversions/contracts.js";
-import type { RustProgramRecords } from "../../../target-model/records/program.js";
-import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import type { RustStructuralShapePlan } from "../../../analysis/objects/structural-shape-plan.js";
+} from "../../target-model/conversions/contracts.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
+import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 
-import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
+import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 
 export function isRustArrayFieldContentAssignment(node: Node, ast: AstReader, records: RustProgramRecords): boolean {
   let current = node;
@@ -88,14 +88,12 @@ function isInsideRustPreconstruction(ast: AstReader, node: Node): boolean {
   return false;
 }
 
-export function rustStructuralUsageKey(carrier: TargetTypeRef, shapes: RustStructuralShapePlan): string {
+export type RustStructuralUsageKey = string | readonly TargetTypeRef[];
+
+export function rustStructuralUsageKey(carrier: TargetTypeRef, shapes: RustStructuralShapePlan): RustStructuralUsageKey {
   const owner = shapes.unionForCarrier(carrier) ?? shapes.definitionForCarrier(carrier);
   return owner === undefined ? closedMetadataKey(carrier)
-    : closedMetadataKey({ componentId: owner.componentId, targetName: owner.targetName });
-}
-
-export function structuralFieldKey(ownerKey: string, storageIndex: number): string {
-  return `${ownerKey}#${storageIndex}`;
+    : owner.sourceCarriers;
 }
 
 export function visitConversionContract(

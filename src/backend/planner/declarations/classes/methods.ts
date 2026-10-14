@@ -9,7 +9,7 @@ import {
   rustCurrentErrorBoundary,
   rustSourceItemIsPubliclyReachable,
 } from "../../program/plan-context.js";
-import { rustAuthoredDeadCodeDisposition } from "../../liveness/directives.js";
+import { rustAuthoredDeadCodeDisposition } from "../../reachability-directives.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";

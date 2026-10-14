@@ -1,5 +1,4 @@
 import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
-import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField } from "../objects/record-contributions.js";
 import {
   createRustProjectObject,
   rustProjectObjectDispatchField,
@@ -106,7 +105,8 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   }
   const { ast } = context.input.program.source;
   const properties = ast.properties(node);
-  if (context.syntheticNames === undefined || properties.length !== fact.contributions.length ||
+  const contributionEvidence = context.input.program.reachability.recordContributions.get(fact);
+  if (contributionEvidence === undefined || context.syntheticNames === undefined || properties.length !== fact.contributions.length ||
     fact.contributions.some((contribution, index) => contribution.property !== properties[index]) ||
     new Set(fact.fields.map((field) => field.sourceName)).size !== fact.fields.length ||
     new Set(fact.fields.map((field) => field.storageIndex)).size !== fact.fields.length) {
@@ -123,25 +123,8 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     getter?: RustExpr;
     setter?: RustExpr;
   }>();
-  const finalContributionByStorageIndex = rustRecordFinalFieldContributions(fact);
-  const finalContributionByMethod = new Map<Node, number>();
-  fact.contributions.forEach((contribution, contributionIndex) => {
-    if (contribution.kind === "property" || contribution.kind === "structural-method") {
-      return;
-    }
-    if (contribution.kind === "method") {
-      for (const declaration of contribution.contractDeclarations) {
-        finalContributionByMethod.set(declaration, contributionIndex);
-      }
-      return;
-    }
-    if (contribution.kind === "accessor") {
-      return;
-    }
-    for (const method of contribution.methods) {
-      finalContributionByMethod.set(method.contractDeclaration, contributionIndex);
-    }
-  });
+  const finalContributionByStorageIndex = contributionEvidence.finalFields;
+  const finalContributionByMethod = contributionEvidence.finalMethods;
   const requiresObjectLiteralImplementation =
     rustObjectLiteralRequiresDispatchImplementation(fact, context);
   const implementationPlan = requiresObjectLiteralImplementation
@@ -318,21 +301,21 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
       continue;
     }
     const spreadExpression = SpreadAssignment_Expression(ast, contribution.property);
+    const spreadEvidence = contributionEvidence.spreads.get(contribution);
     if (ast.kindName(contribution.property) !== KindSpreadAssignment ||
-      spreadExpression !== contribution.expression) {
+      spreadExpression !== contribution.expression || spreadEvidence === undefined) {
       return undefined;
     }
     const plannedSpread = planExpression(spreadExpression, context);
     if (plannedSpread === undefined) {
       return undefined;
     }
-    const retainedFields = contribution.fields.filter(field =>
-      rustRecordSpreadRetainsField(contribution, field, contributionIndex, finalContributionByStorageIndex));
+    const retainedFields = contribution.fields.filter(field => spreadEvidence.retained.has(field));
     const retainedMethods = objectLiteralImplementation?.implementations.filter((implementation) =>
       implementation.kind === "spread" &&
         finalContributionByMethod.get(implementation.contractMethod) === contributionIndex) ?? [];
     const spread = planRustRecordSpread(contribution, plannedSpread, retainedFields, retainedMethods,
-      valuesByStorageIndex, context);
+      valuesByStorageIndex, spreadEvidence, context);
     if (spread === undefined) return undefined;
     bindings.push(...spread.bindings);
     for (const [index, value] of spread.fields) valuesByStorageIndex.set(index, value);

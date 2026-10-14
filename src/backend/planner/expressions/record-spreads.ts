@@ -9,7 +9,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustObjectLiteralMethodImplementationPlan } from "../objects/object-literal-implementations.js";
 import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
-import { rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
+import type { RustRecordSpreadEvidence } from "../../../analysis/reachability/record-contributions.js";
 
 type RecordFact = Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>;
 type Spread = Extract<RecordFact["contributions"][number], { readonly kind: "spread" }>;
@@ -20,6 +20,7 @@ export function planRustRecordSpread(
   fields: Spread["fields"],
   methods: readonly RustObjectLiteralMethodImplementationPlan[],
   previous: ReadonlyMap<number, RustExpr>,
+  evidence: RustRecordSpreadEvidence,
   context: RustPlanContext,
 ): {
   readonly bindings: readonly RustValueBlockEntry[];
@@ -45,7 +46,7 @@ export function planRustRecordSpread(
   const retained = new Set(fields.map(field => field.targetStorageIndex));
   for (const field of contribution.fields) {
     const keep = retained.has(field.targetStorageIndex);
-    if (!keep && !rustRecordSpreadReadIsObservable(contribution, field, context.input.program.structuralShapes)) continue;
+    if (!keep && !evidence.evaluated.has(field)) continue;
     const value = field.method === true
       ? contribution.sourceStorage === "structural-object"
         ? readRustStructuralObjectMethodStorage(contribution.sourceValueCarrier, receiver, field.sourceStorageIndex, context)

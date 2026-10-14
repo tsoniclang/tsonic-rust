@@ -1,25 +1,26 @@
-import { rustRecordFinalFieldContributions, rustRecordSpreadRetainsField, rustRecordSpreadReadIsObservable } from "../objects/record-contributions.js";
+import { analyzeRustRecordContributions } from "./record-contributions.js";
+import type { RustRecordContributionEvidence, RustRecordContributionFact } from "./record-contributions.js";
 
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 
-import type { RustCallableValueAdapter } from "../../../target-model/records/callable-adapters.js";
-import type { RustContextualValueConversion } from "../../../target-model/conversions/contextual.js";
+import type { RustCallableValueAdapter } from "../../target-model/records/callable-adapters.js";
+import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 
-import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../../analysis/operations/finalized-operation/conversions.js";
-import type { RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../../target-model/records/finalized-operation.js";
+import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../operations/finalized-operation/conversions.js";
+import type { RustFinalizedTargetInput, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
 import {
   rustValueConversionContract,
-} from "../../../target-model/conversions/contracts.js";
-import type { RustValueConversion } from "../../../target-model/operations/model.js";
-import type { RustCallableConversion } from "../../../target-model/conversions/callable.js";
-import type { RustClosedTypeTestPlan } from "../../../target-model/operations/type-tests.js";
-import { rustClosedTypeTestConstant } from "../../../target-model/operations/type-tests.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
-import { rustProjectRootThisCarrier } from "../objects/polymorphism/this-references.js";
+} from "../../target-model/conversions/contracts.js";
+import type { RustValueConversion } from "../../target-model/operations/model.js";
+import type { RustCallableConversion } from "../../target-model/conversions/callable.js";
+import type { RustClosedTypeTestPlan } from "../../target-model/operations/type-tests.js";
+import { rustClosedTypeTestConstant } from "../../target-model/operations/type-tests.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { analyzeRustProjectThisReferences, rustProjectRootThisCarrier } from "./this-references.js";
 import {
   isRustPreconstructionThisOperation,
   isRustArrayFieldContentAssignment,
@@ -37,7 +38,7 @@ import { createRustGeneratedItemUsageState } from "./generated-item-usage-state.
 
 export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput): RustGeneratedItemUsage {
   const {
-    usage,
+    seal,
     markProjectTypeUsed,
     markProjectTypeConstructed,
     markProjectTypeReified,
@@ -57,10 +58,17 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
     markAuthoredFieldRead,
   } = createRustGeneratedItemUsageState(input);
   const declarationNames = new WeakSet<Node>();
+  const recordContributions = new Map<RustRecordContributionFact, RustRecordContributionEvidence>();
+  const projectThisReferences = new Map<Node, ReadonlyMap<Node, readonly Node[]>>();
 
   for (const declaration of input.declarations) {
     const name = input.ast.name(declaration);
     if (name !== undefined) declarationNames.add(name);
+    const kind = input.ast.kindName(declaration);
+    if (kind === "KindMethodDeclaration" || kind === "KindGetAccessor" || kind === "KindSetAccessor") {
+      projectThisReferences.set(declaration,
+        analyzeRustProjectThisReferences(declaration, input.ast, input.records, input.projectTypes));
+    }
   }
 
   const visitProjectProjectionFacts = (node: Node): void => {
@@ -345,12 +353,14 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
         } else {
           markStructuralShapeConstructed(fact.resultCarrier);
         }
-        const final = rustRecordFinalFieldContributions(fact);
-        for (const [index, contribution] of fact.contributions.entries()) {
-          if (contribution.kind !== "spread") continue;
+        let evidence = recordContributions.get(fact);
+        if (evidence === undefined) {
+          evidence = analyzeRustRecordContributions(fact, input.structuralShapes);
+          recordContributions.set(fact, evidence);
+        }
+        for (const [contribution, spread] of evidence.spreads) {
           for (const field of contribution.fields) {
-            if (rustRecordSpreadRetainsField(contribution, field, index, final) ||
-              rustRecordSpreadReadIsObservable(contribution, field, input.structuralShapes))
+            if (spread.evaluated.has(field))
               markStructuralFieldRead(contribution.sourceValueCarrier, field.sourceStorageIndex);
           }
         }
@@ -530,7 +540,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
   }
 
   for (const declaration of input.declarations) {
-    const carrier = rustProjectRootThisCarrier(declaration, input.ast, input.records, input.projectTypes);
+    const carrier = rustProjectRootThisCarrier(declaration, input.ast, input.projectTypes, projectThisReferences);
     if (carrier !== undefined) markProjectTypeConstructed(carrier);
   }
 
@@ -588,5 +598,5 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
     }
   }
 
-  return usage;
+  return Object.freeze({ ...seal(), recordContributions, projectThisReferences });
 }

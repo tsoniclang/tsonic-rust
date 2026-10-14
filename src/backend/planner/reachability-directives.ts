@@ -1,11 +1,11 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustPlanningContext } from "../context.js";
-import type { RustDeadCodeDisposition } from "../../target-ast/syntax/nodes.js";
+import type { RustPlanningContext } from "./context.js";
+import type { RustDeadCodeDisposition } from "../target-ast/syntax/nodes.js";
 import type {
   RustDispatchMemberRole,
   RustGeneratedProjectFieldRole,
-} from "./generated-item-usage-model.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+} from "../../analysis/reachability/generated-item-usage-model.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 interface RustLivenessPlanningContext {
   readonly input: RustPlanningContext;
@@ -15,7 +15,7 @@ export function rustAuthoredDeadCodeDisposition(
   context: RustLivenessPlanningContext,
   declaration: Node,
 ): RustDeadCodeDisposition | undefined {
-  return context.input.liveness.requiresSuppression(declaration)
+  return context.input.program.reachability.suppressedDeclarations.has(declaration)
     ? "authored-declaration"
     : undefined;
 }
@@ -26,9 +26,9 @@ export function rustAuthoredFieldDeadCodeDisposition(
   field: Node,
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
-  const liveness = context.input.liveness;
-  return publiclyReachable || liveness.isExternallyReachable(owner) ||
-      liveness.isRead(field)
+  const liveness = context.input.program.reachability;
+  return publiclyReachable || liveness.externallyReachable.has(owner) ||
+      liveness.readAuthoredFields.has(field)
     ? undefined
     : "authored-unread-field";
 }
@@ -39,9 +39,9 @@ export function rustProjectInterfaceDeadCodeDisposition(
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
   if (publiclyReachable) return undefined;
-  const liveness = context.input.liveness;
-  if (liveness.requiresSuppression(declaration)) return "authored-declaration";
-  return liveness.isProjectTypeConstructed(declaration) || liveness.isProjectTypeReified(declaration)
+  const liveness = context.input.program.reachability;
+  if (liveness.suppressedDeclarations.has(declaration)) return "authored-declaration";
+  return liveness.constructedProjectTypes.has(declaration) || liveness.reifiedProjectTypes.has(declaration)
     ? undefined
     : "generated-unconstructed-instance";
 }
@@ -53,13 +53,13 @@ export function rustProjectConstructorDeadCodeDisposition(
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
   if (publiclyReachable) return undefined;
-  const liveness = context.input.liveness;
+  const liveness = context.input.program.reachability;
   if (constructor !== owner) {
-    return liveness.requiresSuppression(constructor)
+    return liveness.suppressedDeclarations.has(constructor)
       ? "authored-declaration"
       : undefined;
   }
-  return liveness.isProjectConstructorInvoked(owner)
+  return liveness.invokedProjectConstructors.has(owner)
     ? undefined
     : "generated-retained-constructor";
 }
@@ -74,8 +74,8 @@ export function rustGeneratedProjectInternalFieldDeadCodeDisposition(
   if (publiclyVisible || ownerSuppressesWarnings) {
     return undefined;
   }
-  const liveness = context.input.liveness;
-  return liveness.isProjectGeneratedFieldUsed(declaration, role)
+  const liveness = context.input.program.reachability;
+  return liveness.usedProjectFields.get(declaration)?.has(role) === true
     ? undefined
     : "generated-unused-storage";
 }
@@ -108,8 +108,8 @@ export function rustGeneratedDispatchDeadCodeDisposition(
   role: RustDispatchMemberRole,
   publiclyReachable = false,
 ): RustDeadCodeDisposition | undefined {
-  return publiclyReachable || context.input.liveness.requiresSuppression(owner) ||
-      context.input.liveness.isDispatchMemberUsed(declaration, role)
+  return publiclyReachable || context.input.program.reachability.suppressedDeclarations.has(owner) ||
+      context.input.program.reachability.usedDispatchMembers.get(declaration)?.has(role) === true
     ? undefined
     : "generated-unused-dispatch";
 }
@@ -120,8 +120,8 @@ export function rustGeneratedDowncastDeadCodeDisposition(
   target: Node,
   publiclyReachable = false,
 ): RustDeadCodeDisposition | undefined {
-  return publiclyReachable || context.input.liveness.requiresSuppression(source) ||
-      context.input.liveness.isDowncastUsed(source, target)
+  return publiclyReachable || context.input.program.reachability.suppressedDeclarations.has(source) ||
+      context.input.program.reachability.usedDowncasts.get(source)?.has(target) === true
     ? undefined
     : "generated-unused-dispatch";
 }
@@ -138,10 +138,10 @@ export function rustAuthoredVariantDeadCodeDisposition(
   variantName: string,
   hasPayload = false,
 ): RustDeadCodeDisposition | undefined {
-  const liveness = context.input.liveness;
-  if (liveness.isExternallyReachable(declaration) || liveness.requiresSuppression(declaration)) return undefined;
-  if (!liveness.isVariantUsed(declaration, variantName)) return "authored-unused-variant";
-  return hasPayload && !liveness.isVariantPayloadRead(declaration, variantName)
+  const liveness = context.input.program.reachability;
+  if (liveness.externallyReachable.has(declaration) || liveness.suppressedDeclarations.has(declaration)) return undefined;
+  if (!(liveness.declarationVariants.get(declaration)?.used.has(variantName) === true)) return "authored-unused-variant";
+  return hasPayload && !liveness.declarationVariants.get(declaration)?.read.has(variantName)
     ? "authored-unread-field" : undefined;
 }
 
@@ -149,9 +149,9 @@ export function rustGeneratedEnumDiscriminantDeadCodeDisposition(
   context: RustLivenessPlanningContext,
   declaration: Node,
 ): RustDeadCodeDisposition | undefined {
-  const liveness = context.input.liveness;
-  return liveness.isExternallyReachable(declaration) ||
-      liveness.requiresSuppression(declaration)
+  const liveness = context.input.program.reachability;
+  return liveness.externallyReachable.has(declaration) ||
+      liveness.suppressedDeclarations.has(declaration)
     ? undefined
     : "generated-enum-discriminant";
 }
@@ -162,11 +162,11 @@ export function rustGeneratedUnionVariantDeadCodeDisposition(
   variantName: string,
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
-  if (publiclyReachable || !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier))) return undefined;
-  if (!carriers.some(carrier => context.input.liveness.isUnionVariantConstructed(carrier, variantName))) {
+  if (publiclyReachable || !carriers.some(carrier => context.input.program.reachability.structuralCarriers.get(carrier)?.used === true)) return undefined;
+  if (!carriers.some(carrier => context.input.program.reachability.structuralCarriers.get(carrier)?.variants.constructed.has(variantName) === true)) {
     return "generated-unconstructed-variant";
   }
-  return carriers.some(carrier => context.input.liveness.isUnionVariantPayloadRead(carrier, variantName))
+  return carriers.some(carrier => context.input.program.reachability.structuralCarriers.get(carrier)?.variants.read.has(variantName) === true)
     ? undefined : "authored-unread-field";
 }
 
@@ -175,7 +175,7 @@ export function rustStructuralShapeDeadCodeDisposition(
   carriers: readonly TargetTypeRef[],
   publiclyReachable: boolean,
 ): RustDeadCodeDisposition | undefined {
-  return publiclyReachable || carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier))
+  return publiclyReachable || carriers.some(carrier => context.input.program.reachability.structuralCarriers.get(carrier)?.used === true)
     ? undefined
     : "generated-unconstructed-shape";
 }
@@ -187,11 +187,11 @@ export function rustStructuralFieldDeadCodeDisposition(
   publiclyReachable: boolean,
   role: "value" | "getter" | "setter",
 ): RustDeadCodeDisposition | undefined {
-  if (publiclyReachable || !carriers.some(carrier => context.input.liveness.isStructuralShapeUsed(carrier))) {
+  if (publiclyReachable || !carriers.some(carrier => context.input.program.reachability.structuralCarriers.get(carrier)?.used === true)) {
     return undefined;
   }
   const used = carriers.some(carrier => role === "setter"
-    ? context.input.liveness.isStructuralFieldWritten(carrier, storageIndex)
-    : context.input.liveness.isStructuralFieldRead(carrier, storageIndex));
+    ? context.input.program.reachability.structuralCarriers.get(carrier)?.fieldsWritten.has(storageIndex) === true
+    : context.input.program.reachability.structuralCarriers.get(carrier)?.fieldsRead.has(storageIndex) === true);
   return used ? undefined : "authored-unread-field";
 }

@@ -62,6 +62,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly reachability: import("../reachability/model.js").RustReachability;
   readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;
   readonly genericCallableErrors: import("../callables/generic-errors.js").RustGenericCallableErrorIndex;
   readonly callableOwnership: import("../callables/ownership-plan.js").RustCallableOwnershipPlan;

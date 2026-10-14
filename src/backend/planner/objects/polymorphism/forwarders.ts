@@ -23,7 +23,6 @@ import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { rustSelfParameter } from "../../declarations/callables/self-parameter.js";
 import { planRootCallableForwarder } from "./callable-adapters.js";
-import { rustProjectThisReferences } from "./this-references.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../program/plan-context.js";
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
@@ -229,10 +228,12 @@ function planRootCallableImplementation(
   const thisBindingName = allocateRustSyntheticName(syntheticNames, "project_this");
   const thisPlan = projectThisOverrides(
     implementation,
+    owner.declaration,
     ownerRelation.targetType,
     thisBindingName,
     context,
   );
+  if (thisPlan === undefined) return undefined;
   const planned = planProjectMethod(implementation, {
     ...context,
     syntheticNames,
@@ -469,13 +470,14 @@ function allocateRustLocalName(used: ReadonlySet<string>, preferred: string): st
 
 function projectThisOverrides(
   method: Node,
+  ownerDeclaration: Node,
   ownerCarrier: TargetTypeRef,
   bindingName: string,
   context: RustPlanContext,
 ): {
   readonly overrides: ReadonlyMap<Node, RustEffectiveExpressionOverride>;
   readonly binding?: RustExpr;
-} {
+} | undefined {
   const overrides = new Map<Node, RustEffectiveExpressionOverride>();
   const ownerValue = rustSourceTypeCarrierValue(ownerCarrier);
   const wrapperPath = ownerValue === undefined ? undefined : sourceTypePath(context, ownerValue);
@@ -484,8 +486,9 @@ function projectThisOverrides(
     return { overrides };
   }
   const program = context.input.program;
-  for (const node of rustProjectThisReferences(method, ownerCarrier, program.source.ast,
-    program.records, program.projectTypes)) {
+  const references = program.reachability.projectThisReferences.get(method);
+  if (references === undefined) return undefined;
+  for (const node of references.get(ownerDeclaration) ?? []) {
     overrides.set(node, {
       carrier: ownerCarrier,
       valueForm: "value",
