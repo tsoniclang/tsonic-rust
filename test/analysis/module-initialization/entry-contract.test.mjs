@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { binaryEntryNativePrograms } from "../../../../tsonic/test/fixtures/binary-entry-contract.mjs";
 
 for (const surfaces of [[], ["js"]]) {
   test(`binary entry rejects uncalled main on ${surfaces[0] ?? "native"}`, () => {
@@ -18,8 +19,7 @@ for (const surfaces of [[], ["js"]]) {
   ]) {
     test(`binary ${name} runs exactly once on ${surfaces[0] ?? "native"}`, { timeout: 300_000 }, () => {
       const sourceText = surfaces.length === 0
-        ? name === "explicit" ? "export function main(): void {} main();"
-          : name === "async" ? "export async function main(): Promise<void> {} await main();" : "export const result = 42;"
+        ? binaryEntryNativePrograms[name]
         : source;
       const { result } = compileRust({ surfaces,
         target: { id: "rust", options: { outputType: "bin", crateName: `entry_${name}_${surfaces[0] ?? "native"}` } },
