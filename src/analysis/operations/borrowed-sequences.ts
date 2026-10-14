@@ -3,7 +3,7 @@ import { sourceSequenceInputChoice, sourceSequenceInputIsEmpty } from "@tsonic/t
 import type { RustBorrowedSequenceInput } from "../../target-model/records/borrowed-sequences.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
-import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
+import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";

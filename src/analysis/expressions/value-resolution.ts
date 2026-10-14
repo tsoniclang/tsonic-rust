@@ -58,7 +58,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import { resolveArrayLiteralCarrier } from "../operations/inputs.js";
 import { resolveCallLikeCarrier, resolveIdentifierCarrier } from "./references.js";
 import { resolveExpressionCarrier } from "./carriers.js";
-import { createRustCarrierProbe } from "./carrier-probe.js";
+import { createRustCarrierProbe } from "../program/carrier-probe.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveRecordLiteralCarrier } from "./records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";

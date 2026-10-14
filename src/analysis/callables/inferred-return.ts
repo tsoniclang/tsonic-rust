@@ -1,6 +1,6 @@
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Initializer, Node_Operand, Node_Type } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
-import { createRustCarrierProbe } from "../expressions/carrier-probe.js";
+import { createRustCarrierProbe } from "../program/carrier-probe.js";
 
 import { rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";

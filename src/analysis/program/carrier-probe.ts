@@ -1,5 +1,5 @@
-import { createRustProgramRecordBuilder } from "../program/records/create.js";
-import type { RustFactWalk } from "../program/walk.js";
+import { createRustProgramRecordBuilder } from "./records/create.js";
+import type { RustFactWalk } from "./walk.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 
 export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {

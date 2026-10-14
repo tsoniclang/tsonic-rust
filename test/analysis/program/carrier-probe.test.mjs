@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustCarrierProbe } from "../../../dist/analysis/expressions/carrier-probe.js";
+import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/signature-query.js";
 
