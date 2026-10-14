@@ -6,7 +6,11 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForCarrier } from "../../foundation/requirements.js";
 import { rustFoundationForContextualConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
-import { rustTypeAliasDeclarationFactKey, rustAsyncFunctionFactKey, rustGeneratorFactKey, rustYieldFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
+import { rustTypeAliasDeclarationFactKey, rustGeneratorFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
+import { createRustAsyncFunctionProducer } from "./async-function.js";
+import { createRustYieldProducer } from "./yield.js";
+import { createRustComputedMemberProducer } from "./computed-member.js";
+import { createRustCompoundWriteProducer } from "./compound-write.js";
 import { rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
 import { createRustSelectedOperationProducer } from "./selected-operation.js";
 import { createRustRuntimeCarrierProducer } from "./runtime-carrier.js";
@@ -35,7 +39,7 @@ import { createRustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-a
 import { createRustPropertyProjectionProducer } from "./property-projection.js";
 import { rustCompileTimeSourceKey, rustSourceCallableReturnFactKey } from "./keys/source-declarations.js";
 import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustCallScopedLifetimeReconciliationFactKey, rustProjectUpcastFactKey, rustProjectDowncastFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
-import { rustCompoundWriteFactKey, rustComputedMemberFactKey, rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
+import { rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey, rustModuleBindingFactKey } from "./keys/operation-selections.js";
 import { rustTypeOnlyDeclarationFactKey } from "./keys/type-only.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
@@ -68,9 +72,9 @@ export function createRustProgramRecordBuilder(
   });
 
   const typeAliasDeclaration = createFamily(rustTypeAliasDeclarationFactKey, parent?.typeAliasDeclaration);
-  const asyncFunction = createFamily(rustAsyncFunctionFactKey, parent?.asyncFunction);
+  const asyncFunctions = createRustAsyncFunctionProducer(assertOpen, parent?.asyncFunction);
   const generator = createFamily(rustGeneratorFactKey, parent?.generator);
-  const yielded = createFamily(rustYieldFactKey, parent?.yield);
+  const yields = createRustYieldProducer(assertOpen, parent?.yield);
   const resourceManagementPlans = createRustResourceManagementProducer(assertOpen, parent?.resourceManagement);
   const sourceParameterAbi = createFamily(rustSourceParameterAbiFactKey, parent?.sourceParameterAbi, fact => {
     const carriers = maximumRustFoundation(rustFoundationForCarrier(fact.valueCarrier),
@@ -112,8 +116,8 @@ export function createRustProgramRecordBuilder(
   const mutatedReferent = createFamily(rustMutatedReferentFactKey, parent?.mutatedReferent);
   const selfMode = createFamily(rustSelfModeFactKey, parent?.selfMode);
   const targetOperations = createRustTargetOperationProducer(assertOpen, requireFoundation, definitions, parent?.targetOperation);
-  const compoundWrite = createFamily(rustCompoundWriteFactKey, parent?.compoundWrite);
-  const computedMember = createFamily(rustComputedMemberFactKey, parent?.computedMember);
+  const compoundWrites = createRustCompoundWriteProducer(assertOpen, parent?.compoundWrite);
+  const computedMembers = createRustComputedMemberProducer(assertOpen, parent?.computedMember);
   const receiverIndependentMethods = createRustReceiverIndependentMethodProducer(assertOpen, parent?.receiverIndependentMethod);
   const preparedOperationResult = createFamily(rustPreparedOperationResultFactKey, parent?.preparedOperationResult);
   const optionalChain = createFamily(rustOptionalChainFactKey, parent?.optionalChain);
@@ -144,9 +148,9 @@ export function createRustProgramRecordBuilder(
 
   const records: RustProgramRecords = Object.freeze({
     typeAliasDeclaration: typeAliasDeclaration.reader,
-    asyncFunction: asyncFunction.reader,
+    asyncFunction: asyncFunctions.records,
     generator: generator.reader,
-    yield: yielded.reader,
+    yield: yields.records,
     resourceManagement: resourceManagementPlans.records,
     sourceParameterAbi: sourceParameterAbi.reader,
     runtimeCarrier: runtimeCarriers.records,
@@ -180,8 +184,8 @@ export function createRustProgramRecordBuilder(
     mutatedReferent: mutatedReferent.reader,
     selfMode: selfMode.reader,
     targetOperation: targetOperations.records,
-    compoundWrite: compoundWrite.reader,
-    computedMember: computedMember.reader,
+    compoundWrite: compoundWrites.records,
+    computedMember: computedMembers.records,
     receiverIndependentMethod: receiverIndependentMethods.records,
     preparedOperationResult: preparedOperationResult.reader,
     optionalChain: optionalChain.reader,
@@ -212,9 +216,11 @@ export function createRustProgramRecordBuilder(
   });
   return Object.freeze({
     typeAliasDeclaration: typeAliasDeclaration.writer,
-    asyncFunction: asyncFunction.writer,
+    asyncFunction: asyncFunctions.records,
+    asyncFunctions,
     generator: generator.writer,
-    yield: yielded.writer,
+    yield: yields.records,
+    yields,
     resourceManagement: resourceManagementPlans.records,
     resourceManagementPlans,
     sourceParameterAbi: sourceParameterAbi.writer,
@@ -265,8 +271,10 @@ export function createRustProgramRecordBuilder(
     selfMode: selfMode.writer,
     targetOperation: targetOperations.records,
     targetOperations,
-    compoundWrite: compoundWrite.writer,
-    computedMember: computedMember.writer,
+    compoundWrite: compoundWrites.records,
+    compoundWrites,
+    computedMember: computedMembers.records,
+    computedMembers,
     receiverIndependentMethod: receiverIndependentMethods.records,
     receiverIndependentMethods,
     preparedOperationResult: preparedOperationResult.writer,

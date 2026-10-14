@@ -31,6 +31,10 @@ import type { RustNativeUnreachableProducer } from "./native-unreachable.js";
 import type { RustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
 import type { RustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
 import type { RustPropertyProjectionProducer } from "./property-projection.js";
+import type { RustAsyncFunctionProducer } from "./async-function.js";
+import type { RustYieldProducer } from "./yield.js";
+import type { RustComputedMemberProducer } from "./computed-member.js";
+import type { RustCompoundWriteProducer } from "./compound-write.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -42,7 +46,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "awaitSourceErrorEffects" | "errorEffects" | "fallible" | "genericCallableInvocation" |
   "sourceAccessorEffects" | "sourceCallEffects" | "sourceErrorEffects" | "awaitValue" |
   "futureValue" | "resourceManagement" | "deferredProducerEffects" |
-  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection";
+  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection" |
+  "asyncFunction" | "yield" | "computedMember" | "compoundWrite";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -77,6 +82,10 @@ export type RustProgramRecordWriter = {
   readonly genericNumerics: RustGenericNumericOperandsProducer;
   readonly indexedFieldKeys: RustIndexedFieldKeyArgumentProducer;
   readonly propertyProjections: RustPropertyProjectionProducer;
+  readonly asyncFunctions: RustAsyncFunctionProducer;
+  readonly yields: RustYieldProducer;
+  readonly computedMembers: RustComputedMemberProducer;
+  readonly compoundWrites: RustCompoundWriteProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
