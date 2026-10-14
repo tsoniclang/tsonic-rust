@@ -345,15 +345,14 @@ function shapeRustSourceCallInput(
   const mutable = parameter.mode === "mut-ref";
   const sourceParameterAbi = context.input.program.records.sourceParameterAbi.get(argumentNode);
   if (borrowedInputs.get(argumentNode) === selectedInput) return selectedInput;
-  const nonConsumingInput = selectedInput;
   return sourceParameterAbi?.mode === parameter.mode &&
       rustTargetTypeRefEquals(sourceParameterAbi.parameterCarrier, parameter.parameterCarrier)
-    ? nonConsumingInput
-    : nonConsumingInput.kind === "string-literal" && !mutable
-      ? { kind: "str-literal", value: nonConsumingInput.value }
+    ? selectedInput
+    : selectedInput.kind === "string-literal" && !mutable
+      ? { kind: "str-literal", value: selectedInput.value }
       : mutable
-        ? createRustMutableReferenceArgument(nonConsumingInput)
-        : createRustSharedReferenceArgument(context, nonConsumingInput, argumentNode);
+        ? createRustMutableReferenceArgument(selectedInput)
+        : createRustSharedReferenceArgument(context, selectedInput, argumentNode);
 }
 
 function resolveFinalizedRustSpreadInput(

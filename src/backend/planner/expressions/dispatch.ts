@@ -51,7 +51,6 @@ import {
 import {
   planRustIdentifierValue,
   planRustValueRead,
-
 } from "./typed-locations.js";
 
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
@@ -373,9 +372,7 @@ export function planExpressionInner(
         ? undefined
         : {
             kind: "evaluate-then",
-            effect: discarded.discard === "value"
-              ? discarded.expression
-              : discarded.expression,
+            effect: discarded.expression,
             discard: discarded.discard,
             value: { kind: "string-literal", value: fact.result },
           };

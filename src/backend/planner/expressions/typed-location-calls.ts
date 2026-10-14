@@ -13,7 +13,6 @@ import { optionReference, typedLocationFactMatchesPlan } from "./location-expres
 import { planRustNativeAllocation } from "./native-memory.js";
 import {
   fallibleLocationAccess,
-
   planRustSourceLocationStorage,
 } from "./typed-locations.js";
 import type { RustExpressionPlanner } from "./typed-locations.js";
