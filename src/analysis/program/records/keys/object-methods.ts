@@ -1,7 +1,7 @@
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 import { defineRustPlanKey } from "../key.js";
 import type { RustPlanKey } from "../key.js";
-import type { RustObjectLiteralMethodAdapterFact, RustSourceCallEffectsFact, RustSourceAccessorEffectsFact, RustFutureValueFact } from "../../../../target-model/records/object-methods.js";
+import type { RustObjectLiteralMethodAdapterFact } from "../../../../target-model/records/object-methods.js";
 
 export const rustObjectLiteralMethodAdapterFactKey: RustPlanKey<RustObjectLiteralMethodAdapterFact> =
   defineRustPlanKey("objectLiteralMethodAdapter", objectLiteralMethodAdapterFactEquals);
@@ -53,15 +53,3 @@ function objectLiteralMethodAdapterFactEquals(
         );
     });
 }
-
-export const rustFallibleFactKey: RustPlanKey<{ readonly fallible: true }> =
-  defineRustPlanKey("fallible", () => true);
-
-export const rustSourceCallEffectsFactKey: RustPlanKey<RustSourceCallEffectsFact> =
-  defineRustPlanKey("sourceCallEffects", closedMetadataEquals);
-
-export const rustSourceAccessorEffectsFactKey: RustPlanKey<RustSourceAccessorEffectsFact> =
-  defineRustPlanKey("sourceAccessorEffects", closedMetadataEquals);
-
-export const rustFutureValueFactKey: RustPlanKey<RustFutureValueFact> =
-  defineRustPlanKey("futureValue", closedMetadataEquals);
