@@ -647,7 +647,7 @@ export function resolvePostCheckBinaryCarrier(
     : undefined;
   if (inPlaceStringAppend !== undefined && fact?.kind === "operator-token") {
     fact = { ...fact, writeStrategy: inPlaceStringAppend.writeStrategy };
-    walk.context.records.mutatedBinding.set(inPlaceStringAppend.declaration, { mutated: true }, [{ message: "rust in-place string append requires mutable local storage" }]);
+    walk.context.records.mutatedBindings.written(inPlaceStringAppend.declaration);
   }
   if (fact === undefined) {
     walk.postCheckOperations.delete(expression);

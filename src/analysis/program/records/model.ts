@@ -43,6 +43,9 @@ import type { RustAsyncFunctionProducer } from "./async-function.js";
 import type { RustYieldProducer } from "./yield.js";
 import type { RustComputedMemberProducer } from "./computed-member.js";
 import type { RustCompoundWriteProducer } from "./compound-write.js";
+import type { RustTypeAliasDeclarationProducer } from "./type-alias-declaration.js";
+import type { RustMutatedBindingProducer } from "./mutated-binding.js";
+import type { RustMutatedReferentProducer } from "./mutated-referent.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -57,7 +60,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection" |
   "typeOnlyDeclaration" | "moduleBinding" | "moduleCallableStorage" | "sourceCallableReturn" | "capturedFieldStorage" |
   "callScopedLifetimeReconciliation" | "projectUpcast" | "projectDowncast" |
-  "asyncFunction" | "yield" | "computedMember" | "compoundWrite";
+  "asyncFunction" | "yield" | "computedMember" | "compoundWrite" |
+  "typeAliasDeclaration" | "mutatedBinding" | "mutatedReferent";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -104,6 +108,9 @@ export type RustProgramRecordWriter = {
   readonly yields: RustYieldProducer;
   readonly computedMembers: RustComputedMemberProducer;
   readonly compoundWrites: RustCompoundWriteProducer;
+  readonly typeAliasDeclarations: RustTypeAliasDeclarationProducer;
+  readonly mutatedBindings: RustMutatedBindingProducer;
+  readonly mutatedReferents: RustMutatedReferentProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {

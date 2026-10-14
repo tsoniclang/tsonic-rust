@@ -6,7 +6,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../tar
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForCarrier } from "../../foundation/requirements.js";
 import { rustFoundationForContextualConversion, rustFoundationForValueConversion } from "../../foundation/conversion-requirements.js";
-import { rustTypeAliasDeclarationFactKey, rustGeneratorFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
+import { rustGeneratorFactKey, rustSourceParameterAbiFactKey } from "./keys/callables-and-resources.js";
 import { createRustAsyncFunctionProducer } from "./async-function.js";
 import { createRustYieldProducer } from "./yield.js";
 import { createRustComputedMemberProducer } from "./computed-member.js";
@@ -41,7 +41,7 @@ import { createRustCallScopedLifetimeReconciliationProducer } from "./call-scope
 import { createRustProjectUpcastProducer } from "./project-upcast.js";
 import { createRustProjectDowncastProducer } from "./project-downcast.js";
 import { rustCompileTimeSourceKey } from "./keys/source-declarations.js";
-import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustMutatedBindingFactKey, rustMutatedReferentFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
+import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
 import { rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
@@ -54,6 +54,9 @@ import { createRustModuleBindingProducer } from "./module-binding.js";
 import { createRustModuleCallableStorageProducer } from "./module-callable-storage.js";
 import { createRustSourceCallableReturnProducer } from "./source-callable-return.js";
 import { createRustCapturedFieldStorageProducer } from "./captured-field-storage.js";
+import { createRustTypeAliasDeclarationProducer } from "./type-alias-declaration.js";
+import { createRustMutatedBindingProducer } from "./mutated-binding.js";
+import { createRustMutatedReferentProducer } from "./mutated-referent.js";
 import { rustMemoryLayoutObservationKey } from "./keys/memory-layout.js";
 
 export function createRustProgramRecordBuilder(
@@ -76,7 +79,7 @@ export function createRustProgramRecordBuilder(
     requireFoundation(foundation(value));
   });
 
-  const typeAliasDeclaration = createFamily(rustTypeAliasDeclarationFactKey, parent?.typeAliasDeclaration);
+  const typeAliasDeclarations = createRustTypeAliasDeclarationProducer(assertOpen, parent?.typeAliasDeclaration);
   const asyncFunctions = createRustAsyncFunctionProducer(assertOpen, parent?.asyncFunction);
   const generator = createFamily(rustGeneratorFactKey, parent?.generator);
   const yields = createRustYieldProducer(assertOpen, parent?.yield);
@@ -117,8 +120,8 @@ export function createRustProgramRecordBuilder(
   const projectDowncasts = createRustProjectDowncastProducer(assertOpen, parent?.projectDowncast);
   const sourceBinding = createFamily(rustSourceBindingFactKey, parent?.sourceBinding);
   const bindingProjection = createFamily(rustBindingProjectionFactKey, parent?.bindingProjection);
-  const mutatedBinding = createFamily(rustMutatedBindingFactKey, parent?.mutatedBinding);
-  const mutatedReferent = createFamily(rustMutatedReferentFactKey, parent?.mutatedReferent);
+  const mutatedBindings = createRustMutatedBindingProducer(assertOpen, parent?.mutatedBinding);
+  const mutatedReferents = createRustMutatedReferentProducer(assertOpen, parent?.mutatedReferent);
   const selfMode = createFamily(rustSelfModeFactKey, parent?.selfMode);
   const targetOperations = createRustTargetOperationProducer(assertOpen, requireFoundation, definitions, parent?.targetOperation);
   const compoundWrites = createRustCompoundWriteProducer(assertOpen, parent?.compoundWrite);
@@ -152,7 +155,7 @@ export function createRustProgramRecordBuilder(
   const classValues = createRustClassValueProducer(assertOpen, parent?.classValue);
 
   const records: RustProgramRecords = Object.freeze({
-    typeAliasDeclaration: typeAliasDeclaration.reader,
+    typeAliasDeclaration: typeAliasDeclarations.records,
     asyncFunction: asyncFunctions.records,
     generator: generator.reader,
     yield: yields.records,
@@ -185,8 +188,8 @@ export function createRustProgramRecordBuilder(
     projectDowncast: projectDowncasts.records,
     sourceBinding: sourceBinding.reader,
     bindingProjection: bindingProjection.reader,
-    mutatedBinding: mutatedBinding.reader,
-    mutatedReferent: mutatedReferent.reader,
+    mutatedBinding: mutatedBindings.records,
+    mutatedReferent: mutatedReferents.records,
     selfMode: selfMode.reader,
     targetOperation: targetOperations.records,
     compoundWrite: compoundWrites.records,
@@ -220,7 +223,8 @@ export function createRustProgramRecordBuilder(
     classValue: classValues.records,
   });
   return Object.freeze({
-    typeAliasDeclaration: typeAliasDeclaration.writer,
+    typeAliasDeclaration: typeAliasDeclarations.records,
+    typeAliasDeclarations,
     asyncFunction: asyncFunctions.records,
     asyncFunctions,
     generator: generator.writer,
@@ -275,8 +279,10 @@ export function createRustProgramRecordBuilder(
     projectDowncasts,
     sourceBinding: sourceBinding.writer,
     bindingProjection: bindingProjection.writer,
-    mutatedBinding: mutatedBinding.writer,
-    mutatedReferent: mutatedReferent.writer,
+    mutatedBinding: mutatedBindings.records,
+    mutatedBindings,
+    mutatedReferent: mutatedReferents.records,
+    mutatedReferents,
     selfMode: selfMode.writer,
     targetOperation: targetOperations.records,
     targetOperations,
