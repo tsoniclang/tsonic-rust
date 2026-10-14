@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../../helpers/rust-session.mjs";
-import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 function selectedNodes(source, program) {
   const rows = [];
