@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { fixedFieldSelfSource } from "../../../helpers/fixed-field-self.mjs";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 function nodesOf(source, files) {
@@ -91,6 +92,24 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(typeof selected.fieldName, "string");
     assert.equal(Object.isFrozen(selected) && Object.isFrozen(captures), true);
     assert.equal(rustTargetTypeRefEquals(selected.carrier, program.records.runtimeCarrier.get(selected.reference)?.carrier), true);
+  });
+
+  test(`checked recursive field capture retains exact field, receiver and ordered reference identities in ${surface}`, () => {
+    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": fixedFieldSelfSource } });
+    const nodes = nodesOf(source, program.sourceFiles);
+    const closures = nodes.filter(node => source.ast.is.IsArrowFunction(node));
+    assert.equal(closures.length, 1);
+    const capture = program.records.closureCapture.get(closures[0]);
+    const field = capture?.recursiveField;
+    assert.equal(field !== undefined, true);
+    assert.equal(field.declaration === capture.recursiveDeclaration, true);
+    assert.equal(source.ast.kindName(field.declaration), "KindPropertyDeclaration");
+    assert.equal(nodes.includes(field.receiver) && nodes.includes(field.reference), true);
+    assert.equal(field.references.length > 0 && field.reference === field.references[0], true);
+    assert.equal(field.references.every(reference => nodes.includes(reference)), true);
+    assert.equal(rustTargetTypeRefEquals(field.carrier, program.records.runtimeCarrier.get(field.reference)?.carrier), true);
+    assert.equal(Object.isFrozen(capture) && Object.isFrozen(field) && Object.isFrozen(field.references), true);
+    assert.equal(capture.receiverFields.some(other => other.declaration === field.declaration), false);
   });
 }
 
