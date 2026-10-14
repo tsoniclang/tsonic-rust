@@ -36,7 +36,7 @@ export function recordRustValueStructDeclaration(walk: RustFactWalk, node: Node)
       "A value struct requires one exact native record carrier for its selected fields.", node, []);
     return true;
   }
-  records.compileTimeSource.set(node, true);
-  records.compileTimeSource.set(initializer, true);
+  records.compileTimeSources.erase(node);
+  records.compileTimeSources.erase(initializer);
   return true;
 }

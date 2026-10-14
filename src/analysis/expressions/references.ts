@@ -343,7 +343,7 @@ function resolveSharedSourceMarkerCarrier(
       appendRustDiagnostic(walk, "RUST_MEMORY_LAYOUT_OBSERVATION_NOT_PROVEN", layout.reason, expression, []);
       return { handled: true };
     }
-    walk.context.records.memoryLayoutObservation.set(expression, Object.freeze({ value: layout.value }));
+    walk.context.records.memoryLayoutObservations.observe(expression, layout.value);
     return { handled: true, carrier: setCarrierFact(walk, expression, rustSourcePrimitiveTargetType("native-uint")) };
   }
   const rawIdentity = readRustSourceRawPointerIdentity(expression, sourceFacts);

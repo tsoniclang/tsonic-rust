@@ -20,7 +20,3 @@ export const rustSourceBindingFactKey: RustPlanKey<RustSourceBindingFact> =
     left.sourceDeclaration === right.sourceDeclaration &&
     (left.scope !== "module" ||
       (right.scope === "module" && left.fileName === right.fileName)));
-
-
-export const rustSelfModeFactKey: RustPlanKey<{ readonly mode: "ref" | "mut-ref" }> =
-  defineRustPlanKey("selfMode", (left, right) => left.mode === right.mode);
