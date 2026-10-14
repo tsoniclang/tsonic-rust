@@ -7,7 +7,7 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { recordRustFlowReadProjection, rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustPolicyNode } from "../../policy/model/context.js";
 import { selectRustGuardedValueCarrier } from "./native-flow-refinement.js";
 import { rustSourceAbsenceReadCarrier, rustSourceAbsenceUse } from "../expressions/absence-use.js";
@@ -36,7 +36,7 @@ export function selectedValueCarrier(
       !types.isNullish(member) && !types.isVoidLike(member) && !types.couldContainTypeVariables(member))) {
       const projection = selectRustFlowReadProjection(effective, present, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
-        recordRustFlowReadProjection(context.records, expression, projection.fact);
+        context.records.flowReadProjections.project(expression, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
         return present;
       }
     }
@@ -54,7 +54,7 @@ export function selectedValueCarrier(
   }
   const flowRead = selectRustFlowReadProjection(stored, selected, options.projectTypes, context.typeDefinitions);
   if (flowRead.kind === "projection") {
-    recordRustFlowReadProjection(context.records, expression, flowRead.fact);
+    context.records.flowReadProjections.project(expression, flowRead.fact.sourceCarrier, flowRead.fact.selectedCarrier, flowRead.fact);
     return selected;
   }
   if (stored.kind === "reference" && rustTargetTypeRefEquals(stored.referent, selected)) {

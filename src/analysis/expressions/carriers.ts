@@ -530,9 +530,7 @@ function applyOptionLane(
       const truncation = selectRustIntegerTruncationConversion(walk.context.ast, expression,
         operation?.kind === "provider-operation" ? operation.operationId : undefined, resolved, scalarTarget);
       if (truncation !== undefined) {
-        walk.context.records.contextualValueConversion.set(expression, {
-          sourceCarrier: resolved, targetCarrier: scalarTarget, conversion: truncation,
-        }, [{ message: "rust exact bounded integer result" }]);
+        walk.context.records.contextualValueConversions.convert(expression, resolved, scalarTarget, truncation);
         projected = scalarTarget;
       }
       const reconciliationTarget = expectedOptionElement !== undefined && !isRustOptionCarrier(resolved)
@@ -568,9 +566,7 @@ function applyOptionLane(
         recordRustValueCarrierReconciliation(walk.context.records, expression, reconciliation);
         projected = reconciliationTarget;
         if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
-          walk.context.records.conversion.set(expression, { convertedType: reconciliationTarget }, [
-            { message: "rust project-type upcast conversion" },
-          ]);
+          walk.context.records.conversions.converted(expression, reconciliationTarget);
         }
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated" &&
@@ -593,21 +589,12 @@ function applyOptionLane(
       walk.context.records.targetOperations.source(expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
     if (projected !== undefined) {
-      walk.context.records.optionProjection.set(expression, {
-        kind: "none",
-        sourceCarrier: projected,
-        resultCarrier: expected,
-      }, [{ message: "rust exact option-none projection" }]);
+      walk.context.records.optionProjections.none(expression, projected, expected);
     }
     return expected;
   }
   if (projected !== undefined && rustTargetTypeRefEquals(projected, inner)) {
-    walk.context.records.optionProjection.set(expression, {
-      kind: "some",
-      sourceCarrier: projected,
-      elementCarrier: inner,
-      resultCarrier: expected,
-    }, [{ message: "rust exact option-some projection" }]);
+    walk.context.records.optionProjections.some(expression, projected, inner, expected);
     return expected;
   }
   return resolved;

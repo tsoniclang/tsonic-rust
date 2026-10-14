@@ -8,18 +8,8 @@ import { rustCompilerOwnedContextualConversionMatches } from "../../target-model
 import type { RustContextualValueConversion } from "../../target-model/conversions/contextual.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAppliedValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import type { RustFlowReadProjectionFact, RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
+import type { RustProjectUpcastFact } from "../../target-model/records/value-projections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-
-export function recordRustFlowReadProjection(
-  records: RustProgramRecordWriter,
-  subject: ExtensionFactSubject,
-  fact: RustFlowReadProjectionFact,
-): void {
-  records.flowReadProjection.set(subject, fact, [
-    { message: `rust exact ${fact.kind} flow-read projection` },
-  ]);
-}
 
 export function recordRustValueCarrierReconciliation(
   records: RustProgramRecordWriter,
@@ -46,19 +36,12 @@ export function recordRustValueCarrierReconciliation(
       throw new Error("Rust optional admission must retain its exact source and selected payload.");
     }
     if (conversion.elementConversion !== null) {
-      records.contextualValueConversion.set(subject, {
-        sourceCarrier,
-        targetCarrier: conversion.element,
-        conversion: conversion.elementConversion,
-      }, [{ message: "rust exact contextual payload conversion before presence" }]);
+      records.contextualValueConversions.convert(subject, sourceCarrier, conversion.element, conversion.elementConversion);
     }
-    records.optionProjection.set(subject, {
-      kind: "some", sourceCarrier: conversion.element,
-      elementCarrier: conversion.element, resultCarrier: targetCarrier,
-    }, [{ message: "rust exact option-some projection" }]);
+    records.optionProjections.some(subject, conversion.element, conversion.element, targetCarrier);
     return;
   }
-  records.contextualValueConversion.set(subject, reconciliation.fact, [{ message: "rust exact contextual value conversion" }]);
+  records.contextualValueConversions.convert(subject, sourceCarrier, targetCarrier, conversion);
 }
 
 export function rustValueCarrierBeforeContextualConversion(

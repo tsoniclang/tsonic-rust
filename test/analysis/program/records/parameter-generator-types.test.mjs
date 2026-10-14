@@ -61,7 +61,7 @@ builder.sourceBinding.get(subject);
       [family + " generic writer", `builder.${family}.set(subject, undefined);`, /Property 'set' does not exist/u]),
     ["generator key", `import { rustGeneratorFactKey } from "${join(root, "dist/analysis/program/records/keys/callables-and-resources.js")}";`, /Cannot find module/u],
     ["parameter ABI key", `import { rustSourceParameterAbiFactKey } from "${join(root, "dist/analysis/program/records/keys/callables-and-resources.js")}";`, /Cannot find module/u],
-    ["source binding key", `import { rustSourceBindingFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /has no exported member|no exported member named/u],
+    ["source binding key", `import { rustSourceBindingFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /Cannot find module.*\/keys\/value-projections\.js/u],
     ["parameter ABI forwarder", `import { setParameterAbiFact } from "${join(root, "dist/analysis/declarations/types-and-bindings.js")}";`, /has no exported member|no exported member named/u],
     ["generator foreign declaration", "builder.generators.suspend({}, protocol, retention);", /missing.*properties.*Node/u],
     ["generator missing protocol", "builder.generators.suspend(subject, {}, retention);", /missing.*properties.*RustGeneratorProtocol/u],

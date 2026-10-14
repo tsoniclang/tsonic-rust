@@ -19,7 +19,7 @@ import {
 import { selectRustFlowReadProjection } from "../../../policy/types/resolution/value-carrier-reconciliation.js";
 import { selectRustGuardedValueCarrier } from "../native-flow-refinement.js";
 import { rustRuntimeUnionProjection } from "../../../target-model/types/carriers/runtime-unions.js";
-import { recordRustFlowReadProjection } from "../../conversions/value-carrier-queries.js";
+
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolution/source-unions.js";
 import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
@@ -134,7 +134,7 @@ export function selectedMemberReceiverCarrier(
     if (selected !== undefined) {
       const projection = selectRustFlowReadProjection(refinedCarrier, selected, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
-        recordRustFlowReadProjection(context.records, receiver, projection.fact);
+        context.records.flowReadProjections.project(receiver, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
         return selected;
       }
     }
@@ -215,7 +215,7 @@ export function selectedMemberReceiverCarrier(
   }
   const flowProjection = selectRustFlowReadProjection(sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
   if (flowProjection.kind === "projection") {
-    recordRustFlowReadProjection(context.records, receiver, flowProjection.fact);
+    context.records.flowReadProjections.project(receiver, flowProjection.fact.sourceCarrier, flowProjection.fact.selectedCarrier, flowProjection.fact);
     return selectedCarrier;
   }
   if (rustRuntimeUnionProjection(sourceCarrier, selectedCarrier) !== undefined) {
@@ -298,7 +298,7 @@ export function acceptRustMemberOperation(
       );
     }
     if (projection.kind === "projection") {
-      recordRustFlowReadProjection(context.records, request.receiver, projection.fact);
+      context.records.flowReadProjections.project(request.receiver, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
     }
   }
   if (request.optionalChain !== true) {

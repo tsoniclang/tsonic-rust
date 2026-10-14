@@ -185,10 +185,11 @@ test("removed general writes, leaked producers and malformed producer inputs fai
 test("the three superseded keys and the type-alias forwarder are deleted rather than kept as alternate routes", () => {
   const result = compile("removed-keys", `
     import { rustTypeAliasDeclarationFactKey } from "../../dist/analysis/program/records/keys/callables-and-resources.js";
-    import { rustMutatedBindingFactKey, rustMutatedReferentFactKey } from "../../dist/analysis/program/records/keys/value-projections.js";
+    import { rustMutatedBindingFactKey } from "../../dist/analysis/program/records/keys/value-projections.js";
+    import { rustMutatedReferentFactKey } from "../../dist/analysis/program/records/keys/value-projections.js";
     import { registerTypeAlias } from "../../dist/analysis/declarations/types-and-bindings.js";
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "no removed key or forwarder has a surviving import path");
-  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2307, 2305, 2305, 2305], result.stdout);
+  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2307, 2307, 2307, 2305], result.stdout);
 });

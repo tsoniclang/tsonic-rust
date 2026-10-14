@@ -12,7 +12,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { rustUnionLeaves } from "../../target-model/types/union-relations.js";
 import { selectRustSourceTypeGuard } from "../../policy/operations/source-profiles/js/type-tests.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
+
 
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -36,7 +36,7 @@ export function selectRustGuardedValueCarrier(
   if (selected === undefined) return undefined;
   const projection = selectRustFlowReadProjection(sourceCarrier, selected, options.projectTypes, context.typeDefinitions);
   if (projection.kind !== "projection") return undefined;
-  recordRustFlowReadProjection(context.records, reference, projection.fact);
+  context.records.flowReadProjections.project(reference, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
   return selected;
 }
 

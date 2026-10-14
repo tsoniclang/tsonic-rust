@@ -44,8 +44,6 @@ const erased: true | undefined = records.compileTimeSource.get(node);
 const mode: "ref" | "mut-ref" | undefined = records.selfMode.get(node)?.mode;
 const value: number | undefined = records.memoryLayoutObservation.get(node)?.value;
 const sealed: RustProgramRecords = builder;
-import { rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustContextualValueConversionFactKey
-  } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";
 `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [
@@ -56,7 +54,7 @@ import { rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustContext
     ...["compileTimeSources", "selfModes", "memoryLayoutObservations"].map(producer =>
       [`${producer} leaked port`, `records.${producer};`, /does not exist/u]),
     ["compile-time retired key", `import { rustCompileTimeSourceKey } from "${join(root, "dist/analysis/program/records/keys/source-declarations.js")}";`, /Cannot find module/u],
-    ["receiver retired key", `import { rustSelfModeFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /has no exported member|no exported member named/u],
+    ["receiver retired key", `import { rustSelfModeFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /Cannot find module.*\/keys\/value-projections\.js/u],
     ["layout retired key", `import { rustMemoryLayoutObservationKey } from "${join(root, "dist/analysis/program/records/keys/memory-layout.js")}";`, /Cannot find module/u],
     ["erase missing subject", "builder.compileTimeSources.erase();", /Expected 1 arguments/u],
     ["erase foreign subject", "builder.compileTimeSources.erase(1);", /not assignable/u],

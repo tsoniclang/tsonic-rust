@@ -44,7 +44,6 @@ test("callable/environment producers require semantic inputs and reject every re
     const callable: Node | undefined = records.sourceCallableValue.get(reference)?.sourceDeclaration;
     const direct: TargetTypeRef | undefined = records.directCallableReference.get(reference)?.resultCarrier;
     const retained: RustRetainedEnvironment["lifetime"] | undefined = records.retainedEnvironment.get(declaration)?.lifetime;
-    import { rustConversionKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";
   `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [];

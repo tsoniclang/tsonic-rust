@@ -67,7 +67,6 @@ builder.typedLocationPlan.get(node);
 builder.bindingStorage.get(node);
 builder.retainedCallLifetimes.get(node);
 builder.bindingProjection.get(node);
-import { rustConversionKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";
 `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [
@@ -76,11 +75,11 @@ import { rustConversionKey } from "${join(root, "dist/analysis/program/records/k
     ["storage old writer", "builder.bindingStorage.set(node, {});", /Property 'set' does not exist/u],
     ["lifetimes old writer", "builder.retainedCallLifetimes.set(node, []);", /Property 'set' does not exist/u],
     ["projection old writer", "builder.bindingProjection.set(node, {});", /Property 'set' does not exist/u],
-    ["argument old key", `import { rustArgumentPassingKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";`, /no exported member named 'rustArgumentPassingKey'|no exported member 'rustArgumentPassingKey'/u],
+    ["argument old key", `import { rustArgumentPassingKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";`, /Cannot find module.*\/keys\/selections\.js/u],
     ["location old key", `import { rustTypedLocationPlanKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /Cannot find module.*\/keys\/operation-selections\.js/u],
     ["storage old key", `import { rustBindingStorageFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /Cannot find module.*\/keys\/operation-selections\.js/u],
     ["lifetimes old key", `import { rustRetainedCallLifetimesFactKey } from "${join(root, "dist/analysis/program/records/keys/retained-environments.js")}";`, /Cannot find module.*\/keys\/retained-environments\.js/u],
-    ["projection old key", `import { rustBindingProjectionFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /no exported member named 'rustBindingProjectionFactKey'|no exported member 'rustBindingProjectionFactKey'/u],
+    ["projection old key", `import { rustBindingProjectionFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /Cannot find module.*\/keys\/value-projections\.js/u],
     ["argument subject", "builder.argumentPassingPlans.pass({}, 'by-value');", /missing.*properties.*Node/u],
     ["argument invalid mode", "builder.argumentPassingPlans.pass(node, 'move');", /not assignable/u],
     ["argument old record", "builder.argumentPassingPlans.pass(node, { mode: 'by-value' });", /not assignable/u],

@@ -13,11 +13,15 @@ import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
 import type { RustProjectUpcastFact } from "${join(root, "dist/target-model/records/value-projections.js")}";
 import type { RustProjectProjectionSelection } from "${join(root, "dist/target-model/types/project-projections.js")}";
+import type { RustFlowReadProjectionInput } from "${join(root, "dist/analysis/program/records/flow-read-projection.js")}";
+import type { RustContextualValueConversion } from "${join(root, "dist/target-model/conversions/contextual.js")}";
 const builder = createRustProgramRecordBuilder();
 declare const subject: ExtensionFactSubject;
 declare const carrier: TargetTypeRef;
 declare const projection: RustProjectProjectionSelection;
 declare const variants: RustProjectUpcastFact["sourceVariants"];
+declare const flow: RustFlowReadProjectionInput;
+declare const conversion: RustContextualValueConversion;
 `;
 
 function check(directory, text) {
@@ -30,7 +34,7 @@ function check(directory, text) {
   return { status: result.status, diagnostics: result.stdout + result.stderr };
 }
 
-test("three physical projection APIs reject superseded writers, keys and malformed checked inputs", () => {
+test("physical projection and conversion APIs reject superseded writers, keys and malformed checked inputs", () => {
   mkdirSync(temporary, { recursive: true });
   const directory = mkdtempSync(join(temporary, "case-"));
   writeFileSync(join(directory, "tsconfig.json"), JSON.stringify({
@@ -46,15 +50,21 @@ builder.projectDowncasts.project(subject, carrier, carrier, carrier, projection)
 builder.callScopedLifetimeReconciliation.get(subject);
 builder.projectUpcast.get(subject);
 builder.projectDowncast.get(subject);
-import { rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustContextualValueConversionFactKey
-} from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";
+builder.conversions.converted(subject, carrier);
+builder.conversions.converted(subject, undefined);
+builder.optionProjections.none(subject, carrier, carrier);
+builder.optionProjections.some(subject, carrier, carrier, carrier);
+builder.flowReadProjections.project(subject, carrier, carrier, flow);
+builder.contextualValueConversions.convert(subject, carrier, carrier, conversion);
+const converted: TargetTypeRef | undefined = builder.conversion.get(subject)?.convertedType;
+const selected: TargetTypeRef | undefined = builder.flowReadProjection.get(subject)?.selectedCarrier;
 `);
   assert.equal(positive.status, 0, positive.diagnostics);
   const invalid = [
     ...["callScopedLifetimeReconciliation", "projectUpcast", "projectDowncast"].map(family =>
       [family, `builder.${family}.set(subject, undefined);`, /Property 'set' does not exist/u]),
     ...["rustCallScopedLifetimeReconciliationFactKey", "rustProjectUpcastFactKey", "rustProjectDowncastFactKey"].map(key =>
-      [key, `import { ${key} } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /has no exported member|no exported member named/u]),
+      [key, `import { ${key} } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /Cannot find module.*\/keys\/value-projections\.js/u]),
     ["lifetime foreign subject", "builder.callScopedLifetimes.reconcile(1, carrier, carrier);", /not assignable/u],
     ["lifetime missing selected carrier", "builder.callScopedLifetimes.reconcile(subject, carrier);", /Expected 3 arguments/u],
     ["lifetime malformed source", "builder.callScopedLifetimes.reconcile(subject, { kind: 'invalid' }, carrier);", /not assignable/u],
@@ -78,10 +88,31 @@ import { rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustContext
     ["sealed reader writer", "builder.seal().projectUpcast.set(subject, undefined);", /Property 'set' does not exist/u],
     ["sealed producer handle", "builder.seal().projectDowncasts;", /does not exist/u],
   ];
+  invalid.push(
+    ...["conversion", "optionProjection", "flowReadProjection", "contextualValueConversion"].flatMap(family => [
+      [family + " retired writer", `builder.${family}.set(subject, undefined);`, /Property 'set' does not exist/u],
+      [family + " sealed writer", `builder.seal().${family}.set(subject, undefined);`, /Property 'set' does not exist/u],
+    ]),
+    ...["conversions", "optionProjections", "flowReadProjections", "contextualValueConversions"].map(producer =>
+      [producer + " leaked producer", `builder.seal().${producer};`, /does not exist/u]),
+    ...["rustOptionProjectionFactKey", "rustFlowReadProjectionFactKey", "rustContextualValueConversionFactKey"].map(key =>
+      [key, `import { ${key} } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /Cannot find module.*\/keys\/value-projections\.js/u]),
+    ["retired conversion key", `import { rustConversionKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";`, /Cannot find module.*\/keys\/selections\.js/u],
+    ["missing converted carrier", "builder.conversions.converted(subject);", /Expected 2 arguments/u],
+    ["invalid converted carrier", "builder.conversions.converted(subject, { kind: 'guessed' });", /not assignable/u],
+    ["old conversion evidence", "builder.conversions.converted(subject, carrier, []);", /Expected 2 arguments/u],
+    ["missing absence result", "builder.optionProjections.none(subject, carrier);", /Expected 3 arguments/u],
+    ["missing presence element", "builder.optionProjections.some(subject, carrier, carrier);", /Expected 4 arguments/u],
+    ["missing flow payload", "builder.flowReadProjections.project(subject, carrier, carrier, { kind: 'union-map' });", /missing/u],
+    ["unknown flow kind", "builder.flowReadProjections.project(subject, carrier, carrier, { kind: 'guessed' });", /not assignable/u],
+    ["old flow evidence", "builder.flowReadProjections.project(subject, carrier, carrier, flow, []);", /Expected 4 arguments/u],
+    ["unknown contextual conversion", "builder.contextualValueConversions.convert(subject, carrier, carrier, { kind: 'guessed' });", /not assignable/u],
+    ["retired flow forwarder", `import { recordRustFlowReadProjection } from "${join(root, "dist/analysis/conversions/value-carrier-queries.js")}";`, /has no exported member|no exported member named/u],
+  );
   for (const [name, body, diagnostic] of invalid) {
     const result = check(directory, body);
     assert.notEqual(result.status, 0, name);
     assert.match(result.diagnostics, diagnostic, name);
   }
-  assert.equal(invalid.length, 28);
+  assert.equal(invalid.length, 54);
 });

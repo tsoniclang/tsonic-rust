@@ -21,6 +21,20 @@ function createModel() {
 }
 
 function admitFamily(model, family, subject, fact) {
+  if (family === "conversion") { model.conversions.converted(subject, fact.convertedType); return model.conversion.get(subject); }
+  if (family === "optionProjection") {
+    if (fact.kind === "none") model.optionProjections.none(subject, fact.sourceCarrier, fact.resultCarrier);
+    else model.optionProjections.some(subject, fact.sourceCarrier, fact.elementCarrier, fact.resultCarrier);
+    return model.optionProjection.get(subject);
+  }
+  if (family === "flowReadProjection") {
+    model.flowReadProjections.project(subject, fact.sourceCarrier, fact.selectedCarrier, fact);
+    return model.flowReadProjection.get(subject);
+  }
+  if (family === "contextualValueConversion") {
+    model.contextualValueConversions.convert(subject, fact.sourceCarrier, fact.targetCarrier, fact.conversion);
+    return model.contextualValueConversion.get(subject);
+  }
   if (family === "runtimeCarrier") model.runtimeCarriers.selected(subject, fact.carrier);
   else if (family === "targetOperation") model.targetOperations.source(subject, fact);
   else if (family === "selectedCall") model.selectedCalls.checked({ source: { call: subject } },
@@ -133,8 +147,13 @@ test("sealed records publish only frozen typed family readers without a native k
       { sourceGuardCarrier: carrier, selectedGuardCarrier: carrier, guardDepth: 1,
         innerResultCarrier: carrier, resultCarrier: carrier, lowering: "map" }),
     closureCapture: () => model.closureCaptures.capture(subject, []),
+    conversion: () => model.conversions.converted(subject, carrier),
+    optionProjection: () => model.optionProjections.none(subject, carrier, carrier),
+    flowReadProjection: () => model.flowReadProjections.project(subject, carrier, carrier, { kind: "closed-native" }),
+    contextualValueConversion: () => model.contextualValueConversions.convert(subject, carrier, carrier,
+      { kind: "semantic-conversion", id: "checked-f64-to-i32-trunc" }),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 62, "every integrated producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 66, "every producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {
@@ -419,8 +438,8 @@ test("closed Rust carrier and conversion facts are allocation-independent", () =
   );
 
   const conversionSubject = {};
-  model.conversion.set(conversionSubject, { convertedType: firstCarrier });
-  assert.doesNotThrow(() => model.conversion.set(conversionSubject, { convertedType: equivalentCarrier }));
+  model.conversions.converted(conversionSubject, firstCarrier);
+  assert.doesNotThrow(() => model.conversions.converted(conversionSubject, equivalentCarrier));
 });
 
 test("selected operations compare target data structurally and source provenance exactly", () => {

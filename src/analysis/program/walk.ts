@@ -331,9 +331,7 @@ export function selectExpressionOperation(
     }, context, walk.operationOptions);
     recordPolicySelection(walk, expression, selection);
     if (selection.kind === "accept" && selection.value.convertedType !== undefined) {
-      walk.context.records.conversion.set(expression, {
-        convertedType: selection.value.convertedType,
-      });
+      walk.context.records.conversions.converted(expression, selection.value.convertedType);
     }
     return;
   }

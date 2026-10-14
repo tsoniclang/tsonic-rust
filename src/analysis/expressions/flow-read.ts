@@ -21,7 +21,7 @@ import {
   rustRuntimeUnionProjection,
 } from "../../target-model/types/carriers/runtime-unions.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
+
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
@@ -90,9 +90,7 @@ export function applyFlowReadLane(
   }
   const entryCarrier = rustGuardedArrayEntryCarrier(walk, expression, sourceCarrier);
   if (entryCarrier !== undefined) {
-    recordRustFlowReadProjection(walk.context.records, expression, {
-      kind: "option-value", sourceCarrier, selectedCarrier: entryCarrier,
-    });
+    walk.context.records.flowReadProjections.project(expression, sourceCarrier, entryCarrier, { kind: "option-value" });
     return entryCarrier;
   }
   const selectedSource = selectedFlowReadSource(walk, expression, sourceCarrier, parentKind === "KindTypeOfExpression");
@@ -152,11 +150,7 @@ export function applyFlowReadLane(
     );
     return undefined;
   }
-  recordRustFlowReadProjection(
-    walk.context.records,
-    expression,
-    selection.fact,
-  );
+  walk.context.records.flowReadProjections.project(expression, selection.fact.sourceCarrier, selection.fact.selectedCarrier, selection.fact);
   if (selection.fact.kind === "option-reference") recordBindingWrite(walk, expression, "referent");
   return selection.fact.selectedCarrier;
 }

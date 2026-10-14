@@ -31,7 +31,7 @@ import { readRustSourceNativePointerOperation, readRustSourceSafetyBuilder, read
 import { recordExportAssignmentFacts } from "../control-flow/statements.js";
 import { resolveExpressionCarrier } from "./carriers.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
+
 import { selectRustOptionalCallResult } from "../operations/provider/calls/instantiation.js";
 import {
   readRustReferenceOperation,
@@ -775,7 +775,7 @@ function applySelectedRuntimeCallableCall(
         return undefined;
       }
       if (projection.kind === "projection") {
-        recordRustFlowReadProjection(walk.context.records, callee, projection.fact);
+        walk.context.records.flowReadProjections.project(callee, projection.fact.sourceCarrier, projection.fact.selectedCarrier, projection.fact);
       }
     }
   } else if (target.form === "constructor-value") {

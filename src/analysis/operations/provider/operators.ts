@@ -476,9 +476,7 @@ function mapSelectedProviderAssignment(
       : selectRustExactIntegerConversion(actual, rustOptionElementCarrier(actual) === undefined
         ? rustOptionElementCarrier(expected) ?? expected : expected);
     if (conversion === undefined) return selected;
-    context.records.contextualValueConversion.set(argument, {
-      sourceCarrier: conversion.source, targetCarrier: conversion.target, conversion,
-    }, [{ message: "rust exact provider field write" }]);
+    context.records.contextualValueConversions.convert(argument, conversion.source, conversion.target, conversion);
     return expected;
   });
   const finalizedSourceArgumentCarriers = sourceArgumentCarriers.filter(

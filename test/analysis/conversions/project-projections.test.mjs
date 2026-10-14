@@ -19,10 +19,8 @@ test("project planning consumes exact sealed cast or flow evidence", () => {
     const records = model();
     const node = {};
     if (mode !== "flow") records.projectDowncasts.project(node, sourceCarrier, dispatchCarrier, targetCarrier, projection);
-    if (mode !== "cast") records.flowReadProjection.set(node, {
-      kind: "project-downcast", sourceCarrier, dispatchCarrier,
-      selectedCarrier: targetCarrier, projection,
-    });
+    if (mode !== "cast") records.flowReadProjections.project(node, sourceCarrier, targetCarrier,
+      { kind: "project-downcast", dispatchCarrier, projection });
     assert.deepEqual(rustSelectedProjectDowncast(records, node), selection);
     assert.equal(rustSelectedProjectDowncast(records, {}), undefined);
   }
@@ -33,11 +31,12 @@ test("contradictory projection evidence cannot be replanned as a valid cast", ()
     const records = model();
     const node = {};
     records.projectDowncasts.project(node, sourceCarrier, dispatchCarrier, targetCarrier, projection);
-    records.flowReadProjection.set(node, {
+    const fact = {
       kind: "project-downcast", sourceCarrier, dispatchCarrier,
       selectedCarrier: targetCarrier, projection,
       [field]: { kind: "target-named", id: "different" },
-    });
+    };
+    records.flowReadProjections.project(node, fact.sourceCarrier, fact.selectedCarrier, fact);
     assert.equal(rustSelectedProjectDowncast(records, node), undefined);
   }
 });

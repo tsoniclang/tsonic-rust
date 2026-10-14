@@ -1,6 +1,10 @@
 import type { ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
+import type { RustConversionProducer } from "./conversion.js";
+import type { RustOptionProjectionProducer } from "./option-projection.js";
+import type { RustFlowReadProjectionProducer } from "./flow-read-projection.js";
+import type { RustContextualValueConversionProducer } from "./contextual-value-conversion.js";
 import type { RustSelectedOperationProducer } from "./selected-operation.js";
 import type { RustRuntimeCarrierProducer } from "./runtime-carrier.js";
 import type { RustSelectedCallProducer } from "./selected-call.js";
@@ -65,29 +69,14 @@ import type { RustOptionalChainProducer } from "./optional-chain.js";
 import type { RustClosureCaptureProducer } from "./closure-capture.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
-  readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
+  readonly set: (subject: ExtensionFactSubject, value: T) => void;
 }
 
-type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "selectedCall" | "targetOperation" |
-  "nativeArrayStorage" | "nativeBacking" | "rawLocationPlan" | "memoryBindingPlan" | "rawAddressPlan" |
-  "receiverIndependentMethod" | "classValue" | "objectLiteralMethodAdapter" | "projectCallableAdapters" | "objectReferenceView" |
-  "awaitSourceErrorEffects" | "errorEffects" | "fallible" | "genericCallableInvocation" |
-  "sourceAccessorEffects" | "sourceCallEffects" | "sourceErrorEffects" | "awaitValue" |
-  "futureValue" | "resourceManagement" | "deferredProducerEffects" |
-  "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection" |
-  "typeOnlyDeclaration" | "moduleBinding" | "moduleCallableStorage" | "sourceCallableReturn" | "capturedFieldStorage" |
-  "callScopedLifetimeReconciliation" | "projectUpcast" | "projectDowncast" |
-  "asyncFunction" | "yield" | "computedMember" | "compoundWrite" |
-  "typeAliasDeclaration" | "mutatedBinding" | "mutatedReferent" |
-  "argumentPassing" | "bindingStorage" | "retainedCallLifetimes" | "bindingProjection" | "typedLocationPlan" |
-  "compileTimeSource" | "selfMode" | "memoryLayoutObservation" |
-  "generator" | "sourceParameterAbi" | "sourceBinding" |
-  "sourceCallableValue" | "directCallableReference" | "retainedEnvironment" |
-  "preparedOperationResult" | "optionalChain" | "closureCapture";
-
-export type RustProgramRecordWriter = {
-  readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
-} & Pick<RustProgramRecords, RustProducedRecordFamily> & {
+export type RustProgramRecordWriter = RustProgramRecords & {
+  readonly conversions: RustConversionProducer;
+  readonly optionProjections: RustOptionProjectionProducer;
+  readonly flowReadProjections: RustFlowReadProjectionProducer;
+  readonly contextualValueConversions: RustContextualValueConversionProducer;
   readonly selectedOperations: RustSelectedOperationProducer;
   readonly runtimeCarriers: RustRuntimeCarrierProducer;
   readonly selectedCalls: RustSelectedCallProducer;

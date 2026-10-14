@@ -19,7 +19,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordBindingWrite, resolveParameterAbi, validateFlowMarkerAgainstMode } from "../declarations/types-and-bindings.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustFlowReadProjection } from "../conversions/value-carrier-queries.js";
+
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 
 import { rustArgumentPassingMode } from "../callables/parameter-passing.js";
@@ -424,11 +424,7 @@ export function applySelectedProjectSourceCall(
         return undefined;
       }
       if (receiverProjection.kind === "projection") {
-        recordRustFlowReadProjection(
-          walk.context.records,
-          receiver,
-          receiverProjection.fact,
-        );
+        walk.context.records.flowReadProjections.project(receiver, receiverProjection.fact.sourceCarrier, receiverProjection.fact.selectedCarrier, receiverProjection.fact);
       }
       const selfMode = walk.context.records.selfMode.get(selectedDeclaration);
       if (selfMode === undefined) {
