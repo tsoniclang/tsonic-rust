@@ -274,7 +274,6 @@ export function resolveExpressionCarrierUncached(
         );
         return undefined;
       }
-      const yieldType = generator.yieldType;
       const operand = source.operand?.expression;
       const delegatedCarrier = source.yieldKind === "delegate" && operand !== undefined
         ? resolveExpressionCarrier(walk, operand, sourceFile, undefined)
@@ -309,13 +308,8 @@ export function resolveExpressionCarrierUncached(
           source.yieldKind === "value" ? generator.yieldType : delegatedCarrier,
         );
       }
-      walk.context.records.yield.set(expression, {
-        generatorDeclaration,
-        kind: source.yieldKind,
-        yieldType,
-        resultType,
-        ...(delegatedCarrier === undefined ? {} : { delegatedCarrier }),
-      }, [{ message: "rust checked yield" }]);
+      if (source.yieldKind === "value") walk.context.records.yields.value(expression, generatorDeclaration, generator);
+      else walk.context.records.yields.delegate(expression, generatorDeclaration, generator, delegatedCarrier!, resultType);
       return setCarrierFact(walk, expression, resultType);
     }
     case KindParenthesizedExpression: {

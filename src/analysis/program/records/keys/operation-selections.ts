@@ -1,17 +1,12 @@
-import { rustBindingStorageEquals, rustComputedMemberEquals, rustClosureCaptureEquals, rustSourceCallableValueEquals } from "../../../../target-model/records/equality.js";
+import { rustBindingStorageEquals, rustClosureCaptureEquals, rustSourceCallableValueEquals } from "../../../../target-model/records/equality.js";
 import { closedMetadataEquals } from "../../../../target-model/metadata/closed-data.js";
 
 import { defineRustPlanKey } from "../key.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import type { RustOptionalChainFact } from "../../../../target-model/operations/model.js";
 import type { RustPlanKey } from "../key.js";
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../../target-model/records/operations.js";
-import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustComputedMemberFact } from "../../../../target-model/records/operation-selections.js";
-
-export const rustCompoundWriteFactKey: RustPlanKey<Extract<RustTargetOperationFact, { kind: "runtime-set" }>> =
-  defineRustPlanKey("compoundWrite", closedMetadataEquals);
-
-export const rustComputedMemberFactKey: RustPlanKey<RustComputedMemberFact> = defineRustPlanKey("computedMember", rustComputedMemberEquals);
+import type { RustTypedLocationPlan } from "../../../../target-model/records/operations.js";
+import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact } from "../../../../target-model/records/operation-selections.js";
 
 export const rustPreparedOperationResultFactKey: RustPlanKey<RustPreparedOperationResultFact> =
   defineRustPlanKey("preparedOperationResult", (left, right) =>

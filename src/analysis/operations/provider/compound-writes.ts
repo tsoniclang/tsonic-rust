@@ -17,7 +17,7 @@ export function recordRustCompoundWrite(
   resultCarrier: TargetTypeRef,
 ): void {
   const fact = selectRustCompoundWrite(walk, left, resultCarrier);
-  if (fact !== undefined) walk.context.records.compoundWrite.set(expression, fact, [{ message: "rust exact selected compound-write index ABI" }]);
+  if (fact !== undefined) walk.context.records.compoundWrites.index(expression, fact.operationId, fact.abi);
 }
 
 export function selectRustCompoundWrite(

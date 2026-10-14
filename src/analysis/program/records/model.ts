@@ -39,6 +39,10 @@ import type { RustCapturedFieldStorageProducer } from "./captured-field-storage.
 import type { RustCallScopedLifetimeReconciliationProducer } from "./call-scoped-lifetime-reconciliation.js";
 import type { RustProjectUpcastProducer } from "./project-upcast.js";
 import type { RustProjectDowncastProducer } from "./project-downcast.js";
+import type { RustAsyncFunctionProducer } from "./async-function.js";
+import type { RustYieldProducer } from "./yield.js";
+import type { RustComputedMemberProducer } from "./computed-member.js";
+import type { RustCompoundWriteProducer } from "./compound-write.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -52,7 +56,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "futureValue" | "resourceManagement" | "deferredProducerEffects" |
   "nativeGuardResult" | "nativeUnreachable" | "genericNumericOperands" | "indexedFieldKeyArgument" | "propertyProjection" |
   "typeOnlyDeclaration" | "moduleBinding" | "moduleCallableStorage" | "sourceCallableReturn" | "capturedFieldStorage" |
-  "callScopedLifetimeReconciliation" | "projectUpcast" | "projectDowncast";
+  "callScopedLifetimeReconciliation" | "projectUpcast" | "projectDowncast" |
+  "asyncFunction" | "yield" | "computedMember" | "compoundWrite";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -95,6 +100,10 @@ export type RustProgramRecordWriter = {
   readonly callScopedLifetimes: RustCallScopedLifetimeReconciliationProducer;
   readonly projectUpcasts: RustProjectUpcastProducer;
   readonly projectDowncasts: RustProjectDowncastProducer;
+  readonly asyncFunctions: RustAsyncFunctionProducer;
+  readonly yields: RustYieldProducer;
+  readonly computedMembers: RustComputedMemberProducer;
+  readonly compoundWrites: RustCompoundWriteProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
