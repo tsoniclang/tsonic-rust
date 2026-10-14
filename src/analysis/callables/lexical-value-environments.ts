@@ -34,11 +34,7 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
             capture.reference, ["target.capability=rust.lexical-function.environment"]);
           continue;
         }
-        if (storage.storage !== "value") records.bindingStorage.set(capture.declaration, {
-          storage: storage.storage, valueCarrier: carrier,
-          ...(storage.initialization === undefined ? {} : { initialization: storage.initialization }),
-          ...(storage.iterationScope === undefined ? {} : { iterationScope: storage.iterationScope }),
-        });
+        records.bindingStoragePlans.capture(capture.declaration, carrier, storage);
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage: storage.storage });
       }
       records.closureCapture.set(node, { receivers: [], receiverFields: [], captures });

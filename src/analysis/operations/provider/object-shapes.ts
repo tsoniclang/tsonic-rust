@@ -350,12 +350,7 @@ function mapSelectedObjectShapeProjection(
       : "by-value" as const);
   for (const [index, argument] of sourceArguments.entries()) {
     const mode = parameterModes[index]!;
-    context.records.argumentPassing.set(argument.expression, {
-      mode,
-      ...(mode === "borrow-shared"
-        ? { storageExpression: argument.expression }
-        : {}),
-    }, [{ message: `rust Object projection argument ${index} passes as ${mode}` }]);
+    context.records.argumentPassingPlans.pass(argument.expression, mode);
   }
   const operation: RustTargetOperationSelection = {
     operationId,

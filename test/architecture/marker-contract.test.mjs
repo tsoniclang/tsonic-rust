@@ -66,7 +66,7 @@ test("Rust converts typed-location facts into one target-owned selection", () =>
   assert.match(operations, /selectRustTypedLocationSourceOperation/u);
   assert.match(operations, /kind:\s*"selected"/u);
   assert.doesNotMatch(selection, /pointerOperationFactKey/u);
-  assert.match(selection, /records\.typedLocationPlan\.set\(request\.source\.call, plan, evidence\)/u);
+  assert.match(selection, /records\.typedLocations\.finalize\(request\.source\.call, pointeeCarrier, locationCarrier, plan\)/u);
   assert.doesNotMatch(selection, /rustTypedLocationPlanKey/u);
   const neutralFactConsumers = sourceFiles(join(repositoryRoot, "src"))
     .filter((path) => readFileSync(path, "utf8").includes("pointerOperationFactKey"))
