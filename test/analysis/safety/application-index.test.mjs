@@ -85,3 +85,43 @@ test("Rust finds a parenthesized builder statement as a compile-time safety oper
   const actual = membership(cases[3][1]);
   assert.deepEqual(actual.parenthesizedOperations, [{ exact: undefined, expression: "safety-builder" }]);
 });
+
+const findingCases = [
+  ["opposite contracts on one declaration conflict once",
+    `export function selected(value: int32): int32 { return value; }
+safety(selected).safe();
+safety(selected).requiresunsafe();`,
+    ["RUST_SAFETY_CONTRACT_CONFLICT"]],
+  ["a setter placement on a getter-only property resolves no target, beside a setter conflict",
+    `export class Snapshot { get only(): int32 { return 1; } }
+safety<Snapshot>().property(snapshot => snapshot.only).setter().requiresunsafe();
+safety<Value>().property(value => value.current).setter().safe();
+safety<Value>().property(value => value.current).setter().requiresunsafe();`,
+    ["RUST_SAFETY_CONTRACT_CONFLICT", "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED"]],
+  ["matching contracts produce no shared finding",
+    `safety<Value>().property(value => value.current).getter().requiresunsafe();`,
+    []],
+];
+
+for (const [name, body, codes] of findingCases) {
+  test(`Rust reports exactly the shared safety findings: ${name}`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ files: { "index.ts": `${header}${body}\n` } });
+    const program = result.program;
+    assert.ok(program, "Rust analysis publishes the program");
+    const expected = program.sourceFiles.flatMap(sourceFile => {
+      const findings = program.safetyApplications.findings(sourceFile);
+      return [
+        ...findings.conflicts.map(() => "RUST_SAFETY_CONTRACT_CONFLICT"),
+        ...findings.applications.filter(entry => entry.status === "target-not-resolved")
+          .map(() => "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED"),
+      ];
+    });
+    assert.deepEqual(expected, codes, "the shared findings name the expected classes");
+    const shared = new Set(["RUST_SAFETY_CONTRACT_CONFLICT", "RUST_SAFETY_APPLICATION_TARGET_NOT_RESOLVED"]);
+    assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code).filter(code => shared.has(code)), expected);
+    const statuses = program.sourceFiles.flatMap(sourceFile =>
+      program.safetyApplications.findings(sourceFile).applications.map(entry => entry.status));
+    assert.equal(statuses.length, program.sourceFiles.reduce((count, sourceFile) =>
+      count + program.safetyApplications.forSourceFile(sourceFile).length, 0), "every application has one status");
+  });
+}
