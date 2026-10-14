@@ -31,10 +31,8 @@ export function resolveRustRawPointerIdentityCarrier(
   });
   if (argumentsPlan.some(argument => argument === undefined)) return {};
   const resultCarrier = rustSourcePrimitiveTargetType(source.operation === "equal-raw-pointer" ? "bool" : "float64");
-  walk.context.records.rawAddressPlan.set(expression, Object.freeze({
-    method: source.operation === "equal-raw-pointer" ? "same" : "hash", resultCarrier,
-    arguments: Object.freeze(argumentsPlan.filter(argument => argument !== undefined)),
-  }), [{ message: "Rust exact raw address identity and optional carriers" }]);
+  walk.context.records.rawAddresses.identity(expression, source.operation === "equal-raw-pointer" ? "same" : "hash",
+    resultCarrier, argumentsPlan.filter(argument => argument !== undefined));
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
 
@@ -74,11 +72,9 @@ export function resolveRustRawAddressCarrier(
   if (argumentsPlan.some(argument => argument === undefined)) return reject("A raw address operand has no closed Rust value carrier.");
   const resultCarrier = source.operation === "raw-to-address-integer"
     ? rustSourcePrimitiveTargetType(source.addressWidth === 32 ? "uint32" : "uint64") : raw;
-  walk.context.records.rawAddressPlan.set(expression, Object.freeze({
-    method: source.operation === "raw-to-address-integer" ? "address"
+  walk.context.records.rawAddresses.address(expression, source.operation === "raw-to-address-integer" ? "address"
       : source.operation === "address-integer-to-raw" ? "from_address"
         : source.offsetSignedness === "unsigned" ? "offset_unsigned" : "offset",
-    width, resultCarrier, arguments: Object.freeze(argumentsPlan.filter(argument => argument !== undefined)),
-  }), [{ message: "Rust exact registered address ABI and integer operands" }]);
+    width, resultCarrier, argumentsPlan.filter(argument => argument !== undefined));
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
