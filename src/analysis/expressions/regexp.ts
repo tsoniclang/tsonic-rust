@@ -2,6 +2,7 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { selectRustRegularExpressionLiteral } from "../../policy/operations/syntax/regexp-literal.js";
 
 export function resolveRegExpCreation(
   walk: RustFactWalk,
@@ -12,11 +13,7 @@ export function resolveRegExpCreation(
   if (!walk.jsEnabled) {
     return undefined;
   }
-  walk.context.records.targetOperations.source(expression, {
-    kind: "regexp-create",
-    operationId: "tsonic.rust.js.regexp.create",
-    pattern,
-    flags,
-  });
-  return setCarrierFact(walk, expression, { kind: "target-named", id: "rust.js.JsRegExp" });
+  const selected = selectRustRegularExpressionLiteral(pattern, flags);
+  walk.context.records.targetOperations.source(expression, selected.operation);
+  return setCarrierFact(walk, expression, selected.targetType);
 }
