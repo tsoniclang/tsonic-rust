@@ -8,6 +8,7 @@ import { rustSelectedTargetOperationEquals } from "../../../target-model/types/e
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustFoundationForSelectedOperation } from "../../foundation/requirements.js";
 import { rustTargetOperationText } from "../../operations/target-operation.js";
+import { createRustRecordFamily } from "./family.js";
 
 export interface RustSelectedOperationProducer {
   readonly records: RustRecordFamily<RustSelectedTargetOperation>;
@@ -30,26 +31,18 @@ export interface RustSelectedOperationProducer {
 export function createRustSelectedOperationProducer(
   inherited?: RustRecordFamily<RustSelectedTargetOperation>,
 ): RustSelectedOperationProducer {
-  const values = new WeakMap<ExtensionFactSubject, RustSelectedTargetOperation>();
   let sealed = false;
   let foundation: RustFoundation = "core";
-  const get = (subject: ExtensionFactSubject | undefined): RustSelectedTargetOperation | undefined =>
-    subject === undefined ? undefined : values.get(subject) ?? inherited?.get(subject);
-  const records = Object.freeze({ get });
   const assertOpen = (): void => {
     if (sealed) throw new Error("Rust semantic plans cannot be written after analysis is sealed.");
   };
-  const admit = (subject: ExtensionFactSubject, operation: RustSelectedTargetOperation): void => {
-    assertOpen();
-    const existing = get(subject);
-    if (existing !== undefined && !rustSelectedTargetOperationEquals(existing, operation)) {
-      throw new Error("Conflicting Rust semantic plan 'selectedOperation' for one exact source subject.");
-    }
-    if (existing === undefined) values.set(subject, operation);
-    foundation = maximumRustFoundation(foundation, rustFoundationForSelectedOperation(operation));
-  };
+  const family = createRustRecordFamily({ id: "selectedOperation", equals: rustSelectedTargetOperationEquals },
+    assertOpen, inherited, operation => {
+      foundation = maximumRustFoundation(foundation, rustFoundationForSelectedOperation(operation));
+    });
+  const admit = family.writer.set;
   return Object.freeze({
-    records,
+    records: family.reader,
     checked<T extends { readonly operation?: RustSelectedTargetOperation }>(
       subject: ExtensionFactSubject,
       selection: RustPolicySelection<T>,

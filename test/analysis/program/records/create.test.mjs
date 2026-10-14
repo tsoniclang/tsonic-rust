@@ -8,6 +8,8 @@ import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from 
 
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
+import { rustSourceUnionTargetType } from "../../../../dist/target-model/types/carriers/source-types.js";
+import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 
 import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../../../../dist/analysis/operations/target-operation.js";
@@ -81,6 +83,106 @@ test("every finalized contextual conversion family contributes its actual native
     model[family].set({}, fact);
     assert.equal(model.minimumFoundation(), "alloc", family);
   }
+});
+
+test("all nine foundation-bearing families account through their typed admission", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const floating = { kind: "source-primitive", name: "float64" };
+  const text = { kind: "target-named", id: "rust.std.String" };
+  const nativeError = { kind: "target-named", id: "acme.native.Failure" };
+  const conversion = { kind: "semantic-conversion", id: "checked-f64-to-i32-trunc" };
+  const identity = { kind: "identity", sourceCarrier: integer, targetCarrier: integer, fallible: false };
+  const finalized = { kind: "semantic", sourceCarrier: floating, targetCarrier: integer, conversion, fallible: true };
+  const cases = [
+    ["runtimeCarrier", { carrier: text }, "alloc"],
+    ["selectedCall", { member: { id: "native.call", sourceName: "call", targetName: "std::thread::current",
+      kind: "method", parameters: [], returnType: integer } }, "std"],
+    ["conversion", { convertedType: text }, "alloc"],
+    ["targetOperation", { kind: "operator-call", operationId: "native.add", operator: "+",
+      path: "std::ops::Add::add", resultCarrier: integer, fallible: false, operandModes: ["value", "value"] }, "std"],
+    ["contextualValueConversion", { sourceCarrier: floating, targetCarrier: integer, conversion }, "alloc"],
+    ["sourceParameterAbi", { form: "required", valueCarrier: integer, parameterCarrier: floating,
+      mode: "value", entryConversion: conversion }, "alloc"],
+    ["futureValue", { outputCarrier: integer, awaitedConversion: identity, awaiting: "fallible",
+      errorBoundary: "target-runtime", errorCarrier: nativeError }, "std"],
+    ["deferredProducerEffects", { kind: "futures", channels: [{ awaiting: "infallible", errorCarrier: integer },
+      { awaiting: "fallible", errorCarrier: nativeError }] }, "std"],
+    ["awaitValue", { operandCarrier: floating, resultCarrier: integer,
+      selection: { kind: "leaf", value: { carrier: floating, completion: { kind: "value", conversion: finalized } } } }, "alloc"],
+  ];
+  for (const [family, fact, expected] of cases) {
+    const builder = createModel();
+    const subject = {};
+    assert.equal(builder.minimumFoundation(), "core", family + ": initially core");
+    builder[family].set(subject, fact);
+    assert.equal(builder.minimumFoundation(), expected, family);
+    assert.equal(builder[family].get(subject) === fact, true, family + ": no evidence copy");
+    assert.doesNotThrow(() => builder[family].set(subject, fact), family + ": repeat remains allowed");
+    builder.seal();
+    assert.equal(builder.minimumFoundation(), expected, family + ": sealed accounting");
+  }
+  for (const [family, fact] of [["conversion", {}], ["deferredProducerEffects", { kind: "no-future" }],
+    ["deferredProducerEffects", { kind: "futures", channels: [] }]]) {
+    const builder = createModel();
+    builder[family].set({}, fact);
+    assert.equal(builder.minimumFoundation(), "core", family + ": absent native requirement");
+  }
+});
+
+test("all definition-dependent foundation admissions retain the supplied source-union definitions", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const union = rustSourceUnionTargetType("/src/foundation.ts", "Choice");
+  const variants = [{ name: "Integer", carrier: integer },
+    { name: "Text", carrier: { kind: "target-named", id: "rust.std.String" } }];
+  const conversion = { kind: "source-union-variant", source: integer, target: union,
+    variantName: "Integer", payloadCarrier: integer, payloadConversion: null };
+  const finalized = { kind: "semantic", sourceCarrier: integer, targetCarrier: union, conversion, fallible: false };
+  const cases = [
+    ["targetOperation", { kind: "source-conversion", operationId: "native.inject", conversion, resultCarrier: union }],
+    ["contextualValueConversion", { sourceCarrier: integer, targetCarrier: union, conversion }],
+    ["sourceParameterAbi", { form: "required", valueCarrier: union, parameterCarrier: integer,
+      mode: "value", entryConversion: conversion }],
+    ["futureValue", { outputCarrier: union, awaitedConversion: finalized, awaiting: "infallible", errorBoundary: "none" }],
+    ["awaitValue", { operandCarrier: integer, resultCarrier: union,
+      selection: { kind: "leaf", value: { carrier: integer, completion: { kind: "value", conversion: finalized } } } }],
+  ];
+  for (const [family, fact] of cases) {
+    let definitionReads = 0;
+    const definitions = { ...emptyRustTypeDefinitions, sourceUnionVariants: carrier => {
+      definitionReads += 1;
+      return rustTargetTypeRefEquals(carrier, union) ? variants : undefined;
+    } };
+    const builder = createRustProgramRecordBuilder(definitions);
+    const subject = {};
+    builder[family].set(subject, fact);
+    assert.equal(definitionReads > 0, true, family + ": actual source definitions used");
+    const beforeReads = definitionReads;
+    for (let read = 0; read < 32; read += 1) {
+      assert.equal(builder[family].get(subject) === fact, true, family + ": same admitted evidence");
+      assert.equal(builder.minimumFoundation(), "core", family + ": no unused union payload cost");
+    }
+    builder.seal();
+    assert.equal(definitionReads, beforeReads, family + ": reads and seal do not recompute");
+    assert.throws(() => createModel()[family].set({}, fact), /no valid (?:lowering|foundation) contract/u,
+      family + ": missing source definitions cannot silently substitute");
+  }
+});
+
+test("inherited foundation accounting happens on successful admission, never on read or conflict", () => {
+  const subject = {};
+  const value = { carrier: { kind: "target-named", id: "rust.std.String" } };
+  const parent = createModel();
+  parent.runtimeCarrier.set(subject, value);
+  const records = parent.seal();
+  const child = createRustProgramRecordBuilder(undefined, records);
+  assert.equal(child.runtimeCarrier.get(subject) === value, true);
+  assert.equal(child.minimumFoundation(), "core", "inheritance alone retains the original accounting rule");
+  child.runtimeCarrier.set(subject, { carrier: { ...value.carrier } });
+  assert.equal(child.minimumFoundation(), "alloc");
+  assert.throws(() => child.runtimeCarrier.set(subject,
+    { carrier: { kind: "target-named", id: "acme.external.Type" } }), /Conflicting Rust semantic plan/u);
+  assert.equal(child.minimumFoundation(), "alloc", "rejected evidence cannot raise the requirement");
+  assert.equal(child.runtimeCarrier.get(subject) === value, true, "no inherited evidence replacement");
 });
 
 test("present contextual conversions retain one scalar conversion followed by presence", () => {
