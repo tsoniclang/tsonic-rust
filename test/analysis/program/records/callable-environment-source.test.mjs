@@ -87,7 +87,7 @@ for (const surfaces of [[], ["js"]]) {
     assertCallable(context, "directCallableReference", selected[0], declaration);
     const aliases = context.nodes.filter(node => context.ast.is.IsVariableDeclaration(node));
     const references = context.nodes.filter(node => context.ast.is.IsIdentifier(node) && aliases.some(alias =>
-      node !== context.ast.name(alias) && context.source.navigation.sourceReferenceFor(node)?.declaration === alias));
+      node !== context.ast.name(alias) && context.program.source.navigation.sourceReferenceFor(node)?.declaration === alias));
     assert.equal(aliases.length, 2);
     assert.equal(references.length, 2);
     const builder = createRustProgramRecordBuilder(undefined, context.records);
