@@ -529,12 +529,8 @@ export function createRustCallableOwnershipComponentQueries(input: {
 
   function graphComponents(nodes: ReadonlySet<Vertex>, graph: ReadonlyMap<Vertex, ReadonlySet<Vertex>>):
     readonly (readonly Vertex[])[] | undefined {
-    let edgeCount = 0;
-    for (const values of graph.values()) { if (!account()) return undefined; edgeCount += values.size; }
     if (nodes.size === 0) return Object.freeze([]);
-    const work = 3 * nodes.size + edgeCount;
-    if (!account(work)) return undefined;
-    const selected = targetStronglyConnectedComponents(nodes, node => graph.get(node) ?? [], Math.max(1, work));
+    const selected = targetStronglyConnectedComponents(nodes, node => graph.get(node) ?? [], account);
     if (selected.kind === "unresolved") { reject(selected.reason); return undefined; }
     return selected.components;
   }
