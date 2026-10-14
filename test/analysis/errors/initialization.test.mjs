@@ -42,7 +42,9 @@ test("initializer analysis seals dependency order, asynchronous execution and ex
   const result = analyzeRustInitializationErrors(current.input);
   assert.equal(result.kind, "resolved");
   const records = result.value;
+  assert.equal(records.entrySourceFile === current.root, true, "the authored entry module is sealed once by exact source identity");
   assert.deepEqual(records.root.modules.map(module => module.identity), [current.dependency.fileName, current.root.fileName]);
+  assert.equal(records.root.modules[1].sourceFile === records.entrySourceFile, true, "startup retains the selected entry object");
   assert.equal(records.root.asynchronous, true);
   assert.equal(records.root.error.kind, "infallible");
   assert.equal(records.workerFor(current.worker) === records.workers[0].initializer, true);

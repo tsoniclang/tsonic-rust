@@ -1,4 +1,4 @@
-import type { Node } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
@@ -7,7 +7,7 @@ import { rustTypeFromCarrierInContext, type RustTypeRenderingContext } from "../
 import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
   type RustFallibleBoundary } from "./fallible-boundaries.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors.js";
-import type { RustPlanContext } from "./plan-context.js";
+import { registerAliasFromPath, type RustPlanContext } from "./plan-context.js";
 import type { RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
@@ -15,13 +15,15 @@ import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
   itemsFor(fileName: string): readonly RustItem[];
-  producerErrorType(reference: RustProducerErrorReference, context: RustTypeRenderingContext,
+  producerErrorType(reference: RustProducerErrorReference,
     render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined;
   nativeErrorJoinType(reference: RustNativeErrorJoinReference, context: RustTypeRenderingContext,
     render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined;
 }
 
-export function createRustErrorRegionCatalog(program: RustTargetProgram): RustErrorRegionCatalog {
+export function createRustErrorRegionCatalog(program: Pick<RustTargetProgram, "sourceFiles" | "errorRegions"> & {
+  readonly source: { readonly ast: Pick<AstReader, "getFileName"> };
+}): RustErrorRegionCatalog {
   const names = new Map<string, ReadonlyMap<number, string>>();
   const declarations = new Map<string, readonly RustItem[]>();
   for (const file of program.sourceFiles) {
@@ -55,7 +57,7 @@ export function createRustErrorRegionCatalog(program: RustTargetProgram): RustEr
           identity: String(index), variant: `Error${index}`, errorType,
         })) })?.errorType;
     },
-    producerErrorType(reference: RustProducerErrorReference, _context: RustTypeRenderingContext,
+    producerErrorType(reference: RustProducerErrorReference,
       render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
       const selected = program.errorRegions.producerError(reference);
       return selected === undefined ? undefined : render(selected);
@@ -79,6 +81,7 @@ export function planRustSelectedErrorRegion(
   const owner = selected.localOwner === undefined || context.sourcePackageErrors === undefined ? undefined
     : resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors, context.sourcePackageComponentId, selected.localOwner);
   if (selected.localOwner !== undefined && owner === undefined) return undefined;
+  if (owner !== undefined) registerAliasFromPath(context, owner.errorTypePath);
   if (selected.sources.length === 0) return Object.freeze({ boundary: owner === undefined
     ? undefined : rustPackageFallibleBoundary(owner) });
   const arity = selected.sources.length + (owner === undefined ? 0 : 1);

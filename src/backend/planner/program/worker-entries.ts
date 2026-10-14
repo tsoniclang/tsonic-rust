@@ -5,6 +5,8 @@ import type { RustPlanningContext } from "../context.js";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
+import { rustItemBindingNames } from "../../target-ast/inspection/item-bindings.js";
+import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import type { RustSourcePackageComponentPlan } from "./source-package-components.js";
 import type { RustSourcePackageCrateContentPlan } from "./source-package-crates.js";
 import type { RustSourcePackageInitializerPlan } from "./source-package-initializers.js";
@@ -112,11 +114,11 @@ export function planRustWorkerEntries(input: {
     if (initializers === undefined) continue;
 
     const occupied = occupiedNamesByComponent.get(component.componentId) ?? new Set(
-      content.libraryItems.flatMap((item) => "name" in item ? [item.name] : []),
+      content.libraryItems.flatMap(rustItemBindingNames),
     );
     occupiedNamesByComponent.set(component.componentId, occupied);
     const baseName = `tsonic_worker_${identity.moduleSegments.join("_")}`;
-    const functionName = allocateName(baseName, occupied);
+    const functionName = allocateRustGeneratedName(occupied, baseName);
     const initializer = planRustCrateInitializer(
       selection,
       initializers,
@@ -139,7 +141,7 @@ export function planRustWorkerEntries(input: {
       body: { statements: [] },
     };
     const selectedItems = initializer?.items ?? [emptyItem];
-    for (const item of selectedItems) if ("name" in item) occupied.add(item.name);
+    for (const name of selectedItems.flatMap(rustItemBindingNames)) occupied.add(name);
     const items = itemsByComponentId.get(component.componentId) ?? [];
     items.push(...selectedItems);
     itemsByComponentId.set(component.componentId, items);
@@ -194,17 +196,6 @@ export function planRustWorkerEntries(input: {
     itemsByComponentId: new Map([...itemsByComponentId].map(([componentId, items]) =>
       [componentId, Object.freeze(items)] as const)),
   });
-}
-
-function allocateName(baseName: string, occupied: Set<string>): string {
-  let candidate = baseName;
-  let suffix = 2;
-  while (occupied.has(candidate)) {
-    candidate = `${baseName}_${suffix}`;
-    suffix += 1;
-  }
-  occupied.add(candidate);
-  return candidate;
 }
 
 function workerDiagnostic(

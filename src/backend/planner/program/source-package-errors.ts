@@ -257,6 +257,8 @@ export function resolveRustPhysicalProgramErrorBoundary(
   if (!isRustProgramErrorOwner(owner) || owner.kind !== "physical") return undefined;
   const consumer = plan.domainsByComponentId.get(consumerComponentId);
   if (consumer === undefined) return undefined;
+  if (owner.domain === "runtime" && consumer.errorDomain === "runtime")
+    return resolveRustSourcePackageErrorBoundary(plan, consumerComponentId, consumerComponentId);
   if (owner.domain === "runtime") return Object.freeze({ componentId: consumerComponentId,
     errorDomain: "runtime", errorTypePath: "tsonic_rust_runtime::TsonicError",
     errorTypeIdentity: rustRuntimeErrorTypeIdentity });

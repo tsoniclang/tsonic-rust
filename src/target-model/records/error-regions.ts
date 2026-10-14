@@ -52,6 +52,7 @@ export interface RustBinaryErrorSelection {
 }
 
 export interface RustInitializationErrorRecords {
+  readonly entrySourceFile: SourceFile | undefined;
   readonly root: RustInitializerSelection;
   readonly workers: readonly { readonly sourceFile: SourceFile; readonly initializer: RustInitializerSelection }[];
   readonly binary: RustBinaryErrorSelection;

@@ -46,7 +46,7 @@ test("producer rendering substitutes a sealed template without source, fact, nam
   const replacement = { kind: "type-parameter", identity: "caller:physical", name: "Physical" };
   const instantiated = { ...reference, genericArguments: [{ kind: "type", type: replacement }] };
   let rendered;
-  const result = catalog.producerErrorType(instantiated, neverRead, carrier => {
+  const result = catalog.producerErrorType(instantiated, carrier => {
     rendered = carrier;
     return { kind: "named", path: "ExactError" };
   });

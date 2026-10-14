@@ -1,5 +1,6 @@
 import type { RustGenericArgument, RustGenericParameter, RustImplFunction, RustItem, RustTraitFunction, RustType, RustTypeBound, RustVisibility } from "../syntax/nodes.js";
 import { rustTypeEquals } from "../inspection/type-equality.js";
+import { rustItemBindingNames } from "../inspection/item-bindings.js";
 import { rustPascalCaseIdentifier } from "../../../target-model/names/identifiers.js";
 
 interface ClosedTypeSummary {
@@ -21,11 +22,10 @@ export function nameRustSignatureTypes(
   ) => Callable = callable => callable,
 ): RustNamedSignatureScope {
   const reserved = new Set(items.flatMap(item => [
-    ...("name" in item ? [item.name] : []),
+    ...rustItemBindingNames(item),
     ...("generics" in item ? item.generics.parameters.map(parameter => parameter.name) : []),
     ...(item.kind === "impl" || item.kind === "trait" ? item.members.flatMap(member => member.kind !== "const"
       ? member.generics.parameters.map(parameter => parameter.name) : []) : []),
-    ...(item.kind === "use" ? [item.alias ?? item.path.split("::").slice(-1)[0]!] : []),
   ]));
   const aliases: Extract<RustItem, { readonly kind: "type-alias" }>[] = [];
   const createTypeNamer = (item: { readonly name: string; readonly visibility: RustVisibility },

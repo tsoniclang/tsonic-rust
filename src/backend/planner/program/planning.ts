@@ -5,6 +5,8 @@ import {
 import type { TargetDiagnostic, TargetStageResult } from "@tsonic/target-api/artifacts";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
+import { rustItemBindingNames } from "../../target-ast/inspection/item-bindings.js";
+import { allocateRustGeneratedName } from "../../../target-model/names/generated.js";
 import { finalizeRustSourceStyle } from "../../target-ast/normalization/source-style.js";
 import { finalizeRustDeadCode } from "../../target-ast/normalization/dead-code.js";
 import { planRustCargoProject } from "../project/cargo.js";
@@ -23,9 +25,6 @@ import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.
 import { rustTypeFromCarrier } from "../types/render.js";
 import { planRustBinaryHookCallPlan } from "./binary-hook-contexts.js";
 import type { RustBinaryHookCallPlan } from "./binary-hook-contexts.js";
-import {
-  resolveProjectEntrySourceFile,
-} from "./entry-point.js";
 import type {
   RustPlannedArtifact,
   RustOutputPlan,
@@ -167,7 +166,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     });
     return rejectedTargetStage(diagnostics);
   }
-  const crateInitializerFunctionName = allocateRustComponentSupportModuleName(
+  const crateInitializerFunctionBase = allocateRustComponentSupportModuleName(
     identityPlan.identities,
     facadePlan.rootComponentId,
     "initialize",
@@ -262,10 +261,8 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   }
 
   const outputType = input.program.configuration.outputType;
-  const entrySourceFile = outputType === "bin"
-    ? resolveProjectEntrySourceFile(input, diagnostics)
-    : undefined;
   const initialization = input.program.errorRegions.initialization;
+  const entrySourceFile = initialization.entrySourceFile;
   const moduleInitializers = initialization.root.modules.length === 0
     ? []
     : planRustModuleInitializers(
@@ -317,14 +314,15 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   if (workerEntries === undefined || diagnostics.length > 0) {
     return rejectedTargetStage(diagnostics);
   }
+  const rootBindings = new Set([...rootCrateContent.libraryItems,
+    ...(workerEntries.itemsByComponentId.get(rootComponentPlan.componentId) ?? [])].flatMap(rustItemBindingNames));
+  const crateInitializerFunctionName = allocateRustGeneratedName(rootBindings, crateInitializerFunctionBase);
   const crateInitializer = planRustCrateInitializer(
     initialization.root,
     moduleInitializers ?? [],
     crateInitializerFunctionName,
     typeRenderingContextFor(rootComponentPlan),
-    new Set([...rootCrateContent.libraryItems,
-      ...(workerEntries.itemsByComponentId.get(rootComponentPlan.componentId) ?? [])]
-      .flatMap(item => "name" in item ? [item.name] : [])),
+    rootBindings,
   );
   if (initialization.root.modules.length > 0 && crateInitializer === undefined) {
     return rejectedTargetStage([{

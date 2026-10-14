@@ -628,7 +628,7 @@ export function rustTypeFromCarrierInContext(
       if (producerErrorWork-- <= 0 || resolvingProducerErrors.size >= 128 || resolvingProducerErrors.has(key)) return undefined;
       resolvingProducerErrors.add(key);
       try {
-        return context.input.errorRegions.producerErrorType(reference, context,
+        return context.input.errorRegions.producerErrorType(reference,
           carrier => rustTypeFromCarrier(carrier, sourceRendering, resolveStructuralShape));
       } finally {
         resolvingProducerErrors.delete(key);

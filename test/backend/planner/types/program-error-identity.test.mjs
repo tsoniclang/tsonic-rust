@@ -38,6 +38,16 @@ test("error equality uses exact domain identities rather than equal alias spelli
   assert.equal(rustTypeEquals(first, { kind: "named", path: first.path }), false);
 });
 
+test("physical runtime errors reuse only the actual native runtime alias and never a project error alias", () => {
+  for (const errorDomain of ["runtime", "project"]) {
+    const scope = context("consumer", errorDomain);
+    const error = rustTypeFromCarrierInContext(rustProgramErrorTargetType({ kind: "physical", domain: "runtime" }), scope);
+    assert.equal(error.identity, rustRuntimeErrorTypeIdentity);
+    assert.equal(error.path, errorDomain === "runtime" ? "rt::TsonicError" : "tsonic_rust_runtime::TsonicError");
+    assert.equal(scope.usedAliases.has("rt"), errorDomain === "runtime", "only the matching runtime alias is activated");
+  }
+});
+
 test("program error rendering fails closed without its selected domain or with malformed arity", () => {
   const scope = context("owner", "project");
   scope.sourcePackageErrors.domainsByComponentId.clear();

@@ -22,6 +22,7 @@ import { rustNativeErrorJoinReference } from "../../target-model/types/native-er
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
+import { isRustNeverCarrier } from "../../target-model/types/carriers/js.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -108,7 +109,8 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     if (operand === undefined) return;
     sourceRegions.set(edge, Object.freeze({ operand, channels: Object.freeze(operand.sources.map(selected =>
       Object.freeze({ sourceIdentity: selected.identity, targetIdentity: channels.get(selected.identity)!.target.identity,
-        uninhabited: selected.errorType.kind === "target-named" && selected.errorType.id === rustInfallibleTargetId }))) }));
+        uninhabited: isRustNeverCarrier(selected.errorType) || selected.errorType.kind === "target-named" &&
+          selected.errorType.id === rustInfallibleTargetId }))) }));
   };
   for (const producer of input.producers.producers) {
     const asynchronous = input.records.asyncFunction.get(producer.declaration);

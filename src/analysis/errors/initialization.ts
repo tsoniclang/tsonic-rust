@@ -51,9 +51,11 @@ export function analyzeRustInitializationErrors(input: {
     modules.set(file, Object.freeze({ sourceFile: file, identity: input.ast.getFileName(file), region,
       asynchronous: input.navigation.moduleHasTopLevelAwait(file) }));
   }
+  let entrySourceFile: SourceFile | undefined;
   const entry = (): SourceFile | undefined => {
     const path = normalizePath(resolve(input.projectRoot, input.entryPoint));
     const file = byFileName.get(path);
+    entrySourceFile = file;
     if (file === undefined) reject("RUST_PROJECT_ENTRY_SOURCE_MISSING", `Entry source module '${path}' is absent from the checked program.`);
     return file;
   };
@@ -144,7 +146,7 @@ export function analyzeRustInitializationErrors(input: {
   const nativeWorkers = workers.filter(worker => worker.initializer.error.kind === "native");
   for (const [index, worker] of nativeWorkers.entries()) sources.push(Object.freeze({ kind: "worker",
     identity: input.ast.getFileName(worker.sourceFile), variant: `Worker${index}`, sourceFile: worker.sourceFile }));
-  return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({ root,
+  return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({ root, entrySourceFile,
     workers: Object.freeze(workers), binary: Object.freeze({ sources: Object.freeze(sources) }),
     moduleFor: (sourceFile: SourceFile) => modules.get(sourceFile),
     workerFor: (sourceFile: SourceFile) => workerByFile.get(sourceFile),

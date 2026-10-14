@@ -997,6 +997,10 @@ test("Rust dead-code obligations are planner-local and normalized before output 
     join(sourceRoot, "backend/planner/program/planning.ts"),
     "utf8",
   );
+  const initializationAnalysis = readFileSync(
+    join(sourceRoot, "analysis/errors/initialization.ts"),
+    "utf8",
+  );
   const entryPoint = readFileSync(
     join(sourceRoot, "backend/planner/program/entry-point.ts"),
     "utf8",
@@ -1040,8 +1044,12 @@ test("Rust dead-code obligations are planner-local and normalized before output 
   assert.match(normalization, /rustDeadCodeAttribute\(deadCode\)/u);
   assert.match(normalization, /const \{ deadCode, \.\.\.withoutDeadCode \} = owner/u);
   assert.match(outputPlanning, /finalizeRustDeadCode\(/u);
-  assert.equal(/resolveProjectEntrySourceFile\(input, diagnostics\)/u.test(outputPlanning), true, "binary startup selects the authored entry module");
-  assert.equal(/\[entrySourceFile\]/u.test(outputPlanning), true, "binary initialization roots retain the selected source identity");
+  assert.equal(/const entrySourceFile = initialization\.entrySourceFile/u.test(outputPlanning), true,
+    "binary startup consumes the sealed authored entry module");
+  assert.equal(/roots\.set\(input\.ast\.getFileName\(file\), file\)/u.test(initializationAnalysis), true,
+    "initialization analysis retains the exact selected source identity");
+  assert.equal(/resolveProjectEntrySourceFile|resolveLibraryInitializationRoots/u.test(outputPlanning), false,
+    "native planning never independently reselects semantic initialization roots");
   assert.equal(/resolveBinaryEntry/u.test(outputPlanning), false, "binary startup never selects an implicit callable");
   assert.equal(/rustProjectEntrySourceFile\(input\.program\)/u.test(entryPoint), true, "entry source resolution has one owner");
   assert.equal(/return program\.sourceFiles\.find/u.test(entryPoint), true, "entry selection uses the exact source collection");
