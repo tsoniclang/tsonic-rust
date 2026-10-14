@@ -68,7 +68,6 @@ builder.bindingStorage.get(node);
 builder.retainedCallLifetimes.get(node);
 builder.bindingProjection.get(node);
 import { rustConversionKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";
-import { rustRetainedEnvironmentFactKey } from "${join(root, "dist/analysis/program/records/keys/retained-environments.js")}";
 `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [
@@ -80,7 +79,7 @@ import { rustRetainedEnvironmentFactKey } from "${join(root, "dist/analysis/prog
     ["argument old key", `import { rustArgumentPassingKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";`, /no exported member named 'rustArgumentPassingKey'|no exported member 'rustArgumentPassingKey'/u],
     ["location old key", `import { rustTypedLocationPlanKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /no exported member named 'rustTypedLocationPlanKey'|no exported member 'rustTypedLocationPlanKey'/u],
     ["storage old key", `import { rustBindingStorageFactKey } from "${join(root, "dist/analysis/program/records/keys/operation-selections.js")}";`, /no exported member named 'rustBindingStorageFactKey'|no exported member 'rustBindingStorageFactKey'/u],
-    ["lifetimes old key", `import { rustRetainedCallLifetimesFactKey } from "${join(root, "dist/analysis/program/records/keys/retained-environments.js")}";`, /no exported member named 'rustRetainedCallLifetimesFactKey'|no exported member 'rustRetainedCallLifetimesFactKey'/u],
+    ["lifetimes old key", `import { rustRetainedCallLifetimesFactKey } from "${join(root, "dist/analysis/program/records/keys/retained-environments.js")}";`, /Cannot find module.*\/keys\/retained-environments\.js/u],
     ["projection old key", `import { rustBindingProjectionFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /no exported member named 'rustBindingProjectionFactKey'|no exported member 'rustBindingProjectionFactKey'/u],
     ["argument subject", "builder.argumentPassingPlans.pass({}, 'by-value');", /missing.*properties.*Node/u],
     ["argument invalid mode", "builder.argumentPassingPlans.pass(node, 'move');", /not assignable/u],

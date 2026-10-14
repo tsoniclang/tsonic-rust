@@ -488,7 +488,8 @@ export function selectRustSourceCallableReturn(
     : resolveRustRetainedResult(declaration, sourceReturn, rawCarrier, parameterCarriers,
         rustResolutionContext(walk, declaration), walk.operationOptions);
   const carrier = asynchronous !== undefined || generator !== undefined ? rawCarrier : retained?.carrier;
-  if (retained?.environment !== undefined) walk.context.records.retainedEnvironment.set(declaration, retained.environment, [{ message: "rust returned owned environment" }]);
+  if (retained?.environment !== undefined) walk.context.records.retainedEnvironments.retain(declaration,
+    retained.environment.lifetime, retained.environment.parameters);
   if (carrier !== undefined) {
     const borrowedParameter = walk.context.sourceCallables.borrowedReturnParameter(declaration);
     const borrowedAbi = borrowedParameter === undefined ? undefined

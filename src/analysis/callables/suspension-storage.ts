@@ -131,7 +131,8 @@ export function resolveRustSuspendedCallableStorage(
       kind: "rejected", reason: "A selected native promise lifetime requires every captured carrier to outlive its declared storage contract.",
     };
   }
-  if (environment.kind === "selected" && requiredLifetime === undefined) walk.context.records.retainedEnvironment.set(declaration, environment.environment, [{ message: "rust owned suspended environment" }]);
+  if (environment.kind === "selected" && requiredLifetime === undefined) walk.context.records.retainedEnvironments.retain(declaration,
+    environment.environment.lifetime, environment.environment.parameters);
   const lifetime = requiredLifetime ?? (environment.kind === "selected" ? environment.environment.lifetime
     : inputCarriers.some(carrier => carrier === undefined) ? undefined
     : selectRustCallableStorageLifetime(inputCarriers as readonly TargetTypeRef[], carriers, contract));

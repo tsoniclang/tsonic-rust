@@ -115,8 +115,12 @@ test("sealed records publish only frozen typed family readers without a native k
     sourceParameterAbi: () => model.sourceParameterAbis.parameter(subject,
       { form: "required", valueCarrier: carrier, parameterCarrier: carrier, mode: "value" }),
     sourceBinding: () => model.sourceBindings.lexical(subject, subject, "authored"),
+    sourceCallableValue: () => model.sourceCallableValues.function(subject, subject, "source.ts", "step", carrier, [], carrier),
+    directCallableReference: () => model.directCallableReferences.function(subject, subject, "source.ts", "step", carrier, [], carrier),
+    retainedEnvironment: () => model.retainedEnvironments.retain(subject,
+      { kind: "parameter", identity: "environment", name: "environment" }, []),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 56, "every integrated producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 59, "every integrated producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
   assert.equal(Object.keys(records).length, 66, "every original native key has one family");
   for (const [name, family] of Object.entries(records)) {

@@ -57,6 +57,9 @@ import type { RustMemoryLayoutObservationProducer } from "./memory-layout-observ
 import type { RustGeneratorProducer } from "./generator.js";
 import type { RustSourceParameterAbiProducer } from "./source-parameter-abi.js";
 import type { RustSourceBindingProducer } from "./source-binding.js";
+import type { RustSourceCallableValueProducer } from "./source-callable-value.js";
+import type { RustDirectCallableReferenceProducer } from "./direct-callable-reference.js";
+import type { RustRetainedEnvironmentProducer } from "./retained-environment.js";
 
 export interface RustRecordWriter<T> extends RustRecordFamily<T> {
   readonly set: (subject: ExtensionFactSubject, value: T, evidence?: readonly unknown[]) => void;
@@ -75,7 +78,8 @@ type RustProducedRecordFamily = "selectedOperation" | "runtimeCarrier" | "select
   "typeAliasDeclaration" | "mutatedBinding" | "mutatedReferent" |
   "argumentPassing" | "bindingStorage" | "retainedCallLifetimes" | "bindingProjection" | "typedLocationPlan" |
   "compileTimeSource" | "selfMode" | "memoryLayoutObservation" |
-  "generator" | "sourceParameterAbi" | "sourceBinding";
+  "generator" | "sourceParameterAbi" | "sourceBinding" |
+  "sourceCallableValue" | "directCallableReference" | "retainedEnvironment";
 
 export type RustProgramRecordWriter = {
   readonly [Family in Exclude<keyof RustProgramRecords, RustProducedRecordFamily>]: RustRecordWriter<Exclude<ReturnType<RustProgramRecords[Family]["get"]>, undefined>>;
@@ -136,6 +140,9 @@ export type RustProgramRecordWriter = {
   readonly generators: RustGeneratorProducer;
   readonly sourceParameterAbis: RustSourceParameterAbiProducer;
   readonly sourceBindings: RustSourceBindingProducer;
+  readonly sourceCallableValues: RustSourceCallableValueProducer;
+  readonly directCallableReferences: RustDirectCallableReferenceProducer;
+  readonly retainedEnvironments: RustRetainedEnvironmentProducer;
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
