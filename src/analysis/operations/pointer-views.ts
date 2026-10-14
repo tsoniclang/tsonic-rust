@@ -51,10 +51,9 @@ export function selectRustPointerViewCall(
     rustLocationCallbackCarrier(view.writeExpression, [pointee], rustUnitTargetType(), context.ast),
   ];
   return recordRustTypedLocationCall(request, {
-    call: request.source.call, operation: "view-pointer", pointeeCarrier: pointee,
-    locationCarrier: target, pointerExpression: view.pointerExpression,
+    operation: "view-pointer", pointerExpression: view.pointerExpression,
     sourcePointeeCarrier: sourcePointee, optional: view.optional,
     readExpression: view.readExpression, writeExpression: view.writeExpression,
-  }, parameters, view.optional ? rustOptionTargetType(target) : target,
+  }, pointee, target, parameters, view.optional ? rustOptionTargetType(target) : target,
   [sourcePointee, pointee], context);
 }

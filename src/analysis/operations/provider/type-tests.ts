@@ -46,7 +46,7 @@ export function selectRustArrayTypeTest(
       sourceCallee: request.source.sourceCallee.expression, sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration },
   };
-  context.records.argumentPassing.set(argument.expression, { mode: "borrow-shared", storageExpression: argument.expression }, evidence);
+  context.records.argumentPassingPlans.pass(argument.expression, "borrow-shared");
   return acceptRustPolicy({ selectedSignature, targetFact, operation }, evidence);
 }
 

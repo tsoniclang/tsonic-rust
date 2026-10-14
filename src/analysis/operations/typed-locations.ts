@@ -25,7 +25,8 @@ import {
   Node_Type,
 } from "@tsonic/target-api/source";
 
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustTypedLocationOperands } from "../program/records/typed-location-plan.js";
 import {
   rustSourceLocationTargetType,
   rustOptionalLocationPointeeCarrier,
@@ -139,7 +140,7 @@ function acceptRustTypedLocationCall(
   const optionLocationCarrier = rustOptionTargetType(locationCarrier);
   const boolCarrier = rustSourcePrimitiveTargetType("bool");
   const unitCarrier = rustUnitTargetType();
-  const plan = rustTypedLocationPlan(sourceOperation, pointeeCarrier, locationCarrier, context, options);
+  const plan = rustTypedLocationPlan(sourceOperation, pointeeCarrier, context, options);
   if (plan.kind === "rejected") {
     return rejectRustTypedLocation(request.source.call, context,
       "RUST_POINTER_STORAGE_NOT_REPRESENTABLE", plan.reason);
@@ -186,20 +187,21 @@ function acceptRustTypedLocationCall(
             ? optionLocationCarrier : locationCarrier;
   const genericCarriers = plan.value.operation === "project-pointer"
     ? [plan.value.sourcePointeeCarrier, pointeeCarrier] : [pointeeCarrier];
-  return recordRustTypedLocationCall(request, plan.value, parameterCarriers, resultCarrier,
+  return recordRustTypedLocationCall(request, plan.value, pointeeCarrier, locationCarrier, parameterCarriers, resultCarrier,
     genericCarriers, context, provider);
 }
 
 export function recordRustTypedLocationCall(
   request: RustCheckedCallSelectionInput,
-  plan: RustTypedLocationPlan,
+  plan: RustTypedLocationOperands,
+  pointeeCarrier: TargetTypeRef,
+  locationCarrier: TargetTypeRef,
   parameterCarriers: readonly TargetTypeRef[],
   resultCarrier: TargetTypeRef,
   genericCarriers: readonly TargetTypeRef[],
   context: RustOperationAnalysisContext,
   provider?: ProviderDeclarationIdentity,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
-  const { pointeeCarrier, locationCarrier } = plan;
   const sourceOperation = plan;
   const selectedGenericParameters = request.source.sourceSelectedMethodTypeArguments ?? [];
   const sourceParameters = rustSelectedCallTypeParameters(selectedGenericParameters, context);
@@ -209,7 +211,7 @@ export function recordRustTypedLocationCall(
   const evidence = [{
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
   }];
-  context.records.typedLocationPlan.set(request.source.call, plan, evidence);
+  context.records.typedLocations.finalize(request.source.call, pointeeCarrier, locationCarrier, plan);
   const targetFact: RustTargetOperationFact = {
     kind: "typed-location",
     operationId,
@@ -234,9 +236,7 @@ export function recordRustTypedLocationCall(
     },
   };
   for (const argument of typedLocationCallArguments(request)) {
-    context.records.argumentPassing.set(argument, {
-      mode: "by-value",
-    }, evidence);
+    context.records.argumentPassingPlans.pass(argument, "by-value");
   }
   const member: RustTargetMember = {
     id: operationId,
@@ -370,27 +370,21 @@ function rustTypedLocationArgumentsMatch(
 }
 
 type RustTypedLocationPlanSelection =
-  | { readonly kind: "selected"; readonly value: RustTypedLocationPlan }
+  | { readonly kind: "selected"; readonly value: RustTypedLocationOperands }
   | { readonly kind: "rejected"; readonly reason: string };
 
 function rustTypedLocationPlan(
   operation: RustTypedLocationSourceFact,
   pointeeCarrier: TargetTypeRef,
-  locationCarrier: TargetTypeRef,
   context: RustOperationAnalysisContext,
   options: RustTargetTypeResolutionOptions,
 ): RustTypedLocationPlanSelection {
-  const base = {
-    call: operation.call,
-    pointeeCarrier,
-    locationCarrier,
-  } as const;
   switch (operation.operation) {
     case "hash-pointer":
-      return { kind: "selected", value: { ...base, operation: operation.operation,
+      return { kind: "selected", value: { operation: operation.operation,
         pointerExpression: operation.pointerExpression } };
     case "bind-pointer":
-      return { kind: "selected", value: { ...base, operation: operation.operation,
+      return { kind: "selected", value: { operation: operation.operation,
         identityExpression: operation.identityExpression,
         readExpression: operation.readExpression, writeExpression: operation.writeExpression } };
     case "project-pointer": {
@@ -404,7 +398,7 @@ function rustTypedLocationPlan(
           ? !isRustAbsenceCarrier(sourceLocation)
           : !rustTargetTypeRefEquals(sourcePointeeCarrier, operandPointeeCarrier))
         ? { kind: "rejected", reason: "Pointer projection requires the exact source location carrier." }
-        : { kind: "selected", value: { ...base, operation: operation.operation,
+        : { kind: "selected", value: { operation: operation.operation,
             pointerExpression: operation.pointerExpression, sourcePointeeCarrier,
             optional: rustOptionElementCarrier(sourceLocation) !== undefined || isRustAbsenceCarrier(sourceLocation),
             fromSourceExpression: operation.fromSourceExpression, toSourceExpression: operation.toSourceExpression } };
@@ -445,15 +439,11 @@ function rustTypedLocationPlan(
         };
       }
       if (root.storage === "local-location") {
-        context.records.bindingStorage.set(root.declaration, {
-          storage: "location",
-          valueCarrier: rootCarrier,
-        }, [{ message: "rust selected canonical typed-location storage root" }]);
+        context.records.bindingStoragePlans.location(root.declaration, rootCarrier);
       }
       return {
         kind: "selected",
         value: {
-          ...base,
           operation: "address-of",
           storageExpression: operation.storageExpression,
           storageDeclaration: operation.storageDeclaration,
@@ -467,7 +457,6 @@ function rustTypedLocationPlan(
       return {
         kind: "selected",
         value: {
-          ...base,
           operation: "allocate",
           initialExpression: operation.initialExpression,
           locationIdentity: operation.locationIdentity,
@@ -477,7 +466,6 @@ function rustTypedLocationPlan(
       return {
         kind: "selected",
         value: {
-          ...base,
           operation: "load",
           pointerExpression: operation.pointerExpression,
         },
@@ -486,7 +474,6 @@ function rustTypedLocationPlan(
       return {
         kind: "selected",
         value: {
-          ...base,
           operation: "store",
           pointerExpression: operation.pointerExpression,
           valueExpression: operation.valueExpression,
@@ -496,7 +483,6 @@ function rustTypedLocationPlan(
       return {
         kind: "selected",
         value: {
-          ...base,
           operation: "equal-pointer",
           leftExpression: operation.leftExpression,
           rightExpression: operation.rightExpression,

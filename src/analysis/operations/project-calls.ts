@@ -607,7 +607,7 @@ export function applySelectedProjectSourceCall(
       ["target.capability=rust.source-call.retained-environment"]);
     return undefined;
   }
-  if (retainedLifetimes.size !== 0) walk.context.records.retainedCallLifetimes.set(expression, Object.freeze([...retainedLifetimes].map(([identity, lifetime]) => Object.freeze({ identity, lifetime }))), [{ message: "rust exact retained call environment" }]);
+  walk.context.records.retainedCalls.finalize(expression, retainedLifetimes);
   if (retainedLifetimes.size !== 0) parameters = parameters.map(parameter => ({ ...parameter,
     valueCarrier: rustRetainedCallResult(parameter.valueCarrier, retainedLifetimes),
     parameterCarrier: rustRetainedCallResult(parameter.parameterCarrier, retainedLifetimes),
@@ -743,12 +743,7 @@ export function applySelectedSourceCallArguments(
     }
     const mode = modes[0]!;
     const passingMode = rustArgumentPassingMode(mode);
-    walk.context.records.argumentPassing.set(argument, {
-      mode: passingMode,
-      ...(mode === "value" ? {} : { storageExpression: argument }),
-    }, [{
-      message: `rust selected source argument ${index} passes as ${passingMode}`,
-    }]);
+    walk.context.records.argumentPassingPlans.pass(argument, passingMode);
     validateFlowMarkerAgainstMode(walk, argument, mode);
     if (mode === "mut-ref") {
       recordBindingWrite(walk, argument, "referent");

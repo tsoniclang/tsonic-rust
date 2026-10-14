@@ -5,7 +5,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
 import { rustProviderInputBorrowMode } from "../storage/provider-borrows.js";
 
-export function rustArgumentPassingMode(mode: RustArgumentMode): ArgumentPassingMode {
+export function rustArgumentPassingMode(mode: RustArgumentMode): Extract<ArgumentPassingMode, "by-value" | "borrow-shared" | "borrow-mut"> {
   switch (mode) {
     case "ref":
       return "borrow-shared";

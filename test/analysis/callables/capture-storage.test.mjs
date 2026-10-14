@@ -346,7 +346,7 @@ test("native call argument evidence must prove ownership rather than an address-
     `);
     const argument = current.summary.uses.find(use => use.role === "argument")?.reference;
     assert.equal(argument !== undefined, true, "exact selected argument");
-    if (mode !== undefined) current.records.argumentPassing.set(argument, { mode });
+    if (mode !== undefined) current.records.argumentPassingPlans.pass(argument, mode);
     if (operation !== undefined)
       current.records.targetOperations.source(current.source.ast.parent(argument), operation);
     assert.deepEqual(current.select(), { storage });
@@ -417,7 +417,7 @@ test("native callable traits, existing shared locations and mutation facts retai
   assert.deepEqual(fixture(text, { carrier: stringCarrier }).select({ nativeCallTrait: "Fn" }), { storage: "borrow-cell" });
   assert.deepEqual(fixture(text, { carrier: stringCarrier }).select({ permitSingleOwner: false }), { storage: "location" });
   const shared = fixture(text, { carrier: stringCarrier });
-  shared.records.bindingStorage.set(shared.declaration, { storage: "location", valueCarrier: stringCarrier });
+  shared.records.bindingStoragePlans.location(shared.declaration, stringCarrier);
   assert.deepEqual(shared.select({ nativeCallTrait: "FnMut" }), { storage: "location" });
   const immutable = fixture(`
     export function outer(seed: number) {

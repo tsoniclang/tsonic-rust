@@ -451,12 +451,7 @@ export function collectRustLexicalCaptures(
     const selectedStorage = rustCapturedBindingStorage(walk, declaration, reference, expression, carrier, permitSingleOwner,
       nativeCallTrait, selected.callableRoots);
     if (carrier === undefined || selectedStorage === undefined) return undefined;
-    if (selectedStorage.storage !== "value") walk.context.records.bindingStorage.set(declaration, {
-      storage: selectedStorage.storage,
-      valueCarrier: carrier,
-      ...(selectedStorage.initialization === undefined ? {} : { initialization: selectedStorage.initialization }),
-      ...(selectedStorage.iterationScope === undefined ? {} : { iterationScope: selectedStorage.iterationScope }),
-    }, [{ message: "rust captured mutable binding storage" }]);
+    walk.context.records.bindingStoragePlans.capture(declaration, carrier, selectedStorage);
     captures.set(declaration, { declaration, reference, carrier, storage: selectedStorage.storage,
       ...(selectedStorage.mutable === undefined ? {} : { mutable: selectedStorage.mutable }) });
   }

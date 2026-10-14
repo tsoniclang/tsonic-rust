@@ -472,12 +472,7 @@ export function acceptSelectedCall(
       );
     }
     const mode = rustArgumentPassingMode(sourceArgument.mode);
-    context.records.argumentPassing.set(argument, {
-      mode,
-      ...(mode === "borrow-shared" || mode === "borrow-mut"
-        ? { storageExpression: argument }
-        : {}),
-    }, [{ message: `rust selected argument ${sourceArgument.sourceIndex} passes as ${mode}` }]);
+    context.records.argumentPassingPlans.pass(argument, mode);
   }
   if (optionalResult.fact !== undefined) {
     context.records.optionalChain.set(request.source.call, optionalResult.fact, [{ message: `rust optional call ${optionalResult.fact.lowering}` }]);

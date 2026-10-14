@@ -11,7 +11,12 @@ import { createRustAsyncFunctionProducer } from "./async-function.js";
 import { createRustYieldProducer } from "./yield.js";
 import { createRustComputedMemberProducer } from "./computed-member.js";
 import { createRustCompoundWriteProducer } from "./compound-write.js";
-import { rustConversionKey, rustArgumentPassingKey } from "./keys/selections.js";
+import { createRustArgumentPassingProducer } from "./argument-passing.js";
+import { createRustBindingStorageProducer } from "./binding-storage.js";
+import { createRustRetainedCallLifetimesProducer } from "./retained-call-lifetimes.js";
+import { createRustBindingProjectionProducer } from "./binding-projection.js";
+import { createRustTypedLocationProducer } from "./typed-location-plan.js";
+import { rustConversionKey } from "./keys/selections.js";
 import { createRustSelectedOperationProducer } from "./selected-operation.js";
 import { createRustRuntimeCarrierProducer } from "./runtime-carrier.js";
 import { createRustSelectedCallProducer } from "./selected-call.js";
@@ -41,12 +46,12 @@ import { createRustCallScopedLifetimeReconciliationProducer } from "./call-scope
 import { createRustProjectUpcastProducer } from "./project-upcast.js";
 import { createRustProjectDowncastProducer } from "./project-downcast.js";
 import { rustCompileTimeSourceKey } from "./keys/source-declarations.js";
-import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustBindingProjectionFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
-import { rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustTypedLocationPlanKey, rustBindingStorageFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
+import { rustOptionProjectionFactKey, rustFlowReadProjectionFactKey, rustContextualValueConversionFactKey, rustSourceBindingFactKey, rustSelfModeFactKey } from "./keys/value-projections.js";
+import { rustPreparedOperationResultFactKey, rustOptionalChainFactKey, rustClosureCaptureFactKey, rustSourceCallableValueFactKey, rustDirectCallableReferenceFactKey } from "./keys/operation-selections.js";
 import { createRustNativeArrayStorageProducer } from "./native-array-storage.js";
 import { createRustNativeBackingProducer } from "./native-backing.js";
 import { createRustRawLocationProducer } from "./raw-locations.js";
-import { rustRetainedEnvironmentFactKey, rustRetainedCallLifetimesFactKey } from "./keys/retained-environments.js";
+import { rustRetainedEnvironmentFactKey } from "./keys/retained-environments.js";
 import { createRustMemoryBindingProducer } from "./memory-bindings.js";
 import { createRustRawAddressProducer } from "./raw-addresses.js";
 import { createRustTypeOnlyDeclarationProducer } from "./type-only-declaration.js";
@@ -95,7 +100,7 @@ export function createRustProgramRecordBuilder(
   const selectedOperations = createRustSelectedOperationProducer(parent?.selectedOperation);
   const conversion = createFamily(rustConversionKey, parent?.conversion,
     value => value.convertedType === undefined ? "core" : rustFoundationForCarrier(value.convertedType));
-  const argumentPassing = createFamily(rustArgumentPassingKey, parent?.argumentPassing);
+  const argumentPassingPlans = createRustArgumentPassingProducer(assertOpen, parent?.argumentPassing);
   const nativeGuardResults = createRustNativeGuardResultProducer(assertOpen, parent?.nativeGuardResult);
   const nativeUnreachableNodes = createRustNativeUnreachableProducer(assertOpen, parent?.nativeUnreachable);
   const awaitValues = createRustAwaitValueProducer(assertOpen, requireFoundation, definitions, parent?.awaitValue);
@@ -119,7 +124,7 @@ export function createRustProgramRecordBuilder(
   const projectUpcasts = createRustProjectUpcastProducer(assertOpen, parent?.projectUpcast);
   const projectDowncasts = createRustProjectDowncastProducer(assertOpen, parent?.projectDowncast);
   const sourceBinding = createFamily(rustSourceBindingFactKey, parent?.sourceBinding);
-  const bindingProjection = createFamily(rustBindingProjectionFactKey, parent?.bindingProjection);
+  const bindingProjections = createRustBindingProjectionProducer(assertOpen, parent?.bindingProjection);
   const mutatedBindings = createRustMutatedBindingProducer(assertOpen, parent?.mutatedBinding);
   const mutatedReferents = createRustMutatedReferentProducer(assertOpen, parent?.mutatedReferent);
   const selfMode = createFamily(rustSelfModeFactKey, parent?.selfMode);
@@ -129,8 +134,8 @@ export function createRustProgramRecordBuilder(
   const receiverIndependentMethods = createRustReceiverIndependentMethodProducer(assertOpen, parent?.receiverIndependentMethod);
   const preparedOperationResult = createFamily(rustPreparedOperationResultFactKey, parent?.preparedOperationResult);
   const optionalChain = createFamily(rustOptionalChainFactKey, parent?.optionalChain);
-  const typedLocationPlan = createFamily(rustTypedLocationPlanKey, parent?.typedLocationPlan);
-  const bindingStorage = createFamily(rustBindingStorageFactKey, parent?.bindingStorage);
+  const typedLocations = createRustTypedLocationProducer(assertOpen, parent?.typedLocationPlan);
+  const bindingStoragePlans = createRustBindingStorageProducer(assertOpen, parent?.bindingStorage);
   const closureCapture = createFamily(rustClosureCaptureFactKey, parent?.closureCapture);
   const sourceCallableValue = createFamily(rustSourceCallableValueFactKey, parent?.sourceCallableValue);
   const directCallableReference = createFamily(rustDirectCallableReferenceFactKey, parent?.directCallableReference);
@@ -143,7 +148,7 @@ export function createRustProgramRecordBuilder(
   const objectReferenceViews = createRustObjectReferenceViewProducer(assertOpen, parent?.objectReferenceView);
   const projectCallableAdapterPlans = createRustProjectCallableAdapterProducer(assertOpen, parent?.projectCallableAdapters);
   const retainedEnvironment = createFamily(rustRetainedEnvironmentFactKey, parent?.retainedEnvironment);
-  const retainedCallLifetimes = createFamily(rustRetainedCallLifetimesFactKey, parent?.retainedCallLifetimes);
+  const retainedCalls = createRustRetainedCallLifetimesProducer(assertOpen, parent?.retainedCallLifetimes);
   const genericNumerics = createRustGenericNumericOperandsProducer(assertOpen, parent?.genericNumericOperands);
   const moduleCallableStoragePlans = createRustModuleCallableStorageProducer(assertOpen, parent?.moduleCallableStorage);
   const genericCallableInvocations = createRustGenericCallableInvocationProducer(assertOpen, parent?.genericCallableInvocation);
@@ -165,7 +170,7 @@ export function createRustProgramRecordBuilder(
     selectedCall: selectedCalls.records,
     selectedOperation: selectedOperations.records,
     conversion: conversion.reader,
-    argumentPassing: argumentPassing.reader,
+    argumentPassing: argumentPassingPlans.records,
     nativeGuardResult: nativeGuardResults.records,
     nativeUnreachable: nativeUnreachableNodes.records,
     awaitValue: awaitValues.records,
@@ -187,7 +192,7 @@ export function createRustProgramRecordBuilder(
     projectUpcast: projectUpcasts.records,
     projectDowncast: projectDowncasts.records,
     sourceBinding: sourceBinding.reader,
-    bindingProjection: bindingProjection.reader,
+    bindingProjection: bindingProjections.records,
     mutatedBinding: mutatedBindings.records,
     mutatedReferent: mutatedReferents.records,
     selfMode: selfMode.reader,
@@ -197,8 +202,8 @@ export function createRustProgramRecordBuilder(
     receiverIndependentMethod: receiverIndependentMethods.records,
     preparedOperationResult: preparedOperationResult.reader,
     optionalChain: optionalChain.reader,
-    typedLocationPlan: typedLocationPlan.reader,
-    bindingStorage: bindingStorage.reader,
+    typedLocationPlan: typedLocations.records,
+    bindingStorage: bindingStoragePlans.records,
     closureCapture: closureCapture.reader,
     sourceCallableValue: sourceCallableValue.reader,
     directCallableReference: directCallableReference.reader,
@@ -211,7 +216,7 @@ export function createRustProgramRecordBuilder(
     objectReferenceView: objectReferenceViews.records,
     projectCallableAdapters: projectCallableAdapterPlans.records,
     retainedEnvironment: retainedEnvironment.reader,
-    retainedCallLifetimes: retainedCallLifetimes.reader,
+    retainedCallLifetimes: retainedCalls.records,
     genericNumericOperands: genericNumerics.records,
     moduleCallableStorage: moduleCallableStoragePlans.records,
     genericCallableInvocation: genericCallableInvocations.records,
@@ -240,7 +245,8 @@ export function createRustProgramRecordBuilder(
     selectedOperation: selectedOperations.records,
     selectedOperations,
     conversion: conversion.writer,
-    argumentPassing: argumentPassing.writer,
+    argumentPassing: argumentPassingPlans.records,
+    argumentPassingPlans,
     nativeGuardResult: nativeGuardResults.records,
     nativeGuardResults,
     nativeUnreachable: nativeUnreachableNodes.records,
@@ -278,7 +284,8 @@ export function createRustProgramRecordBuilder(
     projectDowncast: projectDowncasts.records,
     projectDowncasts,
     sourceBinding: sourceBinding.writer,
-    bindingProjection: bindingProjection.writer,
+    bindingProjection: bindingProjections.records,
+    bindingProjections,
     mutatedBinding: mutatedBindings.records,
     mutatedBindings,
     mutatedReferent: mutatedReferents.records,
@@ -294,8 +301,10 @@ export function createRustProgramRecordBuilder(
     receiverIndependentMethods,
     preparedOperationResult: preparedOperationResult.writer,
     optionalChain: optionalChain.writer,
-    typedLocationPlan: typedLocationPlan.writer,
-    bindingStorage: bindingStorage.writer,
+    typedLocationPlan: typedLocations.records,
+    typedLocations,
+    bindingStorage: bindingStoragePlans.records,
+    bindingStoragePlans,
     closureCapture: closureCapture.writer,
     sourceCallableValue: sourceCallableValue.writer,
     directCallableReference: directCallableReference.writer,
@@ -316,7 +325,8 @@ export function createRustProgramRecordBuilder(
     projectCallableAdapters: projectCallableAdapterPlans.records,
     projectCallableAdapterPlans,
     retainedEnvironment: retainedEnvironment.writer,
-    retainedCallLifetimes: retainedCallLifetimes.writer,
+    retainedCallLifetimes: retainedCalls.records,
+    retainedCalls,
     genericNumericOperands: genericNumerics.records,
     genericNumerics,
     moduleCallableStorage: moduleCallableStoragePlans.records,
