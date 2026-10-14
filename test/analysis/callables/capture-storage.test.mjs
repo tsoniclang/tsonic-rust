@@ -1,7 +1,6 @@
 import { rustBindingStorageEquals } from "../../../dist/target-model/records/equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram, sourceBindingHasSingleCaptureOwner } from "@tsonic/target-api/source";
@@ -165,7 +164,6 @@ function fixture(text, options = {}) {
   const reference = summary.uses.find(use => use.kind !== "type-only")?.reference;
   assert.equal(reference !== undefined, true, "exact retained reference");
   const records = createRustProgramRecordBuilder();
-  const readers = createRustRecordFixture({}, records);
   const navigation = options.summary === undefined ? source.navigation : {
     ...source.navigation,
     declarationUseSummary: selected => {
@@ -174,8 +172,9 @@ function fixture(text, options = {}) {
     },
   };
   const walk = {
-    context: { ast: source.ast, source: { ...source, navigation }, records: readers },
+    context: { ast: source.ast, source: { ...source, navigation }, records },
     capturedBindingStorage: new Map(),
+    promotedStorageDeclarations: new Set(),
   };
   const select = (settings = {}) => rustCapturedBindingStorage(walk, declaration,
     settings.reference ?? reference, owner,
@@ -183,6 +182,71 @@ function fixture(text, options = {}) {
     settings.permitSingleOwner ?? true, settings.nativeCallTrait, settings.roots ?? [owner]);
   return { source, declaration, declarations, owner, reference, summary, walk, records, select };
 }
+
+for (const kind of ["deferred", "iteration"]) for (const addressFirst of [false, true]) {
+  test(`complete ${kind} storage is admitted once with ${addressFirst ? "address" : "capture"} demand first`, () => {
+    const current = fixture(kind === "deferred" ? `
+      export function outer() {
+        const callback = () => seed;
+        const second = () => seed;
+        const seed: number = 3;
+        return callback;
+      }
+    ` : `
+      export function outer() {
+        for (let seed = 0; seed < 2; seed++) {
+          const callback = () => seed;
+          const second = () => seed;
+          callback(); second();
+        }
+      }
+    `);
+    current.walk.promotedStorageDeclarations.add(current.declaration);
+    let admissions = 0;
+    const producer = current.records.bindingStoragePlans;
+    const tracked = { ...producer, capture(...arguments_) {
+      admissions++;
+      return producer.capture(...arguments_);
+    }, requireLocation(...arguments_) {
+      const absent = current.records.bindingStorage.get(current.declaration) === undefined;
+      const accepted = producer.requireLocation(...arguments_);
+      if (absent && accepted) admissions++;
+      return accepted;
+    } };
+    current.walk.context.records = { ...current.records, bindingStoragePlans: tracked };
+    const address = () => tracked.requireLocation(current.walk.context, current.declaration, scalarCarrier);
+    if (addressFirst) assert.equal(address(), true);
+    const selected = current.select({ permitSingleOwner: false });
+    const canonical = current.records.bindingStorage.get(current.declaration);
+    assert.equal(selected.storage, "location");
+    assert.equal(canonical.initialization, kind === "deferred" ? "deferred" : undefined);
+    assert.equal(canonical.iterationScope !== undefined, kind === "iteration");
+    assert.equal(address(), true);
+    assert.equal(address(), true);
+    assert.equal(current.select({ permitSingleOwner: false }) === selected, true);
+    assert.equal(current.records.bindingStorage.get(current.declaration) === canonical, true);
+    assert.equal(admissions, 1, "two captures and two addresses share the complete declaration decision");
+    assert.equal(tracked.requireLocation(current.walk.context, current.declaration, stringCarrier), false);
+    assert.throws(() => current.select({ carrier: stringCarrier }), /Conflicting Rust semantic plan/u);
+    assert.equal(current.records.bindingStorage.get(current.declaration) === canonical, true);
+    current.records.seal();
+    assert.throws(address, /after analysis is sealed/u);
+    assert.throws(() => current.select(), /after analysis is sealed/u);
+  });
+}
+
+test("an addressability demand cannot replace a selected cell or native carrier", () => {
+  const current = fixture(`
+    export function outer(seed: number) {
+      const callback = () => { seed += 1; return seed; };
+      return callback;
+    }
+  `);
+  assert.equal(current.select().storage, "cell");
+  const canonical = current.records.bindingStorage.get(current.declaration);
+  assert.equal(current.records.bindingStoragePlans.requireLocation(current.walk.context, current.declaration, scalarCarrier), false);
+  assert.equal(current.records.bindingStorage.get(current.declaration) === canonical, true);
+});
 
 for (const [name, text, carrier, storage] of [
   ["arithmetic non-Copy read", `
@@ -417,7 +481,7 @@ test("native callable traits, existing shared locations and mutation facts retai
   assert.deepEqual(fixture(text, { carrier: stringCarrier }).select({ nativeCallTrait: "Fn" }), { storage: "borrow-cell" });
   assert.deepEqual(fixture(text, { carrier: stringCarrier }).select({ permitSingleOwner: false }), { storage: "location" });
   const shared = fixture(text, { carrier: stringCarrier });
-  shared.records.bindingStoragePlans.location(shared.declaration, stringCarrier);
+  assert.equal(shared.records.bindingStoragePlans.requireLocation(shared.walk.context, shared.declaration, stringCarrier), true);
   assert.deepEqual(shared.select({ nativeCallTrait: "FnMut" }), { storage: "location" });
   const immutable = fixture(`
     export function outer(seed: number) {

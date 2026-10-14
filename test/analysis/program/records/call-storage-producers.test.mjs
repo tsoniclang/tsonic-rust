@@ -16,7 +16,7 @@ const projections = { kind: "tuple-element", index: 0 };
 const families = [
   ["argumentPassing", "argumentPassingPlans", owner => owner.pass(subject, "by-value")],
   ["typedLocationPlan", "typedLocations", owner => owner.finalize(subject, integer, location, { operation: "load", pointerExpression: pointer })],
-  ["bindingStorage", "bindingStoragePlans", owner => owner.location(subject, integer)],
+  ["bindingStorage", "bindingStoragePlans", owner => owner.capture(subject, integer, { storage: "location" })],
   ["retainedCallLifetimes", "retainedCalls", owner => owner.finalize(subject, new Map([["region", { kind: "static" }]]))],
   ["bindingProjection", "bindingProjections", owner => owner.resolve(subject, integer, integer, projections)],
 ];
@@ -151,7 +151,7 @@ for (const storage of ["location", "cell", "borrow-cell"]) {
       const other = {};
       child.bindingStoragePlans.capture(other, integer, { storage: "value", mutable: true });
       assert.equal(child.bindingStorage.get(other) === undefined, true, "a selected inline value does not acquire backing storage");
-      child.bindingStoragePlans.location(other, wide);
+      child.bindingStoragePlans.capture(other, wide, { storage: "location" });
       assert.equal(child.bindingStorage.get(other)?.storage, "location");
       assert.equal(child.bindingStorage.get(other)?.valueCarrier === wide, true);
       assert.equal(parent.bindingStorage.get(other) === undefined, true);

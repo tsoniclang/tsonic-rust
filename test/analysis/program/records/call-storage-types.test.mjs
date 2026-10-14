@@ -12,9 +12,11 @@ import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/prog
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
 import type { RustLifetimeRef } from "${join(root, "dist/target-model/lifetimes/index.js")}";
+import type { RustSourcePolicyContext } from "${join(root, "dist/policy/model/context.js")}";
 declare const node: Node;
 declare const carrier: TargetTypeRef;
 declare const lifetimes: ReadonlyMap<string, RustLifetimeRef>;
+declare const context: RustSourcePolicyContext;
 const builder = createRustProgramRecordBuilder();
 `;
 
@@ -56,7 +58,7 @@ builder.bindingStoragePlans.capture(node, carrier, { storage: "value" });
 builder.bindingStoragePlans.capture(node, carrier, { storage: "cell", mutable: true });
 builder.bindingStoragePlans.capture(node, carrier, { storage: "borrow-cell" });
 builder.bindingStoragePlans.capture(node, carrier, { storage: "location", initialization: "deferred", iterationScope: node });
-builder.bindingStoragePlans.location(node, carrier);
+builder.bindingStoragePlans.requireLocation(context, node, carrier);
 builder.retainedCalls.finalize(node, lifetimes);
 builder.bindingProjections.resolve(node, carrier, carrier, { kind: "tuple-element", index: 0 });
 builder.bindingProjections.resolve(node, carrier, carrier, { kind: "vec-element", index: 1, checked: true }, carrier, carrier);
@@ -90,7 +92,8 @@ builder.bindingProjection.get(node);
     ["location mismatched operands", "builder.typedLocations.finalize(node, carrier, carrier, { operation: 'store', pointerExpression: node });", /missing/u],
     ["location forged call", "builder.typedLocations.finalize(node, carrier, carrier, { operation: 'load', pointerExpression: node, call: node });", /does not exist/u],
     ["location missing source carrier", "builder.typedLocations.finalize(node, carrier, carrier, { operation: 'project-pointer', pointerExpression: node, optional: false, fromSourceExpression: node, toSourceExpression: node });", /missing/u],
-    ["storage subject", "builder.bindingStoragePlans.location({}, carrier);", /missing.*properties.*Node/u],
+    ["storage retired location constructor", "builder.bindingStoragePlans.location(node, carrier);", /Property 'location' does not exist/u],
+    ["storage subject", "builder.bindingStoragePlans.requireLocation(context, {}, carrier);", /missing.*properties.*Node/u],
     ["storage invalid mode", "builder.bindingStoragePlans.capture(node, carrier, { storage: 'shared' });", /not assignable/u],
     ["storage missing selection", "builder.bindingStoragePlans.capture(node, carrier, {});", /missing/u],
     ["storage invalid initialization", "builder.bindingStoragePlans.capture(node, carrier, { storage: 'location', initialization: 'ready' });", /not assignable/u],
@@ -109,5 +112,5 @@ builder.bindingProjection.get(node);
     assert.notEqual(result.status, 0, name);
     assert.match(result.diagnostics, diagnostic, name);
   }
-  assert.equal(invalid.length, 33);
+  assert.equal(invalid.length, 34);
 });

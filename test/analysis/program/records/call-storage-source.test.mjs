@@ -336,10 +336,10 @@ for (const [type, carrier, expression, expected] of [
       const reference = source.navigation.declarationUseSummary(declaration).uses.find(use => use.kind !== "type-only")?.reference;
       assert.equal(reference !== undefined, true);
       const records = createRustProgramRecordBuilder();
-      const walk = { context: { ast: source.ast, source, records }, capturedBindingStorage: new Map() };
+      const walk = { context: { ast: source.ast, source, records }, capturedBindingStorage: new Map(),
+        promotedStorageDeclarations: new Set() };
       const selected = rustCapturedBindingStorage(walk, declaration, reference, owner, carrier, singleOwner);
       assert.equal(selected?.storage, singleOwner ? expected : "location");
-      records.bindingStoragePlans.capture(declaration, carrier, selected);
       const fact = records.seal().bindingStorage.get(declaration);
       assert.equal(fact?.storage, selected.storage);
       assert.equal(fact.valueCarrier === carrier, true);

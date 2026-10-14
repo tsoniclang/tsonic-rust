@@ -11,9 +11,6 @@ import { rustRetainedCallableStorage } from "./results.js";
 export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: RustLexicalFunctionEnvironments): void {
   const { ast, source, records } = walk.context;
   const visit = (node: Node): void => {
-    if (ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined && sourceDeclarationIsModuleScoped(node, ast)) {
-      records.closureCaptures.capture(node, []);
-    }
     const selection = lexical.forDeclaration(node);
     const retained = rustRetainedCallableStorage(records, node) !== undefined;
     if (selection?.kind === "resolved" && (selection.valueObserved || retained)) {
@@ -34,10 +31,11 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
             capture.reference, ["target.capability=rust.lexical-function.environment"]);
           continue;
         }
-        records.bindingStoragePlans.capture(capture.declaration, carrier, storage);
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage: storage.storage });
       }
       records.closureCaptures.capture(node, captures);
+    } else if (ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined && sourceDeclarationIsModuleScoped(node, ast)) {
+      records.closureCaptures.capture(node, []);
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };

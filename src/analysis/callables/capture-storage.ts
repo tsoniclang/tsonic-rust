@@ -1,5 +1,6 @@
 import type { Node, SourceFile, Symbol } from "@tsonic/tsts";
-import { sourceBindingHasSingleCaptureOwner, sourceBindingCapturedBeforeInitialization, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
+import { sourceBindingHasSingleCaptureOwner, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -9,6 +10,8 @@ import type { RustClosureCaptureFact } from "../../target-model/records/operatio
 import { rustCallArgumentIsOwned } from "./parameter-passing.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
+import { selectRustBindingLocationStorage } from "../storage/binding-locations.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export type RustCaptureStorage = Pick<RustClosureCaptureFact["captures"][number], "storage" | "mutable"> & {
   readonly initialization?: "deferred";
@@ -25,6 +28,7 @@ export function rustCapturedBindingStorage(
   nativeCallTrait?: "Fn" | "FnMut" | "FnOnce",
   captureRoots: readonly Node[] = [owner],
 ): RustCaptureStorage | undefined {
+  walk.context.records.assertOpen();
   const selected = walk.context.source.navigation.sourceReferenceFor(reference);
   const sourceFile = walk.context.ast.getSourceFile(declaration);
   if (
@@ -37,31 +41,40 @@ export function rustCapturedBindingStorage(
   }
   const cached = walk.capturedBindingStorage.get(declaration);
   if (cached !== undefined) {
-    return cached;
+    if (!rustTargetTypeRefEquals(cached.carrier, carrier)) failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.bindingStorage' for one exact source subject.");
+    return cached.selection;
+  }
+  const existing = walk.context.records.bindingStorage.get(declaration);
+  if (existing !== undefined) {
+    const { valueCarrier, ...selection } = existing;
+    if (!rustTargetTypeRefEquals(valueCarrier, carrier)) failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.bindingStorage' for one exact source subject.");
+    const storage = Object.freeze(selection);
+    walk.capturedBindingStorage.set(declaration, { carrier, selection: storage });
+    return storage;
   }
   const mutated = walk.context.records.mutatedBinding.get(declaration) !== undefined ||
     walk.context.source.navigation.bindingWritesWithin(selected.symbol, sourceFile).length > 0;
-  const existing = walk.context.records.bindingStorage.get(declaration);
-  const deferred = sourceBindingCapturedBeforeInitialization(declaration, walk.context.ast, walk.context.source.navigation);
+  const location = selectRustBindingLocationStorage(declaration, walk.context.ast, walk.context.source.navigation);
   const scope = sourceBindingScope(declaration, walk.context.ast);
-  const iterationValue = existing === undefined && isRustCopyCarrier(carrier) && scope !== undefined &&
+  const iterationValue = isRustCopyCarrier(carrier) && scope !== undefined &&
     iterationCaptureCanUseValue(walk, declaration, selected.symbol, scope, sourceFile);
-  const unique = mutated && permitSingleOwner && existing === undefined &&
+  const unique = mutated && permitSingleOwner &&
     singleOwnerDirectBinding(walk, declaration, reference, owner, captureRoots);
-  const selectedStorage: RustCaptureStorage = deferred
-    ? { storage: "location", initialization: "deferred" }
-    : existing?.storage === "location"
-    ? { storage: "location" }
+  const selectedStorage: RustCaptureStorage = location.initialization === "deferred" || walk.promotedStorageDeclarations.has(declaration)
+    ? location
     : !mutated || iterationValue ? { storage: "value" }
     : unique && (nativeCallTrait === "FnMut" || nativeCallTrait === "FnOnce")
       ? { storage: "value", mutable: true }
       : unique && rustCarrierSupportsClone(carrier, walk.context.typeDefinitions)
         ? { storage: isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" }
-        : { storage: "location" };
-  const iterationScope = selectedStorage.storage === "location"
-    ? sourceBindingIterationScope(declaration, walk.context.ast) : undefined;
-  const storage = iterationScope === undefined ? selectedStorage : { ...selectedStorage, iterationScope };
-  walk.capturedBindingStorage.set(declaration, storage);
+        : location;
+  const storage = Object.freeze(selectedStorage);
+  if (storage.storage !== "value") {
+    walk.context.records.bindingStoragePlans.capture(declaration, carrier, storage);
+  }
+  walk.capturedBindingStorage.set(declaration, { carrier, selection: storage });
   return storage;
 }
 

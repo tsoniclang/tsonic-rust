@@ -438,8 +438,9 @@ function rustTypedLocationPlan(
             "Selected address-of storage root has no closed Rust value carrier.",
         };
       }
-      if (root.storage === "local-location") {
-        context.records.bindingStoragePlans.location(root.declaration, rootCarrier);
+      if (root.storage === "local-location" &&
+        !context.records.bindingStoragePlans.requireLocation(context, root.declaration, rootCarrier)) {
+        return { kind: "rejected", reason: "Selected address-of storage requires its exact native location and value carrier." };
       }
       return {
         kind: "selected",

@@ -18,6 +18,8 @@ function parentWalk() {
       callableSignatureCarrier() { throw new Error("parent signature query executed"); } }),
     resolvingCallableSignatures: new Set(),
     finalizedParameters: new WeakSet(),
+    capturedBindingStorage: new Map(),
+    promotedStorageDeclarations: new Set(),
     callableSignatureCarrierFor: resolveRustCallableSignatureCarrier,
     inferredReturns: new Map(),
     resolvingReturns: new Set(),
@@ -29,9 +31,13 @@ test("carrier probes bind signature queries to their own transaction and recursi
   const declaration = {};
   parent.resolvingCallableSignatures.add(declaration);
   parent.finalizedParameters.add(declaration);
+  parent.capturedBindingStorage.set(declaration, { carrier: integer, selection: { storage: "value" } });
   const probe = createRustCarrierProbe(parent);
   assert.equal(probe.resolvingCallableSignatures.has(declaration), false, "parent recursion state is not probe state");
   assert.equal(probe.finalizedParameters.has(declaration), false, "parameter completion belongs to its actual builder");
+  assert.equal(probe.capturedBindingStorage.has(declaration), false, "capture completion belongs to its actual builder");
+  assert.equal(probe.promotedStorageDeclarations === parent.promotedStorageDeclarations, true,
+    "fully collected addressability is shared immutable source input, not a probe result");
   assert.equal(probe.operationOptions === parent.operationOptions, false, "callbacks belong to the requesting transaction");
   assert.equal(probe.callableSignatureCarrierFor === parent.callableSignatureCarrierFor, true,
     "one unbound algorithm serves the root and probe without a cyclic module import");

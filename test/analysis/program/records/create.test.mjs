@@ -128,7 +128,7 @@ test("sealed records publish only frozen typed family readers without a native k
     mutatedReferent: () => model.mutatedReferents.written(subject),
     argumentPassing: () => model.argumentPassingPlans.pass(subject, "by-value"),
     typedLocationPlan: () => model.typedLocations.finalize(subject, carrier, location, { operation: "load", pointerExpression: subject }),
-    bindingStorage: () => model.bindingStoragePlans.location(subject, carrier),
+    bindingStorage: () => model.bindingStoragePlans.capture(subject, carrier, { storage: "location" }),
     retainedCallLifetimes: () => model.retainedCalls.finalize(subject, new Map([["region", { kind: "static" }]])),
     bindingProjection: () => model.bindingProjections.resolve(subject, carrier, carrier, { kind: "tuple-element", index: 0 }),
     compileTimeSource: () => model.compileTimeSources.erase(subject),

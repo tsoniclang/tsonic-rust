@@ -17,6 +17,7 @@ export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
     resolving: new Set(),
     resolvingCallableSignatures: new Set(),
     finalizedParameters: new WeakSet(),
+    capturedBindingStorage: new Map(),
     sourceCallableAbi,
     operationOptions: {
       ...walk.operationOptions,

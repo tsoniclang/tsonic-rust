@@ -175,6 +175,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     callableSignatureCarrierFor: resolveRustCallableSignatureCarrier,
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
     capturedBindingStorage: new Map(),
+    promotedStorageDeclarations,
     objectLiteralMethodExpressions: [],
     objectLiteralMethodSpreadExpressions: [],
     moduleBindings,
