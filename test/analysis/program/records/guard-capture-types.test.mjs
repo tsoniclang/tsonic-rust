@@ -55,6 +55,8 @@ builder.closureCaptures.capture(node, captures, receivers, fields, { recursiveDe
 builder.preparedOperationResult.get(node);
 builder.optionalChain.get(node);
 builder.closureCapture.get(node);
+builder.closureCaptures.capture(node, [{ declaration: node, reference: node, carrier, storage: "value", fieldName: "captured" }]);
+const fieldName: string | undefined = builder.closureCapture.get(node)?.captures[0]?.fieldName;
 `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [
@@ -85,6 +87,7 @@ builder.closureCapture.get(node);
     ["capture missing reference", "builder.closureCaptures.capture(node, [{ declaration: node, carrier, storage: 'value' }]);", /missing/u],
     ["capture invalid storage", "builder.closureCaptures.capture(node, [{ declaration: node, reference: node, carrier, storage: 'shared' }]);", /not assignable/u],
     ["capture invalid mutability", "builder.closureCaptures.capture(node, [{ declaration: node, reference: node, carrier, storage: 'value', mutable: false }]);", /not assignable/u],
+    ["capture invalid field name", "builder.closureCaptures.capture(node, [{ declaration: node, reference: node, carrier, storage: 'value', fieldName: 1 }]);", /not assignable/u],
     ["capture foreign source", "builder.closureCaptures.capture(node, [{ declaration: {}, reference: node, carrier, storage: 'value' }]);", /missing.*properties.*Node/u],
     ["capture invalid receiver", "builder.closureCaptures.capture(node, [], [{ owner: node, reference: node, carrier }]);", /missing/u],
     ["capture invalid receiver field", "builder.closureCaptures.capture(node, [], [], [{ declaration: node, receiver: node, reference: node, references: [node], carrier }]);", /missing/u],
@@ -100,5 +103,5 @@ builder.closureCapture.get(node);
     assert.notEqual(result.status, 0, name);
     assert.match(result.diagnostics, expected, name);
   }
-  assert.equal(invalid.length, 38);
+  assert.equal(invalid.length, 39);
 });

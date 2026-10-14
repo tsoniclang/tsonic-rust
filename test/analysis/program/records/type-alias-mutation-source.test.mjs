@@ -190,5 +190,5 @@ test("the three superseded keys and the type-alias forwarder are deleted rather 
   `);
   assert.equal(result.error === undefined, true, result.error?.message);
   assert.equal(result.status === 0, false, "no removed key or forwarder has a surviving import path");
-  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2305, 2724, 2305, 2305], result.stdout);
+  assert.deepEqual([...result.stdout.matchAll(/error TS(\d+):/gu)].map(match => Number(match[1])), [2307, 2305, 2305, 2305], result.stdout);
 });

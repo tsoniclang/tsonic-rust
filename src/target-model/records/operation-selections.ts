@@ -43,6 +43,7 @@ export interface RustClosureCaptureFact {
     readonly carrier: TargetTypeRef;
     readonly storage: "value" | "location" | "cell" | "borrow-cell";
     readonly mutable?: true;
+    readonly fieldName?: string;
   }[];
   readonly recursiveDeclaration?: Node;
   readonly recursiveField?: RustReceiverFieldCapture & { readonly carrier: TargetTypeRef };

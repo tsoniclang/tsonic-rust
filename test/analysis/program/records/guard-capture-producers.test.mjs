@@ -145,6 +145,26 @@ test("selected class-environment capture metadata survives canonical publication
   assert.equal(Object.isFrozen(selected), true);
   capture.fieldName = "later";
   assert.equal(selected.fieldName, "captured");
+  const record = builder.closureCapture.get(subject);
+  assert.equal(rustClosureCaptureEquals(record, record), true, "class capture equality is reflexive");
+  const equivalent = { captures: [{ ...selected }], receivers: [], receiverFields: [] };
+  assert.equal(rustClosureCaptureEquals(record, equivalent), true, "independent complete capture metadata is equivalent");
+  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  child.closureCaptures.capture(subject, equivalent.captures);
+  assert.equal(child.closureCapture.get(subject) === record, true, "an inherited exact class capture preserves its canonical record");
+  const { fieldName: omitted, ...logical } = selected;
+  assert.equal(omitted, "captured");
+  for (const invalid of [{ ...selected, fieldName: "different" }, logical, { ...selected, fieldName: undefined },
+    { ...selected, fieldName: 1 }, { ...selected, unknown: true }]) {
+    assert.equal(rustClosureCaptureEquals(record, { ...equivalent, captures: [invalid] }), false,
+      "field identity, presence, type and closed shape are significant");
+    assert.throws(() => child.closureCaptures.capture(subject, [invalid]), conflict);
+  }
+  let accessorReads = 0;
+  const accessor = Object.defineProperty({ ...logical }, "fieldName", { enumerable: true, get() { accessorReads += 1; return "captured"; } });
+  assert.equal(rustClosureCaptureEquals(record, { ...equivalent, captures: [accessor] }), false,
+    "equality does not evaluate accessor-bearing metadata");
+  assert.equal(accessorReads, 0);
 });
 
 test("receiver, field and recursive captures retain all source roots, ordering and shared invocation ownership", () => {

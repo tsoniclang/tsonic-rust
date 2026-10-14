@@ -61,6 +61,8 @@ export function rustClosureCaptureEquals(left: RustClosureCaptureFact, right: Ru
         capture.reference === other.reference &&
         capture.storage === other.storage &&
         capture.mutable === other.mutable &&
+        Object.prototype.hasOwnProperty.call(capture, "fieldName") === Object.prototype.hasOwnProperty.call(other, "fieldName") &&
+        capture.fieldName === other.fieldName &&
         rustTargetTypeRefEquals(capture.carrier, other.carrier);
     });
 }
@@ -87,10 +89,12 @@ function closureCaptureShapeMatches(value: RustClosureCaptureFact): boolean {
     capture.references.length > 0 && capture.reference === capture.references[0]) &&
     value.captures.every(capture => isMetadataRecord(capture) &&
       hasExactObjectKeys(capture, ["declaration", "reference", "carrier", "storage",
-        ...(Object.prototype.hasOwnProperty.call(capture, "mutable") ? ["mutable"] : [])]) &&
+        ...(Object.prototype.hasOwnProperty.call(capture, "mutable") ? ["mutable"] : []),
+        ...(Object.prototype.hasOwnProperty.call(capture, "fieldName") ? ["fieldName"] : [])]) &&
       capture.declaration !== undefined && capture.reference !== undefined && capture.carrier !== undefined &&
       (capture.storage === "value" || capture.storage === "location" || capture.storage === "cell" || capture.storage === "borrow-cell") &&
-      (capture.mutable === undefined || capture.mutable === true));
+      (capture.mutable === undefined || capture.mutable === true) &&
+      (!Object.prototype.hasOwnProperty.call(capture, "fieldName") || typeof capture.fieldName === "string"));
 }
 
 export function rustSourceCallableValueEquals(left: RustSourceCallableValueFact, right: RustSourceCallableValueFact): boolean {

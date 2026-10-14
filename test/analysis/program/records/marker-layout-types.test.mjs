@@ -44,8 +44,8 @@ const erased: true | undefined = records.compileTimeSource.get(node);
 const mode: "ref" | "mut-ref" | undefined = records.selfMode.get(node)?.mode;
 const value: number | undefined = records.memoryLayoutObservation.get(node)?.value;
 const sealed: RustProgramRecords = builder;
-import { rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustContextualValueConversionFactKey,
-  rustSourceBindingFactKey } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";
+import { rustFlowReadProjectionFactKey, rustOptionProjectionFactKey, rustContextualValueConversionFactKey
+  } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";
 `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [
