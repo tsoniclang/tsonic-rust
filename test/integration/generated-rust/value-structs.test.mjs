@@ -97,7 +97,7 @@ test("value records retain their distinct storage choice through substitution an
   assert.equal(rustStructuralObjectCarrierValue(substituted).representation, "value");
   assert.deepEqual(rustStructuralObjectCarrierValue(substituted).fields[0].type, { kind: "source-primitive", name: "uint32" });
   const shapes = [reference, value].map(carrier => ({ sourceType: {}, carrier, storage: "structural-object", fields: [] }));
-  const plan = createRustStructuralShapePlan(shapes, [], () => "app", []);
+  const plan = createRustStructuralShapePlan(shapes, [], () => "app", [], [], []);
   assert.equal(plan.definitions.length, 2);
   assert.equal(plan.sharesStorage(reference, value), false);
   for (const representation of [undefined, null, "shared", true]) {

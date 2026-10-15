@@ -1,3 +1,4 @@
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPropertyStorageNames } from "../../target-model/names/property-storage.js";
 import type { RustStructuralInstantiation } from "../../policy/types/model/source-type-registry.js";
@@ -19,6 +20,7 @@ import {
 import type { RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { visitRustTargetTypeParameters } from "../../target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustStructuralGenericCarrier } from "./structural-generic-carrier.js";
@@ -74,8 +76,18 @@ export interface RustStructuralShapePlan extends RustGeneratedUnionPlan {
   readonly definitions: readonly RustStructuralShapeDefinition[];
   definitionForCarrier(carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined;
   sharesStorage(left: TargetTypeRef, right: TargetTypeRef): boolean;
-  fieldName(carrier: TargetTypeRef, storageIndex: number): string | undefined;
   field(carrier: TargetTypeRef, storageIndex: number): RustStructuralShapeField | undefined;
+}
+
+export interface RustStructuralShapeRequestContext {
+  readonly types: ReadonlyMap<string, TargetTypeRef>;
+  readonly lifetimes: ReadonlyMap<string, RustLifetimeRef>;
+}
+
+export interface RustStructuralShapeRequest {
+  readonly carrier: TargetTypeRef;
+  readonly context?: RustStructuralShapeRequestContext;
+  readonly required: boolean;
 }
 
 export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan {
@@ -89,18 +101,19 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
   ): RustStructuralShapePlan;
   initializeUnions(unions: readonly RustSourceUnionDefinition[]): void;
   isInitialized(): boolean;
-  seal(): RustStructuralShapePlan;
+  seal(requests: readonly RustStructuralShapeRequest[]): RustStructuralShapePlan;
 }
 
 export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlanRegistry {
-  let current: RustStructuralShapePlan | undefined;
+  let current: RustStructuralShapePlanState | undefined;
+  let sealed = false;
   let unions: RustGeneratedUnionPlan | undefined;
   let componentForFile: ((fileName: string) => string) | undefined;
   const requireCurrent = (): RustStructuralShapePlan => {
     if (current === undefined) {
       throw new Error("Rust structural shape plan was read before source analysis initialized it.");
     }
-    return current;
+    return current.plan;
   };
   const requireUnions = (): RustGeneratedUnionPlan => {
     if (unions === undefined) throw new Error("Rust generated unions must be finalized after physical value selection.");
@@ -119,11 +132,11 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
       componentForFile = selectComponent;
-      current = createRustStructuralShapePlan(shapes, implementations, selectComponent, nativeFields, instantiations, {
+      current = createRustStructuralShapePlanState(shapes, implementations, selectComponent, nativeFields, instantiations, {
         get unionDefinitions() { return requireUnions().unionDefinitions; },
         unionForCarrier: (carrier: TargetTypeRef) => requireUnions().unionForCarrier(carrier),
       }, receiverIndependentMethods);
-      return current;
+      return current.plan;
     },
     initializeUnions(definitions: readonly RustSourceUnionDefinition[]) {
       const shapes = requireCurrent();
@@ -141,9 +154,15 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     isInitialized() {
       return current !== undefined;
     },
-    seal() {
+    seal(requests: readonly RustStructuralShapeRequest[]) {
       requireUnions();
-      return requireCurrent();
+      const state = current;
+      if (state === undefined || sealed) {
+        failTargetAnalysisInvariant("tsonic-rust", "Rust structural shape plan must be initialized and sealed exactly once.");
+      }
+      sealed = true;
+      state.publish(requests);
+      return state.plan;
     },
     get definitions() {
       return requireCurrent().definitions;
@@ -160,9 +179,6 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
     sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
       return requireCurrent().sharesStorage(left, right);
     },
-    fieldName(carrier: TargetTypeRef, storageIndex: number) {
-      return requireCurrent().fieldName(carrier, storageIndex);
-    },
     field(carrier: TargetTypeRef, storageIndex: number) {
       return requireCurrent().field(carrier, storageIndex);
     },
@@ -174,10 +190,31 @@ export function createRustStructuralShapePlan(
   implementations: readonly RustStructuralFieldImplementation[],
   componentForFile: (fileName: string) => string,
   nativeFields: readonly RustNativeObjectField[],
-  instantiations: readonly RustStructuralInstantiation[] = [],
+  instantiations: readonly RustStructuralInstantiation[],
+  requests: readonly RustStructuralShapeRequest[],
   unions: RustGeneratedUnionPlan = createRustGeneratedUnionPlan([], componentForFile, new Map()),
   receiverIndependentMethods: ReadonlySet<string> = new Set(),
 ): RustStructuralShapePlan {
+  const state = createRustStructuralShapePlanState(shapes, implementations, componentForFile, nativeFields, instantiations,
+    unions, receiverIndependentMethods);
+  state.publish(requests);
+  return state.plan;
+}
+
+interface RustStructuralShapePlanState {
+  readonly plan: RustStructuralShapePlan;
+  publish(requests: readonly RustStructuralShapeRequest[]): void;
+}
+
+function createRustStructuralShapePlanState(
+  shapes: readonly RustSourceObjectShape[],
+  implementations: readonly RustStructuralFieldImplementation[],
+  componentForFile: (fileName: string) => string,
+  nativeFields: readonly RustNativeObjectField[],
+  instantiations: readonly RustStructuralInstantiation[],
+  unions: RustGeneratedUnionPlan,
+  receiverIndependentMethods: ReadonlySet<string>,
+): RustStructuralShapePlanState {
   const selections = new Map<TargetTypeRef, ReturnType<typeof rustStructuralGenericCarrier>>();
   const physicalSelection = (carrier: TargetTypeRef): ReturnType<typeof rustStructuralGenericCarrier> => {
     const existing = selections.get(carrier);
@@ -384,18 +421,52 @@ export function createRustStructuralShapePlan(
     }
     registerCarrier(definition, nested.carrier);
   }
+  let published = false;
   const definitionFor = (carrier: TargetTypeRef | undefined): RustStructuralShapeDefinition | undefined => {
     if (carrier === undefined || rustStructuralObjectCarrierValue(carrier) === undefined) return undefined;
     const key = closedMetadataKey(carrier);
     const selected = byKey.get(key);
     if (selected !== undefined) return rustTargetTypeRefEquals(selected.carrier, carrier) ? selected : undefined;
+    if (published) return undefined;
     const template = byStorageKey.get(structuralStorageKey(carrier, componentForFile));
     if (template === undefined) return undefined;
     const instantiated = instantiateStructuralDefinition(template, carrier);
     if (instantiated !== undefined) byKey.set(key, instantiated);
     return instantiated;
   };
-  return Object.freeze({
+  const publish = (requests: readonly RustStructuralShapeRequest[]): void => {
+    const visited = new Set<TargetTypeRef>();
+    const complete = (root: TargetTypeRef): void => {
+      const pending = [root];
+      for (let carrier = pending.pop(); carrier !== undefined; carrier = pending.pop()) {
+        if (visited.has(carrier)) continue;
+        visited.add(carrier);
+        definitionFor(carrier);
+        pending.push(...rustTargetTypeChildren(carrier));
+      }
+    };
+    const registered = [...byKey.values()];
+    for (const definition of definitions) {
+      complete(definition.carrier);
+      for (const field of definition.fields) {
+        complete(field.carrier);
+        if (field.methodStorageCarrier !== undefined) complete(field.methodStorageCarrier);
+      }
+      if (definition.construction !== undefined) complete(definition.construction.carrier);
+    }
+    for (const definition of registered) complete(definition.carrier);
+    for (const request of requests) {
+      const selected = request.context === undefined ? request.carrier
+        : substituteRustTargetGenerics(request.carrier, request.context.types, request.context.lifetimes);
+      complete(request.carrier);
+      complete(selected);
+      if (request.required && rustStructuralObjectCarrierValue(selected) !== undefined && definitionFor(selected) === undefined) {
+        failTargetAnalysisInvariant("tsonic-rust", "A required Rust structural storage request has no exact definition before publication.");
+      }
+    }
+    published = true;
+  };
+  const plan: RustStructuralShapePlan = Object.freeze({
     get unionDefinitions() { return unions.unionDefinitions; },
     unionForCarrier: (carrier: TargetTypeRef) => unions.unionForCarrier(carrier),
     definitions: Object.freeze(definitions),
@@ -412,11 +483,6 @@ export function createRustStructuralShapePlan(
           rustTargetGenericArgumentEquals(argument, rightDefinition.genericArguments[index]!));
     },
     definitionForCarrier: definitionFor,
-    fieldName(carrier: TargetTypeRef, storageIndex: number) {
-      return Number.isSafeInteger(storageIndex) && storageIndex >= 0
-        ? definitionFor(carrier)?.fields[storageIndex]?.targetName
-        : undefined;
-    },
     field(carrier: TargetTypeRef, storageIndex: number) {
       if (!Number.isSafeInteger(storageIndex) || storageIndex < 0) {
         return undefined;
@@ -424,6 +490,7 @@ export function createRustStructuralShapePlan(
       return definitionFor(carrier)?.fields[storageIndex];
     },
   });
+  return Object.freeze({ plan, publish });
 }
 
 export function structuralStorageKey(carrier: TargetTypeRef, componentForFile: (fileName: string) => string): string {

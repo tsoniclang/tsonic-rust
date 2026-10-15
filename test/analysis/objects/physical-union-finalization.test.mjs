@@ -22,7 +22,7 @@ test("one generated union owner finalizes checked and physical definitions after
   shapes.initialize([], [], () => "root", [], []);
   assert.equal(shapes.isInitialized(), true);
   assert.equal(shapes.definitions.length, 0);
-  assert.throws(() => shapes.seal(), /after physical value selection/u);
+  assert.throws(() => shapes.seal([]), /after physical value selection/u);
   assert.throws(() => shapes.unionForCarrier(physical.carrier), /after physical value selection/u);
   assert.equal(definitions.registerSourceUnion(authoredSource, false), true);
   assert.equal(definitions.registerSourceUnion(physical, false), true);
@@ -30,7 +30,7 @@ test("one generated union owner finalizes checked and physical definitions after
   assert.equal(Object.isFrozen(definitions.generatedUnions()), true);
   assert.equal(definitions.generatedUnions().every(record => Object.isFrozen(record)), true);
   shapes.initializeUnions(definitions.generatedUnions());
-  const finalized = shapes.seal();
+  const finalized = shapes.seal([]);
   assert.equal(finalized.unionDefinitions.length, 1);
   assert.equal(finalized.unionForCarrier(authoredSource.carrier) === finalized.unionForCarrier(physical.carrier), true);
   assert.equal(finalized.unionForCarrier(physical.carrier).sourceCarriers.length, 2);

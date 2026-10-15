@@ -157,7 +157,14 @@ test("generic structural storage preserves exact arguments while sharing alpha-e
   const integer = shape(parameter("Left"), rustSourcePrimitiveTargetType("int32"));
   const unsigned = shape(parameter("Left"), rustSourcePrimitiveTargetType("uint32"));
   const carriers = [original, renamed, repeated, immutable, integer, unsigned];
-  const plan = createRustStructuralShapePlan(carriers.map(carrier => ({ carrier })), [], () => "root", []);
+  const instantiated = shape(parameter("New"), parameter("Other"));
+  const mismatched = rustStructuralObjectTargetType("/src/region.ts", [
+    { sourceName: "different", type: parameter("New"), readonly: false, presence: "required" },
+    { sourceName: "second", type: parameter("Other"), readonly: false, presence: "required" },
+  ]);
+  const repeatedImmutable = shape(parameter("Same"), parameter("Same"), true);
+  const plan = createRustStructuralShapePlan(carriers.map(carrier => ({ carrier })), [], () => "root", [], [],
+    [instantiated, mismatched, repeatedImmutable].map(carrier => ({ carrier, required: false })));
   assert.equal(plan.definitions.length, 5);
   const first = plan.definitionForCarrier(original);
   const second = plan.definitionForCarrier(renamed);
@@ -175,19 +182,14 @@ test("generic structural storage preserves exact arguments while sharing alpha-e
   assert.notEqual(plan.definitionForCarrier(integer).targetName, plan.definitionForCarrier(unsigned).targetName);
   assert.equal(plan.field(renamed, -1), undefined);
   assert.equal(plan.field(renamed, 0.5), undefined);
-  const instantiated = shape(parameter("New"), parameter("Other"));
   const selected = plan.definitionForCarrier(instantiated);
   assert.ok(selected);
   assert.equal(selected.targetName, first.targetName);
   assert.deepEqual(selected.genericArguments, [{ kind: "type", type: parameter("New") }, { kind: "type", type: parameter("Other") }]);
   assert.deepEqual(plan.field(instantiated, 0).carrier, parameter("New"));
   assert.deepEqual(plan.field(instantiated, 1).carrier, parameter("Other"));
-  const mismatched = rustStructuralObjectTargetType("/src/region.ts", [
-    { sourceName: "different", type: parameter("New"), readonly: false, presence: "required" },
-    { sourceName: "second", type: parameter("Other"), readonly: false, presence: "required" },
-  ]);
   assert.equal(plan.definitionForCarrier(mismatched), undefined);
-  assert.equal(plan.definitionForCarrier(shape(parameter("Same"), parameter("Same"), true)), undefined);
+  assert.equal(plan.definitionForCarrier(repeatedImmutable), undefined);
 });
 
 test("equal target carriers retain distinct source instantiations without ambiguous refinements", () => {
@@ -251,9 +253,9 @@ test("structural instantiations reuse only their proven generic storage template
   const byte = rustSourcePrimitiveTargetType("uint8");
   const instance = substituteRustTargetTypeParameters(template, new Map([["Element", byte]]));
   const shapes = [{ carrier: template }, { carrier: instance }];
-  const independent = createRustStructuralShapePlan(shapes, [], () => "root", []);
+  const independent = createRustStructuralShapePlan(shapes, [], () => "root", [], [], []);
   assert.equal(independent.definitions.length, 2);
-  const plan = createRustStructuralShapePlan(shapes, [], () => "root", [], [{ template, instance }]);
+  const plan = createRustStructuralShapePlan(shapes, [], () => "root", [], [{ template, instance }], []);
   assert.equal(plan.definitions.length, 1);
   assert.equal(plan.definitionForCarrier(template).targetName, plan.definitionForCarrier(instance).targetName);
   assert.deepEqual(plan.definitionForCarrier(instance).genericArguments, [{ kind: "type", type: byte }]);
@@ -261,7 +263,7 @@ test("structural instantiations reuse only their proven generic storage template
   const wrongTemplate = rustStructuralObjectTargetType("/src/region.ts", [
     { sourceName: "different", type: { kind: "type-parameter", identity: "Element", name: "Element" }, readonly: true, presence: "required" },
   ]);
-  assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "root", [], [{ template: wrongTemplate, instance }]), /missing.*template/u);
-  assert.throws(() => createRustStructuralShapePlan([...shapes, { carrier: wrongTemplate }], [], () => "root", [], [{ template: wrongTemplate, instance }]), /exact generic-parameter correspondence/u);
-  assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "root", [], [{ template, instance }, { template: instance, instance: template }]), /cyclic/u);
+  assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "root", [], [{ template: wrongTemplate, instance }], []), /missing.*template/u);
+  assert.throws(() => createRustStructuralShapePlan([...shapes, { carrier: wrongTemplate }], [], () => "root", [], [{ template: wrongTemplate, instance }], []), /exact generic-parameter correspondence/u);
+  assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "root", [], [{ template, instance }, { template: instance, instance: template }], []), /cyclic/u);
 });

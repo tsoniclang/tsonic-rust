@@ -78,7 +78,7 @@ test("exact structural alias instances retain their generic root in either regis
     assert.equal(registry.registerRepresentationAlias(declaration, selected), false);
     assert.equal(registry.structuralInstantiations().length, 2);
     const plan = createRustStructuralShapePlan(registry.structuralObjects(), [], () => "source", [],
-      registry.structuralInstantiations());
+      registry.structuralInstantiations(), []);
     assert.equal(plan.definitions.length, 1);
     assert.deepEqual(plan.definitionForCarrier(selected).genericArguments, [{ kind: "type", type: {
       kind: "array", element: scalar,
@@ -153,7 +153,7 @@ test("structural storage parameterizes independent family outputs without revers
 test("nested structural family storage retains exact child definitions and independent argument positions", () => {
   const inner = carrier([projection("Storage"), projection("Container")]);
   const outer = carrier([projection("Container"), inner]);
-  const plan = createRustStructuralShapePlan([{ carrier: inner }, { carrier: outer }], [], () => "source", []);
+  const plan = createRustStructuralShapePlan([{ carrier: inner }, { carrier: outer }], [], () => "source", [], [], []);
   const outerDefinition = plan.definitionForCarrier(outer);
   const canonical = plan.definitions.find(definition => definition.targetName === outerDefinition.targetName);
   const child = plan.definitionForCarrier(canonical.fields[1].carrier);
@@ -161,7 +161,7 @@ test("nested structural family storage retains exact child definitions and indep
   assert.equal(child.targetName, plan.definitionForCarrier(inner).targetName);
   assert.deepEqual(child.genericArguments.map(argument => argument.type.name), ["Storage1", "Storage0"]);
   assert.deepEqual(child.fields.map(field => field.carrier.name), ["Storage1", "Storage0"]);
-  assert.throws(() => createRustStructuralShapePlan([{ carrier: outer }], [], () => "source", []),
+  assert.throws(() => createRustStructuralShapePlan([{ carrier: outer }], [], () => "source", [], [], []),
     /missing its checked source definition/u);
 });
 
@@ -178,7 +178,7 @@ test("selected record instantiation retains exact reordered members and one gene
     assert.deepEqual(selected.field.declarations, [input.declarations[index]]);
   }
   const plan = createRustStructuralShapePlan(input.sourceTypes.structuralObjects(), [], () => "source", [],
-    input.sourceTypes.structuralInstantiations());
+    input.sourceTypes.structuralInstantiations(), []);
   assert.equal(plan.definitions.length, 1);
   assert.equal(plan.definitions[0].genericParameters.length, 2);
   assert.deepEqual(plan.definitionForCarrier(plan.definitions[0].carrier), plan.definitions[0]);
