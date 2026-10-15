@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { isSourceCallableBodyBoundary, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -173,25 +173,22 @@ export function createRustNativeFutureInputPlan(input: {
   const empty: readonly RustNativeFutureInput[] = Object.freeze([]);
   const inputsBySubject = new Map([...subjects].map(([subject, values]) => [subject, Object.freeze([...values.values()])]));
   const environments = new Map<Node, RustNativeFutureEnvironmentSelection>();
-  const environmentFor = (declaration: Node): RustNativeFutureEnvironmentSelection => {
-    const previous = environments.get(declaration);
-    if (previous !== undefined) return previous;
-    const callable = nodes.has(declaration) && (sourceEnclosingCallable(declaration, input.ast) === declaration ||
-      input.ast.is.IsMethodSignatureDeclaration(declaration) || input.ast.is.IsCallSignatureDeclaration(declaration) ||
-      input.ast.is.IsConstructSignatureDeclaration(declaration) || input.ast.is.IsFunctionTypeNode(declaration) ||
-      input.ast.is.IsConstructorTypeNode(declaration));
-    const reason = !callable
-      ? "Native Future environment requires an owned callable declaration."
-      : failures.get(declaration) ?? [...captures.get(declaration) ?? []].map(capture => failures.get(capture.owner))
-        .find(failure => failure !== undefined);
+  const unavailable: RustNativeFutureEnvironmentSelection = Object.freeze({ kind: "unresolved",
+    reason: "Native Future environment requires an owned callable declaration." });
+  for (const declaration of input.storage.nodes) {
+    if (!isSourceCallableBodyBoundary(input.ast, declaration) &&
+      !input.ast.is.IsMethodSignatureDeclaration(declaration) && !input.ast.is.IsCallSignatureDeclaration(declaration) &&
+      !input.ast.is.IsConstructSignatureDeclaration(declaration) && !input.ast.is.IsFunctionTypeNode(declaration) &&
+      !input.ast.is.IsConstructorTypeNode(declaration)) continue;
+    const reason = failures.get(declaration) ?? [...captures.get(declaration) ?? []].map(capture => failures.get(capture.owner))
+      .find(failure => failure !== undefined);
     const selected: RustNativeFutureEnvironmentSelection = reason === undefined ? Object.freeze({ kind: "resolved",
       inputs: Object.freeze(owners.get(declaration) ?? []), captures: Object.freeze([...captures.get(declaration) ?? []]) })
       : Object.freeze({ kind: "unresolved", reason });
-    if (nodes.has(declaration)) environments.set(declaration, selected);
-    return selected;
-  };
+    environments.set(declaration, selected);
+  }
   return Object.freeze({
-    forDeclaration: environmentFor,
+    forDeclaration: (declaration: Node) => environments.get(declaration) ?? unavailable,
     forSubject: (subject: SourceStorageSubject) => inputsBySubject.get(subject) ?? empty,
   });
 }

@@ -14,8 +14,8 @@ const sourceText = `import type { int32 } from "@tsonic/core/types.js";
     const read = () => value; read();
   }`;
 
-function fixture() {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": sourceText } });
+function fixture(text = sourceText) {
+  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const ast = source.ast;
@@ -158,4 +158,67 @@ test("owned bodyless callable contracts retain environments without requiring an
   const foreign = Object.defineProperty({}, "kind", { get() { reads++; throw Error("foreign node inspected"); } });
   rejected(program.callableValues.nativeStorage.futureEnvironmentFor(foreign), /owned callable declaration/u);
   assert.equal(reads, 0);
+});
+
+const finiteFutureInputs = `import type { int32 } from "@tsonic/core/types.js";
+  export function outer(left: Promise<int32>, right: Promise<int32>): Promise<int32> {
+    const empty = () => 1; empty(); return left;
+  }`;
+
+test("published Future environments read only completed owned data after source access is revoked", () => {
+  const current = fixture(finiteFutureInputs);
+  const source = Proxy.revocable(current.input.ast, {});
+  const plan = createRustNativeFutureInputPlan({ ...current.input, ast: source.proxy });
+  source.revoke();
+  const selected = plan.forDeclaration(current.outer);
+  assert.equal(selected.kind, "resolved", selected.reason);
+  assert.equal(selected.inputs.length, 2);
+  assert.equal(selected.inputs[0] !== selected.inputs[1], true, "equal Future signatures retain distinct owned formals");
+  assert.equal(selected.captures.length, 0);
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.inputs) && Object.isFrozen(selected.captures), true);
+  assert.equal(plan.forDeclaration(current.outer) === selected, true, "the immutable selection is reused");
+  for (const entry of selected.inputs) {
+    const subject = plan.forSubject(entry.subject);
+    assert.equal(subject.length, 1);
+    assert.equal(subject[0] === entry, true, "the subject lookup retains the original exact input");
+    assert.equal(plan.forSubject(entry.subject) === subject, true, "subject lookup is already materialized");
+  }
+  const closure = plan.forDeclaration(current.closure);
+  assert.equal(closure.kind, "resolved", closure.reason);
+  assert.equal(closure.inputs.length + closure.captures.length, 0, "an exact empty environment stays successful");
+  assert.equal(plan.forDeclaration(current.closure) === closure, true);
+  const absent = plan.forDeclaration(current.program.sourceFiles[0]);
+  rejected(absent, /owned callable declaration/u);
+  let reads = 0;
+  const foreign = Object.defineProperty({}, "kind", { get() { reads += 1; throw Error("foreign node inspected"); } });
+  assert.equal(plan.forDeclaration(foreign) === absent, true, "unowned and noncallable queries share the immutable refusal");
+  assert.equal(reads, 0);
+});
+
+test("completed Future environment failures remain exact data without later source or lexical queries", () => {
+  const current = fixture(finiteFutureInputs);
+  const reason = "The selected lexical environment has an exact checked refusal.";
+  let queries = 0;
+  let published = false;
+  const source = Proxy.revocable(current.input.ast, {});
+  const plan = createRustNativeFutureInputPlan({ ...current.input, ast: source.proxy, lexicalFunctions: {
+    ...current.input.lexicalFunctions,
+    forDeclaration(node) {
+      assert.equal(published, false, "lexical queries finish before publication");
+      queries += 1;
+      return node === current.closure ? { kind: "unresolved", reason }
+        : current.input.lexicalFunctions.forDeclaration(node);
+    },
+  } });
+  const completedQueries = queries;
+  published = true;
+  source.revoke();
+  const selected = plan.forDeclaration(current.closure);
+  rejected(selected, /exact checked refusal/u);
+  assert.equal(selected.reason, reason);
+  assert.equal(plan.forDeclaration(current.closure) === selected, true, "the final refusal is not recomputed");
+  assert.equal(queries, completedQueries);
+  const independent = plan.forDeclaration(current.outer);
+  assert.equal(independent.kind, "resolved", independent.reason);
+  assert.equal(independent.inputs.length, 2, "one failed lexical environment never erases its formal owner");
 });
