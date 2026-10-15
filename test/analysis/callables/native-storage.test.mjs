@@ -36,7 +36,8 @@ function fixture(text, options = {}) {
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   input.producers = producers;
-  const queries = createRustNativeStorageQueries({ ...input, native });
+  const guardedQueries = Proxy.revocable(createRustNativeStorageQueries({ ...input, native }), {});
+  const queries = guardedQueries.proxy;
   const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries });
   generic.initializePhysical({ ...input, native, captures,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
@@ -52,7 +53,7 @@ function fixture(text, options = {}) {
     return selected.subject;
   };
   return { program, source, storage, input, native, plan, declaration, initializer, exactSubject,
-    revokeSource: guardedAst.revoke };
+    revokeSource: guardedAst.revoke, revokeQueries: guardedQueries.revoke };
 }
 
 test("finalized formal ABI storage is a stable owned lookup without caller carrier arbitration", () => {
@@ -71,8 +72,9 @@ test("finalized formal ABI storage never inspects revoked source or fabricates f
   const current = fixture("export function read(value: number): number { return value; }");
   const owner = current.declaration("read");
   const parameter = current.source.ast.parameters(owner)[0];
-  const selected = current.plan.parameterFor(parameter);
   current.revokeSource();
+  current.revokeQueries();
+  const selected = current.plan.parameterFor(parameter);
   assert.equal(current.plan.parameterFor(parameter) === selected, true);
   assert.equal(selected.kind, "identity");
   const missing = current.plan.parameterFor(owner);
