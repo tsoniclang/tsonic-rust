@@ -132,7 +132,7 @@ export function analyzeRustSourcePackageComponents(
     const inspect = (carrier: TargetTypeRef): void => {
       if (visited.has(carrier)) return;
       visited.add(carrier);
-      const definition = generic.physical.definitionFor(carrier);
+      const definition = generic.physical.existingSelectionFor(carrier)?.definition;
       if (definition !== undefined && !inspected.has(definition.identity)) {
         inspected.add(definition.identity);
         const owner = componentIdByFileName.get(normalizePath(definition.ownerFileName));
