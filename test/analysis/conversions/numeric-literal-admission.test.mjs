@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { analyzeRustNumericLiteralAdmission } from "../../../dist/analysis/numeric/literal-admission.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
@@ -43,10 +44,26 @@ nonFinite.push(
   ["class field initializer 1e400", "export class C {\n  v: number = 1e400;\n}\n"],
   ["ambient const initializer 1e400", "declare const big = 1e400;\nexport function f(): number {\n  const y: number = big;\n  return y;\n}\n"],
   ["enum member initializer 1e400", "export enum E {\n  A = 1e400,\n}\nexport function f(): E {\n  return E.A;\n}\n"],
+  ["computed object key [1e400]", "export function f(): number {\n  const o = { [1e400]: 1 };\n  return o.Infinity;\n}\n"],
+  ["class computed key [1e400]", "export class C {\n  [1e400]: number = 1;\n}\n"],
+  ["heritage call argument 1e400", "function base(n: number) {\n  return class {\n    value: number = n;\n  };\n}\nexport class C extends base(1e400) {}\n"],
+  ["object literal property name 1e400", "export function f(): number {\n  const o = { 1e400: 1 };\n  return o.Infinity;\n}\n"],
+  ["binding property name 1e400", "export function f(o: { Infinity: number }): number {\n  const { 1e400: v } = o;\n  return v;\n}\n"],
+  ["class property name 1e400", "export class C {\n  1e400: number = 1;\n}\n"],
 );
 const jsOnlyNonFinite = [
   ["provider call argument 1e400", "export function f(): number {\n  return Math.max(1e400, 1);\n}\n"],
 ];
+const typeSyntax = [
+  ["negative literal type alias -1e400", "type NegBig = -1e400;\nexport function f(x: NegBig): number {\n  return x;\n}\n"],
+  ["negative literal type in a union -1e400", "export function f(x: -1e400 | number): number {\n  return x;\n}\n"],
+  ["type assertion to -1e400 | number", "export function f(x: number): number {\n  return x as -1e400 | number;\n}\n"],
+];
+const typeMemberKeys = [
+  ["interface computed member key [1e400]", "interface Keyed {\n  [1e400]: number;\n}\nexport function f(): number {\n  return 1;\n}\n"],
+  ["type literal computed member key [1e400]", "type Keyed = { [1e400]: number };\nexport function f(): number {\n  return 1;\n}\n"],
+];
+const declarationFileUse = "import { big } from \"./values.js\";\nexport function f(): number {\n  const y: number = big;\n  return y;\n}\n";
 
 const accepted = [
   ["float64 local 1.7976931348623157e308", "number", "1.7976931348623157e308", "let y: f64 = 1.7976931348623157e+308;"],
@@ -64,12 +81,18 @@ const acceptedSource = accepted.map(([, type, expression], index) =>
   `export function f${index}(): ${type} {\n  const y: ${type} = ${expression};\n  return y;\n}\n`).join("") +
   "type Big = 1e400;\n" +
   "export function typeParameter(x: 1e400): number {\n  return x;\n}\n" +
-  "export function typeAlias(x: Big): number {\n  return x;\n}\n" +
-  "export function propertyName(): number {\n  const o = { 1e400: 1 };\n  return o.Infinity;\n}\n" +
-  "export function bindingPropertyName(o: { Infinity: number }): number {\n  const { 1e400: v } = o;\n  return v;\n}\n";
+  "export function typeAlias(x: Big): number {\n  return x;\n}\n";
 
 function surfaceOptions(selected) {
   return selected === undefined ? {} : { surfaces: selected };
+}
+
+function buildNatively(name, artifacts) {
+  const projectRoot = writeGeneratedProject(name, artifacts.map(artifact =>
+    ({ path: String(artifact.path), text: String(artifact.text) })));
+  runCargo(projectRoot, ["generate-lockfile", "--offline"]);
+  runCargo(projectRoot, ["fmt", "--all", "--check"]);
+  runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
 }
 
 function analyzeOnly(source, selected) {
@@ -83,6 +106,19 @@ function analyzeOnly(source, selected) {
     },
   });
   return { analysis, ast };
+}
+
+function admissionOnly(source, selected) {
+  let refusals;
+  compileRust({ ...surfaceOptions(selected), files: { "index.ts": source },
+    compileTarget(request) {
+      const ast = request.input.source.ast;
+      refusals = analyzeRustNumericLiteralAdmission(ast,
+        request.input.source.sourceFiles.filter(file => file !== undefined && !ast.isDeclarationFile(file)));
+      return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
+    },
+  });
+  return refusals;
 }
 
 function literalOffsets(source) {
@@ -124,7 +160,7 @@ for (const [surface, selected] of surfaces) {
       assertRefused(name, header + body, selected);
     });
   }
-  test(`${surface}: finite literals and non-value numeric literal positions compile natively with exact Rust literals`, () => {
+  test(`${surface}: finite literals and literal type positions compile natively with exact Rust literals`, () => {
     const { result } = compileRust({ ...surfaceOptions(selected), files: { "index.ts": header + acceptedSource } });
     assert.equal(result.diagnostics.length === 0, true, `${surface}: no diagnostics: ${JSON.stringify(result.diagnostics.map(entry => entry.code))}`);
     const rust = result.artifacts.filter(artifact => String(artifact.path).endsWith(".rs")).map(artifact => String(artifact.text));
@@ -133,10 +169,28 @@ for (const [surface, selected] of surfaces) {
       assert.equal(lines.includes(line), true, `${name}: emits ${line}`);
     }
     assert.equal(lines.some(line => /Infinity\.0|Infinity_f32|f64::INFINITY/u.test(line)), false, `${surface}: no non-finite float literal in generated Rust`);
-    const projectRoot = writeGeneratedProject(`numeric-literal-admission-${surface}`, result.artifacts.map(artifact =>
-      ({ path: String(artifact.path), text: String(artifact.text) })));
-    runCargo(projectRoot, ["generate-lockfile", "--offline"]);
-    runCargo(projectRoot, ["fmt", "--all", "--check"]);
-    runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
+    buildNatively(`numeric-literal-admission-${surface}`, result.artifacts);
+  });
+  typeSyntax.forEach(([name, body], index) => {
+    test(`${surface}: ${name} is type syntax and compiles natively without a refusal`, () => {
+      const { result } = compileRust({ ...surfaceOptions(selected), files: { "index.ts": header + body } });
+      assert.equal(result.diagnostics.length === 0, true, `${name}: no diagnostics: ${JSON.stringify(result.diagnostics.map(entry => entry.code))}`);
+      assert.equal(result.artifacts.length > 0, true, `${name}: the compilation publishes its project`);
+      buildNatively(`numeric-literal-admission-type-${index}-${surface}`, result.artifacts);
+    });
+  });
+  for (const [name, body] of typeMemberKeys) {
+    test(`${surface}: ${name} is type syntax that numeric literal admission does not enter`, () => {
+      const refusals = admissionOnly(header + body, selected);
+      assert.equal(refusals !== undefined && refusals.length === 0, true,
+        `${name}: no admission refusal: ${JSON.stringify(refusals?.map(entry => entry.code))}`);
+    });
+  }
+  test(`${surface}: a non-finite literal in a declaration file is outside admission and never reaches carrier resolution`, () => {
+    const { result } = compileRust({ ...surfaceOptions(selected), files: { "index.ts": header + declarationFileUse,
+      "values.d.ts": "export declare const big = 1e400;\n" } });
+    const codes = result.diagnostics.map(entry => entry.code);
+    assert.equal(codes.includes(refusal.code), false, `declaration file: no admission refusal: ${JSON.stringify(codes)}`);
+    assert.equal(codes.some(code => /INVARIANT/u.test(code)), false, `declaration file: no analysis invariant: ${JSON.stringify(codes)}`);
   });
 }
