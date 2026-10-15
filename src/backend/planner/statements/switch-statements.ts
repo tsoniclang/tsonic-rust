@@ -1,6 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { CaseBlock_Clauses, CaseOrDefaultClause_Expression, CaseOrDefaultClause_Statements,
   SwitchStatement_CaseBlock, SwitchStatement_Expression, KindCaseClause } from "@tsonic/target-api/source";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
@@ -39,12 +40,7 @@ export function planSwitchStatement(
     return undefined;
   }
   if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.switch-names",
-      "Switch lowering requires finalized hygienic-name state.",
-    ));
-    return undefined;
+    failTargetPlannerInvariant("tsonic-rust", "Switch lowering requires finalized hygienic-name state.", node);
   }
   const discriminant = planExpression(discriminantNode, context);
   const target = createRustBreakTarget(context, "switch");
