@@ -27,10 +27,14 @@ import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } f
 import { createRustNativeStorageQueries, type RustNativeStoragePlan } from "./native-storage.js";
 import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
-import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
+import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests,
+  type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
-import { createRustGenericCallableDispatchPlan, type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
-import { createRustGenericCallableIdentityPlan, type RustGenericCallableIdentityPlan } from "./generic-identities.js";
+import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests,
+  type RustGenericCallableDispatchPlan } from "./generic-dispatch.js";
+import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdentityRequests,
+  type RustGenericCallableIdentityPlan } from "./generic-identities.js";
+import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPlan } from "./native-dispatch.js";
 import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
@@ -72,54 +76,79 @@ export interface RustCallableValuePlanInput {
   readonly structuralShapes: RustStructuralStorageLookup;
 }
 
-export interface RustCallableValuePlanRegistry extends RustCallableValuePlan {
-  initialize(input: RustCallableValuePlanInput): RustCallableValuePlan;
+export interface RustCallableValueConstruction {
+  readonly generic: RustGenericCallablePlan;
+  readonly native: RustNativeCallableInputPlan;
+  readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeProducers: RustNativeCallableProducerPlan;
+  readonly issues: readonly RustSourceCallableSpecializationIssue[];
+}
+
+export interface RustCallableValuePlanRegistry extends RustCallableValueConstruction {
+  initialize(input: RustCallableValuePlanInput): RustCallableValueConstruction;
+  finalizeSelected(): readonly RustSourceCallableSpecializationIssue[];
+  readonly selected: RustCallableValuePlan;
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
   seal(): RustCallableValuePlan;
 }
 
+interface RustCallableValueLifecycle {
+  readonly construction: RustCallableValueConstruction;
+  finalizeSelected(): { readonly plan: RustCallableValuePlan; readonly issues: readonly RustSourceCallableSpecializationIssue[] };
+  publish(): void;
+}
+
 export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegistry {
-  let current: RustCallableValuePlan | undefined;
+  let lifecycle: RustCallableValueLifecycle | undefined;
+  let selected: RustCallableValuePlan | undefined;
   let completions: RustGenericCallableCompletionPlan | undefined;
   const requireCompletions = (): RustGenericCallableCompletionPlan => {
     if (completions === undefined) throw new Error("Generic callable completions require sealed producer effects and component owners.");
     return completions;
   };
-  const requireCurrent = (): RustCallableValuePlan => {
-    if (current === undefined) throw new Error("Rust callable values must be finalized after their selected adapters and before effect analysis.");
-    return current;
+  const requireLifecycle = (): RustCallableValueLifecycle => {
+    if (lifecycle === undefined) throw new Error("Rust callable values must be finalized after their selected adapters and before effect analysis.");
+    return lifecycle;
+  };
+  const requireSelected = (): RustCallableValuePlan => {
+    if (selected === undefined) throw new Error("Rust callable value inventories require their selected physical families after effect analysis.");
+    return selected;
   };
   return Object.freeze({
-    initialize(input: RustCallableValuePlanInput) {
-      if (current !== undefined) throw new Error("Rust callable value representations can be initialized only once.");
-      current = createRustCallableValuePlan(input, requireCompletions);
-      return current;
+    initialize(input: RustCallableValuePlanInput): RustCallableValueConstruction {
+      if (lifecycle !== undefined) throw new Error("Rust callable value representations can be initialized only once.");
+      lifecycle = createRustCallableValueLifecycle(input, requireCompletions);
+      return lifecycle.construction;
     },
+    finalizeSelected(): readonly RustSourceCallableSpecializationIssue[] {
+      const current = requireLifecycle();
+      if (selected !== undefined) throw new Error("Rust callable value inventories finalize exactly once.");
+      const finalized = current.finalizeSelected();
+      selected = finalized.plan;
+      return finalized.issues;
+    },
+    get selected() { return requireSelected(); },
     initializeCompletions(input: RustGenericCallableCompletionInput): void {
-      const current = requireCurrent();
+      const current = requireSelected();
       if (completions !== undefined || input.physical !== current.generic.physical || input.producers !== current.nativeProducers)
         throw new Error("Generic callable completions finalize exactly once from their owned physical family and producer plans.");
       completions = createRustGenericCallableCompletionPlan(input);
     },
-    seal: requireCurrent,
-    get generic() { return requireCurrent().generic; },
-    get suspended() { return requireCurrent().suspended; },
-    get frames() { return requireCurrent().frames; },
-    get native() { return requireCurrent().native; },
-    get nativeStorage() { return requireCurrent().nativeStorage; },
-    get nativeCaptures() { return requireCurrent().nativeCaptures; },
-    get nativeProducers() { return requireCurrent().nativeProducers; },
-    get nativeGenericProducers() { return requireCurrent().nativeGenericProducers; },
-    get genericDispatch() { return requireCurrent().genericDispatch; },
-    get genericIdentities() { return requireCurrent().genericIdentities; },
-    get nativeDispatch() { return requireCurrent().nativeDispatch; },
-    get genericCompletions() { return requireCompletions(); },
-    get issues() { return requireCurrent().issues; },
+    seal(): RustCallableValuePlan {
+      const current = requireSelected();
+      requireLifecycle().publish();
+      return current;
+    },
+    get generic() { return requireLifecycle().construction.generic; },
+    get native() { return requireLifecycle().construction.native; },
+    get nativeStorage() { return requireLifecycle().construction.nativeStorage; },
+    get nativeProducers() { return requireLifecycle().construction.nativeProducers; },
+    get issues() { return requireLifecycle().construction.issues; },
   });
 }
 
-function createRustCallableValuePlan(input: RustCallableValuePlanInput,
-  completions: () => RustGenericCallableCompletionPlan): RustCallableValuePlan {
+function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
+  completions: () => RustGenericCallableCompletionPlan): RustCallableValueLifecycle {
   const flows: { subject: Node; conversion: RustGenericCallableConversion }[] = [];
   const usedNames = new Set<string>();
   const recordField = (subject: Node, source: TargetTypeRef | undefined, target: TargetTypeRef | undefined): void => {
@@ -181,7 +210,9 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
     input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
-  const generic = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.navigation, flows, input.closedSourceFiles);
+  const genericRegistry = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.navigation,
+    flows, input.closedSourceFiles);
+  const generic = genericRegistry.plan;
   for (const definition of generic.definitions) {
     usedNames.add(definition.targetName);
     for (const implementation of definition.implementations) {
@@ -197,13 +228,19 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
       const selected = nativeStorageQueries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
+  let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
+    physicalCarrierFor: (carrier, ownerFileName, producers) => {
+      if (physicalCarrierFor === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
+      return physicalCarrierFor(carrier, ownerFileName, producers);
+    },
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
-  const nativeCaptures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
+  const captures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
     nativeStorage: nativeStorageQueries });
-  generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
+  const physical = genericRegistry.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
+  physicalCarrierFor = physical.carrierFor;
   const nativeStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
     records: input.records }, nativeStorageQueries);
   const genericCarriers = new Map<TargetTypeRef, boolean>();
@@ -220,17 +257,35 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
     if (containsGeneric(input.records.sourceCallableReturn.get(node)?.returnCarrier)) nativeStorage.returnFor(node);
     if (containsGeneric(input.records.runtimeCarrier.get(node)?.carrier)) nativeStorage.valueFor(node);
   }
-  const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.lifetimes, nativeCaptures);
-  for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
-  const frames = createRustFrameCallablePlan({ ...input, usedNames });
-  const nativeGenericProducers = createRustNativeGenericProducerPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
-    records: input.records, generic, native, nativeStorage, definitions: input.typeDefinitions });
-  const genericIdentities = createRustGenericCallableIdentityPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
-    records: input.records, nativeStorage, physical: generic.physical });
-  const genericDispatch = createRustGenericCallableDispatchPlan({ ...input,
-    nodes: input.sourceStorage.nodes, generic, nativeStorage, nativeGenericProducers });
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
-  return Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers, nativeGenericProducers,
-    genericDispatch, genericIdentities, nativeDispatch, get genericCompletions() { return completions(); },
-    issues: Object.freeze([...generic.issues, ...nativeStorage.issues, ...suspended.issues, ...frames.issues, ...genericIdentities.issues]) });
+  const issues = Object.freeze([...generic.issues, ...nativeStorage.issues]);
+  const construction: RustCallableValueConstruction = Object.freeze({ generic, native, nativeStorage, nativeProducers, issues });
+  return Object.freeze({
+    construction,
+    finalizeSelected() {
+      const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.lifetimes,
+        Object.freeze({ forDeclaration: captures.require }));
+      for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
+      const frames = createRustFrameCallablePlan({ ...input, usedNames });
+      const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
+        records: input.records, generic, native, nativeStorage, definitions: input.typeDefinitions });
+      const identityRequests = prepareRustGenericCallableIdentityRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
+        records: input.records, nativeStorage });
+      const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.sourceStorage.nodes, generic, nativeStorage });
+      physical.closeAdmission();
+      const nativeCaptures = captures.complete();
+      const nativeGenericProducers = createRustNativeGenericProducerPlan({ records: input.records, generic, nativeStorage,
+        requests: producerRequests });
+      const genericIdentities = createRustGenericCallableIdentityPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
+        records: input.records, physical: generic.physical, requests: identityRequests });
+      const genericDispatch = createRustGenericCallableDispatchPlan({ ast: input.ast, generic, closedSourceFiles: input.closedSourceFiles,
+        nativeGenericProducers, invocations: dispatchRequests });
+      const selectedIssues = Object.freeze([...suspended.issues, ...frames.issues, ...genericIdentities.issues]);
+      const plan: RustCallableValuePlan = Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers,
+        nativeGenericProducers, genericDispatch, genericIdentities, nativeDispatch, get genericCompletions() { return completions(); },
+        issues: Object.freeze([...issues, ...selectedIssues]) });
+      return Object.freeze({ plan, issues: selectedIssues });
+    },
+    publish: () => physical.publish(),
+  });
 }

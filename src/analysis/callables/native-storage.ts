@@ -40,6 +40,7 @@ import { createRustNativeFutureInputPlan, type RustNativeFutureEnvironmentSelect
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
+import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import { selectRustGenericCallableInvocationStorage } from "./generic-dispatch.js";
 import { rustGenericCallableMemberInvocationBindings } from "./generic-bindings.js";
@@ -81,6 +82,7 @@ export function createRustNativeStorageQueries(input: {
   readonly native: RustNativeCallableInputPlan;
   readonly producers: RustNativeCallableProducerPlan;
   readonly generic: RustGenericCallablePlan;
+  readonly physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector;
   readonly lifetimes: RustLifetimeIndex;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralStorageLookup;
@@ -343,7 +345,7 @@ export function createRustNativeStorageQueries(input: {
             (!permitsAbsence || producer.subject.projection.length !== 0 ||
               !isRustAbsenceCarrier(input.records.runtimeCarrier.get(producer.subject.node)?.carrier)));
           const ownerFileName = input.ast.getFileName(input.ast.getSourceFile(selectedSubject.node));
-          const physical = input.generic.physical.carrierFor(current, ownerFileName, present);
+          const physical = input.physicalCarrierFor(current, ownerFileName, present);
           if (physical === undefined) return fail("A generic callable producer lacks its exact bound physical capture environment.");
           for (const selected of physical.inputs) selectedInputs.add(selected);
           return physical.carrier;

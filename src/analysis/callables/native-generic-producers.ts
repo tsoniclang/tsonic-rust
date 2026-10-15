@@ -37,7 +37,14 @@ export interface RustNativeGenericProducerPlan {
   errorAritiesFor(fileName: string): readonly number[] | undefined;
 }
 
-export function createRustNativeGenericProducerPlan(input: {
+export interface RustNativeGenericProducerRequests {
+  readonly bindings: readonly { readonly input: RustNativeCallableInput; readonly definition: RustGenericCallablePhysicalDefinition }[];
+  readonly forwarding: ReadonlyMap<Node, readonly RustNativeGenericProducerForwarding[]>;
+  readonly open: RustNativeGenericProducerPlan["open"];
+  readonly unresolved: RustNativeGenericProducerPlan["unresolved"];
+}
+
+export function prepareRustNativeGenericProducerRequests(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
@@ -45,9 +52,9 @@ export function createRustNativeGenericProducerPlan(input: {
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
   readonly definitions: RustTypeDefinitions;
-}): RustNativeGenericProducerPlan {
+}): RustNativeGenericProducerRequests {
   const nativeInputs = new Map(input.native.inputs.map(selected => [selected.subject, selected]));
-  const bindings = new Map<RustNativeCallableProtocol, Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>>();
+  const bindings: { readonly input: RustNativeCallableInput; readonly definition: RustGenericCallablePhysicalDefinition }[] = [];
   const forwarding = new Map<Node, Map<string, RustNativeGenericProducerForwarding>>();
   const open: { readonly invocation: Node; readonly input: RustNativeCallableInput;
     readonly inputs: readonly RustNativeCallableInput[] }[] = [];
@@ -56,11 +63,7 @@ export function createRustNativeGenericProducerPlan(input: {
     unresolved.push(Object.freeze({ invocation, input: selected, reason }));
   };
   const bind = (selected: RustNativeCallableInput, definition: RustGenericCallablePhysicalDefinition): void => {
-    const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>();
-    const consumers = values.get(definition) ?? new Set<RustNativeCallableInput>();
-    consumers.add(selected);
-    values.set(definition, consumers);
-    bindings.set(selected.protocol, values);
+    bindings.push(Object.freeze({ input: selected, definition }));
   };
   for (const invocation of input.nodes) {
     const operation = input.records.targetOperation.get(invocation);
@@ -127,8 +130,34 @@ export function createRustNativeGenericProducerPlan(input: {
         inputs: Object.freeze([...abstractInputs]) }));
     }
   }
+  return Object.freeze({ bindings: Object.freeze(bindings),
+    forwarding: new Map([...forwarding].map(([owner, values]) => [owner, Object.freeze([...values.values()])])),
+    open: Object.freeze(open), unresolved: Object.freeze(unresolved) });
+}
+
+export function createRustNativeGenericProducerPlan(input: {
+  readonly records: RustProgramRecords;
+  readonly generic: RustGenericCallablePlan;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "implementationOriginsFor">;
+  readonly requests: RustNativeGenericProducerRequests;
+}): RustNativeGenericProducerPlan {
+  const bindings = new Map<RustNativeCallableProtocol, Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>>();
+  const { open } = input.requests;
+  const unresolved = [...input.requests.unresolved];
+  const reject = (invocation: Node, selected: RustNativeCallableInput, reason: string): void => {
+    unresolved.push(Object.freeze({ invocation, input: selected, reason }));
+  };
+  const bind = (selected: RustNativeCallableInput, definition: RustGenericCallablePhysicalDefinition): void => {
+    const values = bindings.get(selected.protocol) ?? new Map<RustGenericCallablePhysicalDefinition, Set<RustNativeCallableInput>>();
+    const consumers = values.get(definition) ?? new Set<RustNativeCallableInput>();
+    consumers.add(selected);
+    values.set(definition, consumers);
+    bindings.set(selected.protocol, values);
+  };
+  for (const selected of input.requests.bindings) bind(selected.input, selected.definition);
+  const inventory = input.generic.physical.definitions();
   const byImplementation = new Map<Node, Set<RustGenericCallablePhysicalDefinition>>();
-  for (const definition of input.generic.physical.definitions()) for (const member of definition.members) {
+  for (const definition of inventory) for (const member of definition.members) {
     const definitions = byImplementation.get(member.implementation.declaration) ?? new Set<RustGenericCallablePhysicalDefinition>();
     definitions.add(definition);
     byImplementation.set(member.implementation.declaration, definitions);
@@ -158,25 +187,30 @@ export function createRustNativeGenericProducerPlan(input: {
   }
   const selectedBindings = new Map([...bindings].map(([protocol, values]) => [protocol, Object.freeze(
     [...values].map(([definition, inputs]) => Object.freeze({ definition, inputs: Object.freeze([...inputs]) })))]));
-  const selectedForwarding = new Map([...forwarding].map(([owner, values]) => [owner, Object.freeze([...values.values()])]));
+  const aritiesFor = (fileName: string): readonly number[] | undefined => {
+    const arities = new Set<number>();
+    for (const definition of inventory) {
+      if (definition.ownerFileName !== fileName) continue;
+      const effects = definition.implementations.map(implementation => input.records.sourceCallEffects.get(implementation.declaration));
+      if (effects.some(effect => effect === undefined)) return undefined;
+      for (const channel of ["invocation", "awaiting"] as const) {
+        const arity = effects.filter(effect => effect?.[channel] === "fallible").length;
+        if (arity > 1) arities.add(arity);
+      }
+    }
+    return Object.freeze([...arities].sort((left, right) => left - right));
+  };
+  const errorArities = new Map<string, readonly number[] | undefined>();
+  for (const definition of inventory) {
+    if (!errorArities.has(definition.ownerFileName)) errorArities.set(definition.ownerFileName, aritiesFor(definition.ownerFileName));
+  }
   const emptyBindings: readonly RustNativeGenericProducerBinding[] = Object.freeze([]);
   const emptyForwarding: readonly RustNativeGenericProducerForwarding[] = Object.freeze([]);
-  return Object.freeze({ bindings: Object.freeze([...selectedBindings.values()].flat()), open: Object.freeze(open),
+  const emptyArities: readonly number[] = Object.freeze([]);
+  return Object.freeze({ bindings: Object.freeze([...selectedBindings.values()].flat()), open,
     unresolved: Object.freeze(unresolved),
     forProtocol: (protocol: RustNativeCallableProtocol) => selectedBindings.get(protocol) ?? emptyBindings,
-    forwardingFor: (owner: Node) => selectedForwarding.get(owner) ?? emptyForwarding,
-    errorAritiesFor(fileName: string): readonly number[] | undefined {
-      const arities = new Set<number>();
-      for (const definition of input.generic.physical.definitions()) {
-        if (definition.ownerFileName !== fileName) continue;
-        const effects = definition.implementations.map(implementation => input.records.sourceCallEffects.get(implementation.declaration));
-        if (effects.some(effect => effect === undefined)) return undefined;
-        for (const channel of ["invocation", "awaiting"] as const) {
-          const arity = effects.filter(effect => effect?.[channel] === "fallible").length;
-          if (arity > 1) arities.add(arity);
-        }
-      }
-      return Object.freeze([...arities].sort((left, right) => left - right));
-    },
+    forwardingFor: (owner: Node) => input.requests.forwarding.get(owner) ?? emptyForwarding,
+    errorAritiesFor: (fileName: string) => errorArities.has(fileName) ? errorArities.get(fileName) : emptyArities,
   });
 }

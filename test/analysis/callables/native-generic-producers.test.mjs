@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { createRustNativeGenericProducerPlan } from "../../../dist/analysis/callables/native-generic-producers.js";
+import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests }
+  from "../../../dist/analysis/callables/native-generic-producers.js";
+
+const producerPlan = options => createRustNativeGenericProducerPlan({ ...options,
+  requests: prepareRustNativeGenericProducerRequests(options) });
 
 function fixture(text, configuration = {}) {
   const { program } = analyzeRust({ surfaces: [], ...configuration, files: { "index.ts": text } });
@@ -104,7 +108,7 @@ test("unresolved concrete storage is explicit and cannot be replaced by equal-si
       const callback = <Value>(value: Value): Value => value; return invoke(callback);
     }
   `);
-  const plan = createRustNativeGenericProducerPlan({ ...current.options, nativeStorage: {
+  const plan = producerPlan({ ...current.options, nativeStorage: {
     ...current.options.nativeStorage,
     invocationOriginsFor() { return { kind: "unresolved", reason: "unavailable exact binding" }; },
   } });
@@ -135,7 +139,7 @@ test("open producer enumeration preserves symbolic obligations and never substit
   assert.equal(current.plan.open.some(entry => entry.input === retained && entry.inputs.includes(forwarded)), true);
   assert.equal(current.plan.forwardingFor(current.declaration("forward")).some(entry =>
     entry.input === forwarded && entry.trait.id === retained.protocol.identity), true);
-  const missing = createRustNativeGenericProducerPlan({ ...current.options, nativeStorage: {
+  const missing = producerPlan({ ...current.options, nativeStorage: {
     ...current.options.nativeStorage,
     implementationOriginsFor(input) {
       return input === retained ? { kind: "open", producers: [], boundaries: origins.boundaries }

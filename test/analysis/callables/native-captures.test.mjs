@@ -10,7 +10,7 @@ function fixture(text) {
   const source = program.source;
   const storage = program.sourceStorage;
   const native = program.callableValues.native;
-  const plan = program.callableValues.nativeCaptures;
+  const plan = program.callableValues.selected.nativeCaptures;
   const closures = storage.nodes.filter(node => source.ast.is.IsArrowFunction(node));
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);

@@ -90,25 +90,31 @@ closureCapture: { get: (node) => {
   ), sourceStorage: createSourceStorageQuery(fakeCompileInput().source, []), records, names, navigation,
     lifetimes: { contractFor: () => undefined }, classValueAdapters: [], closedSourceFiles: new Set(),
     ownership: { components: [], activations: [], failureReason: () => undefined } },
-    create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names, navigation, [], closed) };
+    create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names, navigation, [], closed).plan };
 }
 
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {
   const registry = createRustCallableValuePlanRegistry();
   assert.throws(() => registry.generic, /finalized after their selected adapters/u);
-  assert.throws(() => registry.suspended, /finalized after their selected adapters/u);
-  assert.throws(() => registry.frames, /finalized after their selected adapters/u);
   assert.throws(() => registry.issues, /finalized after their selected adapters/u);
-  assert.throws(() => registry.seal(), /finalized after their selected adapters/u);
+  assert.throws(() => registry.finalizeSelected(), /finalized after their selected adapters/u);
+  assert.throws(() => registry.selected, /selected physical families after effect analysis/u);
+  assert.throws(() => registry.seal(), /selected physical families after effect analysis/u);
   const { planInput } = input();
-  const plan = registry.initialize(planInput);
-  assert.equal(registry.seal(), plan);
-  assert.equal(registry.generic, plan.generic);
-  assert.equal(registry.suspended, plan.suspended);
-  assert.equal(registry.frames, plan.frames);
-  assert.equal(plan.frames.definitions.length, 0);
+  const construction = registry.initialize(planInput);
+  assert.equal(registry.generic, construction.generic);
   assert.deepEqual(registry.issues, []);
+  assert.equal(Object.isFrozen(construction), true);
+  assert.equal("suspended" in construction || "frames" in construction || "initializePhysical" in construction.generic, false,
+    "construction exposes neither retained inventories nor the physical initializer");
+  assert.throws(() => registry.seal(), /selected physical families after effect analysis/u);
+  assert.deepEqual(registry.finalizeSelected(), []);
+  const plan = registry.seal();
+  assert.equal(registry.selected, plan);
+  assert.equal(plan.generic, construction.generic);
+  assert.equal(plan.frames.definitions.length, 0);
   assert.equal(Object.isFrozen(plan), true);
+  assert.throws(() => registry.finalizeSelected(), /exactly once/u);
   assert.throws(() => registry.initialize(planInput), /only once/u);
 });
 

@@ -25,10 +25,13 @@ function fixture(text, options = {}) {
   const guardedAst = Proxy.revocable(checkedSource.ast, {});
   const source = { ...checkedSource, ast: guardedAst.proxy };
   const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const generic = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation);
+  const genericRegistry = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation);
+  const generic = genericRegistry.plan;
+  let physical;
   const input = { ast: source.ast, storage, records: program.records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes,
-    generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes };
+    generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
+    physicalCarrierFor: (carrier, ownerFileName, producers) => physical.carrierFor(carrier, ownerFileName, producers) };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {
@@ -39,7 +42,7 @@ function fixture(text, options = {}) {
   const guardedQueries = Proxy.revocable(createRustNativeStorageQueries({ ...input, native }), {});
   const queries = guardedQueries.proxy;
   const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries });
-  generic.initializePhysical({ ...input, native, captures,
+  physical = genericRegistry.initializePhysical({ ...input, native, captures,
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const plan = finalizeRustNativeParameterStorage(input, queries);
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&
@@ -336,7 +339,7 @@ test("concrete quantified producers retain the existing sealed family through al
       "only the exact existing producer family is retained");
   }
   const unavailable = createRustNativeStorageQueries({ ...current.input, native: current.native,
-    generic: { ...current.input.generic, physical: { ...current.input.generic.physical, carrierFor: () => undefined } } });
+    physicalCarrierFor: () => undefined });
   assert.equal(unavailable.returnFor(current.declaration("make")).kind, "unresolved",
     "signature equality cannot substitute for a missing producer identity");
 });

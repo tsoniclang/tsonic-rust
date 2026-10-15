@@ -1,8 +1,8 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustGenericCallableDispatchPlan, selectRustGenericCallableInvocationStorage }
-  from "../../../dist/analysis/callables/generic-dispatch.js";
+import { createRustGenericCallableDispatchPlan, prepareRustGenericCallableDispatchRequests,
+  selectRustGenericCallableInvocationStorage } from "../../../dist/analysis/callables/generic-dispatch.js";
 
 
 
@@ -55,7 +55,8 @@ conversion: { get: () => undefined }}),
 
 test("generic dispatch retains direct calls, native bridges and published boundaries, not transport-only families", () => {
   const current = fixture();
-  const plan = createRustGenericCallableDispatchPlan(current.input);
+  const invocations = prepareRustGenericCallableDispatchRequests(current.input);
+  const plan = createRustGenericCallableDispatchPlan({ ...current.input, invocations });
   assert.equal(Object.isFrozen(plan), true);
   assert.equal(plan.requiredFor(current.called), true);
   assert.equal(plan.requiredFor(current.bridged), true);
@@ -70,7 +71,7 @@ test("generic dispatch retains direct calls, native bridges and published bounda
     assert.equal(plan.requiredFor(current.transported), false);
   }
   assert.equal(current.storageReads(), 1, "the immutable demand plan never rescans at each emitted family");
-  const published = createRustGenericCallableDispatchPlan({ ...current.input, closedSourceFiles: new Set() });
+  const published = createRustGenericCallableDispatchPlan({ ...current.input, closedSourceFiles: new Set(), invocations });
   assert.equal(published.requiredFor(current.transported), true, "a separately consumed library retains its callable API");
   assert.equal(published.usesDeclarationBody(current.transported.members[0].implementation.declaration), true);
 });
