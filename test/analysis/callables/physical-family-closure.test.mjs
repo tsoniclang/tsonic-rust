@@ -346,6 +346,23 @@ test("before closure, a required read of a physical shape construction never adm
   assert.equal(current.physical.plan.existingSelectionFor(reordered) === undefined, true, "the failed reads admitted no family");
 });
 
+test("a logical carrier whose family was never admitted stays absent in every reader", () => {
+  const current = construction(`export function make(): <Value>(value: Value) => Value { return <Value>(value: Value): Value => value; }`);
+  const [implementation] = current.implementations;
+  const logical = implementation.carrier;
+  assert.equal(rustGenericCallableValue(logical) !== undefined && rustGenericCallableValue(logical).physical === undefined, true,
+    "the implementation carrier is logical");
+  current.physical.closeAdmission();
+  assert.equal(current.physical.plan.definitions().length === 0 && current.physical.plan.environmentFor(implementation) !== undefined, true,
+    "the family has a completed environment and no admitted shape");
+  current.physical.publish();
+  const physical = current.physical.plan;
+  for (const [name, read] of [["definitionFor", () => physical.definitionFor(logical)], ["argumentsFor", () => physical.argumentsFor(logical)],
+    ["existingSelectionFor", () => physical.existingSelectionFor(logical)], ["conversionFor", () => physical.conversionFor(logical, logical)]]) {
+    assert.equal(invariantCode(read) === undefined && read() === undefined, true, `${name}: a logical carrier is not a physical storage key`);
+  }
+});
+
 test("every family's canonical self-carrier is stored at closure, including identity-observed families", () => {
   const context = checkedContext(identityDeclarations, { id: "rust", options: { outputType: "lib" } });
   const physical = context.callableValues.selected.generic.physical;
