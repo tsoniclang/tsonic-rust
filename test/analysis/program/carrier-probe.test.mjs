@@ -16,12 +16,12 @@ function parentWalk() {
     sourceCallableAbi,
     operationOptions: Object.freeze({ sourceCallableAbi,
       callableSignatureCarrier() { throw new Error("parent signature query executed"); } }),
-    resolvingCallableSignatures: new Set(),
+    callableSignatures: new WeakMap(),
     finalizedParameters: new WeakSet(),
     capturedBindingStorage: new Map(),
     promotedStorageDeclarations: new Set(),
     callableSignatureCarrierFor: resolveRustCallableSignatureCarrier,
-    inferredReturns: new Map(),
+    inferredReturns: new WeakMap(),
     resolvingReturns: new Set(),
     deferredCallbackCalls: new WeakMap(),
     preparedCallbackCalls: new Map(),
@@ -33,11 +33,12 @@ function parentWalk() {
 test("carrier probes bind signature queries to their own transaction and recursion state", () => {
   const parent = parentWalk();
   const declaration = {};
-  parent.resolvingCallableSignatures.add(declaration);
+  const state = { active: true, completed: new Map(), suspensions: new Map() };
+  parent.callableSignatures.set(declaration, state);
   parent.finalizedParameters.add(declaration);
   parent.capturedBindingStorage.set(declaration, { carrier: integer, selection: { storage: "value" } });
   const probe = createRustCarrierProbe(parent);
-  assert.equal(probe.resolvingCallableSignatures.has(declaration), false, "parent recursion state is not probe state");
+  assert.equal(probe.callableSignatures.has(declaration), false, "parent recursion state is not probe state");
   assert.equal(probe.finalizedParameters.has(declaration), false, "parameter completion belongs to its actual builder");
   assert.equal(probe.capturedBindingStorage.has(declaration), false, "capture completion belongs to its actual builder");
   assert.equal(probe.promotedStorageDeclarations === parent.promotedStorageDeclarations, true,
@@ -47,9 +48,9 @@ test("carrier probes bind signature queries to their own transaction and recursi
     "one unbound algorithm serves the root and probe without a cyclic module import");
   assert.equal(probe.operationOptions.callableSignatureCarrier(declaration) === undefined, true,
     "an unavailable body is checked in the probe without invoking the parent callback");
-  assert.equal(probe.resolvingCallableSignatures.size, 0);
-  assert.equal(parent.resolvingCallableSignatures.has(declaration), true);
-  probe.resolvingCallableSignatures.add(declaration);
+  assert.equal(probe.callableSignatures.has(declaration), false);
+  assert.equal(parent.callableSignatures.get(declaration) === state, true);
+  probe.callableSignatures.set(declaration, { active: true, completed: new Map(), suspensions: new Map() });
   assert.equal(probe.operationOptions.callableSignatureCarrier(declaration) === undefined, true);
   assert.equal(probe.context.diagnostics === parent.context.diagnostics, false);
   assert.equal(probe.inferredReturns === parent.inferredReturns, true, "retain the one return-inference memo");

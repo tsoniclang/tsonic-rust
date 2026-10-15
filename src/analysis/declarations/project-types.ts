@@ -12,7 +12,7 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectRustCapturedFieldStorage } from "../../policy/ownership/captured-field-storage.js";
 
-import { recordCallableReturnFact, recordCallableSuspensionFacts } from "../callables/signatures.js";
+import { finalizeRustCallableSignature } from "../callables/signature-query.js";
 import { recordCallableDefaultParameterFacts, recordParameterAbiFacts } from "./types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
 import { resolveTypeNodeCarrier } from "./types-and-bindings.js";
@@ -114,9 +114,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
         }
       }
       if (memberKind !== "KindConstructor") {
-        recordCallableSuspensionFacts(walk, member);
-        recordCallableReturnFact(walk, member);
-        if (memberKind === "KindSetAccessor") walk.context.records.sourceCallableReturns.setter(member);
+        finalizeRustCallableSignature(walk, member);
       }
     }
   }
@@ -292,7 +290,7 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       for (const parameter of parameters) {
         recordParameterAbiFacts(walk, parameter);
       }
-      recordCallableReturnFact(walk, member);
+      finalizeRustCallableSignature(walk, member);
     }
   }
 }

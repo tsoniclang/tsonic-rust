@@ -5,7 +5,27 @@ import { closedMetadataEquals, hasExactObjectKeys, isDenseDataArray, isMetadataR
 import { isRustCapturedFieldStorage } from "../types/field-storage.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustLifetimesEqual } from "../lifetimes/index.js";
-import type { RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "./callables-and-resources.js";
+import type { RustAsyncFunctionFact, RustGeneratorFact, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "./callables-and-resources.js";
+
+export function rustAsyncFunctionFactEquals(left: RustAsyncFunctionFact, right: RustAsyncFunctionFact): boolean {
+  return left.kind === right.kind && rustTargetTypeRefEquals(left.futureCarrier, right.futureCarrier) &&
+    rustTargetTypeRefEquals(left.outputCarrier, right.outputCarrier) &&
+    (left.kind === "native-future" || right.kind === "native-future" ||
+      left.capturedParameters.length === right.capturedParameters.length &&
+      left.capturedParameters.every((parameter, index) => parameter === right.capturedParameters[index]) &&
+      rustSuspendedCallableStorageEquals(left.storage, right.storage) &&
+      rustSuspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver));
+}
+
+export function rustGeneratorFactEquals(left: RustGeneratorFact, right: RustGeneratorFact): boolean {
+  return left.kind === right.kind && rustTargetTypeRefEquals(left.resultCarrier, right.resultCarrier) &&
+    rustTargetTypeRefEquals(left.yieldType, right.yieldType) && rustTargetTypeRefEquals(left.returnType, right.returnType) &&
+    rustTargetTypeRefEquals(left.nextType, right.nextType) &&
+    left.capturedParameters.length === right.capturedParameters.length &&
+    left.capturedParameters.every((parameter, index) => parameter === right.capturedParameters[index]) &&
+    rustSuspendedCallableStorageEquals(left.storage, right.storage) &&
+    rustSuspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver);
+}
 
 export function rustCallScopedLifetimeReconciliationEquals(
   left: RustCallScopedLifetimeReconciliationFact,

@@ -33,6 +33,8 @@ import { mapRustTargetTypes } from "../../target-model/types/carriers/substituti
 import { rustOptionalStorageValue, rustSourceOptionalTargetType } from "../../target-model/types/projections.js";
 import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveFunctionExpressionSignature } from "../callables/closures.js";
+import { createRustCarrierProbe } from "../program/carrier-probe.js";
+import { recordCallableParameterSignatureFacts } from "../callables/parameter-signature.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import type { Node } from "@tsonic/tsts";
@@ -166,7 +168,7 @@ function reconcileProjectSourceArgumentTypeParameters(
     if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) continue;
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
-    const actual = walk.context.records.indexedFieldKeyArgument.get(argument)?.carrier ??
+    const actual = contextual(argument) ? undefined : walk.context.records.indexedFieldKeyArgument.get(argument)?.carrier ??
       resolveProjectSourceInferenceCarrier(walk, argument);
     if (matches.length === 0) continue;
     for (const binding of matches) {
@@ -197,11 +199,13 @@ function reconcileProjectSourceArgumentTypeParameters(
             return rustTargetTypeRefEquals(selected, rustSourceOptionalTargetType(selected))
               ? value : rustSourceOptionalTargetType(value);
           });
-      const actualCarrier = actual === undefined ? undefined : binding.sourceForm === "spread-element"
+      const selectedActual = contextual(argument) && instantiatedParameterCarrier !== undefined
+        ? resolveProjectSourceInferenceCarrier(walk, argument, instantiatedParameterCarrier) : actual;
+      const actualCarrier = selectedActual === undefined ? undefined : binding.sourceForm === "spread-element"
         ? binding.spreadElementIndex === undefined
           ? undefined
-          : rustSpreadElementCarrier(actual, binding.spreadElementIndex)
-        : actual;
+          : rustSpreadElementCarrier(selectedActual, binding.spreadElementIndex)
+        : selectedActual;
       if (instantiatedParameterCarrier === undefined) {
         continue;
       }
@@ -250,7 +254,7 @@ function projectSourceArgumentInferencePairs(
     return inner === undefined ? undefined : projectSourceArgumentInferencePairs(walk, inner, pattern);
   }
   if (ast.is.IsArrowFunction(argument) || ast.is.IsFunctionExpression(argument)) {
-    const actual = actualCarrier ?? resolveProjectSourceInferenceCarrier(walk, argument);
+    const actual = actualCarrier ?? resolveProjectSourceInferenceCarrier(walk, argument, pattern);
     const expected = rustCallableProtocol(pattern) ?? rustClosureProtocol(pattern);
     const selected = rustCallableProtocol(actual) ?? rustClosureProtocol(actual);
     const parameters = ast.parameters(argument);
@@ -328,16 +332,20 @@ function projectSourceArgumentInferencePairs(
 function resolveProjectSourceInferenceCarrier(
   walk: RustFactWalk,
   argument: Node,
+  contextualCarrier?: TargetTypeRef,
 ): TargetTypeRef | undefined {
   const kind = walk.context.ast.kindName(argument);
   if (walk.context.ast.is.IsArrowFunction(argument) || walk.context.ast.is.IsFunctionExpression(argument)) {
-    return resolveFunctionExpressionSignature(walk, argument)?.carrier;
+    const query = createRustCarrierProbe(walk);
+    recordCallableParameterSignatureFacts(query, argument, contextualCarrier);
+    const selected = resolveFunctionExpressionSignature(query, argument);
+    return selected?.inference.kind === "complete" ? selected.carrier : undefined;
   }
   if (kind === KindSpreadElement) {
     const inner = Node_Expression(walk.context.ast, argument);
     return inner === undefined
       ? undefined
-      : resolveProjectSourceInferenceCarrier(walk, inner);
+      : resolveProjectSourceInferenceCarrier(walk, inner, contextualCarrier);
   }
   if (kind === KindArrayLiteralExpression || kind === KindObjectLiteralExpression) {
     return walk.context.records.runtimeCarrier.get(argument)?.carrier;

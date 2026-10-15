@@ -17,36 +17,61 @@ import { selectRustCheckedPropertyAccess } from "../operations/selected-members.
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
-import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { rustNativeCallableResultMatches } from "../../policy/ownership/callable-result-contract.js";
-import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
-import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
-import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
+import { finalizeRustCallableSignature } from "./signature-query.js";
 import { setCarrierFact } from "../operations/project-calls.js";
+import type { RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
+import type { RustProgramRecordBuilder } from "../program/records/model.js";
+
+export type RustInferredReturnSelection =
+  | { readonly kind: "complete"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "pending"; readonly hint?: TargetTypeRef };
+
+interface RustInferredReturnCompletion {
+  readonly baseline: TargetTypeRef;
+  readonly parameterAbis: readonly RustSourceParameterAbiFact[];
+  readonly callable?: Node;
+  readonly receiver?: TargetTypeRef;
+  readonly superReceiver?: TargetTypeRef;
+  readonly carrier: TargetTypeRef;
+}
+
+export type RustInferredReturnMemo = WeakMap<RustProgramRecordBuilder,
+  WeakMap<Node, readonly RustInferredReturnCompletion[]>>;
 
 export function selectRustInferredReturn(
   walk: RustFactWalk,
   declaration: Node,
   baseline: TargetTypeRef | undefined,
-): TargetTypeRef | undefined {
+): RustInferredReturnSelection {
+  walk.context.records.assertOpen();
   const { ast } = walk.context;
   const scalar = rustOptionElementCarrier(baseline) ?? baseline;
   const annotated = Node_Type(ast, declaration) !== undefined;
-  const callableResult = rustCallableProtocol(scalar);
-  const inferredLifetime = scalar !== undefined && rustTargetGenericReferences(scalar).hasUnnameableLifetime;
-  if (baseline === undefined || scalar === undefined ||
-    (annotated && callableResult === undefined && !inferredLifetime) || ast.body(declaration) === undefined ||
-    walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return baseline;
+  if (baseline === undefined || scalar === undefined) return { kind: "pending" };
+  if (annotated || ast.body(declaration) === undefined ||
+    walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return { kind: "complete", carrier: baseline };
   const numericResult = isRustNumericCarrier(scalar) || isRustBigIntCarrier(scalar);
-  if (walk.inferredReturns.has(declaration)) return walk.inferredReturns.get(declaration);
-  if (walk.resolvingReturns.has(declaration)) return baseline;
+  const parameterAbis: RustSourceParameterAbiFact[] = [];
+  for (const parameter of ast.parameters(declaration)) {
+    const selected = walk.context.records.sourceParameterAbi.get(parameter);
+    if (selected === undefined) return { kind: "pending", hint: baseline };
+    parameterAbis.push(selected);
+  }
+  const memo = walk.inferredReturns.get(walk.context.records);
+  const completed = memo?.get(declaration)?.find(entry => rustTargetTypeRefEquals(entry.baseline, baseline) &&
+    entry.parameterAbis.length === parameterAbis.length && entry.parameterAbis.every((abi, index) => abi === parameterAbis[index]) &&
+    entry.callable === walk.currentCallableDeclaration && rustTargetTypeRefEquals(entry.receiver, walk.currentThisCarrier) &&
+    rustTargetTypeRefEquals(entry.superReceiver, walk.currentSuperCarrier));
+  if (completed !== undefined) return { kind: "complete", carrier: completed.carrier };
+  if (walk.resolvingReturns.has(declaration)) return { kind: "pending", hint: baseline };
   walk.resolvingReturns.add(declaration);
   try {
-    const probe = createRustCarrierProbe(walk);
+    const probe = createRustCarrierProbe({ ...walk, currentCallableDeclaration: declaration });
     const records = probe.context.records;
     const expressions = directReturns(walk, declaration);
     const active = new Set<Node>();
     const carriers = expressions.map(expression => expressionCarrier(expression));
+    if (carriers.some(carrier => carrier === undefined)) return { kind: "pending", hint: baseline };
     let selected: TargetTypeRef | undefined;
     for (const carrier of carriers) {
       if (carrier !== undefined && isRustAbsenceCarrier(carrier) && rustOptionElementCarrier(baseline) !== undefined) continue;
@@ -55,13 +80,6 @@ export function selectRustInferredReturn(
         selected = undefined;
         break;
       }
-      if (annotated && callableResult !== undefined) {
-        const protocol = rustCallableProtocol(value);
-        if (protocol === undefined || protocol.parameters.length !== callableResult.parameters.length ||
-          protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, callableResult.parameters[index])) ||
-          !rustNativeCallableResultMatches(protocol.result, callableResult.result)) return baseline;
-      }
-      if (annotated && callableResult === undefined && !rustNativeRepresentationMatches(value, scalar)) return baseline;
       selected = selected === undefined ? value : rustTargetTypeRefEquals(selected, value)
         ? selected : numericResult ? selectRustNumericBinaryPromotion(selected, value)?.carrier : undefined;
       if (selected === undefined) break;
@@ -70,8 +88,14 @@ export function selectRustInferredReturn(
       : rustOptionElementCarrier(baseline) === undefined ? selected
         : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(selected)
           : rustSourceOptionalTargetType(selected);
-    if (selected !== undefined && result !== undefined) walk.inferredReturns.set(declaration, result);
-    return result;
+    if (result === undefined) return { kind: "pending", hint: baseline };
+    let local = memo;
+    if (local === undefined) walk.inferredReturns.set(walk.context.records, local = new WeakMap());
+    local.set(declaration, Object.freeze([...(local.get(declaration) ?? []), Object.freeze({ baseline,
+      parameterAbis: Object.freeze(parameterAbis), callable: walk.currentCallableDeclaration,
+      receiver: walk.currentThisCarrier, superReceiver: walk.currentSuperCarrier, carrier: result,
+    })]));
+    return { kind: "complete", carrier: result };
 
     function expressionCarrier(expression: Node): TargetTypeRef | undefined {
       if (active.has(expression)) return undefined;
@@ -88,6 +112,7 @@ export function selectRustInferredReturn(
           const reference = selection?.declaration;
           const parameter = reference === undefined ? undefined : records.sourceParameterAbi.get(reference);
           if (parameter !== undefined) return parameter.valueCarrier;
+          if (reference !== undefined && ast.kindName(reference) === "KindParameter") return undefined;
           const initializer = reference === undefined ? undefined : Node_Initializer(ast, reference);
           const referenceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
           const unwritten = referenceFile !== undefined && selection?.symbol !== undefined &&
@@ -102,6 +127,7 @@ export function selectRustInferredReturn(
           if (conditional?.WhenTrue === undefined || conditional.WhenFalse === undefined) return undefined;
           const left = expressionCarrier(conditional.WhenTrue);
           const right = expressionCarrier(conditional.WhenFalse);
+          if (left === undefined || right === undefined) return undefined;
           return selectRustConditionalNumericCarrier(conditional.WhenTrue, conditional.WhenFalse, left, right, ast) ??
             (left === undefined || right === undefined ? undefined : resolveRustBranchUnion(expression, [
               { expression: conditional.WhenTrue, carrier: left },
@@ -113,10 +139,9 @@ export function selectRustInferredReturn(
           const semantics = walk.context.semanticsFor(expression);
           const call = semantics.operations.call(expression);
           const target = call === undefined ? undefined : semantics.declarations.signatureDeclaration(call.selectedSignature);
-          if (target !== undefined && ast.body(target) !== undefined && !ast.hasModifierKind(target, "async") &&
+          if (target !== undefined && walk.context.source.navigation.isProjectDeclaration(target) && !ast.hasModifierKind(target, "async") &&
             walk.context.semanticsFor(target).operations.generator(target) === undefined) {
-            recordCallableParameterSignatureFacts(probe, target);
-            if (!records.sourceCallableReturns.resolve(probe, target)) return undefined;
+            if (finalizeRustCallableSignature(probe, target) === undefined) return undefined;
             const sourceFile = ast.getSourceFile(expression);
             if (sourceFile === undefined) return undefined;
             return resolveExpressionCarrier(probe, expression, sourceFile, undefined);
@@ -137,7 +162,8 @@ export function selectRustInferredReturn(
         }
         const operands = kind === "KindBinaryExpression"
           ? [BinaryExpression_Left(ast, expression), BinaryExpression_Right(ast, expression)]
-          : kind === "KindPrefixUnaryExpression" ? [Node_Operand(ast, expression)] : [];
+          : kind === "KindPrefixUnaryExpression" ? [Node_Operand(ast, expression)]
+            : kind === "KindAwaitExpression" ? [Node_Expression(ast, expression)] : [];
         for (const operand of operands) {
           if (operand === undefined) return undefined;
           const carrier = expressionCarrier(operand);

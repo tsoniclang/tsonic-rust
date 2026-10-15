@@ -47,12 +47,12 @@ export function rustCallableTargetType(
   result: TargetTypeRef,
   lifetime: RustLifetimeRef = rustPlaceholderLifetime,
 ): TargetTypeRef {
-  return {
+  return Object.freeze({
     kind: "target-named",
     id: rustCallableTargetId,
-    genericArguments: [rustLifetimeGenericArgument(lifetime),
-      ...rustTypeGenericArguments([{ kind: "tuple", elements: parameters }, result])],
-  };
+    genericArguments: Object.freeze([rustLifetimeGenericArgument(lifetime),
+      ...rustTypeGenericArguments([Object.freeze({ kind: "tuple", elements: Object.freeze([...parameters]) }), result])]),
+  });
 }
 
 export function isRustCallableCarrier(

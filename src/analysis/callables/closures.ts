@@ -41,9 +41,12 @@ import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rebindRustCallableCarrier } from "../../target-model/types/carriers/callable-rebinding.js";
-import { recordCallableReturnFact, recordCallableSuspensionFacts, selectedSourceCallableReturn } from "./signatures.js";
+import { selectedSourceCallableReturn } from "./signatures.js";
+import { finalizeRustCallableSignature } from "./signature-query.js";
 import { rustCapturedBindingStorage } from "./capture-storage.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
+import { createRustCarrierProbe } from "../program/carrier-probe.js";
+import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
 
@@ -69,17 +72,23 @@ export function resolveFunctionExpressionSignature(
   const sourceProtocol = sourceSelected?.kind === "function-pointer"
     ? { parameters: sourceSelected.args, result: sourceSelected.result }
     : rustGenericCallableProtocol(sourceSelected, genericParameters) ?? rustClosureProtocol(sourceSelected) ?? rustCallableProtocol(sourceSelected);
-  const sourceResult = sourceProtocol === undefined ? undefined
-    : rustCallableInvocationResult(walk.context.records, expression) ??
-      (ast.hasModifierKind(expression, "async") ? sourceProtocol.result
-        : selectRustInferredReturn(walk, expression, sourceProtocol.result));
-  if (sourceSelected === undefined || sourceProtocol === undefined || sourceResult === undefined) return undefined;
+  if (sourceSelected === undefined || sourceProtocol === undefined) return undefined;
+  const query = parameters.every(parameter => walk.context.records.sourceParameterAbi.get(parameter) !== undefined)
+    ? walk : createRustCarrierProbe(walk);
+  if (query !== walk) recordCallableParameterSignatureFacts(query, expression, sourceSelected);
+  const finalized = rustCallableInvocationResult(query.context.records, expression);
+  const inference = finalized !== undefined ? { kind: "complete" as const, carrier: finalized }
+    : ast.hasModifierKind(expression, "async") ? { kind: "complete" as const, carrier: sourceProtocol.result }
+      : selectRustInferredReturn(query, expression, sourceProtocol.result);
+  const sourceResult = inference.kind === "complete" ? inference.carrier : inference.hint;
+  if (sourceResult === undefined) return undefined;
   const parameterCarriers = sourceProtocol.parameters.map((carrier, index) =>
     Node_Initializer(ast, parameters[index]) === undefined ? carrier : rustSourceOptionalTargetType(carrier));
   const carrier = rebindRustCallableCarrier(sourceSelected, parameterCarriers, sourceResult,
     { typeParameters: genericParameters ?? [] });
   return carrier === undefined ? undefined : {
     carrier,
+    inference,
     sourceCarrier: sourceSelected,
     protocol: { ...sourceProtocol, result: sourceResult },
   };
@@ -226,7 +235,9 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const receiver = leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
-  recordCallableSuspensionFacts(walk, expression, receiver?.kind === "reference" ? undefined : receiver, selectedResult);
+  const signatureRequest = { parameterAbis, ownedReceiver: receiver?.kind === "reference" ? undefined : receiver,
+    contextualResult: selectedResult };
+  const completedSignature = finalizeRustCallableSignature(walk, expression, signatureRequest);
   const generator = walk.context.records.generator.get(expression);
   const asynchronous = walk.context.records.asyncFunction.get(expression);
   if (walk.context.semanticsFor(expression).operations.generator(expression) !== undefined
@@ -235,11 +246,13 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const finalizedReturn = walk.context.records.sourceCallableReturn.get(expression)?.returnCarrier;
-  const selectedResultExpectation = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
-    ? selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
+  const resultInference = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer"
+    ? completedSignature !== undefined ? { kind: "complete" as const, carrier: completedSignature.logicalReturn }
+    : selectRustInferredReturn(walk, expression, resolveRustTargetTypeRef(Node_Type(ast, expression) ??
         (ast.kindName(body) === KindBlock ? selectedSourceCallableReturn(walk, expression) : undefined),
       rustResolutionContext(walk, expression), walk.operationOptions))
-    : selectedResult;
+    : { kind: "complete" as const, carrier: selectedResult };
+  const selectedResultExpectation = resultInference.kind === "complete" ? resultInference.carrier : undefined;
   const suspendedResult = generator?.resultCarrier ?? asynchronous?.futureCarrier;
   const invocationResult = suspendedResult === undefined || selectedResultExpectation === undefined ||
       rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation)
@@ -250,11 +263,6 @@ export function resolveFunctionExpressionCarrier(
       !rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation) && invocationResult === undefined) return undefined;
   const selectedValueResult = selectedResultExpectation ?? suspendedResult;
   const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? selectedResultExpectation;
-  const selectedReturnFact = generator?.resultCarrier ?? selectedBodyResult;
-  if (finalizedReturn !== undefined && selectedReturnFact !== undefined &&
-    !rustTargetTypeRefEquals(finalizedReturn, selectedReturnFact)) {
-    return undefined;
-  }
   const resultExpectation = selectedBodyResult ?? finalizedReturn;
   const parameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
   const expressionName = Node_Name(ast, expression);
@@ -312,7 +320,8 @@ export function resolveFunctionExpressionCarrier(
     ...targetParameterCarriers.slice(parameters.length),
   ];
   const valueResult = selectedValueResult ?? bodyCarrier;
-  if (!recordCallableReturnFact(walk, expression, generator?.resultCarrier ?? bodyCarrier)) return undefined;
+  if (finalizeRustCallableSignature(walk, expression,
+    { ...signatureRequest, selectedReturn: generator?.resultCarrier ?? bodyCarrier }) === undefined) return undefined;
   const discarded = sourceCallableDefinitionIsDiscarded(expression, ast);
   const captures = discarded ? { receivers: [], receiverFields: [], captures: [] }
     : collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {

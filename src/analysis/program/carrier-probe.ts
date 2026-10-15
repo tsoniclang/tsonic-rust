@@ -16,7 +16,7 @@ export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
     postCheckOperations: new WeakMap(),
     rejectedExpressions: new WeakSet(),
     resolving: new Set(),
-    resolvingCallableSignatures: new Set(),
+    callableSignatures: new WeakMap(),
     finalizedParameters: new WeakSet(),
     capturedBindingStorage: new Map(),
     deferredCallbackCalls: new WeakMap(),

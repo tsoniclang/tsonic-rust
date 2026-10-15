@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { recordCallableReturnFact } from "../../../../dist/analysis/callables/signatures.js";
 import { isRustUnitCarrier, rustCallableTargetType } from "../../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
@@ -156,7 +155,7 @@ test("missing suspension evidence rejects through the actual source-return produ
     const declaration = {};
     const walk = { context: { records: builder, ast: { hasModifierKind: () => asynchronous },
       semanticsFor: () => ({ operations: { generator: () => generator ? {} : undefined } }) } };
-    assert.equal(recordCallableReturnFact(walk, declaration), false, label);
+    assert.equal(walk.context.records.sourceCallableReturns.resolve(walk, declaration), false, label);
     assert.equal(builder.sourceCallableReturn.get(declaration) === undefined, true, label);
   }
 });

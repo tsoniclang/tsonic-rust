@@ -6,7 +6,6 @@ import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 
 
 
-import { recordCallableReturnFact } from "../../../dist/analysis/callables/signatures.js";
 import { rustCallableInvocationResult } from "../../../dist/analysis/callables/results.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/index.js";
@@ -63,7 +62,7 @@ test("suspended return publication rejects missing generator and ordinary async 
       ast: { hasModifierKind: () => asynchronous },
       semanticsFor: () => ({ operations: { generator: () => generator ? {} : undefined } }),
     } };
-    assert.equal(recordCallableReturnFact(walk, {}) === false, true, label);
+    assert.equal(walk.context.records.sourceCallableReturns.resolve(walk, {}) === false, true, label);
   }
 });
 

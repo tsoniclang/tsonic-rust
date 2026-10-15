@@ -37,7 +37,7 @@ for (const [name, source, callsSignature] of [
   assert.equal(baseline !== undefined, true);
   const original = context.sourceStorage.nodes.map(node => context.records.runtimeCarrier.get(node));
   let scoped = 0;
-  const request = { ...walk, inferredReturns: new Map(), resolvingReturns: new Set(),
+  const request = { ...walk, inferredReturns: new WeakMap(), resolvingReturns: new Set(),
     operationOptions: { ...walk.operationOptions, callableSignatureCarrier() {
       throw new Error("inferred return used the parent's callable query");
     } },
@@ -48,7 +48,8 @@ for (const [name, source, callsSignature] of [
     },
   };
   const selected = selectRustInferredReturn(request, declaration, baseline);
-  assert.equal(rustTargetTypeRefEquals(selected, expected), true, "the selected raw native result is unchanged");
+  assert.equal(selected.kind, "complete");
+  assert.equal(rustTargetTypeRefEquals(selected.carrier, expected), true, "the selected raw native result is unchanged");
   if (callsSignature) {
     const named = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
       context.ast.text(context.ast.name(node)) === "named");

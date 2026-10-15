@@ -10,13 +10,15 @@ import { rustCallableProtocol, rustClosureProtocol, rustSourceOptionalTargetType
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
 
-export function recordCallableParameterSignatureFacts(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
+export function recordCallableParameterSignatureFacts(
+  walk: RustFactWalk, declaration: Node, selectedSignature?: TargetTypeRef,
+): TargetTypeRef | undefined {
   const parameters = requireDenseSourceNodes(walk, walk.context.ast.parameters(declaration), "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) return undefined;
-  const signature = walk.context.ast.is.IsArrowFunction(declaration) || walk.context.ast.is.IsFunctionExpression(declaration)
+  const signature = selectedSignature ?? (walk.context.ast.is.IsArrowFunction(declaration) || walk.context.ast.is.IsFunctionExpression(declaration)
     ? resolveRustTargetTypeRef(declaration,
         { ...rustResolutionContext(walk, declaration), callableRepresentation: "signature" }, walk.operationOptions)
-    : undefined;
+    : undefined);
   const contextual = selectRustClosedCallableContext(walk, declaration, signature);
   const logical = rustCallableProtocol(signature) ?? rustClosureProtocol(signature);
   const protocol = rustCallableProtocol(contextual) ?? rustClosureProtocol(contextual);

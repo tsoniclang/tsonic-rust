@@ -6,7 +6,7 @@ import { recordRustModuleCallableStorage } from "../callables/module-values.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
-import { resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
+import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -20,7 +20,7 @@ import {
 import { recordEnumFacts, reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
 import { recordFallibilityFacts } from "../resources/fallibility.js";
-import { recordFunctionSignatureFacts, recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
+import { recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
 import { recordFutureValueFacts, recordResourceManagementFacts } from "../resources/suspension.js";
 import { recordRustDeferredProducerEffects } from "../resources/deferred-producer-effects.js";
 import { resolveRustExternalProjectBase } from "../../policy/types/project/external-project-types.js";
@@ -168,9 +168,9 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourceCallableAbi,
     operationOptions,
     operationAttempts: new WeakMap(),
-    inferredReturns: new Map(),
+    inferredReturns: new WeakMap(),
     resolvingReturns: new Set(),
-    resolvingCallableSignatures: new Set(),
+    callableSignatures: new WeakMap(),
     finalizedParameters: new WeakSet(),
     callableSignatureCarrierFor: resolveRustCallableSignatureCarrier,
     postCheckOperations: new WeakMap<object, "binary" | "unary-minus" | "unary-plus">(),
@@ -361,7 +361,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
-        recordFunctionSignatureFacts(walk, statement);
+        finalizeRustCallableSignature(walk, statement);
       } else if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
         recordClassSignatureFacts(walk, statement);
       } else if (kind === "KindEnumDeclaration") {

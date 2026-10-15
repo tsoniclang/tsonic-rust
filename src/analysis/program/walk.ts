@@ -50,6 +50,8 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { recordRustConversionSelection } from "../conversions/value-carrier-queries.js";
 import type { RustOperationAttempt } from "./operation-attempts.js";
+import type { RustCallableSignatureState } from "../callables/signature-query.js";
+import type { RustInferredReturnMemo } from "../callables/inferred-return.js";
 
 export const rustTargetSemanticsExtensionId = "tsonic.rust.policy";
 
@@ -65,9 +67,9 @@ export interface RustFactWalk {
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly operationOptions: RustOperationsProviderOptions;
   readonly operationAttempts: WeakMap<Node, RustOperationAttempt>;
-  readonly inferredReturns: Map<Node, TargetTypeRef | undefined>;
+  readonly inferredReturns: RustInferredReturnMemo;
   readonly resolvingReturns: Set<Node>;
-  readonly resolvingCallableSignatures: Set<Node>;
+  readonly callableSignatures: WeakMap<Node, RustCallableSignatureState>;
   readonly finalizedParameters: WeakSet<Node>;
   readonly callableSignatureCarrierFor: (walk: RustFactWalk, declaration: Node) => TargetTypeRef | undefined;
   readonly postCheckOperations: WeakMap<object, "binary" | "unary-minus" | "unary-plus">;

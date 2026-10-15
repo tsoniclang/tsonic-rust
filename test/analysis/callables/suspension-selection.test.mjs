@@ -5,7 +5,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { resolveRustSuspendedCallableStorage } from "../../../dist/analysis/callables/suspension-storage.js";
-import { recordRustAsyncBodyFacts } from "../../../dist/analysis/callables/async-results.js";
+import { finalizeRustCallableSignature } from "../../../dist/analysis/callables/signature-query.js";
 import { rustJsPromiseTargetTypeWithLifetime } from "../../../dist/target-model/types/carriers/js.js";
 
 function fixture(text) {
@@ -51,12 +51,12 @@ test("an incompatible contextual Promise cannot publish an environment and a lat
   assert.equal(rejection.kind, "type");
   const incompatible = rustJsPromiseTargetTypeWithLifetime(input.asynchronous.outputCarrier,
     { kind: "parameter", identity: "foreign-native-region", name: "foreign" }, rejection.type);
-  recordRustAsyncBodyFacts(input.current, input.declaration, future, undefined, incompatible);
+  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: incompatible }) === undefined, true);
   assert.equal(input.current.context.diagnostics.length, 1);
   assert.equal(input.current.context.diagnostics[0].code, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN");
   assert.equal(input.current.context.records.retainedEnvironment.get(input.declaration) === undefined, true);
   assert.equal(input.current.context.records.asyncFunction.get(input.declaration) === undefined, true);
-  recordRustAsyncBodyFacts(input.current, input.declaration, future, undefined, future);
+  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: future }) !== undefined, true);
   const selected = input.current.context.records.asyncFunction.get(input.declaration);
   const retained = input.current.context.records.retainedEnvironment.get(input.declaration);
   assert.equal(selected?.kind, "js-promise");

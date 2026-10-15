@@ -23,6 +23,9 @@ import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js"
 import type { RustFactWalk } from "../program/walk.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
+import type { RustAsyncFunctionFact } from "../../target-model/records/callables-and-resources.js";
+import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
+import { rustNativeAsyncFunctionFact, rustPromiseAsyncFunctionFact } from "../program/records/async-function.js";
 
 export type RustAsyncBodyPromiseSelection =
   | {
@@ -80,15 +83,18 @@ export function selectRustAsyncBodyPromise(
   return Object.freeze({ kind: "selected", ...admitted[0]!, errorCarrier: error.type });
 }
 
-export function recordRustAsyncBodyFacts(
+export function selectRustAsyncBodyFacts(
   walk: RustFactWalk,
   declaration: Node,
   futureCarrier: TargetTypeRef | undefined,
   ownedReceiver?: TargetTypeRef,
   contextualResult?: TargetTypeRef,
-): void {
+): { readonly fact: RustAsyncFunctionFact; readonly retainedEnvironment?: RustRetainedEnvironment } | undefined {
+  walk.context.records.assertOpen();
   const { ast } = walk.context;
-  const inferred = selectRustInferredReturn(walk, declaration, rustFutureOutputCarrier(futureCarrier));
+  const inference = selectRustInferredReturn(walk, declaration, rustFutureOutputCarrier(futureCarrier));
+  if (inference.kind === "pending") return undefined;
+  const inferred = inference.carrier;
   const contextualLiteral = Node_Type(ast, declaration) === undefined &&
     (ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration));
   const isJsPromise = futureCarrier?.kind === "target-named" && futureCarrier.id === rustJsPromiseTargetId;
@@ -105,8 +111,7 @@ export function recordRustAsyncBodyFacts(
   if (!isJsPromise) {
     const inner = !isRustNeverCarrier(inferred) || selectedContext === undefined ? inferred
       : rustFutureOutputCarrier(rustOptionElementCarrier(selectedContext) ?? selectedContext);
-    if (inner !== undefined) walk.context.records.asyncFunctions.native(declaration, inner);
-    return;
+    return inner === undefined ? undefined : { fact: rustNativeAsyncFunctionFact(inner) };
   }
   const selected = selectRustAsyncBodyPromise(futureCarrier, inferred, selectedContext, walk.context.typeDefinitions);
   if (selected.kind === "rejected") {
@@ -141,7 +146,7 @@ export function recordRustAsyncBodyFacts(
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
     return;
   }
-  if (storage.retainedEnvironment !== undefined) walk.context.records.retainedEnvironments.retain(declaration,
-    storage.retainedEnvironment.lifetime, storage.retainedEnvironment.parameters);
-  walk.context.records.asyncFunctions.promise(declaration, closedFutureCarrier, selected.outputCarrier, storage);
+  return { fact: rustPromiseAsyncFunctionFact(closedFutureCarrier, selected.outputCarrier, storage),
+    ...(storage.retainedEnvironment === undefined ? {} : { retainedEnvironment: storage.retainedEnvironment }),
+  };
 }
