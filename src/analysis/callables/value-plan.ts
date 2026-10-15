@@ -90,6 +90,7 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
   readonly selected: RustCallableValuePlan;
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
   seal(): RustCallableValuePlan;
+  publish(): void;
 }
 
 interface RustCallableValueLifecycle {
@@ -134,10 +135,10 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
         throw new Error("Generic callable completions finalize exactly once from their owned physical family and producer plans.");
       completions = createRustGenericCallableCompletionPlan(input);
     },
-    seal(): RustCallableValuePlan {
-      const current = requireSelected();
+    seal: requireSelected,
+    publish(): void {
+      requireSelected();
       requireLifecycle().publish();
-      return current;
     },
     get generic() { return requireLifecycle().construction.generic; },
     get native() { return requireLifecycle().construction.native; },
@@ -276,8 +277,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const nativeCaptures = captures.complete();
       const nativeGenericProducers = createRustNativeGenericProducerPlan({ records: input.records, generic, nativeStorage,
         requests: producerRequests });
-      const genericIdentities = createRustGenericCallableIdentityPlan({ ast: input.ast, nodes: input.sourceStorage.nodes,
-        records: input.records, physical: generic.physical, requests: identityRequests });
+      const genericIdentities = createRustGenericCallableIdentityPlan({ ast: input.ast, records: input.records,
+        physical: generic.physical, requests: identityRequests });
       const genericDispatch = createRustGenericCallableDispatchPlan({ ast: input.ast, generic, closedSourceFiles: input.closedSourceFiles,
         nativeGenericProducers, invocations: dispatchRequests });
       const selectedIssues = Object.freeze([...suspended.issues, ...frames.issues, ...genericIdentities.issues]);

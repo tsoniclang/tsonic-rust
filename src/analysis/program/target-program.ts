@@ -401,7 +401,9 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
-  return resolvedTargetStage(Object.freeze({ ...program, reachability: analyzeRustReachability(program) }));
+  const reachability = analyzeRustReachability(program);
+  context.callableValues.publish();
+  return resolvedTargetStage(Object.freeze({ ...program, reachability }));
 }
 
 export type {

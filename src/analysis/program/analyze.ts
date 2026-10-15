@@ -566,9 +566,12 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordRustDeferredProducerEffects(walk);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);
-  const effectDiagnostics = context.diagnostics.splice(selectedIssuePosition);
-  context.callableValues.finalizeSelected().forEach(callableIssue);
-  context.diagnostics.push(...effectDiagnostics);
+  const effectDiagnosticEnd = context.diagnostics.length;
+  try {
+    context.callableValues.finalizeSelected().forEach(callableIssue);
+  } finally {
+    context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
+  }
   return lexicalFunctions;
 }
 
