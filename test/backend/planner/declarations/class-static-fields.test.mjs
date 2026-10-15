@@ -2,10 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   acmeTestingPackage,
+  analyzeRust,
   artifactText,
   compileRust,
 } from "../../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../../helpers/cargo-projects.mjs";
+import { readRustSourceStaticField } from "../../../../dist/backend/planner/declarations/classes/static-field-storage.js";
+import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
+import { resolvedTargetStage, runTargetCompilationStages } from "@tsonic/target-api/artifacts";
 
 test("static class fields preserve source initialization read write and update semantics", { timeout: 300_000 }, () => {
   const { result } = compileRust({
@@ -212,4 +216,59 @@ export class Invalid {
   assert.ok(result.diagnostics.some((diagnostic) =>
     diagnostic.code === "RUST_STATIC_FIELD_RECEIVER_NOT_EXACT" &&
     diagnostic.message.includes("exact TSTS-selected receiver value evidence")));
+});
+
+test("a local static field read through a selected class receiver requires the planner's native local-name allocator", () => {
+  const source = `
+import type { int32 } from "@tsonic/core/types.js";
+
+export function run(): int32 {
+  class Local {
+    static value: int32 = 1;
+  }
+  const Alias = Local;
+  return Alias.value;
+}
+`;
+  const accepted = compileRust({ files: { "index.ts": source } });
+  assert.equal(accepted.result.diagnostics.length === 0 && accepted.result.artifacts.length > 0, true,
+    "the source program is accepted and planned with the real source-file allocator");
+  const { program } = analyzeRust({ files: { "index.ts": source } });
+  const { ast } = program.source;
+  const reads = [];
+  const visit = node => {
+    const fact = program.records.targetOperation.get(node);
+    if (fact?.kind === "source-static-field" && fact.classReceiver !== undefined) reads.push({ node, fact });
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(reads.length, 1);
+  const [{ node, fact }] = reads;
+  const receiver = { kind: "path", path: "selected_receiver" };
+  const context = syntheticNames => ({
+    input: { program }, diagnostics: [], sourceFile: ast.getSourceFile(node), syntheticNames,
+    expressionOverrides: new Map([[fact.classReceiver, { expression: receiver, valueForm: "value", carrier: fact.resultCarrier }]]),
+  });
+  const planned = readRustSourceStaticField(fact, context(createRustSyntheticNameState(ast, node, [])));
+  assert.equal(planned?.kind, "block", "a composed planner context binds the selected receiver once");
+  let compiled;
+  try {
+    compiled = runTargetCompilationStages({
+      analyze: () => resolvedTargetStage({}),
+      plan: () => resolvedTargetStage(readRustSourceStaticField(fact, context(undefined))),
+      materialize: () => ({ artifacts: [] }),
+    });
+  } catch {
+    compiled = undefined;
+  }
+  assert.equal(compiled !== undefined, true, "a planner context without its allocator is classified by the shared planning boundary");
+  assert.equal(compiled.kind, "rejected");
+  assert.equal(compiled.diagnostics.length, 1);
+  const diagnostic = compiled.diagnostics[0];
+  assert.equal(diagnostic.code, "TSONIC_INTERNAL_PLANNER_INVARIANT");
+  assert.equal(diagnostic.category, "error");
+  assert.equal(diagnostic.source, "tsonic-rust");
+  assert.equal(diagnostic.message, "A selected class receiver has no native local-name allocator.");
+  assert.equal(diagnostic.sourceNode === fact.declaration, true, "the diagnostic names the static field declaration");
+  assert.equal(Object.isFrozen(diagnostic), true);
 });
