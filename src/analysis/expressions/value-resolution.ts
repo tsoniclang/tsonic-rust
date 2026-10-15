@@ -30,9 +30,10 @@ import {
   KindTypeOfExpression,
   KindVoidExpression,
   Node_Expression,
-  parseFiniteNumberLiteral,
   sourceIntegerLiteralValue,
 } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustNumericLiteralIsFinite } from "../numeric/literal-admission.js";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
 import { getRustTypeofRuntimeKind } from "../../target-model/types/runtime-kind.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
@@ -88,15 +89,9 @@ export function resolveExpressionCarrierUncached(
   const kind = walk.context.ast.kindName(expression);
   switch (kind) {
     case KindNumericLiteral: {
-      if (parseFiniteNumberLiteral(walk.context.ast.text(expression)) === undefined) {
-        appendRustDiagnostic(
-          walk,
-          "RUST_NUMERIC_LITERAL_NOT_FINITE",
-          "Numeric literal requires parseable finite source literal text from TSTS.",
-          expression,
-          ["target.capability=rust.syntax.numeric-literal"],
-        );
-        return undefined;
+      if (!rustNumericLiteralIsFinite(walk.context.ast, expression)) {
+        return failTargetAnalysisInvariant("tsonic-rust",
+          "Numeric literal admission must refuse a non-finite numeric literal before carrier resolution.", expression);
       }
       const contextualExpected = expected !== undefined && isRustOptionCarrier(expected)
         ? rustOptionElementCarrier(expected)

@@ -85,6 +85,7 @@ import { createRustSourceProfileStorageEffects } from "../../policy/operations/s
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
 import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
+import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
@@ -140,6 +141,7 @@ export function createRustAnalysisContext(
           sourceFile !== undefined && !ast.isDeclarationFile(sourceFile))
       : [],
   );
+  const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles);
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
     sourceFiles,
@@ -218,7 +220,7 @@ export function createRustAnalysisContext(
     runtimeValueUses,
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
-    diagnostics: [...names.diagnostics, ...lifetimes.diagnostics,
+    diagnostics: [...numericLiteralAdmission, ...names.diagnostics, ...lifetimes.diagnostics,
       ...(receiverOccurrences.kind === "unresolved" ? [{ code: "RUST_RECEIVER_OCCURRENCES_UNRESOLVED",
         category: "error" as const, source: "tsonic-rust", message: receiverOccurrences.reason,
         evidence: ["target.capability=rust.analysis.ownership"] }] : []),
