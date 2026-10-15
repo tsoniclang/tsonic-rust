@@ -17,14 +17,24 @@ export interface RustNativeCapturePlan {
   forDeclaration(declaration: Node): RustNativeCaptureSelection;
 }
 
+export interface RustNativeCaptureConstruction extends RustNativeCapturePlan {
+  require(declaration: Node): RustNativeCaptureSelection;
+  complete(): RustNativeCapturePlan;
+}
+
 export function createRustNativeCapturePlan(input: {
   readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "subjectFor">;
-}): RustNativeCapturePlan {
+}): RustNativeCaptureConstruction {
   const nodes = new Set(input.storage.nodes);
   const selections = new Map<Node, RustNativeCaptureSelection>();
+  const active = new Set<Node>();
+  let published: RustNativeCapturePlan | undefined;
   const unresolved = (reason: string): RustNativeCaptureSelection => Object.freeze({ kind: "unresolved", reason });
+  const foreign = unresolved("A native capture environment requires an owned source declaration.");
+  const recursive = unresolved("A native capture environment depends on its own unfinished capture selection.");
+  const unrequired = unresolved("A native capture environment is published only for its required generic or suspended declarations.");
   const select = (declaration: Node): RustNativeCaptureSelection => {
     const fact = input.records.closureCapture.get(declaration);
     if (fact === undefined) return unresolved("A native capture environment requires its exact finalized capture declarations.");
@@ -53,14 +63,31 @@ export function createRustNativeCapturePlan(input: {
       : Object.freeze({ kind: "resolved", captures, receiverFields, receivers, inputs: Object.freeze([...inputs]),
         environment: rustTargetGenericReferences({ kind: "tuple", elements: [...captures, ...receiverFields, ...receivers] }) });
   };
-  return Object.freeze({
-    forDeclaration(declaration: Node): RustNativeCaptureSelection {
-      if (!nodes.has(declaration)) return unresolved("A native capture environment requires an owned source declaration.");
-      const existing = selections.get(declaration);
-      if (existing !== undefined) return existing;
+  const construct = (declaration: Node, required: boolean): RustNativeCaptureSelection => {
+    if (published !== undefined) return published.forDeclaration(declaration);
+    if (!nodes.has(declaration)) return foreign;
+    const existing = selections.get(declaration);
+    if (existing !== undefined) return existing;
+    if (active.has(declaration)) return recursive;
+    active.add(declaration);
+    try {
       const result = select(declaration);
-      selections.set(declaration, result);
+      if (result.kind === "resolved" || required) selections.set(declaration, result);
       return result;
+    } finally {
+      active.delete(declaration);
+    }
+  };
+  return Object.freeze({
+    forDeclaration: (declaration: Node) => construct(declaration, false),
+    require: (declaration: Node) => construct(declaration, true),
+    complete(): RustNativeCapturePlan {
+      if (published !== undefined) throw new Error("Native capture environments complete exactly once.");
+      const completed = new Map(selections);
+      published = Object.freeze({
+        forDeclaration: (declaration: Node) => nodes.has(declaration) ? completed.get(declaration) ?? unrequired : foreign,
+      });
+      return published;
     },
   });
 }

@@ -264,7 +264,7 @@ export function analyzeRustTargetProgram(
     objectRepresentations,
     context.callableValues.generic,
     classValues.instanceViews,
-    context.callableValues.frames,
+    context.callableValues.selected.frames,
     context.callableValues.native,
   );
   if (declarationGenericRequirements.kind === "rejected") {
@@ -313,7 +313,7 @@ export function analyzeRustTargetProgram(
     effectsFor: declaration => records.sourceCallEffects.get(declaration) });
   if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
   const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
-    names: context.names, callables: context.callableValues,
+    names: context.names, callables: context.callableValues.selected,
     producers: context.callableValues.nativeProducers, definitions: typeDefinitions,
     components: sourcePackageComponents.plan });
   if (errorRegions.kind === "rejected") return errorRegions;

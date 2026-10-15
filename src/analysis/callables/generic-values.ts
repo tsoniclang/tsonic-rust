@@ -20,8 +20,8 @@ import type { RustGenericCallableConversion } from "../../target-model/conversio
 
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
-import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalInput,
-  type RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import { createRustGenericCallablePhysicalPlan, type RustGenericCallablePhysicalConstruction,
+  type RustGenericCallablePhysicalInput, type RustGenericCallablePhysicalPlan } from "./generic-physical.js";
 
 export interface RustGenericCallableImplementation {
   readonly declaration: Node;
@@ -58,8 +58,9 @@ export interface RustGenericCallablePlan {
   readonly physical: RustGenericCallablePhysicalPlan;
 }
 
-export interface RustGenericCallableRegistry extends RustGenericCallablePlan {
-  initializePhysical(input: RustGenericCallablePhysicalInput): void;
+export interface RustGenericCallableRegistry {
+  readonly plan: RustGenericCallablePlan;
+  initializePhysical(input: RustGenericCallablePhysicalInput): RustGenericCallablePhysicalConstruction;
 }
 
 export function createRustGenericCallablePlan(
@@ -212,15 +213,19 @@ export function createRustGenericCallablePlan(
       return selected === undefined || closedMetadataKey(selected.signature) !== closedMetadataKey(value.signature) ? undefined : selected;
   };
   let physical: RustGenericCallablePhysicalPlan | undefined;
-  return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues), definitionFor,
-    initializePhysical(input: RustGenericCallablePhysicalInput): void {
-      if (physical !== undefined) throw new Error("A generic callable physical environment is initialized exactly once.");
-      physical = createRustGenericCallablePhysicalPlan(definitions, definitionFor, input);
-    },
+  const plan: RustGenericCallablePlan = Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues), definitionFor,
     get physical(): RustGenericCallablePhysicalPlan {
       if (physical === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
       return physical;
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),
+  });
+  return Object.freeze({ plan,
+    initializePhysical(input: RustGenericCallablePhysicalInput): RustGenericCallablePhysicalConstruction {
+      if (physical !== undefined) throw new Error("A generic callable physical environment is initialized exactly once.");
+      const construction = createRustGenericCallablePhysicalPlan(definitions, definitionFor, input);
+      physical = construction.plan;
+      return construction;
+    },
   });
 }

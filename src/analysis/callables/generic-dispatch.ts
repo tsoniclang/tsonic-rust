@@ -42,17 +42,27 @@ export function selectRustGenericCallableInvocationStorage(
   return definition === undefined ? undefined : { operation, carrier: storage.carrier, definition };
 }
 
-export function createRustGenericCallableDispatchPlan(input: RustGenericCallableInvocationInput & {
+export function prepareRustGenericCallableDispatchRequests(input: RustGenericCallableInvocationInput & {
   readonly nodes: readonly Node[];
+}): readonly RustGenericCallablePhysicalDefinition[] {
+  const invoked: RustGenericCallablePhysicalDefinition[] = [];
+  for (const node of input.nodes) {
+    const selected = selectRustGenericCallableInvocationStorage(node, input);
+    if (selected !== undefined) invoked.push(selected.definition);
+  }
+  return Object.freeze(invoked);
+}
+
+export function createRustGenericCallableDispatchPlan(input: {
+  readonly ast: AstReader;
+  readonly generic: RustGenericCallablePlan;
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
+  readonly invocations: readonly RustGenericCallablePhysicalDefinition[];
 }): RustGenericCallableDispatchPlan {
   const closed = new Set([...input.closedSourceFiles].map(file => input.ast.getFileName(file)));
   const invoked = new Set(input.nativeGenericProducers.bindings.map(binding => binding.definition));
-  for (const node of input.nodes) {
-    const selected = selectRustGenericCallableInvocationStorage(node, input);
-    if (selected !== undefined) invoked.add(selected.definition);
-  }
+  for (const definition of input.invocations) invoked.add(definition);
   const requiredFor = (definition: RustGenericCallablePhysicalDefinition): boolean =>
     !closed.has(definition.ownerFileName) || invoked.has(definition);
   const bodies = new Set<Node>();

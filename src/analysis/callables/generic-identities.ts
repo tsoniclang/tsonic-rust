@@ -10,7 +10,7 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember,
   RustGenericCallablePhysicalPlan } from "./generic-physical.js";
-import type { RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import { createRustEffectsWorkBudget, type RustEffectsWorkBudget } from "../resources/effects-work-budget.js";
 
@@ -97,12 +97,39 @@ function selectIdentity(
   return Object.freeze({ leftCarrier, rightCarrier, left, right, pairs: Object.freeze(pairs), exhaustive });
 }
 
-export function createRustGenericCallableIdentityPlan(input: {
+export interface RustGenericCallableIdentityRequests {
+  readonly operands: ReadonlyMap<Node, {
+    readonly left: RustNativeStorageSelection | undefined;
+    readonly right: RustNativeStorageSelection | undefined;
+  }>;
+}
+
+export function prepareRustGenericCallableIdentityRequests(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
   readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
+}): RustGenericCallableIdentityRequests {
+  const operands = new Map<Node, { readonly left: RustNativeStorageSelection | undefined; readonly right: RustNativeStorageSelection | undefined }>();
+  for (const node of input.nodes) {
+    const operation = input.records.targetOperation.get(node);
+    if (operation?.kind !== "operator-token" || operation.operator !== "==" && operation.operator !== "!=") continue;
+    const leftNode = BinaryExpression_Left(input.ast, node);
+    const rightNode = BinaryExpression_Right(input.ast, node);
+    if (rustGenericCallableValue(rustEffectiveValueCarrier(input.records, leftNode)) === undefined &&
+      rustGenericCallableValue(rustEffectiveValueCarrier(input.records, rightNode)) === undefined) continue;
+    operands.set(node, Object.freeze({ left: leftNode === undefined ? undefined : input.nativeStorage.valueFor(leftNode),
+      right: rightNode === undefined ? undefined : input.nativeStorage.valueFor(rightNode) }));
+  }
+  return Object.freeze({ operands });
+}
+
+export function createRustGenericCallableIdentityPlan(input: {
+  readonly ast: AstReader;
+  readonly nodes: readonly Node[];
+  readonly records: RustProgramRecords;
   readonly physical: RustGenericCallablePhysicalPlan;
+  readonly requests: RustGenericCallableIdentityRequests;
 }): RustGenericCallableIdentityPlan {
   const comparisons = new Map<Node, RustGenericCallableIdentityComparison>();
   const definitions = new Map<RustGenericCallablePhysicalDefinition, RustGenericCallableIdentitySelection>();
@@ -125,8 +152,9 @@ export function createRustGenericCallableIdentityPlan(input: {
     const leftLogical = rustEffectiveValueCarrier(input.records, leftNode);
     const rightLogical = rustEffectiveValueCarrier(input.records, rightNode);
     if (rustGenericCallableValue(leftLogical) === undefined && rustGenericCallableValue(rightLogical) === undefined) return;
-    const leftStorage = leftNode === undefined ? undefined : input.nativeStorage.valueFor(leftNode);
-    const rightStorage = rightNode === undefined ? undefined : input.nativeStorage.valueFor(rightNode);
+    const requested = input.requests.operands.get(node);
+    const leftStorage = requested?.left;
+    const rightStorage = requested?.right;
     const leftDefinition = leftStorage === undefined || leftStorage.kind === "unresolved" ? undefined
       : input.physical.definitionFor(leftStorage.carrier);
     const rightDefinition = rightStorage === undefined || rightStorage.kind === "unresolved" ? undefined

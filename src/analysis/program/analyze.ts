@@ -54,6 +54,7 @@ import { createRustSourceProfileCallableAliasQuery } from "../../policy/operatio
 import { collectRustDeclaredProviderErrorCarriers } from "./provider-errors.js";
 import { createRustLexicalFunctionEnvironmentPlan, finalizeRustLexicalFunctionQueries, type RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import { recordRustLexicalValueEnvironments } from "../callables/lexical-value-environments.js";
+import type { RustSourceCallableSpecializationIssue } from "../callables/specializations.js";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
@@ -555,16 +556,20 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes });
-  for (const issue of callableValues.issues) {
-    appendRustDiagnostic(walk, "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject,
-      ["target.capability=rust.callable-value.exact-implementation"]);
-  }
+  const callableIssue = (issue: RustSourceCallableSpecializationIssue): void => appendRustDiagnostic(walk,
+    "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject, ["target.capability=rust.callable-value.exact-implementation"]);
+  callableValues.issues.forEach(callableIssue);
+  const selectedIssuePosition = context.diagnostics.length;
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
   recordRustDeferredProducerEffects(walk);
-  return finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
+  const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);
+  const effectDiagnostics = context.diagnostics.splice(selectedIssuePosition);
+  context.callableValues.finalizeSelected().forEach(callableIssue);
+  context.diagnostics.push(...effectDiagnostics);
+  return lexicalFunctions;
 }
 
 function collectSourcePackageBoundaries(
