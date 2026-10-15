@@ -30,6 +30,7 @@ import {
   KindTypeOfExpression,
   KindVoidExpression,
   Node_Expression,
+  parseFiniteNumberLiteral,
   sourceIntegerLiteralValue,
 } from "@tsonic/target-api/source";
 import { rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
@@ -87,6 +88,16 @@ export function resolveExpressionCarrierUncached(
   const kind = walk.context.ast.kindName(expression);
   switch (kind) {
     case KindNumericLiteral: {
+      if (parseFiniteNumberLiteral(walk.context.ast.text(expression)) === undefined) {
+        appendRustDiagnostic(
+          walk,
+          "RUST_NUMERIC_LITERAL_NOT_FINITE",
+          "Numeric literal requires parseable finite source literal text from TSTS.",
+          expression,
+          ["target.capability=rust.syntax.numeric-literal"],
+        );
+        return undefined;
+      }
       const contextualExpected = expected !== undefined && isRustOptionCarrier(expected)
         ? rustOptionElementCarrier(expected)
         : expected;
