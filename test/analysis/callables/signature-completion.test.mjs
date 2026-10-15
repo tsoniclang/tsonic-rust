@@ -6,6 +6,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/signature-query.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 
 function fixture(inherit, source = "export async function step(value: number): Promise<number> { return value; }", surfaces = ["js"]) {
   const { context, walk } = analyzeRustOperations(source, { surfaces });
@@ -87,6 +88,27 @@ test("a differing full parameter ABI cannot be hidden by a completed native sign
   assert.equal(input.current.context.records.sourceCallableReturn.get(input.declaration) === selected.result, true);
 });
 
+for (const [name, source] of [
+  ["async", "export async function step(value: number): Promise<number> { return value; }"],
+  ["generator", "export function* step(value: number): Generator<number, number, number> { yield value; return value; }"],
+]) for (const inherited of [false, true]) test(`a different ${name} logical result cannot hide behind ${inherited ? "inherited" : "local"} suspension facts`, () => {
+  const input = fixture(inherited, source);
+  const complete = finalizeRustCallableSignature(input.current, input.declaration);
+  assert.equal(complete !== undefined, true);
+  assert.throws(() => finalizeRustCallableSignature(input.current, input.declaration, {
+    selectedReturn: { kind: "source-primitive", name: "int32" },
+  }), /Conflicting Rust semantic plan/u);
+  assert.equal(input.admissions(), inherited ? 0 : 1);
+  assert.equal(input.current.context.records.sourceCallableReturn.get(input.declaration) === complete.result, true);
+  const request = { selectedReturn: complete.logicalReturn };
+  const matching = finalizeRustCallableSignature(input.current, input.declaration, request);
+  assert.equal(matching !== undefined, true);
+  assert.equal(matching.result === complete.result, true);
+  assert.equal(matching.suspension === complete.suspension, true);
+  assert.equal(finalizeRustCallableSignature(input.current, input.declaration, request) === matching, true);
+  assert.equal(input.admissions(), inherited ? 0 : 1);
+});
+
 test("a complete callable keeps its selected logical contract separate from native retained storage", () => {
   const { context, walk } = analyzeRustOperations('import type { int32 } from "@tsonic/core/types.js"; export function step(callback: () => int32): () => int32 { return callback; }', { surfaces: [] });
   const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node));
@@ -116,6 +138,38 @@ test("the cached native callable owns immutable argument containers without copy
   assert.throws(() => { carrier.genericArguments = []; }, TypeError);
   assert.equal(resolveRustCallableSignatureCarrier(input.current, input.declaration) === carrier, true);
   assert.equal(parameters.elements.length, 1);
+});
+
+test("class and interface callable orchestration delegates parameter completion to the full owner", () => {
+  const { context, walk } = analyzeRustOperations(`
+export interface Shape { size(value: number): number; }
+export class Square {
+  side: number;
+  constructor(value: number) { this.side = value; }
+  size(value: number): number { return this.side + value; }
+  get value(): number { return this.side; }
+  set value(value: number) { this.side = value; }
+}
+`, { surfaces: [] });
+  const { ast } = context;
+  const current = createRustCarrierProbe(walk);
+  const declarations = context.sourceStorage.nodes.filter(node => ast.is.IsClassDeclaration(node) || ast.is.IsInterfaceDeclaration(node));
+  const members = context.sourceStorage.nodes.filter(node => ast.is.IsMethodDeclaration(node) || ast.kindName(node) === "KindMethodSignature" ||
+    ast.is.IsGetAccessorDeclaration(node) || ast.is.IsSetAccessorDeclaration(node));
+  assert.equal(declarations.length, 2);
+  assert.equal(members.length, 4);
+  for (const member of members) assert.equal(finalizeRustCallableSignature(current, member) !== undefined, true);
+  const lookup = { ...current, context: { ...current.context, ast: { ...ast,
+    parameters(node) {
+      assert.equal(members.includes(node), false, "a completed full callable cannot re-enter outer parameter orchestration");
+      return ast.parameters(node);
+    },
+  } } };
+  for (const declaration of declarations) {
+    if (ast.is.IsClassDeclaration(declaration)) recordClassSignatureFacts(lookup, declaration);
+    else recordInterfaceFacts(lookup, declaration);
+  }
+  for (const member of members) assert.equal(finalizeRustCallableSignature(lookup, member) !== undefined, true);
 });
 
 for (const [name, path] of [

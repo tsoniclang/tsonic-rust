@@ -54,6 +54,15 @@ export interface FinalizedProjectSourceGenericArguments {
   readonly substitutions: RustTargetGenericBindings;
 }
 
+type ProjectSourceInference<Value> =
+  | { readonly kind: "complete"; readonly value: Value }
+  | { readonly kind: "pending" };
+
+interface ProjectSourceInferencePair {
+  readonly pattern: TargetTypeRef;
+  readonly actual: TargetTypeRef;
+}
+
 export function finalizeProjectSourceGenericArguments(
   walk: RustFactWalk,
   selected: RustSelectedTargetSignature,
@@ -136,10 +145,18 @@ export function finalizeProjectSourceGenericArguments(
       }
     }
   }
+  let pendingLifetimeInference = false;
   const finalizedArguments = rustSourceCallGenericLifetimeArguments(selected, finalized, index => {
     const argument = callArguments[index];
-    return argument === undefined ? undefined : resolveProjectSourceInferenceCarrier(walk, argument);
+    if (argument === undefined) return undefined;
+    const selected = resolveProjectSourceInferenceCarrier(walk, argument);
+    if (selected.kind === "pending") {
+      pendingLifetimeInference = true;
+      return undefined;
+    }
+    return selected.value;
   });
+  if (pendingLifetimeInference) return undefined;
   const substitutions = finalizedArguments === undefined ? undefined : rustTargetGenericBindingsForArguments(parameters, finalizedArguments);
   return substitutions === undefined
     ? undefined
@@ -168,9 +185,10 @@ function reconcileProjectSourceArgumentTypeParameters(
     if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) continue;
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
-    const actual = contextual(argument) ? undefined : walk.context.records.indexedFieldKeyArgument.get(argument)?.carrier ??
-      resolveProjectSourceInferenceCarrier(walk, argument);
     if (matches.length === 0) continue;
+    const indexed = walk.context.records.indexedFieldKeyArgument.get(argument)?.carrier;
+    const actual = contextual(argument) ? undefined : indexed === undefined
+      ? resolveProjectSourceInferenceCarrier(walk, argument) : { kind: "complete" as const, value: indexed };
     for (const binding of matches) {
       const parameter = selected.member.parameters[binding.sourceParameterIndex];
       const sourceParameter = selected.sourceSelectedSignatureParameters?.find(selectedParameter =>
@@ -199,19 +217,22 @@ function reconcileProjectSourceArgumentTypeParameters(
             return rustTargetTypeRefEquals(selected, rustSourceOptionalTargetType(selected))
               ? value : rustSourceOptionalTargetType(value);
           });
-      const selectedActual = contextual(argument) && instantiatedParameterCarrier !== undefined
-        ? resolveProjectSourceInferenceCarrier(walk, argument, instantiatedParameterCarrier) : actual;
-      const actualCarrier = selectedActual === undefined ? undefined : binding.sourceForm === "spread-element"
-        ? binding.spreadElementIndex === undefined
-          ? undefined
-          : rustSpreadElementCarrier(selectedActual, binding.spreadElementIndex)
-        : selectedActual;
-      if (instantiatedParameterCarrier === undefined) {
+      if (instantiatedParameterCarrier === undefined ||
+        !rustTargetGenericReferences(instantiatedParameterCarrier).typeIdentities.some(identity => parameterNames.has(identity))) {
         continue;
       }
+      const selectedActual = contextual(argument)
+        ? resolveProjectSourceInferenceCarrier(walk, argument, instantiatedParameterCarrier) : actual;
+      if (selectedActual?.kind === "pending") return undefined;
+      const actualCarrier = selectedActual?.value === undefined ? undefined : binding.sourceForm === "spread-element"
+        ? binding.spreadElementIndex === undefined
+          ? undefined
+          : rustSpreadElementCarrier(selectedActual.value, binding.spreadElementIndex)
+        : selectedActual.value;
       const pairs = projectSourceArgumentInferencePairs(walk, argument, instantiatedParameterCarrier, actualCarrier);
-      if (pairs === undefined) continue;
-      for (const pair of pairs) {
+      if (pairs.kind === "pending") return undefined;
+      if (pairs.value === undefined) continue;
+      for (const pair of pairs.value) {
         const references = rustTargetGenericReferences(pair.pattern);
         const callScopedElisions = new Map(references.callScopedElisions.map((lifetime) => [
           rustLifetimeKey(lifetime),
@@ -246,43 +267,47 @@ function projectSourceArgumentInferencePairs(
   argument: Node,
   pattern: TargetTypeRef,
   actualCarrier?: TargetTypeRef,
-): readonly { readonly pattern: TargetTypeRef; readonly actual: TargetTypeRef }[] | undefined {
+): ProjectSourceInference<readonly ProjectSourceInferencePair[] | undefined> {
   const { ast } = walk.context;
-  if (isUnannotatedRustNumericLiteral(argument, ast)) return [];
+  if (isUnannotatedRustNumericLiteral(argument, ast)) return { kind: "complete", value: [] };
   if (ast.kindName(argument) === KindParenthesizedExpression || ast.kindName(argument) === KindSatisfiesExpression) {
     const inner = Node_Expression(ast, argument);
-    return inner === undefined ? undefined : projectSourceArgumentInferencePairs(walk, inner, pattern);
+    return inner === undefined ? { kind: "complete", value: undefined } : projectSourceArgumentInferencePairs(walk, inner, pattern);
   }
   if (ast.is.IsArrowFunction(argument) || ast.is.IsFunctionExpression(argument)) {
-    const actual = actualCarrier ?? resolveProjectSourceInferenceCarrier(walk, argument, pattern);
+    const actual = actualCarrier === undefined ? resolveProjectSourceInferenceCarrier(walk, argument, pattern)
+      : { kind: "complete" as const, value: actualCarrier };
+    if (actual.kind === "pending") return actual;
     const expected = rustCallableProtocol(pattern) ?? rustClosureProtocol(pattern);
-    const selected = rustCallableProtocol(actual) ?? rustClosureProtocol(actual);
+    const selected = rustCallableProtocol(actual.value) ?? rustClosureProtocol(actual.value);
     const parameters = ast.parameters(argument);
     if (expected === undefined || selected === undefined || expected.parameters.length !== selected.parameters.length ||
-      parameters.some(parameter => parameter === undefined)) return undefined;
-    return [{ pattern: expected.result, actual: selected.result }, ...parameters.flatMap((parameter, index) =>
+      parameters.some(parameter => parameter === undefined)) return { kind: "complete", value: undefined };
+    return { kind: "complete", value: [{ pattern: expected.result, actual: selected.result }, ...parameters.flatMap((parameter, index) =>
       Node_Type(ast, parameter) === undefined || expected.parameters[index] === undefined ? []
-        : [{ pattern: expected.parameters[index]!, actual: selected.parameters[index]! }])];
+        : [{ pattern: expected.parameters[index]!, actual: selected.parameters[index]! }])] };
   }
   if (ast.kindName(argument) === KindArrayLiteralExpression) {
     const element = rustJsArrayLikeElementTargetType(pattern) ?? rustFixedArrayCarrierValue(pattern)?.element ??
       (pattern.kind === "array" ? pattern.element : undefined);
-    const pairs: { readonly pattern: TargetTypeRef; readonly actual: TargetTypeRef }[] = [];
+    const pairs: ProjectSourceInferencePair[] = [];
     for (const [index, expression] of ast.elements(argument).entries()) {
       const selected = pattern.kind === "tuple" ? pattern.elements[index] : element;
-      if (expression === undefined || selected === undefined) return undefined;
+      if (expression === undefined || selected === undefined) return { kind: "complete", value: undefined };
       const spread = ast.kindName(expression) === KindSpreadElement;
       const value = spread ? Node_Expression(ast, expression) : expression;
-      if (value === undefined || spread && element === undefined) return undefined;
+      if (value === undefined || spread && element === undefined) return { kind: "complete", value: undefined };
       const children = projectSourceArgumentInferencePairs(walk, value, spread ? pattern : selected);
-      if (children === undefined) return undefined;
-      pairs.push(...children);
+      if (children.kind === "pending" || children.value === undefined) return children;
+      pairs.push(...children.value);
     }
-    return pairs;
+    return { kind: "complete", value: pairs };
   }
   if (ast.kindName(argument) !== KindObjectLiteralExpression) {
-    const actual = actualCarrier ?? resolveProjectSourceInferenceCarrier(walk, argument);
-    return actual === undefined ? undefined : [{ pattern, actual }];
+    const actual = actualCarrier === undefined ? resolveProjectSourceInferenceCarrier(walk, argument)
+      : { kind: "complete" as const, value: actualCarrier };
+    return actual.kind === "pending" ? actual : { kind: "complete",
+      value: actual.value === undefined ? undefined : [{ pattern, actual: actual.value }] };
   }
   const sourceTypes = walk.operationOptions.sourceTypes;
   const carrier = rustOptionElementCarrier(pattern) ?? pattern;
@@ -296,21 +321,21 @@ function projectSourceArgumentInferencePairs(
     const selected = walk.context.semanticsFor(element).operations.objectLiteralElement(element);
     return initializer === undefined || selected === undefined ? undefined : { initializer, selected };
   });
-  if (elements.some(element => element === undefined)) return undefined;
+  if (elements.some(element => element === undefined)) return { kind: "complete", value: undefined };
   if (walk.context.projectTypes.definitionForCarrier(carrier) !== undefined) {
-    const pairs: { readonly pattern: TargetTypeRef; readonly actual: TargetTypeRef }[] = [];
+    const pairs: ProjectSourceInferencePair[] = [];
     for (const element of elements) {
       const selected = element!.selected.sourceSelectedDeclarations.map(declaration => {
         const declared = resolveRustTargetTypeRef(declaration, rustOperationContext(walk, declaration), walk.operationOptions);
         return declared === undefined ? undefined : walk.context.projectTypes.instantiateMemberCarrier(declaration, carrier, declared);
       });
       const field = selected[0];
-      if (field === undefined || selected.some(candidate => !rustTargetTypeRefEquals(candidate, field))) return undefined;
+      if (field === undefined || selected.some(candidate => !rustTargetTypeRefEquals(candidate, field))) return { kind: "complete", value: undefined };
       const children = projectSourceArgumentInferencePairs(walk, element!.initializer, field);
-      if (children === undefined) return undefined;
-      pairs.push(...children);
+      if (children.kind === "pending" || children.value === undefined) return children;
+      pairs.push(...children.value);
     }
-    return pairs;
+    return { kind: "complete", value: pairs };
   }
   const matches = shapes.flatMap(shape => {
     if (shape === undefined) return [];
@@ -319,42 +344,43 @@ function projectSourceArgumentInferencePairs(
     if (fields.some(field => field.length !== 1) || new Set(fields.map(field => field[0])).size !== fields.length) return [];
     return [fields.map((field, index) => ({ field: field[0]!, initializer: elements[index]!.initializer }))];
   });
-  if (matches.length !== 1) return undefined;
-  const pairs: { readonly pattern: TargetTypeRef; readonly actual: TargetTypeRef }[] = [];
+  if (matches.length !== 1) return { kind: "complete", value: undefined };
+  const pairs: ProjectSourceInferencePair[] = [];
   for (const { field, initializer } of matches[0]!) {
     const children = projectSourceArgumentInferencePairs(walk, initializer, field.resultCarrier);
-    if (children === undefined) return undefined;
-    pairs.push(...children);
+    if (children.kind === "pending" || children.value === undefined) return children;
+    pairs.push(...children.value);
   }
-  return pairs;
+  return { kind: "complete", value: pairs };
 }
 
 function resolveProjectSourceInferenceCarrier(
   walk: RustFactWalk,
   argument: Node,
   contextualCarrier?: TargetTypeRef,
-): TargetTypeRef | undefined {
+): ProjectSourceInference<TargetTypeRef | undefined> {
   const kind = walk.context.ast.kindName(argument);
   if (walk.context.ast.is.IsArrowFunction(argument) || walk.context.ast.is.IsFunctionExpression(argument)) {
     const query = createRustCarrierProbe(walk);
     recordCallableParameterSignatureFacts(query, argument, contextualCarrier);
     const selected = resolveFunctionExpressionSignature(query, argument);
-    return selected?.inference.kind === "complete" ? selected.carrier : undefined;
+    return selected?.inference.kind === "pending" ? { kind: "pending" }
+      : { kind: "complete", value: selected?.carrier };
   }
   if (kind === KindSpreadElement) {
     const inner = Node_Expression(walk.context.ast, argument);
     return inner === undefined
-      ? undefined
+      ? { kind: "complete", value: undefined }
       : resolveProjectSourceInferenceCarrier(walk, inner, contextualCarrier);
   }
   if (kind === KindArrayLiteralExpression || kind === KindObjectLiteralExpression) {
-    return walk.context.records.runtimeCarrier.get(argument)?.carrier;
+    return { kind: "complete", value: walk.context.records.runtimeCarrier.get(argument)?.carrier };
   }
   if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) {
-    return walk.context.records.runtimeCarrier.get(argument)?.carrier;
+    return { kind: "complete", value: walk.context.records.runtimeCarrier.get(argument)?.carrier };
   }
   const file = walk.context.ast.getSourceFile(argument);
-  return file === undefined ? undefined : resolveExpressionCarrier(walk, argument, file, undefined);
+  return { kind: "complete", value: file === undefined ? undefined : resolveExpressionCarrier(walk, argument, file, undefined) };
 }
 
 function projectSourceTypeArgumentHasLiteralProof(

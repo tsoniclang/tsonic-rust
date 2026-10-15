@@ -315,8 +315,10 @@ function recordCallableValueSignatureFacts(
     : { kind: "complete" as const, carrier: selectedReturnCarrier };
   if (inference.kind === "pending") return;
   const returnCarrier = inference.carrier;
+  const suspended = ast.hasModifierKind(expression, "async") ||
+    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined;
   if (finalizeRustCallableSignature(walk, expression, {
-    parameterAbis, contextualResult: selectedReturnCarrier, selectedReturn: returnCarrier,
+    parameterAbis, contextualResult: selectedReturnCarrier, ...(suspended ? {} : { selectedReturn: returnCarrier }),
   }) === undefined) {
     return;
   }

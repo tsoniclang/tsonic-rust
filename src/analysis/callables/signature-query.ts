@@ -3,6 +3,7 @@ import { Node_Type } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustAsyncFunctionFact, RustGeneratorFact, RustSourceParameterAbiFact } from "../../target-model/records/callables-and-resources.js";
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import type { RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
@@ -89,9 +90,14 @@ export function finalizeRustCallableSignature(
       admitSuspension(walk, declaration, suspension);
       state.suspensions.set(suspensionKey, suspension);
     }
-    const logical = selectRustCallableLogicalReturn(walk, declaration,
-      suspension.kind === "async" ? suspension.fact.outputCarrier
-        : suspension.kind === "generator" ? suspension.fact.resultCarrier : request?.selectedReturn);
+    const suspendedReturn = suspension.kind === "async" ? suspension.fact.outputCarrier
+      : suspension.kind === "generator" ? suspension.fact.resultCarrier : undefined;
+    if (suspendedReturn !== undefined && request?.selectedReturn !== undefined &&
+      !rustTargetTypeRefEquals(suspendedReturn, request.selectedReturn)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact selected logical result.", declaration);
+    }
+    const logical = selectRustCallableLogicalReturn(walk, declaration, suspendedReturn ?? request?.selectedReturn);
     if (logical.kind === "pending") return undefined;
     if (ast.is.IsSetAccessorDeclaration(declaration)) records.sourceCallableReturns.setter(declaration);
     else if (!records.sourceCallableReturns.resolve(walk, declaration, logical.carrier)) return undefined;

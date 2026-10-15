@@ -95,8 +95,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
       }
       continue;
     }
-    if (memberKind === "KindConstructor" || memberKind === "KindMethodDeclaration" ||
-      memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
+    if (memberKind === "KindConstructor") {
       const parameters = requireDenseSourceNodes(walk, ast.parameters(member), "Class callable contains an undefined or non-data parameter slot.");
       if (parameters === undefined) {
         return;
@@ -113,9 +112,8 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
           }
         }
       }
-      if (memberKind !== "KindConstructor") {
-        finalizeRustCallableSignature(walk, member);
-      }
+    } else if (memberKind === "KindMethodDeclaration" || memberKind === "KindGetAccessor" || memberKind === "KindSetAccessor") {
+      finalizeRustCallableSignature(walk, member);
     }
   }
 }
@@ -279,17 +277,6 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       setCarrierFact(walk, member, valueCarrier);
     } else if (memberKind === "KindMethodSignature" || memberKind === "KindConstructSignature") {
       if (memberKind === "KindMethodSignature") walk.context.records.selfModes.method(member, "ref");
-      const parameters = requireDenseSourceNodes(
-        walk,
-        ast.parameters(member),
-        "Interface method contains an undefined or non-data parameter slot.",
-      );
-      if (parameters === undefined) {
-        return;
-      }
-      for (const parameter of parameters) {
-        recordParameterAbiFacts(walk, parameter);
-      }
       finalizeRustCallableSignature(walk, member);
     }
   }

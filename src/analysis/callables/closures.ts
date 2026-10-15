@@ -235,8 +235,11 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   const receiver = leadingParameters.find(parameter => parameter.kind === "this")?.carrier;
+  const suspended = ast.hasModifierKind(expression, "async") ||
+    walk.context.semanticsFor(expression).operations.generator(expression) !== undefined;
+  const inferResult = selectedResult.kind === "opaque" && selectedResult.id === "tsonic.rust.infer";
   const signatureRequest = { parameterAbis, ownedReceiver: receiver?.kind === "reference" ? undefined : receiver,
-    contextualResult: selectedResult };
+    contextualResult: selectedResult, ...(!suspended && !inferResult ? { selectedReturn: selectedResult } : {}) };
   const completedSignature = finalizeRustCallableSignature(walk, expression, signatureRequest);
   const generator = walk.context.records.generator.get(expression);
   const asynchronous = walk.context.records.asyncFunction.get(expression);
