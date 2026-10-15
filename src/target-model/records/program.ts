@@ -1,5 +1,6 @@
 import type { RustTypeAliasDeclarationFact, RustAsyncFunctionFact, RustGeneratorFact, RustYieldFact, RustResourceManagementFact, RustSourceParameterAbiFact } from "./callables-and-resources.js";
 import type { RustRuntimeCarrierSelection, RustConversionSelection } from "./selections.js";
+import type { RustNativeParticipation } from "./native-demand.js";
 import type { RustSelectedTargetSignature, RustSelectedTargetOperation, TargetTypeRef } from "../types/model.js";
 import type { ArgumentPassingFact, ExtensionFactSubject } from "@tsonic/tsts";
 import type { RustAwaitValueFact } from "./await-values.js";
@@ -45,6 +46,7 @@ export interface RustProgramRecords {
   readonly argumentPassing: RustRecordFamily<ArgumentPassingFact>;
   readonly nativeGuardResult: RustRecordFamily<boolean>;
   readonly nativeUnreachable: RustRecordFamily<boolean>;
+  readonly nativeParticipation: RustRecordFamily<RustNativeParticipation>;
   readonly awaitValue: RustRecordFamily<RustAwaitValueFact>;
   readonly compileTimeSource: RustRecordFamily<true>;
   readonly sourceCallableReturn: RustRecordFamily<RustSourceCallableReturnFact>;

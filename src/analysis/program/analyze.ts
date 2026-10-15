@@ -4,6 +4,7 @@ import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } fro
 import { resolveRustProjectField } from "../operations/provider/project-fields.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
+import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
@@ -471,6 +472,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       );
     }
   }
+  analyzeRustNativeParticipation({ ast, nodes: context.sourceStorage.nodes, navigation: context.source.navigation,
+    producer: context.records.nativeParticipations, requiredRecords: context.requiredRecords });
   context.projectMethodDispatch.initialize({
     ast,
     names: context.names,

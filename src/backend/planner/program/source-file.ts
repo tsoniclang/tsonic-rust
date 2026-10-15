@@ -288,14 +288,10 @@ function planModuleItems(
       continue;
     }
     if (kind === KindFunctionDeclaration) {
-      if (ast.body(statement) === undefined) {
-        const implementation = context.input.program.sourceNavigation
-          .callableImplementation(statement);
-        if (implementation.kind === "resolved" &&
-          implementation.implementation.declaration !== statement) {
-          continue;
-        }
-      }
+      const participation = context.input.program.records.nativeParticipation.get(statement);
+      if (participation === undefined) failTargetPlannerInvariant("tsonic-rust",
+        "Authored function placement requires its sealed native participation.", statement);
+      if (participation === "erased") continue;
       const diagnosticCount = context.diagnostics.length;
       const plannedFunctions = planFunctionDeclarations(statement, context);
       if (plannedFunctions !== undefined) {

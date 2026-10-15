@@ -41,6 +41,7 @@ import { createRustResourceManagementProducer } from "./resource-management.js";
 import { createRustDeferredProducerEffectsProducer } from "./deferred-producer-effects.js";
 import { createRustNativeGuardResultProducer } from "./native-guard-result.js";
 import { createRustNativeUnreachableProducer } from "./native-unreachable.js";
+import { createRustNativeParticipationProducer } from "./native-participation.js";
 import { createRustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
 import { createRustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
 import { createRustPropertyProjectionProducer } from "./property-projection.js";
@@ -95,6 +96,7 @@ export function createRustProgramRecordBuilder(
   const argumentPassingPlans = createRustArgumentPassingProducer(assertOpen, parent?.argumentPassing);
   const nativeGuardResults = createRustNativeGuardResultProducer(assertOpen, parent?.nativeGuardResult);
   const nativeUnreachableNodes = createRustNativeUnreachableProducer(assertOpen, parent?.nativeUnreachable);
+  const nativeParticipations = createRustNativeParticipationProducer(assertOpen, parent?.nativeParticipation);
   const awaitValues = createRustAwaitValueProducer(assertOpen, requireFoundation, definitions, parent?.awaitValue);
   const compileTimeSources = createRustCompileTimeSourceProducer(assertOpen, parent?.compileTimeSource);
   const retainedEnvironments = createRustRetainedEnvironmentProducer(assertOpen, parent?.retainedEnvironment);
@@ -163,6 +165,7 @@ export function createRustProgramRecordBuilder(
     argumentPassing: argumentPassingPlans.records,
     nativeGuardResult: nativeGuardResults.records,
     nativeUnreachable: nativeUnreachableNodes.records,
+    nativeParticipation: nativeParticipations.records,
     awaitValue: awaitValues.records,
     compileTimeSource: compileTimeSources.records,
     sourceCallableReturn: sourceCallableReturns.records,
@@ -233,6 +236,7 @@ export function createRustProgramRecordBuilder(
     argumentPassingPlans,
     nativeGuardResults,
     nativeUnreachableNodes,
+    nativeParticipations,
     awaitValues,
     compileTimeSources,
     sourceCallableReturns,

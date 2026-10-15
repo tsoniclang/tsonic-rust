@@ -32,6 +32,7 @@ import type { RustResourceManagementProducer } from "./resource-management.js";
 import type { RustDeferredProducerEffectsProducer } from "./deferred-producer-effects.js";
 import type { RustNativeGuardResultProducer } from "./native-guard-result.js";
 import type { RustNativeUnreachableProducer } from "./native-unreachable.js";
+import type { RustNativeParticipationProducer } from "./native-participation.js";
 import type { RustGenericNumericOperandsProducer } from "./generic-numeric-operands.js";
 import type { RustIndexedFieldKeyArgumentProducer } from "./indexed-field-key-argument.js";
 import type { RustPropertyProjectionProducer } from "./property-projection.js";
@@ -101,6 +102,7 @@ export type RustProgramRecordWriter = RustProgramRecords & {
   readonly deferredProducerChannels: RustDeferredProducerEffectsProducer;
   readonly nativeGuardResults: RustNativeGuardResultProducer;
   readonly nativeUnreachableNodes: RustNativeUnreachableProducer;
+  readonly nativeParticipations: RustNativeParticipationProducer;
   readonly genericNumerics: RustGenericNumericOperandsProducer;
   readonly indexedFieldKeys: RustIndexedFieldKeyArgumentProducer;
   readonly propertyProjections: RustPropertyProjectionProducer;

@@ -15,8 +15,8 @@ import {
   KindVariableStatement,
   KindWhileStatement,
   Node_Expression,
-  sourceLexicalFunctionIsUnused,
 } from "@tsonic/target-api/source";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import { diagnosticInput } from "../program/plan-context.js";
 import { prepareRustFrameScope } from "../bindings/frame-storage.js";
 import { directResourceDeclaration, planLoopExitStatement, planResourceDeclarationScope } from "./resources.js";
@@ -78,8 +78,10 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   const kind = ast.kindName(node);
   switch (kind) {
     case "KindFunctionDeclaration": {
-      if (ast.body(node) === undefined) return [];
-      if (sourceLexicalFunctionIsUnused(node, ast, context.input.program.sourceNavigation)) return [];
+      const participation = context.input.program.records.nativeParticipation.get(node);
+      if (participation === undefined) failTargetPlannerInvariant("tsonic-rust",
+        "Authored function placement requires its sealed native participation.", node);
+      if (participation === "erased") return [];
       const items = planFunctionDeclarations(node, context);
       return items?.map(item => ({ kind: "item", item }));
     }

@@ -18,6 +18,7 @@ function classify({ exported = false, kind = "first-class", direct = source, con
   const declaration = {};
   const reference = {};
   const builder = createRustProgramRecordBuilder();
+  const requiredRecords = [];
   builder.moduleBindings.function(declaration, "step", { name: "step", carrier: source,
     parameterCarriers: [], resultCarrier: number });
   const values = new Map([
@@ -28,6 +29,7 @@ function classify({ exported = false, kind = "first-class", direct = source, con
     ])],
   ]);
   recordRustModuleCallableStorage({ context: {
+    requiredRecords,
     ast: { forEachChild() {}, is: { IsFunctionDeclaration() { return false; } } }, sourceFiles: [declaration],
     source: { navigation: { declarationUseSummary() { return { exported }; },
       expressionValueFlow() { return { aliasDeclarations: [] }; },
@@ -37,6 +39,7 @@ function classify({ exported = false, kind = "first-class", direct = source, con
       contextualValueConversion: { get: node => values.get(node)?.get("contextualValueConversion") },
     }, builder), assertOpen: builder.assertOpen, moduleCallableStoragePlans: builder.moduleCallableStoragePlans },
   } });
+  builder.seal(requiredRecords);
   return builder.moduleCallableStorage.get(declaration);
 }
 

@@ -110,6 +110,7 @@ test("sealed records publish only frozen typed family readers without a native k
     deferredProducerEffects: () => model.deferredProducerChannels.finalize(new Map()),
     nativeGuardResult: () => model.nativeGuardResults.resolve(subject, () => false),
     nativeUnreachable: () => model.nativeUnreachableNodes.resolve(subject, () => true),
+    nativeParticipation: () => model.nativeParticipations.selected(subject, "body"),
     genericNumericOperands: () => model.genericNumerics.comparison(subject, carrier, carrier, undefined),
     indexedFieldKeyArgument: () => model.indexedFieldKeys.selected(subject, carrier, false),
     propertyProjection: () => model.propertyProjections.finalize(subject, undefined, []),
@@ -158,9 +159,9 @@ test("sealed records publish only frozen typed family readers without a native k
     contextualValueConversion: () => model.contextualValueConversions.convert(subject, carrier, carrier,
       { kind: "semantic-conversion", id: "checked-f64-to-i32-trunc" }),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 66, "every producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 67, "every producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
-  assert.equal(Object.keys(records).length, 66, "every original native key has one family");
+  assert.equal(Object.keys(records).length, 67, "every native key has one family");
   for (const [name, family] of Object.entries(records)) {
     assert.deepEqual(Object.keys(family), ["get"], name + ": getter-only publication");
     assert.equal(Object.isFrozen(family), true, name + ": immutable family port");
