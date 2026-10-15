@@ -251,16 +251,11 @@ export function run(): int32 {
   });
   const planned = readRustSourceStaticField(fact, context(createRustSyntheticNameState(ast, node, [])));
   assert.equal(planned?.kind, "block", "a composed planner context binds the selected receiver once");
-  let compiled;
-  try {
-    compiled = runTargetCompilationStages({
-      analyze: () => resolvedTargetStage({}),
-      plan: () => resolvedTargetStage(readRustSourceStaticField(fact, context(undefined))),
-      materialize: () => ({ artifacts: [] }),
-    });
-  } catch {
-    compiled = undefined;
-  }
+  const compiled = runTargetCompilationStages({
+    analyze: () => resolvedTargetStage({}),
+    plan: () => resolvedTargetStage(readRustSourceStaticField(fact, context(undefined))),
+    materialize: () => ({ artifacts: [] }),
+  });
   assert.equal(compiled !== undefined, true, "a planner context without its allocator is classified by the shared planning boundary");
   assert.equal(compiled.kind, "rejected");
   assert.equal(compiled.diagnostics.length, 1);

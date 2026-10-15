@@ -74,16 +74,11 @@ test("project object construction selects its exact runtime owner for every lega
 });
 
 test("an unclassified project object representation fails through the shared planning invariant", () => {
-  let compiled;
-  try {
-    compiled = runTargetCompilationStages({
-      analyze: () => resolvedTargetStage({}),
-      plan: () => resolvedTargetStage(createRustProjectObject("Counter", "CounterState", [], { kind: "unclassified" })),
-      materialize: () => ({ artifacts: [] }),
-    });
-  } catch {
-    compiled = undefined;
-  }
+  const compiled = runTargetCompilationStages({
+    analyze: () => resolvedTargetStage({}),
+    plan: () => resolvedTargetStage(createRustProjectObject("Counter", "CounterState", [], { kind: "unclassified" })),
+    materialize: () => ({ artifacts: [] }),
+  });
   assert.equal(compiled !== undefined, true, "malformed planner data is classified by the shared planning boundary");
   assert.equal(compiled.kind, "rejected");
   assert.equal(compiled.diagnostics.length, 1);

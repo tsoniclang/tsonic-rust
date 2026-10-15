@@ -38,15 +38,11 @@ test("primitive-only local classes need no enclosing scope imports", () => {
 const malformedScopeMessage = "Authored type scope must contain its one planned struct declaration.";
 
 function planAuthoredScopes(items) {
-  try {
-    return runTargetCompilationStages({
-      analyze: () => resolvedTargetStage({}),
-      plan: () => resolvedTargetStage(completeRustAuthoredStructScopes(items, new Set(["entry_scope"]))),
-      materialize: () => ({ artifacts: [] }),
-    });
-  } catch {
-    return undefined;
-  }
+  return runTargetCompilationStages({
+    analyze: () => resolvedTargetStage({}),
+    plan: () => resolvedTargetStage(completeRustAuthoredStructScopes(items, new Set(["entry_scope"]))),
+    materialize: () => ({ artifacts: [] }),
+  });
 }
 
 const scopedStruct = { kind: "struct", name: "Entry", visibility: "crate", generics: emptyRustGenerics,
