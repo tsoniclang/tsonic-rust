@@ -42,7 +42,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(abi.inputLifetime === undefined, true, `${name} cannot retain a borrow of a local callback`);
       const inputs = current.context.callableValues.native.inputsFor(owner);
       assert.equal(inputs.length, 1);
-      const physical = current.context.callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
+      const physical = current.context.callableValues.nativeStorage.parameterFor(parameter);
       assert.equal(physical.kind, "selected", physical.reason);
       assert.equal(physical.carrier === inputs[0].implementation, true, "no wrapper, Clone, or reference added to C");
       assert.equal(rustTargetGenericReferences(physical.carrier).lifetimes.length, 0,

@@ -231,7 +231,7 @@ export function finalizeRustLexicalFunctionQueries(
       const carrier = parameter ?? records.runtimeCarrier.get(node)?.carrier ??
         records.sourceCallableReturn.get(node)?.returnCarrier;
       if (carrier === undefined) continue;
-      const selected = parameter !== undefined ? nativeStorage.parameterFor(node, parameter)
+      const selected = parameter !== undefined ? nativeStorage.parameterFor(node)
         : records.sourceCallableReturn.get(node) !== undefined ? nativeStorage.returnFor(node)
         : nativeStorage.valueFor(node);
       if (selected.kind === "unresolved") { failures.set(declaration, selected.reason); continue; }

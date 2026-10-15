@@ -56,7 +56,7 @@ export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
   genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection;
   futureEnvironmentFor(declaration: Node): RustNativeFutureEnvironmentSelection;
-  parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection;
+  readonly parameterFor: (parameter: Node) => RustNativeStorageSelection;
   returnFor(declaration: Node): RustNativeStorageSelection;
   valueFor(node: Node): RustNativeStorageSelection;
   operandFor(node: Node): RustNativeStorageSelection;
@@ -71,7 +71,9 @@ export interface RustNativeStoragePlan {
   implementationOriginsFor(input: RustNativeCallableInput): SourceStorageProducersSelection;
 }
 
-export function createRustNativeStoragePlan(input: {
+export type RustNativeStorageQueries = Omit<RustNativeStoragePlan, "parameterFor">;
+
+export function createRustNativeStorageQueries(input: {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
@@ -82,7 +84,7 @@ export function createRustNativeStoragePlan(input: {
   readonly lifetimes: RustLifetimeIndex;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralStorageLookup;
-}): RustNativeStoragePlan {
+}): RustNativeStorageQueries {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
   const ownedInputs = new Set(input.native.inputs);
@@ -464,13 +466,6 @@ export function createRustNativeStoragePlan(input: {
         : unresolved("Native generic activation requires its exact owned declaration.");
     },
     futureEnvironmentFor: futures.forDeclaration,
-    parameterFor(parameter: Node, carrier: TargetTypeRef): RustNativeStorageSelection {
-      const owner = input.ast.parent(parameter);
-      if (!nodes.has(parameter) || owner === undefined || !input.ast.parameters(owner).includes(parameter))
-        return unresolved("Native parameter storage requires its exact owned formal parameter.");
-      const subject = input.storage.subject(parameter, "input");
-      return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(owner));
-    },
     returnFor(declaration: Node): RustNativeStorageSelection {
       if (!nodes.has(declaration)) return unresolved("Native callable return requires an owned declaration.");
       const result = input.records.sourceCallableReturn.get(declaration);

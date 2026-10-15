@@ -84,7 +84,7 @@ export function planRustCallableParameters(
     const native = context.input.program.callableValues.native;
     const requiresImplementation = native.inputsFor(callable).some(input => input.subject.node === parameter);
     const physical = abi === undefined || !requiresImplementation ? undefined
-      : context.input.program.callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
+      : context.input.program.callableValues.nativeStorage.parameterFor(parameter);
     const parameterCarrier = abi === undefined || physical?.kind === "unresolved" ? undefined
       : physical?.carrier ?? abi.parameterCarrier;
     const parameterType = rustParameterTypeFromCarrierInContext(parameterCarrier, context);

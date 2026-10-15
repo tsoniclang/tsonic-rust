@@ -38,7 +38,7 @@ test("native callable inputs preserve two equal-signature formals and alias corr
   }
   for (const [index, parameter] of ast.parameters(owner).entries()) {
     const abi = program.records.sourceParameterAbi.get(parameter);
-    const physical = program.callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
+    const physical = program.callableValues.nativeStorage.parameterFor(parameter);
     assert.equal(physical.kind, "selected");
     const carrier = physical.carrier;
     assert.equal(carrier === inputs[index].implementation || carrier?.referent === inputs[index].implementation, true,

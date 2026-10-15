@@ -4,7 +4,8 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
-import { createRustNativeStoragePlan } from "../../../dist/analysis/callables/native-storage.js";
+import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
+import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
@@ -20,7 +21,9 @@ import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
 
 function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
-  const source = createTargetSourceProgram(checked);
+  const checkedSource = createTargetSourceProgram(checked);
+  const guardedAst = Proxy.revocable(checkedSource.ast, {});
+  const source = { ...checkedSource, ast: guardedAst.proxy };
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const generic = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation);
   const input = { ast: source.ast, storage, records: program.records, definitions: program.typeDefinitions,
@@ -29,14 +32,15 @@ function fixture(text, options = {}) {
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
     returnCarrierFor: declaration => {
-      const selected = plan.returnFor(declaration);
+      const selected = queries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   input.producers = producers;
-  const plan = createRustNativeStoragePlan({ ...input, native });
-  const captures = createRustNativeCapturePlan({ ...input, nativeStorage: plan });
+  const queries = createRustNativeStorageQueries({ ...input, native });
+  const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries });
   generic.initializePhysical({ ...input, native, captures,
-    boundSubjectFor: (subject, carrier, bindings) => plan.boundSubjectFor(subject, carrier, bindings) });
+    boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
+  const plan = finalizeRustNativeParameterStorage(input, queries);
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&
     source.ast.text(source.ast.name(node)) === name &&
     (source.ast.is.IsFunctionDeclaration(node) || source.ast.is.IsVariableDeclaration(node) ||
@@ -47,8 +51,35 @@ function fixture(text, options = {}) {
     assert.equal(selected.kind === "resolved", true, selected.reason ?? "owned storage subject");
     return selected.subject;
   };
-  return { program, source, storage, input, native, plan, declaration, initializer, exactSubject };
+  return { program, source, storage, input, native, plan, declaration, initializer, exactSubject,
+    revokeSource: guardedAst.revoke };
 }
+
+test("finalized formal ABI storage is a stable owned lookup without caller carrier arbitration", () => {
+  const current = fixture("export function read(value: number): number { return value; }");
+  const owner = current.declaration("read");
+  const parameter = current.source.ast.parameters(owner)[0];
+  const selected = current.plan.parameterFor(parameter);
+  assert.equal(selected.kind, "identity");
+  assert.equal(selected.carrier === current.program.records.sourceParameterAbi.get(parameter).parameterCarrier, true);
+  assert.equal(current.plan.parameterFor(parameter) === selected, true);
+  assert.equal(Object.isFrozen(selected), true);
+  assert.equal(current.plan.parameterFor.length, 1, "the formal ABI owner supplies the carrier");
+});
+
+test("finalized formal ABI storage never inspects revoked source or fabricates foreign parameters", () => {
+  const current = fixture("export function read(value: number): number { return value; }");
+  const owner = current.declaration("read");
+  const parameter = current.source.ast.parameters(owner)[0];
+  const selected = current.plan.parameterFor(parameter);
+  current.revokeSource();
+  assert.equal(current.plan.parameterFor(parameter) === selected, true);
+  assert.equal(selected.kind, "identity");
+  const missing = current.plan.parameterFor(owner);
+  assert.equal(missing.kind, "unresolved");
+  assert.equal(current.plan.parameterFor({}) === missing, true);
+  assert.equal(Object.isFrozen(missing), true);
+});
 
 test("closed native generic queries validate ownership without manufacturing unused activations", () => {
   const current = fixture("export function closed(): number { return 7; }");
@@ -302,7 +333,7 @@ test("concrete quantified producers retain the existing sealed family through al
       definition.members[0].implementation === implementation, true,
       "only the exact existing producer family is retained");
   }
-  const unavailable = createRustNativeStoragePlan({ ...current.input, native: current.native,
+  const unavailable = createRustNativeStorageQueries({ ...current.input, native: current.native,
     generic: { ...current.input.generic, physical: { ...current.input.generic.physical, carrierFor: () => undefined } } });
   assert.equal(unavailable.returnFor(current.declaration("make")).kind, "unresolved",
     "signature equality cannot substitute for a missing producer identity");
@@ -345,9 +376,9 @@ test("physical storage validates token ownership, exact contracts and finite pro
   assert.equal(current.plan.subjectFor(subject, input.carrier, foreign.declaration("identity")).kind, "unresolved");
   const mismatched = rustCallableTargetType([], rustSourcePrimitiveTargetType("bool"));
   assert.equal(current.plan.subjectFor(subject, mismatched, owner).kind, "unresolved", "equal arity cannot substitute a different signature");
-  const otherPlan = createRustNativeStoragePlan({ ...current.input, native: foreign.native });
+  const otherPlan = createRustNativeStorageQueries({ ...current.input, native: foreign.native });
   assert.equal(otherPlan.returnFor(owner).kind, "unresolved", "another native plan cannot mint this graph's input identity");
-  const limited = createRustNativeStoragePlan({ ...current.input, native: current.native, storage: {
+  const limited = createRustNativeStorageQueries({ ...current.input, native: current.native, storage: {
     ...current.storage, boundValueFrontierFor() { return { kind: "resolved",
       frontier: Array(4097).fill({ kind: "origin", subject: input.subject, bindings: current.storage.emptyBindings }) }; },
   } });
@@ -359,7 +390,7 @@ test("physical storage validates token ownership, exact contracts and finite pro
 test("non-callable storage remains an exact identity without inspecting unrelated origins", () => {
   const current = fixture(`export function number(value: number): number { const selected = value; return selected; }`);
   let originQueries = 0;
-  const plan = createRustNativeStoragePlan({ ...current.input, native: current.native, storage: {
+  const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, storage: {
     ...current.storage, boundOriginsFor() { originQueries += 1; throw new Error("non-callable origin scan"); },
     boundValueFrontierFor() { originQueries += 1; throw new Error("non-callable frontier scan"); },
   } });
@@ -394,7 +425,7 @@ test("structural native dispatch signatures are not stored callable payloads and
       return selected === undefined ? undefined : { ...selected, nativeMethod: undefined };
     }],
   ]) {
-    const plan = createRustNativeStoragePlan({ ...current.input, native: current.native, structuralShapes: { field } });
+    const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: { field } });
     const selected = plan.valueFor(value);
     assert.equal(selected.kind, "unresolved", name);
     assert.match(selected.reason, /layout owner/u, name);

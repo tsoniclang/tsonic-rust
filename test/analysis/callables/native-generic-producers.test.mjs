@@ -129,7 +129,7 @@ test("open producer enumeration preserves symbolic obligations and never substit
   assert.equal(origins.kind, "open");
   assert.equal(origins.boundaries.length > 0, true);
   assert.equal(origins.producers.length > 0, true, "known concrete producers may still require legal native impls");
-  const symbolic = current.options.nativeStorage.parameterFor(forwarded.subject.node, forwarded.carrier);
+  const symbolic = current.options.nativeStorage.subjectFor(forwarded.subject, forwarded.carrier, forwarded.owner);
   assert.equal(symbolic.kind, "selected");
   assert.equal(symbolic.carrier === forwarded.implementation, true, "the public input remains its own unknown C");
   assert.equal(current.plan.open.some(entry => entry.input === retained && entry.inputs.includes(forwarded)), true);

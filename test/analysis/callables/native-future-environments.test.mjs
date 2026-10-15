@@ -148,7 +148,7 @@ test("owned bodyless callable contracts retain environments without requiring an
       for (const parameter of ast.parameters(declaration)) {
         const abi = program.records.sourceParameterAbi.get(parameter);
         assert.equal(abi !== undefined, true, name);
-        const physical = program.callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
+        const physical = program.callableValues.nativeStorage.parameterFor(parameter);
         assert.equal(physical.kind, "identity", `${name}: ${physical.reason ?? "ordinary native parameter"}`);
       }
     }

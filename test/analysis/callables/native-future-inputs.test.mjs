@@ -70,7 +70,7 @@ test("native Future input storage uses canonical optional union payloads without
   const [input] = requireEnvironment(current, owner).inputs;
   assert.equal(input !== undefined, true);
   const abi = current.program.records.sourceParameterAbi.get(parameter);
-  for (const value of [current.plan.parameterFor(parameter, abi.parameterCarrier), current.plan.returnFor(owner),
+  for (const value of [current.plan.parameterFor(parameter), current.plan.returnFor(owner),
     current.plan.valueFor(current.initializer("selected"))]) {
     const carrier = requireSelected(value, "one canonical Future union payload");
     assert.equal(contains(carrier, input.implementation, current.program.typeDefinitions), true, "same F in optional union");
@@ -84,7 +84,7 @@ test("the original callback completion reader retains its exact Future payload a
   assert.equal(input !== undefined, true, "original read has one exact formal Future payload");
   const parameter = current.ast.parameters(owner)[0];
   const abi = current.program.records.sourceParameterAbi.get(parameter);
-  const carrier = requireSelected(current.plan.parameterFor(parameter, abi.parameterCarrier), "original read parameter");
+  const carrier = requireSelected(current.plan.parameterFor(parameter), "original read parameter");
   assert.equal(contains(carrier, input.implementation, current.program.typeDefinitions), true);
   const result = requireSelected(current.plan.returnFor(owner), "original read result");
   assert.equal(contains(result, input.implementation, current.program.typeDefinitions), true);
@@ -146,6 +146,6 @@ test("native Future physical storage rejects incompatible alternatives and forei
   assert.equal(current.plan.returnFor(current.declaration("choose")).kind, "unresolved", "different opaque types require a native join");
   const foreign = fixture("export function foreign(): void {}");
   assert.equal(current.plan.futureEnvironmentFor(foreign.declaration("foreign")).kind, "unresolved");
-  assert.equal(current.plan.parameterFor(foreign.declaration("foreign"), { kind: "source-primitive", name: "int32" }).kind,
+  assert.equal(current.plan.parameterFor(foreign.declaration("foreign")).kind,
     "unresolved", "only owned exact formal parameters are accepted");
 });

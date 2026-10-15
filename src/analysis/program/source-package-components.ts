@@ -161,7 +161,7 @@ export function analyzeRustSourcePackageComponents(
       inspectStorage(node, context.records.sourceCallableReturn.get(node)?.returnCarrier, () => nativeStorage.returnFor(node));
       const parameter = context.ast.is.IsParameterDeclaration(node)
         ? context.records.sourceParameterAbi.get(node)?.parameterCarrier : undefined;
-      inspectStorage(node, parameter, () => nativeStorage.parameterFor(node, parameter!));
+      inspectStorage(node, parameter, () => nativeStorage.parameterFor(node));
       context.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     visit(file);

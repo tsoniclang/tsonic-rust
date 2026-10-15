@@ -24,7 +24,8 @@ import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
-import { createRustNativeStoragePlan, type RustNativeStoragePlan } from "./native-storage.js";
+import { createRustNativeStorageQueries, type RustNativeStoragePlan } from "./native-storage.js";
+import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
 import { createRustNativeGenericProducerPlan, type RustNativeGenericProducerPlan } from "./native-generic-producers.js";
 import { createRustNativeCapturePlan, type RustNativeCapturePlan } from "./native-captures.js";
@@ -193,15 +194,18 @@ function createRustCallableValuePlan(input: RustCallableValuePlanInput,
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
     nodes: input.sourceStorage.nodes, native, definitions: input.typeDefinitions,
     returnCarrierFor: declaration => {
-      const selected = nativeStorage.returnFor(declaration);
+      const selected = nativeStorageQueries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  const nativeStorage = createRustNativeStoragePlan({ ast: input.ast, records: input.records,
+  const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
-  const nativeCaptures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage, nativeStorage });
+  const nativeCaptures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
+    nativeStorage: nativeStorageQueries });
   generic.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures: nativeCaptures, native,
-    boundSubjectFor: (subject, carrier, bindings) => nativeStorage.boundSubjectFor(subject, carrier, bindings) });
+    boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
+  const nativeStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
+    records: input.records }, nativeStorageQueries);
   const genericCarriers = new Map<TargetTypeRef, boolean>();
   const containsGeneric = (carrier: TargetTypeRef | undefined): boolean => {
     if (carrier === undefined) return false;

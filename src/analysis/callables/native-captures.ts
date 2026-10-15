@@ -20,7 +20,7 @@ export interface RustNativeCapturePlan {
 export function createRustNativeCapturePlan(input: {
   readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
-  readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "subjectFor">;
 }): RustNativeCapturePlan {
   const nodes = new Set(input.storage.nodes);
   const selections = new Map<Node, RustNativeCaptureSelection>();

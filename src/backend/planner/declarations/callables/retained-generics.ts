@@ -19,7 +19,7 @@ export function planRustRetainedGenerics(declaration: Node, source: RustCallable
   for (const parameter of retained.parameters) {
     const abi = records.sourceParameterAbi.get(parameter);
     if (abi === undefined) return undefined;
-    const physical = callableValues.nativeStorage.parameterFor(parameter, abi.parameterCarrier);
+    const physical = callableValues.nativeStorage.parameterFor(parameter);
     if (physical.kind === "unresolved") return undefined;
     carriers.push(physical.carrier);
   }

@@ -52,7 +52,7 @@ export async function combine(first: () => int32, pending: () => int32 | Promise
   assert.equal(selected.capturedParameters.length, 4, "all owned callback inputs remain in the suspended frame");
   assert.equal(selected.storage.kind, "static", "these logical callback signatures contain no borrowed payloads");
   for (const [index, parameter] of ast.parameters(declaration).entries()) {
-    const physical = program.callableValues.nativeStorage.parameterFor(parameter, inputs[index].parameterCarrier);
+    const physical = program.callableValues.nativeStorage.parameterFor(parameter);
     const input = program.callableValues.native.inputsFor(declaration).find(input => input.subject.node === parameter);
     assert.equal(physical.kind, "selected", physical.reason);
     assert.equal(physical.carrier === input.implementation, true, "physical storage is the exact owned callback type");
