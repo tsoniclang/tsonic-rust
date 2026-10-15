@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { AstReader } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
+  parseFiniteNumberLiteral,
   sourceIntegerLiteralValue,
   KindMinusToken,
   KindPlusToken,
@@ -130,8 +131,7 @@ function selectedNumericLiteralValue(
 ): number | undefined {
   const kind = ast.kindName(node);
   if (kind === "KindNumericLiteral") {
-    const value = Number(ast.text(node));
-    return Number.isFinite(value) ? value : undefined;
+    return parseFiniteNumberLiteral(ast.text(node));
   }
   if (kind !== "KindPrefixUnaryExpression") {
     return undefined;
@@ -149,6 +149,6 @@ function selectedNumericLiteralValue(
   if (operand === undefined || ast.kindName(operand) !== "KindNumericLiteral") {
     return undefined;
   }
-  const value = Number(ast.text(operand));
-  return Number.isFinite(value) ? sign * value : undefined;
+  const value = parseFiniteNumberLiteral(ast.text(operand));
+  return value === undefined ? undefined : sign * value;
 }

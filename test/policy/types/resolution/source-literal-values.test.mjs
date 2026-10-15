@@ -5,11 +5,38 @@ import {
   parseSourceIntegerLiteral,
   sourceCharCodeUnit,
 } from "../../../../dist/target-model/syntax/literals.js";
-import { selectedIntegerLiteralUnionJoin } from "../../../../dist/policy/types/resolution/selected-numeric-literal.js";
+import { selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../../../dist/policy/types/resolution/selected-numeric-literal.js";
+import { checkedSource, projectSourceFile } from "../../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { rustUnionLeaves } from "../../../../dist/target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustOptionTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+
+test("floating literal selection shares source token parsing without broadening selected source forms", async () => {
+  const cases = [
+    ["1_000", true], ["0xFF_FF", true], ["0b1010_0101", true], ["1e3", true],
+    ["-1_000", true], ["+0.5", true], ["-0", true], ["1e9999", false],
+    ["(1)", false], ["-(+1)", false], ["1n", false], ["\"1\"", false],
+  ];
+  const source = await checkedSource("selected-floating-literal-text", { "src/index.ts":
+    cases.map(([text], index) => `export const value${index} = ${text};`).join("\n") });
+  const initializers = [];
+  const visit = node => {
+    if (source.ast.is.IsVariableDeclaration(node)) {
+      const initializer = source.ast.as.AsVariableDeclaration(node)?.Initializer;
+      if (initializer !== undefined) initializers.push(initializer);
+    }
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(projectSourceFile(source, "src/index.ts"));
+  assert.equal(initializers.length, cases.length, "each checked source initializer is observed");
+  for (const [index, initializer] of initializers.entries()) {
+    for (const primitive of ["float32", "float64"]) {
+      assert.equal(selectedSourceLiteralIsRepresentable(initializer, primitive, source.ast), cases[index][1],
+        `${primitive}: ${cases[index][0]}`);
+    }
+  }
+});
 
 test("source integer literal parsing preserves exact authored integer values", () => {
   assert.equal(parseSourceIntegerLiteral("9_007_199_254_740_991"), 9007199254740991n);
