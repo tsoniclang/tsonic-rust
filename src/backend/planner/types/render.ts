@@ -569,11 +569,11 @@ export function rustTypeFromCarrierInContext(
     if (instance !== undefined) return rustClassEnvironmentHandleType(instance, context);
     const genericCallable = rustGenericCallableValue(shapeCarrier);
     if (genericCallable !== undefined) {
-      const selection = context.input.program.callableValues.generic.physical.existingSelectionFor(shapeCarrier);
-      const definition = selection?.definition;
+      const physical = context.input.program.callableValues.generic.physical;
+      const definition = physical.definitionFor(shapeCarrier);
       const module = definition === undefined ? undefined : context.moduleNameByFileName.get(definition.ownerFileName);
       const externalCrate = definition === undefined ? undefined : context.externalCrateNameByFileName.get(definition.ownerFileName);
-      const physicalArguments = selection?.arguments;
+      const physicalArguments = physical.argumentsFor(shapeCarrier);
       const arguments_ = physicalArguments === undefined ? undefined : rustGenericArgumentsFromCarrier(
         rustGenericCallableStorageArguments(genericCallable.environment, physicalArguments), sourceRendering, resolveStructuralShape);
       if (definition === undefined || module === undefined || arguments_ === undefined) return undefined;
