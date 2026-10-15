@@ -1,4 +1,5 @@
 import type { Node } from "@tsonic/tsts";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import { createRustSourceFile, type RustItem } from "../../target-ast/syntax/nodes.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
@@ -51,7 +52,7 @@ export function completeRustAuthoredStructScopes(
     if (item.kind !== "mod-decl" || !scopes.has(item.name)) return item;
     const declaration = item.body?.items[0];
     if (item.body?.items.length !== 1 || declaration?.kind !== "struct") {
-      throw new Error("Authored type scope must contain its one planned struct declaration.");
+      failTargetPlannerInvariant("tsonic-rust", "Authored type scope must contain its one planned struct declaration.");
     }
     const boundNames = new Set([declaration.name,
       ...declaration.generics.parameters.filter(parameter => parameter.kind !== "lifetime")
