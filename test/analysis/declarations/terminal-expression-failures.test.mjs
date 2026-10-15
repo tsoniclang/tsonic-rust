@@ -7,13 +7,16 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 test("a diagnosed expression rejects repeated requests without selecting it again", () => {
   const expression = {};
   const dependent = {};
-  const walk = { resolving: new Set([dependent]), rejectedExpressions: new WeakSet(), context: { diagnostics: [] } };
+  let openChecks = 0;
+  const records = { assertOpen() { openChecks += 1; } };
+  const walk = { resolving: new Set([dependent]), rejectedExpressions: new WeakSet(), context: { diagnostics: [], records } };
   appendRustDiagnostic(walk, "EXACT_FAILURE", "Selected operand is not representable", expression, []);
   for (let index = 0; index < 128; index += 1) {
     assert.equal(resolveExpressionCarrier(walk, expression, {}, undefined), undefined);
     assert.equal(resolveExpressionCarrier(walk, dependent, {}, undefined), undefined);
   }
   assert.equal(walk.context.diagnostics.length, 1);
+  assert.equal(openChecks, 256, "every repeated request checks that analysis records are open before rejecting");
   const independent = {};
   walk.resolving.clear();
   appendRustDiagnostic(walk, "EXACT_FAILURE", "Selected operand is not representable", independent, []);
