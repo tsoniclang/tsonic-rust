@@ -108,8 +108,10 @@ test("callable value plans seal only after adapter classification and cannot be 
   assert.equal("suspended" in construction || "frames" in construction || "initializePhysical" in construction.generic, false,
     "construction exposes neither retained inventories nor the physical initializer");
   assert.throws(() => registry.seal(), /selected physical families after effect analysis/u);
+  assert.throws(() => registry.publish(), /selected physical families after effect analysis/u);
   assert.deepEqual(registry.finalizeSelected(), []);
   const plan = registry.seal();
+  registry.publish();
   assert.equal(registry.selected, plan);
   assert.equal(plan.generic, construction.generic);
   assert.equal(plan.frames.definitions.length, 0);
