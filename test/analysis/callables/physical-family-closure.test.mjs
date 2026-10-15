@@ -192,6 +192,8 @@ function storedKeys(program, keys) {
   }).map(([key]) => key).sort();
 }
 
+const sameMetadata = (left, right) => closedMetadataKey(left) === closedMetadataKey(right);
+
 function invariantCode(attempt) {
   try {
     attempt();
@@ -241,7 +243,7 @@ test("two backend plans over a published program read completed callable stores 
   const unstored = () => {
     const first = generic.physical.argumentsFor(late);
     const second = generic.physical.argumentsFor(late);
-    assert.deepEqual(second, first);
+    assert.equal(sameMetadata(second, first), true, "repeated late-key reads link the same arguments");
     assert.equal(generic.physical.definitionFor(late) === joined && first !== second, true,
       "a key outside admission and closure preparation links on every read and is never stored");
   };
@@ -254,8 +256,10 @@ test("two backend plans over a published program read completed callable stores 
     assert.equal(planned.kind, "resolved", planned.diagnostics?.map(row => row.message).join("; "));
   }
   assert.equal(read.size > 0, true, "the backend reads physical keys");
-  assert.deepEqual(storedKeys(program, read), storedKeys(unplanned, read),
-    "every key the backend read is stored exactly as in the same program analyzed without a backend plan");
+  const plannedKeys = storedKeys(program, read);
+  const unplannedKeys = storedKeys(unplanned, read);
+  assert.equal(plannedKeys.length === unplannedKeys.length && plannedKeys.every((key, index) => key === unplannedKeys[index]), true,
+    `every key the backend read is stored exactly as in the same program analyzed without a backend plan: ${plannedKeys.length} and ${unplannedKeys.length} stored of ${read.size}`);
   unstored();
   const after = snapshot();
   assert.equal(after.inventory === before.inventory, true, "no family is admitted by either backend plan");
@@ -301,7 +305,7 @@ test("published physical reads return stored keys, link late keys without storin
   const joined = inventory.find(definition => definition.members.length === 2);
   assert.equal(joined !== undefined, true);
   const canonical = physical.argumentsFor(joined.carrier);
-  assert.deepEqual(canonical, joined.parameters);
+  assert.equal(sameMetadata(canonical, joined.parameters), true, "the canonical key links the family's own parameters");
   assert.equal(physical.definitionFor(joined.carrier) === joined, true, "the canonical self-carrier links to its own family");
   for (let count = 0; count < 4; count += 1) {
     assert.equal(physical.argumentsFor(joined.carrier) === canonical, true, "a repeated read returns the same result object");
@@ -309,7 +313,7 @@ test("published physical reads return stored keys, link late keys without storin
   assert.equal(physical.conversionFor(joined.carrier, joined.carrier)?.kind, "identity");
   const late = concreteKey(joined.carrier);
   const linked = physical.argumentsFor(late);
-  assert.deepEqual(physical.argumentsFor(late), linked);
+  assert.equal(sameMetadata(physical.argumentsFor(late), linked), true, "repeated late-key reads link the same arguments");
   assert.equal(physical.definitionFor(late) === joined && physical.argumentsFor(late) !== linked, true,
     "a late key links to its existing family on every read and is not stored");
   const value = rustGenericCallableValue(joined.carrier);
@@ -318,9 +322,9 @@ test("published physical reads return stored keys, link late keys without storin
     () => physical.conversionFor(reordered, joined.carrier)]) {
     assert.equal(invariantCode(read), "TSONIC_INTERNAL_PLANNER_INVARIANT", "a required read of a valid unrooted shape after publication is a planner invariant");
   }
-  assert.equal(physical.existingSelectionFor(reordered), undefined, "an optional read of a valid unrooted shape stays absent");
+  assert.equal(physical.existingSelectionFor(reordered) === undefined, true, "an optional read of a valid unrooted shape stays absent");
   const logical = rustGenericCallableCarrier({ origin: value.origin, signature: value.signature, environment: value.environment });
-  assert.equal(physical.definitionFor(logical), undefined, "a logical carrier is not a physical storage key");
+  assert.equal(physical.definitionFor(logical) === undefined, true, "a logical carrier is not a physical storage key");
   const foreign = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: value.physical.members.map(member =>
     ({ ...member, origin: { ...member.origin, declarationIdentity: "foreign" } })) } });
   assert.equal(physical.definitionFor(foreign) === undefined, true, "an unknown or foreign key stays absent");
@@ -334,12 +338,12 @@ test("before closure, a required read of a physical shape construction never adm
   const joined = joinedCarrierIn(selected.carrier);
   assert.equal(joined !== undefined && current.physical.plan.definitionFor(joined) !== undefined, true, "an admitted shape links before closure");
   const reordered = reorderedKey(joined);
-  assert.equal(current.physical.plan.existingSelectionFor(reordered), undefined, "an optional read stays absent");
+  assert.equal(current.physical.plan.existingSelectionFor(reordered) === undefined, true, "an optional read stays absent");
   for (const read of [() => current.physical.plan.definitionFor(reordered), () => current.physical.plan.argumentsFor(reordered)]) {
     assert.equal(invariantCode(read), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "a required read does not report a missing family as absence");
   }
   current.physical.closeAdmission();
-  assert.equal(current.physical.plan.existingSelectionFor(reordered), undefined, "the failed reads admitted no family");
+  assert.equal(current.physical.plan.existingSelectionFor(reordered) === undefined, true, "the failed reads admitted no family");
 });
 
 test("every family's canonical self-carrier is stored at closure, including identity-observed families", () => {
@@ -365,7 +369,7 @@ test("closure prepares the canonical self-carrier of every admitted family", () 
     "admission selects concrete physical arguments, never the canonical parameters");
   for (const definition of inventory) {
     const prepared = current.physical.plan.argumentsFor(definition.carrier);
-    assert.deepEqual(prepared, definition.parameters);
+    assert.equal(sameMetadata(prepared, definition.parameters), true, `${definition.targetName}: the canonical key links the family's own parameters`);
     assert.equal(current.physical.plan.argumentsFor(definition.carrier) === prepared, true,
       `${definition.targetName}: the canonical key read after closure is the one stored at closure`);
     const late = concreteKey(definition.carrier);
