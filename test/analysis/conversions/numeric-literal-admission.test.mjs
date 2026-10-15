@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
 const header = `import type { float32, int32 } from "@tsonic/core/types.js";\n`;
 const local = (type, expression) => `export function f(): ${type} {\n  const y: ${type} = ${expression};\n  return y;\n}\n`;
 const surfaces = [["native", undefined], ["js", ["js"]]];
+const refusal = Object.freeze({
+  code: "RUST_NUMERIC_LITERAL_NOT_FINITE",
+  message: "Numeric literal is not a finite double-precision value.",
+  evidence: ["target.capability=rust.syntax.numeric-literal"],
+});
 
 const nonFinite = [];
 for (const [type, label] of [["number", "float64"], ["float32", "float32"]]) {
@@ -26,58 +32,111 @@ nonFinite.push(
   ["element index 1e400", "export function f(a: number[]): number {\n  return a[1e400];\n}\n"],
   ["switch case 1e400", "export function f(x: number): number {\n  switch (x) {\n    case 1e400:\n      return 1;\n    default:\n      return 0;\n  }\n}\n"],
   ["int32 local 1e400", local("int32", "1e400")],
+  ["untyped array [1e400]", "export function f(): number[] {\n  const a = [1e400];\n  return a;\n}\n"],
+  ["untyped array [1, 1e400]", "export function f(): number[] {\n  const a = [1, 1e400];\n  return a;\n}\n"],
+  ["untyped array spread [...[1e400]]", "export function f(): number[] {\n  const a = [...[1e400]];\n  return a;\n}\n"],
+  ["typed array spread [...[1e400]]", "export function f(): number[] {\n  const a: number[] = [...[1e400]];\n  return a;\n}\n"],
+  ["typed array [1e400, -1e400]", "export function f(): number[] {\n  const a: number[] = [1e400, -1e400];\n  return a;\n}\n"],
+  ["conditional branch 1e400", "export function f(flag: boolean): number {\n  return flag ? 1e400 : 0;\n}\n"],
+  ["template substitution 1e400", "export function f(): string {\n  return `${1e400}`;\n}\n"],
+  ["object property value 1e400", "export function f(): { v: number } {\n  return { v: 1e400 };\n}\n"],
+  ["class field initializer 1e400", "export class C {\n  v: number = 1e400;\n}\n"],
+  ["ambient const initializer 1e400", "declare const big = 1e400;\nexport function f(): number {\n  const y: number = big;\n  return y;\n}\n"],
+  ["enum member initializer 1e400", "export enum E {\n  A = 1e400,\n}\nexport function f(): E {\n  return E.A;\n}\n"],
 );
-
-const finite = [
-  ["float64 local 1.7976931348623157e308", local("number", "1.7976931348623157e308"), "let y: f64 = 1.7976931348623157e+308;"],
-  ["float64 local -0", local("number", "-0"), "let y: f64 = -0.0;"],
-  ["float64 local 5e-324", local("number", "5e-324"), "let y: f64 = 5e-324;"],
-  ["float64 local 1e-400", local("number", "1e-400"), "let y: f64 = 0.0;"],
-  ["float64 local 1e3", local("number", "1e3"), "let y: f64 = 1000.0;"],
-  ["float64 local 1e21", local("number", "1e21"), "let y: f64 = 1e+21;"],
-  ["float64 local -(2.5)", local("number", "-(2.5)"), "let y: f64 = -2.5;"],
-  ["float32 local -0", local("float32", "-0"), "let y: f32 = -0.0_f32;"],
-  ["float32 local 5e-324", local("float32", "5e-324"), "let y: f32 = 5e-324_f32;"],
-  ["float32 local 1.5", local("float32", "1.5"), "let y: f32 = 1.5_f32;"],
+const jsOnlyNonFinite = [
+  ["provider call argument 1e400", "export function f(): number {\n  return Math.max(1e400, 1);\n}\n"],
 ];
 
-function analyzeOnly(body, selected) {
+const accepted = [
+  ["float64 local 1.7976931348623157e308", "number", "1.7976931348623157e308", "let y: f64 = 1.7976931348623157e+308;"],
+  ["float64 local -0", "number", "-0", "let y: f64 = -0.0;"],
+  ["float64 local 5e-324", "number", "5e-324", "let y: f64 = 5e-324;"],
+  ["float64 local 1e-400", "number", "1e-400", "let y: f64 = 0.0;"],
+  ["float64 local 1e3", "number", "1e3", "let y: f64 = 1000.0;"],
+  ["float64 local 1e21", "number", "1e21", "let y: f64 = 1e+21;"],
+  ["float64 local -(2.5)", "number", "-(2.5)", "let y: f64 = -2.5;"],
+  ["float32 local -0", "float32", "-0", "let y: f32 = -0.0_f32;"],
+  ["float32 local 5e-324", "float32", "5e-324", "let y: f32 = 5e-324_f32;"],
+  ["float32 local 1.5", "float32", "1.5", "let y: f32 = 1.5_f32;"],
+];
+const acceptedSource = accepted.map(([, type, expression], index) =>
+  `export function f${index}(): ${type} {\n  const y: ${type} = ${expression};\n  return y;\n}\n`).join("") +
+  "type Big = 1e400;\n" +
+  "export function typeParameter(x: 1e400): number {\n  return x;\n}\n" +
+  "export function typeAlias(x: Big): number {\n  return x;\n}\n" +
+  "export function propertyName(): number {\n  const o = { 1e400: 1 };\n  return o.Infinity;\n}\n" +
+  "export function bindingPropertyName(o: { Infinity: number }): number {\n  const { 1e400: v } = o;\n  return v;\n}\n";
+
+function surfaceOptions(selected) {
+  return selected === undefined ? {} : { surfaces: selected };
+}
+
+function analyzeOnly(source, selected) {
   let analysis;
   let ast;
-  const { result } = compileRust({ ...(selected === undefined ? {} : { surfaces: selected }), files: { "index.ts": header + body },
+  compileRust({ ...surfaceOptions(selected), files: { "index.ts": source },
     compileTarget(request) {
       ast = request.input.source.ast;
       analysis = analyzeRustTargetProgram(request);
       return analysis.kind === "rejected" ? analysis : { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
     },
   });
-  return { analysis, ast, result };
+  return { analysis, ast };
+}
+
+function literalOffsets(source) {
+  const offsets = [];
+  for (let index = source.indexOf("1e400"); index !== -1; index = source.indexOf("1e400", index + 1)) offsets.push(index);
+  return offsets;
+}
+
+function assertRefused(name, source, selected) {
+  const { analysis, ast } = analyzeOnly(source, selected);
+  assert.equal(analysis !== undefined, true, `${name}: the session invokes Rust analysis`);
+  assert.equal(analysis.kind === "rejected", true, `${name}: analysis rejects the program`);
+  const offsets = literalOffsets(source);
+  const codes = analysis.diagnostics.map(entry => entry.code);
+  assert.equal(JSON.stringify(codes) === JSON.stringify(offsets.map(() => refusal.code)), true,
+    `${name}: the complete diagnostic list is one refusal per non-finite literal: ${JSON.stringify(codes)}`);
+  analysis.diagnostics.forEach((entry, index) => {
+    const label = `${name}: refusal ${index}`;
+    assert.equal(entry.message === refusal.message, true, `${label} states the finite double-precision condition`);
+    assert.equal(JSON.stringify(entry.evidence) === JSON.stringify(refusal.evidence), true, `${label} carries the numeric-literal evidence`);
+    assert.equal(entry.category === "error" && entry.source === "tsonic-rust", true, `${label} is a tsonic-rust error`);
+    assert.equal(ast.kindName(entry.sourceNode) === "KindNumericLiteral", true, `${label} anchors to the numeric literal`);
+    const range = ast.authoredRange(entry.sourceNode);
+    const text = ast.getSourceText(ast.getSourceFile(entry.sourceNode));
+    assert.equal(range.kind === "authored" && range.start === offsets[index] && text.slice(range.start, range.end) === "1e400", true,
+      `${label} spans the authored literal at offset ${offsets[index]}`);
+  });
+  const { result } = compileRust({ ...surfaceOptions(selected), files: { "index.ts": source } });
+  assert.equal(result.artifacts.length === 0, true, `${name}: the full compilation publishes no artifact`);
+  assert.equal(JSON.stringify(result.diagnostics.map(({ code, message }) => [code, message])) ===
+    JSON.stringify(analysis.diagnostics.map(({ code, message }) => [code, message])), true,
+  `${name}: the full compilation reports exactly the analysis refusals`);
 }
 
 for (const [surface, selected] of surfaces) {
-  for (const [name, body] of nonFinite) {
-    test(`${surface}: ${name} is refused by analysis before any Rust is planned`, () => {
-      const { analysis, ast, result } = analyzeOnly(body, selected);
-      assert.equal(analysis !== undefined, true, `${name}: the session invokes Rust analysis`);
-      assert.equal(analysis.kind === "rejected", true, `${name}: analysis rejects the non-finite numeric literal`);
-      const refusals = analysis.diagnostics.filter(entry => entry.code === "RUST_NUMERIC_LITERAL_NOT_FINITE");
-      assert.equal(refusals.length === 1, true, `${name}: exactly one non-finite literal refusal`);
-      assert.equal(analysis.diagnostics[0] === refusals[0], true, `${name}: the refusal is the first diagnostic`);
-      assert.equal(refusals[0].message === "Numeric literal requires parseable finite source literal text from TSTS.", true,
-        `${name}: the refusal states the finite source literal requirement`);
-      assert.equal(refusals[0].category === "error", true, `${name}: the refusal is an error`);
-      assert.equal(ast.kindName(refusals[0].sourceNode) === "KindNumericLiteral", true, `${name}: the refusal anchors to the numeric literal`);
-      assert.equal(ast.text(refusals[0].sourceNode) === "Infinity", true, `${name}: TSTS literal text for 1e400 is the non-finite value`);
-      assert.equal(result.artifacts.length === 0, true, `${name}: no Rust artifact is produced`);
+  const forms = surface === "js" ? [...nonFinite, ...jsOnlyNonFinite] : nonFinite;
+  for (const [name, body] of forms) {
+    test(`${surface}: ${name} is refused by numeric literal admission before carrier analysis`, () => {
+      assertRefused(name, header + body, selected);
     });
   }
-  for (const [name, body, line] of finite) {
-    test(`${surface}: ${name} keeps its exact finite Rust literal`, () => {
-      const { result } = compileRust({ ...(selected === undefined ? {} : { surfaces: selected }), files: { "index.ts": header + body } });
-      assert.equal(result.diagnostics.length === 0, true, `${name}: no diagnostics`);
-      const rust = result.artifacts.filter(artifact => String(artifact.path).endsWith(".rs")).map(artifact => String(artifact.text)).join("\n");
-      assert.equal(rust.split("\n").some(text => text.trim() === line), true, `${name}: emits ${line}`);
-      assert.equal(rust.includes("Infinity"), false, `${name}: no non-finite spelling in generated Rust`);
-    });
-  }
+  test(`${surface}: finite literals and non-value numeric literal positions compile natively with exact Rust literals`, () => {
+    const { result } = compileRust({ ...surfaceOptions(selected), files: { "index.ts": header + acceptedSource } });
+    assert.equal(result.diagnostics.length === 0, true, `${surface}: no diagnostics: ${JSON.stringify(result.diagnostics.map(entry => entry.code))}`);
+    const rust = result.artifacts.filter(artifact => String(artifact.path).endsWith(".rs")).map(artifact => String(artifact.text));
+    const lines = rust.join("\n").split("\n").map(line => line.trim());
+    for (const [name, , , line] of accepted) {
+      assert.equal(lines.includes(line), true, `${name}: emits ${line}`);
+    }
+    assert.equal(lines.some(line => /Infinity\.0|Infinity_f32|f64::INFINITY/u.test(line)), false, `${surface}: no non-finite float literal in generated Rust`);
+    const projectRoot = writeGeneratedProject(`numeric-literal-admission-${surface}`, result.artifacts.map(artifact =>
+      ({ path: String(artifact.path), text: String(artifact.text) })));
+    runCargo(projectRoot, ["generate-lockfile", "--offline"]);
+    runCargo(projectRoot, ["fmt", "--all", "--check"]);
+    runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
+  });
 }
