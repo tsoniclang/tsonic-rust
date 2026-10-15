@@ -105,6 +105,7 @@ test("native capture query rejects foreign declarations without inspecting custo
   const foreign = Object.defineProperty({}, "kind", { get() { inspected += 1; throw Error("not owned"); } });
   assert.equal(current.plan.forDeclaration(foreign).kind, "unresolved");
   assert.equal(inspected, 0);
-  assert.equal(current.plan.forDeclaration(current.declaration("make")).kind, "unresolved",
+  const declaration = current.plan.forDeclaration(current.declaration("make"));
+  assert.equal(declaration.kind === "unresolved" && /exact finalized capture declarations/u.test(declaration.reason), true,
     "only declarations with finalized capture facts are accepted");
 });
