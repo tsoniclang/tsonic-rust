@@ -10,6 +10,8 @@ import { selectedSourceCallableReturn } from "../../../dist/analysis/callables/s
 import { resolveRustTargetTypeRef } from "../../../dist/policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { resolveFunctionExpressionCarrier } from "../../../dist/analysis/callables/closures.js";
 
 function fixture(source, name = "width", maskParameters = false) {
   const { context, walk } = analyzeRustOperations(source);
@@ -111,4 +113,58 @@ test("an unresolved native branch cannot complete through a conditional checker-
   assert.equal(completed.kind, "complete");
   assert.equal(rustTargetTypeRefEquals(completed.carrier,
     input.context.records.sourceCallableReturn.get(input.declaration).returnCarrier), true);
+});
+
+test("a closure without a selected expected contract cannot publish a pending logical hint", () => {
+  const { context, walk } = analyzeRustOperations(`
+function width(value: string) { return value.length; }
+export function factory(value: string) { return () => width(value); }
+`);
+  const { ast, records } = context;
+  const dependency = context.sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "width");
+  const arrow = context.sourceStorage.nodes.find(node => ast.is.IsArrowFunction(node));
+  assert.equal(dependency !== undefined && arrow !== undefined, true);
+  const inherited = createRustRecordFixture({ sourceCallableReturn: {
+    get: node => node === dependency || node === arrow ? undefined : records.sourceCallableReturn.get(node),
+  } }, records);
+  const current = createRustCarrierProbe({ ...walk, inferredReturns: new WeakMap(), resolvingReturns: new Set([dependency]),
+    context: { ...context, records: createRustProgramRecordBuilder(context.typeDefinitions, inherited) } });
+  const sourceFile = ast.getSourceFile(arrow);
+  assert.equal(resolveFunctionExpressionCarrier(current, arrow, sourceFile, undefined) === undefined, true);
+  assert.equal(current.context.records.sourceCallableReturn.get(arrow) === undefined, true,
+    "an unselected logical hint cannot become a final native source return");
+  current.resolvingReturns.delete(dependency);
+  const complete = resolveFunctionExpressionCarrier(current, arrow, sourceFile, undefined);
+  assert.equal(complete !== undefined, true);
+  assert.equal(rustCallableProtocol(complete)?.result.name, "native-uint");
+});
+
+test("an actual fixed contextual callback completes its logical contract before the body without re-inferring it", () => {
+  const { context, walk } = analyzeRustOperations(`
+import type { int32 } from "@tsonic/core/types.js";
+export function floatingCapture(value: int32): () => number {
+  const callback: () => number = () => value;
+  return callback;
+}
+`, { surfaces: [] });
+  const { ast, records } = context;
+  const arrow = context.sourceStorage.nodes.find(node => ast.is.IsArrowFunction(node));
+  assert.equal(arrow !== undefined, true);
+  const selected = records.sourceCallableReturn.get(arrow);
+  const expected = records.runtimeCarrier.get(ast.parent(arrow))?.carrier;
+  assert.equal(selected?.returnCarrier.name, "float64");
+  assert.equal(expected !== undefined, true);
+  const current = createRustCarrierProbe(walk);
+  let requests = 0;
+  const query = { ...current, context: { ...current.context, records: { ...current.context.records,
+    sourceCallableReturns: { ...current.context.records.sourceCallableReturns,
+      resolve(...arguments_) { requests++; return current.context.records.sourceCallableReturns.resolve(...arguments_); },
+    },
+  } } };
+  assert.equal(resolveFunctionExpressionCarrier(query, arrow, ast.getSourceFile(arrow), expected) !== undefined, true);
+  assert.equal(query.context.records.sourceCallableReturn.get(arrow) === selected, true);
+  assert.equal(requests, 1, "the post-body full query reuses the same selected logical request");
+  const conversion = query.context.records.contextualValueConversion.get(ast.body(arrow));
+  assert.equal(conversion?.sourceCarrier.name, "int32");
+  assert.equal(conversion?.targetCarrier.name, "float64");
 });

@@ -115,6 +115,7 @@ export function resolveFunctionExpressionCarrier(
   const parameters = ast.parameters(expression);
   const inferred = expected === undefined || options?.sourceCarrier !== undefined
     ? resolveFunctionExpressionSignature(walk, expression, options?.sourceCarrier) : undefined;
+  if (expected === undefined && inferred?.inference.kind === "pending") return undefined;
   const sourceSelected = options?.sourceCarrier ?? inferred?.sourceCarrier;
   const resolvedSourceCallable = inferred?.protocol;
   const selectedExpected = selectRustClosedCallableContext(walk, expression, expected ?? inferred?.carrier);
