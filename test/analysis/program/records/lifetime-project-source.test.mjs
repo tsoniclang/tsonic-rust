@@ -89,6 +89,7 @@ for (const surfaces of [[], ["js"]]) {
         label === "union" ? source.ast.as.AsReturnStatement(nodes.find(node => source.ast.is.IsReturnStatement(node)))?.Expression :
         nodes.find(node => source.ast.is.IsNewExpression(node));
       assertRustRecordRequirement(requiredRecords, family, expectedSubject);
+      if (family === "projectUpcast") assertRustRecordRequirement(requiredRecords, "conversion", expectedSubject);
       const classes = nodes.filter(node => source.ast.is.IsClassDeclaration(node));
       assert.equal(classes.length, 3);
       for (const declaration of classes) assertRustRecordRequirement(requiredRecords, "projectCallableAdapters", declaration);

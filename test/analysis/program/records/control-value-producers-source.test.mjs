@@ -51,6 +51,8 @@ test("generic comparisons publish their exact checked operand carriers on the ac
   const recorded = nodes.filter(node => program.records.genericNumericOperands.get(node) !== undefined);
   const expectedBinary = nodes.find(node => source.ast.is.IsBinaryExpression(node));
   assertRustRecordRequirement(requiredRecords, "genericNumericOperands", expectedBinary);
+  assertRustRecordRequirement(requiredRecords, "selectedOperation", expectedBinary);
+  assertRustRecordRequirement(requiredRecords, "targetOperation", expectedBinary);
   assert.equal(recorded.length, 1);
   const node = recorded[0];
   const binary = source.ast.as.AsBinaryExpression(node);
