@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustSelectedOperationProducer } from "../../../../dist/analysis/program/records/selected-operation.js";
 import * as selectedOperationModule from "../../../../dist/analysis/program/records/selected-operation.js";
@@ -102,7 +103,8 @@ test("canonical equality retains exact provenance and refuses competing decision
   const original = operation({ provenance });
   const producer = createRustSelectedOperationProducer();
   producer.checked(subject, accepted({ operation: original }));
-  producer.checked(subject, accepted({ operation: { ...original, resultType: { ...integer }, provenance: { ...provenance } } }));
+  assertRustInheritedRecordCorrespondence("selectedOperation", subject, original,
+    candidate => candidate.selectedOperations.checked(subject, accepted({ operation: { ...original, resultType: { ...integer }, provenance: { ...provenance } } })));
   assert.equal(producer.records.get(subject) === original, true, "equivalent admission does not replace evidence");
   const mutations = [
     { operationId: "different" }, { operationKind: "property" }, { targetOperation: "different" },
@@ -111,7 +113,8 @@ test("canonical equality retains exact provenance and refuses competing decision
     { providerDeclaration: { providerId: "different" } },
   ];
   for (const [index, mutation] of mutations.entries()) {
-    assert.throws(() => producer.checked(subject, accepted({ operation: { ...original, ...mutation } })),
+    assertRustInheritedRecordConflict("selectedOperation", subject, original,
+      candidate => candidate.selectedOperations.checked(subject, accepted({ operation: { ...original, ...mutation } })),
       /Conflicting Rust semantic plan 'selectedOperation'/u, `mutation ${index}`);
     assert.equal(producer.records.get(subject) === original, true, `no cached-first suppression ${index}`);
   }
@@ -127,7 +130,7 @@ test("inherited operation records preserve exact scope and reject incompatible o
   assert.equal(child.selectedOperation.get(inheritedSubject) === original, true);
   child.selectedOperations.checked(inheritedSubject, accepted({ operation: { ...original, resultType: { ...integer } } }));
   assert.equal(child.selectedOperation.get(inheritedSubject) === original, true);
-  assert.throws(() => child.selectedOperations.checked(inheritedSubject,
+  assertRustInheritedRecordConflict("selectedOperation", inheritedSubject, original, candidate => candidate.selectedOperations.checked(inheritedSubject,
     accepted({ operation: { ...original, resultType: text } })), /Conflicting Rust semantic plan/u);
   const childSubject = {};
   child.selectedOperations.project(childSubject, "specialized", "method", "function", text);
@@ -142,7 +145,8 @@ test("distinct generic carrier contexts never collapse into a cached first selec
   const carrier = element => ({ kind: "target-named", id: "acme.Container", genericArguments: [{ kind: "type", type: element }] });
   const subject = {};
   producer.checked(subject, accepted({ operation: operation({ resultType: carrier(integer) }) }));
-  assert.throws(() => producer.checked(subject, accepted({ operation: operation({ resultType: carrier(text) }) })),
+  assertRustInheritedRecordConflict("selectedOperation", subject, producer.records.get(subject),
+    candidate => candidate.selectedOperations.checked(subject, accepted({ operation: operation({ resultType: carrier(text) }) })),
     /Conflicting Rust semantic plan/u);
   const scoped = {};
   producer.checked(scoped, accepted({ operation: operation({ resultType: carrier(text) }) }));

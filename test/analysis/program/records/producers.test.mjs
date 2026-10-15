@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { selectedRustCallSignature } from "../../../../dist/analysis/program/records/selected-call.js";
@@ -66,8 +67,10 @@ test("source runtime-carrier conflicts retain the exact diagnostic and rejected-
     `existing=${JSON.stringify(integer)}`, `incoming=${JSON.stringify(external)}`]);
   assert.equal(walk.rejectedExpressions.has(subject), true);
   assert.equal(walk.rejectedExpressions.has(dependent), true);
-  assert.throws(() => records.runtimeCarriers.selected(subject, external), /Conflicting Rust semantic plan/u,
-    "the internal publication channel remains an invariant refusal");
+  assert.throws(() => records.runtimeCarriers.selected(subject, external), /Duplicate Rust semantic plan/u,
+    "the internal publication channel refuses a second local decision before comparison");
+  assertRustInheritedRecordConflict("runtimeCarrier", subject, first,
+    candidate => candidate.runtimeCarriers.selected(subject, external), /Conflicting Rust semantic plan/u);
   assert.equal(diagnostics.length, 1, "the internal channel never adds a source diagnostic");
 });
 
@@ -106,9 +109,10 @@ test("target operation constructors retain checked data, exact source identities
   builder.targetOperations.checked(subject, selection);
   assert.equal(builder.targetOperation.get(subject) === fact, true);
   assert.equal(builder.minimumFoundation(), "alloc");
-  builder.targetOperations.checked(subject, accepted({ targetFact: { ...fact, resultCarrier: { ...text } } }));
+  assertRustInheritedRecordCorrespondence("targetOperation", subject, fact,
+    candidate => candidate.targetOperations.checked(subject, accepted({ targetFact: { ...fact, resultCarrier: { ...text } } })));
   assert.equal(builder.targetOperation.get(subject) === fact, true);
-  assert.throws(() => builder.targetOperations.checked(subject,
+  assertRustInheritedRecordConflict("targetOperation", subject, fact, candidate => candidate.targetOperations.checked(subject,
     accepted({ targetFact: { ...fact, declaration: {} } })), /Conflicting Rust semantic plan/u);
   assert.equal(builder.targetOperation.get(subject) === fact, true);
   assert.equal(builder.targetOperation.get({}) === undefined, true);
@@ -158,7 +162,7 @@ test("one selected-call constructor retains every exact checked-source evidence 
   const inherited = createRustProgramRecordBuilder(undefined, builder.seal([]));
   inherited.selectedCalls.checked(request, accepted({ selectedSignature: { ...signature } }));
   assert.equal(inherited.selectedCall.get(request.source.call) === signature, true);
-  assert.throws(() => inherited.selectedCalls.checked(request,
+  assertRustInheritedRecordConflict("selectedCall", request.source.call, signature, candidate => candidate.selectedCalls.checked(request,
     accepted({ selectedSignature: { ...signature, sourceSignature: {} } })), /Conflicting Rust semantic plan/u);
   assert.equal(inherited.selectedCall.get({}) === undefined, true);
 });

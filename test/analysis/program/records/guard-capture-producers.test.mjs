@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustClosureCaptureEquals } from "../../../../dist/target-model/records/equality.js";
@@ -52,7 +53,8 @@ for (const operationKind of ["method", "constructor", "property", "indexer"]) {
       [{ ...operation, operationKind, operationId: "different" }, integer],
       [{ ...operation, operationKind: operationKind === "method" ? "property" : "method" }, integer],
       [{ ...operation, operationKind }, wide],
-    ]) assert.throws(() => child.preparedOperations.prepare(subject, template, carrier), conflict);
+    ]) assertRustInheritedRecordConflict("preparedOperationResult", subject, first,
+      candidate => candidate.preparedOperations.prepare(subject, template, carrier), conflict);
     const other = {};
     child.preparedOperations.prepare(other, { ...operation, operationKind }, integer);
     assert.equal(child.preparedOperationResult.get(other) !== first, true);
@@ -82,11 +84,14 @@ for (const operationKind of ["property", "indexer", "method"]) for (const loweri
     const same = { ...contract, lowering, guardDepth: 2, sourceGuardCarrier: structuredClone(contract.sourceGuardCarrier) };
     child.optionalChains.guard(subject, guard, operationKind, same);
     assert.equal(child.optionalChain.get(subject) === first, true);
-    assert.throws(() => child.optionalChains.guard(subject, {}, operationKind, same), conflict);
-    assert.throws(() => child.optionalChains.guard(subject, guard, operationKind === "method" ? "property" : "method", same), conflict);
+    assertRustInheritedRecordConflict("optionalChain", subject, first,
+      candidate => candidate.optionalChains.guard(subject, {}, operationKind, same), conflict);
+    assertRustInheritedRecordConflict("optionalChain", subject, first,
+      candidate => candidate.optionalChains.guard(subject, guard, operationKind === "method" ? "property" : "method", same), conflict);
     for (const [key, value] of Object.entries(same)) {
       const replacement = key === "guardDepth" ? 1 : key === "lowering" ? lowering === "map" ? "and-then" : "map" : wide;
-      assert.throws(() => child.optionalChains.guard(subject, guard, operationKind, { ...same, [key]: replacement }), conflict, key);
+      assertRustInheritedRecordConflict("optionalChain", subject, first,
+        candidate => candidate.optionalChains.guard(subject, guard, operationKind, { ...same, [key]: replacement }), conflict, key);
       assert.equal(child.optionalChain.get(subject) === first, true, key);
     }
     const other = {};
@@ -122,10 +127,13 @@ for (const storage of ["value", "location", "cell", "borrow-cell"]) for (const m
     for (const name of ["declaration", "reference", "carrier", "storage", "mutable"]) {
       const replacement = name === "carrier" ? wide : name === "storage" ? storage === "value" ? "cell" : "value" :
         name === "mutable" ? mutable ? undefined : true : {};
-      assert.throws(() => child.closureCaptures.capture(subject, [{ ...same[0], [name]: replacement }, same[1]]), conflict, name);
+      assertRustInheritedRecordConflict("closureCapture", subject, first,
+        candidate => candidate.closureCaptures.capture(subject, [{ ...same[0], [name]: replacement }, same[1]]), conflict, name);
     }
-    assert.throws(() => child.closureCaptures.capture(subject, [...same].reverse()), conflict);
-    assert.throws(() => child.closureCaptures.capture(subject, same.slice(0, 1)), conflict);
+    assertRustInheritedRecordConflict("closureCapture", subject, first,
+      candidate => candidate.closureCaptures.capture(subject, [...same].reverse()), conflict);
+    assertRustInheritedRecordConflict("closureCapture", subject, first,
+      candidate => candidate.closureCaptures.capture(subject, same.slice(0, 1)), conflict);
     const other = {};
     child.closureCaptures.capture(other, []);
     assert.equal(child.closureCapture.get(other)?.captures.length, 0);
@@ -158,7 +166,8 @@ test("selected class-environment capture metadata survives canonical publication
     { ...selected, fieldName: 1 }, { ...selected, unknown: true }]) {
     assert.equal(rustClosureCaptureEquals(record, { ...equivalent, captures: [invalid] }), false,
       "field identity, presence, type and closed shape are significant");
-    assert.throws(() => child.closureCaptures.capture(subject, [invalid]), conflict);
+    assertRustInheritedRecordConflict("closureCapture", subject, record,
+      candidate => candidate.closureCaptures.capture(subject, [invalid]), conflict);
   }
   let accessorReads = 0;
   const accessor = Object.defineProperty({ ...logical }, "fieldName", { enumerable: true, get() { accessorReads += 1; return "captured"; } });
@@ -188,28 +197,28 @@ test("receiver, field and recursive captures retain all source roots, ordering a
     Object.isFrozen(first.receiverFields[0]) && Object.isFrozen(first.receiverFields[0].references) &&
     Object.isFrozen(first.receiverFields[0].storage) && Object.isFrozen(first.recursiveField) && Object.isFrozen(first.recursiveField.references), true);
   const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
-  const admit = (receiver = first.receivers, field = first.receiverFields,
+  const admit = (records, receiver = first.receivers, field = first.receiverFields,
     recursion = { recursiveDeclaration, recursiveField: first.recursiveField }, owner = "shared-state") =>
-    child.closureCaptures.capture(subject, [], receiver, field, recursion, owner);
-  admit();
+    records.closureCaptures.capture(subject, [], receiver, field, recursion, owner);
+  admit(child);
   assert.equal(child.closureCapture.get(subject) === first, true);
-  assert.throws(() => admit([], first.receiverFields), conflict);
-  assert.throws(() => admit(first.receivers, []), conflict);
-  assert.throws(() => admit(first.receivers, first.receiverFields, {}), conflict);
-  assert.throws(() => child.closureCaptures.capture(subject, [], first.receivers, first.receiverFields,
+  assertRustInheritedRecordConflict("closureCapture", subject, first, candidate => admit(candidate, [], first.receiverFields), conflict);
+  assertRustInheritedRecordConflict("closureCapture", subject, first, candidate => admit(candidate, first.receivers, []), conflict);
+  assertRustInheritedRecordConflict("closureCapture", subject, first, candidate => admit(candidate, first.receivers, first.receiverFields, {}), conflict);
+  assertRustInheritedRecordConflict("closureCapture", subject, first, candidate => candidate.closureCaptures.capture(subject, [], first.receivers, first.receiverFields,
     { recursiveDeclaration, recursiveField: first.recursiveField }), conflict);
   for (const key of ["owner", "reference", "references", "carrier"]) {
     const replacement = key === "carrier" ? wide : key === "references" ? [receiverReference] : {};
-    assert.throws(() => admit([{ ...first.receivers[0], [key]: replacement }]), conflict, key);
+    assertRustInheritedRecordConflict("closureCapture", subject, first, candidate => admit(candidate, [{ ...first.receivers[0], [key]: replacement }]), conflict, key);
   }
   for (const key of ["declaration", "receiver", "reference", "references", "carrier", "storage"]) {
     const replacement = key === "carrier" ? integer : key === "references" ? [fieldReference] :
       key === "storage" ? { kind: "shared", initialization: "ready" } : {};
-    assert.throws(() => admit(first.receivers, [{ ...first.receiverFields[0], [key]: replacement }]), conflict, key);
+    assertRustInheritedRecordConflict("closureCapture", subject, first, candidate => admit(candidate, first.receivers, [{ ...first.receiverFields[0], [key]: replacement }]), conflict, key);
   }
   for (const key of ["declaration", "receiver", "reference", "references", "carrier"]) {
     const replacement = key === "carrier" ? wide : key === "references" ? [recursiveReference] : {};
-    assert.throws(() => admit(first.receivers, first.receiverFields,
+    assertRustInheritedRecordConflict("closureCapture", subject, first, candidate => admit(candidate, first.receivers, first.receiverFields,
       { recursiveDeclaration, recursiveField: { ...first.recursiveField, [key]: replacement } }), conflict, key);
   }
   receivers[0].references.reverse();

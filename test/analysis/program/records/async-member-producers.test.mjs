@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { recordRustComputedCallEvaluation } from "../../../../dist/analysis/operations/computed-members.js";
@@ -58,9 +59,10 @@ test("native async publication constructs the exact future and preserves native 
   assert.equal(fact.outputCarrier === integer, true);
   assert.equal(rustTargetTypeRefEquals(fact.futureCarrier, rustFutureTargetType(integer)), true);
   assert.equal(Object.hasOwn(fact, "storage") || Object.hasOwn(fact, "capturedParameters"), false);
-  builder.asyncFunctions.native(declaration, { ...integer });
+  assertRustInheritedRecordCorrespondence("asyncFunction", declaration, fact, candidate => candidate.asyncFunctions.native(declaration, { ...integer }));
   assert.equal(builder.asyncFunction.get(declaration) === fact, true, "the first native record remains canonical");
-  assert.throws(() => builder.asyncFunctions.native(declaration, wide), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("asyncFunction", declaration, fact,
+    candidate => candidate.asyncFunctions.native(declaration, wide), /Conflicting Rust semantic plan/u);
   assert.equal(builder.asyncFunction.get(declaration) === fact, true);
   assert.equal(builder.minimumFoundation(), "core");
 });
@@ -84,10 +86,10 @@ for (const [name, lifetime, capture] of [
   assert.equal(fact.capturedParameters === parameters && fact.storage === lifetime, true);
   assert.equal(fact.ownedReceiver === capture, true);
   assert.equal(Object.hasOwn(fact, "ownedReceiver"), capture !== undefined);
-  builder.asyncFunctions.promise(declaration, { ...future }, { ...integer }, {
+  assertRustInheritedRecordCorrespondence("asyncFunction", declaration, fact, candidate => candidate.asyncFunctions.promise(declaration, { ...future }, { ...integer }, {
     ...selected, capturedParameters: [...parameters], storage: { ...lifetime },
     ...(capture === undefined ? {} : { ownedReceiver: { ...capture, occurrences: [...capture.occurrences] } }),
-  });
+  }));
   assert.equal(builder.asyncFunction.get(declaration) === fact, true, "structural equality keeps original evidence");
   assert.equal(builder.asyncFunction.get({}) === undefined, true);
   assert.equal(builder.minimumFoundation(), "core", "suspension records do not add unrelated foundation demand");
@@ -115,11 +117,13 @@ test("promise equality detects output, parameter identity/order, storage region 
     [future, integer, { ...selected, ownedReceiver: { ...receiver, occurrences: [{}] } }],
   ];
   for (const [index, [carrier, output, changed]] of changes.entries()) {
-    assert.throws(() => builder.asyncFunctions.promise(declaration, carrier, output, changed),
+    assertRustInheritedRecordConflict("asyncFunction", declaration, original,
+      candidate => candidate.asyncFunctions.promise(declaration, carrier, output, changed),
       /Conflicting Rust semantic plan 'tsonic.rust.asyncFunction'/u, `change ${index}`);
     assert.equal(builder.asyncFunction.get(declaration) === original, true, `change ${index}`);
   }
-  assert.throws(() => builder.asyncFunctions.native(declaration, integer), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("asyncFunction", declaration, original,
+    candidate => candidate.asyncFunctions.native(declaration, integer), /Conflicting Rust semantic plan/u);
 });
 
 test("yield publication preserves active generator, next result and delegated return identities", () => {
@@ -141,8 +145,10 @@ test("yield publication preserves active generator, next result and delegated re
   assert.equal(delegated.kind, "delegate");
   assert.equal(delegated.yieldType === integer && delegated.resultType === delegatedReturn, true);
   assert.equal(delegated.delegatedCarrier === delegatedCarrier, true);
-  builder.yields.value(value, generator, protocol({ yieldType: { ...integer }, nextType: { ...wide } }));
-  builder.yields.delegate(delegate, generator, selected, { ...delegatedCarrier }, { ...integer });
+  assertRustInheritedRecordCorrespondence("yield", value, yielded,
+    candidate => candidate.yields.value(value, generator, protocol({ yieldType: { ...integer }, nextType: { ...wide } })));
+  assertRustInheritedRecordCorrespondence("yield", delegate, delegated,
+    candidate => candidate.yields.delegate(delegate, generator, selected, { ...delegatedCarrier }, { ...integer }));
   assert.equal(builder.yield.get(value) === yielded && builder.yield.get(delegate) === delegated, true);
   assert.equal(builder.minimumFoundation(), "core");
 });
@@ -156,11 +162,13 @@ test("yield conflicts preserve the canonical record and reject foreign declarati
   const original = builder.yield.get(expression);
   for (const [owner, changed] of [[{}, selected], [generator, protocol({ nextType: integer })],
     [generator, protocol({ yieldType: wide })]]) {
-    assert.throws(() => builder.yields.value(expression, owner, changed),
+    assertRustInheritedRecordConflict("yield", expression, original,
+      candidate => candidate.yields.value(expression, owner, changed),
       /Conflicting Rust semantic plan 'tsonic.rust.yield'/u);
     assert.equal(builder.yield.get(expression) === original, true);
   }
-  assert.throws(() => builder.yields.delegate(expression, generator, selected, integer, wide), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("yield", expression, original,
+    candidate => candidate.yields.delegate(expression, generator, selected, integer, wide), /Conflicting Rust semantic plan/u);
 });
 
 for (const [kind, evaluateKey] of [["KindStringLiteral", false], ["KindNumericLiteral", false],
@@ -235,10 +243,12 @@ test("compound index publication preserves the finalized ABI object and full str
   assert.equal(original.kind, "runtime-set");
   assert.equal(original.operationId, "native.index-set");
   assert.equal(original.abi === abi, true);
-  builder.compoundWrites.index(expression, "native.index-set", indexAbi());
+  assertRustInheritedRecordCorrespondence("compoundWrite", expression, original,
+    candidate => candidate.compoundWrites.index(expression, "native.index-set", indexAbi()));
   assert.equal(builder.compoundWrite.get(expression) === original, true);
   for (const [operation, changed] of [["other.index-set", abi], ["native.index-set", indexAbi(wide)]]) {
-    assert.throws(() => builder.compoundWrites.index(expression, operation, changed),
+    assertRustInheritedRecordConflict("compoundWrite", expression, original,
+      candidate => candidate.compoundWrites.index(expression, operation, changed),
       /Conflicting Rust semantic plan 'tsonic.rust.compoundWrite'/u);
     assert.equal(builder.compoundWrite.get(expression) === original, true);
   }

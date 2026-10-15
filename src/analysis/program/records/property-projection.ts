@@ -3,6 +3,7 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import type { RustPropertyProjectionCase, RustPropertyProjectionFact } from "../../../target-model/records/property-projections.js";
 import type { RustValueConversion } from "../../../target-model/operations/model.js";
 import { createRustRecordFamily } from "./family.js";
+import { rustPropertyProjectionFactEquals } from "../../../target-model/records/operation-equality.js";
 
 export interface RustPropertyProjectionProducer {
   readonly records: RustRecordFamily<RustPropertyProjectionFact>;
@@ -15,9 +16,7 @@ export function createRustPropertyProjectionProducer(
   assertOpen: () => void,
   inherited?: RustRecordFamily<RustPropertyProjectionFact>,
 ): RustPropertyProjectionProducer {
-  const family = createRustRecordFamily({ id: "tsonic.rust.propertyProjection", equals: (
-    left: RustPropertyProjectionFact, right: RustPropertyProjectionFact,
-  ) => left === right }, assertOpen, inherited);
+  const family = createRustRecordFamily({ id: "tsonic.rust.propertyProjection", equals: rustPropertyProjectionFactEquals }, assertOpen, inherited);
   return Object.freeze({
     records: family.reader,
     assertOpen,
@@ -25,10 +24,9 @@ export function createRustPropertyProjectionProducer(
       cases: readonly RustPropertyProjectionCase[]): RustValueConversion | undefined {
       assertOpen();
       if (conversion === undefined) return undefined;
-      if (family.reader.get(expression) !== undefined) return undefined;
       const selected = Object.freeze({ conversion, cases: Object.freeze(cases) });
       family.writer.set(expression, selected);
-      return selected.conversion;
+      return family.reader.get(expression)!.conversion;
     },
   });
 }

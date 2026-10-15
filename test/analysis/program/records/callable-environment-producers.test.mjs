@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustCallableTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
@@ -51,7 +52,9 @@ for (const [family, producer] of callableFamilies) {
     const declaration = {};
     builder[producer].function(reference, declaration, "input.ts", "step", callable, [integer], text);
     const fact = builder[family].get(reference);
-    builder[producer].function(reference, declaration, "input.ts", "step", rustCallableTargetType([{ ...integer }], { ...text }), [{ ...integer }], { ...text });
+    assertRustInheritedRecordCorrespondence(family, reference, fact,
+      candidate => candidate[producer].function(reference, declaration, "input.ts", "step", rustCallableTargetType([{ ...integer }], { ...text }), [{ ...integer }], { ...text }));
+    assert.throws(() => builder[producer].function(reference, declaration, "input.ts", "step", callable, [integer], text), /Duplicate Rust semantic plan/u);
     assert.equal(builder[family].get(reference) === fact, true);
     const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
     child[producer].function(reference, declaration, "input.ts", "step", callable, [integer], text);

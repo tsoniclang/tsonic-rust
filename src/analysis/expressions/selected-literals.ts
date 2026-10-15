@@ -13,7 +13,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustEnumLiteralFact, rustUnaryMinusLiteralFact, rustUnaryPlusLiteralFact } from "../operations/literal-plans.js";
 import { rustSelectedOperatorOperation } from "../operations/target-operation.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { rustTargetOperationFactEquals } from "../operations/contracts/equality.js";
+import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
 import { rustSelectedTargetOperationEquals } from "../../target-model/types/equality.js";
 
 export function sourceLiteralIsRepresentableAsPrimitive(

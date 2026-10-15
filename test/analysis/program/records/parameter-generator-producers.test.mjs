@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { createRustSourceParameterAbiProducer } from "../../../../dist/analysis/program/records/source-parameter-abi.js";
@@ -47,7 +48,8 @@ for (const [family, admit] of Object.entries(construct)) {
     admit(parent, subject);
     const fact = parent[family].get(subject);
     assert.equal(fact !== undefined && Object.isFrozen(fact), true);
-    admit(parent, subject);
+    assertRustInheritedRecordCorrespondence(family, subject, fact, candidate => admit(candidate, subject));
+    assert.throws(() => admit(parent, subject), /Duplicate Rust semantic plan/u);
     assert.equal(parent[family].get(subject) === fact, true);
     assert.equal(parent[family].get({ ...subject }) === undefined, true);
     const sealed = parent.seal([]);
@@ -122,7 +124,8 @@ test("generator equality rejects every changed protocol, captured identity, life
     const subject = {};
     parent.generators.suspend(subject, protocol, originalRetention);
     const fact = parent.generator.get(subject);
-    assert.throws(() => parent.generators.suspend(subject, selectedProtocol, selectedRetention), /Conflicting Rust semantic plan 'tsonic\.rust\.generator'/u, String(index));
+    assertRustInheritedRecordConflict("generator", subject, fact,
+      candidate => candidate.generators.suspend(subject, selectedProtocol, selectedRetention), /Conflicting Rust semantic plan 'tsonic\.rust\.generator'/u, String(index));
     assert.equal(parent.generator.get(subject) === fact, true, String(index));
     const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     assert.throws(() => child.generators.suspend(subject, selectedProtocol, selectedRetention), /Conflicting Rust semantic plan 'tsonic\.rust\.generator'/u, String(index));

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
@@ -58,7 +59,8 @@ for (const mode of ["by-value", "borrow-shared", "borrow-mut"]) {
     child.argumentPassingPlans.pass(subject, mode);
     assert.equal(child.argumentPassing.get(subject) === first, true);
     for (const different of ["by-value", "borrow-shared", "borrow-mut"].filter(candidate => candidate !== mode)) {
-      assert.throws(() => child.argumentPassingPlans.pass(subject, different), conflict);
+      assertRustInheritedRecordConflict("argumentPassing", subject, first,
+        candidate => candidate.argumentPassingPlans.pass(subject, different), conflict);
       assert.equal(child.argumentPassing.get(subject) === first, true);
     }
     const other = {};
@@ -97,12 +99,15 @@ for (const operands of operandCases) {
     const childRequiredRecords = [];
     child.typedLocations.finalize(subject, { ...integer }, structuredClone(location), { ...operands });
     assert.equal(child.typedLocationPlan.get(subject) === first, true);
-    assert.throws(() => child.typedLocations.finalize(subject, wide, location, operands), conflict);
-    assert.throws(() => child.typedLocations.finalize(subject, integer, rustSourceLocationTargetType(wide), operands), conflict);
+    assertRustInheritedRecordConflict("typedLocationPlan", subject, first,
+      candidate => candidate.typedLocations.finalize(subject, wide, location, operands), conflict);
+    assertRustInheritedRecordConflict("typedLocationPlan", subject, first,
+      candidate => candidate.typedLocations.finalize(subject, integer, rustSourceLocationTargetType(wide), operands), conflict);
     for (const [key, selected] of Object.entries(operands)) {
       if (key === "operation") continue;
       const replacement = key === "optional" ? !selected : key === "sourcePointeeCarrier" ? integer : {};
-      assert.throws(() => child.typedLocations.finalize(subject, integer, location, { ...operands, [key]: replacement }), conflict, key);
+      assertRustInheritedRecordConflict("typedLocationPlan", subject, first,
+        candidate => candidate.typedLocations.finalize(subject, integer, location, { ...operands, [key]: replacement }), conflict, key);
       assert.equal(child.typedLocationPlan.get(subject) === first, true, key);
     }
     const other = {};
@@ -153,9 +158,11 @@ for (const storage of ["location", "cell", "borrow-cell"]) {
         { ...selected, iterationScope: {} }, { ...selected, initialization: deferred ? undefined : "deferred" }];
       if (storage === "location") incompatible.push({ ...selected, iterationScope: undefined });
       for (const changed of incompatible) {
-        assert.throws(() => child.bindingStoragePlans.capture(subject, integer, changed), conflict);
+        assertRustInheritedRecordConflict("bindingStorage", subject, first,
+          candidate => candidate.bindingStoragePlans.capture(subject, integer, changed), conflict);
       }
-      assert.throws(() => child.bindingStoragePlans.capture(subject, wide, selected), conflict);
+      assertRustInheritedRecordConflict("bindingStorage", subject, first,
+        candidate => candidate.bindingStoragePlans.capture(subject, wide, selected), conflict);
       const other = {};
       child.bindingStoragePlans.capture(other, integer, { storage: "value", mutable: true });
       assert.equal(child.bindingStorage.get(other) === undefined, true, "a selected inline value does not acquire backing storage");
@@ -194,7 +201,8 @@ test("retained calls finalize one frozen ordered lifetime map without inventing 
     new Map([["first", firstLifetime]]), new Map([["other", firstLifetime], ["second", secondLifetime]]),
     new Map([["first", firstLifetime], ["second", { ...secondLifetime, callIdentity: "another" }]]),
     new Map([["first", firstLifetime], ["second", { ...secondLifetime, parameterIdentity: "another" }]])]) {
-    assert.throws(() => child.retainedCalls.finalize(subject, changed), conflict);
+    assertRustInheritedRecordConflict("retainedCallLifetimes", subject, first,
+      candidate => candidate.retainedCalls.finalize(subject, changed), conflict);
     assert.equal(child.retainedCallLifetimes.get(subject) === first, true);
   }
   const other = {};
@@ -228,8 +236,10 @@ for (const [normalization, projected, fallback, checked] of [
     const childRequiredRecords = [];
     child.bindingProjections.resolve(childRequiredRecords, subject, source, projected, { ...projections }, fallback, checked);
     assert.equal(child.bindingProjection.get(subject) === first, true);
-    assert.throws(() => child.bindingProjections.resolve(childRequiredRecords, subject, wide, projected, projections, fallback, checked), conflict);
-    assert.throws(() => child.bindingProjections.resolve(childRequiredRecords, subject, source, projected, { ...projections, index: 1 }, fallback, checked), conflict);
+    assertRustInheritedRecordConflict("bindingProjection", subject, first,
+      candidate => candidate.bindingProjections.resolve([], subject, wide, projected, projections, fallback, checked), conflict);
+    assertRustInheritedRecordConflict("bindingProjection", subject, first,
+      candidate => candidate.bindingProjections.resolve([], subject, source, projected, { ...projections, index: 1 }, fallback, checked), conflict);
     assert.equal(child.bindingProjections.resolve(childRequiredRecords, {}, source, integer, projections, undefined, wide) === undefined, true,
       "a mismatching checked array premise is rejected before admission");
     const other = {};

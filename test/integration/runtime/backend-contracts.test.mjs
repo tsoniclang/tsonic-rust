@@ -1,4 +1,4 @@
-import { rustTargetOperationFactEquals } from "../../../dist/analysis/operations/contracts/equality.js";
+import { rustTargetOperationFactEquals } from "../../../dist/target-model/records/operation-equality.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import { test } from "node:test";

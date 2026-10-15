@@ -1,11 +1,24 @@
 import type { RustBindingStorageFact, RustComputedMemberFact, RustClosureCaptureFact, RustSourceCallableValueFact } from "./operation-selections.js";
 import type { RustCapturedFieldStorageFact } from "./receiver-captures.js";
-import type { RustCallScopedLifetimeReconciliationFact, RustFlowReadProjectionFact, RustProjectDowncastFact } from "./value-projections.js";
+import type { RustCallScopedLifetimeReconciliationFact, RustFlowReadProjectionFact, RustProjectDowncastFact, RustSourceBindingFact } from "./value-projections.js";
+import type { RustSourceCallableReturnFact } from "./source-declarations.js";
 import { closedMetadataEquals, hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../metadata/closed-data.js";
 import { isRustCapturedFieldStorage } from "../types/field-storage.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustLifetimesEqual } from "../lifetimes/index.js";
 import type { RustAsyncFunctionFact, RustGeneratorFact, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "./callables-and-resources.js";
+
+export function rustSourceCallableReturnFactEquals(left: RustSourceCallableReturnFact, right: RustSourceCallableReturnFact): boolean {
+  return rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier) &&
+    left.borrowedParameter === right.borrowedParameter && left.implementationCompletion === right.implementationCompletion &&
+    left.undefinedReturn === right.undefinedReturn && left.fallthroughUndefined === right.fallthroughUndefined &&
+    left.canFallThrough === right.canFallThrough;
+}
+
+export function rustSourceBindingFactEquals(left: RustSourceBindingFact, right: RustSourceBindingFact): boolean {
+  return left.scope === right.scope && left.sourceName === right.sourceName && left.sourceDeclaration === right.sourceDeclaration &&
+    (left.scope !== "module" || right.scope === "module" && left.fileName === right.fileName);
+}
 
 export function rustAsyncFunctionFactEquals(left: RustAsyncFunctionFact, right: RustAsyncFunctionFact): boolean {
   return left.kind === right.kind && rustTargetTypeRefEquals(left.futureCarrier, right.futureCarrier) &&

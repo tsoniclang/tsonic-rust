@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { isRustUnitCarrier, rustCallableTargetType } from "../../../../dist/target-model/types/index.js";
@@ -98,15 +99,15 @@ test("module callable inherited equality compares every physical ABI member with
   child.moduleBindings.function(subject, "implementation", { ...value, parameterCarriers: [{ ...integer }] });
   assert.equal(child.moduleBinding.get(subject) === original, true);
   const conflicts = [
-    () => child.moduleBindings.function(subject, "other", value),
-    () => child.moduleBindings.callable(subject, {}, "implementation", value),
+    candidate => candidate.moduleBindings.function(subject, "other", value),
+    candidate => candidate.moduleBindings.callable(subject, {}, "implementation", value),
     ...[{ ...value, name: "other" }, { ...value, carrier: text }, { ...value, parameterCarriers: [] },
       { ...value, parameterCarriers: [text] }, { ...value, resultCarrier: integer }].map(changed =>
-      () => child.moduleBindings.function(subject, "implementation", changed)),
-    () => child.moduleBindings.defaultExport(subject, integer),
+      candidate => candidate.moduleBindings.function(subject, "implementation", changed)),
+    candidate => candidate.moduleBindings.defaultExport(subject, integer),
   ];
   for (const write of conflicts) {
-    assert.throws(write, /Conflicting Rust semantic plan 'tsonic\.rust\.moduleBinding'/u);
+    assertRustInheritedRecordConflict("moduleBinding", subject, original, write, /Conflicting Rust semantic plan 'tsonic\.rust\.moduleBinding'/u);
     assert.equal(child.moduleBinding.get(subject) === original, true);
   }
   const fresh = {};

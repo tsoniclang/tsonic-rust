@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { selectRustNumericConstraintComparison } from "../../../../dist/policy/operations/numeric/union.js";
+import { recordRustIndexedCallKeyArguments } from "../../../../dist/analysis/operations/indexed-call-keys.js";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "uint64" };
@@ -102,9 +104,12 @@ test("generic comparison publication retains operation and operand identity, ord
   assert.equal(record.length, 2);
   assert.equal(record[0] === parameter && record[1] === wide, true);
   assert.equal(Object.isFrozen(record), true);
-  builder.genericNumerics.comparison(subject, { ...parameter }, { ...wide }, comparison());
+  assert.throws(() => builder.genericNumerics.comparison(subject, { ...parameter }, { ...wide }, comparison()), /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("genericNumericOperands", subject, record,
+    candidate => candidate.genericNumerics.comparison(subject, { ...parameter }, { ...wide }, comparison()));
   assert.equal(builder.genericNumericOperands.get(subject) === record, true);
-  assert.throws(() => builder.genericNumerics.comparison(subject, wide, parameter, comparison()),
+  assertRustInheritedRecordConflict("genericNumericOperands", subject, record,
+    candidate => candidate.genericNumerics.comparison(subject, wide, parameter, comparison()),
     /Conflicting Rust semantic plan 'tsonic.rust.genericNumericOperands'/u);
   assert.equal(builder.genericNumericOperands.get(subject) === record, true);
   assert.equal(builder.genericNumerics.comparison({}, integer, wide, undefined) === undefined, true);
@@ -122,7 +127,8 @@ test("generic operands inherit canonical evidence and isolate genuinely new sour
   const childRequiredRecords = [];
   child.genericNumerics.comparison(subject, { ...integer }, { ...wide }, comparison());
   assert.equal(child.genericNumericOperands.get(subject) === record, true);
-  assert.throws(() => child.genericNumerics.comparison(subject, integer, parameter, comparison()), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("genericNumericOperands", subject, record,
+    candidate => candidate.genericNumerics.comparison(subject, integer, parameter, comparison()), /Conflicting Rust semantic plan/u);
   const newSubject = {};
   child.genericNumerics.comparison(newSubject, parameter, wide, comparison());
   assert.equal(inherited.genericNumericOperands.get(newSubject) === undefined, true);
@@ -142,7 +148,7 @@ test("indexed-key finalization uses actual source bindings and calls evaluation 
   ]);
   selected.member.parameters.push({ name: "ignored", type: integer });
   const seen = [];
-  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, selected, [first, second, ignored], new Map([["Key", wide]]), node => {
+  assert.equal(recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, selected, [first, second, ignored], new Map([["Key", wide]]), node => {
     seen.push(node);
     return node === first;
   }), true);
@@ -163,7 +169,7 @@ test("indexed-key finalization preserves original partial admission before a lat
     { sourceParameterIndex: 0, sourceArgumentIndex: 1, sourceForm: "value" },
   ]);
   let selections = 0;
-  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, selected, [argument], new Map([["Key", wide]]), () => {
+  assert.equal(recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, selected, [argument], new Map([["Key", wide]]), () => {
     selections += 1;
     return false;
   }), false);
@@ -178,20 +184,20 @@ test("indexed keys reject nonvalue bindings, skip unresolved keys and retain str
   const argument = {};
   const keys = new Map([["Key", wide]]);
   const select = selectedKey();
-  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, select, [argument], keys, () => false), true);
+  assert.equal(recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, select, [argument], keys, () => false), true);
   const record = builder.indexedFieldKeyArgument.get(argument);
-  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, select, [argument], new Map([["Key", { ...wide }]]), () => false), true);
+  assert.equal(recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, select, [argument], new Map([["Key", { ...wide }]]), () => false), true);
   assert.equal(builder.indexedFieldKeyArgument.get(argument) === record, true);
   for (const [changedKeys, evaluate] of [[new Map([["Key", integer]]), () => false], [keys, () => true]]) {
-    assert.throws(() => builder.indexedFieldKeys.bind(builderRequiredRecords, select, [argument], changedKeys, evaluate),
+    assert.throws(() => recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, select, [argument], changedKeys, evaluate),
       /Conflicting Rust semantic plan 'tsonic.rust.indexedFieldKeyArgument'/u);
     assert.equal(builder.indexedFieldKeyArgument.get(argument) === record, true);
   }
   const unseen = {};
-  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, selectedKey([{ sourceParameterIndex: 0, sourceArgumentIndex: 0, sourceForm: "spread" }]),
+  assert.equal(recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, selectedKey([{ sourceParameterIndex: 0, sourceArgumentIndex: 0, sourceForm: "spread" }]),
     [unseen], keys, () => { assert.fail("a spread cannot be evaluated as one key"); }), false);
   for (const selectedKeys of [new Map(), new Map([["Key", parameter]])]) {
-    assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, select, [unseen], selectedKeys,
+    assert.equal(recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, select, [unseen], selectedKeys,
       () => { assert.fail("unresolved key cannot be admitted"); }), true);
     assert.equal(builder.indexedFieldKeyArgument.get(unseen) === undefined, true);
   }
@@ -203,16 +209,16 @@ test("indexed keys retain inherited metadata identity and cannot leak into their
   const subject = {};
   const signature = selectedKey();
   const keys = new Map([["Key", wide]]);
-  parent.indexedFieldKeys.bind(parentRequiredRecords, signature, [subject], keys, () => false);
+  recordRustIndexedCallKeyArguments(parent, parentRequiredRecords, signature, [subject], keys, () => false);
   const original = parent.indexedFieldKeyArgument.get(subject);
   const inherited = parent.seal(parentRequiredRecords);
   const child = createRustProgramRecordBuilder(undefined, inherited);
   const childRequiredRecords = [];
-  child.indexedFieldKeys.bind(childRequiredRecords, signature, [subject], keys, () => false);
+  recordRustIndexedCallKeyArguments(child, childRequiredRecords, signature, [subject], keys, () => false);
   assert.equal(child.indexedFieldKeyArgument.get(subject) === original, true);
-  assert.throws(() => child.indexedFieldKeys.bind(childRequiredRecords, signature, [subject], keys, () => true), /Conflicting Rust semantic plan/u);
+  assert.throws(() => recordRustIndexedCallKeyArguments(child, childRequiredRecords, signature, [subject], keys, () => true), /Conflicting Rust semantic plan/u);
   const fresh = {};
-  child.indexedFieldKeys.bind(childRequiredRecords, signature, [fresh], keys, () => true);
+  recordRustIndexedCallKeyArguments(child, childRequiredRecords, signature, [fresh], keys, () => true);
   assert.equal(inherited.indexedFieldKeyArgument.get(fresh) === undefined, true);
   assert.equal(child.indexedFieldKeyArgument.get(fresh).evaluate, true);
 });
@@ -230,9 +236,10 @@ test("property projections freeze the selected cases and preserve exact conversi
   assert.equal(record.conversion === conversion && record.cases === cases, true);
   assert.equal(record.cases[0].reads[0] === read, true);
   const equivalent = projection();
-  assert.equal(builder.propertyProjections.finalize(expression, equivalent, []) === undefined, true);
+  assert.throws(() => builder.propertyProjections.finalize(expression, equivalent, []), /Duplicate Rust semantic plan/u);
   assert.equal(builder.propertyProjection.get(expression) === record, true, "a repeated constructor cannot discard original cases");
-  assert.equal(builder.propertyProjections.finalize(expression, { ...conversion, source: wide }, []) === undefined, true);
+  assertRustInheritedRecordConflict("propertyProjection", expression, record,
+    candidate => candidate.propertyProjections.finalize(expression, { ...conversion, source: wide }, []), /Conflicting Rust semantic plan/u);
   assert.equal(builder.propertyProjection.get(expression) === record, true, "conflicts fail without changing evidence");
   const absent = {};
   assert.equal(builder.propertyProjections.finalize(absent, undefined, []) === undefined, true);
@@ -250,9 +257,10 @@ test("property projection scopes preserve original case identity and reject inco
   const child = createRustProgramRecordBuilder(undefined, inherited);
   const childRequiredRecords = [];
   const equivalent = projection();
-  assert.equal(child.propertyProjections.finalize(subject, equivalent, []) === undefined, true);
+  assert.equal(child.propertyProjections.finalize(subject, equivalent, []) === original.conversion, true);
   assert.equal(child.propertyProjection.get(subject) === original, true);
-  assert.equal(child.propertyProjections.finalize(subject, { ...equivalent, source: wide }, []) === undefined, true);
+  assertRustInheritedRecordConflict("propertyProjection", subject, original,
+    candidate => candidate.propertyProjections.finalize(subject, { ...equivalent, source: wide }, []), /Conflicting Rust semantic plan/u);
   assert.equal(child.propertyProjection.get(subject) === original, true);
   const specialized = {};
   child.propertyProjections.finalize(specialized, equivalent, []);
@@ -274,8 +282,8 @@ test("sealing closes every producer before cache reads, rejected selections or s
       () => builder.nativeUnreachableNodes.resolve(subject, unexpected),
       () => builder.genericNumerics.comparison(subject, integer, wide, comparison()),
       () => builder.genericNumerics.comparison(subject, integer, wide, undefined),
-      () => builder.indexedFieldKeys.bind(builderRequiredRecords, selectedKey(), [subject], new Map([["Key", wide]]), unexpected),
-      () => builder.indexedFieldKeys.bind(builderRequiredRecords, { member: { parameters: [] } }, [], new Map(), unexpected),
+      () => recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, selectedKey(), [subject], new Map([["Key", wide]]), unexpected),
+      () => recordRustIndexedCallKeyArguments(builder, builderRequiredRecords, { member: { parameters: [] } }, [], new Map(), unexpected),
       () => builder.propertyProjections.finalize(subject, projection(), []),
       () => builder.propertyProjections.finalize(subject, undefined, []),
     ]) assert.throws(write, /after analysis is sealed/u);

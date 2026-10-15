@@ -29,13 +29,16 @@ export function createRustRecordFamily<T>(
     subject === undefined ? undefined : values?.get(subject) ?? inherited?.get(subject);
   const admit = (subject: ExtensionFactSubject, value: T): RustRecordConflict<T> | undefined => {
     assertOpen();
-    const existing = get(subject);
-    if (existing !== undefined && !definition.equals(existing, value)) return { existing, incoming: value };
-    onAdmission?.(value);
-    if (existing === undefined) {
-      values ??= new WeakMap<ExtensionFactSubject, T>();
-      values.set(subject, value);
+    if (values?.has(subject)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        `Duplicate Rust semantic plan '${definition.id}' for one exact source subject.`);
     }
+    const existing = inherited?.get(subject);
+    if (existing !== undefined && !definition.equals(existing, value)) return { existing, incoming: value };
+    const canonical = existing ?? value;
+    onAdmission?.(canonical);
+    values ??= new WeakMap<ExtensionFactSubject, T>();
+    values.set(subject, canonical);
     return undefined;
   };
   return Object.freeze({

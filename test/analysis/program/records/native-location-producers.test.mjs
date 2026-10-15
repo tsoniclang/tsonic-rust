@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 
@@ -166,12 +167,15 @@ test("raw-location conversion construction keeps exact expression identity, oper
   assert.equal(original.inputCarrier === integer, true);
   assert.equal(original.layout === layout, true);
   assert.equal(Object.isFrozen(original), true);
-  builder.rawLocations.conversion(subject, "to-raw", expression, { ...integer }, { ...layout });
+  assert.throws(() => builder.rawLocations.conversion(subject, "to-raw", expression, { ...integer }, { ...layout }), /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("rawLocationPlan", subject, original,
+    candidate => candidate.rawLocations.conversion(subject, "to-raw", expression, { ...integer }, { ...layout }));
   assert.equal(builder.rawLocationPlan.get(subject) === original, true);
   for (const [operation, operand, carrier, selectedLayout] of [
     ["reinterpret", expression, integer, layout], ["to-raw", {}, integer, layout],
     ["to-raw", expression, otherInteger, layout], ["to-raw", expression, integer, changedLayout],
-  ]) assert.throws(() => builder.rawLocations.conversion(subject, operation, operand, carrier, selectedLayout),
+  ]) assertRustInheritedRecordConflict("rawLocationPlan", subject, original,
+    candidate => candidate.rawLocations.conversion(subject, operation, operand, carrier, selectedLayout),
     /Conflicting Rust semantic plan/u);
   const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.rawLocations.conversion(subject, "to-raw", expression, integer, layout);
@@ -188,11 +192,15 @@ test("field and record memory-binding construction preserves exact ordered locat
   assert.equal(original.expression === expression, true);
   assert.equal(original.carrier === integer, true);
   assert.equal(Object.isFrozen(original), true);
-  builder.memoryBindings.field(field, { ...integer }, expression);
+  assert.throws(() => builder.memoryBindings.field(field, { ...integer }, expression), /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("memoryBindingPlan", field, original,
+    candidate => candidate.memoryBindings.field(field, { ...integer }, expression));
   assert.equal(builder.memoryBindingPlan.get(field) === original, true);
-  assert.throws(() => builder.memoryBindings.field(field, integer, {}), /Conflicting Rust semantic plan/u);
-  assert.throws(() => builder.memoryBindings.field(field, otherInteger, expression), /Conflicting Rust semantic plan/u);
-  assert.throws(() => builder.memoryBindings.record(field, integer, []), /Conflicting Rust semantic plan/u);
+  for (const attempt of [candidate => candidate.memoryBindings.field(field, integer, {}),
+    candidate => candidate.memoryBindings.field(field, otherInteger, expression),
+    candidate => candidate.memoryBindings.record(field, integer, [])]) {
+    assertRustInheritedRecordConflict("memoryBindingPlan", field, original, attempt, /Conflicting Rust semantic plan/u);
+  }
   const record = {};
   const fields = [Object.freeze({ expression, storageIndex: 0, carrier: integer }),
     Object.freeze({ expression: {}, storageIndex: 1, carrier: otherInteger })];
@@ -202,11 +210,14 @@ test("field and record memory-binding construction preserves exact ordered locat
   assert.equal(selected.fields === fields, true, "no copying or competing field storage");
   assert.equal(Object.isFrozen(selected), true);
   assert.equal(Object.isFrozen(fields), true);
-  builder.memoryBindings.record(record, { ...integer }, fields.map(entry => ({ ...entry })));
+  assert.throws(() => builder.memoryBindings.record(record, { ...integer }, fields.map(entry => ({ ...entry }))), /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("memoryBindingPlan", record, selected,
+    candidate => candidate.memoryBindings.record(record, { ...integer }, fields.map(entry => ({ ...entry }))));
   assert.equal(builder.memoryBindingPlan.get(record) === selected, true);
   for (const changed of [[], [...fields].reverse(), [{ ...fields[0], storageIndex: 1 }, fields[1]],
     [{ ...fields[0], expression: {} }, fields[1]], [{ ...fields[0], carrier: otherInteger }, fields[1]]]) {
-    assert.throws(() => builder.memoryBindings.record(record, integer, changed), /Conflicting Rust semantic plan/u);
+    assertRustInheritedRecordConflict("memoryBindingPlan", record, selected,
+      candidate => candidate.memoryBindings.record(record, integer, changed), /Conflicting Rust semantic plan/u);
   }
   const empty = {};
   builder.memoryBindings.record(empty, integer, []);
@@ -244,7 +255,9 @@ test("raw address equality keeps every exact native operation, width, result and
   const operand = { expression: {}, carrier: integer, input: "u64" };
   builder.rawAddresses.address(subject, "address", 64, integer, [operand]);
   const original = builder.rawAddressPlan.get(subject);
-  builder.rawAddresses.address(subject, "address", 64, { ...integer }, [{ ...operand, carrier: { ...integer } }]);
+  assert.throws(() => builder.rawAddresses.address(subject, "address", 64, { ...integer }, [{ ...operand, carrier: { ...integer } }]), /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("rawAddressPlan", subject, original,
+    candidate => candidate.rawAddresses.address(subject, "address", 64, { ...integer }, [{ ...operand, carrier: { ...integer } }]));
   assert.equal(builder.rawAddressPlan.get(subject) === original, true);
   for (const [method, width, result, arguments_] of [
     ["from_address", 64, integer, [operand]], ["address", 32, integer, [operand]],
@@ -252,8 +265,10 @@ test("raw address equality keeps every exact native operation, width, result and
     ["address", 64, integer, [{ ...operand, expression: {} }]],
     ["address", 64, integer, [{ ...operand, input: "i128" }]],
     ["address", 64, integer, [{ ...operand, carrier: otherInteger }]],
-  ]) assert.throws(() => builder.rawAddresses.address(subject, method, width, result, arguments_), /Conflicting Rust semantic plan/u);
-  assert.throws(() => builder.rawAddresses.identity(subject, "hash", integer, [operand]), /Conflicting Rust semantic plan/u);
+  ]) assertRustInheritedRecordConflict("rawAddressPlan", subject, original,
+    candidate => candidate.rawAddresses.address(subject, method, width, result, arguments_), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("rawAddressPlan", subject, original,
+    candidate => candidate.rawAddresses.identity(subject, "hash", integer, [operand]), /Conflicting Rust semantic plan/u);
   const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.rawAddresses.address(subject, "address", 64, integer, [operand]);
   assert.equal(child.rawAddressPlan.get(subject) === original, true);

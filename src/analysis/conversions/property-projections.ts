@@ -19,8 +19,7 @@ import type { RustProjectAccessorSelection } from "../../target-model/records/pr
 import type { RustPropertyProjectionCase, RustPropertyProjectionFact } from "../../target-model/records/property-projections.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustProjectFieldDispatchQueries } from "../project-types/field-dispatch.js";
-import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { rustProjectMemberSelectionEquals } from "../operations/contracts/equality.js";
+import { rustPropertyProjectionFactEquals } from "../../target-model/records/operation-equality.js";
 
 const maximumPropertyProjectionMembers = 1_048_576;
 
@@ -84,17 +83,6 @@ export function createRustPropertyProjectionSelector(
     cache.set(argumentIndex, canonical);
     return canonical.conversion;
   };
-}
-
-export function rustPropertyProjectionFactEquals(left: RustPropertyProjectionFact, right: RustPropertyProjectionFact): boolean {
-  return closedMetadataEquals(left.conversion, right.conversion) && left.cases.length === right.cases.length &&
-    left.cases.every((selected, index) => {
-      const other = right.cases[index];
-      return other !== undefined && rustTargetTypeRefEquals(selected.source, other.source) &&
-        closedMetadataEquals(selected.conversion, other.conversion) && selected.reads.length === other.reads.length &&
-        selected.reads.every((read, offset) => other.reads[offset] !== undefined &&
-          rustProjectMemberSelectionEquals(read, other.reads[offset]!));
-    });
 }
 
 export function selectRustPropertyProjectionCase(

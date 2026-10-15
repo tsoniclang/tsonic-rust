@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { RustSourceBindingFact } from "../../../target-model/records/value-projections.js";
 import { createRustRecordFamily } from "./family.js";
+import { rustSourceBindingFactEquals } from "../../../target-model/records/equality.js";
 
 export interface RustSourceBindingProducer {
   readonly records: RustRecordFamily<RustSourceBindingFact>;
@@ -13,10 +14,7 @@ export function createRustSourceBindingProducer(
   assertOpen: () => void,
   inherited?: RustRecordFamily<RustSourceBindingFact>,
 ): RustSourceBindingProducer {
-  const family = createRustRecordFamily<RustSourceBindingFact>({ id: "tsonic.rust.sourceBinding", equals: (left, right) =>
-    left.scope === right.scope && left.sourceName === right.sourceName && left.sourceDeclaration === right.sourceDeclaration &&
-    (left.scope !== "module" || right.scope === "module" && left.fileName === right.fileName),
-  }, assertOpen, inherited);
+  const family = createRustRecordFamily<RustSourceBindingFact>({ id: "tsonic.rust.sourceBinding", equals: rustSourceBindingFactEquals }, assertOpen, inherited);
   return Object.freeze({
     records: family.reader,
     lexical(reference: Node, declaration: Node, sourceName: string): Extract<RustSourceBindingFact, { readonly scope: "lexical" }> {

@@ -8,8 +8,9 @@ import type { RustAsyncFunctionFact, RustGeneratorFact, RustSourceParameterAbiFa
 import type { RustSourceCallableReturnFact } from "../../target-model/records/source-declarations.js";
 import type { RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
-import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals } from "../../target-model/records/equality.js";
+import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals, rustSourceCallableReturnFactEquals } from "../../target-model/records/equality.js";
 import { rustCallableTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "./results.js";
 import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 import { recordRustParameterAbiSelection } from "../declarations/types-and-bindings.js";
@@ -103,7 +104,12 @@ export function finalizeRustCallableSignature(
     if (ast.is.IsSetAccessorDeclaration(declaration)) {
       requireRustRecord(walk.context.requiredRecords, "sourceCallableReturn", declaration,
         "setter", "finalizeRustCallableSignature");
-      records.sourceCallableReturns.setter(declaration);
+      const existing = records.sourceCallableReturn.get(declaration);
+      if (existing === undefined) records.sourceCallableReturns.setter(declaration);
+      else if (!rustSourceCallableReturnFactEquals(existing, { returnCarrier: rustUnitTargetType() })) {
+        failTargetAnalysisInvariant("tsonic-rust",
+          "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact source subject.", declaration);
+      }
     }
     else if (!records.sourceCallableReturns.resolve(walk, declaration, logical.carrier)) return undefined;
     const result = records.sourceCallableReturn.get(declaration);

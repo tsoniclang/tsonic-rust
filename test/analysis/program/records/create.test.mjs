@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 
@@ -110,7 +111,7 @@ test("sealed records publish only frozen typed family readers without a native k
     nativeGuardResult: () => model.nativeGuardResults.resolve(subject, () => false),
     nativeUnreachable: () => model.nativeUnreachableNodes.resolve(subject, () => true),
     genericNumericOperands: () => model.genericNumerics.comparison(subject, carrier, carrier, undefined),
-    indexedFieldKeyArgument: () => model.indexedFieldKeys.bind([], {}, [], new Map(), () => false),
+    indexedFieldKeyArgument: () => model.indexedFieldKeys.selected(subject, carrier, false),
     propertyProjection: () => model.propertyProjections.finalize(subject, undefined, []),
     typeOnlyDeclaration: () => model.typeOnlyDeclarations.finalize({}, []),
     moduleBinding: () => model.moduleBindings.defaultExport(subject, carrier),
@@ -264,7 +265,9 @@ test("all nine foundation-bearing families account through their typed admission
     assert.equal(closedMetadataEquals(selected, fact), true, family + ": full original native evidence retained");
     assert.equal(family === "runtimeCarrier" ? admitted?.carrier === fact.carrier : admitted === selected,
       true, family + ": exact producer input retained");
-    assert.doesNotThrow(() => admitFamily(builder, family, subject, fact), family + ": repeat remains allowed");
+    if (family === "futureValue") {
+      assert.doesNotThrow(() => admitFamily(builder, family, subject, fact), family + ": complete query retains canonical evidence");
+    } else assert.throws(() => admitFamily(builder, family, subject, fact), /Duplicate Rust semantic plan/u, family);
     assert.equal(builder[family].get(subject) === admitted, true, family + ": same canonical record");
     builder.seal(builderRequiredRecords);
     assert.equal(builder.minimumFoundation(), expected, family + ": sealed accounting");
@@ -343,9 +346,11 @@ test("inherited foundation accounting happens on successful admission, never on 
   assert.equal(child.minimumFoundation(), "core", "inheritance alone retains the original accounting rule");
   child.runtimeCarriers.selected(subject, { ...value.carrier });
   assert.equal(child.minimumFoundation(), "alloc");
-  assert.throws(() => child.runtimeCarriers.selected(subject,
+  const rejected = createRustProgramRecordBuilder(undefined, records);
+  assert.throws(() => rejected.runtimeCarriers.selected(subject,
     { kind: "target-named", id: "acme.external.Type" }), /Conflicting Rust semantic plan/u);
   assert.equal(child.minimumFoundation(), "alloc", "rejected evidence cannot raise the requirement");
+  assert.equal(rejected.minimumFoundation(), "core", "a conflicting first inherited admission never adds a native requirement");
   assert.equal(child.runtimeCarrier.get(subject) === original, true, "no inherited evidence replacement");
 });
 
@@ -414,12 +419,14 @@ test("source fields retain exact declaration identity when reselected", () => {
   };
   const subject = {};
   model.targetOperations.source(subject, fact);
-  assert.doesNotThrow(() => model.targetOperations.source(subject, { ...fact, resultCarrier: { ...fact.resultCarrier }, valueSemantics: { ...fact.valueSemantics } }));
+  assertRustInheritedRecordCorrespondence("targetOperation", subject, fact,
+    candidate => candidate.targetOperations.source(subject, { ...fact, resultCarrier: { ...fact.resultCarrier }, valueSemantics: { ...fact.valueSemantics } }));
   for (const mutation of [
     { declaration: { ...declaration } }, { storageIndex: 1 }, { accessMode: "write" },
     { resultCarrier: { kind: "source-primitive", name: "uint32" } },
   ]) {
-    assert.throws(() => model.targetOperations.source(subject, { ...fact, ...mutation }), /Conflicting Rust semantic plan/u);
+    assertRustInheritedRecordConflict("targetOperation", subject, fact,
+      candidate => candidate.targetOperations.source(subject, { ...fact, ...mutation }), /Conflicting Rust semantic plan/u);
   }
 });
 
@@ -445,16 +452,18 @@ test("closed Rust carrier and conversion facts are allocation-independent", () =
   };
 
   model.runtimeCarriers.selected(subject, firstCarrier);
-  assert.doesNotThrow(() => model.runtimeCarriers.selected(subject, equivalentCarrier));
+  assertRustInheritedRecordCorrespondence("runtimeCarrier", subject, model.runtimeCarrier.get(subject),
+    candidate => candidate.runtimeCarriers.selected(subject, equivalentCarrier));
   assert.equal(model.runtimeCarrier.get(subject)?.carrier, firstCarrier);
-  assert.throws(
-    () => model.runtimeCarriers.selected(subject, { kind: "source-primitive", name: "uint8" }),
+  assertRustInheritedRecordConflict("runtimeCarrier", subject, model.runtimeCarrier.get(subject),
+    candidate => candidate.runtimeCarriers.selected(subject, { kind: "source-primitive", name: "uint8" }),
     /Conflicting Rust semantic plan/u,
   );
 
   const conversionSubject = {};
   model.conversions.converted(conversionSubject, firstCarrier);
-  assert.doesNotThrow(() => model.conversions.converted(conversionSubject, equivalentCarrier));
+  assertRustInheritedRecordCorrespondence("conversion", conversionSubject, model.conversion.get(conversionSubject),
+    candidate => candidate.conversions.converted(conversionSubject, equivalentCarrier));
 });
 
 test("selected operations compare target data structurally and source provenance exactly", () => {
@@ -478,9 +487,10 @@ test("selected operations compare target data structurally and source provenance
   };
 
   model.selectedOperations.checked(subject, { kind: "accept", value: { operation: first } });
-  assert.doesNotThrow(() => model.selectedOperations.checked(subject, { kind: "accept", value: { operation: equivalent } }));
-  assert.throws(
-    () => model.selectedOperations.checked(subject, { kind: "accept", value: {
+  assertRustInheritedRecordCorrespondence("selectedOperation", subject, first,
+    candidate => candidate.selectedOperations.checked(subject, { kind: "accept", value: { operation: equivalent } }));
+  assertRustInheritedRecordConflict("selectedOperation", subject, first,
+    candidate => candidate.selectedOperations.checked(subject, { kind: "accept", value: {
       operation: { ...equivalent, provenance: { sourceExpression: {} } },
     } }),
     /Conflicting Rust semantic plan/u,
@@ -525,9 +535,10 @@ test("selected calls preserve exact checker evidence while accepting equivalent 
   };
 
   admitFamily(model, "selectedCall", subject, first);
-  assert.doesNotThrow(() => admitFamily(model, "selectedCall", subject, equivalent));
-  assert.throws(
-    () => admitFamily(model, "selectedCall", subject, {
+  assertRustInheritedRecordCorrespondence("selectedCall", subject, model.selectedCall.get(subject),
+    candidate => admitFamily(candidate, "selectedCall", subject, equivalent));
+  assertRustInheritedRecordConflict("selectedCall", subject, model.selectedCall.get(subject),
+    candidate => admitFamily(candidate, "selectedCall", subject, {
       ...equivalent,
       sourceArgumentBindings: [{ ...equivalent.sourceArgumentBindings[0], selectedArgumentType: {} }],
     }),

@@ -42,6 +42,9 @@ import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js
 
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustSourceBindingFactEquals, rustSourceCallableValueEquals } from "../../target-model/records/equality.js";
+import type { RustSourceCallableValueFact } from "../../target-model/records/operation-selections.js";
 import { resolveRustDeclaredBindingStorage, tryFlowMarkerCall } from "../declarations/types-and-bindings.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -176,14 +179,30 @@ export function recordProjectSourceBinding(
     return undefined;
   }
   requireRustRecord(walk.context.requiredRecords, "sourceBinding", identifier, "project-reference", "recordProjectSourceBinding");
-  const binding: RustSourceBindingFact = sourceDeclarationIsModuleScoped(declaration, ast)
-    ? walk.context.records.sourceBindings.module(identifier, declaration, sourceName, ast.getFileName(ast.getSourceFile(declaration)))
+  const selected: RustSourceBindingFact = sourceDeclarationIsModuleScoped(declaration, ast)
+    ? { scope: "module", sourceDeclaration: declaration, sourceName, fileName: ast.getFileName(ast.getSourceFile(declaration)) }
+    : { scope: "lexical", sourceDeclaration: declaration, sourceName };
+  let binding = walk.context.records.sourceBinding.get(identifier);
+  if (binding !== undefined && !rustSourceBindingFactEquals(binding, selected)) {
+    failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.sourceBinding' for one exact source subject.", identifier);
+  }
+  if (binding === undefined) binding = selected.scope === "module"
+    ? walk.context.records.sourceBindings.module(identifier, declaration, sourceName, selected.fileName)
     : walk.context.records.sourceBindings.lexical(identifier, declaration, sourceName);
   const module = walk.context.records.moduleBinding.get(declaration);
   if (binding.scope === "module" && module?.storage === "native-callable" && module.value !== undefined &&
     !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {
     requireRustRecord(walk.context.requiredRecords, "directCallableReference", identifier, "module-callable", "recordProjectSourceBinding");
-    walk.context.records.directCallableReferences.function(identifier, module.callableDeclaration,
+    const callable: RustSourceCallableValueFact = { form: "function", sourceDeclaration: module.callableDeclaration,
+      fileName: binding.fileName, name: module.name, carrier: module.value.carrier,
+      parameterCarriers: module.value.parameterCarriers, resultCarrier: module.value.resultCarrier };
+    const existing = walk.context.records.directCallableReference.get(identifier);
+    if (existing !== undefined && !rustSourceCallableValueEquals(existing, callable)) {
+      failTargetAnalysisInvariant("tsonic-rust",
+        "Conflicting Rust semantic plan 'tsonic.rust.directCallableReference' for one exact source subject.", identifier);
+    }
+    if (existing === undefined) walk.context.records.directCallableReferences.function(identifier, module.callableDeclaration,
       binding.fileName, module.name, module.value.carrier, module.value.parameterCarriers, module.value.resultCarrier);
   }
   return binding;

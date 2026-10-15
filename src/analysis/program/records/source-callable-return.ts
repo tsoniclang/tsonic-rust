@@ -3,8 +3,8 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { RustSourceCallableReturnFact } from "../../../target-model/records/source-declarations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { isRustUnitCarrier, rustUnitTargetType } from "../../../target-model/types/index.js";
+import { rustUnitTargetType } from "../../../target-model/types/index.js";
+import { rustSourceCallableReturnFactEquals } from "../../../target-model/records/equality.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
 import { selectRustSourceCallableReturn } from "../../callables/signatures.js";
 import type { RustFactWalk } from "../walk.js";
@@ -23,13 +23,7 @@ export function createRustSourceCallableReturnProducer(
   retainedEnvironments: RustRetainedEnvironmentProducer,
   inherited?: RustRecordFamily<RustSourceCallableReturnFact>,
 ): RustSourceCallableReturnProducer {
-  const corresponds = (
-    left: RustSourceCallableReturnFact, right: RustSourceCallableReturnFact,
-  ) => rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier) &&
-    left.borrowedParameter === right.borrowedParameter && left.implementationCompletion === right.implementationCompletion &&
-    left.undefinedReturn === right.undefinedReturn && left.fallthroughUndefined === right.fallthroughUndefined &&
-    left.canFallThrough === right.canFallThrough;
-  const family = createRustRecordFamily({ id: "tsonic.rust.sourceCallableReturn", equals: corresponds }, assertOpen, inherited);
+  const family = createRustRecordFamily({ id: "tsonic.rust.sourceCallableReturn", equals: rustSourceCallableReturnFactEquals }, assertOpen, inherited);
   const completedRequests = new WeakMap<Node, Set<string>>();
   return Object.freeze({
     records: family.reader,
@@ -43,7 +37,7 @@ export function createRustSourceCallableReturnProducer(
       if (selection === undefined) return false;
       requireRustRecord(walk.context.requiredRecords, "sourceCallableReturn", declaration,
         "complete callable return", "sourceCallableReturns.resolve");
-      if (existing !== undefined && !corresponds(existing, selection.fact)) {
+      if (existing !== undefined && !rustSourceCallableReturnFactEquals(existing, selection.fact)) {
         failTargetAnalysisInvariant("tsonic-rust",
           "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact source subject.");
       }
@@ -62,13 +56,7 @@ export function createRustSourceCallableReturnProducer(
       return true;
     },
     setter(declaration: Node): void {
-      assertOpen();
-      const existing = family.reader.get(declaration);
-      if (existing !== undefined && !isRustUnitCarrier(existing.returnCarrier)) {
-        failTargetAnalysisInvariant("tsonic-rust",
-          "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact source subject.");
-      }
-      if (existing === undefined) family.writer.set(declaration, { returnCarrier: rustUnitTargetType() });
+      family.writer.set(declaration, { returnCarrier: rustUnitTargetType() });
     },
   });
 }

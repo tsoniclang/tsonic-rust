@@ -1,9 +1,10 @@
-import { rustTargetOperationFactEquals } from "../../../../dist/analysis/operations/contracts/equality.js";
+import { rustTargetOperationFactEquals } from "../../../dist/target-model/records/operation-equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../helpers/records.mjs";
 
-import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
-import { rustSelectedTargetSignatureEquals } from "../../../../dist/target-model/types/selected-call-equality.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
+import { rustSelectedTargetSignatureEquals } from "../../../dist/target-model/types/selected-call-equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };
@@ -94,12 +95,15 @@ test("selected-call admission rejects changed completion proof without replacing
   const admit = selectedSignature => builder.selectedCalls.checked(request,
     { kind: "accept", value: { kind: "runtime", selectedSignature }, evidence: [] });
   admit(signature);
-  admit(copyMetadata(signature));
+  assertRustInheritedRecordCorrespondence("selectedCall", subject, signature,
+    candidate => candidate.selectedCalls.checked(request, { kind: "accept", value: { kind: "runtime", selectedSignature: copyMetadata(signature) }, evidence: [] }));
   for (const changed of [
     { ...signature, sourceResultProjection: { ...signature.sourceResultProjection, selectedCarrier: text } },
     { ...signature, sourceUnionMethods: { ...signature.sourceUnionMethods, variants: [] } },
   ]) {
-    assert.throws(() => admit(changed), /Conflicting Rust semantic plan 'tsonic.rust.selectedCall'/u);
+    assertRustInheritedRecordConflict("selectedCall", subject, signature,
+      candidate => candidate.selectedCalls.checked(request, { kind: "accept", value: { kind: "runtime", selectedSignature: changed }, evidence: [] }),
+      /Conflicting Rust semantic plan 'tsonic.rust.selectedCall'/u);
     assert.equal(builder.selectedCall.get(subject) === signature, true);
   }
 });
@@ -210,7 +214,8 @@ test("repeated switch selection retains one contract and rejects every clause mu
   const subject = {};
   const fact = facts.find(item => item.kind === "switch");
   model.targetOperations.source(subject, fact);
-  model.targetOperations.source(subject, copyMetadata(fact));
+  assertRustInheritedRecordCorrespondence("targetOperation", subject, fact,
+    candidate => candidate.targetOperations.source(subject, copyMetadata(fact)));
   const clauses = fact.clauses;
   for (const mutation of [
     { clauses: [...clauses].reverse() },
@@ -221,7 +226,7 @@ test("repeated switch selection retains one contract and rejects every clause mu
     { clauses: [clauses[0], { ...clauses[1], expression: first, carrier: text }] },
     { discriminantCarrier: integer },
   ]) {
-    assert.throws(() => model.targetOperations.source(subject, { ...fact, ...mutation }),
+    assertRustInheritedRecordConflict("targetOperation", subject, fact, candidate => candidate.targetOperations.source(subject, { ...fact, ...mutation }),
       /Conflicting Rust semantic plan/u);
   }
   assert.equal(model.seal([]).targetOperation.get(subject), fact);

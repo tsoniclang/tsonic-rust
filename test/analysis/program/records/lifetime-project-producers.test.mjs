@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { recordRustValueCarrierReconciliation, rustValueCarrierBeforeContextualConversion } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
@@ -53,7 +54,9 @@ test("call-scoped lifetime production retains exact carriers, call and parameter
   assert.equal(stored.selectedCarrier.lifetime === selected.lifetime, true);
   assert.equal(Object.isFrozen(stored), true);
   assert.equal(rustValueCarrierBeforeContextualConversion(builder, subject) === selected, true);
-  assert.doesNotThrow(() => builder.callScopedLifetimes.reconcile(subject, reference(), reference(lifetime())));
+  assert.throws(() => builder.callScopedLifetimes.reconcile(subject, reference(), reference(lifetime())), /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("callScopedLifetimeReconciliation", subject, stored,
+    candidate => candidate.callScopedLifetimes.reconcile(subject, reference(), reference(lifetime())));
   assert.equal(builder.callScopedLifetimeReconciliation.get(subject) === stored, true);
   const incompatible = [
     [reference(lifetime("other-call")), selected],
@@ -63,7 +66,8 @@ test("call-scoped lifetime production retains exact carriers, call and parameter
     [input, { ...selected, referent: wide }],
   ];
   for (const [inputCarrier, selectedCarrier] of incompatible) {
-    assert.throws(() => builder.callScopedLifetimes.reconcile(subject, inputCarrier, selectedCarrier),
+    assertRustInheritedRecordConflict("callScopedLifetimeReconciliation", subject, stored,
+      candidate => candidate.callScopedLifetimes.reconcile(subject, inputCarrier, selectedCarrier),
       /Conflicting Rust semantic plan 'tsonic\.rust\.callScopedLifetimeReconciliation'/u);
     assert.equal(builder.callScopedLifetimeReconciliation.get(subject) === stored, true);
   }
@@ -91,7 +95,8 @@ test("lifetime specializations retain inherited identity and never write into th
   child.callScopedLifetimes.reconcile(foreign, selected, input);
   assert.equal(child.callScopedLifetimeReconciliation.get(foreign)?.sourceCarrier === selected, true);
   assert.equal(parent.callScopedLifetimeReconciliation.get(foreign) === undefined, true);
-  assert.throws(() => child.callScopedLifetimes.reconcile(subject, input, reference(lifetime("other-call"))),
+  assertRustInheritedRecordConflict("callScopedLifetimeReconciliation", subject, fact,
+    candidate => candidate.callScopedLifetimes.reconcile(subject, input, reference(lifetime("other-call"))),
     /Conflicting Rust semantic plan/u);
   assert.equal(child.seal(childRequiredRecords).callScopedLifetimeReconciliation.get(subject) === fact, true);
   assert.throws(() => child.callScopedLifetimes.reconcile({}, input, selected), /after analysis is sealed/u);
@@ -119,12 +124,14 @@ test("project upcast production preserves exact ordered source variants and inhe
   assert.equal(child.projectUpcast.get(subject) === fact, true);
   for (const changed of [undefined, [], [...variants].reverse(),
     [{ ...variants[0], name: "Other" }, variants[1]], [{ ...variants[0], carrier: wide }, variants[1]]]) {
-    assert.throws(() => child.projectUpcasts.project(subject, source, target, changed),
+    assertRustInheritedRecordConflict("projectUpcast", subject, fact,
+      candidate => candidate.projectUpcasts.project(subject, source, target, changed),
       /Conflicting Rust semantic plan 'tsonic\.rust\.projectUpcast'/u);
     assert.equal(child.projectUpcast.get(subject) === fact, true);
   }
   for (const [inputCarrier, outputCarrier] of [[target, target], [source, source]]) {
-    assert.throws(() => child.projectUpcasts.project(subject, inputCarrier, outputCarrier, variants),
+    assertRustInheritedRecordConflict("projectUpcast", subject, fact,
+      candidate => candidate.projectUpcasts.project(subject, inputCarrier, outputCarrier, variants),
       /Conflicting Rust semantic plan/u);
   }
   const foreign = {};
@@ -159,7 +166,8 @@ for (const projection of [{ kind: "closed", slot: "cast" }, { kind: "checked", s
       [optional, target, source, projection.kind === "generic" ? { kind: "closed", slot: "cast" } : { ...projection, slot: "other" }],
       [optional, target, source, projection.kind === "closed" ? { ...projection, kind: "checked" } : { kind: "closed", slot: "cast" }],
     ]) {
-      assert.throws(() => child.projectDowncasts.project(subject, inputCarrier, dispatchCarrier, outputCarrier, selected),
+      assertRustInheritedRecordConflict("projectDowncast", subject, fact,
+        candidate => candidate.projectDowncasts.project(subject, inputCarrier, dispatchCarrier, outputCarrier, selected),
         /Conflicting Rust semantic plan 'tsonic\.rust\.projectDowncast'/u);
       assert.equal(child.projectDowncast.get(subject) === fact, true);
     }

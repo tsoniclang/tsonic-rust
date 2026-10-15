@@ -7,7 +7,7 @@ import type { RustRecordFamily } from "../../../target-model/records/program.js"
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { rustFoundationForTargetOperationFact } from "../../foundation/operation-requirements.js";
-import { rustTargetOperationFactEquals } from "../../operations/contracts/equality.js";
+import { rustTargetOperationFactEquals } from "../../../target-model/records/operation-equality.js";
 import { createRustRecordFamily } from "./family.js";
 
 export interface RustTargetOperationProducer {

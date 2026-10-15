@@ -33,7 +33,7 @@ test("record admission preserves false, zero and empty strings without losing ex
     const family = createRustRecordFamily({ id: "scalar", equals: equal }, open);
     const subject = {};
     family.writer.set(subject, value);
-    family.writer.set(subject, value);
+    assert.throws(() => family.writer.set(subject, value), /Duplicate Rust semantic plan/u);
     assert.equal(family.reader.get(subject) === value, true, typeof value);
     assert.equal(family.reader.get({}) === undefined, true, typeof value);
   }
@@ -49,13 +49,17 @@ test("equivalent admissions retain the first evidence and conflicting provenance
     admissions += 1;
   });
   family.writer.set(subject, original);
-  family.writer.set(subject, { ...original });
+  assert.throws(() => family.writer.set(subject, { ...original }), /Duplicate Rust semantic plan/u);
   assert.equal(family.reader.get(subject) === original, true);
   for (const changed of [{ ...original, value: 2 }, { ...original, provenance: {} }]) {
-    assert.throws(() => family.writer.set(subject, changed), /Conflicting Rust semantic plan 'provenance'/u);
+    const comparison = createRustRecordFamily({ id: "provenance", equals: (left, right) =>
+      left.value === right.value && left.provenance === right.provenance }, open, family.reader,
+      () => { admissions += 1; });
+    assert.throws(() => comparison.writer.set(subject, changed), /Conflicting Rust semantic plan 'provenance'/u);
+    assert.equal(comparison.reader.get(subject) === original, true);
     assert.equal(family.reader.get(subject) === original, true);
   }
-  assert.equal(admissions, 2, "only successful original and equivalent admissions run accounting");
+  assert.equal(admissions, 1, "neither duplicates nor incompatible first inherited requests run accounting");
 });
 
 test("inherited records remain live, equal admissions do not shadow and new scopes stay isolated", () => {
@@ -66,7 +70,9 @@ test("inherited records remain live, equal admissions do not shadow and new scop
   parent.writer.set(subject, false);
   child.writer.set(subject, false);
   assert.equal(child.reader.get(subject), false);
-  assert.throws(() => child.writer.set(subject, true), /Conflicting Rust semantic plan/u);
+  const incompatible = createRustRecordFamily({ id: "scope", equals: equal }, open, parent.reader);
+  assert.throws(() => incompatible.writer.set(subject, true), /Conflicting Rust semantic plan/u);
+  assert.throws(() => child.writer.set(subject, true), /Duplicate Rust semantic plan/u);
   child.writer.set(childSubject, true);
   assert.equal(parent.reader.get(childSubject) === undefined, true);
   const laterSubject = {};
@@ -114,45 +120,44 @@ test("admission has constant family work and reads never recompute accounting", 
   const subjects = Array.from({ length: 4096 }, () => ({}));
   for (const [index, subject] of subjects.entries()) {
     family.writer.set(subject, index);
-    family.writer.set(subject, index);
+    assert.throws(() => family.writer.set(subject, index), /Duplicate Rust semantic plan/u);
     for (let read = 0; read < 4; read += 1) assert.equal(family.reader.get(subject), index);
   }
   assert.equal(guards, subjects.length * 2);
-  assert.equal(comparisons, subjects.length);
-  assert.equal(admissions, subjects.length * 2);
+  assert.equal(comparisons, 0);
+  assert.equal(admissions, subjects.length);
 });
 
 test("typed conflict outcomes and strict failures share exactly one comparison and admission path", () => {
   let comparisons = 0;
   let admissions = 0;
   let sealed = false;
+  const original = { value: 1 };
   const family = createRustRecordFamily({ id: "channels", equals: (left, right) => {
     comparisons += 1;
     return left.value === right.value;
-  } }, () => { if (sealed) throw new Error("owner sealed"); }, undefined, () => { admissions += 1; });
+  } }, () => { if (sealed) throw new Error("owner sealed"); }, { get: () => original }, () => { admissions += 1; });
   const subject = {};
-  const original = { value: 1 };
-  assert.equal(family.admit(subject, original) === undefined, true, "success has no result object");
-  assert.equal(comparisons, 0);
-  assert.equal(admissions, 1);
-  assert.equal(family.admit(subject, { value: 1 }) === undefined, true, "equal admission remains allowed");
-  assert.equal(comparisons, 1);
-  assert.equal(admissions, 2);
   const incoming = { value: 2 };
   const conflict = family.admit(subject, incoming);
   assert.equal(conflict?.existing === original, true);
   assert.equal(conflict?.incoming === incoming, true);
-  assert.equal(comparisons, 2);
-  assert.equal(admissions, 2, "conflicting admission never accounts");
+  assert.equal(comparisons, 1);
+  assert.equal(admissions, 0, "conflicting admission never accounts");
   assert.equal(family.reader.get(subject) === original, true, "conflict never publishes");
   assert.throws(() => family.writer.set(subject, incoming), /Conflicting Rust semantic plan 'channels'/u);
-  assert.equal(comparisons, 3, "strict channel does not compare a second time");
-  assert.equal(admissions, 2);
+  assert.equal(comparisons, 2, "strict channel compares exactly once");
+  assert.equal(admissions, 0);
+  assert.equal(family.admit(subject, { value: 1 }) === undefined, true, "first matching inherited admission has no result object");
+  assert.equal(family.reader.get(subject) === original, true);
+  assert.equal(comparisons, 3);
+  assert.equal(admissions, 1);
+  assert.throws(() => family.admit(subject, original), /Duplicate Rust semantic plan/u);
   sealed = true;
   assert.throws(() => family.admit(subject, original), /owner sealed/u);
   assert.throws(() => family.writer.set(subject, original), /owner sealed/u);
   assert.equal(comparisons, 3);
-  assert.equal(admissions, 2);
+  assert.equal(admissions, 1);
 });
 
 test("the source-carrier query validates canonical correspondence without a generic reuse port", () => {

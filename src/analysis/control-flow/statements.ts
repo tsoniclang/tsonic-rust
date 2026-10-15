@@ -1,4 +1,6 @@
 import { requireRustRecord } from "../program/records/required-records.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import {
   CatchClause_Block,
   CatchClause_VariableDeclaration,
@@ -189,6 +191,7 @@ export function recordExportAssignmentFacts(
   walk: RustFactWalk,
   declaration: Node,
 ): TargetTypeRef | undefined {
+  walk.context.records.assertOpen();
   const { ast } = walk.context;
   const assignment = ast.as.AsExportAssignment(declaration);
   const sourceFile = ast.getSourceFile(declaration);
@@ -218,7 +221,13 @@ export function recordExportAssignmentFacts(
     return undefined;
   }
   requireRustRecord(walk.context.requiredRecords, "moduleBinding", declaration, "default-export", "recordExportAssignmentFacts");
-  walk.context.records.moduleBindings.defaultExport(declaration, finalized);
+  const binding = walk.context.records.moduleBinding.get(declaration);
+  if (binding === undefined) walk.context.records.moduleBindings.defaultExport(declaration, finalized);
+  else if (binding.declarationKind !== "const" || binding.storage !== "module-cell" ||
+    binding.initialization !== "value" || !rustTargetTypeRefEquals(binding.valueCarrier, finalized)) {
+    failTargetAnalysisInvariant("tsonic-rust",
+      "Conflicting Rust semantic plan 'tsonic.rust.moduleBinding' for one exact source subject.", declaration);
+  }
   return finalized;
 }
 

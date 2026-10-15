@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustPropertyProjectionSelector, rustPropertyProjectionFactEquals,
+import { rustPropertyProjectionFactEquals } from "../../../dist/target-model/records/operation-equality.js";
+import { createRustPropertyProjectionSelector,
   selectRustPropertyProjectionCase } from "../../../dist/analysis/conversions/property-projections.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { rustSourcePrimitiveTargetType, rustOptionTargetType } from "../../../dist/target-model/types/index.js";
@@ -127,7 +128,7 @@ test("per-call property queries select once and return the complete canonical co
   assert.equal(another(0) === first, true, "new call request revalidates and retains canonical conversion identity");
   assert.equal(input.selections(), 2);
   assert.equal(input.admissions(), 1, "another request never repeats the actual constructor");
-  assert.equal(input.builder.propertyProjections.finalize(input.expression, first, fact.cases) === undefined, true);
+  assert.throws(() => input.builder.propertyProjections.finalize(input.expression, first, fact.cases), /Duplicate Rust semantic plan/u);
   const child = createRustProgramRecordBuilder(undefined, input.builder.seal(input.context.requiredRecords));
   const inherited = selectorFixture(child, input.expression);
   assert.equal(inherited.select()(0) === first, true, "an inherited query selects before reusing full native evidence");

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { createRustFutureValueProducer } from "../../../../dist/analysis/program/records/future-value.js";
@@ -83,9 +84,12 @@ test("exact selected error effects retain identity, pure values and conflict ref
   const builder = createRustProgramRecordBuilder();
   const declaration = {};
   builder.errorEffectPlans.selected(declaration, native);
-  builder.errorEffectPlans.selected(declaration, { ...native });
+  assert.throws(() => builder.errorEffectPlans.selected(declaration, { ...native }), /Duplicate Rust semantic plan/u);
+  assertRustInheritedRecordCorrespondence("errorEffects", declaration, native,
+    candidate => candidate.errorEffectPlans.selected(declaration, { ...native }));
   assert.equal(builder.errorEffects.get(declaration) === native, true);
-  assert.throws(() => builder.errorEffectPlans.selected(declaration, pure), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("errorEffects", declaration, native,
+    candidate => candidate.errorEffectPlans.selected(declaration, pure), /Conflicting Rust semantic plan/u);
   const region = {};
   builder.errorEffectPlans.selected(region, pure);
   assert.equal(builder.errorEffects.get(region) === pure, true);
@@ -98,7 +102,7 @@ test("fallibility admits the exact source identity without manufacturing a false
   const subject = {};
   builder.fallibleSubjects.selected(subject);
   const original = builder.fallible.get(subject);
-  builder.fallibleSubjects.selected(subject);
+  assert.throws(() => builder.fallibleSubjects.selected(subject), /Duplicate Rust semantic plan/u);
   assert.equal(builder.fallible.get(subject) === original, true);
   assert.deepEqual(original, { fallible: true });
   assert.equal(builder.fallible.get({}) === undefined, true);
@@ -117,7 +121,8 @@ test("source error routes preserve exact declaration and native source/target id
   assert.equal(fact.edges === routes, true);
   assert.equal(fact.edges[0] === route && fact.edges[0].declaration === declaration, true);
   assert.equal(fact.edges[0].nativeErrors[0].source === native.nativeErrors[0], true);
-  assert.throws(() => builder.sourceErrorEdges.invocation(subject, [edge({})]), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("sourceErrorEffects", subject, fact,
+    candidate => candidate.sourceErrorEdges.invocation(subject, [edge({})]), /Conflicting Rust semantic plan/u);
   assert.equal(builder.sourceErrorEffects.get(subject) === fact, true);
 });
 
@@ -131,7 +136,8 @@ test("await-source branches retain the very same selected source route and nativ
   assert.equal(Object.isFrozen(fact), true);
   assert.equal(fact.branches === branches, true);
   assert.equal(fact.branches[0].edge === route && fact.branches[0].carrier === integer, true);
-  assert.throws(() => builder.awaitSourceErrors.selected(subject,
+  assertRustInheritedRecordConflict("awaitSourceErrorEffects", subject, fact,
+    candidate => candidate.awaitSourceErrors.selected(subject,
     [{ carrier: text, edge: route }]), /Conflicting Rust semantic plan/u);
 });
 
@@ -142,9 +148,11 @@ test("generic invocations preserve finalized physical owner and independent nati
   builder.genericCallableInvocations.selected(subject, fact);
   assert.equal(builder.genericCallableInvocation.get(subject) === fact, true);
   assert.equal(builder.genericCallableInvocation.get(subject).invocation[0].errorType === nativeError, true);
-  assert.throws(() => builder.genericCallableInvocations.selected(subject,
+  assertRustInheritedRecordConflict("genericCallableInvocation", subject, fact,
+    candidate => candidate.genericCallableInvocations.selected(subject,
     { ...fact, ownerFileName: "/src/foreign.ts" }), /Conflicting Rust semantic plan/u);
-  assert.throws(() => builder.genericCallableInvocations.selected(subject,
+  assertRustInheritedRecordConflict("genericCallableInvocation", subject, fact,
+    candidate => candidate.genericCallableInvocations.selected(subject,
     { ...fact, invocation: [{ ...fact.invocation[0], identity: "input/foreign" }] }), /Conflicting Rust semantic plan/u);
 });
 
@@ -162,7 +170,8 @@ test("native call inputs construct one invocation and await channel record witho
   assert.equal(fact.nativeInput.invocationError === nativeError, true);
   assert.equal(fact.nativeInput.invocationErrorSource, "input/exact");
   assert.equal(fact.nativeInput.awaitErrors === errors && fact.nativeInput.awaitErrorSources === identities, true);
-  assert.throws(() => builder.sourceCallEffectPlans.nativeInput({ ...input,
+  assertRustInheritedRecordConflict("sourceCallEffects", subject, fact,
+    candidate => candidate.sourceCallEffectPlans.nativeInput({ ...input,
     invocationErrorSource: "input/foreign" }), /Conflicting Rust semantic plan/u);
   const sync = {};
   builder.sourceCallEffectPlans.nativeInput({ ...input, node: sync, completion: undefined });
@@ -176,7 +185,8 @@ test("selected source call branches preserve ordering, false effects and explici
     { invocation: "fallible", awaiting: "fallible" }];
   builder.sourceCallEffectPlans.selected(subject, "fallible", "fallible", branches);
   assert.equal(builder.sourceCallEffects.get(subject).unionBranches === branches, true);
-  assert.throws(() => builder.sourceCallEffectPlans.selected(subject,
+  assertRustInheritedRecordConflict("sourceCallEffects", subject, builder.sourceCallEffects.get(subject),
+    candidate => candidate.sourceCallEffectPlans.selected(subject,
     "infallible", "fallible", branches), /Conflicting Rust semantic plan/u);
   const pureSubject = {};
   builder.sourceCallEffectPlans.selected(pureSubject, "infallible", "not-applicable");
@@ -254,8 +264,8 @@ test("await foundation tracks exact finalized semantic conversions and refuses c
     () => ({ kind: "semantic-conversion", id: "checked-f64-to-i32-trunc" }));
   assert.equal(selected !== undefined, true);
   assert.deepEqual(foundations, ["alloc"]);
-  assert.throws(() => owner.finalize(subject, floating, floating, () => undefined, () => undefined),
-    /Conflicting Rust semantic plan/u);
+  const incompatible = createRustAwaitValueProducer(() => {}, value => foundations.push(value), emptyRustTypeDefinitions, owner.records);
+  assert.throws(() => incompatible.finalize(subject, floating, floating, () => undefined, () => undefined), /Conflicting Rust semantic plan/u);
   assert.deepEqual(foundations, ["alloc"]);
   assert.equal(owner.records.get(subject) === selected, true);
 });
@@ -275,7 +285,8 @@ test("deferred completion batches retain finalized native channels, identity, or
   assert.deepEqual(fact.channels.map(value => value.awaiting), ["infallible", "fallible"]);
   channels[0].errorCarrier = text;
   assert.equal(fact.channels[0].errorCarrier.name, "int32");
-  assert.throws(() => owner.finalize(new Map([[second, { kind: "no-future" }]])), /Conflicting Rust semantic plan/u);
+  const incompatible = createRustDeferredProducerEffectsProducer(() => {}, value => foundations.push(value), owner.records);
+  assert.throws(() => incompatible.finalize(new Map([[second, { kind: "no-future" }]])), /Conflicting Rust semantic plan/u);
   assert.deepEqual(foundations, ["core", "std"]);
   assert.equal(owner.records.get(second) === fact, true);
 });

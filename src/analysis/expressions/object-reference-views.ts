@@ -11,7 +11,7 @@ import { selectRustProjectStructuralView } from "../objects/project-structural-v
 import { rustClassConstructorInstance } from "../../target-model/types/carriers/class-constructors.js";
 import { selectRustClassValueView } from "../objects/class-values.js";
 import type { RustRecordFamily } from "../../target-model/records/program.js";
-import { rustProjectMemberSelectionEquals } from "../operations/contracts/equality.js";
+import { rustProjectMemberSelectionEquals } from "../../target-model/records/operation-equality.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export type RustObjectReferenceViewQuery = (

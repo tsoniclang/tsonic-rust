@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 
@@ -32,8 +33,10 @@ for (const [family, producer, construct] of cases) {
     assert.equal(fact !== undefined, true, "publication exists");
     assert.equal(Object.isFrozen(fact), true, "the admitted fact is immutable");
     assert.equal(builder[family].get({}) === undefined, true, "same shape is not the same source node");
-    construct(builder, subject);
-    assert.equal(builder[family].get(subject) === fact, true, "the existing primitive preserves equal-repeat identity");
+    assertRustInheritedRecordCorrespondence(family, subject, fact, candidate => construct(candidate, subject));
+    if (family === "compileTimeSource") construct(builder, subject);
+    else assert.throws(() => construct(builder, subject), /Duplicate Rust semantic plan/u);
+    assert.equal(builder[family].get(subject) === fact, true, "query/event or duplicate refusal retains canonical identity");
     assert.equal(builder.minimumFoundation(), "core");
     assert.equal(builder.seal([])[family].get(subject) === fact, true, "sealing retains exact data identity");
   });
@@ -99,7 +102,7 @@ for (const mode of ["ref", "mut-ref"]) {
     const fact = parent.selfMode.get(member);
     assert.deepEqual(fact, { mode });
     const different = mode === "ref" ? "mut-ref" : "ref";
-    assert.throws(() => parent.selfModes.method(member, different),
+    assertRustInheritedRecordConflict("selfMode", member, fact, candidate => candidate.selfModes.method(member, different),
       /Conflicting Rust semantic plan 'tsonic\.rust\.selfMode'/u);
     assert.equal(parent.selfMode.get(member) === fact, true, "a conflict never replaces the admitted fact");
     const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
@@ -128,7 +131,7 @@ test("layout conflicts reject locally and through inheritance without replacing 
   const expression = {};
   parent.memoryLayoutObservations.observe(expression, 0);
   const fact = parent.memoryLayoutObservation.get(expression);
-  assert.throws(() => parent.memoryLayoutObservations.observe(expression, 4),
+  assertRustInheritedRecordConflict("memoryLayoutObservation", expression, fact, candidate => candidate.memoryLayoutObservations.observe(expression, 4),
     /Conflicting Rust semantic plan 'tsonic\.rust\.memoryLayoutObservation'/u);
   assert.equal(parent.memoryLayoutObservation.get(expression) === fact, true);
   const child = createRustProgramRecordBuilder(undefined, parent.seal([]));

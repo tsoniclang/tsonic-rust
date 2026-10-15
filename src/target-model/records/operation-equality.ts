@@ -1,10 +1,23 @@
 import type { Node } from "@tsonic/tsts";
-import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import type { RustProjectFieldSelection } from "../../../target-model/records/project-fields.js";
-import type { RustProjectAccessorSelection } from "../../../target-model/records/project-accessors.js";
+import { closedMetadataEquals } from "../metadata/closed-data.js";
+import { rustTargetTypeRefEquals } from "../types/equality.js";
+import type { RustTargetOperationFact } from "./operations.js";
+import type { RustProjectFieldSelection } from "./project-fields.js";
+import type { RustProjectAccessorSelection } from "./project-accessors.js";
+import type { RustPropertyProjectionFact } from "./property-projections.js";
 
 type RustOperationComparisonInput = RustTargetOperationFact | RustProjectFieldSelection | RustProjectAccessorSelection;
+
+export function rustPropertyProjectionFactEquals(left: RustPropertyProjectionFact, right: RustPropertyProjectionFact): boolean {
+  return closedMetadataEquals(left.conversion, right.conversion) && left.cases.length === right.cases.length &&
+    left.cases.every((selected, index) => {
+      const other = right.cases[index];
+      return other !== undefined && rustTargetTypeRefEquals(selected.source, other.source) &&
+        closedMetadataEquals(selected.conversion, other.conversion) && selected.reads.length === other.reads.length &&
+        selected.reads.every((read, offset) => other.reads[offset] !== undefined &&
+          rustProjectMemberSelectionEquals(read, other.reads[offset]!));
+    });
+}
 
 export function rustTargetOperationFactEquals(
   left: RustTargetOperationFact,

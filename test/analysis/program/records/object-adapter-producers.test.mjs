@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { rustCallableTargetType, rustSourceTypeCarrier, rustStructuralObjectTargetType } from "../../../../dist/target-model/types/index.js";
@@ -193,8 +194,9 @@ test("object-method producer retains exact implementation, contract and ABI evid
   assert.deepEqual(fresh.literal(), []);
   assert.equal(parent.objectLiteralMethodAdapter.get(fresh.expression) === undefined, true);
   for (const replacement of [{ implementation: {} }, { contract: {} }, { slot: "foreign" }, { returnCarrier: wide }]) {
-    const changed = adapterFixture(child, { ...selected, ...replacement });
-    assert.throws(changed.literal, /Conflicting Rust semantic plan 'tsonic\.rust\.objectLiteralMethodAdapter'/u);
+    assertRustInheritedRecordConflict("objectLiteralMethodAdapter", selected.expression, fact,
+      candidate => adapterFixture(candidate, { ...selected, ...replacement }).literal(),
+      /Conflicting Rust semantic plan 'tsonic\.rust\.objectLiteralMethodAdapter'/u);
     assert.equal(child.objectLiteralMethodAdapter.get(selected.expression) === fact, true);
   }
   assert.equal(child.minimumFoundation(), "core");
@@ -236,9 +238,11 @@ test("project-adapter producer owns declaration publication and exact contract/i
   equal.project();
   assert.equal(child.projectCallableAdapters.get(selected.concrete.declaration) === fact, true);
   for (const replacement of [{ implementation: {} }, { contract: {} }, { slot: "foreign" }, { returnCarrier: wide }]) {
-    const changed = adapterFixture(child, { ...selected, ...replacement });
-    changed.input.projectTypes.definitions = [selected.concrete];
-    assert.throws(changed.project, /Conflicting Rust semantic plan 'tsonic\.rust\.projectCallableAdapters'/u);
+    assertRustInheritedRecordConflict("projectCallableAdapters", selected.concrete.declaration, fact, candidate => {
+      const changed = adapterFixture(candidate, { ...selected, ...replacement });
+      changed.input.projectTypes.definitions = [selected.concrete];
+      changed.project();
+    }, /Conflicting Rust semantic plan 'tsonic\.rust\.projectCallableAdapters'/u);
     assert.equal(child.projectCallableAdapters.get(selected.concrete.declaration) === fact, true);
   }
   assert.equal(child.projectCallableAdapters.get({}) === undefined, true);

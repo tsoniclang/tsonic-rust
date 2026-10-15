@@ -4,6 +4,7 @@ import { createRustProgramRecordBuilder } from "../../../../dist/analysis/progra
 import { rustFlowReadProjectionEquals } from "../../../../dist/target-model/records/equality.js";
 import { rustOptionTargetType } from "../../../../dist/target-model/types/carriers/optional.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
+import { assertRustInheritedRecordConflict } from "../../../helpers/records.mjs";
 
 const source = rustSourcePrimitiveTargetType("int32");
 const selected = rustSourcePrimitiveTargetType("int64");
@@ -51,7 +52,8 @@ for (const recipe of recipes) {
     for (const [changedSource, changedSelected, changedRecipe] of [
       [different, selected, recipe], [source, different, recipe],
       [source, selected, { kind: recipe.kind === "closed-native" ? "option-value" : "closed-native" }],
-    ]) assert.throws(() => child.flowReadProjections.project(subject, changedSource, changedSelected, changedRecipe), /Conflicting Rust semantic plan/u);
+    ]) assertRustInheritedRecordConflict("flowReadProjection", subject, fact,
+      candidate => candidate.flowReadProjections.project(subject, changedSource, changedSelected, changedRecipe), /Conflicting Rust semantic plan/u);
     assert.equal(child.flowReadProjection.get(subject) === fact, true, "a rejected correspondence never replaces the canonical record");
     child.seal([]);
     assert.throws(() => child.flowReadProjections.project({}, source, selected, recipe), /sealed/u);
@@ -67,7 +69,8 @@ test("flow construction preserves optional project-property presence without los
     assert.equal(Object.hasOwn(builder.flowReadProjection.get(subject), "project"), present);
     const opposite = { kind: "source-union", dispatchCarrier: dispatch, variant: "Some",
       ...(!present ? { project: undefined } : {}) };
-    assert.throws(() => builder.flowReadProjections.project(subject, source, selected, opposite),
+    assertRustInheritedRecordConflict("flowReadProjection", subject, builder.flowReadProjection.get(subject),
+      candidate => candidate.flowReadProjections.project(subject, source, selected, opposite),
       /Conflicting Rust semantic plan/u);
     assert.equal(Object.hasOwn(builder.flowReadProjection.get(subject), "project"), present);
   }
@@ -88,9 +91,11 @@ test("option producers retain exact native absence and presence operands", () =>
   const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.optionProjections.some(present, source, selected, option);
   assert.equal(child.optionProjection.get(present) === fact, true);
-  assert.throws(() => child.optionProjections.none(present, source, option), /Conflicting Rust semantic plan/u);
-  assert.throws(() => child.optionProjections.some(present, selected, selected, option), /Conflicting Rust semantic plan/u);
-  assert.throws(() => child.optionProjections.some(present, source, source, option), /Conflicting Rust semantic plan/u);
+  for (const attempt of [candidate => candidate.optionProjections.none(present, source, option),
+    candidate => candidate.optionProjections.some(present, selected, selected, option),
+    candidate => candidate.optionProjections.some(present, source, source, option)]) {
+    assertRustInheritedRecordConflict("optionProjection", present, fact, attempt, /Conflicting Rust semantic plan/u);
+  }
 });
 
 test("conversion producers preserve both an absent selection and the exact selected carrier", () => {
@@ -105,7 +110,8 @@ test("conversion producers preserve both an absent selection and the exact selec
   const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.conversions.converted(converted, selected);
   assert.equal(child.conversion.get(converted) === builder.conversion.get(converted), true);
-  assert.throws(() => child.conversions.converted(converted, different), /Conflicting Rust semantic plan/u);
+  assertRustInheritedRecordConflict("conversion", converted, builder.conversion.get(converted),
+    candidate => candidate.conversions.converted(converted, different), /Conflicting Rust semantic plan/u);
 });
 
 test("contextual conversion producer preserves the complete selected conversion and carrier pair", () => {
@@ -119,8 +125,10 @@ test("contextual conversion producer preserves the complete selected conversion 
   const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.contextualValueConversions.convert(subject, source, selected, conversion);
   assert.equal(child.contextualValueConversion.get(subject) === fact, true);
-  assert.throws(() => child.contextualValueConversions.convert(subject, different, selected, conversion), /Conflicting Rust semantic plan/u);
-  assert.throws(() => child.contextualValueConversions.convert(subject, source, different, conversion), /Conflicting Rust semantic plan/u);
+  for (const attempt of [candidate => candidate.contextualValueConversions.convert(subject, different, selected, conversion),
+    candidate => candidate.contextualValueConversions.convert(subject, source, different, conversion)]) {
+    assertRustInheritedRecordConflict("contextualValueConversion", subject, fact, attempt, /Conflicting Rust semantic plan/u);
+  }
 });
 
 test("all final conversion families have one immutable reader and no sealed producer port", () => {

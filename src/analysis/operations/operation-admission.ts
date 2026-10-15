@@ -5,7 +5,7 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import { rustSelectedTargetOperationEquals } from "../../target-model/types/equality.js";
 import type { RustSelectedTargetOperation } from "../../target-model/types/model.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
-import { rustTargetOperationFactEquals } from "./contracts/equality.js";
+import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
 import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 
