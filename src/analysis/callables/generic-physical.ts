@@ -29,6 +29,11 @@ export interface RustGenericCallablePhysicalDefinition extends RustGenericCallab
   readonly carrier: TargetTypeRef;
 }
 
+export interface RustGenericCallablePhysicalSelection {
+  readonly definition: RustGenericCallablePhysicalDefinition;
+  readonly arguments: readonly RustTargetGenericArgument[];
+}
+
 export type RustGenericCallablePhysicalConversion =
   | { readonly kind: "identity" }
   | { readonly kind: "variants"; readonly members: readonly {
@@ -41,6 +46,7 @@ export interface RustGenericCallablePhysicalPlan {
   definitionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalDefinition | undefined;
   argumentsFor(carrier: TargetTypeRef): readonly RustTargetGenericArgument[] | undefined;
   conversionFor(source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined;
+  existingSelectionFor(carrier: TargetTypeRef): RustGenericCallablePhysicalSelection | undefined;
 }
 
 export type RustGenericCallablePhysicalCarrierSelector = (carrier: TargetTypeRef, ownerFileName: string,
@@ -75,10 +81,8 @@ export function createRustGenericCallablePhysicalPlan(
   const definitions = new Map<string, RustGenericCallablePhysicalDefinition>();
   let inventory: readonly RustGenericCallablePhysicalDefinition[] | undefined;
   let published = false;
-  const selectedCarriers = new Map<string, { readonly definition: RustGenericCallablePhysicalDefinition;
-    readonly arguments: readonly RustTargetGenericArgument[] }>();
-  const linkedCarriers = new Map<string, { readonly definition: RustGenericCallablePhysicalDefinition;
-    readonly arguments: readonly RustTargetGenericArgument[] } | undefined>();
+  let openCarriers: Map<string, RustGenericCallablePhysicalSelection> | undefined = new Map();
+  const selectedCarriers: ReadonlyMap<string, RustGenericCallablePhysicalSelection> = openCarriers;
   const nativeInputs = new Map(input.native.inputs.map(value => [value.implementation.identity, value]));
   const sourceFiles = new Set(input.storage.nodes.filter(node => input.ast.is.IsSourceFile(node)).map(node => input.ast.getFileName(input.ast.getSourceFile(node))));
   const usedNames = new Set(families.flatMap(family => [family.targetName,
@@ -110,18 +114,13 @@ export function createRustGenericCallablePhysicalPlan(
       activeEnvironments.delete(implementation);
     }
   };
-  const select = (carrier: TargetTypeRef, admit: boolean): { readonly definition: RustGenericCallablePhysicalDefinition;
-    readonly arguments: readonly RustTargetGenericArgument[] } | undefined => {
+  const select = (carrier: TargetTypeRef, mode: "admit" | "link" | "inspect"): RustGenericCallablePhysicalSelection | undefined => {
     const value = rustGenericCallableValue(carrier);
     const family = value === undefined ? undefined : familyFor(carrier);
     if (value === undefined || family === undefined) return undefined;
     const cacheKey = closedMetadataKey(carrier);
-    const cached = selectedCarriers.get(cacheKey) ?? linkedCarriers.get(cacheKey);
-    if (cached !== undefined || linkedCarriers.has(cacheKey)) return cached;
-    const refuse = (): undefined => {
-      if (inventory !== undefined) linkedCarriers.set(cacheKey, undefined);
-      return undefined;
-    };
+    const cached = selectedCarriers.get(cacheKey);
+    if (cached !== undefined) return cached;
     const physical = value.physical;
     const members = physical?.members ?? family.implementations.map(implementation => ({
       origin: origins.get(implementation)!, arguments: [] as readonly number[],
@@ -138,27 +137,29 @@ export function createRustGenericCallablePhysicalPlan(
     const selected: RustGenericCallablePhysicalMember[] = [];
     const variantNames = new Set<string>();
     for (const member of members) {
-      if (member.origin === undefined) return refuse();
+      if (member.origin === undefined) return undefined;
       const implementation = byOrigin.get(closedMetadataKey(member.origin));
       const environment = implementation === undefined ? undefined
-        : admit ? constructEnvironment(implementation, false) : environmentFor(implementation);
+        : mode === "admit" ? constructEnvironment(implementation, false) : environmentFor(implementation);
       if (implementation === undefined || environment === undefined || !family.implementations.includes(implementation) ||
         environment.parameters.length !== member.arguments.length ||
-        environment.parameters.some((parameter, index) => parameter.kind !== parameters[member.arguments[index]!]!.kind)) return refuse();
+        environment.parameters.some((parameter, index) => parameter.kind !== parameters[member.arguments[index]!]!.kind)) return undefined;
       const arguments_ = member.arguments.map(index => parameters[index]!);
       selected.push(Object.freeze({ implementation,
         variantName: allocateRustGeneratedName(variantNames, implementation.variantName), arguments: snapshotClosedMetadata(arguments_) }));
     }
     const ownerFileName = selected.length === 1 ? selected[0]!.implementation.sourceFileName
       : physical?.ownerFileName ?? family.ownerFileName;
-    if (!sourceFiles.has(ownerFileName) || physical !== undefined && physical.ownerFileName !== ownerFileName) return refuse();
+    if (!sourceFiles.has(ownerFileName) || physical !== undefined && physical.ownerFileName !== ownerFileName) return undefined;
     const identity = closedMetadataKey({ family: family.identity, ownerFileName,
       members, parameters: parameters.map(parameter => parameter.kind) });
     let definition = definitions.get(identity);
     if (definition === undefined) {
+      if (physical === undefined || mode === "inspect") return undefined;
       if (inventory !== undefined) (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
         "A physical generic callable family was requested after family admission closed; its selected source root is missing.");
-      if (!admit) return undefined;
+      if (mode === "link") failTargetAnalysisInvariant("tsonic-rust",
+        "A physical generic callable shape was read before construction admitted its family; its selected source root is missing.");
       const suffix = createHash("sha256").update(identity).digest("hex").slice(0, 12);
       definition = Object.freeze({ ...family, identity, familyIdentity: family.identity, ownerFileName,
         copy: selected.every(member => member.implementation.storage === "value"),
@@ -174,8 +175,7 @@ export function createRustGenericCallablePhysicalPlan(
       definitions.set(identity, definition);
     }
     const result = Object.freeze({ definition, arguments: snapshotClosedMetadata(actuals) });
-    if (inventory !== undefined) linkedCarriers.set(cacheKey, result);
-    else if (admit) selectedCarriers.set(cacheKey, result);
+    if (mode === "admit") openCarriers?.set(cacheKey, result);
     return result;
   };
   const plan: RustGenericCallablePhysicalPlan = Object.freeze({
@@ -184,12 +184,13 @@ export function createRustGenericCallablePhysicalPlan(
       return inventory;
     },
     environmentFor,
-    definitionFor: (carrier: TargetTypeRef) => select(carrier, false)?.definition,
-    argumentsFor: (carrier: TargetTypeRef) => select(carrier, false)?.arguments,
+    definitionFor: (carrier: TargetTypeRef) => select(carrier, "link")?.definition,
+    argumentsFor: (carrier: TargetTypeRef) => select(carrier, "link")?.arguments,
+    existingSelectionFor: (carrier: TargetTypeRef) => select(carrier, "inspect"),
     conversionFor(source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined {
       if (!rustGenericCallableSignaturesMatch(source, target)) return undefined;
-      const from = select(source, false);
-      const into = select(target, false);
+      const from = select(source, "link");
+      const into = select(target, "link");
       if (from === undefined || into === undefined || from.definition.familyIdentity !== into.definition.familyIdentity) return undefined;
       if (from.definition === into.definition && closedMetadataEquals(from.arguments, into.arguments))
         return Object.freeze({ kind: "identity" as const });
@@ -258,13 +259,14 @@ export function createRustGenericCallablePhysicalPlan(
       const selected = [...members.values()];
       const physicalOwner = selected.length === 1 ? selected[0]!.origin.fileName : ownerFileName;
       const result = rustGenericCallableCarrier({ ...value, physical: { ownerFileName: physicalOwner, members: selected, arguments: arguments_ } });
-      return select(result, true) === undefined ? undefined : Object.freeze({ carrier: result, inputs: Object.freeze([...selectedInputs]) });
+      return select(result, "admit") === undefined ? undefined : Object.freeze({ carrier: result, inputs: Object.freeze([...selectedInputs]) });
     },
     closeAdmission(): void {
       if (inventory !== undefined) throw new Error("Generic callable physical family admission closes exactly once.");
       for (const family of families) for (const implementation of family.implementations) constructEnvironment(implementation, true);
-      for (const definition of [...definitions.values()]) if (definition.identityObserved) select(definition.carrier, true);
+      for (const definition of [...definitions.values()]) select(definition.carrier, "admit");
       inventory = Object.freeze([...definitions.values()]);
+      openCarriers = undefined;
     },
     publish(): void {
       if (inventory === undefined) throw new Error("Generic callable physical families publish only after their admission closes.");
