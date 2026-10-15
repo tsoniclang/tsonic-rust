@@ -5,6 +5,7 @@ import type { RustSelectedTargetSignature, RustTargetGenericArgument, TargetType
 import { rustIndexedFieldTrait } from "../../target-model/types/carriers/indexed-fields.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { resolveRustIndexedField } from "../../policy/types/resolution/indexed-fields.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecordWriter } from "../program/records/model.js";
@@ -73,7 +74,7 @@ export function recordRustIndexedCallKeyArguments(
     const incoming = prior === undefined ? { carrier, evaluate: evaluate(argument) } : { carrier, evaluate: prior.evaluate };
     requireRustRecord(requiredRecords, "indexedFieldKeyArgument", argument, "concrete indexed key", "recordRustIndexedCallKeyArguments");
     const existing = records.indexedFieldKeyArgument.get(argument);
-    if (existing !== undefined && (!rustTargetTypeRefEquals(existing.carrier, incoming.carrier) || existing.evaluate !== incoming.evaluate)) {
+    if (existing !== undefined && !closedMetadataEquals(existing, incoming)) {
       failTargetAnalysisInvariant("tsonic-rust",
         "Conflicting Rust semantic plan 'tsonic.rust.indexedFieldKeyArgument' for one exact source subject.", argument);
     }

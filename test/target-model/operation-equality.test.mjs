@@ -1,10 +1,10 @@
-import { rustTargetOperationFactEquals } from "../../../dist/target-model/records/operation-equality.js";
+import { rustTargetOperationFactEquals } from "../../dist/target-model/records/operation-equality.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../helpers/records.mjs";
+import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../helpers/records.mjs";
 
-import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { rustSelectedTargetSignatureEquals } from "../../../dist/target-model/types/selected-call-equality.js";
+import { createRustProgramRecordBuilder } from "../../dist/analysis/program/records/create.js";
+import { rustSelectedTargetSignatureEquals } from "../../dist/target-model/types/selected-call-equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const text = { kind: "target-named", id: "rust.std.String" };

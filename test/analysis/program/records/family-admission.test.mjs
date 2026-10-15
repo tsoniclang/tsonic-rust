@@ -44,6 +44,43 @@ for (const method of ["admit", "set"]) {
       /Duplicate Rust semantic plan/u);
     assert.deepEqual([inheritedReads, comparisons, admissions], [1, 1, 1]);
   });
+
+  test(`${method} retries failed inherited accounting without marking a local admission`, () => {
+    const subject = {};
+    const canonical = { value: 1 };
+    let inheritedReads = 0;
+    let comparisons = 0;
+    let attempts = 0;
+    let successful = 0;
+    let refuse = true;
+    const family = createRustRecordFamily({ id: "test.inherited-accounting", equals(left, right) {
+      comparisons++;
+      return left.value === right.value;
+    } }, () => {}, { get(node) {
+      inheritedReads++;
+      assert.equal(node === subject, true);
+      return canonical;
+    } }, value => {
+      attempts++;
+      assert.equal(value === canonical, true, "accounting receives the inherited canonical object");
+      if (refuse) throw new Error("inherited accounting refused");
+      successful++;
+    });
+    const admit = value => method === "admit" ? family.admit(subject, value) : family.writer.set(subject, value);
+    assert.throws(() => admit({ value: 1 }), /inherited accounting refused/u);
+    assert.deepEqual([inheritedReads, comparisons, attempts, successful], [1, 1, 1, 0]);
+    assert.equal(family.reader.get(subject) === canonical, true, "failed accounting leaves inheritance readable");
+    assert.equal(inheritedReads, 2, "the failed attempt did not mark a local admission");
+    refuse = false;
+    assert.equal(admit({ value: 1 }) === undefined, true);
+    assert.equal(family.reader.get(subject) === canonical, true);
+    assert.deepEqual([inheritedReads, comparisons, attempts, successful], [3, 2, 2, 1]);
+    for (const value of [{ value: 1 }, { value: 2 }]) {
+      assert.throws(() => admit(value), /Duplicate Rust semantic plan 'test.inherited-accounting'/u);
+    }
+    assert.deepEqual([inheritedReads, comparisons, attempts, successful], [3, 2, 2, 1]);
+    assert.equal(family.reader.get(subject) === canonical, true);
+  });
 }
 
 test("a first inherited conflict is typed, uncharged and retryable with complete matching data", () => {
