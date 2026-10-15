@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   BinaryExpression_Left,
   BinaryExpression_Right,
@@ -201,6 +202,7 @@ export function resolvedRustReferenceOperationCarrier(
       referenceCarrier: operandCarrier,
       resultCarrier: operandCarrier.referent,
     };
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/reference-operations.ts");
     walk.context.records.targetOperations.source(expression, fact);
     return { carrier: setCarrierFact(walk, expression, fact.resultCarrier) };
   }
@@ -248,6 +250,7 @@ export function resolvedRustReferenceOperationCarrier(
     ),
     resultCarrier,
   };
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/reference-operations.ts");
   walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
@@ -373,6 +376,7 @@ function resolvedRustReferenceConstruction(
     referenceCarrier,
     resultCarrier: referenceCarrier,
   };
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/reference-operations.ts");
   walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, referenceCarrier) };
 }

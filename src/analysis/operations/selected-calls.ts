@@ -10,6 +10,7 @@ import { rustSelectedTargetSignatureEquals } from "../../target-model/types/sele
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import type { RustOperationAttempt } from "../program/operation-attempts.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 export function selectRustCheckedCall(
   request: RustCheckedCallSelectionInput,
@@ -35,11 +36,15 @@ function recordCheckedCallSelection(
   }
   const value = selection.value;
   const hasSelectedSignature = value.targetFact?.kind !== "flow-marker";
+  if (hasSelectedSignature) requireRustRecord(context.requiredRecords, "selectedCall", request.source.call,
+    "checked call", "recordCheckedCallSelection");
   const existing = hasSelectedSignature ? context.records.selectedCall.get(request.source.call) : undefined;
   if (existing !== undefined && !rustSelectedTargetSignatureEquals(existing, value.selectedSignature)) {
     failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.selectedCall' for one exact source subject.");
   }
   const guard = value.sourceGuard;
+  if (guard !== undefined) requireRustRecord(context.requiredRecords, "runtimeCarrier", guard.guard,
+    "checked call source guard", "recordCheckedCallSelection");
   const existingGuard = guard === undefined ? undefined : context.records.runtimeCarrier.get(guard.guard);
   if (guard !== undefined && existingGuard !== undefined && !rustTargetTypeRefEquals(existingGuard.carrier, guard.sourceGuardCarrier)) {
     failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.runtimeCarrier' for one exact source subject.");

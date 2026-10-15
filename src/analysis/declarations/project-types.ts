@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   ClassStaticBlock_Body,
   KindClassStaticBlockDeclaration,
@@ -48,6 +49,7 @@ export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: reado
             ast.kindName(member) === "KindSetAccessor") &&
           !ast.hasModifierKind(member, "static")) {
           const mode = walk.context.objectRepresentations.methodSelfMode(member);
+          requireRustRecord(walk.context.requiredRecords, "selfMode", member, "class-method", "recordMethodSelfModeFacts");
           walk.context.records.selfModes.method(member, mode);
         }
       }
@@ -107,7 +109,9 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
           const carrier = walk.context.records.runtimeCarrier.get(parameter)?.carrier;
           if (name !== undefined && carrier !== undefined) {
             setCarrierFact(walk, name, carrier);
+            requireRustRecord(walk.context.requiredRecords, "sourceBinding", name, "parameter-property", "analysis/declarations/project-types.ts");
             walk.context.records.sourceBindings.lexical(name, parameter, ast.text(name));
+            requireRustRecord(walk.context.requiredRecords, "sourceParameterAbi", name, "parameter-property", "analysis/declarations/project-types.ts");
             walk.context.records.sourceParameterAbis.use(name, parameter);
           }
         }
@@ -276,7 +280,10 @@ export function recordInterfaceFacts(walk: RustFactWalk, declaration: Node): voi
       setCarrierFact(walk, keyParameter, keyCarrier);
       setCarrierFact(walk, member, valueCarrier);
     } else if (memberKind === "KindMethodSignature" || memberKind === "KindConstructSignature") {
-      if (memberKind === "KindMethodSignature") walk.context.records.selfModes.method(member, "ref");
+      if (memberKind === "KindMethodSignature") {
+        requireRustRecord(walk.context.requiredRecords, "selfMode", member, "interface-method", "analysis/declarations/project-types.ts");
+        walk.context.records.selfModes.method(member, "ref");
+      }
       finalizeRustCallableSignature(walk, member);
     }
   }

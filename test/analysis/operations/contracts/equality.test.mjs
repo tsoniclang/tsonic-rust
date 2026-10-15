@@ -224,6 +224,6 @@ test("repeated switch selection retains one contract and rejects every clause mu
     assert.throws(() => model.targetOperations.source(subject, { ...fact, ...mutation }),
       /Conflicting Rust semantic plan/u);
   }
-  assert.equal(model.seal().targetOperation.get(subject), fact);
+  assert.equal(model.seal([]).targetOperation.get(subject), fact);
   assert.throws(() => model.targetOperations.source(subject, fact), /sealed/u);
 });

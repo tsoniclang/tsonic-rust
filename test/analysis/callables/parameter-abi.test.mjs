@@ -16,6 +16,7 @@ function fixture() {
   const walk = {
     finalizedParameters: new WeakSet(), rejectedExpressions: new WeakSet(), resolving: new Set(),
     context: {
+      requiredRecords: [],
       records: { ...builder, sourceParameterAbis: { ...builder.sourceParameterAbis, parameter(...arguments_) {
         admissions++;
         builder.sourceParameterAbis.parameter(...arguments_);
@@ -38,7 +39,7 @@ test("one completed source parameter owns ABI admission and binding inspection",
   assert.equal(current.builder.sourceParameterAbi.get(parameter) === fact, true, "native ABI identity is canonical");
   assert.equal(current.builder.runtimeCarrier.get(parameter)?.carrier === integer, true);
   assert.deepEqual(current.counts(), { admissions: 1, names: 1 }, "a repeated complete query has no admission or binding replay");
-  current.builder.seal();
+  current.builder.seal(current.walk.context.requiredRecords);
   assert.throws(() => recordRustParameterAbiSelection(current.walk, parameter, abi), /after analysis is sealed/u);
   assert.deepEqual(current.counts(), { admissions: 1, names: 1 }, "the phase guard runs before cached work");
 });

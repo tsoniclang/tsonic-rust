@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -77,13 +78,17 @@ export function recordRustInlineModuleCallableUses(
   for (const [reference, value] of values) records.sourceCallableValues.function(reference, value.sourceDeclaration,
     value.fileName, value.name, value.carrier, value.parameterCarriers, value.resultCarrier);
   if (!selection.stored) for (const alias of selection.aliases) {
-    for (const declaration of alias.declarations) records.compileTimeSources.erase(declaration);
+    for (const declaration of alias.declarations) {
+      requireRustRecord(walk.context.requiredRecords, "compileTimeSource", declaration, "inline-callable-alias", "recordRustInlineModuleCallableUses");
+      records.compileTimeSources.erase(declaration);
+    }
   }
   for (const [reference, value] of references) records.directCallableReferences.function(reference, value.sourceDeclaration,
     value.fileName, value.name, value.carrier, value.parameterCarriers, value.resultCarrier);
 
   function collect(reference: Node, value: RustSourceCallableValueFact, family: RustRecordFamily<RustSourceCallableValueFact>,
     pending: Map<Node, RustSourceCallableValueFact>, id: "sourceCallableValue" | "directCallableReference"): void {
+    requireRustRecord(walk.context.requiredRecords, id, reference, "inline-callable-use", "recordRustInlineModuleCallableUses");
     const existing = pending.get(reference) ?? family.get(reference);
     if (existing !== undefined && !rustSourceCallableValueEquals(existing, value)) failTargetAnalysisInvariant("tsonic-rust",
       `Conflicting Rust semantic plan 'tsonic.rust.${id}' for one exact source subject.`);

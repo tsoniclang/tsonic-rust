@@ -62,7 +62,7 @@ test("binding defaults select the projected native context once before sealing n
         const records = createRustProgramRecordBuilder();
         let resolutions = 0;
         const recorded = recordRustBindingPatternFacts(pattern, sourceCarrier, {
-          ast, records, setCarrier: () => {},
+          ast, records, requiredRecords: [], setCarrier: () => {},
           resolveCarrier: () => assert.fail("binding defaults must not select an uncontextualized initializer type"),
           resolveExpressionCarrier: (selected, expected) => {
             resolutions++;
@@ -98,7 +98,7 @@ test("pure-absence binding defaults infer one present initializer without an abs
       const records = createRustProgramRecordBuilder();
       let resolutions = 0;
       const recorded = recordRustBindingPatternFacts(pattern, rustTupleTargetType([rustAbsenceTargetType()]), {
-        ast, records, setCarrier: () => {},
+        ast, records, requiredRecords: [], setCarrier: () => {},
         resolveCarrier: () => assert.fail("the exact initializer must resolve only once"),
         resolveExpressionCarrier: (selected, expected) => {
           resolutions++;
@@ -225,11 +225,12 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
   };
   for (const length of [3n, 9007199254740992n, 9007199254740993n]) {
     const records = createRustProgramRecordBuilder();
+    const requiredRecords = [];
     const carriers = new Map();
     const sourceCarrier = rustFixedArrayTargetType(element, integer(length));
     const remainder = rustFixedArrayTargetType(element, integer(length - 1n));
     assert.equal(recordRustBindingPatternFacts(pattern, sourceCarrier, {
-      ast, records, setCarrier: (subject, carrier) => carriers.set(subject, carrier),
+      ast, records, requiredRecords, setCarrier: (subject, carrier) => carriers.set(subject, carrier),
     }), true);
     assert.deepEqual(carriers.get(firstName), element);
     assert.deepEqual(carriers.get(restName), remainder);
@@ -242,7 +243,7 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
     const statements = planRustBindingPattern(pattern, source, sourceCarrier, {
       diagnostics,
       input: { program: {
-        source: { ast }, records: records.seal(),
+        source: { ast }, records: records.seal(requiredRecords),
         names: { nameForDeclaration: node => node === first ? "first" : "rest" },
       } },
     }, () => assert.fail("fixed-array rest must not reconstruct a source expression"));
@@ -311,7 +312,7 @@ test("fixed-array literal cardinality rejects exact mismatches without extent ex
   const diagnostics = [];
   const records = createRustProgramRecordBuilder();
   const zero = rustFixedArrayTargetType(element, integer(0n));
-  assert.deepEqual(resolveArrayLiteralCarrier({ context: { ast: { elements: () => [] }, diagnostics, records } },
+  assert.deepEqual(resolveArrayLiteralCarrier({ context: { ast: { elements: () => [] }, diagnostics, records, requiredRecords: [] } },
     expression, {}, zero), zero);
   assertNoTargetDiagnostics(diagnostics);
   assert.deepEqual(records.runtimeCarrier.get(expression)?.carrier, zero);

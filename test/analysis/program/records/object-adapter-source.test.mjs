@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -68,9 +69,19 @@ function checkedNodes(source, program) {
 for (const surfaces of [[], ["js"]]) {
   for (const [index, [family, text, viewKind]] of cases.entries()) {
     test(`${family} producer retains checked source, selected ABI and immutable readers in ${surfaces[0] ?? "native"} case ${index}`, () => {
-      const { source, program } = analyzeRust({ surfaces, files: { "index.ts": text } });
+      const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": text } });
       const nodes = checkedNodes(source, program);
       const identities = new Set(nodes);
+      const { ast } = source;
+      const initializer = name => ast.as.AsVariableDeclaration(nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === name))?.Initializer;
+      const expectedSubjects = index === 0 ? nodes.filter(node => ast.is.IsMethodDeclaration(node) && ast.text(ast.name(node)) === "value") :
+        index === 1 ? [initializer("constructor")] :
+        index === 2 ? [ast.arguments(nodes.find(node => ast.is.IsCallExpression(node)))[0]] :
+        index === 3 ? nodes.filter(node => ast.is.IsObjectLiteralExpression(node)) :
+        index === 4 ? nodes.filter(node => ast.is.IsClassDeclaration(node)) :
+        index === 6 ? nodes.filter(node => ast.is.IsNewExpression(node)) : [initializer("view")];
+      assert.equal(expectedSubjects.length, index === 4 ? 2 : 1);
+      for (const subject of expectedSubjects) assertRustRecordRequirement(requiredRecords, family, subject);
       const selected = nodes.flatMap(node => {
         const fact = program.records[family].get(node);
         return fact === undefined ? [] : [{ node, fact }];
@@ -138,11 +149,12 @@ for (const surfaces of [[], ["js"]]) {
   }
 
   test(`a declaration used only as a static qualifier does not manufacture a class-value record in ${surfaces[0] ?? "native"}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       class Box { static value: number = 3; }
       export function run(): number { return Box.value; }
     ` } });
     const nodes = checkedNodes(source, program);
     assert.equal(nodes.some(node => program.records.classValue.get(node) !== undefined), false);
+    assert.equal(requiredRecords.some(row => row.family === "classValue"), false);
   });
 }

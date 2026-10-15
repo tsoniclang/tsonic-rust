@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -39,6 +40,7 @@ export function resolveRustClosedRecordLiteral(
     names.add(sourceName);
     fields.push({ property, expression: value, sourceName });
   }
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "closed-record-literal", "analysis/expressions/closed-records.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "closed-record-literal", operationId: "tsonic.rust.record.closed-literal",
     resultCarrier: carrier, fields,

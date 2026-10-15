@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
@@ -31,7 +32,7 @@ function assertReader(records, family) {
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
   test(`ordinary nested arguments publish exact checked call inputs in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { int32 } from "@tsonic/core/types.js";
       function identity(value: int32): int32 { return value; }
       export function run(value: int32): int32 { return identity(identity(value)); }
@@ -40,8 +41,10 @@ for (const surfaces of [[], ["js"]]) {
     const calls = nodes.filter(node => source.ast.is.IsCallExpression(node));
     assert.equal(calls.length, 2);
     const arguments_ = calls.map(node => source.ast.arguments(node)[0]);
+    for (const call of calls) assert.equal(requiredRecords.some(row => row.family === "retainedCallLifetimes" && row.subject === call), false);
     assert.equal(nodes.filter(node => program.records.argumentPassing.get(node) !== undefined).length, 2);
     for (const argument of arguments_) {
+      assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
       const fact = program.records.argumentPassing.get(argument);
       assert.equal(fact?.mode, "by-value");
       assert.equal(Object.hasOwn(fact, "storageExpression"), false);
@@ -52,7 +55,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`provider arguments publish the actual selected native ABI passing mode in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, packages: [acmeFilesPackage()], files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, packages: [acmeFilesPackage()], files: { "index.ts": `
       import { readText } from "@acme/files";
       export function run(path: string): string { return readText(path); }
     ` } });
@@ -66,6 +69,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(runtimeArguments.length, 1);
     assert.equal(runtimeArguments[0].sourceIndex, 0);
     const argument = source.ast.arguments(call)[0];
+    assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
     const passing = program.records.argumentPassing.get(argument);
     assert.equal(passing?.mode, rustArgumentPassingMode(runtimeArguments[0].mode));
     assert.equal(passing.storageExpression === argument, passing.mode === "borrow-shared" || passing.mode === "borrow-mut");
@@ -75,7 +79,7 @@ for (const surfaces of [[], ["js"]]) {
 
   for (const [reference, mutable] of [["Ref", false], ["Mut", true]]) {
     test(`native ${reference} inputs retain selected reference carriers without a second passing wrapper in ${surface}`, () => {
-      const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+      const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
         import type { int32 } from "@tsonic/core/types.js";
         import type { Life, ${reference} } from "@tsonic/rust/types.js";
         function identity<Region extends Life>(value: ${reference}<int32, Region>): ${reference}<int32, Region> { return value; }
@@ -86,6 +90,8 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(calls.length, 1);
       const call = calls[0];
       const argument = source.ast.arguments(call)[0];
+      assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
+      assertRustRecordRequirement(requiredRecords, "callScopedLifetimeReconciliation", argument);
       const passing = program.records.argumentPassing.get(argument);
       assert.equal(passing?.mode, "by-value", "the native reference is already the selected argument value");
       assert.equal(Object.hasOwn(passing, "storageExpression"), false);
@@ -107,7 +113,7 @@ for (const surfaces of [[], ["js"]]) {
   }
 
   test(`typed-location calls construct canonical pointer and local-storage records in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { int32 } from "@tsonic/core/types.js";
       import { addressof, allocateptr, loadptr, storeptr, equalptr, hashptr } from "@tsonic/core/lang.js";
       export function run(value: int32): int32 {
@@ -120,6 +126,14 @@ for (const surfaces of [[], ["js"]]) {
     ` } });
     const nodes = nodesOf(source, program.sourceFiles);
     const identities = new Set(nodes);
+    const expectedCalls = nodes.filter(node => source.ast.is.IsCallExpression(node));
+    assert.equal(expectedCalls.length, 7);
+    for (const call of expectedCalls) {
+      assertRustRecordRequirement(requiredRecords, "typedLocationPlan", call);
+      for (const argument of source.ast.arguments(call)) assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
+    }
+    const local = nodes.find(node => source.ast.is.IsVariableDeclaration(node) && source.ast.text(source.ast.name(node)) === "local");
+    assertRustRecordRequirement(requiredRecords, "bindingStorage", local);
     const selected = nodes.filter(node => program.records.typedLocationPlan.get(node) !== undefined);
     assert.equal(selected.length, 7);
     assert.deepEqual([...new Set(selected.map(node => program.records.typedLocationPlan.get(node).operation))].sort(),
@@ -153,7 +167,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`required and optional projected pointers retain their exact source operands in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { int32, Pointer } from "@tsonic/core/types.js";
       import { projectptr } from "@tsonic/core/lang.js";
       export function required(pointer: Pointer<int32>): Pointer<int32> {
@@ -165,6 +179,12 @@ for (const surfaces of [[], ["js"]]) {
     ` } });
     const nodes = nodesOf(source, program.sourceFiles);
     const selected = nodes.filter(node => program.records.typedLocationPlan.get(node)?.operation === "project-pointer");
+    const expectedCalls = nodes.filter(node => source.ast.is.IsCallExpression(node));
+    assert.equal(expectedCalls.length, 2);
+    for (const call of expectedCalls) {
+      assertRustRecordRequirement(requiredRecords, "typedLocationPlan", call);
+      for (const argument of source.ast.arguments(call)) assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
+    }
     assert.equal(selected.length, 2);
     assert.deepEqual(selected.map(node => program.records.typedLocationPlan.get(node).optional), [false, true]);
     for (const call of selected) {
@@ -181,7 +201,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`pointer views and bound callbacks use the same canonical location constructor in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { int32, Pointer } from "@tsonic/core/types.js";
       import { bindptr, viewptr } from "@tsonic/core/lang.js";
       class Identity { value: int32 = 0; }
@@ -191,6 +211,12 @@ for (const surfaces of [[], ["js"]]) {
     const nodes = nodesOf(source, program.sourceFiles);
     const selected = nodes.filter(node => program.records.typedLocationPlan.get(node) !== undefined);
     assert.equal(selected.length, 2);
+    const expectedCalls = nodes.filter(node => source.ast.is.IsCallExpression(node));
+    assert.equal(expectedCalls.length, 2);
+    for (const call of expectedCalls) {
+      assertRustRecordRequirement(requiredRecords, "typedLocationPlan", call);
+      for (const argument of source.ast.arguments(call)) assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
+    }
     assert.deepEqual(selected.map(node => program.records.typedLocationPlan.get(node).operation).sort(), ["bind-pointer", "view-pointer"]);
     for (const call of selected) {
       const fact = program.records.typedLocationPlan.get(call);
@@ -210,7 +236,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`retained source calls preserve the actual callee/caller lifetime substitution in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { int32 } from "@tsonic/core/types.js";
       function retain(callback: () => int32): () => int32 { return callback; }
       export function run(callback: () => int32): () => int32 { return retain(callback); }
@@ -220,6 +246,12 @@ for (const surfaces of [[], ["js"]]) {
     const callee = declarations.find(node => source.ast.text(source.ast.name(node)) === "retain");
     const caller = declarations.find(node => source.ast.text(source.ast.name(node)) === "run");
     assert.equal(callee !== undefined && caller !== undefined, true);
+    assertRustRecordRequirement(requiredRecords, "retainedEnvironment", callee);
+    assertRustRecordRequirement(requiredRecords, "retainedEnvironment", caller);
+    const expectedCalls = nodes.filter(node => source.ast.is.IsCallExpression(node));
+    assert.equal(expectedCalls.length, 1);
+    assertRustRecordRequirement(requiredRecords, "retainedCallLifetimes", expectedCalls[0]);
+    assertRustRecordRequirement(requiredRecords, "argumentPassing", source.ast.arguments(expectedCalls[0])[0]);
     const selected = nodes.filter(node => program.records.retainedCallLifetimes.get(node) !== undefined);
     assert.equal(selected.length, 1);
     const call = selected[0];
@@ -241,7 +273,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`binding projection construction keeps checked leaf carriers, defaults and rest in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { int32 } from "@tsonic/core/types.js";
       interface Pair { left: int32; right: int32; }
       export function run(pair: Pair, values: int32[]): int32 {
@@ -252,6 +284,12 @@ for (const surfaces of [[], ["js"]]) {
     ` } });
     const nodes = nodesOf(source, program.sourceFiles);
     const bindings = nodes.filter(node => program.records.bindingProjection.get(node) !== undefined);
+    const expectedBindings = nodes.filter(node => source.ast.kindName(node) === "KindBindingElement");
+    assert.equal(expectedBindings.length, 4);
+    for (const binding of expectedBindings) {
+      assertRustRecordRequirement(requiredRecords, "bindingProjection", binding);
+      assert.equal(requiredRecords.some(row => row.family === "bindingProjection" && row.subject === source.ast.name(binding)), false);
+    }
     assert.equal(bindings.length, 4);
     const forms = [];
     for (const binding of bindings) {
@@ -279,13 +317,14 @@ for (const surfaces of [[], ["js"]]) {
 }
 
 test("closed JS object projections preserve the selected object-literal borrow", () => {
-  const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: ["js"], files: { "index.ts": `
     export function inspect(): string[] { const pair = { left: 1, right: 2 }; return Object.keys(pair); }
   ` } });
   const nodes = nodesOf(source, program.sourceFiles);
   const calls = nodes.filter(node => source.ast.is.IsCallExpression(node));
   assert.equal(calls.length, 1);
   const argument = source.ast.arguments(calls[0])[0];
+  assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
   const passing = program.records.argumentPassing.get(argument);
   assert.equal(passing?.mode, "borrow-shared");
   assert.equal(passing.storageExpression === argument, true);
@@ -295,7 +334,7 @@ test("closed JS object projections preserve the selected object-literal borrow",
 });
 
 test("closed JS array predicates borrow the actual checked value without a conversion or invented storage", () => {
-  const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: ["js"], files: { "index.ts": `
     export function inspect(value: unknown): boolean { return Array.isArray(value); }
   ` } });
   const nodes = nodesOf(source, program.sourceFiles);
@@ -306,6 +345,8 @@ test("closed JS array predicates borrow the actual checked value without a conve
   assert.equal(passing?.mode, "borrow-shared");
   assert.equal(passing.storageExpression === argument, true);
   assert.equal(Object.isFrozen(passing), true);
+  assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
+  assert.equal(requiredRecords.some(row => row.family === "bindingStorage" && row.subject === argument), false);
   assert.equal(program.records.targetOperation.get(calls[0])?.kind, "closed-type-test");
   assert.equal(program.records.conversion.get(argument) === undefined, true);
   assert.equal(program.records.bindingStorage.get(argument) === undefined, true);
@@ -336,11 +377,12 @@ for (const [type, carrier, expression, expected] of [
       const reference = source.navigation.declarationUseSummary(declaration).uses.find(use => use.kind !== "type-only")?.reference;
       assert.equal(reference !== undefined, true);
       const records = createRustProgramRecordBuilder();
-      const walk = { context: { ast: source.ast, source, records }, capturedBindingStorage: new Map(),
+      const walk = { context: { ast: source.ast, source, records, requiredRecords: [] }, capturedBindingStorage: new Map(),
         promotedStorageDeclarations: new Set() };
       const selected = rustCapturedBindingStorage(walk, declaration, reference, owner, carrier, singleOwner);
+      assertRustRecordRequirement(walk.context.requiredRecords, "bindingStorage", declaration);
       assert.equal(selected?.storage, singleOwner ? expected : "location");
-      const fact = records.seal().bindingStorage.get(declaration);
+      const fact = records.seal(walk.context.requiredRecords).bindingStorage.get(declaration);
       assert.equal(fact?.storage, selected.storage);
       assert.equal(fact.valueCarrier === carrier, true);
       assert.equal(Object.isFrozen(fact), true);

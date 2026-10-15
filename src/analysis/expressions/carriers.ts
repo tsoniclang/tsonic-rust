@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   ElementAccessExpression_ArgumentExpression,
   BinaryExpression_Left,
@@ -78,6 +79,7 @@ export function resolveExpressionCarrier(
   purpose: "value" | "operation" = "value",
   integerConversion: "native" | "exact" = "native",
 ): TargetTypeRef | undefined {
+  walk.context.records.assertOpen();
   if (walk.rejectedExpressions.has(expression)) return undefined;
   const records = walk.context.records;
   const contextualExpected = rustExpressionResolutionExpectation(
@@ -92,6 +94,7 @@ export function resolveExpressionCarrier(
         rustSourceValueWrapperContains(expression, operand, walk.context.ast)) {
         const abi = records.sourceParameterAbi.get(operand);
         if (abi !== undefined && rustTargetTypeRefEquals(result, abi.valueCarrier)) {
+          requireRustRecord(walk.context.requiredRecords, "sourceParameterAbi", expression, "parameter-wrapper", "resolveExpressionCarrier");
           records.sourceParameterAbis.use(expression, operand);
         }
       }
@@ -520,7 +523,7 @@ function applyOptionLane(
     if (exactInteger !== undefined || retained?.conversion.kind === "exact-integer" &&
       rustTargetTypeRefEquals(retained.sourceCarrier, resolved) &&
       rustTargetTypeRefEquals(retained.targetCarrier, scalarTarget)) {
-      recordRustValueCarrierReconciliation(walk.context.records, expression, { kind: "conversion", fact: {
+      recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, { kind: "conversion", fact: {
         sourceCarrier: resolved, targetCarrier: scalarTarget,
         conversion: exactInteger ?? retained!.conversion,
       } });
@@ -530,7 +533,7 @@ function applyOptionLane(
       const truncation = selectRustIntegerTruncationConversion(walk.context.ast, expression,
         operation?.kind === "provider-operation" ? operation.operationId : undefined, resolved, scalarTarget);
       if (truncation !== undefined) {
-        recordRustValueCarrierReconciliation(walk.context.records, expression, { kind: "conversion",
+        recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, { kind: "conversion",
           fact: { sourceCarrier: resolved, targetCarrier: scalarTarget, conversion: truncation } });
         projected = scalarTarget;
       }
@@ -564,10 +567,10 @@ function applyOptionLane(
       }
       if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
-        recordRustValueCarrierReconciliation(walk.context.records, expression, reconciliation);
+        recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, reconciliation);
         projected = reconciliationTarget;
         if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
-          recordRustConversionSelection(walk.context.records, expression, reconciliationTarget);
+          recordRustConversionSelection(walk.context.records, walk.context.requiredRecords, expression, reconciliationTarget);
         }
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated") {
@@ -587,17 +590,18 @@ function applyOptionLane(
     return projected;
   }
   if (isRustUnitCarrier(projected)) {
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "option-none", "applyOptionLane");
     const existing = walk.context.records.targetOperation.get(expression);
     if (existing === undefined) {
       walk.context.records.targetOperations.source(expression, { kind: "option-none", operationId: "tsonic.rust.option.none" });
     }
     if (projected !== undefined) {
-      recordRustOptionProjection(walk.context.records, expression, { kind: "none", sourceCarrier: projected, resultCarrier: expected });
+      recordRustOptionProjection(walk.context.records, walk.context.requiredRecords, expression, { kind: "none", sourceCarrier: projected, resultCarrier: expected });
     }
     return expected;
   }
   if (projected !== undefined && rustTargetTypeRefEquals(projected, inner)) {
-    recordRustOptionProjection(walk.context.records, expression, { kind: "some", sourceCarrier: projected,
+    recordRustOptionProjection(walk.context.records, walk.context.requiredRecords, expression, { kind: "some", sourceCarrier: projected,
       elementCarrier: inner, resultCarrier: expected });
     return expected;
   }
@@ -622,7 +626,7 @@ export function reconcileRequiredCarrier(
   if (reconciliation.kind === "call-scoped-lifetime" ||
     reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
     recordRustValueCarrierReconciliation(
-      walk.context.records,
+      walk.context.records, walk.context.requiredRecords,
       expression,
       reconciliation,
     );

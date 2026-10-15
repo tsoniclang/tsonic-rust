@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { fieldFactKey } from "@tsonic/tsts";
 import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from "@tsonic/source-core/facts";
@@ -12,6 +13,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "./project-calls.js";
 
 export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: Node, file: SourceFile) {
+  walk.context.records.assertOpen();
   const { ast, source } = walk.context;
   const field = selectTsonicMemoryFieldBinding(ast, source.sourceFacts, expression);
   const record = selectTsonicMemoryRecordBinding(ast, source.sourceFacts, expression);
@@ -33,6 +35,7 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
     const carrier = rustSourceLocationTargetType(pointee);
     const pointer = resolveExpressionCarrier(walk, operation.pointerExpression, file, carrier);
     if (!rustTargetTypeRefEquals(pointer, carrier)) return reject("The bound field and selected location have different native value carriers.");
+    requireRustRecord(walk.context.requiredRecords, "memoryBindingPlan", expression, "field", "resolveRustMemoryBindingCarrier");
     walk.context.records.memoryBindings.field(expression, carrier, operation.pointerExpression);
     return { handled: true as const, carrier: setCarrierFact(walk, expression, carrier) };
   }
@@ -41,6 +44,7 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
   const carrier = resolveRustTargetTypeRef(operation.layout.explicitTypeNode ?? operation.sourceType, resolution, walk.operationOptions);
   const structural = rustStructuralObjectCarrierValue(carrier);
   if (carrier !== undefined && rustTargetTypeRefEquals(carrier, rustEmptyObjectTargetType()) && operation.fields.length === 0) {
+    requireRustRecord(walk.context.requiredRecords, "memoryBindingPlan", expression, "empty-record", "resolveRustMemoryBindingCarrier");
     walk.context.records.memoryBindings.record(expression, carrier, []);
     return { handled: true as const, carrier: setCarrierFact(walk, expression, carrier) };
   }
@@ -65,6 +69,7 @@ export function resolveRustMemoryBindingCarrier(walk: RustFactWalk, expression: 
     used.add(selection.field.storageIndex);
     fields.push(Object.freeze({ expression: entry.expression, storageIndex: selection.field.storageIndex, carrier: pointer }));
   }
+  requireRustRecord(walk.context.requiredRecords, "memoryBindingPlan", expression, "record", "resolveRustMemoryBindingCarrier");
   walk.context.records.memoryBindings.record(expression, carrier, fields);
   return { handled: true as const, carrier: setCarrierFact(walk, expression, carrier) };
 }

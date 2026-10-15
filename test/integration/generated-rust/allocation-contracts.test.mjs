@@ -1,5 +1,6 @@
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
+import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import test from "node:test";
 import { nativeFunction, nativeSource, nativeType, nativeBorrow, nativeMethods,
   assertNoNativeCalls } from "../../helpers/native-ast.mjs";
@@ -92,7 +93,7 @@ test("local receiver field results do not force shared object storage", () => {
     ["read(): Parser { return this; }", "shared-immutable", false],
     ["read(): () => number { return () => this.position; }", "value", true],
   ]) {
-    const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: ["js"], files: { "index.ts": `
       class Parser { position = 0; ${body} }
       export function run(): void { const parser = new Parser(); parser.read(); }
     ` } });
@@ -110,6 +111,7 @@ test("local receiver field results do not force shared object storage", () => {
     assert.equal(ast.is.IsArrowFunction(callable), fieldOnly, "exact expected field-only closure input");
     if (fieldOnly) {
       const field = members.find(member => ast.text(ast.name(member)) === "position");
+      assertRustRecordRequirement(requiredRecords, "capturedFieldStorage", field);
       assert.equal(field !== undefined, true, "exact selected position field");
       const captures = program.objectRepresentations.receiverCaptures.capturesFor(callable);
       assert.equal(captures.length, 1, "one retained field, not the whole object");

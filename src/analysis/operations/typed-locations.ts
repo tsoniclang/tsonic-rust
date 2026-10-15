@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { selectedRustCallSignature } from "../program/records/selected-call.js";
 import type {
@@ -75,6 +76,7 @@ export function selectRustTypedLocationCall(
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedCallSelectionResult> | undefined {
+  context.records.assertOpen();
   const selection = selectRustTypedLocationSourceOperation(
     request.source.call,
     marker,
@@ -202,6 +204,7 @@ export function recordRustTypedLocationCall(
   context: RustOperationAnalysisContext,
   provider?: ProviderDeclarationIdentity,
 ): RustPolicySelection<RustCheckedCallSelectionResult> {
+  context.records.assertOpen();
   const sourceOperation = plan;
   const selectedGenericParameters = request.source.sourceSelectedMethodTypeArguments ?? [];
   const sourceParameters = rustSelectedCallTypeParameters(selectedGenericParameters, context);
@@ -211,6 +214,7 @@ export function recordRustTypedLocationCall(
   const evidence = [{
     message: `rust selected exact typed-location operation ${sourceOperation.operation}`,
   }];
+  requireRustRecord(context.requiredRecords, "typedLocationPlan", request.source.call, sourceOperation.operation, "recordRustTypedLocationCall");
   context.records.typedLocations.finalize(request.source.call, pointeeCarrier, locationCarrier, plan);
   const targetFact: RustTargetOperationFact = {
     kind: "typed-location",
@@ -236,6 +240,7 @@ export function recordRustTypedLocationCall(
     },
   };
   for (const argument of typedLocationCallArguments(request)) {
+    requireRustRecord(context.requiredRecords, "argumentPassing", argument, "by-value", "recordRustTypedLocationCall");
     context.records.argumentPassingPlans.pass(argument, "by-value");
   }
   const member: RustTargetMember = {
@@ -438,9 +443,11 @@ function rustTypedLocationPlan(
             "Selected address-of storage root has no closed Rust value carrier.",
         };
       }
-      if (root.storage === "local-location" &&
-        !context.records.bindingStoragePlans.requireLocation(context, root.declaration, rootCarrier)) {
-        return { kind: "rejected", reason: "Selected address-of storage requires its exact native location and value carrier." };
+      if (root.storage === "local-location") {
+        requireRustRecord(context.requiredRecords, "bindingStorage", root.declaration, "local-location", "analysis/operations/typed-locations.ts");
+        if (!context.records.bindingStoragePlans.requireLocation(context, root.declaration, rootCarrier)) {
+          return { kind: "rejected", reason: "Selected address-of storage requires its exact native location and value carrier." };
+        }
       }
       return {
         kind: "selected",

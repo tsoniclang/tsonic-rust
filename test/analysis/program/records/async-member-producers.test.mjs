@@ -33,7 +33,7 @@ function indexAbi(value = integer) {
 
 test("the four async and member families publish the same immutable getter ports without general writers", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const records = builder.seal([]);
   assert.equal(Object.keys(records).length, 66);
   for (const [family, producer] of [["asyncFunction", "asyncFunctions"], ["yield", "yields"],
     ["computedMember", "computedMembers"], ["compoundWrite", "compoundWrites"]]) {
@@ -198,11 +198,11 @@ test("computed call selection admits only the exact checker-selected element cal
   const source = { sourceCalleeAccess: { kind: "element", expression,
     receiver: { expression: receiver }, argument: { expression: key } } };
   for (const selected of [undefined, {}, { sourceCalleeAccess: { ...source.sourceCalleeAccess, kind: "property" } }]) {
-    assert.equal(recordRustComputedCallEvaluation(ast, builder, selected, expression, true) === undefined, true);
+    assert.equal(recordRustComputedCallEvaluation(ast, builder, [], selected, expression, true) === undefined, true);
   }
-  assert.equal(recordRustComputedCallEvaluation(ast, builder, source, {}, true) === undefined, true);
+  assert.equal(recordRustComputedCallEvaluation(ast, builder, [], source, {}, true) === undefined, true);
   assert.equal(builder.computedMember.get(expression) === undefined, true);
-  assert.equal(recordRustComputedCallEvaluation(ast, builder, source, expression, false) === key, true);
+  assert.equal(recordRustComputedCallEvaluation(ast, builder, [], source, expression, false) === key, true);
   const fact = builder.computedMember.get(expression);
   assert.equal(fact.receiver === receiver && fact.key === key, true);
   assert.equal(fact.evaluateReceiver, false);
@@ -270,13 +270,13 @@ test("all four families retain inherited evidence, live parent additions and iso
     assert.equal(parent[family].get(specialized) === undefined, true, family);
     assert.equal(child[family].get(specialized) !== undefined, true, family);
   }
-  parent.seal();
-  child.seal();
+  parent.seal([]);
+  child.seal([]);
 });
 
 test("every producer operation rejects after sealing before examining caller-owned metadata", () => {
   const builder = createRustProgramRecordBuilder();
-  builder.seal();
+  builder.seal([]);
   let reads = 0;
   const unreadable = new Proxy({}, { get() { reads += 1; throw new Error("metadata was read"); } });
   const calls = [

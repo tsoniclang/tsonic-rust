@@ -7,6 +7,7 @@ import { selectRustCopiedMethods } from "../../objects/copied-methods.js";
 import type { RustFactWalk } from "../walk.js";
 import { appendRustDiagnostic } from "../walk.js";
 import { createRustRecordFamily } from "./family.js";
+import { requireRustRecord } from "./required-records.js";
 
 export interface RustReceiverIndependentMethodProducer {
   readonly records: RustRecordFamily<{ readonly carrier: TargetTypeRef }>;
@@ -34,6 +35,8 @@ export function createRustReceiverIndependentMethodProducer(
           continue;
         }
         for (const method of selection.implementations.get(identity) ?? []) {
+          requireRustRecord(walk.context.requiredRecords, "receiverIndependentMethod", method.node,
+            "copied-method", "receiverIndependentMethods.finalize");
           const pending = candidates.get(method.node);
           const existing = pending ?? family.reader.get(method.node)?.carrier;
           if (existing !== undefined && !rustTargetTypeRefEquals(existing, method.carrier)) {

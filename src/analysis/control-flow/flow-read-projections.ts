@@ -4,15 +4,16 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 import { selectRustFlowReadProjection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import type { RustFlowReadProjectionSelection } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import type { ExtensionFactSubject } from "@tsonic/tsts";
+import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustRecordFamily } from "../../target-model/records/program.js";
 import { rustFlowReadProjectionEquals } from "../../target-model/records/equality.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export interface RustFlowReadProjectionQueries {
-  readonly resolve: (subject: ExtensionFactSubject, source: TargetTypeRef, selected: TargetTypeRef,
+  readonly resolve: (requiredRecords: RustRequiredRecord[], subject: Node, source: TargetTypeRef, selected: TargetTypeRef,
     projectTypes: RustProjectTypePolicy, definitions: RustTypeDefinitions) => RustFlowReadProjectionSelection;
   readonly validate: (subject: ExtensionFactSubject, source: TargetTypeRef, projectTypes: RustProjectTypePolicy,
     definitions: RustTypeDefinitions) => Exclude<RustFlowReadProjectionSelection, { readonly kind: "identity" }> | undefined;
@@ -52,7 +53,7 @@ export function createRustFlowReadProjectionQueries(input: {
     return { kind: "projection", fact: canonical };
   };
   return Object.freeze({
-    resolve(subject: ExtensionFactSubject, source: TargetTypeRef, selected: TargetTypeRef,
+    resolve(requiredRecords: RustRequiredRecord[], subject: Node, source: TargetTypeRef, selected: TargetTypeRef,
       projectTypes: RustProjectTypePolicy, definitions: RustTypeDefinitions): RustFlowReadProjectionSelection {
       input.assertOpen();
       const existing = input.records.get(subject);
@@ -63,6 +64,7 @@ export function createRustFlowReadProjectionQueries(input: {
         failTargetAnalysisInvariant("tsonic-rust", "Conflicting Rust semantic plan 'tsonic.rust.flowReadProjection' for one exact source subject.");
       }
       if (selection.kind !== "projection") return selection;
+      requireRustRecord(requiredRecords, "flowReadProjection", subject, selection.fact.kind, "flowReadProjections.resolve");
       if (existing === undefined) input.publish(subject, selection.fact);
       const canonical = existing ?? input.records.get(subject);
       if (canonical === undefined || !rustFlowReadProjectionEquals(canonical, selection.fact)) {

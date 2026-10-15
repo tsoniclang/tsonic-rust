@@ -52,6 +52,7 @@ import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit, type RustEffe
 import type { RustAwaitSourceErrorBranch } from "../../target-model/records/await-source-error-effects.js";
 import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 export function recordFallibilityFacts(
   walk: RustFactWalk,
@@ -101,6 +102,8 @@ function collectFallibilityFacts(
   const isFallible = (declaration: Node): boolean => rustErrorEffectsAreFallible(declarationEffects(declaration));
   for (const nativeInput of walk.context.callableValues.native.calls) {
     budget.step();
+    requireRustRecord(walk.context.requiredRecords, "sourceCallEffects", nativeInput.node,
+      "native-call", "recordFallibilityFacts");
     walk.context.records.sourceCallEffectPlans.nativeInput(nativeInput);
   }
   const genericCallables = walk.context.callableValues.generic;
@@ -509,6 +512,8 @@ function collectFallibilityFacts(
     budget.step();
     const result = walk.context.records.asyncFunction.get(declaration)?.futureCarrier ??
       walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
+    requireRustRecord(walk.context.requiredRecords, "sourceCallEffects", declaration,
+      "source-callable", "recordFallibilityFacts");
     walk.context.records.sourceCallEffectPlans.selected(declaration,
       genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
       !hasCompletion(result) ? "not-applicable" : genericAwaitIsFallible(declaration) ? "fallible" : "infallible");
@@ -565,6 +570,8 @@ function collectFallibilityFacts(
   for (const declaration of new Set([...declarations, ...effectsByDeclaration.keys()])) {
     const effects = declarationEffects(declaration);
     budget.metadata(effects);
+    requireRustRecord(walk.context.requiredRecords, "errorEffects", declaration,
+      "source-callable", "recordFallibilityFacts");
     walk.context.records.errorEffectPlans.selected(declaration, effects);
     if (rustErrorEffectsAreFallible(effects)) fallibleSubjects.add(declaration);
   }
@@ -585,6 +592,8 @@ function collectFallibilityFacts(
     if (selectedEffects.some(effects => effects === undefined)) return;
     const effects = mergeEffects(selectedEffects as RustErrorEffectsFact[]);
     if (effects === undefined) return;
+    requireRustRecord(walk.context.requiredRecords, "errorEffects", sourceFile,
+      "module", "recordFallibilityFacts");
     walk.context.records.errorEffectPlans.selected(sourceFile, effects);
     if (rustErrorEffectsAreFallible(effects)) {
       fallibleSubjects.add(sourceFile);
@@ -624,6 +633,8 @@ function collectFallibilityFacts(
             selected?.provenance?.sourceSelectedWriteDeclaration,
             walk.context.ast,
           );
+          requireRustRecord(walk.context.requiredRecords, "sourceAccessorEffects", node,
+            "source-accessor", "recordFallibilityFacts");
           walk.context.records.sourceAccessorEffectPlans.selected(node,
             operation.read === undefined || readDeclaration === undefined ? undefined : isFallible(readDeclaration),
             operation.write === undefined || writeDeclaration === undefined ? undefined : isFallible(writeDeclaration));
@@ -652,6 +663,8 @@ function collectFallibilityFacts(
                   : genericAwaitIsFallible(variant.declaration) ? "fallible" as const : "infallible" as const,
               }))
               : undefined;
+            requireRustRecord(walk.context.requiredRecords, "sourceCallEffects", node,
+              "source-call", "recordFallibilityFacts");
             walk.context.records.sourceCallEffectPlans.selected(node,
               invocation !== undefined ? invocation.effects.invocation
                 : runtimeCallable || (unionBranches === undefined
@@ -678,14 +691,20 @@ function collectFallibilityFacts(
   }
   for (const [region, effects] of effectsByRegion) {
     budget.metadata(effects);
+    requireRustRecord(walk.context.requiredRecords, "errorEffects", region,
+      "error-region", "recordFallibilityFacts");
     walk.context.records.errorEffectPlans.selected(region, effects);
   }
   for (const [node, invocation] of genericInvocations) {
     budget.metadata(invocation);
+    requireRustRecord(walk.context.requiredRecords, "genericCallableInvocation", node,
+      "generic-invocation", "recordFallibilityFacts");
     walk.context.records.genericCallableInvocations.selected(node, invocation);
   }
   for (const [node, effects] of effectsByExpression) {
     budget.metadata(effects);
+    requireRustRecord(walk.context.requiredRecords, "errorEffects", node,
+      "expression", "recordFallibilityFacts");
     walk.context.records.errorEffectPlans.selected(node, effects);
   }
   for (const [node, edges] of sourceErrorEdges) {
@@ -694,11 +713,19 @@ function collectFallibilityFacts(
       budget.metadata(edge.effects);
       budget.metadata(edge.nativeErrors);
     }
+    requireRustRecord(walk.context.requiredRecords, "sourceErrorEffects", node,
+      "source-invocation", "recordFallibilityFacts");
     walk.context.records.sourceErrorEdges.invocation(node, edges);
   }
-  for (const [node, branches] of awaitSourceEdges) walk.context.records.awaitSourceErrors.selected(node, branches);
+  for (const [node, branches] of awaitSourceEdges) {
+    requireRustRecord(walk.context.requiredRecords, "awaitSourceErrorEffects", node,
+      "await", "recordFallibilityFacts");
+    walk.context.records.awaitSourceErrors.selected(node, branches);
+  }
   for (const subject of fallibleSubjects) {
     budget.step();
+    requireRustRecord(walk.context.requiredRecords, "fallible", subject,
+      "fallible-source", "recordFallibilityFacts");
     walk.context.records.fallibleSubjects.selected(subject);
   }
 }

@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import { selectedOptionNullishRelationship } from "./nullish-comparisons.js";
 import {
   sourceIntegerConstantValue,
@@ -651,6 +652,7 @@ export function resolvePostCheckBinaryCarrier(
     : undefined;
   if (inPlaceStringAppend !== undefined && fact?.kind === "operator-token") {
     fact = { ...fact, writeStrategy: inPlaceStringAppend.writeStrategy };
+    requireRustRecord(walk.context.requiredRecords, "mutatedBinding", inPlaceStringAppend.declaration, "string-append", "analysis/operations/operators.ts");
     walk.context.records.mutatedBindings.written(inPlaceStringAppend.declaration);
   }
   if (fact === undefined) {
@@ -692,7 +694,9 @@ export function resolvePostCheckBinaryCarrier(
   if (resultCarrier === undefined) {
     return undefined;
   }
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/operations/operators.ts");
   walk.context.records.targetOperations.source(expression, fact);
+  requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, fact.kind, "resolvePostCheckBinaryCarrier");
   walk.context.records.selectedOperations.operator(expression, fact, resultCarrier);
   if ((fact.kind === "operator-token" || fact.kind === "operator-call") &&
     fact.operator !== "=" && isRustAssignmentOperator(fact.operator)) {
@@ -811,7 +815,9 @@ export function resolvePostCheckUnaryCarrier(
         operationId: rustPostCheckUnaryPlusOperationId,
         resultCarrier: expected,
       };
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/operations/operators.ts");
   walk.context.records.targetOperations.source(expression, fact);
+  requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, fact.kind, "resolvePostCheckUnaryCarrier");
   walk.context.records.selectedOperations.operator(expression, fact, expected);
   return setCarrierFact(walk, expression, expected);
 }

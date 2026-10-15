@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -7,11 +8,11 @@ import { rustLifetimeKey } from "../../../../dist/target-model/lifetimes/index.j
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 function fixture(text, surfaces) {
-  const { source, program } = analyzeRust({ surfaces, files: { "index.ts": text } });
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": text } });
   const nodes = [];
   const visit = node => { nodes.push(node); source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
   program.sourceFiles.forEach(visit);
-  return { source, program, ast: source.ast, nodes, records: program.records };
+  return { source, program, ast: source.ast, nodes, records: program.records, requiredRecords };
 }
 
 function assertCallable(context, family, reference, declaration) {
@@ -44,6 +45,8 @@ for (const surfaces of [[], ["js"]]) {
       export const callback: (value: int32) => int32 = keepMyCase;
     `, surfaces);
     const declaration = context.nodes.find(node => context.ast.is.IsFunctionDeclaration(node));
+    const callback = context.nodes.find(node => context.ast.is.IsVariableDeclaration(node));
+    assertRustRecordRequirement(context.requiredRecords, "directCallableReference", context.ast.as.AsVariableDeclaration(callback).Initializer);
     const selected = context.nodes.filter(node => context.records.directCallableReference.get(node) !== undefined);
     assert.equal(selected.length, 1);
     assert.equal(context.ast.is.IsIdentifier(selected[0]), true);
@@ -64,6 +67,8 @@ for (const surfaces of [[], ["js"]]) {
       }
     `, surfaces);
     const declaration = context.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) && context.ast.text(context.ast.name(node)) === "keepMyCase");
+    const callback = context.nodes.find(node => context.ast.is.IsVariableDeclaration(node) && context.ast.text(context.ast.name(node)) === "callback");
+    assertRustRecordRequirement(context.requiredRecords, "sourceCallableValue", context.ast.as.AsVariableDeclaration(callback).Initializer);
     const selected = context.nodes.filter(node => context.records.sourceCallableValue.get(node) !== undefined);
     assert.equal(selected.length, 1);
     assertCallable(context, "sourceCallableValue", selected[0], declaration);
@@ -90,13 +95,20 @@ for (const surfaces of [[], ["js"]]) {
       node !== context.ast.name(alias) && context.program.sourceNavigation.sourceReferenceFor(node)?.declaration === alias));
     assert.equal(aliases.length, 2);
     assert.equal(references.length, 2);
+    const callback = aliases.find(node => context.ast.text(context.ast.name(node)) === "callback");
+    const initializer = context.ast.as.AsVariableDeclaration(callback).Initializer;
+    assertRustRecordRequirement(context.requiredRecords, "sourceCallableValue", initializer);
+    assertRustRecordRequirement(context.requiredRecords, "directCallableReference", initializer);
     const builder = createRustProgramRecordBuilder(undefined, context.records);
-    recordRustInlineModuleCallableUses({ context: { records: builder } }, {
+    const replayRequirements = [];
+    recordRustInlineModuleCallableUses({ context: { records: builder, requiredRecords: replayRequirements } }, {
       stored: false, declarationValue: true, uses: [{ kind: "first-class", reference: selected[0] }],
       aliases: [{ declarations: aliases, references, producer: fact }],
     });
     assert.equal(builder.sourceCallableValue.get(selected[0]) === fact, true, "equal admission reuses inherited record identity");
+    assertRustRecordRequirement(replayRequirements, "sourceCallableValue", initializer);
     for (const reference of references) {
+      assertRustRecordRequirement(replayRequirements, "directCallableReference", reference);
       const direct = builder.directCallableReference.get(reference);
       assert.equal(direct.sourceDeclaration === declaration, true);
       assert.equal(direct.carrier === fact.carrier && direct.resultCarrier === fact.resultCarrier, true);
@@ -105,6 +117,7 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(context.records.directCallableReference.get(reference) === undefined, true);
     }
     assert.equal(aliases.every(alias => builder.compileTimeSource.get(alias) === true), true);
+    for (const alias of aliases) assertRustRecordRequirement(replayRequirements, "compileTimeSource", alias);
   });
 
   test(`returned native environments keep only the checked escaping input and exact call lifetime in ${surface}`, () => {
@@ -114,6 +127,9 @@ for (const surfaces of [[], ["js"]]) {
       export function run(callback: () => int32, unused: () => int32): () => int32 { return retain(callback); }
     `, surfaces);
     const declarations = context.nodes.filter(node => context.records.retainedEnvironment.get(node) !== undefined);
+    const expectedDeclarations = context.nodes.filter(node => context.ast.is.IsFunctionDeclaration(node));
+    assert.equal(expectedDeclarations.length, 2);
+    for (const declaration of expectedDeclarations) assertRustRecordRequirement(context.requiredRecords, "retainedEnvironment", declaration);
     assert.equal(declarations.length, 2);
     for (const declaration of declarations) {
       const environment = context.records.retainedEnvironment.get(declaration);
@@ -126,6 +142,7 @@ for (const surfaces of [[], ["js"]]) {
     const callee = declarations.find(node => context.ast.text(context.ast.name(node)) === "retain");
     const caller = declarations.find(node => context.ast.text(context.ast.name(node)) === "run");
     const call = context.nodes.find(node => context.ast.is.IsCallExpression(node));
+    assertRustRecordRequirement(context.requiredRecords, "retainedCallLifetimes", call);
     const entries = context.records.retainedCallLifetimes.get(call);
     assert.equal(entries.length, 1);
     assert.equal(entries[0].identity, rustLifetimeKey(context.records.retainedEnvironment.get(callee).lifetime));
@@ -145,11 +162,13 @@ for (const surfaces of [[], ["js"]]) {
       const selected = context.records[kind === "async" ? "asyncFunction" : "generator"].get(declaration);
       assert.equal(selected !== undefined, true);
       if (kind === "async" && surfaces.length === 0) {
+        assert.equal(context.requiredRecords.some(row => row.family === "retainedEnvironment" && row.subject === declaration), false);
         assert.equal(selected.kind, "native-future");
         assert.equal(environment === undefined, true, "native async syntax does not invent a boxed owned environment");
         return;
       }
       assert.equal(environment !== undefined, true);
+      assertRustRecordRequirement(context.requiredRecords, "retainedEnvironment", declaration);
       assert.equal(environment.parameters.length, 1);
       assert.equal(environment.parameters[0] === context.ast.parameters(declaration)[0], true);
       assert.equal(Object.isFrozen(environment) && Object.isFrozen(environment.parameters), true);
@@ -166,6 +185,7 @@ for (const surfaces of [[], ["js"]]) {
       export function run(value: int32): int32 { return value; }
     `, surfaces);
     for (const family of ["sourceCallableValue", "directCallableReference", "retainedEnvironment"]) {
+      assert.equal(context.requiredRecords.some(row => row.family === family), false, family);
       assert.equal(context.nodes.every(node => context.records[family].get(node) === undefined), true, family);
     }
   });

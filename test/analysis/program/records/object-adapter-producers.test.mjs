@@ -20,7 +20,7 @@ const producers = [
 
 test("object and adapter families have one frozen reader, no generic writer and a closed producer", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const records = builder.seal([]);
   for (const [family, producer, attempt] of producers) {
     assert.equal(builder[family] === builder[producer].records, true, family);
     assert.equal(records[family] === builder[family], true, family);
@@ -49,7 +49,7 @@ function copiedFixture(builder, { method = { kind: "KindMethodDeclaration", chil
     ? { kind: "source-field", storage: "structural-object", receiverCarrier: shape, storageIndex: 0, valueSemantics: { kind: "method" } }
     : undefined } }, builder);
   if (receiver) method.children = [{ kind: "KindThisExpression" }];
-  const walk = { context: { records, diagnostics: [], ast: {
+  const walk = { context: { requiredRecords: [], records, diagnostics: [], ast: {
     forEachChild(node, visit) { for (const child of node.children ?? []) visit(child); },
     kindName: node => node.kind ?? "KindIdentifier",
   } }, rejectedExpressions: new WeakSet(), resolving: new Set() };
@@ -65,7 +65,7 @@ test("copied-method producer admits only proved implementations and preserves in
   assert.equal(Object.isFrozen(fact), true);
   assert.equal(parent.receiverIndependentMethod.get({}) === undefined, true);
   assert.equal(parent.minimumFoundation(), "core");
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(original.walk.context.requiredRecords));
   const selected = copiedFixture(child, { method: original.method, carrier: { ...callable } });
   assert.equal(selected.finalize().size, 1);
   assert.equal(child.receiverIndependentMethod.get(original.method) === fact, true, "equal child admission keeps exact parent evidence");
@@ -91,7 +91,7 @@ test("copied-method admission preserves publication order before later rejected-
   const original = copiedFixture(parent);
   original.finalize();
   const fact = parent.receiverIndependentMethod.get(original.method);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(original.walk.context.requiredRecords));
   const conflicting = copiedFixture(child, { method: original.method, carrier: wideCallable });
   const rejected = copiedFixture(child, { fieldName: "other", receiver: true });
   const first = conflicting.walk.context.records.targetOperation;
@@ -153,7 +153,7 @@ function adapterFixture(builder, { expression = {}, implementation = {}, contrac
   const records = createRustRecordFixture({ targetOperation: { get: node => node === expression ? operation : undefined },
     sourceCallableReturn: { get: node => returns.get(node) } }, builder);
   const variant = { declaration: contract, targetTypeArguments: [], sourceTypeParameterIdentities: [], virtualSlot: slot };
-  const input = {
+  const input = { requiredRecords: [],
     ast: { typeParameters: () => [], parameters: () => [], members: () => [contract], hasModifierKind: () => false,
       kindName: () => "KindMethodSignature" },
     sourceLifetimes: { parameterFor: () => undefined }, records,
@@ -166,7 +166,7 @@ function adapterFixture(builder, { expression = {}, implementation = {}, contrac
     projectMethodDispatch: { variantsForMember: () => [variant] },
     expressions: new Set([expression]),
   };
-  const walk = { context: { ...input, diagnostics: [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
+  const walk = { context: { requiredRecords: [], ...input, diagnostics: [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
   return { expression, implementation, contract, owner, concrete, input, walk,
     literal: () => builder.objectLiteralMethodAdapters.finalize(input),
     project: () => builder.projectCallableAdapterPlans.finalize(walk) };
@@ -185,7 +185,7 @@ test("object-method producer retains exact implementation, contract and ABI evid
   assert.equal(Object.isFrozen(fact), true);
   assert.equal(Object.isFrozen(fact.implementations), true);
   assert.equal(Object.isFrozen(fact.dispatches), true);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(selected.input.requiredRecords));
   const equal = adapterFixture(child, selected);
   assert.deepEqual(equal.literal(), []);
   assert.equal(child.objectLiteralMethodAdapter.get(selected.expression) === fact, true);
@@ -230,7 +230,7 @@ test("project-adapter producer owns declaration publication and exact contract/i
   assert.equal(Object.isFrozen(fact), true);
   assert.equal(Object.isFrozen(fact[0]), true);
   assert.equal(Object.isFrozen(fact[0].parameterAdapters), true);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(selected.input.requiredRecords));
   const equal = adapterFixture(child, selected);
   equal.input.projectTypes.definitions = [selected.concrete];
   equal.project();
@@ -277,7 +277,7 @@ function viewFixture(builder, { expression = {}, sourceCarrier = rustStructuralO
     structuralFieldProjectionForDeclaration: (declaration, carrier) => projection(
       declaration === sourceDeclaration ? sourceSymbol : declaration === targetDeclaration ? targetSymbol : undefined, carrier),
     registerStructuralFieldImplementation: () => true,
-  }, context: {
+  }, context: { requiredRecords: [],
     projectTypes: { definitionForCarrier: () => undefined },
     semanticsFor: () => ({ types: { expressionType: () => sourceType, structuralMembers: () => ({
       kind: "available", destination: { calls: [], constructs: [], indexes: [] }, members: [{ kind: "present",
@@ -299,7 +299,7 @@ test("object-reference producer preserves exact native carriers, parent identity
   assert.equal(fact.sourceCarrier === selected.sourceCarrier, true);
   assert.equal(fact.targetCarrier === selected.targetCarrier, true);
   assert.equal(Object.isFrozen(fact.fields), true);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(selected.walk.context.requiredRecords));
   assert.equal(viewFixture(child, selected).select() === fact, true);
   assert.equal(child.objectReferenceView.get(selected.expression) === fact, true);
   const changed = viewFixture(child, { ...selected, targetCarrier: rustStructuralObjectTargetType("/foreign.ts", viewFields) });
@@ -338,7 +338,7 @@ test("object view queries retain full canonical evidence and select once in each
   assert.equal(implementations, 2, "new walk closes its own implementation demand");
   assert.equal(selected.select() === first, true);
   assert.equal(implementations, 2, "the first walk remains completed");
-  builder.seal();
+  builder.seal(selected.walk.context.requiredRecords);
   assert.throws(() => selected.select(), /after analysis is sealed/u);
 });
 
@@ -369,7 +369,7 @@ test("class-value reuse is a read of exact inherited evidence, not an invented s
   assert.equal(builder.classValue.get(subject) === fact, true);
   assert.equal(builder.minimumFoundation(), "core", "a read never manufactures native accounting");
   const fresh = {};
-  const walk = { context: { ast: { kindName: () => "KindIdentifier" },
+  const walk = { context: { requiredRecords: [], ast: { kindName: () => "KindIdentifier" },
     source: { navigation: { sourceReferenceFor: () => undefined } } } };
   assert.equal(builder.classValues.resolve(walk, fresh, undefined) === undefined, true);
   assert.equal(builder.classValue.get(fresh) === undefined, true);

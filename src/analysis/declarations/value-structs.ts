@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import { fieldFactKey, structFactKey } from "@tsonic/tsts";
 import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
@@ -36,7 +37,9 @@ export function recordRustValueStructDeclaration(walk: RustFactWalk, node: Node)
       "A value struct requires one exact native record carrier for its selected fields.", node, []);
     return true;
   }
+  requireRustRecord(walk.context.requiredRecords, "compileTimeSource", node, "value-struct", "recordRustValueStructDeclaration");
   records.compileTimeSources.erase(node);
+  requireRustRecord(walk.context.requiredRecords, "compileTimeSource", initializer, "value-struct-initializer", "recordRustValueStructDeclaration");
   records.compileTimeSources.erase(initializer);
   return true;
 }

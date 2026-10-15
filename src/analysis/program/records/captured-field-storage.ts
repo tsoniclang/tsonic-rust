@@ -1,3 +1,4 @@
+import { requireRustRecord } from "./required-records.js";
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
@@ -33,7 +34,11 @@ export function createRustCapturedFieldStorageProducer(
         return;
       }
       const selection = selectRustCapturedFieldStorageFact(walk, declaration, carrier);
-      if (selection !== undefined) family.writer.set(declaration, selection);
+      if (selection !== undefined) {
+        requireRustRecord(walk.context.requiredRecords, "capturedFieldStorage", declaration,
+          "captured-field", "capturedFieldStoragePlans.resolve");
+        family.writer.set(declaration, selection);
+      }
     },
   });
 }

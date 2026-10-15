@@ -72,9 +72,9 @@ const sealed: RustProgramRecords = builder;
     ["layout text", "builder.memoryLayoutObservations.observe(node, '4');", /not assignable/u],
     ["layout absent selection", "builder.memoryLayoutObservations.observe(node, undefined);", /not assignable/u],
     ["layout evidence overload", "builder.memoryLayoutObservations.observe(node, 4, []);", /Expected 2 arguments/u],
-    ["sealed erase port", "builder.seal().compileTimeSources.erase(node);", /does not exist/u],
-    ["sealed receiver port", "builder.seal().selfModes.method(node, 'ref');", /does not exist/u],
-    ["sealed layout port", "builder.seal().memoryLayoutObservations.observe(node, 4);", /does not exist/u],
+    ["sealed erase port", "builder.seal([]).compileTimeSources.erase(node);", /does not exist/u],
+    ["sealed receiver port", "builder.seal([]).selfModes.method(node, 'ref');", /does not exist/u],
+    ["sealed layout port", "builder.seal([]).memoryLayoutObservations.observe(node, 4);", /does not exist/u],
   ];
   for (const [name, body, diagnostic] of invalid) {
     const result = check(directory, body);

@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -26,7 +27,7 @@ for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
   for (const [name, declarations, parameter, expression, operationKinds, lowerings] of cases) {
     test(`checked ${name} guard retains its exact source, selected native carriers and lowering in ${surface}`, () => {
-      const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+      const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
         ${declarations}
         export function run(${parameter}): number | undefined { return ${expression}; }
       ` } });
@@ -53,7 +54,7 @@ for (const surfaces of [[], ["js"]]) {
   }
 
   test(`module lexical declarations publish exact immutable empty environments in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       function read(value: number): number { return value; }
       export function run(value: number): number { return read(value); }
     ` } });
@@ -61,6 +62,7 @@ for (const surfaces of [[], ["js"]]) {
     const functions = nodes.filter(node => source.ast.is.IsFunctionDeclaration(node));
     assert.equal(functions.length, 2);
     for (const node of functions) {
+      assertRustRecordRequirement(requiredRecords, "closureCapture", node);
       const fact = program.records.closureCapture.get(node);
       assert.equal(fact !== undefined, true);
       assert.deepEqual(Object.keys(fact).sort(), ["captures", "receiverFields", "receivers"]);
@@ -73,7 +75,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`checked lexical class capture retains the exact selected native environment metadata in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       export function run(value: number): number {
         class Value { read(): number { return value; } }
         return new Value().read();
@@ -81,6 +83,7 @@ for (const surfaces of [[], ["js"]]) {
     ` } });
     const nodes = nodesOf(source, program.sourceFiles);
     const declaration = nodes.find(node => source.ast.is.IsClassDeclaration(node));
+    assertRustRecordRequirement(requiredRecords, "closureCapture", declaration);
     const captures = program.records.closureCapture.get(declaration);
     assert.equal(captures !== undefined, true);
     assert.equal(captures.captures.length, 1);
@@ -95,10 +98,11 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`checked recursive field capture retains exact field, receiver and ordered reference identities in ${surface}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": fixedFieldSelfSource } });
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": fixedFieldSelfSource } });
     const nodes = nodesOf(source, program.sourceFiles);
     const closures = nodes.filter(node => source.ast.is.IsArrowFunction(node));
     assert.equal(closures.length, 1);
+    assertRustRecordRequirement(requiredRecords, "closureCapture", closures[0]);
     const capture = program.records.closureCapture.get(closures[0]);
     const field = capture?.recursiveField;
     assert.equal(field !== undefined, true);
@@ -118,11 +122,14 @@ for (const [name, result, expression] of [
   ["reduce", "number", "values.reduce((sum, value) => sum + value, 0)"],
 ]) {
   test(`checked ${name} callback publishes its prepared native protocol result without reselecting it`, () => {
-    const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: ["js"], files: { "index.ts": `
       export function run(values: number[]): ${result} { return ${expression}; }
     ` } });
     const nodes = nodesOf(source, program.sourceFiles);
     const calls = nodes.filter(node => program.records.preparedOperationResult.get(node) !== undefined);
+    const expectedCalls = nodes.filter(node => source.ast.is.IsCallExpression(node));
+    assert.equal(expectedCalls.length, 1);
+    assertRustRecordRequirement(requiredRecords, "preparedOperationResult", expectedCalls[0]);
     assert.equal(calls.length, 1);
     const call = calls[0];
     const fact = program.records.preparedOperationResult.get(call);
@@ -137,6 +144,8 @@ for (const [name, result, expression] of [
     const closures = nodes.filter(node => source.ast.is.IsArrowFunction(node));
     assert.equal(closures.length, 1);
     const captures = program.records.closureCapture.get(closures[0]);
+    assertRustRecordRequirement(requiredRecords, "closureCapture", closures[0]);
+    assert.equal(requiredRecords.some(row => row.family === "preparedOperationResult" && row.subject === closures[0]), false);
     assert.equal(captures !== undefined, true);
     assert.equal(captures.captures.length + captures.receivers.length + captures.receiverFields.length, 0);
     assert.equal(Object.isFrozen(captures), true);

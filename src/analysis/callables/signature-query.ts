@@ -18,6 +18,7 @@ import { requireDenseSourceNodes } from "../expressions/records.js";
 import { selectRustCallableSuspension } from "./suspension.js";
 import type { RustCallableSuspensionSelection } from "./suspension.js";
 import { selectRustCallableLogicalReturn } from "./signatures.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 export interface RustCallableSignatureRequest {
   readonly parameterAbis?: readonly RustSourceParameterAbi[];
@@ -99,7 +100,11 @@ export function finalizeRustCallableSignature(
     }
     const logical = selectRustCallableLogicalReturn(walk, declaration, suspendedReturn ?? request?.selectedReturn);
     if (logical.kind === "pending") return undefined;
-    if (ast.is.IsSetAccessorDeclaration(declaration)) records.sourceCallableReturns.setter(declaration);
+    if (ast.is.IsSetAccessorDeclaration(declaration)) {
+      requireRustRecord(walk.context.requiredRecords, "sourceCallableReturn", declaration,
+        "setter", "finalizeRustCallableSignature");
+      records.sourceCallableReturns.setter(declaration);
+    }
     else if (!records.sourceCallableReturns.resolve(walk, declaration, logical.carrier)) return undefined;
     const result = records.sourceCallableReturn.get(declaration);
     if (result === undefined) return undefined;
@@ -123,6 +128,8 @@ export function finalizeRustCallableSignature(
 function admitSuspension(walk: RustFactWalk, declaration: Node, selection: RustCallableSuspensionSelection): void {
   if (selection.kind === "none") return;
   const { records, ast } = walk.context;
+  requireRustRecord(walk.context.requiredRecords, selection.kind === "async" ? "asyncFunction" : "generator",
+    declaration, selection.fact.kind, "admitSuspension");
   const asynchronous = records.asyncFunction.get(declaration);
   const generator = records.generator.get(declaration);
   if (selection.kind === "async" ? generator !== undefined || asynchronous !== undefined &&
@@ -131,8 +138,12 @@ function admitSuspension(walk: RustFactWalk, declaration: Node, selection: RustC
     failTargetAnalysisInvariant("tsonic-rust",
       `Conflicting Rust semantic plan 'tsonic.rust.${selection.kind === "async" ? "asyncFunction" : "generator"}' for one exact source subject.`, declaration);
   }
-  if (selection.retainedEnvironment !== undefined) records.retainedEnvironments.retain(declaration,
-    selection.retainedEnvironment.lifetime, selection.retainedEnvironment.parameters);
+  if (selection.retainedEnvironment !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
+      "suspended callable environment", "admitSuspension");
+    records.retainedEnvironments.retain(declaration,
+      selection.retainedEnvironment.lifetime, selection.retainedEnvironment.parameters);
+  }
   if (selection.kind === "async") {
     if (asynchronous === undefined) {
       if (selection.fact.kind === "native-future") records.asyncFunctions.native(declaration, selection.fact.outputCarrier);

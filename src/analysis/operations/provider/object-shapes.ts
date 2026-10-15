@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import { isRustJsArrayCarrier, isRustNumericCarrier, rustStringTargetType } from "../../../target-model/types/index.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
@@ -350,6 +351,7 @@ function mapSelectedObjectShapeProjection(
       : "by-value" as const);
   for (const [index, argument] of sourceArguments.entries()) {
     const mode = parameterModes[index]!;
+    requireRustRecord(context.requiredRecords, "argumentPassing", argument.expression, mode, "analysis/operations/provider/object-shapes.ts");
     context.records.argumentPassingPlans.pass(argument.expression, mode);
   }
   const operation: RustTargetOperationSelection = {
@@ -383,6 +385,7 @@ function mapSelectedObjectShapeProjection(
   const selectedSignature = selectedRustCallSignature(request, member,
     selection.static ? undefined : { sourceSelectedReceiverCarrier: sourceValueCarrier });
   if (optionalResult.fact !== undefined) {
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/object-shapes.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }
@@ -723,6 +726,7 @@ export function acceptProjectSourceCall(
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
   });
   if (optionalResult.fact !== undefined) {
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/object-shapes.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }

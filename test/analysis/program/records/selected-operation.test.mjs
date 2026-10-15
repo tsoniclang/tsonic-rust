@@ -28,7 +28,7 @@ test("selected-operation records have one typed immutable reader and no general 
   const builder = createRustProgramRecordBuilder();
   const subject = {};
   builder.selectedOperations.project(subject, "project", "method", "function", integer);
-  const records = builder.seal();
+  const records = builder.seal([]);
   assert.equal(records.selectedOperation === builder.selectedOperations.records, true);
   assert.equal(records.selectedOperation === builder.selectedOperation, true);
   assert.equal(Object.isFrozen(records.selectedOperation), true);
@@ -122,7 +122,7 @@ test("inherited operation records preserve exact scope and reject incompatible o
   const inheritedSubject = {};
   const original = operation({ provenance: { sourceExpression: inheritedSubject } });
   parent.selectedOperations.checked(inheritedSubject, accepted({ operation: original }));
-  const parentRecords = parent.seal();
+  const parentRecords = parent.seal([]);
   const child = createRustProgramRecordBuilder(undefined, parentRecords);
   assert.equal(child.selectedOperation.get(inheritedSubject) === original, true);
   child.selectedOperations.checked(inheritedSubject, accepted({ operation: { ...original, resultType: { ...integer } } }));
@@ -132,7 +132,7 @@ test("inherited operation records preserve exact scope and reject incompatible o
   const childSubject = {};
   child.selectedOperations.project(childSubject, "specialized", "method", "function", text);
   assert.equal(parentRecords.selectedOperation.get(childSubject) === undefined, true, "child never mutates parent");
-  const childRecords = child.seal();
+  const childRecords = child.seal([]);
   assert.equal(childRecords.selectedOperation.get(childSubject)?.operationId, "specialized");
   assert.equal(childRecords.selectedOperation.get(inheritedSubject) === original, true);
 });
@@ -160,7 +160,7 @@ test("selected-operation native foundation accounting is retained by its owner",
     const selected = operation({ targetOperation, resultType });
     builder.selectedOperations.checked(subject, accepted({ operation: selected }));
     assert.equal(builder.minimumFoundation(), expected, targetOperation);
-    builder.seal();
+    builder.seal([]);
     assert.equal(builder.minimumFoundation(), expected, targetOperation + " after seal");
   }
   const builder = createRustProgramRecordBuilder();

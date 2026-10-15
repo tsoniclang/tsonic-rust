@@ -10,6 +10,7 @@ import { selectRustSourceCallableReturn } from "../../callables/signatures.js";
 import type { RustFactWalk } from "../walk.js";
 import { createRustRecordFamily } from "./family.js";
 import type { RustRetainedEnvironmentProducer } from "./retained-environment.js";
+import { requireRustRecord } from "./required-records.js";
 
 export interface RustSourceCallableReturnProducer {
   readonly records: RustRecordFamily<RustSourceCallableReturnFact>;
@@ -40,12 +41,18 @@ export function createRustSourceCallableReturnProducer(
       if (request !== undefined && completedRequests.get(declaration)?.has(request)) return true;
       const selection = selectRustSourceCallableReturn(walk, declaration, selectedCarrier);
       if (selection === undefined) return false;
+      requireRustRecord(walk.context.requiredRecords, "sourceCallableReturn", declaration,
+        "complete callable return", "sourceCallableReturns.resolve");
       if (existing !== undefined && !corresponds(existing, selection.fact)) {
         failTargetAnalysisInvariant("tsonic-rust",
           "Conflicting Rust semantic plan 'tsonic.rust.sourceCallableReturn' for one exact source subject.");
       }
-      if (selection.retainedEnvironment !== undefined) retainedEnvironments.retain(declaration,
-        selection.retainedEnvironment.lifetime, selection.retainedEnvironment.parameters);
+      if (selection.retainedEnvironment !== undefined) {
+        requireRustRecord(walk.context.requiredRecords, "retainedEnvironment", declaration,
+          "returned callable environment", "sourceCallableReturns.resolve");
+        retainedEnvironments.retain(declaration,
+          selection.retainedEnvironment.lifetime, selection.retainedEnvironment.parameters);
+      }
       if (existing === undefined) family.writer.set(declaration, selection.fact);
       if (request !== undefined) {
         let completed = completedRequests.get(declaration);

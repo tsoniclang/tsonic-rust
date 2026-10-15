@@ -21,6 +21,7 @@ import type { RustFutureValueFact } from "../../target-model/records/object-meth
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 export function recordResourceManagementFacts(
   walk: RustFactWalk,
@@ -34,6 +35,8 @@ export function recordResourceManagementFacts(
       if (declarationKind !== "using" && declarationKind !== "await using") {
         continue;
       }
+      requireRustRecord(walk.context.requiredRecords, "resourceManagement", declaration,
+        declarationKind, "recordResourceManagementFacts");
       const selected = walk.context.records.resourceManagementPlans.select(
         declaration,
         rustOperationContext(walk, declaration),
@@ -128,6 +131,8 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       );
       return undefined;
     }
+    requireRustRecord(walk.context.requiredRecords, "futureValue", node,
+      "future-value", "recordFutureValueFacts");
     return fact;
   });
   for (const sourceFile of sourceFiles) {
@@ -144,6 +149,8 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       const carrier = rustEffectiveValueCarrier(walk.context.records, operand);
       if (operand === undefined || operation?.kind !== "await-op" || carrier === undefined) return;
       const knownFuture = resolve(operand);
+      requireRustRecord(walk.context.requiredRecords, "awaitValue", node,
+        "await", "recordFutureValueFacts");
       const awaiting = walk.context.records.awaitValues.finalize(node, carrier, operation.resultCarrier, leaf =>
         knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)
           ? knownFuture : rustFutureValueForStoredBranch(walk, operand, leaf) ?? rustFutureValueForSourceStorage(leaf),
@@ -168,6 +175,7 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
   const conversion = carrier === undefined ? undefined : selectRustProgramErrorConversion(carrier,
     undefined, walk.context.typeDefinitions);
   if (conversion !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", statement, "throw-op", "analysis/resources/suspension.ts");
     walk.context.records.targetOperations.source(statement, Object.freeze({
       kind: "throw-op",
       operationId: "tsonic.rust.error.throw",
@@ -176,6 +184,7 @@ export function recordThrowFacts(walk: RustFactWalk, statement: Node, sourceFile
     return;
   }
   if (carrier !== undefined && isRustProgramErrorCarrier(carrier)) {
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", statement, "throw-op", "analysis/resources/suspension.ts");
     walk.context.records.targetOperations.source(statement, {
       kind: "throw-op",
       operationId: "tsonic.rust.error.rethrow",

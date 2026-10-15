@@ -94,9 +94,9 @@ const fieldName: string | undefined = builder.closureCapture.get(node)?.captures
     ["capture invalid recursive field", "builder.closureCaptures.capture(node, [], [], [], { recursiveField: {} });", /missing/u],
     ["capture foreign recursive owner", "builder.closureCaptures.capture(node, [], [], [], { recursiveDeclaration: {} });", /missing.*properties.*Node/u],
     ["capture invalid invocation owner", "builder.closureCaptures.capture(node, [], [], [], {}, 'unique');", /not assignable/u],
-    ["prepared producer not published", "builder.seal().preparedOperations.prepare(node, operation, carrier);", /does not exist/u],
-    ["guard producer not published", "builder.seal().optionalChains.guard(node, node, 'property', contract);", /does not exist/u],
-    ["capture producer not published", "builder.seal().closureCaptures.capture(node, []);", /does not exist/u],
+    ["prepared producer not published", "builder.seal([]).preparedOperations.prepare(node, operation, carrier);", /does not exist/u],
+    ["guard producer not published", "builder.seal([]).optionalChains.guard(node, node, 'property', contract);", /does not exist/u],
+    ["capture producer not published", "builder.seal([]).closureCaptures.capture(node, []);", /does not exist/u],
   ];
   for (const [name, body, expected] of invalid) {
     const result = check(directory, body);

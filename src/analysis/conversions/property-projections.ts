@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import type { Node, Type } from "@tsonic/tsts";
 import type { RustCheckedCallSelectionInput } from "../../policy/operations/contracts.js";
@@ -71,6 +72,7 @@ export function createRustPropertyProjectionSelector(
       cache.set(argumentIndex, undefined);
       return undefined;
     }
+    requireRustRecord(context.requiredRecords, "propertyProjection", argument.expression, "projected-value", "createRustPropertyProjectionSelector");
     const selected = Object.freeze({ conversion: selectedConversion, cases: Object.freeze(cases) });
     let canonical = context.records.propertyProjection.get(argument.expression);
     if (canonical !== undefined) {

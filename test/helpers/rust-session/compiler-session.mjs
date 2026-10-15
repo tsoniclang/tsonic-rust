@@ -25,6 +25,7 @@ import { createRustTargetPack } from "../../../dist/index.js";
 import { createRustCompilationSession } from "../../../dist/compilation/session.js";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { analyzeRustCheckedContext } from "./analysis-context.mjs";
 
 export function createRustSession({
   files,
@@ -260,13 +261,25 @@ function createRustCompileInputFromSession({
 }
 
 export function compileRust(options) {
+  const { captureRequiredRecords = false, ...compilationOptions } = options;
   let program;
   let plan;
+  let requiredRecords;
   const compileTarget = options.compileTarget ?? compileRustTarget;
-  const harness = createRustSession({ ...options, compileTarget: request => compileTarget(request, {
-    analyzed(value) { program = value; },
-    planned(value) { plan = value; },
-  }) });
+  const harness = createRustSession({ ...compilationOptions, compileTarget(request) {
+    const compiled = compileTarget(request, {
+      analyzed(value) { program = value; },
+      planned(value) { plan = value; },
+    });
+    if (captureRequiredRecords && compiled.kind === "resolved") {
+      const context = analyzeRustCheckedContext(request);
+      assert.deepEqual(context.diagnostics.map(({ code, message }) => ({ code, message })), []);
+      assert.equal(context.source === request.input.source, true,
+        "the independent analysis uses the identical checked source and Nodes");
+      requiredRecords = Object.freeze([...context.requiredRecords]);
+    }
+    return compiled;
+  } });
   const sourceDiagnostics = rustSourceDiagnosticsText(harness);
   if (sourceDiagnostics !== "") {
     harness.targetSession.close();
@@ -330,12 +343,13 @@ export function compileRust(options) {
     result,
     source,
     harness,
+    ...(requiredRecords === undefined ? {} : { requiredRecords }),
   };
 }
 
 export function analyzeRust(options) {
   let program;
-  const { source, result } = compileRust({ ...options, compileTarget(request) {
+  const { source, result, requiredRecords } = compileRust({ ...options, compileTarget(request) {
     const analysis = analyzeRustTargetProgram(request);
     if (analysis.kind === "rejected") return analysis;
     program = analysis.value;
@@ -345,7 +359,7 @@ export function analyzeRust(options) {
     throw new Error(result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
   }
   assert.ok(program, "The compilation session must invoke target analysis.");
-  return Object.freeze({ source, program });
+  return Object.freeze({ source, program, ...(requiredRecords === undefined ? {} : { requiredRecords }) });
 }
 
 export function compileRustThroughTargetPack(options) {

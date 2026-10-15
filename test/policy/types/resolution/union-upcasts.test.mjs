@@ -45,7 +45,7 @@ test("native upcasts precede exact union injection in expression and callable co
     contextualValueConversion: { get: node => node === subject ? written.get("contextualValueConversion") : undefined,
       set: (node, value) => { assert.equal(node === subject, true); written.set("contextualValueConversion", value); } },
   });
-  recordRustValueCarrierReconciliation(records, subject, selected);
+  recordRustValueCarrierReconciliation(records, [], subject, selected);
   assert.deepEqual([...written.keys()], ["projectUpcast", "contextualValueConversion"]);
   assert.deepEqual(rustEffectiveValueCarrier(records, subject), union);
   assert.equal(rustEffectiveValueCarrier(records, {}) === undefined, true, "foreign source subjects have no evidence");

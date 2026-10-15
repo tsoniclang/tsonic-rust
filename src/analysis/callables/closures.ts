@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 
 import { appendRustDiagnostic } from "../program/walk.js";
@@ -354,12 +355,14 @@ export function resolveFunctionExpressionCarrier(
   const closureCarrier = resolveRustCallableStorageCarrier(logicalCarrier,
     rustResolutionContext(walk, expression, "value"), walk.operationOptions, new Set());
   if (closureCarrier === undefined) return undefined;
+  requireRustRecord(walk.context.requiredRecords, "closureCapture", expression, "closure", "analysis/callables/closures.ts");
   walk.context.records.closureCaptures.capture(expression, captures.captures, captures.receivers, captures.receiverFields,
     captures, (generator !== undefined || asynchronous !== undefined) &&
         rustFrameCallableValue(closureCarrier) === undefined &&
         rustCallableProtocol(closureCarrier) !== undefined &&
         (captures.captures.length > 0 || captures.receiverFields.length > 0 || captures.receivers.length > 0 || captures.recursiveDeclaration !== undefined)
       ? "shared-state" : undefined);
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "closure", "analysis/callables/closures.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "closure",
     operationId: "tsonic.rust.closure",

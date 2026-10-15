@@ -1,3 +1,4 @@
+import { assertRustRequiredRecords, type RustRequiredRecord } from "./required-records.js";
 import type { RustProgramRecordBuilder } from "./model.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
@@ -288,8 +289,9 @@ export function createRustProgramRecordBuilder(
     minimumFoundation(): RustFoundation {
       return maximumRustFoundation(minimumFoundation, selectedOperations.minimumFoundation());
     },
-    seal(): RustProgramRecords {
+    seal(required: readonly RustRequiredRecord[]): RustProgramRecords {
       if (sealed) throw new Error("Rust semantic plans can be sealed only once.");
+      assertRustRequiredRecords(records, required);
       selectedOperations.seal();
       sealed = true;
       return records;

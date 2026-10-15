@@ -22,7 +22,7 @@ function fixture(text) {
     const context = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
       request.rootPublishesLibrary, dispatch.plan);
     analyzeRustProgram(context);
-    program = { ...context, records: context.records.seal() };
+    program = { ...context, records: context.records.seal(context.requiredRecords) };
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
   } });
   assert.deepEqual(result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`), []);
@@ -41,7 +41,7 @@ function fixture(text) {
       [family, { get: () => undefined }])), program.records);
     const records = createRustProgramRecordBuilder(program.typeDefinitions, parent);
     const diagnostics = [];
-    const context = { ...program, source, ast, records, diagnostics };
+    const context = { ...program, source, ast, records, diagnostics, requiredRecords: [] };
     recordFallibilityFacts({ context, resolving: new Set(), rejectedExpressions: new WeakSet(),
       preparedCallbackCalls: new Map(), objectLiteralMethodExpressions: new Set(), objectLiteralMethodSpreadExpressions: new Set() },
     program.sourceFiles, maximumWork);

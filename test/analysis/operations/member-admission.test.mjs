@@ -37,7 +37,7 @@ test("callee selection and normal property resolution share one admitted native 
   assert.equal(inherited.kind, "accept");
   assert.equal(inherited.value.operation === repeated.value.operation, true);
   assert.equal(inherited.value.targetFact === repeated.value.targetFact, true);
-  context.records.seal();
+  context.records.seal(context.requiredRecords);
   assert.throws(() => selectRustCheckedPropertyAccess(unreadable, guarded, walk.operationOptions), /sealed/u);
 });
 
@@ -58,6 +58,6 @@ test("an element request returns its complete canonical native index decision", 
     { ...completed.request, sourceSelectedElementIndex: 1 }]) {
     assert.throws(() => selectRustCheckedElementAccess(changed, guarded, walk.operationOptions), /Conflicting Rust checked member request/u);
   }
-  context.records.seal();
+  context.records.seal(context.requiredRecords);
   assert.throws(() => selectRustCheckedElementAccess(unreadable, guarded, walk.operationOptions), /sealed/u);
 });

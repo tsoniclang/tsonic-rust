@@ -71,8 +71,9 @@ function admitFamily(model, family, subject, fact) {
 
 test("sealed records publish only frozen typed family readers without a native key or writer API", () => {
   const model = createModel();
+  const modelRequiredRecords = [];
   model.assertOpen();
-  const records = model.seal();
+  const records = model.seal(modelRequiredRecords);
   assert.equal(Object.hasOwn(records, "assertOpen"), false, "the analysis lifecycle guard is not a backend capability");
   assert.throws(model.assertOpen, /after analysis is sealed/u);
   const subject = {};
@@ -109,7 +110,7 @@ test("sealed records publish only frozen typed family readers without a native k
     nativeGuardResult: () => model.nativeGuardResults.resolve(subject, () => false),
     nativeUnreachable: () => model.nativeUnreachableNodes.resolve(subject, () => true),
     genericNumericOperands: () => model.genericNumerics.comparison(subject, carrier, carrier, undefined),
-    indexedFieldKeyArgument: () => model.indexedFieldKeys.bind({}, [], new Map(), () => false),
+    indexedFieldKeyArgument: () => model.indexedFieldKeys.bind([], {}, [], new Map(), () => false),
     propertyProjection: () => model.propertyProjections.finalize(subject, undefined, []),
     typeOnlyDeclaration: () => model.typeOnlyDeclarations.finalize({}, []),
     moduleBinding: () => model.moduleBindings.defaultExport(subject, carrier),
@@ -130,7 +131,7 @@ test("sealed records publish only frozen typed family readers without a native k
     typedLocationPlan: () => model.typedLocations.finalize(subject, carrier, location, { operation: "load", pointerExpression: subject }),
     bindingStorage: () => model.bindingStoragePlans.capture(subject, carrier, { storage: "location" }),
     retainedCallLifetimes: () => model.retainedCalls.finalize(subject, new Map([["region", { kind: "static" }]])),
-    bindingProjection: () => model.bindingProjections.resolve(subject, carrier, carrier, { kind: "tuple-element", index: 0 }),
+    bindingProjection: () => model.bindingProjections.resolve([], subject, carrier, carrier, { kind: "tuple-element", index: 0 }),
     compileTimeSource: () => model.compileTimeSources.erase(subject),
     selfMode: () => model.selfModes.method(subject, "ref"),
     memoryLayoutObservation: () => model.memoryLayoutObservations.observe(subject, 0),
@@ -177,14 +178,15 @@ test("sealed records publish only frozen typed family readers without a native k
   for (const removed of ["get", "getFact", "resolve", "set", "seal", "minimumFoundation"]) {
     assert.equal(Object.hasOwn(records, removed), false, removed + ": no competing public API");
   }
-  assert.throws(() => model.seal(), /only once/u);
+  assert.throws(() => model.seal(modelRequiredRecords), /only once/u);
 });
 
 test("scoped guard producers preserve false, exact subjects and parent isolation without reselecting", () => {
   const parent = createModel();
+  const parentRequiredRecords = [];
   const subject = {};
   parent.nativeGuardResults.resolve(subject, () => false);
-  const inherited = parent.seal();
+  const inherited = parent.seal(parentRequiredRecords);
   const scoped = createRustProgramRecordBuilder(undefined, inherited);
   assert.equal(scoped.nativeGuardResult.get(subject), false, "false is present evidence");
   assert.equal(scoped.nativeGuardResult.get({}) === undefined, true, "equal-looking source is not the owner");
@@ -197,7 +199,7 @@ test("scoped guard producers preserve false, exact subjects and parent isolation
   const specialized = {};
   scoped.nativeGuardResults.resolve(specialized, () => true);
   assert.equal(inherited.nativeGuardResult.get(specialized) === undefined, true, "specialization cannot mutate its parent");
-  const records = scoped.seal();
+  const records = scoped.seal([]);
   assert.equal(records.nativeGuardResult.get(subject), false);
   assert.equal(records.nativeGuardResult.get(specialized), true);
   assert.throws(() => scoped.nativeGuardResults.resolve(specialized, () => true), /after analysis is sealed/u);
@@ -219,6 +221,7 @@ test("every finalized contextual conversion family contributes its actual native
   ];
   for (const [family, fact] of cases) {
     const model = createModel();
+    const modelRequiredRecords = [];
     assert.equal(model.minimumFoundation(), "core");
     admitFamily(model, family, {}, fact);
     assert.equal(model.minimumFoundation(), "alloc", family);
@@ -252,6 +255,7 @@ test("all nine foundation-bearing families account through their typed admission
   ];
   for (const [family, fact, expected] of cases) {
     const builder = createModel();
+    const builderRequiredRecords = [];
     const subject = {};
     assert.equal(builder.minimumFoundation(), "core", family + ": initially core");
     const selected = admitFamily(builder, family, subject, fact);
@@ -262,12 +266,13 @@ test("all nine foundation-bearing families account through their typed admission
       true, family + ": exact producer input retained");
     assert.doesNotThrow(() => admitFamily(builder, family, subject, fact), family + ": repeat remains allowed");
     assert.equal(builder[family].get(subject) === admitted, true, family + ": same canonical record");
-    builder.seal();
+    builder.seal(builderRequiredRecords);
     assert.equal(builder.minimumFoundation(), expected, family + ": sealed accounting");
   }
   for (const [family, fact] of [["conversion", {}], ["deferredProducerEffects", { kind: "no-future" }],
     ["deferredProducerEffects", { kind: "futures", channels: [] }]]) {
     const builder = createModel();
+    const builderRequiredRecords = [];
     admitFamily(builder, family, {}, fact);
     assert.equal(builder.minimumFoundation(), "core", family + ": absent native requirement");
   }
@@ -297,6 +302,7 @@ test("all definition-dependent foundation admissions retain the supplied source-
       return rustTargetTypeRefEquals(carrier, union) ? variants : undefined;
     } };
     const builder = createRustProgramRecordBuilder(definitions);
+    const builderRequiredRecords = [];
     const subject = {};
     const selected = admitFamily(builder, family, subject, fact);
     assert.equal(definitionReads > 0, true, family + ": actual source definitions used");
@@ -306,7 +312,7 @@ test("all definition-dependent foundation admissions retain the supplied source-
       assert.equal(builder[family].get(subject) === selected, true, family + ": same admitted evidence");
       assert.equal(builder.minimumFoundation(), "core", family + ": no unused union payload cost");
     }
-    builder.seal();
+    builder.seal(builderRequiredRecords);
     assert.equal(definitionReads, beforeReads, family + ": reads and seal do not recompute");
     const missingDefinitions = createModel();
     const rejectedSubject = {};
@@ -327,10 +333,12 @@ test("inherited foundation accounting happens on successful admission, never on 
   const subject = {};
   const value = { carrier: { kind: "target-named", id: "rust.std.String" } };
   const parent = createModel();
+  const parentRequiredRecords = [];
   parent.runtimeCarriers.selected(subject, value.carrier);
   const original = parent.runtimeCarrier.get(subject);
-  const records = parent.seal();
+  const records = parent.seal(parentRequiredRecords);
   const child = createRustProgramRecordBuilder(undefined, records);
+  const childRequiredRecords = [];
   assert.equal(child.runtimeCarrier.get(subject) === original, true);
   assert.equal(child.minimumFoundation(), "core", "inheritance alone retains the original accounting rule");
   child.runtimeCarriers.selected(subject, { ...value.carrier });
@@ -343,6 +351,7 @@ test("inherited foundation accounting happens on successful admission, never on 
 
 test("present contextual conversions retain one scalar conversion followed by presence", () => {
   const model = createModel();
+  const modelRequiredRecords = [];
   const subject = {};
   const source = { kind: "source-primitive", name: "uint8" };
   const element = { kind: "source-primitive", name: "int32" };
@@ -351,19 +360,19 @@ test("present contextual conversions retain one scalar conversion followed by pr
   const scalar = { kind: "conversion", fact: { sourceCarrier: source, targetCarrier: element, conversion } };
   const optional = { kind: "conversion", fact: { sourceCarrier: source, targetCarrier: option,
     conversion: { kind: "option-some", source, element, elementConversion: conversion } } };
-  recordRustValueCarrierReconciliation(model, subject, optional);
-  assert.doesNotThrow(() => recordRustValueCarrierReconciliation(model, subject, scalar));
+  recordRustValueCarrierReconciliation(model, modelRequiredRecords, subject, optional);
+  assert.doesNotThrow(() => recordRustValueCarrierReconciliation(model, modelRequiredRecords, subject, scalar));
   assert.equal(model.contextualValueConversion.get(subject)?.targetCarrier, element);
   assert.equal(model.optionProjection.get(subject)?.sourceCarrier, element);
   assert.equal(rustEffectiveValueCarrier(model, subject), option);
-  assert.throws(() => recordRustValueCarrierReconciliation(model, subject,
+  assert.throws(() => recordRustValueCarrierReconciliation(model, modelRequiredRecords, subject,
     { ...scalar, fact: { ...scalar.fact, sourceCarrier: element } }), /Conflicting Rust semantic plan/u);
   for (const mutation of [{ sourceCarrier: element }, { targetCarrier: rustOptionTargetType(source) }]) {
-    assert.throws(() => recordRustValueCarrierReconciliation(model, {},
+    assert.throws(() => recordRustValueCarrierReconciliation(model, modelRequiredRecords, {},
       { ...optional, fact: { ...optional.fact, ...mutation } }), /exact source and selected payload/u);
   }
   const unchanged = {};
-  recordRustValueCarrierReconciliation(model, unchanged, { kind: "conversion", fact: {
+  recordRustValueCarrierReconciliation(model, modelRequiredRecords, unchanged, { kind: "conversion", fact: {
     sourceCarrier: element, targetCarrier: option,
     conversion: { kind: "option-some", source: element, element, elementConversion: null },
   } });
@@ -374,6 +383,7 @@ test("present contextual conversions retain one scalar conversion followed by pr
 
 test("analysis result probes retain parent facts without mutating the final plan", () => {
   const parent = createModel();
+  const parentRequiredRecords = [];
   const subject = {};
   const value = { carrier: { kind: "source-primitive", name: "uint64" } };
   parent.runtimeCarriers.selected(subject, value.carrier);
@@ -385,13 +395,14 @@ test("analysis result probes retain parent facts without mutating the final plan
   probe.runtimeCarriers.selected(selected, value.carrier);
   const specialized = probe.runtimeCarrier.get(selected);
   assert.equal(parent.runtimeCarrier.get(selected), undefined);
-  assert.equal(probe.seal().runtimeCarrier.get(selected) === specialized, true);
+  assert.equal(probe.seal([]).runtimeCarrier.get(selected) === specialized, true);
   assert.throws(() => probe.runtimeCarriers.selected({}, value.carrier), /after analysis is sealed/u);
-  assert.equal(parent.seal().runtimeCarrier.get(subject) === original, true);
+  assert.equal(parent.seal(parentRequiredRecords).runtimeCarrier.get(subject) === original, true);
 });
 
 test("source fields retain exact declaration identity when reselected", () => {
   const model = createModel();
+  const modelRequiredRecords = [];
   const declaration = { kind: "property", parent: undefined };
   declaration.parent = declaration;
   const fact = {
@@ -414,6 +425,7 @@ test("source fields retain exact declaration identity when reselected", () => {
 
 test("closed Rust carrier and conversion facts are allocation-independent", () => {
   const model = createModel();
+  const modelRequiredRecords = [];
   const subject = {};
   const firstCarrier = {
     kind: "target-named",
@@ -447,6 +459,7 @@ test("closed Rust carrier and conversion facts are allocation-independent", () =
 
 test("selected operations compare target data structurally and source provenance exactly", () => {
   const model = createModel();
+  const modelRequiredRecords = [];
   const subject = {};
   const sourceExpression = {};
   const first = {
@@ -476,6 +489,7 @@ test("selected operations compare target data structurally and source provenance
 
 test("selected calls preserve exact checker evidence while accepting equivalent target members", () => {
   const model = createModel();
+  const modelRequiredRecords = [];
   const subject = {};
   const sourceSignature = {};
   const selectedType = {};

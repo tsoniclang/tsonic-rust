@@ -172,7 +172,7 @@ function fixture(text, options = {}) {
     },
   };
   const walk = {
-    context: { ast: source.ast, source: { ...source, navigation }, records },
+    context: { ast: source.ast, source: { ...source, navigation }, records, requiredRecords: [] },
     capturedBindingStorage: new Map(),
     promotedStorageDeclarations: new Set(),
   };
@@ -229,7 +229,7 @@ for (const kind of ["deferred", "iteration"]) for (const addressFirst of [false,
     assert.equal(tracked.requireLocation(current.walk.context, current.declaration, stringCarrier), false);
     assert.throws(() => current.select({ carrier: stringCarrier }), /Conflicting Rust semantic plan/u);
     assert.equal(current.records.bindingStorage.get(current.declaration) === canonical, true);
-    current.records.seal();
+    current.records.seal(current.walk.context.requiredRecords);
     assert.throws(address, /after analysis is sealed/u);
     assert.throws(() => current.select(), /after analysis is sealed/u);
   });

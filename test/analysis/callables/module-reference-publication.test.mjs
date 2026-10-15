@@ -26,7 +26,7 @@ test("overlapping module contributions publish once per exact reference and neve
   admit(builder.directCallableReferences, first, value);
   const canonical = builder.directCallableReference.get(first);
   const counts = { values: 0, references: 0 };
-  const walk = { context: { records: { ...builder,
+  const walk = { context: { requiredRecords: [], records: { ...builder,
     sourceCallableValues: { ...builder.sourceCallableValues, function(...arguments_) {
       counts.values++;
       builder.sourceCallableValues.function(...arguments_);
@@ -54,7 +54,7 @@ test("overlapping module contributions publish once per exact reference and neve
     aliases: [{ declarations: [], references: [third], producer: value }],
   });
   assert.deepEqual(counts, { values: 1, references: 2 }, "same declaration and native ABI do not merge distinct references");
-  builder.seal();
+  builder.seal(walk.context.requiredRecords);
   assert.throws(() => recordRustInlineModuleCallableUses(walk, selection), /after analysis is sealed/u);
   assert.deepEqual(counts, { values: 1, references: 2 });
 });
@@ -68,7 +68,7 @@ for (const [name, change] of [
   const reference = {};
   const alias = {};
   const value = selected();
-  assert.throws(() => recordRustInlineModuleCallableUses({ context: { records: builder } }, {
+  assert.throws(() => recordRustInlineModuleCallableUses({ context: { requiredRecords: [], records: builder } }, {
     stored: false, declarationValue: false, uses: [], aliases: [
       { declarations: [alias], references: [reference], producer: value },
       { declarations: [], references: [reference], producer: { ...value, ...change } },
@@ -85,7 +85,7 @@ test("module value demand refuses a conflicting existing selected reference", ()
   admit(builder.directCallableReferences, reference, value);
   admit(builder.sourceCallableValues, reference, { ...value, sourceDeclaration: {} });
   const canonical = builder.sourceCallableValue.get(reference);
-  assert.throws(() => recordRustInlineModuleCallableUses({ context: { records: builder } }, {
+  assert.throws(() => recordRustInlineModuleCallableUses({ context: { requiredRecords: [], records: builder } }, {
     stored: false, declarationValue: true, uses: [{ kind: "first-class", reference }], aliases: [],
   }), /Conflicting Rust semantic plan 'tsonic\.rust\.sourceCallableValue'/u);
   assert.equal(builder.sourceCallableValue.get(reference) === canonical, true);

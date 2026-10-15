@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Initializer } from "@tsonic/target-api/source";
@@ -11,7 +12,7 @@ import { rustProducerErrorReference } from "../../../dist/target-model/types/car
 import { rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
 
 function fixture(text) {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: [], files: { "index.ts": text } });
   const { ast } = program.source;
   const declarations = new Map();
   const visit = node => {
@@ -37,7 +38,7 @@ function fixture(text) {
     assert.equal(physical !== undefined, true, "physical source operand");
     return physical;
   };
-  return { program, ast, input, declaration, initializer, operand };
+  return { program, ast, input, declaration, initializer, operand, requiredRecords };
 }
 
 test("source-produced conversion operands retain the original physical producer signature", () => {
@@ -49,6 +50,7 @@ test("source-produced conversion operands retain the original physical producer 
     }
   `);
   const node = current.initializer("adapted");
+  assertRustRecordRequirement(current.requiredRecords, "contextualValueConversion", node);
   const fact = current.program.records.contextualValueConversion.get(node);
   assert.equal(fact?.conversion.kind, "callable-adapter", "source checking selects adaptation");
   const physical = current.operand(node);

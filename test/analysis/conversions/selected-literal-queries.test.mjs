@@ -41,7 +41,7 @@ function fixture(expression) {
   assert.equal(node !== undefined, true);
   const builder = createRustProgramRecordBuilder();
   const tracked = track(builder);
-  const context = { ast: source.ast, records: tracked.records };
+  const context = { ast: source.ast, records: tracked.records, requiredRecords: [] };
   const options = { sourceTypes: { enumVariantForLiteral: () => undefined } };
   return { node, builder, context, options, admissions: tracked.admissions,
     select: (actual, expected) => normalizeSelectedLiteralCarrier(node, actual, expected, context, options) };
@@ -62,7 +62,7 @@ for (const expression of ["3", "-3", "+3"]) {
     assert.throws(() => current.select(first, wide), /Conflicting Rust semantic plan/u);
     assert.equal(current.builder.runtimeCarrier.get(current.node)?.carrier === first, true);
     assert.deepEqual(current.admissions, counts);
-    current.builder.seal();
+    current.builder.seal(current.context.requiredRecords);
     assert.throws(() => current.select(first, integer), /after analysis is sealed/u);
   });
 }
@@ -110,13 +110,14 @@ test("an inherited literal request reads all canonical facts without child admis
   const first = current.select(undefined, integer);
   const native = current.builder.targetOperation.get(current.node);
   const selected = current.builder.selectedOperation.get(current.node);
-  const child = createRustProgramRecordBuilder(undefined, current.builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, current.builder.seal(current.context.requiredRecords));
   const tracked = track(child);
   current.context.records = tracked.records;
+  current.context.requiredRecords = [];
   assert.equal(current.select(first, { ...integer }) === first, true);
   assert.equal(child.targetOperation.get(current.node) === native, true);
   assert.equal(child.selectedOperation.get(current.node) === selected, true);
   assert.deepEqual(tracked.admissions, { runtime: 0, target: 0, selected: 0 });
-  child.seal();
+  child.seal(current.context.requiredRecords);
   assert.throws(() => current.select(first, integer), /after analysis is sealed/u);
 });

@@ -106,6 +106,7 @@ function selectorFixture(builder = createRustProgramRecordBuilder(), expression 
   const records = { ...builder, propertyProjections: { ...builder.propertyProjections,
     finalize: (...args) => { admissions += 1; return builder.propertyProjections.finalize(...args); } } };
   input.context.records = records;
+  input.context.requiredRecords = [];
   const request = { source: { sourceArguments: [{ expression, type: input.sourceType }],
     sourceArgumentBindings: [{ sourceArgumentIndex: 0, sourceForm: "value", selectedParameterType: input.destination }] } };
   return { ...input, builder, expression, request, selections: () => selections, admissions: () => admissions,
@@ -127,7 +128,7 @@ test("per-call property queries select once and return the complete canonical co
   assert.equal(input.selections(), 2);
   assert.equal(input.admissions(), 1, "another request never repeats the actual constructor");
   assert.equal(input.builder.propertyProjections.finalize(input.expression, first, fact.cases) === undefined, true);
-  const child = createRustProgramRecordBuilder(undefined, input.builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, input.builder.seal(input.context.requiredRecords));
   const inherited = selectorFixture(child, input.expression);
   assert.equal(inherited.select()(0) === first, true, "an inherited query selects before reusing full native evidence");
   assert.equal(inherited.selections(), 1);
@@ -194,7 +195,7 @@ test("property queries preserve optional presence, local failed caching and clos
   assert.equal(refused.selections(), 1, "fixed argument failure is cached locally, not published");
   assert.equal(refused.admissions(), 0);
   assert.equal(refused.builder.propertyProjection.get(refused.expression) === undefined, true);
-  refused.builder.seal();
+  refused.builder.seal(refused.context.requiredRecords);
   const unexpected = new Proxy({}, { get: () => assert.fail("closed query reads checked source") });
   const closed = createRustPropertyProjectionSelector(unexpected, refused.context, refused.options, []);
   assert.throws(() => closed(0), /after analysis is sealed/u);

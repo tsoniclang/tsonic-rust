@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   KindElementAccessExpression,
   KindParenthesizedExpression,
@@ -48,6 +49,7 @@ export function applyFlowReadLane(
   expression: Node,
   sourceCarrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
+  walk.context.records.assertOpen();
   if (sourceCarrier === undefined) {
     return undefined;
   }
@@ -90,6 +92,7 @@ export function applyFlowReadLane(
   }
   const entryCarrier = rustGuardedArrayEntryCarrier(walk, expression, sourceCarrier);
   if (entryCarrier !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "flowReadProjection", expression, "option-value", "applyFlowReadLane");
     walk.context.records.flowReadProjections.project(expression, sourceCarrier, entryCarrier, { kind: "option-value" });
     return entryCarrier;
   }
@@ -128,7 +131,7 @@ export function applyFlowReadLane(
       return undefined;
     }
   }
-  const selection = walk.context.records.flowReadProjections.resolve(expression,
+  const selection = walk.context.records.flowReadProjections.resolve(walk.context.requiredRecords, expression,
     sourceCarrier,
     selectedCarrier,
     walk.context.projectTypes, walk.context.typeDefinitions,

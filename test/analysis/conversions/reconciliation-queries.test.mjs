@@ -37,79 +37,83 @@ function counted(builder) {
 
 test("the complete optional and scalar reconciliation query consumes one canonical payload and presence", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const { records, counts } = counted(builder);
   const node = {};
-  recordRustValueCarrierReconciliation(records, node, optional);
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, node, optional);
   const payload = builder.contextualValueConversion.get(node);
   const presence = builder.optionProjection.get(node);
   for (const request of [optional, scalar, { ...scalar, fact: { ...scalar.fact, conversion: { ...conversion } } }]) {
-    recordRustValueCarrierReconciliation(records, node, request);
+    recordRustValueCarrierReconciliation(records, builderRequiredRecords, node, request);
   }
   assert.equal(counts.contextual, 1);
   assert.equal(counts.option, 1);
   assert.equal(builder.contextualValueConversion.get(node) === payload && builder.optionProjection.get(node) === presence, true);
-  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, builder.seal(builderRequiredRecords));
+  const childRequiredRecords = [];
   const inherited = counted(child);
-  recordRustValueCarrierReconciliation(inherited.records, node, optional);
-  recordRustValueCarrierReconciliation(inherited.records, node, scalar);
+  recordRustValueCarrierReconciliation(inherited.records, childRequiredRecords, node, optional);
+  recordRustValueCarrierReconciliation(inherited.records, childRequiredRecords, node, scalar);
   assert.equal(inherited.counts.contextual + inherited.counts.option, 0, "inherited query never calls either actual constructor");
   for (const change of [
     { ...scalar, fact: { ...scalar.fact, sourceCarrier: wide } },
     { ...scalar, fact: { ...scalar.fact, targetCarrier: wide } },
     { ...scalar, fact: { ...scalar.fact, conversion: { ...conversion, target: wide } } },
-  ]) assert.throws(() => recordRustValueCarrierReconciliation(inherited.records, node, change),
+  ]) assert.throws(() => recordRustValueCarrierReconciliation(inherited.records, childRequiredRecords, node, change),
     /Conflicting Rust semantic plan 'tsonic\.rust\.contextualValueConversion'/u);
   assert.equal(child.contextualValueConversion.get(node) === payload, true);
 });
 
 test("native lifetime, ordered upcast and authored conversion queries do not repeat admission", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const { records, counts } = counted(builder);
   const lifetimeNode = {};
   const lifetime = { kind: "call-scoped-lifetime", fact: { sourceCarrier: source, selectedCarrier: target } };
-  recordRustValueCarrierReconciliation(records, lifetimeNode, lifetime);
-  recordRustValueCarrierReconciliation(records, lifetimeNode, lifetime);
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, lifetimeNode, lifetime);
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, lifetimeNode, lifetime);
   assert.equal(counts.lifetime, 1);
-  assert.throws(() => recordRustValueCarrierReconciliation(records, lifetimeNode,
+  assert.throws(() => recordRustValueCarrierReconciliation(records, builderRequiredRecords, lifetimeNode,
     { ...lifetime, fact: { ...lifetime.fact, selectedCarrier: wide } }), /callScopedLifetimeReconciliation/u);
   const node = {};
   const variants = [{ name: "Narrow", carrier: source }, { name: "Wide", carrier: wide }];
   const upcast = { kind: "project-upcast", fact: { sourceCarrier: source, targetCarrier: target, sourceVariants: variants } };
-  recordRustValueCarrierReconciliation(records, node, upcast);
-  recordRustValueCarrierReconciliation(records, node, { ...upcast,
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, node, upcast);
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, node, { ...upcast,
     fact: { ...upcast.fact, sourceVariants: variants.map(value => ({ ...value })) } });
   assert.equal(counts.upcast, 1);
   for (const sourceVariants of [undefined, [], [...variants].reverse(),
     [{ ...variants[0], carrier: wide }, variants[1]], [{ ...variants[0], name: "Other" }, variants[1]]]) {
-    assert.throws(() => recordRustValueCarrierReconciliation(records, node,
+    assert.throws(() => recordRustValueCarrierReconciliation(records, builderRequiredRecords, node,
       { ...upcast, fact: { ...upcast.fact, sourceVariants } }), /tsonic\.rust\.projectUpcast/u);
   }
   const absent = {};
-  recordRustValueCarrierReconciliation(records, absent, { kind: "project-upcast", fact: { sourceCarrier: source, targetCarrier: target } });
-  recordRustValueCarrierReconciliation(records, absent, { kind: "project-upcast",
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, absent, { kind: "project-upcast", fact: { sourceCarrier: source, targetCarrier: target } });
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, absent, { kind: "project-upcast",
     fact: { sourceCarrier: source, targetCarrier: target, sourceVariants: undefined } });
   assert.equal(counts.upcast, 2, "request normalizes exactly like its actual native constructor");
-  recordRustConversionSelection(records, node, target);
-  recordRustConversionSelection(records, node, { ...target });
+  recordRustConversionSelection(records, builderRequiredRecords, node, target);
+  recordRustConversionSelection(records, builderRequiredRecords, node, { ...target });
   assert.equal(counts.conversion, 1);
-  assert.throws(() => recordRustConversionSelection(records, node, wide), /tsonic\.rust\.conversion/u);
+  assert.throws(() => recordRustConversionSelection(records, builderRequiredRecords, node, wide), /tsonic\.rust\.conversion/u);
 });
 
 test("optional queries preserve exact absence and payload-before-presence failure order", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const { records, counts } = counted(builder);
   const node = {};
   const none = { kind: "none", sourceCarrier: rustUnitTargetType(), resultCarrier: optional.fact.targetCarrier };
-  recordRustOptionProjection(records, node, none);
+  recordRustOptionProjection(records, builderRequiredRecords, node, none);
   const original = builder.optionProjection.get(node);
-  recordRustOptionProjection(records, node, { ...none });
+  recordRustOptionProjection(records, builderRequiredRecords, node, { ...none });
   assert.equal(counts.option, 1);
-  assert.throws(() => recordRustValueCarrierReconciliation(records, node, optional), /tsonic\.rust\.optionProjection/u);
+  assert.throws(() => recordRustValueCarrierReconciliation(records, builderRequiredRecords, node, optional), /tsonic\.rust\.optionProjection/u);
   assert.equal(builder.contextualValueConversion.get(node)?.targetCarrier === target, true,
     "the original payload-before-presence order is retained on refusal");
   assert.equal(builder.optionProjection.get(node) === original, true);
   const unchanged = {};
-  recordRustValueCarrierReconciliation(records, unchanged, { kind: "conversion", fact: {
+  recordRustValueCarrierReconciliation(records, builderRequiredRecords, unchanged, { kind: "conversion", fact: {
     sourceCarrier: target, targetCarrier: optional.fact.targetCarrier,
     conversion: { kind: "option-some", source: target, element: target, elementConversion: null },
   } });
@@ -119,9 +123,10 @@ test("optional queries preserve exact absence and payload-before-presence failur
 
 test("reconciliation is closed before any record cache or incoming metadata is inspected", () => {
   const builder = createRustProgramRecordBuilder();
-  builder.seal();
+  const builderRequiredRecords = [];
+  builder.seal(builderRequiredRecords);
   const unexpected = new Proxy({}, { get: () => assert.fail("closed query inspects its request") });
-  assert.throws(() => recordRustValueCarrierReconciliation(builder, {}, unexpected), /after analysis is sealed/u);
-  assert.throws(() => recordRustOptionProjection(builder, {}, unexpected), /after analysis is sealed/u);
-  assert.throws(() => recordRustConversionSelection(builder, {}, unexpected), /after analysis is sealed/u);
+  assert.throws(() => recordRustValueCarrierReconciliation(builder, builderRequiredRecords, {}, unexpected), /after analysis is sealed/u);
+  assert.throws(() => recordRustOptionProjection(builder, builderRequiredRecords, {}, unexpected), /after analysis is sealed/u);
+  assert.throws(() => recordRustConversionSelection(builder, builderRequiredRecords, {}, unexpected), /after analysis is sealed/u);
 });

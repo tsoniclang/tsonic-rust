@@ -53,7 +53,7 @@ for (const [family, producer] of callableFamilies) {
     const fact = builder[family].get(reference);
     builder[producer].function(reference, declaration, "input.ts", "step", rustCallableTargetType([{ ...integer }], { ...text }), [{ ...integer }], { ...text });
     assert.equal(builder[family].get(reference) === fact, true);
-    const child = createRustProgramRecordBuilder(undefined, builder.seal());
+    const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
     child[producer].function(reference, declaration, "input.ts", "step", callable, [integer], text);
     assert.equal(child[family].get(reference) === fact, true);
     const other = {};
@@ -69,7 +69,7 @@ for (const [family, producer] of callableFamilies) {
       const declaration = {};
       builder[producer].function(reference, declaration, "input.ts", "step", callable, [integer], text);
       const fact = builder[family].get(reference);
-      const child = createRustProgramRecordBuilder(undefined, builder.seal());
+      const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
       assert.throws(() => child[producer].function(reference,
         field === "sourceDeclaration" ? {} : declaration,
         field === "fileName" ? "other.ts" : "input.ts",
@@ -84,7 +84,7 @@ for (const [family, producer] of callableFamilies) {
 
 test("all three final families publish one immutable reader and no generic writer or producer", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const records = builder.seal([]);
   for (const [family, producer] of [...callableFamilies, ["retainedEnvironment", "retainedEnvironments"]]) {
     assert.equal(builder[producer].records === builder[family] && records[family] === builder[family], true, family);
     assert.equal(Object.isFrozen(builder[producer]) && Object.isFrozen(records[family]), true, family);
@@ -128,7 +128,7 @@ test("retained environments preserve equality semantics including lifetime name 
   const fact = builder.retainedEnvironment.get(declaration);
   builder.retainedEnvironments.retain(declaration, { ...lifetime, name: "renamed" }, [parameter]);
   assert.equal(builder.retainedEnvironment.get(declaration) === fact, true);
-  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.retainedEnvironments.retain(declaration, { ...lifetime }, [parameter]);
   assert.equal(child.retainedEnvironment.get(declaration) === fact, true);
   const other = {};
@@ -145,7 +145,7 @@ for (const change of ["lifetime", "parameter", "count", "order"]) {
     const second = {};
     builder.retainedEnvironments.retain(declaration, lifetime, [first, second]);
     const fact = builder.retainedEnvironment.get(declaration);
-    const child = createRustProgramRecordBuilder(undefined, builder.seal());
+    const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
     const parameters = change === "count" ? [first] : change === "order" ? [second, first]
       : change === "parameter" ? [first, {}] : [first, second];
     assert.throws(() => child.retainedEnvironments.retain(declaration,

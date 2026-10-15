@@ -1,3 +1,4 @@
+import { requireRustRecord } from "./required-records.js";
 import type { RustProjectCallableAdapter } from "../../../target-model/records/project-callable-adapters.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
@@ -29,7 +30,11 @@ export function createRustProjectCallableAdapterProducer(
       assertOpen();
       for (const concrete of walk.context.projectTypes.definitions) {
         const adapters = selectRustProjectCallableAdapters(walk, concrete);
-        if (adapters !== undefined) family.writer.set(concrete.declaration, adapters);
+        if (adapters !== undefined) {
+          requireRustRecord(walk.context.requiredRecords, "projectCallableAdapters", concrete.declaration,
+            "project-callable", "projectCallableAdapterPlans.finalize");
+          family.writer.set(concrete.declaration, adapters);
+        }
       }
     },
   });

@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../../program/records/required-records.js";
 import { rustIterableTargetPolicy, selectRustIterationLowering } from "../../../policy/operations/iteration/index.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import {
@@ -113,6 +114,8 @@ export function resolveRustCheckedElementAccess(
         const evaluateReceiver = selected.kind === "source-static-field" ? selected.classReceiver !== undefined
           : selected.kind !== "source-accessor" || selected.receiver.kind !== "static" ||
             request.sourceReceiverValueDeclaration !== options.projectTypes.definitionContainingDeclaration(request.sourceSelectedDeclaration)?.declaration;
+        requireRustRecord(context.requiredRecords, "computedMember", request.expression,
+          "checked computed member", "resolveRustCheckedElementAccess");
         context.records.computedMembers.evaluate(context.ast, request.expression,
           request.receiver, request.argument, request.accessMode, evaluateReceiver);
       }

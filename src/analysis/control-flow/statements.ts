@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   CatchClause_Block,
   CatchClause_VariableDeclaration,
@@ -216,6 +217,7 @@ export function recordExportAssignmentFacts(
   if (finalized === undefined) {
     return undefined;
   }
+  requireRustRecord(walk.context.requiredRecords, "moduleBinding", declaration, "default-export", "recordExportAssignmentFacts");
   walk.context.records.moduleBindings.defaultExport(declaration, finalized);
   return finalized;
 }
@@ -440,6 +442,7 @@ function recordSwitchFacts(
     }
   }
   if (!failed && finalizedClauses.length === clauses.length) {
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", statement, "switch", "analysis/control-flow/statements.ts");
     walk.context.records.targetOperations.source(statement, {
       kind: "switch",
       operationId: "tsonic.rust.control.switch.strict-equality",

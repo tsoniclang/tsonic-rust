@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import type { RustCheckedOperatorSelectionInput, RustCheckedOperationSelectionResult, RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection } from "../../../policy/operations/contracts.js";
 import { acceptRustPolicy } from "../../../policy/operations/contracts.js";
@@ -46,6 +47,7 @@ export function selectRustArrayTypeTest(
       sourceCallee: request.source.sourceCallee.expression, sourceSelectedSignature: request.source.selectedSignature,
       sourceSelectedDeclaration: request.sourceSelectedDeclaration },
   };
+  requireRustRecord(context.requiredRecords, "argumentPassing", argument.expression, "borrow-shared", "analysis/operations/provider/type-tests.ts");
   context.records.argumentPassingPlans.pass(argument.expression, "borrow-shared");
   return acceptRustPolicy({ selectedSignature, targetFact, operation }, evidence);
 }

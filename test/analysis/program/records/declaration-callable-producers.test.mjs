@@ -15,7 +15,7 @@ const families = [
 
 test("all five declaration and callable families expose one immutable reader and no general writer", () => {
   const builder = createRustProgramRecordBuilder();
-  const sealed = builder.seal();
+  const sealed = builder.seal([]);
   for (const [family, producer] of families) {
     assert.equal(builder[producer].records === builder[family], true, family);
     assert.equal(builder[family] === sealed[family], true, family);
@@ -47,7 +47,7 @@ test("module value admission uses the existing declaration classifier and exact 
   const subject = {};
   const selected = { storage: "module-cell", declarationKind: "let", initialization: "declaration", valueCarrier: text };
   let calls = 0;
-  const walk = { moduleBindings: { classifyValue(declaration, kind, carrier) {
+  const walk = { context: { requiredRecords: [] }, moduleBindings: { classifyValue(declaration, kind, carrier) {
     assert.equal(declaration === subject, true);
     assert.equal(kind, "let");
     assert.equal(carrier === text, true);
@@ -59,7 +59,7 @@ test("module value admission uses the existing declaration classifier and exact 
   assert.equal(builder.moduleBinding.get(subject) === selected, true, "the selected physical storage remains exact");
   assert.equal(builder.minimumFoundation(), "core", "this family adds no competing carrier accounting");
   const absent = {};
-  builder.moduleBindings.value({ moduleBindings: { classifyValue: () => undefined } }, absent, "const", integer);
+  builder.moduleBindings.value({ context: { requiredRecords: [] }, moduleBindings: { classifyValue: () => undefined } }, absent, "const", integer);
   assert.equal(builder.moduleBinding.get(absent) === undefined, true);
 });
 
@@ -93,7 +93,7 @@ test("module callable inherited equality compares every physical ABI member with
   const value = { name: "value", carrier: rustCallableTargetType([integer], text), parameterCarriers: [integer], resultCarrier: text };
   parent.moduleBindings.function(subject, "implementation", value);
   const original = parent.moduleBinding.get(subject);
-  const sealed = parent.seal();
+  const sealed = parent.seal([]);
   const child = createRustProgramRecordBuilder(undefined, sealed);
   child.moduleBindings.function(subject, "implementation", { ...value, parameterCarriers: [{ ...integer }] });
   assert.equal(child.moduleBinding.get(subject) === original, true);
@@ -118,7 +118,7 @@ test("module value conflicts retain const/cell kind, initialization and exact in
   const builder = createRustProgramRecordBuilder();
   const subject = {};
   const original = { declarationKind: "let", storage: "module-cell", initialization: "declaration", valueCarrier: integer };
-  const admit = value => builder.moduleBindings.value({ moduleBindings: { classifyValue: () => value } }, subject, "let", integer);
+  const admit = value => builder.moduleBindings.value({ context: { requiredRecords: [] }, moduleBindings: { classifyValue: () => value } }, subject, "let", integer);
   admit(original);
   admit({ ...original, valueCarrier: { ...integer } });
   for (const changed of [{ ...original, declarationKind: "var" }, { ...original, initialization: "value" },
@@ -135,7 +135,7 @@ test("complete return queries reuse inherited facts and setters preserve native 
   assert.equal(parent.sourceCallableReturns.inferred === undefined, true, "the incomplete constructor is removed");
   parent.sourceCallableReturns.setter(declaration);
   const original = parent.sourceCallableReturn.get(declaration);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
   const noSelection = new Proxy({}, { get() { throw new Error("the complete inherited query must be a lookup"); } });
   assert.equal(child.sourceCallableReturns.resolve(noSelection, declaration), true);
   child.sourceCallableReturns.setter(declaration);
@@ -145,7 +145,7 @@ test("complete return queries reuse inherited facts and setters preserve native 
   assert.equal(isRustUnitCarrier(child.sourceCallableReturn.get(setter).returnCarrier), true);
   assert.deepEqual(child.sourceCallableReturn.get(setter).returnCarrier, { kind: "tuple", elements: [] });
   assert.equal(parent.sourceCallableReturn.get(setter) === undefined, true);
-  child.seal();
+  child.seal([]);
   assert.equal(child.sourceCallableReturns.inferred === undefined, true);
 });
 
@@ -153,7 +153,7 @@ test("missing suspension evidence rejects through the actual source-return produ
   for (const [label, asynchronous, generator] of [["async", true, false], ["generator", false, true], ["async-generator", true, true]]) {
     const builder = createRustProgramRecordBuilder();
     const declaration = {};
-    const walk = { context: { records: builder, ast: { hasModifierKind: () => asynchronous },
+    const walk = { context: { requiredRecords: [], records: builder, ast: { hasModifierKind: () => asynchronous },
       semanticsFor: () => ({ operations: { generator: () => generator ? {} : undefined } }) } };
     assert.equal(walk.context.records.sourceCallableReturns.resolve(walk, declaration), false, label);
     assert.equal(builder.sourceCallableReturn.get(declaration) === undefined, true, label);
@@ -164,7 +164,7 @@ function capturedField(builder, { carrier = integer, captured = true, readonly =
   const declaration = {};
   const captures = { isCaptured: () => captured, storageDeclaration: () => declaration,
     storageReadonly: () => readonly, isDeferred: () => deferred, storageImmutable: () => immutable };
-  const walk = { context: { records: builder, objectRepresentations: { receiverCaptures: captures } } };
+  const walk = { context: { requiredRecords: [], records: builder, objectRepresentations: { receiverCaptures: captures } } };
   return { declaration, walk, resolve: () => builder.capturedFieldStoragePlans.resolve(walk, declaration, carrier) };
 }
 
@@ -187,10 +187,10 @@ for (const [name, input, kind, initialization] of [
   selected.resolve();
   assert.equal(builder.capturedFieldStorage.get(selected.declaration) === fact, true);
   const noSelection = new Proxy({}, { get() { throw new Error("captured storage was already selected"); } });
-  builder.capturedFieldStoragePlans.resolve({ context: { objectRepresentations: noSelection } },
+  builder.capturedFieldStoragePlans.resolve({ context: { requiredRecords: [], objectRepresentations: noSelection } },
     selected.declaration, { ...fact.valueCarrier });
   assert.equal(builder.capturedFieldStorage.get(selected.declaration) === fact, true, "same complete native field query is a lookup");
-  builder.seal();
+  builder.seal(selected.walk.context.requiredRecords);
   assert.throws(selected.resolve, /after analysis is sealed/u);
 });
 
@@ -202,7 +202,7 @@ test("uncaptured fields do not manufacture storage and inherited captures keep t
   const selected = capturedField(parent);
   selected.resolve();
   const fact = parent.capturedFieldStorage.get(selected.declaration);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(selected.walk.context.requiredRecords));
   child.capturedFieldStoragePlans.resolve(selected.walk, selected.declaration, { ...integer });
   assert.equal(child.capturedFieldStorage.get(selected.declaration) === fact, true);
   assert.throws(() => child.capturedFieldStoragePlans.resolve(selected.walk, selected.declaration, text), /Conflicting Rust semantic plan/u);
@@ -231,7 +231,7 @@ function ambientFixture(builder, { malformed = false, runtime = false } = {}) {
     hasModifierKind: () => true, is: { IsVariableStatement: node => node === statement,
       IsVariableDeclarationList: node => node === list, IsSourceFile: node => node === file },
     as: { AsVariableStatement: () => ({ DeclarationList: list }), AsVariableDeclarationList: () => list } };
-  const walk = { context: { ast, records: builder, diagnostics: [], typeFamilies: { families: () => [] },
+  const walk = { context: { requiredRecords: [], ast, records: builder, diagnostics: [], typeFamilies: { families: () => [] },
     source: { navigation: { declarationUses(subject) {
       assert.equal(subject === declaration, true);
       events.push(builder.typeOnlyDeclaration.get(statement)?.reason);

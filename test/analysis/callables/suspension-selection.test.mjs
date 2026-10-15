@@ -68,7 +68,7 @@ test("an incompatible contextual Promise cannot publish an environment and a lat
 
 test("suspension storage refuses a sealed request before accessing caller source metadata", () => {
   const records = createRustProgramRecordBuilder();
-  records.seal();
+  records.seal([]);
   let reads = 0;
   const context = { records, get ast() { reads++; throw new Error("source read after seal"); } };
   assert.throws(() => resolveRustSuspendedCallableStorage({ context }, {}, []), /after analysis is sealed/u);

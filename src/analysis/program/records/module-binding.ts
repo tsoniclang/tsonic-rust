@@ -1,3 +1,4 @@
+import { requireRustRecord } from "./required-records.js";
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustModuleBindingFact } from "../../../target-model/records/operation-selections.js";
@@ -41,6 +42,7 @@ export function createRustModuleBindingProducer(
         rustTargetTypeRefEquals(existing.valueCarrier, carrier) && completedPolicies.get(declaration) === walk.moduleBindings) return;
       const binding = walk.moduleBindings.classifyValue(declaration, kind, carrier);
       if (binding === undefined) return;
+      requireRustRecord(walk.context.requiredRecords, "moduleBinding", declaration, binding.storage, "moduleBindings.value");
       if (existing !== undefined && !corresponds(existing, binding)) failTargetAnalysisInvariant("tsonic-rust",
         "Conflicting Rust semantic plan 'tsonic.rust.moduleBinding' for one exact source subject.");
       if (existing === undefined) family.writer.set(declaration, binding);

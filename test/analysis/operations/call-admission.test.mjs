@@ -49,7 +49,7 @@ for (const [name, text, options] of [
   assert.equal(inherited.kind, "accept");
   assert.equal(inherited.value.selectedSignature === result.value.selectedSignature, true, "inherited complete proof stays canonical");
   assert.equal(context.records.selectedCall.get(call) === result.value.selectedSignature, true, "probe admission never replaces the parent");
-  context.records.seal();
+  context.records.seal(context.requiredRecords);
   assert.throws(() => selectRustCheckedCall(forbidden, guarded, walk.operationOptions), /sealed/u);
 });
 

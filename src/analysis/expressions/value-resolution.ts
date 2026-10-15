@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   ConditionalExpression_Condition,
   ConditionalExpression_WhenFalse,
@@ -242,6 +243,7 @@ export function resolveExpressionCarrierUncached(
       if (output === undefined) {
         return undefined;
       }
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "await-op", "analysis/expressions/value-resolution.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "await-op",
         operationId: "tsonic.rust.async.await",
@@ -308,6 +310,7 @@ export function resolveExpressionCarrierUncached(
           source.yieldKind === "value" ? generator.yieldType : delegatedCarrier,
         );
       }
+      requireRustRecord(walk.context.requiredRecords, "yield", expression, source.yieldKind, "resolveExpressionCarrierUncached");
       if (source.yieldKind === "value") walk.context.records.yields.value(expression, generatorDeclaration, generator);
       else walk.context.records.yields.delegate(expression, generatorDeclaration, generator, delegatedCarrier!, resultType);
       return setCarrierFact(walk, expression, resultType);
@@ -339,7 +342,9 @@ export function resolveExpressionCarrierUncached(
           operationId: "tsonic.rust.assertion.const",
           resultCarrier: carrier,
         };
+        requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/value-resolution.ts");
         walk.context.records.targetOperations.source(expression, fact);
+        requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, fact.kind, "resolveExpressionCarrierUncached");
         walk.context.records.selectedOperations.operator(expression, fact, carrier);
       }
       return setCarrierFact(walk, expression, carrier);
@@ -356,6 +361,7 @@ export function resolveExpressionCarrierUncached(
       if (!rustTargetTypeRefEquals(carrier, resultCarrier)) {
         return undefined;
       }
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "identity-expression", "analysis/expressions/value-resolution.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "identity-expression",
         operationId: "tsonic.rust.syntax.satisfies",
@@ -372,6 +378,7 @@ export function resolveExpressionCarrierUncached(
         return undefined;
       }
       const resultCarrier = rustOptionElementCarrier(sourceCarrier) ?? sourceCarrier;
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "non-null-expression", "analysis/expressions/value-resolution.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "non-null-expression",
         operationId: rustTargetTypeRefEquals(sourceCarrier, resultCarrier)
@@ -431,6 +438,7 @@ export function resolveExpressionCarrierUncached(
         !rustTargetTypeRefEquals(falseCarrier, resultCarrier)) {
         return undefined;
       }
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "conditional", "analysis/expressions/value-resolution.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "conditional",
         operationId: "tsonic.rust.syntax.conditional",
@@ -459,6 +467,7 @@ export function resolveExpressionCarrierUncached(
         return undefined;
       }
       const resultCarrier = rustStringTargetType();
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "typeof", "analysis/expressions/value-resolution.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "typeof",
         operationId: `tsonic.rust.syntax.typeof.${typeof result === "string" ? result : "runtime-union"}`,
@@ -484,11 +493,13 @@ export function resolveExpressionCarrierUncached(
       }
       const resultCarrier = rustAbsenceTargetType();
       const operationId = "tsonic.rust.syntax.void";
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "void-expression", "analysis/expressions/value-resolution.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "void-expression",
         operationId,
         resultCarrier,
       });
+      requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "void-expression", "resolveExpressionCarrierUncached");
       walk.context.records.selectedOperations.project(
         expression,
         operationId,
@@ -584,6 +595,7 @@ function resolveTemplateExpressionCarrier(
     substitutions.push({ expression: substitution, carrier });
   }
   const resultCarrier = rustStringTargetType();
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "template-string", "analysis/expressions/value-resolution.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "template-string",
     operationId: "tsonic.rust.syntax.template-string",

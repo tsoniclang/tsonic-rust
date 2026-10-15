@@ -30,7 +30,7 @@ for (const callFirst of [false, true]) {
     const key = { kind: "KindCallExpression" };
     const source = { sourceCalleeAccess: { kind: "element", expression,
       receiver: { expression: receiver }, argument: { expression: key } } };
-    const call = () => recordRustComputedCallEvaluation(ast, builder, source, expression, false);
+    const call = () => recordRustComputedCallEvaluation(ast, builder, [], source, expression, false);
     const element = () => builder.computedMembers.evaluate(ast, expression, receiver, key, "read", false);
     if (callFirst) call();
     else element();
@@ -64,11 +64,11 @@ test("closed computed-call queries reject before examining either source or AST 
   const expression = {};
   const key = { kind: "KindCallExpression" };
   builder.computedMembers.evaluate(ast, expression, {}, key, "read");
-  builder.seal();
+  builder.seal([]);
   let reads = 0;
   const unreadable = new Proxy({}, { get() { reads += 1; throw new Error("unexpected metadata read"); } });
-  assert.throws(() => recordRustComputedCallEvaluation(unreadable, builder, unreadable, expression, true), /sealed/u);
-  assert.throws(() => recordRustComputedCallEvaluation(unreadable, builder, undefined, expression, true), /sealed/u);
+  assert.throws(() => recordRustComputedCallEvaluation(unreadable, builder, [], unreadable, expression, true), /sealed/u);
+  assert.throws(() => recordRustComputedCallEvaluation(unreadable, builder, [], undefined, expression, true), /sealed/u);
   assert.throws(() => builder.computedMembers.evaluate(unreadable, expression, {}, key, "read"), /sealed/u);
   assert.equal(reads, 0);
 });

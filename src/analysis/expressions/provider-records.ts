@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import { ObjectLiteralProperty_Value } from "@tsonic/target-api/source";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
@@ -56,6 +57,7 @@ export function resolveProviderRecordLiteral(
       return rejectProviderRecordLiteral(walk, expression,
         "Opaque provider default construction accepts only an empty object literal.");
     }
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "provider-record-literal", "analysis/expressions/provider-records.ts");
     walk.context.records.targetOperations.source(expression, {
       kind: "provider-record-literal", operationId: "tsonic.rust.provider.default",
       resultCarrier, completion: "default", absentFields: [], fields: [],
@@ -205,6 +207,7 @@ export function resolveProviderRecordLiteral(
       absentFields.push(Object.freeze({ targetName: field.targetName, carrier: field.carrier }));
     }
   }
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "provider-record-literal", "analysis/expressions/provider-records.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "provider-record-literal",
     operationId: `tsonic.rust.provider-record.${typeRow.providerPackageId}.${typeRow.providerModuleId}.${typeRow.exportId}`,

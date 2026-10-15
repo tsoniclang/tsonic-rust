@@ -1,3 +1,4 @@
+import { requireRustRecord } from "./required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import { recordRustInlineModuleCallableUses, selectRustModuleCallableStorage } from "../../callables/module-values.js";
@@ -23,6 +24,8 @@ export function createRustModuleCallableStorageProducer(
       const visit = (node: Node): void => {
         const selection = selectRustModuleCallableStorage(walk, node);
         if (selection !== undefined) {
+          requireRustRecord(walk.context.requiredRecords, "moduleCallableStorage", node,
+            selection.stored ? "stored" : "inline", "moduleCallableStoragePlans.finalize");
           family.writer.set(node, Object.freeze({ kind: selection.stored ? "stored" : "inline" }));
           recordRustInlineModuleCallableUses(walk, selection);
         }

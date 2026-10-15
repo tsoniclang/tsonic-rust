@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -26,7 +27,7 @@ const cases = [
 for (const surfaces of [[], ["js"]]) {
   for (const [reference, mutable] of [["Ref", false], ["Mut", true]]) {
     test(`call-scoped ${reference} records preserve actual selected call and lifetime identities in ${surfaces[0] ?? "native"}`, () => {
-      const { source, program } = analyzeRust({ surfaces, files: { "index.ts": `
+      const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
         import type { int32 } from "@tsonic/core/types.js";
         import type { Life, ${reference} } from "@tsonic/rust/types.js";
         function identity<L extends Life>(value: ${reference}<int32, L>): ${reference}<int32, L> { return value; }
@@ -44,6 +45,9 @@ for (const surfaces of [[], ["js"]]) {
       program.sourceFiles.forEach(visit);
       assert.equal(selected.length, 2, "the actual call result and argument each retain their own selected reconciliation");
       const argument = source.ast.arguments(call)[0];
+      assertRustRecordRequirement(requiredRecords, "callScopedLifetimeReconciliation", call);
+      assertRustRecordRequirement(requiredRecords, "callScopedLifetimeReconciliation", argument);
+      assert.equal(requiredRecords.some(row => row.family === "callScopedLifetimeReconciliation" && row.subject === declaration), false);
       assert.equal(selected.includes(call) && selected.includes(argument), true, "record keys are the exact checked subjects");
       const result = program.records.callScopedLifetimeReconciliation.get(call);
       const input = program.records.callScopedLifetimeReconciliation.get(argument);
@@ -74,13 +78,20 @@ for (const surfaces of [[], ["js"]]) {
 
   for (const [family, label, body] of cases) {
     test(`${family} preserves actual checked ${label} evidence in ${surfaces[0] ?? "native"} source`, () => {
-      const { source, program } = analyzeRust({ surfaces, files: { "index.ts": declarations + body } });
+      const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": declarations + body } });
       const nodes = [];
       const visit = node => {
         nodes.push(node);
         source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
       };
       program.sourceFiles.forEach(visit);
+      const expectedSubject = family === "projectDowncast" ? nodes.find(node => source.ast.kindName(node) === "KindAsExpression") :
+        label === "union" ? source.ast.as.AsReturnStatement(nodes.find(node => source.ast.is.IsReturnStatement(node)))?.Expression :
+        nodes.find(node => source.ast.is.IsNewExpression(node));
+      assertRustRecordRequirement(requiredRecords, family, expectedSubject);
+      const classes = nodes.filter(node => source.ast.is.IsClassDeclaration(node));
+      assert.equal(classes.length, 3);
+      for (const declaration of classes) assertRustRecordRequirement(requiredRecords, "projectCallableAdapters", declaration);
       const selected = nodes.filter(node => program.records[family].get(node) !== undefined);
       assert.equal(selected.length, 1, `${family}: one actual checked subject`);
       const node = selected[0];
@@ -119,18 +130,23 @@ for (const surfaces of [[], ["js"]]) {
   }
 
   test(`a narrowed optional project payload retains its existing flow family in ${surfaces[0] ?? "native"}`, () => {
-    const { source, program } = analyzeRust({ surfaces, files: { "index.ts": declarations + `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": declarations + `
       export function inspect(value: Base | undefined): Derived | undefined {
         return value instanceof Derived ? value : undefined;
       }
     ` } });
     const selected = [];
+    let conditional;
     const visit = node => {
+      if (source.ast.kindName(node) === "KindConditionalExpression") conditional = source.ast.as.AsConditionalExpression(node);
       const flow = program.records.flowReadProjection.get(node);
       if (flow?.kind === "project-downcast") selected.push({ node, flow });
       source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     };
     program.sourceFiles.forEach(visit);
+    assert.equal(conditional !== undefined, true);
+    assertRustRecordRequirement(requiredRecords, "flowReadProjection", conditional.WhenTrue);
+    assertRustRecordRequirement(requiredRecords, "optionProjection", conditional.WhenFalse);
     assert.equal(selected.length, 1);
     const { node, flow } = selected[0];
     assert.equal(program.records.projectDowncast.get(node) === undefined, true,

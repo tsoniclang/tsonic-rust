@@ -18,7 +18,7 @@ async function fixture() {
   for (const node of selected) builder.runtimeCarriers.selected(node, { kind: "target-named", id: "rust.std.String" });
   const input = {
     storage,
-    records: builder.seal(),
+    records: builder.seal([]),
     flow: { movingReads: new Set(), captureTransfers: new Map() },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: { ast: source.ast },

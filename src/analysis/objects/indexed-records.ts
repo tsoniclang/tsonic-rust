@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { Node_Type, ObjectLiteralProperty_Value, SpreadAssignment_Expression } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
@@ -68,6 +69,7 @@ export function resolveRustIndexedRecordLiteral(
     if (initializer === undefined || resolveExpressionCarrier(walk, initializer, sourceFile, value) === undefined) return undefined;
     contributions.push({ kind: "property", property, sourceName, expression: initializer });
   }
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "record-index-literal", "analysis/objects/indexed-records.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "record-index-literal", operationId: "tsonic.rust.record.index-literal",
     resultCarrier, keyCarrier: key, valueCarrier: value, storage, contributions,

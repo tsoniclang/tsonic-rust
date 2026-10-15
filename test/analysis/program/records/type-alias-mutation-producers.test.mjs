@@ -12,13 +12,13 @@ const text = { kind: "target-named", id: "rust.std.String" };
 function stringLiteralWalk(builder, variants) {
   return {
     sourceTypes: { enumVariantsForDeclaration: () => variants, carrierForDeclaration: () => text },
-    context: { projectTypes: { definitionForDeclaration: () => undefined }, ast: {}, records: builder, diagnostics: [] },
+    context: { requiredRecords: [], projectTypes: { definitionForDeclaration: () => undefined }, ast: {}, records: builder, diagnostics: [] },
   };
 }
 
 test("type-alias and mutation families expose one immutable reader and no general writer", () => {
   const builder = createRustProgramRecordBuilder();
-  const sealed = builder.seal();
+  const sealed = builder.seal([]);
   for (const [family, producer] of families) {
     assert.equal(builder[producer].records === builder[family], true, family);
     assert.equal(builder[family] === sealed[family], true, family);
@@ -69,7 +69,7 @@ test("scoped builders read inherited mutation facts and never publish new ones i
   const inherited = {};
   parent.mutatedBindings.written(inherited);
   parent.mutatedReferents.written(inherited);
-  const sealed = parent.seal();
+  const sealed = parent.seal([]);
   const child = createRustProgramRecordBuilder(undefined, sealed);
   assert.equal(child.mutatedBinding.get(inherited) === sealed.mutatedBinding.get(inherited), true);
   assert.equal(child.mutatedReferent.get(inherited) === sealed.mutatedReferent.get(inherited), true);
@@ -103,7 +103,7 @@ test("positive mutation events retain canonical local and inherited facts and st
   assert.equal(child.mutatedBinding.get(fresh) === selected, true);
   assert.equal(child.mutatedReferent.get(fresh) === undefined, true, "the two write-evidence families remain independent");
   assert.equal(parent.mutatedBinding.get(fresh) === undefined, true, "child events never mutate a live parent");
-  child.seal();
+  child.seal([]);
   for (const subject of [declaration, fresh]) {
     assert.throws(() => child.mutatedBindings.written(subject), /after analysis is sealed/u);
     assert.throws(() => child.mutatedReferents.written(subject), /after analysis is sealed/u);
@@ -129,7 +129,7 @@ test("type-alias registration publishes nothing when the selector finds no decla
   let selections = 0;
   const walk = {
     sourceTypes: { enumVariantsForDeclaration() { selections++; return undefined; } },
-    context: {
+    context: { requiredRecords: [],
       records: builder,
       ast: { typeParameters: () => [], name: () => undefined, text: () => "", getSourceFile: () => ({}), getFileName: () => "" },
       sourceLifetimes: { contractFor: () => undefined },
@@ -147,8 +147,9 @@ test("inherited type-alias facts reject a different selection without publishing
   const parent = createRustProgramRecordBuilder();
   const declaration = {};
   const variants = [{ name: "On", literal: "on" }];
-  parent.typeAliasDeclarations.register(stringLiteralWalk(parent, variants), declaration);
-  const sealed = parent.seal();
+  const parentWalk = stringLiteralWalk(parent, variants);
+  parent.typeAliasDeclarations.register(parentWalk, declaration);
+  const sealed = parent.seal(parentWalk.context.requiredRecords);
   const original = sealed.typeAliasDeclaration.get(declaration);
   const child = createRustProgramRecordBuilder(undefined, sealed);
   child.typeAliasDeclarations.register(stringLiteralWalk(child, [{ name: "On", literal: "on" }]), declaration);
@@ -178,7 +179,7 @@ test("successful type-alias queries select once per actual walk and still valida
   builder.typeAliasDeclarations.register(requester, declaration);
   assert.equal(selections, 2, "a distinct requesting walk validates once without re-admission");
   assert.equal(builder.typeAliasDeclaration.get(declaration) === canonical, true);
-  builder.seal();
+  builder.seal(walk.context.requiredRecords);
   assert.throws(() => builder.typeAliasDeclarations.register(requester, declaration), /after analysis is sealed/u);
   assert.equal(selections, 2, "closed analysis rejects before cached work");
 });

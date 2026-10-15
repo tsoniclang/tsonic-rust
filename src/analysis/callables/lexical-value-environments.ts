@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
@@ -33,8 +34,10 @@ export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: 
         }
         captures.push({ declaration: capture.declaration, reference: capture.reference, carrier, storage: storage.storage });
       }
+      requireRustRecord(walk.context.requiredRecords, "closureCapture", node, "lexical-environment", "recordRustLexicalValueEnvironments");
       records.closureCaptures.capture(node, captures);
     } else if (ast.is.IsFunctionDeclaration(node) && ast.body(node) !== undefined && sourceDeclarationIsModuleScoped(node, ast)) {
+      requireRustRecord(walk.context.requiredRecords, "closureCapture", node, "module-environment", "recordRustLexicalValueEnvironments");
       records.closureCaptures.capture(node, []);
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });

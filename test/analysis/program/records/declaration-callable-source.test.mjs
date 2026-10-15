@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -17,7 +18,7 @@ function checkedNodes(program) {
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
   test(`ambient and callable aliases publish only their actual checked declaration identities in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       declare const seed: number;
       interface Phantom { field: typeof seed; }
       interface Callable { (value: number): number; }
@@ -25,6 +26,11 @@ for (const surfaces of [[], ["js"]]) {
     ` } });
     const nodes = checkedNodes(program);
     const { ast } = program.source;
+    const seed = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "seed");
+    const statement = ast.parent(ast.parent(seed));
+    const callable = nodes.find(node => ast.is.IsInterfaceDeclaration(node) && ast.text(ast.name(node)) === "Callable");
+    assert.equal(ast.is.IsVariableStatement(statement), true);
+    for (const subject of [statement, seed, callable]) assertRustRecordRequirement(requiredRecords, "typeOnlyDeclaration", subject);
     const selected = nodes.filter(node => program.records.typeOnlyDeclaration.get(node) !== undefined);
     assert.equal(selected.length, 3, "one ambient statement, its declaration, and one callable facade");
     for (const node of selected) {
@@ -34,12 +40,13 @@ for (const surfaces of [[], ["js"]]) {
     const ordinary = nodes.find(node => ast.is.IsInterfaceDeclaration(node) && ast.text(ast.name(node)) === "Phantom");
     assert.equal(ordinary !== undefined, true);
     assert.equal(program.records.typeOnlyDeclaration.get(ordinary) === undefined, true, "an ordinary structural interface is not erased");
+    assert.equal(requiredRecords.some(row => row.family === "typeOnlyDeclaration" && row.subject === ordinary), false);
     assert.equal(program.records.typeOnlyDeclaration.get({}) === undefined, true);
     assert.equal(program.records.typeOnlyDeclaration.set === undefined, true);
   });
 
   test(`module bindings preserve native constant, live-cell and default-export storage in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       const answer: number = 7;
       let counter: number = 1;
       export function run(): number { counter += 1; return counter + answer; }
@@ -50,6 +57,7 @@ for (const surfaces of [[], ["js"]]) {
     for (const [name, kind, storage] of [["answer", "const", "native-const"], ["counter", "let", "module-cell"]]) {
       const declaration = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === name);
       assert.equal(declaration !== undefined, true, name);
+      assertRustRecordRequirement(requiredRecords, "moduleBinding", declaration);
       const binding = program.records.moduleBinding.get(declaration);
       assert.equal(binding?.declarationKind, kind, name);
       assert.equal(binding?.storage, storage, name);
@@ -57,6 +65,10 @@ for (const surfaces of [[], ["js"]]) {
     }
     const exported = nodes.find(node => ast.kindName(node) === "KindExportAssignment");
     assert.equal(exported !== undefined, true);
+    assertRustRecordRequirement(requiredRecords, "moduleBinding", exported);
+    const run = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "run");
+    assert.equal(program.records.moduleBinding.get(run) === undefined, true, "a direct-only declaration has no module value storage");
+    assert.equal(requiredRecords.some(row => row.family === "moduleBinding" && row.subject === run), false);
     const binding = program.records.moduleBinding.get(exported);
     assert.equal(binding?.storage, "module-cell");
     assert.equal(binding.initialization, "value");
@@ -69,11 +81,13 @@ for (const surfaces of [[], ["js"]]) {
     ["stored", `function step(value: number): number { return value + 1; }
       export const callback: (value: number) => number = step;`, "stored"],
   ]) test(`module ${name} callable storage retains the actual function declaration and value ABI in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": source } });
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": source } });
     const { ast } = program.source;
     const nodes = checkedNodes(program);
     const step = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "step");
     assert.equal(step !== undefined, true);
+    assertRustRecordRequirement(requiredRecords, "moduleBinding", step);
+    assertRustRecordRequirement(requiredRecords, "moduleCallableStorage", step);
     const binding = program.records.moduleBinding.get(step);
     assert.equal(binding?.storage, "native-callable");
     assert.equal(binding.callableDeclaration === step, true);
@@ -85,7 +99,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`source return inference keeps exact native integer carriers without result annotations in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { int32 } from "@tsonic/core/types.js";
       function identity(value: int32) { return value; }
       export function run(value: int32) { return identity(value); }
@@ -103,7 +117,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`source return records preserve explicit native reference contracts without inventing a local loan in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import type { Life, Ref } from "@tsonic/rust/types.js";
       import type { int32 } from "@tsonic/core/types.js";
       export function borrowed<Region extends Life>(value: Ref<int32, Region>): Ref<int32, Region> { return value; }
@@ -120,7 +134,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`source absence completion and setter unit results remain explicit in sealed data in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       export function selected(value: boolean): string | undefined { if (value) return "ready"; }
       class Box { value = 1; set next(value: number) { this.value = value; } }
       export function run(): Box { return new Box(); }

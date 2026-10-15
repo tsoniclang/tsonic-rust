@@ -1,3 +1,4 @@
+import { requireRustRecord } from "./records/required-records.js";
 import { appendMalformedSourceAstDiagnostic, recordClassBodyFacts, recordClassSignatureFacts, recordInterfaceFacts, recordMethodSelfModeFacts } from "../declarations/project-types.js";
 import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } from "./walk.js";
 import { resolveRustProjectField } from "../operations/provider/project-fields.js";
@@ -268,7 +269,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     if (ast.is.IsVariableDeclaration(node)) {
       const alias = callableAlias(node);
       if (alias !== undefined) {
-        for (const declaration of alias.declarations) context.records.compileTimeSources.erase(declaration);
+        for (const declaration of alias.declarations) {
+          requireRustRecord(context.requiredRecords, "compileTimeSource", declaration, "callable-alias", "collectPromotedStorage");
+          context.records.compileTimeSources.erase(declaration);
+        }
         return;
       }
     }
@@ -276,6 +280,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     context.pointerBacking.record(node);
     const metadata = context.memoryMetadata.declaration(node);
     if (metadata !== undefined || context.memoryMetadata.isCompileTimeExpression(node)) {
+      requireRustRecord(context.requiredRecords, "compileTimeSource", node, "memory-metadata", "collectPromotedStorage");
       context.records.compileTimeSources.erase(node);
       for (const issue of metadata?.issues ?? []) appendRustDiagnostic(walk,
         "RUST_MEMORY_METADATA_RUNTIME_ESCAPE", issue.reason, issue.node, []);
@@ -424,6 +429,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
           "Class evaluation requires one consistent, immutable capture and static-storage contract.", definition.declaration,
           ["target.capability=rust.class-value.environment"]);
       }
+      requireRustRecord(context.requiredRecords, "closureCapture", definition.declaration, "class-environment", "analysis/program/analyze.ts");
       context.records.closureCaptures.capture(definition.declaration, selected.environment.captures);
     }
   }
@@ -478,6 +484,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   });
   for (const issue of walk.context.records.objectLiteralMethodAdapters.finalize({
     ast: walk.context.ast,
+    requiredRecords: walk.context.requiredRecords,
     sourceLifetimes: walk.context.sourceLifetimes,
     records: walk.context.records,
     projectTypes: walk.context.projectTypes,

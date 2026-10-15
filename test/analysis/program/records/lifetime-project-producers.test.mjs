@@ -22,7 +22,8 @@ const families = [
 
 test("lifetime and project families expose only frozen readers and close their real producers at the seal", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const builderRequiredRecords = [];
+  const records = builder.seal(builderRequiredRecords);
   for (const [family, producer, attempt] of families) {
     assert.equal(builder[family] === builder[producer].records, true, family);
     assert.equal(records[family] === builder[family], true, family);
@@ -39,12 +40,13 @@ test("lifetime and project families expose only frozen readers and close their r
 
 test("call-scoped lifetime production retains exact carriers, call and parameter identities", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const subject = {};
   const input = reference();
   const selected = reference(lifetime());
   const fact = selectRustCallScopedLifetimeReconciliation(input, selected);
   assert.equal(fact !== undefined, true);
-  recordRustValueCarrierReconciliation(builder, subject, { kind: "call-scoped-lifetime", fact });
+  recordRustValueCarrierReconciliation(builder, builderRequiredRecords, subject, { kind: "call-scoped-lifetime", fact });
   const stored = builder.callScopedLifetimeReconciliation.get(subject);
   assert.equal(stored?.sourceCarrier === input, true);
   assert.equal(stored.selectedCarrier === selected, true);
@@ -75,12 +77,14 @@ test("call-scoped lifetime production retains exact carriers, call and parameter
 
 test("lifetime specializations retain inherited identity and never write into the parent", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const subject = {};
   const input = reference();
   const selected = reference(lifetime());
   parent.callScopedLifetimes.reconcile(subject, input, selected);
   const fact = parent.callScopedLifetimeReconciliation.get(subject);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+  const childRequiredRecords = [];
   child.callScopedLifetimes.reconcile(subject, reference(), reference(lifetime()));
   assert.equal(child.callScopedLifetimeReconciliation.get(subject) === fact, true);
   const foreign = {};
@@ -89,18 +93,19 @@ test("lifetime specializations retain inherited identity and never write into th
   assert.equal(parent.callScopedLifetimeReconciliation.get(foreign) === undefined, true);
   assert.throws(() => child.callScopedLifetimes.reconcile(subject, input, reference(lifetime("other-call"))),
     /Conflicting Rust semantic plan/u);
-  assert.equal(child.seal().callScopedLifetimeReconciliation.get(subject) === fact, true);
+  assert.equal(child.seal(childRequiredRecords).callScopedLifetimeReconciliation.get(subject) === fact, true);
   assert.throws(() => child.callScopedLifetimes.reconcile({}, input, selected), /after analysis is sealed/u);
 });
 
 test("project upcast production preserves exact ordered source variants and inherited evidence", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const subject = {};
   const variants = Object.freeze([
     Object.freeze({ name: "Left", carrier: source }),
     Object.freeze({ name: "Right", carrier: integer }),
   ]);
-  recordRustValueCarrierReconciliation(parent, subject, {
+  recordRustValueCarrierReconciliation(parent, parentRequiredRecords, subject, {
     kind: "project-upcast", fact: { sourceCarrier: source, targetCarrier: target, sourceVariants: variants },
   });
   const fact = parent.projectUpcast.get(subject);
@@ -108,7 +113,8 @@ test("project upcast production preserves exact ordered source variants and inhe
   assert.equal(fact.targetCarrier === target, true);
   assert.equal(fact.sourceVariants === variants, true);
   assert.equal(Object.isFrozen(fact), true);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+  const childRequiredRecords = [];
   child.projectUpcasts.project(subject, source, target, variants.map(variant => ({ ...variant })));
   assert.equal(child.projectUpcast.get(subject) === fact, true);
   for (const changed of [undefined, [], [...variants].reverse(),
@@ -132,6 +138,7 @@ for (const projection of [{ kind: "closed", slot: "cast" }, { kind: "checked", s
   { kind: "structural", slot: "cast" }, { kind: "generic" }]) {
   test(`project downcast ${projection.kind} keeps its physical dispatch and selected route`, () => {
     const parent = createRustProgramRecordBuilder();
+    const parentRequiredRecords = [];
     const subject = {};
     const optional = rustOptionTargetType(target);
     parent.projectDowncasts.project(subject, optional, target, source, projection);
@@ -141,7 +148,8 @@ for (const projection of [{ kind: "closed", slot: "cast" }, { kind: "checked", s
     assert.equal(fact.targetCarrier === source, true);
     assert.equal(fact.projection === projection, true);
     assert.equal(Object.isFrozen(fact), true);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+    const childRequiredRecords = [];
     child.projectDowncasts.project(subject, { ...optional }, { ...target }, { ...source }, { ...projection });
     assert.equal(child.projectDowncast.get(subject) === fact, true);
     for (const [inputCarrier, dispatchCarrier, outputCarrier, selected] of [
@@ -158,17 +166,18 @@ for (const projection of [{ kind: "closed", slot: "cast" }, { kind: "checked", s
     const foreign = {};
     child.projectDowncasts.project(foreign, target, target, source, projection);
     assert.equal(parent.projectDowncast.get(foreign) === undefined, true);
-    assert.equal(child.seal().projectDowncast.get(subject) === fact, true);
+    assert.equal(child.seal(childRequiredRecords).projectDowncast.get(subject) === fact, true);
     assert.throws(() => child.projectDowncasts.project({}, target, target, source, projection), /after analysis is sealed/u);
   });
 }
 
 test("payload upcast admission still precedes contextual conversion validation and optional publication", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const subject = {};
   const optional = rustOptionTargetType(target);
   const conversion = { kind: "option-some", source: target, element: target, elementConversion: null };
-  recordRustValueCarrierReconciliation(builder, subject, { kind: "conversion",
+  recordRustValueCarrierReconciliation(builder, builderRequiredRecords, subject, { kind: "conversion",
     upcast: { sourceCarrier: source, targetCarrier: target },
     fact: { sourceCarrier: target, targetCarrier: optional, conversion },
   });
@@ -177,7 +186,7 @@ test("payload upcast admission still precedes contextual conversion validation a
   assert.equal(builder.optionProjection.get(subject)?.elementCarrier === target, true);
   assert.equal(builder.contextualValueConversion.get(subject) === undefined, true);
   const malformed = {};
-  assert.throws(() => recordRustValueCarrierReconciliation(builder, malformed, {
+  assert.throws(() => recordRustValueCarrierReconciliation(builder, builderRequiredRecords, malformed, {
     kind: "conversion", upcast: { sourceCarrier: source, targetCarrier: target },
     fact: { sourceCarrier: source, targetCarrier: optional, conversion },
   }), /exact source and selected payload/u);
@@ -189,11 +198,13 @@ test("payload upcast admission still precedes contextual conversion validation a
 
 test("an earlier inherited upcast conflict prevents later contextual records from being published", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const subject = {};
   parent.projectUpcasts.project(subject, source, target);
   const fact = parent.projectUpcast.get(subject);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
-  assert.throws(() => recordRustValueCarrierReconciliation(child, subject, {
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+  const childRequiredRecords = [];
+  assert.throws(() => recordRustValueCarrierReconciliation(child, childRequiredRecords, subject, {
     kind: "conversion", upcast: { sourceCarrier: target, targetCarrier: source },
     fact: { sourceCarrier: integer, targetCarrier: wide,
       conversion: { kind: "exact-integer", source: integer, target: wide } },
@@ -205,6 +216,7 @@ test("an earlier inherited upcast conflict prevents later contextual records fro
 
 test("these record families retain their existing foundation-neutral admission rule", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const string = rustStringTargetType();
   builder.callScopedLifetimes.reconcile({}, string, string);
   builder.projectUpcasts.project({}, source, string);

@@ -42,6 +42,7 @@ import { rustOptionalStorageValue } from "../../target-model/types/projections.j
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 
 export interface RustBindingPatternFactContext {
+  readonly requiredRecords: RustAnalysisContext["requiredRecords"];
   readonly ast: AstReader;
   readonly records: RustAnalysisContext["records"];
   readonly navigation: RustAnalysisContext["source"]["navigation"];
@@ -105,7 +106,7 @@ export function recordRustBindingPatternFacts(
     const defaultCarrier = initializer === undefined ? undefined
       : context.resolveExpressionCarrier(initializer, isRustAbsenceCarrier(defaultExpected) ? undefined : defaultExpected);
     if (initializer !== undefined && defaultCarrier === undefined) return false;
-    const projected = context.records.bindingProjections.resolve(element, sourceCarrier,
+    const projected = context.records.bindingProjections.resolve(context.requiredRecords, element, sourceCarrier,
       selected.projectedCarrier, selected.projection, defaultCarrier, selected.checkedArrayElement);
     if (projected === undefined) return false;
     const { bindingCarrier } = projected;

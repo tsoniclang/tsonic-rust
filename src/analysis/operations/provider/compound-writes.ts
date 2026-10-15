@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import { ElementAccessExpression_ArgumentExpression, Node_Expression } from "@tsonic/target-api/source";
 import { selectJsSurfaceMemberWrite } from "../../../policy/operations/source-profiles/js/member-reads.js";
@@ -16,8 +17,12 @@ export function recordRustCompoundWrite(
   left: Node,
   resultCarrier: TargetTypeRef,
 ): void {
+  walk.context.records.assertOpen();
   const fact = selectRustCompoundWrite(walk, left, resultCarrier);
-  if (fact !== undefined) walk.context.records.compoundWrites.index(expression, fact.operationId, fact.abi);
+  if (fact !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "compoundWrite", expression, fact.operationId, "recordRustCompoundWrite");
+    walk.context.records.compoundWrites.index(expression, fact.operationId, fact.abi);
+  }
 }
 
 export function selectRustCompoundWrite(

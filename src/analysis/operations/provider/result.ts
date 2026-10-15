@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../program/operation-context.js";
 import {
   isRustAbsenceCarrier,
@@ -131,7 +132,7 @@ export function selectedMemberReceiverCarrier(
     );
     const selected = indexes?.length === 1 ? sourceUnion.variants[indexes[0]!]!.carrier : undefined;
     if (selected !== undefined) {
-      const projection = context.records.flowReadProjections.resolve(receiver, refinedCarrier, selected, options.projectTypes, context.typeDefinitions);
+      const projection = context.records.flowReadProjections.resolve(context.requiredRecords, receiver, refinedCarrier, selected, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
         return projection.fact.selectedCarrier;
       }
@@ -211,7 +212,7 @@ export function selectedMemberReceiverCarrier(
   if (rustTargetTypeRefEquals(sourceCarrier, selectedCarrier)) {
     return sourceCarrier;
   }
-  const flowProjection = context.records.flowReadProjections.resolve(receiver, sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
+  const flowProjection = context.records.flowReadProjections.resolve(context.requiredRecords, receiver, sourceCarrier, selectedCarrier, options.projectTypes, context.typeDefinitions);
   if (flowProjection.kind === "projection") {
     return flowProjection.fact.selectedCarrier;
   }
@@ -281,7 +282,7 @@ export function acceptRustMemberOperation(
       : rustOptionElementCarrier(sourceReceiverCarrier) ?? sourceReceiverCarrier
     : sourceReceiverCarrier;
   if (operationReceiverCarrier !== undefined && selectedReceiverCarrier !== undefined) {
-    const projection = context.records.flowReadProjections.resolve(request.receiver,
+    const projection = context.records.flowReadProjections.resolve(context.requiredRecords, request.receiver,
       operationReceiverCarrier,
       selectedReceiverCarrier,
       options.projectTypes, context.typeDefinitions,
@@ -332,6 +333,7 @@ export function acceptRustMemberOperation(
     provenance,
     selection.fact.resultCarrier,
   );
+  requireRustRecord(context.requiredRecords, "optionalChain", request.expression, selection.fact.operationKind, "analysis/operations/provider/result.ts");
   context.records.optionalChains.guard(request.expression, selection.fact.guard, selection.fact.operationKind, selection.fact);
   return accepted;
 }

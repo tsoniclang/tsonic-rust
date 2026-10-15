@@ -43,7 +43,7 @@ export function selectRustIndexedCallKeys(
   };
   if (!selected.member.parameters.every(parameter => visit(parameter.type)) ||
     selected.member.returnType !== undefined && !visit(selected.member.returnType)) return false;
-  return walk.context.records.indexedFieldKeys.bind(selected, callArguments, keys, argument => {
+  return walk.context.records.indexedFieldKeys.bind(walk.context.requiredRecords, selected, callArguments, keys, argument => {
     const kind = walk.context.ast.kindName(argument);
     return kind !== "KindStringLiteral" && kind !== "KindNoSubstitutionTemplateLiteral";
   });

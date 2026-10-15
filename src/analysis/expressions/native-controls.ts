@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { Node_Type } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
@@ -51,6 +52,7 @@ export function resolveRustNativeControl(
       operands.length === 2 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, element))) {
       const resultCarrier = rustNamedTargetType(native.id, native.path,
         [{ kind: "type", type: element }], native.genericDefaults, native.traits, native.upcasts);
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "native-range", "analysis/expressions/native-controls.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "native-range", operationId: "tsonic.rust.range",
         operands: operands.map(operand => operand.expression), elementCarrier: element,
@@ -77,6 +79,7 @@ export function resolveRustNativeControl(
       (explicitArguments.length === 0 || explicitArguments.length === 2 &&
         explicitArguments.every((argument, index) => argument !== undefined &&
           rustTargetTypeRefEquals(argument, argumentsList[index])))) {
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "native-propagation", "analysis/expressions/native-controls.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "native-propagation", operationId: "tsonic.rust.propagate",
         callableDeclaration: declaration, callableReturnCarrier: returnCarrier,

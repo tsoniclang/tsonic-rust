@@ -25,6 +25,7 @@ import { createRustSourceTypeFamilyRegistry } from "../project-types/type-famili
 import { createRustTypeDefinitionRegistry, type RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
 import { createRustClassValueRegistry, type RustClassValueRegistry } from "../objects/class-values.js";
 import { createRustProgramRecordBuilder } from "./records/create.js";
+import type { RustRequiredRecord } from "./records/required-records.js";
 import type { RustProgramRecordBuilder } from "./records/model.js";
 import {
   createRustProjectTypePolicyRegistry,
@@ -101,6 +102,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourcePackages: TargetCompileInput["sourcePackages"];
   readonly rootPublishesLibrary: boolean;
   readonly records: RustProgramRecordBuilder;
+  readonly requiredRecords: RustRequiredRecord[];
   readonly projectTypes: RustProjectTypePolicyRegistry;
   readonly objectRepresentations: RustObjectRepresentationPlanRegistry;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
@@ -198,6 +200,7 @@ export function createRustAnalysisContext(
     sourcePackages: input.sourcePackages,
     rootPublishesLibrary,
     records,
+    requiredRecords: [],
     projectTypes: createRustProjectTypePolicyRegistry(),
     objectRepresentations: createRustObjectRepresentationPlanRegistry(),
     projectMethodDispatch: createRustProjectMethodDispatchPlanRegistry(),

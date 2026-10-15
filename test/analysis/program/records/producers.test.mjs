@@ -21,7 +21,7 @@ test("the three closed families publish canonical readers and no writer or produ
   const builder = createRustProgramRecordBuilder();
   const owners = [["runtimeCarrier", "runtimeCarriers"], ["selectedCall", "selectedCalls"],
     ["targetOperation", "targetOperations"]];
-  const records = builder.seal();
+  const records = builder.seal([]);
   for (const [family, producer] of owners) {
     assert.equal(builder[family] === builder[producer].records, true, family);
     assert.equal(records[family] === builder[family], true, family);
@@ -49,7 +49,7 @@ test("source runtime-carrier conflicts retain the exact diagnostic and rejected-
   const subject = {};
   const dependent = {};
   const diagnostics = [];
-  const walk = { context: { records, diagnostics }, rejectedExpressions: new WeakSet(), resolving: new Set([dependent]) };
+  const walk = { context: { requiredRecords: [], records, diagnostics }, rejectedExpressions: new WeakSet(), resolving: new Set([dependent]) };
   assert.equal(setCarrierFact(walk, subject, integer) === integer, true);
   const first = records.runtimeCarrier.get(subject);
   assert.equal(setCarrierFact(walk, subject, { ...integer }) === integer, true, "equal input retains its exact original carrier");
@@ -76,8 +76,8 @@ test("source inherited reuse preserves the exact stored carrier without counting
   const subject = {};
   parent.runtimeCarriers.selected(subject, text);
   const original = parent.runtimeCarrier.get(subject);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
-  const walk = { context: { records: child, diagnostics: [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
+  const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
+  const walk = { context: { requiredRecords: [], records: child, diagnostics: [] }, rejectedExpressions: new WeakSet(), resolving: new Set() };
   assert.equal(setCarrierFact(walk, subject, { ...text }) === text, true);
   assert.equal(child.runtimeCarrier.get(subject) === original, true);
   assert.equal(child.minimumFoundation(), "core", "reuse retains the original probe accounting");
@@ -88,7 +88,7 @@ test("source inherited reuse preserves the exact stored carrier without counting
   const fresh = {};
   assert.equal(setCarrierFact(walk, fresh, integer) === integer, true);
   assert.equal(parent.runtimeCarrier.get(fresh) === undefined, true, "the child never mutates its parent");
-  child.seal();
+  child.seal([]);
   for (const candidate of [subject, fresh, {}]) assert.throws(() => setCarrierFact(walk, candidate, integer),
     /after analysis is sealed/u);
 });
@@ -155,7 +155,7 @@ test("one selected-call constructor retains every exact checked-source evidence 
   const builder = createRustProgramRecordBuilder();
   builder.selectedCalls.checked(request, accepted({ selectedSignature: signature }));
   assert.equal(builder.selectedCall.get(request.source.call) === signature, true);
-  const inherited = createRustProgramRecordBuilder(undefined, builder.seal());
+  const inherited = createRustProgramRecordBuilder(undefined, builder.seal([]));
   inherited.selectedCalls.checked(request, accepted({ selectedSignature: { ...signature } }));
   assert.equal(inherited.selectedCall.get(request.source.call) === signature, true);
   assert.throws(() => inherited.selectedCalls.checked(request,

@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -36,6 +37,7 @@ export function createRustObjectReferenceViewQuery(input: {
       rustTargetTypeRefEquals(previous.targetCarrier, targetCarrier)) return previous;
     const selected = selectRustObjectReferenceView(walk, expression, sourceCarrier, targetCarrier);
     if (selected === undefined) return undefined;
+    requireRustRecord(walk.context.requiredRecords, "objectReferenceView", expression, selected.kind, "createRustObjectReferenceViewQuery");
     if (previous !== undefined && !rustObjectReferenceViewEquals(previous, selected)) {
       failTargetAnalysisInvariant("tsonic-rust",
         "Conflicting Rust semantic plan 'tsonic.rust.objectReferenceView' for one exact source subject.",

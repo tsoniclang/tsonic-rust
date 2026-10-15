@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
@@ -49,11 +50,16 @@ export function selectRustGenericNumericOperation(
   left: TargetTypeRef | undefined,
   right: TargetTypeRef | undefined,
 ) {
+  walk.context.records.assertOpen();
   if (!walk.jsEnabled || left === undefined || right === undefined ||
     left.kind !== "type-parameter" && right.kind !== "type-parameter") return undefined;
   const valid = (operand: Node, carrier: TargetTypeRef): boolean => rustOperandSupportsSourceNumeric(
     operand, carrier, rustResolutionContext(walk, operand), walk.operationOptions,
   );
   if (!valid(leftNode, left) || !valid(rightNode, right)) return undefined;
-  return walk.context.records.genericNumerics.comparison(node, left, right, selectRustNumericConstraintComparison(operator));
+  const selection = selectRustNumericConstraintComparison(operator);
+  if (selection !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "genericNumericOperands", node, "numeric-comparison", "selectRustGenericNumericOperation");
+  }
+  return walk.context.records.genericNumerics.comparison(node, left, right, selection);
 }

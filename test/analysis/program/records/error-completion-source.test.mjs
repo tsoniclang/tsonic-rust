@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import test from "node:test";
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { analyzeRustErrorEffects } from "../../../helpers/rust-error-analysis.mjs";
@@ -36,6 +37,10 @@ test("prepared callbacks and declaration or closure effects publish each positiv
     context.ast.text(context.ast.name(node)) === "fail");
   const closure = context.sourceStorage.nodes.find(node => context.ast.is.IsArrowFunction(node));
   assert.equal(declared !== undefined && closure !== undefined, true);
+  assertRustRecordRequirement(context.requiredRecords, "fallible", declared);
+  assertRustRecordRequirement(context.requiredRecords, "fallible", closure);
+  assertRustRecordRequirement(context.requiredRecords, "errorEffects", declared);
+  assertRustRecordRequirement(context.requiredRecords, "errorEffects", context.sourceFiles[0]);
   assert.equal(counts.get(declared), 1, "prepared named callback and declaration converge before publication");
   assert.equal(counts.get(closure), 1, "prepared lambda and closure analysis converge before publication");
   assert.equal([...counts.values()].every(count => count === 1), true);
@@ -111,6 +116,15 @@ test("native abstract calls publish the exact pre-selected invocation errors bef
   const forwarded = current.nodes.filter(node => current.ast.is.IsCallExpression(node) &&
     current.ast.text(Node_Expression(current.ast, node)) === "invoke");
   assert.equal(forwarded.length, 2);
+  for (const node of forwarded) {
+    for (const family of ["sourceCallEffects", "sourceErrorEffects", "errorEffects"]) {
+      assertRustRecordRequirement(current.context.requiredRecords, family, node);
+    }
+  }
+  const callback = current.nodes.find(node => current.ast.is.IsCallExpression(node) && current.ast.text(Node_Expression(current.ast, node)) === "callback");
+  const invoke = current.nodes.find(node => current.ast.is.IsFunctionDeclaration(node) && current.ast.text(current.ast.name(node)) === "invoke");
+  assertRustRecordRequirement(current.context.requiredRecords, "sourceCallEffects", callback);
+  assertRustRecordRequirement(current.context.requiredRecords, "sourceCallEffects", invoke);
   assert.equal(forwarded.every(node => current.records.sourceErrorEffects.get(node)?.edges.length === 1), true);
   assert.equal(forwarded.every(node => current.records.errorEffects.get(node)?.nativeErrors.length === 1), true);
 });
@@ -124,6 +138,7 @@ for (const surfaces of [[], ["js"]]) test(`resource selection retains checked di
     current.ast.variableDeclarationKind(node) === "using");
   const disposer = current.nodes.find(node => current.ast.is.IsMethodDeclaration(node));
   assert.equal(declaration !== undefined && disposer !== undefined, true);
+  assertRustRecordRequirement(current.context.requiredRecords, "resourceManagement", declaration);
   const selected = current.records.resourceManagement.get(declaration);
   assert.equal(selected !== undefined, true);
   assert.equal(selected.declarationKind, "using");
@@ -154,6 +169,13 @@ test("accessor effects keep selected read and write effects separate without dup
   assert.equal(effects.some(fact => fact.read === "infallible"), true);
   assert.equal(effects.some(fact => fact.write === "fallible"), true);
   const setter = current.nodes.find(node => current.ast.kindName(node) === "KindSetAccessor");
+  const use = current.nodes.find(node => current.ast.is.IsFunctionDeclaration(node) && current.ast.text(current.ast.name(node)) === "use");
+  const expectedAccesses = current.nodes.filter(node => current.ast.is.IsPropertyAccessExpression(node) &&
+    current.ast.text(current.ast.name(node)) === "value" && sourceEnclosingCallable(node, current.ast) === use);
+  assert.equal(expectedAccesses.length, 2);
+  for (const access of expectedAccesses) assertRustRecordRequirement(current.context.requiredRecords, "sourceAccessorEffects", access);
+  assertRustRecordRequirement(current.context.requiredRecords, "errorEffects", setter);
+  assertRustRecordRequirement(current.context.requiredRecords, "fallible", setter);
   assert.equal(setter !== undefined, true);
   assert.equal(current.records.errorEffects.get(setter).localErrors, true);
   assert.equal(current.records.fallible.get(setter)?.fallible, true);
@@ -168,6 +190,7 @@ test("deferred generic future completion preserves exact activated native error 
   const declarations = current.nodes.filter(node => current.ast.is.IsFunctionDeclaration(node));
   assert.equal(declarations.length, 3);
   for (const declaration of declarations) {
+    assertRustRecordRequirement(current.context.requiredRecords, "deferredProducerEffects", declaration);
     const input = current.context.callableValues.native.inputsFor(declaration)[0];
     const fact = current.records.deferredProducerEffects.get(declaration);
     assert.equal(input !== undefined && fact !== undefined, true);
@@ -189,6 +212,11 @@ test("a selected first-class generic value publishes its actual physical invocat
     export function run(): number { const selected = choose(true); return selected<number>(7); }
   `, []);
   const selected = current.nodes.filter(node => current.records.genericCallableInvocation.get(node) !== undefined);
+  const expectedCall = current.nodes.find(node => current.ast.is.IsCallExpression(node) && current.ast.text(Node_Expression(current.ast, node)) === "selected");
+  for (const family of ["genericCallableInvocation", "sourceCallEffects", "errorEffects"]) {
+    assertRustRecordRequirement(current.context.requiredRecords, family, expectedCall);
+  }
+  assert.equal(current.context.requiredRecords.some(row => row.family === "sourceErrorEffects" && row.subject === expectedCall), false);
   assert.equal(selected.length, 1);
   const node = selected[0];
   const invocation = current.records.genericCallableInvocation.get(node);

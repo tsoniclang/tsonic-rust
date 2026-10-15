@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import { selectedRustCallSignature } from "../../../program/records/selected-call.js";
 import { rustSelectedCallTypeParameters } from "../../../../policy/types/resolution/generic-arguments.js";
@@ -647,6 +648,7 @@ function acceptRuntimeCallableCarrierCall(
       : { sourceDeclaration: sourceDeclaration ?? request.sourceSelectedDeclaration }),
   });
   if (optionalResult.fact !== undefined) {
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/calls/selection.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }

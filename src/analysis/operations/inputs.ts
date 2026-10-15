@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   sourceBoundTypeRelationship,
   ElementAccessExpression_ArgumentExpression,
@@ -299,6 +300,7 @@ export function resolveArrayLiteralCarrier(
       if (carriers.some(carrier => carrier === undefined)) return undefined;
       const resultCarrier = inferred
         ? { ...selected, elements: carriers as readonly TargetTypeRef[] } : selected;
+      requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "tuple-literal", "analysis/operations/inputs.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "tuple-literal",
         operationId: "tsonic.rust.tuple.literal",
@@ -329,6 +331,7 @@ export function resolveArrayLiteralCarrier(
     for (const element of presentElements) {
       if (resolveArrayElementCarrier(walk, element, sourceFile, fixedArray.element) === undefined) return undefined;
     }
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "fixed-array-literal", "analysis/operations/inputs.ts");
     walk.context.records.targetOperations.source(expression, { kind: "fixed-array-literal", operationId: "tsonic.rust.fixed-array.literal" });
     return setCarrierFact(walk, expression, expected);
   }
@@ -371,6 +374,7 @@ export function resolveArrayLiteralCarrier(
   const resultCarrier = lane === "js"
     ? rustJsArrayTargetType(expectedElement)
     : rustVecTargetType(expectedElement);
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "array-literal", "analysis/operations/inputs.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "array-literal",
     operationId: `tsonic.rust.js.array-literal.${lane}`,
@@ -540,7 +544,10 @@ export function recordForOfFacts(
     if (initializer !== undefined) {
       if (walk.context.ast.kindName(initializer) === KindIdentifier) {
         const declaration = recordProjectSourceBinding(walk, initializer)?.sourceDeclaration;
-        if (declaration !== undefined) walk.context.records.mutatedBindings.written(declaration);
+        if (declaration !== undefined) {
+          requireRustRecord(walk.context.requiredRecords, "mutatedBinding", declaration, "iteration-assignment", "analysis/operations/inputs.ts");
+          walk.context.records.mutatedBindings.written(declaration);
+        }
       }
       for (const declaration of collectDescendantsOfKind(walk, initializer, KindVariableDeclaration)) {
         setCarrierFact(walk, declaration, selected.elementCarrier);

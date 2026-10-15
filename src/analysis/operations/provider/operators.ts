@@ -476,7 +476,7 @@ function mapSelectedProviderAssignment(
       : selectRustExactIntegerConversion(actual, rustOptionElementCarrier(actual) === undefined
         ? rustOptionElementCarrier(expected) ?? expected : expected);
     if (conversion === undefined) return selected;
-    recordRustValueCarrierReconciliation(context.records, argument, { kind: "conversion",
+    recordRustValueCarrierReconciliation(context.records, context.requiredRecords, argument, { kind: "conversion",
       fact: { sourceCarrier: conversion.source, targetCarrier: conversion.target, conversion } });
     return expected;
   });

@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile, Symbol } from "@tsonic/tsts";
 import { sourceBindingHasSingleCaptureOwner, sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -72,6 +73,7 @@ export function rustCapturedBindingStorage(
         : location;
   const storage = Object.freeze(selectedStorage);
   if (storage.storage !== "value") {
+    requireRustRecord(walk.context.requiredRecords, "bindingStorage", declaration, storage.storage, "rustCapturedBindingStorage");
     walk.context.records.bindingStoragePlans.capture(declaration, carrier, storage);
   }
   walk.capturedBindingStorage.set(declaration, { carrier, selection: storage });

@@ -16,6 +16,7 @@ import {
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 import { flowStateFactKey } from "@tsonic/tsts";
 import { closedMetadataEquals, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -340,6 +341,8 @@ export function recordRustParameterAbiSelection(
       "Conflicting Rust semantic plan 'tsonic.rust.sourceParameterAbi' for one exact source subject.", parameter);
   }
   if (walk.finalizedParameters.has(parameter)) return true;
+  requireRustRecord(walk.context.requiredRecords, "sourceParameterAbi", parameter,
+    parameterAbi.form, "recordRustParameterAbiSelection");
   if (setCarrierFact(walk, parameter, parameterAbi.valueCarrier) === undefined) return false;
   if (finalized === undefined) records.sourceParameterAbis.parameter(parameter, parameterAbi);
   const name = Node_Name(walk.context.ast, parameter);
@@ -367,6 +370,7 @@ export function recordBindingPatternFacts(
   return recordRustBindingPatternFacts(pattern, sourceCarrier, {
     ast: walk.context.ast,
     records: walk.context.records,
+    requiredRecords: walk.context.requiredRecords,
     navigation: walk.context.source.navigation,
     semanticsFor: walk.context.semanticsFor,
     sourceTypes: walk.sourceTypes,
@@ -452,6 +456,7 @@ function recordDefaultParameterInitializerFacts(
 }
 
 export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined, writeKind: "binding" | "referent" = "binding"): void {
+  walk.context.records.assertOpen();
   if (target === undefined) {
     return;
   }
@@ -485,6 +490,8 @@ export function recordBindingWrite(walk: RustFactWalk, target: Node | undefined,
   }
   const declaration = walk.context.source.navigation.sourceReferenceFor(target)?.declaration;
   if (declaration !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, writeKind === "binding" ? "mutatedBinding" : "mutatedReferent",
+      declaration, writeKind, "recordBindingWrite");
     if (writeKind === "binding") walk.context.records.mutatedBindings.written(declaration);
     else walk.context.records.mutatedReferents.written(declaration);
   }
@@ -537,6 +544,7 @@ export function tryFlowMarkerCall(
   if (flow.state !== "moved" && flow.state !== "borrowed-shared" && flow.state !== "borrowed-mut") {
     return { carrier: undefined };
   }
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "flow-marker", "analysis/declarations/types-and-bindings.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "flow-marker",
     operationId: `tsonic.rust.flow.${flow.state}`,

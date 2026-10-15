@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../../../program/records/required-records.js";
 import type { RustOperationAnalysisContext } from "../../../program/operation-context.js";
 import {
   rustCallableProtocol,
@@ -449,11 +450,11 @@ export function acceptSelectedCall(
         `Selected call '${callIdentity.sourceName}' has no exact source argument ${pending.sourceIndex}.`,
       );
     }
-    recordRustValueCarrierReconciliation(context.records, argument, pending.reconciliation);
+    recordRustValueCarrierReconciliation(context.records, context.requiredRecords, argument, pending.reconciliation);
   }
   if (receiverReconciliation !== undefined && request.source.sourceReceiver !== undefined) {
     recordRustValueCarrierReconciliation(
-      context.records,
+      context.records, context.requiredRecords,
       request.source.sourceReceiver.expression,
       receiverReconciliation,
     );
@@ -472,9 +473,11 @@ export function acceptSelectedCall(
       );
     }
     const mode = rustArgumentPassingMode(sourceArgument.mode);
+    requireRustRecord(context.requiredRecords, "argumentPassing", argument, mode, "analysis/operations/provider/calls/instantiation.ts");
     context.records.argumentPassingPlans.pass(argument, mode);
   }
   if (optionalResult.fact !== undefined) {
+    requireRustRecord(context.requiredRecords, "optionalChain", request.source.call, optionalResult.fact.operationKind, "analysis/operations/provider/calls/instantiation.ts");
     context.records.optionalChains.guard(request.source.call, optionalResult.fact.guard,
       optionalResult.fact.operationKind, optionalResult.fact);
   }

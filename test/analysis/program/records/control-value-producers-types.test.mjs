@@ -47,7 +47,7 @@ builder.nativeGuardResults.resolve(subject, () => false);
 builder.nativeUnreachableNodes.resolve(subject, () => true);
 builder.genericNumerics.comparison(subject, carrier, carrier, operation);
 builder.genericNumerics.comparison(subject, carrier, carrier, undefined);
-builder.indexedFieldKeys.bind(selected, [subject], keys, () => false);
+builder.indexedFieldKeys.bind([], selected, [subject], keys, () => false);
 builder.propertyProjections.finalize(subject, conversion, cases);
 builder.propertyProjections.finalize(subject, undefined, cases);
 builder.nativeGuardResult.get(subject);
@@ -69,10 +69,10 @@ builder.propertyProjection.get(subject);
     ["numeric foreign subject", "builder.genericNumerics.comparison({}, carrier, carrier, operation);", /missing.*properties.*Node/u],
     ["numeric malformed carrier", "builder.genericNumerics.comparison(subject, { kind: 'invalid' }, carrier, operation);", /not assignable/u],
     ["numeric malformed selection", "builder.genericNumerics.comparison(subject, carrier, carrier, { kind: 'invalid' });", /not assignable/u],
-    ["indexed missing signature", "builder.indexedFieldKeys.bind({}, [subject], keys, () => false);", /Property 'member' is missing.*RustSelectedTargetSignature/u],
-    ["indexed foreign source", "builder.indexedFieldKeys.bind(selected, [{}], keys, () => false);", /missing.*properties.*Node/u],
-    ["indexed malformed keys", "builder.indexedFieldKeys.bind(selected, [subject], new Map([['Key', 1]]), () => false);", /not assignable/u],
-    ["indexed malformed evaluation", "builder.indexedFieldKeys.bind(selected, [subject], keys, () => 'yes');", /not assignable/u],
+    ["indexed missing signature", "builder.indexedFieldKeys.bind([], {}, [subject], keys, () => false);", /Property 'member' is missing.*RustSelectedTargetSignature/u],
+    ["indexed foreign source", "builder.indexedFieldKeys.bind([], selected, [{}], keys, () => false);", /missing.*properties.*Node/u],
+    ["indexed malformed keys", "builder.indexedFieldKeys.bind([], selected, [subject], new Map([['Key', 1]]), () => false);", /not assignable/u],
+    ["indexed malformed evaluation", "builder.indexedFieldKeys.bind([], selected, [subject], keys, () => 'yes');", /not assignable/u],
     ["projection foreign source", "builder.propertyProjections.finalize({}, conversion, cases);", /missing.*properties.*Node/u],
     ["projection invalid conversion", "builder.propertyProjections.finalize(subject, { kind: 'invalid' }, cases);", /not assignable/u],
     ["projection missing read evidence", "builder.propertyProjections.finalize(subject, conversion, [{}]);", /missing.*properties.*RustPropertyProjectionCase/u],

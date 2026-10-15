@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { createTsonicClosedArrayStorageQueries } from "@tsonic/source-core/facts";
 import type { RustFactWalk } from "../program/walk.js";
@@ -15,6 +16,7 @@ import { resolveExpressionCarrier } from "../expressions/carriers.js";
 import { setCarrierFact } from "./project-calls.js";
 
 export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: Node, file: SourceFile) {
+  walk.context.records.assertOpen();
   const { context } = walk;
   const selected = readRustRawLocation(context.ast, context.source.sourceFacts, expression);
   if (selected === undefined) return undefined;
@@ -36,12 +38,14 @@ export function resolveRustRawLocationCarrier(walk: RustFactWalk, expression: No
   const expected = selected.operation.operation === "to-raw" ? location : raw;
   const inputCarrier = resolveExpressionCarrier(walk, selected.expression, file, expected);
   if (inputCarrier === undefined) return reject("The raw conversion operand has no exact native carrier.");
+  requireRustRecord(context.requiredRecords, "rawLocationPlan", expression, selected.operation.operation, "resolveRustRawLocationCarrier");
   context.records.rawLocations.conversion(expression, selected.operation.operation, selected.expression, inputCarrier, layout);
   return { handled: true as const, carrier: setCarrierFact(walk, expression,
     selected.operation.operation === "to-raw" ? raw : location) };
 }
 
 export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNativeObjectField[] {
+  walk.context.records.assertOpen();
   const { context } = walk;
   const arrayStorage = createTsonicClosedArrayStorageQueries(context.source, 131_072);
   const fields: RustNativeObjectField[] = [];
@@ -94,6 +98,9 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
           return receiver?.kind === "array" && rustTargetTypeRefEquals(receiver.element, layout.pointeeCarrier) &&
             value?.kind === "provider-operation" && value.abi.target.form === "index" && value.abi.targetArguments.length === 1;
         });
+        if (valid) for (const [selectedSubject, kind] of subjects) {
+          requireRustRecord(context.requiredRecords, "nativeArrayStorage", selectedSubject, kind, "recordRustNativeBacking");
+        }
         if (!valid || !context.records.nativeArrays.promote(subjects, component.declarations[0]!, layout, descriptor.stride)) {
           reject(origin.call, "Native array aliases require one exact element carrier, stride and layout.");
           continue;
@@ -148,6 +155,7 @@ export function recordRustNativeBacking(walk: RustFactWalk): readonly RustNative
       }
       subject = declaration;
     }
+    requireRustRecord(context.requiredRecords, "nativeBacking", subject, origin.operation, "recordRustNativeBacking");
     if (!context.records.nativeBackings.require(subject, layout)) {
       reject(origin.call, "One exact storage declaration has incompatible native layout requirements.");
     }

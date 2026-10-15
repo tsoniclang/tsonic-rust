@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Node_Expression } from "@tsonic/target-api/source";
@@ -54,10 +55,12 @@ function nodes(program, predicate) {
 for (const surfaces of [[], ["js"]]) {
   const lane = surfaces[0] ?? "native";
   test(`optional project admission retains one exact scalar upcast before presence in ${lane}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": sourceText } });
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": sourceText } });
     const constructions = nodes(program, (node, ast) => ast.is.IsNewExpression(node));
     assert.equal(constructions.length, 2);
     for (const node of constructions) {
+      assertRustRecordRequirement(requiredRecords, "projectUpcast", node);
+      assertRustRecordRequirement(requiredRecords, "optionProjection", node);
       const source = program.records.runtimeCarrier.get(node)?.carrier;
       const upcast = program.records.projectUpcast.get(node);
       const presence = program.records.optionProjection.get(node);
@@ -96,7 +99,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`optional fluent calls finalize checked derived results before the next guard in ${lane}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": fluentSourceText } });
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": fluentSourceText } });
     const fluent = nodes(program, (node, ast) => {
       if (!ast.is.IsCallExpression(node)) return false;
       const callee = Node_Expression(ast, node);

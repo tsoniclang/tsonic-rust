@@ -11,7 +11,7 @@ export function createRustCarrierProbe(walk: RustFactWalk): RustFactWalk {
   });
   const probe: RustFactWalk = {
     ...walk,
-    context: { ...walk.context, records, diagnostics: [] },
+    context: { ...walk.context, records, requiredRecords: [], diagnostics: [] },
     operationAttempts: new WeakMap(),
     postCheckOperations: new WeakMap(),
     rejectedExpressions: new WeakSet(),

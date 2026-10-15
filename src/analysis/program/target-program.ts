@@ -171,7 +171,7 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents.plan });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
-  const records = context.records.seal();
+  const records = context.records.seal(context.requiredRecords);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     typeDefinitions: context.typeDefinitions,
     projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,

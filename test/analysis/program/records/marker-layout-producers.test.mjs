@@ -15,7 +15,7 @@ for (const [family, producer, construct] of cases) {
     assert.equal(Object.isFrozen(builder[family]), true, family);
     assert.equal(Object.isFrozen(builder[producer]), true, producer);
     assert.equal(builder[producer].records === builder[family], true, "builder and producer share the same reader");
-    const sealed = builder.seal();
+    const sealed = builder.seal([]);
     assert.equal(sealed[family] === builder[family], true, "sealing preserves reader identity");
     assert.equal(sealed[family].set === undefined, true, "the final family has no general writer");
     assert.equal(sealed[producer] === undefined, true, "the final program has no producer port");
@@ -35,14 +35,14 @@ for (const [family, producer, construct] of cases) {
     construct(builder, subject);
     assert.equal(builder[family].get(subject) === fact, true, "the existing primitive preserves equal-repeat identity");
     assert.equal(builder.minimumFoundation(), "core");
-    assert.equal(builder.seal()[family].get(subject) === fact, true, "sealing retains exact data identity");
+    assert.equal(builder.seal([])[family].get(subject) === fact, true, "sealing retains exact data identity");
   });
 
   test(`${family} retains parent identity and isolates fresh child admissions`, () => {
     const parent = createRustProgramRecordBuilder();
     const subject = {};
     construct(parent, subject);
-    const sealed = parent.seal();
+    const sealed = parent.seal([]);
     const child = createRustProgramRecordBuilder(undefined, sealed);
     const fact = sealed[family].get(subject);
     assert.equal(child[family].get(subject) === fact, true, "inherited exact fact");
@@ -52,23 +52,23 @@ for (const [family, producer, construct] of cases) {
     construct(child, fresh);
     assert.equal(child[family].get(fresh) !== undefined, true, "fresh child publication");
     assert.equal(sealed[family].get(fresh) === undefined, true, "no write reaches the sealed parent");
-    assert.equal(child.seal()[family].get(subject) === fact, true);
+    assert.equal(child.seal([])[family].get(subject) === fact, true);
   });
 
   test(`${family} rejects every admission after the seal, including inherited and equal facts`, () => {
     const parent = createRustProgramRecordBuilder();
     const subject = {};
     construct(parent, subject);
-    const sealedParent = parent.seal();
+    const sealedParent = parent.seal([]);
     const child = createRustProgramRecordBuilder(undefined, sealedParent);
     const local = {};
     construct(child, local);
-    const sealedChild = child.seal();
+    const sealedChild = child.seal([]);
     for (const node of [subject, local, {}]) {
       assert.throws(() => construct(child, node), /after analysis is sealed/u);
     }
     assert.equal(sealedChild[family].get(subject) === sealedParent[family].get(subject), true);
-    assert.throws(() => child.seal(), /can be sealed only once/u);
+    assert.throws(() => child.seal([]), /can be sealed only once/u);
   });
 }
 
@@ -83,10 +83,10 @@ test("compile-time erasure constructs true without admitting arbitrary flags or 
   assert.equal(builder.compileTimeSource.get(initializer), true);
   assert.equal(builder.selfMode.get(declaration) === undefined, true);
   assert.equal(builder.memoryLayoutObservation.get(initializer) === undefined, true);
-  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.compileTimeSources.erase(declaration);
   assert.equal(child.compileTimeSource.get(declaration), true);
-  child.seal();
+  child.seal([]);
   assert.throws(() => child.compileTimeSources.erase(declaration), /after analysis is sealed/u);
   assert.throws(() => child.compileTimeSources.erase({}), /after analysis is sealed/u);
 });
@@ -102,7 +102,7 @@ for (const mode of ["ref", "mut-ref"]) {
     assert.throws(() => parent.selfModes.method(member, different),
       /Conflicting Rust semantic plan 'tsonic\.rust\.selfMode'/u);
     assert.equal(parent.selfMode.get(member) === fact, true, "a conflict never replaces the admitted fact");
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     assert.throws(() => child.selfModes.method(member, different),
       /Conflicting Rust semantic plan 'tsonic\.rust\.selfMode'/u);
     assert.equal(child.selfMode.get(member) === fact, true, "an inherited conflict leaves the parent intact");
@@ -131,7 +131,7 @@ test("layout conflicts reject locally and through inheritance without replacing 
   assert.throws(() => parent.memoryLayoutObservations.observe(expression, 4),
     /Conflicting Rust semantic plan 'tsonic\.rust\.memoryLayoutObservation'/u);
   assert.equal(parent.memoryLayoutObservation.get(expression) === fact, true);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
   assert.throws(() => child.memoryLayoutObservations.observe(expression, 8),
     /Conflicting Rust semantic plan 'tsonic\.rust\.memoryLayoutObservation'/u);
   assert.equal(child.memoryLayoutObservation.get(expression) === fact, true);

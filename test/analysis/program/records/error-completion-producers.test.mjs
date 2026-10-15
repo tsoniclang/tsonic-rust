@@ -40,7 +40,7 @@ function edge(declaration) {
 
 test("all eleven completion/error families expose only their exact frozen reader after sealing", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const records = builder.seal([]);
   assert.equal(Object.keys(records).length, 66);
   for (const [family, owner] of owners) {
     assert.equal(builder[family] === builder[owner].records, true, family);
@@ -61,7 +61,7 @@ test("every producer refuses work after sealing before selection or input iterat
   const select = () => { selected += 1; throw new Error("selector must not run"); };
   const iterable = { [Symbol.iterator]: select };
   builder.futureValues.resolve({}, () => future);
-  builder.seal();
+  builder.seal([]);
   for (const write of [
     () => builder.awaitSourceErrors.selected({}, []),
     () => builder.errorEffectPlans.selected({}, pure),
@@ -298,7 +298,7 @@ test("inherited error, source route and future evidence remains exact without mu
   parent.errorEffectPlans.selected(subject, native);
   parent.sourceErrorEdges.invocation(subject, [route]);
   parent.futureValues.resolve(subject, () => future);
-  const inherited = parent.seal();
+  const inherited = parent.seal([]);
   const child = createRustProgramRecordBuilder(undefined, inherited);
   child.errorEffectPlans.selected(subject, { ...native });
   child.sourceErrorEdges.invocation(subject, [route]);

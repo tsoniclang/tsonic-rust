@@ -33,7 +33,7 @@ export function selectedValueCarrier(
     const members = type === undefined ? [] : types.isUnion(type) ? types.unionOrIntersectionTypes(type) : [type];
     if (members.length > 0 && members.every(member => !types.isAny(member) && !types.isUnknown(member) &&
       !types.isNullish(member) && !types.isVoidLike(member) && !types.couldContainTypeVariables(member))) {
-      const projection = context.records.flowReadProjections.resolve(expression, effective, present, options.projectTypes, context.typeDefinitions);
+      const projection = context.records.flowReadProjections.resolve(context.requiredRecords, reference, effective, present, options.projectTypes, context.typeDefinitions);
       if (projection.kind === "projection") {
         return projection.fact.selectedCarrier;
       }
@@ -50,8 +50,9 @@ export function selectedValueCarrier(
   if (stored === undefined || selected === undefined || rustTargetTypeRefEquals(stored, selected)) {
     return selected ?? stored;
   }
-  const flowRead = context.records.flowReadProjections.resolve(expression, stored, selected, options.projectTypes, context.typeDefinitions);
-  if (flowRead.kind === "projection") {
+  const flowRead = reference === undefined ? undefined
+    : context.records.flowReadProjections.resolve(context.requiredRecords, reference, stored, selected, options.projectTypes, context.typeDefinitions);
+  if (flowRead?.kind === "projection") {
     return flowRead.fact.selectedCarrier;
   }
   if (stored.kind === "reference" && rustTargetTypeRefEquals(stored.referent, selected)) {

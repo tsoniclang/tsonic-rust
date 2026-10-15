@@ -18,12 +18,13 @@ const families = [
   ["typedLocationPlan", "typedLocations", owner => owner.finalize(subject, integer, location, { operation: "load", pointerExpression: pointer })],
   ["bindingStorage", "bindingStoragePlans", owner => owner.capture(subject, integer, { storage: "location" })],
   ["retainedCallLifetimes", "retainedCalls", owner => owner.finalize(subject, new Map([["region", { kind: "static" }]]))],
-  ["bindingProjection", "bindingProjections", owner => owner.resolve(subject, integer, integer, projections)],
+  ["bindingProjection", "bindingProjections", owner => owner.resolve([], subject, integer, integer, projections)],
 ];
 
 test("call/storage families expose exact frozen readers and only their semantic producers", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const builderRequiredRecords = [];
+  const records = builder.seal(builderRequiredRecords);
   assert.equal(Object.keys(records).length, 66);
   for (const [family, producer, attempt] of families) {
     assert.equal(builder[family] === builder[producer].records, true, family);
@@ -39,19 +40,21 @@ test("call/storage families expose exact frozen readers and only their semantic 
   }
   assert.throws(() => builder.bindingStoragePlans.capture(subject, integer, { storage: "value" }), sealed);
   assert.throws(() => builder.retainedCalls.finalize(subject, new Map()), sealed);
-  assert.throws(() => builder.bindingProjections.resolve(subject, integer, integer, projections, undefined, wide), sealed);
+  assert.throws(() => builder.bindingProjections.resolve(builderRequiredRecords, subject, integer, integer, projections, undefined, wide), sealed);
 });
 
 for (const mode of ["by-value", "borrow-shared", "borrow-mut"]) {
   test(`argument ${mode} construction preserves the exact subject and inherited first admission`, () => {
     const parent = createRustProgramRecordBuilder();
+    const parentRequiredRecords = [];
     parent.argumentPassingPlans.pass(subject, mode);
     const first = parent.argumentPassing.get(subject);
     assert.equal(first?.mode, mode);
     assert.equal(first.storageExpression === subject, mode !== "by-value");
     assert.equal(Object.hasOwn(first, "storageExpression"), mode !== "by-value");
     assert.equal(Object.isFrozen(first), true);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+    const childRequiredRecords = [];
     child.argumentPassingPlans.pass(subject, mode);
     assert.equal(child.argumentPassing.get(subject) === first, true);
     for (const different of ["by-value", "borrow-shared", "borrow-mut"].filter(candidate => candidate !== mode)) {
@@ -83,13 +86,15 @@ const operandCases = [
 for (const operands of operandCases) {
   test(`typed-location ${operands.operation} owns common construction and all exact operand identities`, () => {
     const parent = createRustProgramRecordBuilder();
+    const parentRequiredRecords = [];
     parent.typedLocations.finalize(subject, integer, location, operands);
     const first = parent.typedLocationPlan.get(subject);
     assert.equal(first?.call === subject, true);
     assert.equal(first.pointeeCarrier === integer && first.locationCarrier === location, true);
     for (const [key, selected] of Object.entries(operands)) assert.equal(first[key] === selected, true, key);
     assert.equal(Object.isFrozen(first), true);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+    const childRequiredRecords = [];
     child.typedLocations.finalize(subject, { ...integer }, structuredClone(location), { ...operands });
     assert.equal(child.typedLocationPlan.get(subject) === first, true);
     assert.throws(() => child.typedLocations.finalize(subject, wide, location, operands), conflict);
@@ -110,6 +115,7 @@ for (const operands of operandCases) {
 
 test("typed-location finalization owns the call and carriers rather than accepting copied common fields", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const extra = { operation: "load", pointerExpression: pointer, call: {}, pointeeCarrier: wide,
     locationCarrier: rustSourceLocationTargetType(wide) };
   builder.typedLocations.finalize(subject, integer, location, extra);
@@ -124,6 +130,7 @@ for (const storage of ["location", "cell", "borrow-cell"]) {
   for (const deferred of storage === "location" ? [false, true] : [false]) {
     test(`captured ${storage}/${deferred ? "deferred" : "ready"} retains the selected physical backing and lexical activation`, () => {
       const parent = createRustProgramRecordBuilder();
+      const parentRequiredRecords = [];
       const iterationScope = {};
       const selected = { storage, mutable: true,
         ...(storage === "location" ? { iterationScope } : {}),
@@ -138,7 +145,8 @@ for (const storage of ["location", "cell", "borrow-cell"]) {
       assert.equal(Object.hasOwn(first, "initialization"), deferred);
       assert.equal(Object.hasOwn(first, "mutable"), false, "capture mutability is not a competing storage fact");
       assert.equal(Object.isFrozen(first), true);
-      const child = createRustProgramRecordBuilder(undefined, parent.seal());
+      const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+      const childRequiredRecords = [];
       child.bindingStoragePlans.capture(subject, { ...integer }, { ...selected });
       assert.equal(child.bindingStorage.get(subject) === first, true);
       const incompatible = [{ ...selected, storage: storage === "location" ? "cell" : "location" },
@@ -162,6 +170,7 @@ for (const storage of ["location", "cell", "borrow-cell"]) {
 
 test("retained calls finalize one frozen ordered lifetime map without inventing empty environments", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const firstLifetime = { kind: "static" };
   const secondLifetime = { kind: "call-scoped-elision", callIdentity: "call:2", parameterIdentity: "parameter:2" };
   parent.retainedCalls.finalize(subject, new Map());
@@ -175,7 +184,8 @@ test("retained calls finalize one frozen ordered lifetime map without inventing 
   assert.equal(Object.isFrozen(first) && first.every(Object.isFrozen), true);
   selected.clear();
   assert.equal(first.length, 2, "finalization snapshots the ordered selected substitutions");
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+  const childRequiredRecords = [];
   child.retainedCalls.finalize(subject, new Map([["first", { ...firstLifetime }], ["second", { ...secondLifetime }]]));
   assert.equal(child.retainedCallLifetimes.get(subject) === first, true);
   child.retainedCalls.finalize(subject, new Map());
@@ -202,8 +212,9 @@ for (const [normalization, projected, fallback, checked] of [
 ]) {
   test(`binding ${normalization} centralizes normalization without losing selected projection data`, () => {
     const parent = createRustProgramRecordBuilder();
+    const parentRequiredRecords = [];
     const source = { kind: "tuple", elements: [projected] };
-    const first = parent.bindingProjections.resolve(subject, source, projected, projections, fallback, checked);
+    const first = parent.bindingProjections.resolve(parentRequiredRecords, subject, source, projected, projections, fallback, checked);
     assert.equal(first !== undefined, true);
     assert.equal(parent.bindingProjection.get(subject) === first, true);
     assert.equal(first.sourceCarrier === source && first.projectedCarrier === projected && first.projection === projections, true);
@@ -213,15 +224,16 @@ for (const [normalization, projected, fallback, checked] of [
     assert.equal(rustTargetTypeRefEquals(first.bindingCarrier,
       normalization === "default-on-none" || normalization === "default-on-absence" || normalization === "checked-array-default" ? integer : storage), true);
     assert.equal(Object.isFrozen(first), true);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
-    child.bindingProjections.resolve(subject, source, projected, { ...projections }, fallback, checked);
+    const child = createRustProgramRecordBuilder(undefined, parent.seal(parentRequiredRecords));
+    const childRequiredRecords = [];
+    child.bindingProjections.resolve(childRequiredRecords, subject, source, projected, { ...projections }, fallback, checked);
     assert.equal(child.bindingProjection.get(subject) === first, true);
-    assert.throws(() => child.bindingProjections.resolve(subject, wide, projected, projections, fallback, checked), conflict);
-    assert.throws(() => child.bindingProjections.resolve(subject, source, projected, { ...projections, index: 1 }, fallback, checked), conflict);
-    assert.equal(child.bindingProjections.resolve({}, source, integer, projections, undefined, wide) === undefined, true,
+    assert.throws(() => child.bindingProjections.resolve(childRequiredRecords, subject, wide, projected, projections, fallback, checked), conflict);
+    assert.throws(() => child.bindingProjections.resolve(childRequiredRecords, subject, source, projected, { ...projections, index: 1 }, fallback, checked), conflict);
+    assert.equal(child.bindingProjections.resolve(childRequiredRecords, {}, source, integer, projections, undefined, wide) === undefined, true,
       "a mismatching checked array premise is rejected before admission");
     const other = {};
-    child.bindingProjections.resolve(other, source, projected, projections, fallback, checked);
+    child.bindingProjections.resolve(childRequiredRecords, other, source, projected, projections, fallback, checked);
     assert.equal(parent.bindingProjection.get(other) === undefined, true);
     assert.equal(child.minimumFoundation(), "core");
   });
@@ -230,6 +242,7 @@ for (const [normalization, projected, fallback, checked] of [
 test("typed producers never publish their records on an independent lookalike source object", () => {
   for (const [family, producer, attempt] of families) {
     const builder = createRustProgramRecordBuilder();
+    const builderRequiredRecords = [];
     attempt(builder[producer]);
     assert.equal(builder[family].get(subject) !== undefined, true, family);
     assert.equal(builder[family].get({}) === undefined, true, family);

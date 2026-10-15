@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { finalizeProjectSourceGenericArguments } from "../operations/project-call-generics.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
@@ -87,6 +88,7 @@ export function resolveIdentifierCarrier(
       }
     }
     if (declarationKind === KindParameter) {
+      requireRustRecord(walk.context.requiredRecords, "sourceParameterAbi", identifier, "parameter-reference", "resolveIdentifierCarrier");
       walk.context.records.sourceParameterAbis.use(identifier, declaration);
     }
     if (declarationKind === KindVariableDeclaration &&
@@ -132,6 +134,7 @@ export function resolveIdentifierCarrier(
         const closedParameterAbis = parameterAbis as import("../../target-model/records/callables-and-resources.js").RustSourceParameterAbiFact[];
         const callableCarrier = rustSourceFunctionValueCarrier(walk, declaration, closedParameterAbis, returnCarrier);
         if (callableCarrier === undefined) return undefined;
+        requireRustRecord(walk.context.requiredRecords, "sourceCallableValue", identifier, "runtime-function", "resolveIdentifierCarrier");
         walk.context.records.sourceCallableValues.function(identifier, declaration,
           ast.getFileName(ast.getSourceFile(declaration)), targetName, callableCarrier,
           closedParameterAbis.map((abi) => abi.parameterCarrier), returnCarrier);
@@ -153,6 +156,7 @@ export function recordProjectSourceBinding(
   walk: RustFactWalk,
   identifier: Node,
 ): RustSourceBindingFact | undefined {
+  walk.context.records.assertOpen();
   const { ast } = walk.context;
   const reference = walk.context.source.navigation.sourceReferenceFor(identifier);
   const declaration = reference?.declaration;
@@ -171,12 +175,14 @@ export function recordProjectSourceBinding(
     walk.context.names.nameForDeclaration(declaration) === undefined) {
     return undefined;
   }
+  requireRustRecord(walk.context.requiredRecords, "sourceBinding", identifier, "project-reference", "recordProjectSourceBinding");
   const binding: RustSourceBindingFact = sourceDeclarationIsModuleScoped(declaration, ast)
     ? walk.context.records.sourceBindings.module(identifier, declaration, sourceName, ast.getFileName(ast.getSourceFile(declaration)))
     : walk.context.records.sourceBindings.lexical(identifier, declaration, sourceName);
   const module = walk.context.records.moduleBinding.get(declaration);
   if (binding.scope === "module" && module?.storage === "native-callable" && module.value !== undefined &&
     !walk.context.source.navigation.declarationUseSummary(declaration).bindingWritten) {
+    requireRustRecord(walk.context.requiredRecords, "directCallableReference", identifier, "module-callable", "recordProjectSourceBinding");
     walk.context.records.directCallableReferences.function(identifier, module.callableDeclaration,
       binding.fileName, module.name, module.value.carrier, module.value.parameterCarriers, module.value.resultCarrier);
   }
@@ -237,6 +243,7 @@ export function resolveCallLikeCarrier(
       request: deferred.request,
       prepared: prepared.value,
     });
+    requireRustRecord(walk.context.requiredRecords, "preparedOperationResult", expression, "deferred-call", "analysis/expressions/references.ts");
     walk.context.records.preparedOperations.prepare(expression, prepared.value.template, prepared.value.resultCarrier);
     return setCarrierFact(walk, expression, prepared.value.resultCarrier);
   }
@@ -315,6 +322,7 @@ function resolveSharedSourceMarkerCarrier(
       appendRustDiagnostic(walk, "RUST_MEMORY_LAYOUT_OBSERVATION_NOT_PROVEN", layout.reason, expression, []);
       return { handled: true };
     }
+    requireRustRecord(walk.context.requiredRecords, "memoryLayoutObservation", expression, "native-layout", "analysis/expressions/references.ts");
     walk.context.records.memoryLayoutObservations.observe(expression, layout.value);
     return { handled: true, carrier: setCarrierFact(walk, expression, rustSourcePrimitiveTargetType("native-uint")) };
   }
@@ -502,6 +510,7 @@ function resolvedNativePointerCarrier(
       break;
     }
   }
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, fact.kind, "analysis/expressions/references.ts");
   walk.context.records.targetOperations.source(expression, fact);
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
 }
@@ -691,6 +700,7 @@ function applySelectedRuntimeCallableCall(
       return undefined;
     }
     if (optionalResult.fact !== undefined) {
+      requireRustRecord(walk.context.requiredRecords, "optionalChain", expression, optionalResult.fact.operationKind, "analysis/expressions/references.ts");
       walk.context.records.optionalChains.guard(expression, optionalResult.fact.guard,
         optionalResult.fact.operationKind, optionalResult.fact);
     }
@@ -709,7 +719,7 @@ function applySelectedRuntimeCallableCall(
     return undefined;
   }
   const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
-  const computedKey = recordRustComputedCallEvaluation(walk.context.ast, walk.context.records,
+  const computedKey = recordRustComputedCallEvaluation(walk.context.ast, walk.context.records, walk.context.requiredRecords,
     walk.context.semanticsFor(expression).operations.call(expression), callee, true);
   if (computedKey !== undefined &&
     resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
@@ -744,6 +754,7 @@ function applySelectedRuntimeCallableCall(
         storageIndex: structuralMethod.storageIndex,
         callableCarrier: carrier,
       };
+  requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedRuntimeCallableCall");
   walk.context.records.selectedOperations.project(
     expression,
     selectedSignature.member.id,
@@ -751,6 +762,7 @@ function applySelectedRuntimeCallableCall(
     target.form,
     finalResultCarrier,
   );
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "source-call", "analysis/expressions/references.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "source-call",
     operationId: selectedSignature.member.id,
@@ -764,7 +776,7 @@ function applySelectedRuntimeCallableCall(
   if (target.form === "callable") {
     const resolved = calleeCarrier;
     if (optionalCall === undefined) {
-      const projection = resolved === undefined ? undefined : walk.context.records.flowReadProjections.resolve(callee,
+      const projection = resolved === undefined ? undefined : walk.context.records.flowReadProjections.resolve(walk.context.requiredRecords, callee,
         resolved, carrier, walk.context.projectTypes, walk.context.typeDefinitions,
       );
       if (projection === undefined || projection.kind === "incompatible") {

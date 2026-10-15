@@ -9,7 +9,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const temporary = join(root, ".temp/lifetime-project-producers-types");
 const prelude = `
 import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/create.js")}";
-import type { ExtensionFactSubject } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "${join(root, "dist/target-model/types/model.js")}";
 import type { RustProjectUpcastFact } from "${join(root, "dist/target-model/records/value-projections.js")}";
 import type { RustProjectProjectionSelection } from "${join(root, "dist/target-model/types/project-projections.js")}";
@@ -18,7 +18,7 @@ import type { RustContextualValueConversion } from "${join(root, "dist/target-mo
 import type { RustProjectTypePolicy } from "${join(root, "dist/target-model/types/project-types.js")}";
 import type { RustTypeDefinitions } from "${join(root, "dist/target-model/types/source-union-definitions.js")}";
 const builder = createRustProgramRecordBuilder();
-declare const subject: ExtensionFactSubject;
+declare const subject: Node;
 declare const carrier: TargetTypeRef;
 declare const projection: RustProjectProjectionSelection;
 declare const variants: RustProjectUpcastFact["sourceVariants"];
@@ -59,7 +59,7 @@ builder.conversions.converted(subject, undefined);
 builder.optionProjections.none(subject, carrier, carrier);
 builder.optionProjections.some(subject, carrier, carrier, carrier);
 builder.flowReadProjections.project(subject, carrier, carrier, flow);
-builder.flowReadProjections.resolve(subject, carrier, carrier, projectTypes, definitions);
+builder.flowReadProjections.resolve([], subject, carrier, carrier, projectTypes, definitions);
 builder.flowReadProjections.validate(subject, carrier, projectTypes, definitions);
 builder.contextualValueConversions.convert(subject, carrier, carrier, conversion);
 const converted: TargetTypeRef | undefined = builder.conversion.get(subject)?.convertedType;
@@ -67,9 +67,9 @@ const selected: TargetTypeRef | undefined = builder.flowReadProjection.get(subje
 `);
   assert.equal(positive.status, 0, positive.diagnostics);
   const invalid = [
-    ["flow query missing native definitions", "builder.flowReadProjections.resolve(subject, carrier, carrier, projectTypes);", /Expected 5 arguments/u],
+    ["flow query missing native definitions", "builder.flowReadProjections.resolve([], subject, carrier, carrier, projectTypes);", /Expected 6 arguments/u],
     ["flow validation foreign source", "builder.flowReadProjections.validate(subject, {}, projectTypes, definitions);", /not assignable/u],
-    ["sealed flow query", "builder.seal().flowReadProjection.resolve(subject, carrier, carrier, projectTypes, definitions);", /Property 'resolve' does not exist/u],
+    ["sealed flow query", "builder.seal([]).flowReadProjection.resolve(subject, carrier, carrier, projectTypes, definitions);", /Property 'resolve' does not exist/u],
     ...["callScopedLifetimeReconciliation", "projectUpcast", "projectDowncast"].map(family =>
       [family, `builder.${family}.set(subject, undefined);`, /Property 'set' does not exist/u]),
     ...["rustCallScopedLifetimeReconciliationFactKey", "rustProjectUpcastFactKey", "rustProjectDowncastFactKey"].map(key =>
@@ -94,16 +94,16 @@ const selected: TargetTypeRef | undefined = builder.flowReadProjection.get(subje
     ["downcast malformed kind", "builder.projectDowncasts.project(subject, carrier, carrier, carrier, { kind: 'guessed' });", /not assignable/u],
     ["downcast missing checked slot", "builder.projectDowncasts.project(subject, carrier, carrier, carrier, { kind: 'checked' });", /Property 'slot' is missing/u],
     ["downcast malformed structural slot", "builder.projectDowncasts.project(subject, carrier, carrier, carrier, { kind: 'structural', slot: 1 });", /not assignable/u],
-    ["sealed reader writer", "builder.seal().projectUpcast.set(subject, undefined);", /Property 'set' does not exist/u],
-    ["sealed producer handle", "builder.seal().projectDowncasts;", /does not exist/u],
+    ["sealed reader writer", "builder.seal([]).projectUpcast.set(subject, undefined);", /Property 'set' does not exist/u],
+    ["sealed producer handle", "builder.seal([]).projectDowncasts;", /does not exist/u],
   ];
   invalid.push(
     ...["conversion", "optionProjection", "flowReadProjection", "contextualValueConversion"].flatMap(family => [
       [family + " retired writer", `builder.${family}.set(subject, undefined);`, /Property 'set' does not exist/u],
-      [family + " sealed writer", `builder.seal().${family}.set(subject, undefined);`, /Property 'set' does not exist/u],
+      [family + " sealed writer", `builder.seal([]).${family}.set(subject, undefined);`, /Property 'set' does not exist/u],
     ]),
     ...["conversions", "optionProjections", "flowReadProjections", "contextualValueConversions"].map(producer =>
-      [producer + " leaked producer", `builder.seal().${producer};`, /does not exist/u]),
+      [producer + " leaked producer", `builder.seal([]).${producer};`, /does not exist/u]),
     ...["rustOptionProjectionFactKey", "rustFlowReadProjectionFactKey", "rustContextualValueConversionFactKey"].map(key =>
       [key, `import { ${key} } from "${join(root, "dist/analysis/program/records/keys/value-projections.js")}";`, /Cannot find module.*\/keys\/value-projections\.js/u]),
     ["retired conversion key", `import { rustConversionKey } from "${join(root, "dist/analysis/program/records/keys/selections.js")}";`, /Cannot find module.*\/keys\/selections\.js/u],

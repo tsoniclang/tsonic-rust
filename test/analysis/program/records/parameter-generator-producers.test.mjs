@@ -27,7 +27,7 @@ const construct = {
 
 test("three families expose immutable readers and exactly one domain producer instead of generic setters", () => {
   const builder = createRustProgramRecordBuilder();
-  const sealed = builder.seal();
+  const sealed = builder.seal([]);
   for (const family of Object.keys(construct)) {
     assert.equal(Object.isFrozen(builder[family]), true, family);
     assert.deepEqual(Object.keys(builder[family]), ["get"], family);
@@ -50,7 +50,7 @@ for (const [family, admit] of Object.entries(construct)) {
     admit(parent, subject);
     assert.equal(parent[family].get(subject) === fact, true);
     assert.equal(parent[family].get({ ...subject }) === undefined, true);
-    const sealed = parent.seal();
+    const sealed = parent.seal([]);
     const child = createRustProgramRecordBuilder(undefined, sealed);
     assert.equal(child[family].get(subject) === fact, true);
     admit(child, subject);
@@ -59,19 +59,19 @@ for (const [family, admit] of Object.entries(construct)) {
     admit(child, fresh);
     assert.equal(child[family].get(fresh) !== undefined, true);
     assert.equal(sealed[family].get(fresh) === undefined, true);
-    assert.equal(child.seal()[family].get(subject) === fact, true);
+    assert.equal(child.seal([])[family].get(subject) === fact, true);
   });
 
   test(`${family} rejects all writes after sealing, including equal and inherited admissions`, () => {
     const parent = createRustProgramRecordBuilder();
     const inherited = {};
     admit(parent, inherited);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     const local = {};
     admit(child, local);
-    child.seal();
+    child.seal([]);
     for (const subject of [inherited, local, {}]) assert.throws(() => admit(child, subject), /after analysis is sealed/u);
-    assert.throws(() => child.seal(), /can be sealed only once/u);
+    assert.throws(() => child.seal([]), /can be sealed only once/u);
   });
 }
 
@@ -124,7 +124,7 @@ test("generator equality rejects every changed protocol, captured identity, life
     const fact = parent.generator.get(subject);
     assert.throws(() => parent.generators.suspend(subject, selectedProtocol, selectedRetention), /Conflicting Rust semantic plan 'tsonic\.rust\.generator'/u, String(index));
     assert.equal(parent.generator.get(subject) === fact, true, String(index));
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     assert.throws(() => child.generators.suspend(subject, selectedProtocol, selectedRetention), /Conflicting Rust semantic plan 'tsonic\.rust\.generator'/u, String(index));
     assert.equal(child.generator.get(subject) === fact, true, String(index));
   }
@@ -160,11 +160,11 @@ test("parameter ABI identity propagation never admits an arbitrary DTO or invent
   parent.sourceParameterAbis.parameter(source, abi);
   parent.sourceParameterAbis.use(use, source);
   assert.equal(parent.sourceParameterAbi.get(use) === parent.sourceParameterAbi.get(source), true);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
   child.sourceParameterAbis.use(other, use);
   assert.equal(child.sourceParameterAbi.get(other) === parent.sourceParameterAbi.get(source), true);
   assert.equal(parent.sourceParameterAbi.get(other) === undefined, true);
-  child.seal();
+  child.seal([]);
   for (const pair of [[other, source], [{}, {}]]) assert.throws(() => child.sourceParameterAbis.use(...pair), /after analysis is sealed/u);
 });
 
@@ -178,7 +178,7 @@ test("parameter ABI retains carrier foundation requirements and all existing con
   assert.equal(conversion !== undefined, true);
   const changes = [{ form: "optional" }, { valueCarrier: wide }, { parameterCarrier: wide }, { mode: "mut-ref" },
     { inputLifetime: { ...lifetime, identity: "other" } }, { inputLifetime: undefined }, { entryConversion: conversion }];
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
   for (const change of changes) {
     assert.throws(() => child.sourceParameterAbis.parameter(subject, { ...selected, ...change }), /Conflicting Rust semantic plan 'tsonic\.rust\.sourceParameterAbi'/u);
     assert.equal(child.sourceParameterAbi.get(subject) === fact, true);
@@ -254,7 +254,7 @@ test("parameter ABI foundation uses entry conversions and the exact provided sou
   assert.equal(builder.sourceParameterAbi.get(parameter)?.entryConversion === conversion, true);
   const beforeReads = definitionReads;
   for (let index = 0; index < 32; index++) assert.equal(builder.sourceParameterAbi.get(parameter)?.entryConversion === conversion, true);
-  builder.seal();
+  builder.seal([]);
   assert.equal(definitionReads, beforeReads, "reads and sealing do not compute the conversion again");
   const missing = createRustProgramRecordBuilder();
   assert.throws(() => missing.sourceParameterAbis.parameter({}, { ...abi, valueCarrier: union, entryConversion: conversion }),
@@ -282,7 +282,7 @@ test("source binding conflicts preserve source identity, scope, name and module 
       ? builder.sourceBindings.lexical(subject, declaration, name) : builder.sourceBindings.module(subject, declaration, name, file);
     publish(parent);
     const fact = parent.sourceBinding.get(subject);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     for (const args of [[{}, "input"], [parameter, "other"], ...(scope === "module" ? [[parameter, "input", "/src/other.ts"]] : [])]) {
       assert.throws(() => publish(child, ...args), /Conflicting Rust semantic plan 'tsonic\.rust\.sourceBinding'/u);
       assert.equal(child.sourceBinding.get(subject) === fact, true);

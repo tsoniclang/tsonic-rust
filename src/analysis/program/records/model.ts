@@ -1,4 +1,5 @@
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
+import type { RustRequiredRecord } from "./required-records.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import type { RustConversionProducer } from "./conversion.js";
 import type { RustOptionProjectionProducer } from "./option-projection.js";
@@ -138,6 +139,6 @@ export type RustProgramRecordWriter = RustProgramRecords & {
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
-  seal(): RustProgramRecords;
+  seal(required: readonly RustRequiredRecord[]): RustProgramRecords;
   minimumFoundation(): RustFoundation;
 }

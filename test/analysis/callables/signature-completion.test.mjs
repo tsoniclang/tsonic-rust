@@ -71,7 +71,7 @@ test("a completed full signature is a canonical lookup and rejects closed access
   assert.equal(finalizeRustCallableSignature(lookup, input.declaration) === selected, true);
   assert.equal(resolveRustCallableSignatureCarrier(lookup, input.declaration) === selected.callableValue, true);
   assert.equal(reads, 0);
-  input.current.context.records.seal();
+  input.current.context.records.seal(input.current.context.requiredRecords);
   assert.throws(() => finalizeRustCallableSignature(lookup, input.declaration), /after analysis is sealed/u);
   assert.throws(() => resolveRustCallableSignatureCarrier(lookup, input.declaration), /after analysis is sealed/u);
   assert.equal(reads, 0);

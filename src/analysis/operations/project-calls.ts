@@ -49,6 +49,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -407,7 +408,7 @@ export function applySelectedProjectSourceCall(
         );
         return undefined;
       }
-      const receiverProjection = walk.context.records.flowReadProjections.resolve(receiver,
+      const receiverProjection = walk.context.records.flowReadProjections.resolve(walk.context.requiredRecords, receiver,
         rawReceiverCarrier,
         selectedReceiverCarrier,
         walk.context.projectTypes, walk.context.typeDefinitions,
@@ -599,6 +600,9 @@ export function applySelectedProjectSourceCall(
       ["target.capability=rust.source-call.retained-environment"]);
     return undefined;
   }
+  if (retainedLifetimes.size > 0) {
+    requireRustRecord(walk.context.requiredRecords, "retainedCallLifetimes", expression, "retained-call", "analysis/operations/project-calls.ts");
+  }
   walk.context.records.retainedCalls.finalize(expression, retainedLifetimes);
   if (retainedLifetimes.size !== 0) parameters = parameters.map(parameter => ({ ...parameter,
     valueCarrier: rustRetainedCallResult(parameter.valueCarrier, retainedLifetimes),
@@ -642,11 +646,12 @@ export function applySelectedProjectSourceCall(
     return undefined;
   }
   const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
-  const computedKey = recordRustComputedCallEvaluation(ast, walk.context.records,
+  const computedKey = recordRustComputedCallEvaluation(ast, walk.context.records, walk.context.requiredRecords,
     walk.context.semanticsFor(expression).operations.call(expression), callee,
     target.form !== "function" && target.form !== "static-method" || target.classReceiver !== undefined);
   if (computedKey !== undefined &&
     resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
+  requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedProjectSourceCall");
   walk.context.records.selectedOperations.project(
     expression,
     operationId,
@@ -654,6 +659,7 @@ export function applySelectedProjectSourceCall(
     target.form,
     finalResultCarrier,
   );
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "source-call", "analysis/operations/project-calls.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "source-call",
     operationId,
@@ -735,6 +741,7 @@ export function applySelectedSourceCallArguments(
     }
     const mode = modes[0]!;
     const passingMode = rustArgumentPassingMode(mode);
+    requireRustRecord(walk.context.requiredRecords, "argumentPassing", argument, passingMode, "analysis/operations/project-calls.ts");
     walk.context.records.argumentPassingPlans.pass(argument, passingMode);
     validateFlowMarkerAgainstMode(walk, argument, mode);
     if (mode === "mut-ref") {
@@ -763,6 +770,8 @@ function selectedSpreadArgumentMatches(
 
 export function setCarrierFact(walk: RustFactWalk, subject: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
   const records = walk.context.records;
+  records.assertOpen();
+  requireRustRecord(walk.context.requiredRecords, "runtimeCarrier", subject, carrier.kind, "setCarrierFact");
   const conflict = records.runtimeCarriers.source(subject, carrier);
   if (conflict !== undefined) {
     appendRustDiagnostic(

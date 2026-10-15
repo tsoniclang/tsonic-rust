@@ -1,24 +1,25 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { BinaryExpression_OperatorToken, Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 function fixture(text, surfaces) {
-  const { source, program } = analyzeRust({ surfaces, files: { "index.ts": text } });
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": text } });
   const nodes = [];
   const visit = node => {
     nodes.push(node);
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.filter(file => source.ast.getFileName(file) === "/src/index.ts").forEach(visit);
-  return { ast: source.ast, nodes, records: program.records };
+  return { ast: source.ast, nodes, records: program.records, requiredRecords };
 }
 
 for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
   test(`checked ${surface} async bodies publish exact native int64 output and their independent suspension protocol`, () => {
-    const { ast, nodes, records } = fixture(`
+    const { ast, nodes, records, requiredRecords } = fixture(`
       import type { int64 } from "@tsonic/core/types.js";
       export async function echo(value: int64): Promise<int64> { return value; }
       export function* values(value: int64): Generator<int64, int64, int64> {
@@ -48,7 +49,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`checked ${surface} value and delegated yields retain exact source owner, next and return carriers`, () => {
-    const { ast, nodes, records } = fixture(`
+    const { ast, nodes, records, requiredRecords } = fixture(`
       import type { int32 } from "@tsonic/core/types.js";
       function* inner(seed: int32): Generator<int32, int32, int32> { const next: int32 = yield seed; return next; }
       export function* outer(seed: int32): Generator<int32, int32, int32> { return yield* inner(seed); }
@@ -60,8 +61,10 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(yields.length, 3);
     const kinds = [];
     for (const expression of yields) {
+      assertRustRecordRequirement(requiredRecords, "yield", expression);
       const selected = records.yield.get(expression);
       const owner = sourceEnclosingCallable(expression, ast);
+      assertRustRecordRequirement(requiredRecords, "generator", owner);
       assert.equal(selected !== undefined && owner !== undefined, true);
       assert.equal(selected.generatorDeclaration === owner, true);
       const protocol = records.generator.get(owner);
@@ -83,7 +86,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`checked ${surface} computed fields distinguish static receivers, authored keys and read-write effects`, () => {
-    const { ast, nodes, records } = fixture(`
+    const { ast, nodes, records, requiredRecords } = fixture(`
       class Value { amount = 3; static fixed = 7; }
       function key(): "amount" { return "amount"; }
       export function read(value: Value): number {
@@ -93,6 +96,9 @@ for (const surfaces of [[], ["js"]]) {
       }
     `, surfaces);
     const computed = nodes.filter(node => records.computedMember.get(node) !== undefined);
+    const expectedComputed = nodes.filter(node => ast.is.IsElementAccessExpression(node));
+    assert.equal(expectedComputed.length, 4);
+    for (const expression of expectedComputed) assertRustRecordRequirement(requiredRecords, "computedMember", expression);
     assert.equal(computed.length, 4);
     assert.deepEqual(computed.map(node => records.computedMember.get(node).accessMode),
       ["read-write", "read-write", "read", "read"]);
@@ -108,7 +114,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`checked ${surface} compound indices retain only their selected surface's exact setter ABI`, () => {
-    const { ast, nodes, records } = fixture(`
+    const { ast, nodes, records, requiredRecords } = fixture(`
       export function update(values: number[], index: number): number {
         const first = values[index]++;
         values[index] += 3;
@@ -116,6 +122,12 @@ for (const surfaces of [[], ["js"]]) {
       }
     `, surfaces);
     const writes = nodes.filter(node => records.compoundWrite.get(node) !== undefined);
+    const expectedWrites = nodes.filter(node => ast.kindName(node) === "KindPostfixUnaryExpression" ||
+      (ast.kindName(node) === "KindBinaryExpression" && ast.kindName(BinaryExpression_OperatorToken(ast, node)) === "KindPlusEqualsToken"));
+    assert.equal(expectedWrites.length, 2);
+    for (const expression of expectedWrites) {
+      assert.equal(requiredRecords.some(row => row.family === "compoundWrite" && row.subject === expression), surfaces.length !== 0);
+    }
     assert.equal(writes.length, surfaces.length === 0 ? 0 : 2);
     if (surfaces.length !== 0) {
       assert.deepEqual(writes.map(node => ast.kindName(node)), ["KindPostfixUnaryExpression", "KindBinaryExpression"]);

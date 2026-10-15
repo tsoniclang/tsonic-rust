@@ -1,3 +1,4 @@
+import { requireRustRecord } from "./required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
@@ -42,9 +43,11 @@ export function createRustTypeOnlyDeclarationProducer(
         if (finalizedStatements.has(statement)) continue;
         const reason = selectRustTypeOnlyDeclaration(walk, statement, families);
         if (reason === undefined) continue;
+        requireRustRecord(walk.context.requiredRecords, "typeOnlyDeclaration", statement, reason, "typeOnlyDeclarations.finalize");
         recordReason(statement, reason);
         if (reason === "ambient") for (const declaration of rustAmbientVariableDeclarations(walk, statement)) {
           checkRustAmbientVariableUses(walk, declaration);
+          requireRustRecord(walk.context.requiredRecords, "typeOnlyDeclaration", declaration, reason, "typeOnlyDeclarations.finalize");
           recordReason(declaration, reason);
         }
         finalizedStatements.add(statement);
@@ -90,6 +93,8 @@ export function createRustTypeOnlyDeclarationProducer(
               "Merged interfaces require one exact native representation.", merged, []);
             return false;
           }
+          requireRustRecord(walk.context.requiredRecords, "typeOnlyDeclaration", merged,
+            "representation-alias", "typeOnlyDeclarations.representationAliases");
           const existing = family.reader.get(merged);
           if (existing !== undefined && existing.reason !== "representation-alias") failTargetAnalysisInvariant("tsonic-rust",
             "Conflicting Rust semantic plan 'tsonic.rust.typeOnlyDeclaration' for one exact source subject.");

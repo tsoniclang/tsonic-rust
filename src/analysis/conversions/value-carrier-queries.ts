@@ -1,4 +1,4 @@
-import type { ExtensionFactSubject } from "@tsonic/tsts";
+import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import type { RustProgramRecords } from "../../target-model/records/program.js";
@@ -13,14 +13,18 @@ import type { RustContextualValueConversionFact, RustOptionProjectionFact, RustP
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
 import { rustCallScopedLifetimeReconciliationEquals } from "../../target-model/records/equality.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export function recordRustValueCarrierReconciliation(
   records: RustProgramRecordWriter,
-  subject: ExtensionFactSubject,
+  requiredRecords: RustRequiredRecord[],
+  subject: Node,
   reconciliation: RustAppliedValueCarrierReconciliation,
 ): void {
   records.assertOpen();
   if (reconciliation.kind === "call-scoped-lifetime") {
+    requireRustRecord(requiredRecords, "callScopedLifetimeReconciliation", subject,
+      reconciliation.kind, "recordRustValueCarrierReconciliation");
     const previous = records.callScopedLifetimeReconciliation.get(subject);
     if (previous !== undefined) {
       if (!rustCallScopedLifetimeReconciliationEquals(previous, reconciliation.fact)) {
@@ -31,11 +35,11 @@ export function recordRustValueCarrierReconciliation(
     return;
   }
   if (reconciliation.kind === "project-upcast") {
-    recordRustProjectUpcast(records, subject, reconciliation.fact);
+    recordRustProjectUpcast(records, requiredRecords, subject, reconciliation.fact);
     return;
   }
   if (reconciliation.upcast !== undefined) {
-    recordRustProjectUpcast(records, subject, reconciliation.upcast);
+    recordRustProjectUpcast(records, requiredRecords, subject, reconciliation.upcast);
   }
   const { sourceCarrier, targetCarrier, conversion } = reconciliation.fact;
   if (conversion.kind === "option-some") {
@@ -44,19 +48,21 @@ export function recordRustValueCarrierReconciliation(
       failTargetAnalysisInvariant("tsonic-rust", "Rust optional admission must retain its exact source and selected payload.");
     }
     if (conversion.elementConversion !== null) {
-      recordRustContextualConversion(records, subject, { sourceCarrier, targetCarrier: conversion.element,
+      recordRustContextualConversion(records, requiredRecords, subject, { sourceCarrier, targetCarrier: conversion.element,
         conversion: conversion.elementConversion });
     }
-    recordRustOptionProjection(records, subject, { kind: "some", sourceCarrier: conversion.element,
+    recordRustOptionProjection(records, requiredRecords, subject, { kind: "some", sourceCarrier: conversion.element,
       elementCarrier: conversion.element, resultCarrier: targetCarrier });
     return;
   }
-  recordRustContextualConversion(records, subject, reconciliation.fact);
+  recordRustContextualConversion(records, requiredRecords, subject, reconciliation.fact);
 }
 
-function recordRustProjectUpcast(records: RustProgramRecordWriter, subject: ExtensionFactSubject, selected: RustProjectUpcastFact): void {
+function recordRustProjectUpcast(records: RustProgramRecordWriter, requiredRecords: RustRequiredRecord[],
+  subject: Node, selected: RustProjectUpcastFact): void {
   const normalized = { sourceCarrier: selected.sourceCarrier, targetCarrier: selected.targetCarrier,
     ...(selected.sourceVariants === undefined ? {} : { sourceVariants: selected.sourceVariants }) };
+  requireRustRecord(requiredRecords, "projectUpcast", subject, "project upcast", "recordRustProjectUpcast");
   const previous = records.projectUpcast.get(subject);
   if (previous !== undefined) {
     if (!closedMetadataEquals(previous, normalized)) {
@@ -68,9 +74,11 @@ function recordRustProjectUpcast(records: RustProgramRecordWriter, subject: Exte
 
 function recordRustContextualConversion(
   records: RustProgramRecordWriter,
-  subject: ExtensionFactSubject,
+  requiredRecords: RustRequiredRecord[],
+  subject: Node,
   selected: RustContextualValueConversionFact,
 ): void {
+  requireRustRecord(requiredRecords, "contextualValueConversion", subject, selected.conversion.kind, "recordRustContextualConversion");
   const previous = records.contextualValueConversion.get(subject);
   if (previous !== undefined) {
     if (!closedMetadataEquals(previous, selected)) {
@@ -80,8 +88,10 @@ function recordRustContextualConversion(
   } else records.contextualValueConversions.convert(subject, selected.sourceCarrier, selected.targetCarrier, selected.conversion);
 }
 
-export function recordRustOptionProjection(records: RustProgramRecordWriter, subject: ExtensionFactSubject, selected: RustOptionProjectionFact): void {
+export function recordRustOptionProjection(records: RustProgramRecordWriter, requiredRecords: RustRequiredRecord[],
+  subject: Node, selected: RustOptionProjectionFact): void {
   records.assertOpen();
+  requireRustRecord(requiredRecords, "optionProjection", subject, selected.kind, "recordRustOptionProjection");
   const previous = records.optionProjection.get(subject);
   if (previous !== undefined) {
     if (!closedMetadataEquals(previous, selected)) {
@@ -94,10 +104,13 @@ export function recordRustOptionProjection(records: RustProgramRecordWriter, sub
 
 export function recordRustConversionSelection(
   records: RustProgramRecordWriter,
-  subject: ExtensionFactSubject,
+  requiredRecords: RustRequiredRecord[],
+  subject: Node,
   convertedType: TargetTypeRef | undefined,
 ): void {
   records.assertOpen();
+  if (convertedType !== undefined) requireRustRecord(requiredRecords, "conversion", subject,
+    "checked conversion", "recordRustConversionSelection");
   const previous = records.conversion.get(subject);
   if (previous !== undefined) {
     if (!rustTargetTypeRefEquals(previous.convertedType, convertedType)) {

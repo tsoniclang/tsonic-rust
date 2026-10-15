@@ -45,7 +45,7 @@ test("typed object and adapter producers accept only their actual checked constr
   const result = compile("accepted", `${imports}
     const copied: ReadonlySet<string> = builder.receiverIndependentMethods.finalize(walk, files, name => name);
     const classValue: TargetTypeRef | undefined = builder.classValues.resolve(walk, subject, carrier);
-    builder.objectLiteralMethodAdapters.finalize({ ...input, expressions: new Set([subject]) });
+    builder.objectLiteralMethodAdapters.finalize({ ...input, requiredRecords: [], expressions: new Set([subject]) });
     builder.projectCallableAdapterPlans.finalize(walk);
     const view: RustObjectReferenceView | undefined = builder.objectReferenceViews.select(walk, subject, carrier, carrier);
     const readers: RustProgramRecords = builder;
@@ -64,8 +64,8 @@ test("superseded generic writers, leaked producers and malformed construction in
     ${producers.map(producer => `records.${producer};`).join("\n")}
     builder.receiverIndependentMethods.finalize(walk, [carrier], name => name);
     builder.classValues.resolve(walk, carrier, carrier);
-    builder.objectLiteralMethodAdapters.finalize({ ...input, expressions: new Set([carrier]) });
-    builder.objectLiteralMethodAdapters.finalize({ ...input, expressions: [subject] });
+    builder.objectLiteralMethodAdapters.finalize({ ...input, requiredRecords: [], expressions: new Set([carrier]) });
+    builder.objectLiteralMethodAdapters.finalize({ ...input, requiredRecords: [], expressions: [subject] });
     builder.projectCallableAdapterPlans.finalize(carrier);
     builder.objectReferenceViews.select(walk, subject, subject, carrier);
     const oldBoolean: boolean = builder.objectReferenceViews.select(walk, subject, carrier, carrier);

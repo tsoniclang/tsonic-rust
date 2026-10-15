@@ -12,7 +12,7 @@ const families = [["nativeArrayStorage", "nativeArrays"], ["nativeBacking", "nat
 
 test("native-location families expose one immutable reader and no generic publication port", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const records = builder.seal([]);
   for (const [family, producer] of families) {
     assert.equal(builder[family] === builder[producer].records, true, family);
     assert.equal(records[family] === builder[family], true, family);
@@ -31,7 +31,7 @@ test("native-location families expose one immutable reader and no generic public
 test("each native-location producer refuses every admission form after sealing", () => {
   const builder = createRustProgramRecordBuilder();
   const subject = {};
-  builder.seal();
+  builder.seal([]);
   for (const write of [
     () => builder.nativeArrays.promote([], subject, layout, 4),
     () => builder.nativeArrays.promote([[subject, "binding"]], subject, layout, 4),
@@ -86,7 +86,7 @@ test("native array promotion preserves inherited canonical identity and strict k
   const subject = {};
   parent.nativeArrays.promote([[subject, "element"]], declaration, layout, 8);
   const original = parent.nativeArrayStorage.get(subject);
-  const records = parent.seal();
+  const records = parent.seal([]);
   const child = createRustProgramRecordBuilder(undefined, records);
   assert.equal(child.nativeArrays.promote([[subject, "element"]], declaration, { ...layout }, 8), true);
   assert.equal(child.nativeArrayStorage.get(subject) === original, true);
@@ -112,7 +112,7 @@ test("native array demand coalesces identical component contributions without re
   assert.equal(referenceRecord?.kind, "reference");
   assert.equal(builder.nativeArrays.promote([[reference, "reference"], [element, "element"]], declaration, layout, 8), true);
   assert.equal(builder.nativeArrayStorage.get(reference) === referenceRecord, true);
-  builder.seal();
+  builder.seal([]);
   assert.throws(() => builder.nativeArrays.promote([[element, "element"]], declaration, layout, 8), /after analysis is sealed/u);
 });
 
@@ -143,7 +143,7 @@ test("native backing admits the exact layout once and reports incompatible sourc
   assert.equal(parent.nativeBacking.get(subject) === layout, true);
   assert.equal(parent.nativeBackings.require(subject, { ...layout, pointeeCarrier: { ...integer } }), true);
   assert.equal(parent.nativeBackings.require(subject, changedLayout), false);
-  const inherited = parent.seal();
+  const inherited = parent.seal([]);
   const child = createRustProgramRecordBuilder(undefined, inherited);
   assert.equal(child.nativeBacking.get(subject) === layout, true);
   assert.equal(child.nativeBackings.require(subject, { ...layout }), true);
@@ -173,7 +173,7 @@ test("raw-location conversion construction keeps exact expression identity, oper
     ["to-raw", expression, otherInteger, layout], ["to-raw", expression, integer, changedLayout],
   ]) assert.throws(() => builder.rawLocations.conversion(subject, operation, operand, carrier, selectedLayout),
     /Conflicting Rust semantic plan/u);
-  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.rawLocations.conversion(subject, "to-raw", expression, integer, layout);
   assert.equal(child.rawLocationPlan.get(subject) === original, true);
 });
@@ -211,7 +211,7 @@ test("field and record memory-binding construction preserves exact ordered locat
   const empty = {};
   builder.memoryBindings.record(empty, integer, []);
   assert.equal(builder.memoryBindingPlan.get(empty).fields.length, 0);
-  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.memoryBindings.field(field, integer, expression);
   child.memoryBindings.record(record, integer, fields);
   assert.equal(child.memoryBindingPlan.get(field) === original, true);
@@ -254,7 +254,7 @@ test("raw address equality keeps every exact native operation, width, result and
     ["address", 64, integer, [{ ...operand, carrier: otherInteger }]],
   ]) assert.throws(() => builder.rawAddresses.address(subject, method, width, result, arguments_), /Conflicting Rust semantic plan/u);
   assert.throws(() => builder.rawAddresses.identity(subject, "hash", integer, [operand]), /Conflicting Rust semantic plan/u);
-  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.rawAddresses.address(subject, "address", 64, integer, [operand]);
   assert.equal(child.rawAddressPlan.get(subject) === original, true);
   const fresh = {};

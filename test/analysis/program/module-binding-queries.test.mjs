@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustModuleBindingPolicy } from "../../../dist/analysis/program/module-bindings.js";
@@ -22,7 +23,7 @@ test("module value classification computes one native decision and does not repl
     classifications++;
     return context.ast.kindName(node);
   } } }, new Set());
-  const walk = { moduleBindings: policy };
+  const walk = { moduleBindings: policy, context: { requiredRecords: [] } };
   builder.moduleBindings.value(walk, declaration, "const", integer);
   const original = builder.moduleBinding.get(declaration);
   const selectedWork = classifications;
@@ -39,7 +40,7 @@ test("module value classification computes one native decision and does not repl
   assert.equal(builder.moduleBinding.get(declaration) === original, true,
     "a conflicting request does not poison the completed native decision");
   assert.equal(classifications, beforeRetry);
-  builder.seal();
+  builder.seal(walk.context.requiredRecords);
   const beforeClosed = classifications;
   assert.throws(() => builder.moduleBindings.value(walk, declaration, "const", integer), /after analysis is sealed/u);
   assert.equal(classifications, beforeClosed, "closed analysis refuses even a completed classification request");
@@ -52,11 +53,12 @@ test("address-taken module declarations keep their complete cell classification 
   const builder = createRustProgramRecordBuilder();
   const policy = createRustModuleBindingPolicy({ ...context, records: builder }, new Set([declaration]));
   const carrier = { kind: "source-primitive", name: "float64" };
-  builder.moduleBindings.value({ moduleBindings: policy }, declaration, "const", carrier);
+  const walk = { moduleBindings: policy, context: { requiredRecords: [] } };
+  builder.moduleBindings.value(walk, declaration, "const", carrier);
   const first = builder.moduleBinding.get(declaration);
   assert.equal(first.storage, "module-cell");
   assert.equal(first.initialization, "value");
-  builder.moduleBindings.value({ moduleBindings: policy }, declaration, "const", { ...carrier });
+  builder.moduleBindings.value(walk, declaration, "const", { ...carrier });
   assert.equal(builder.moduleBinding.get(declaration) === first, true);
 });
 
@@ -68,16 +70,18 @@ test("module query completion belongs to its actual record builder, not the shar
     selections++;
     return { declarationKind: kind, storage: "native-const", valueCarrier: carrier };
   } });
-  parent.moduleBindings.value({ moduleBindings: policy }, declaration, "const", integer);
-  parent.moduleBindings.value({ moduleBindings: policy }, declaration, "const", integer);
+  const parentWalk = { moduleBindings: policy, context: { requiredRecords: [] } };
+  parent.moduleBindings.value(parentWalk, declaration, "const", integer);
+  parent.moduleBindings.value(parentWalk, declaration, "const", integer);
   assert.equal(selections, 1);
   const child = createRustProgramRecordBuilder(undefined, parent);
-  child.moduleBindings.value({ moduleBindings: policy }, declaration, "const", integer);
-  child.moduleBindings.value({ moduleBindings: policy }, declaration, "const", integer);
+  const childWalk = { moduleBindings: policy, context: { requiredRecords: [] } };
+  child.moduleBindings.value(childWalk, declaration, "const", integer);
+  child.moduleBindings.value(childWalk, declaration, "const", integer);
   assert.equal(selections, 2, "a different transaction validates its own request once");
   assert.equal(child.moduleBinding.get(declaration) === parent.moduleBinding.get(declaration), true);
   const local = {};
-  child.moduleBindings.value({ moduleBindings: policy }, local, "const", integer);
+  child.moduleBindings.value(childWalk, local, "const", integer);
   assert.equal(child.moduleBinding.get(local) !== undefined, true);
   assert.equal(parent.moduleBinding.get(local) === undefined, true, "a probe never publishes to its parent");
 });
@@ -109,6 +113,7 @@ test("merged interface representation groups are selected once and every exact d
   assert.equal(walk !== undefined, true);
   const declarations = context.sourceStorage.nodes.filter(node => context.ast.is.IsInterfaceDeclaration(node));
   assert.equal(declarations.length, 2);
+  for (const declaration of declarations) assertRustRecordRequirement(context.requiredRecords, "typeOnlyDeclaration", declaration);
   let selected = 0;
   const observed = { ...walk, context: { ...walk.context, semanticsFor(node) {
     if (declarations.includes(node)) selected++;

@@ -6,6 +6,8 @@ import { rustSelectedTargetOperationEquals } from "../../target-model/types/equa
 import type { RustSelectedTargetOperation } from "../../target-model/types/model.js";
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
 import { rustTargetOperationFactEquals } from "./contracts/equality.js";
+import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 export function admitRustOperationSelection<T extends {
   readonly operation?: RustSelectedTargetOperation;
@@ -14,6 +16,12 @@ export function admitRustOperationSelection<T extends {
   context.records.assertOpen();
   if (selection.kind === "reject") return selection;
   const value = selection.value;
+  if (value.targetFact !== undefined) requireRustRecord(context.requiredRecords, "targetOperation", subject,
+    value.targetFact.kind, "admitRustOperationSelection");
+  if (value.operation !== undefined && rustPostCheckOperationKind(value.operation.operationId) === undefined) {
+    requireRustRecord(context.requiredRecords, "selectedOperation", subject,
+      value.operation.operationKind, "admitRustOperationSelection");
+  }
   const existingTarget = value.targetFact === undefined ? undefined : context.records.targetOperation.get(subject);
   const existingOperation = value.operation === undefined ? undefined : context.records.selectedOperation.get(subject);
   if (existingTarget !== undefined && value.targetFact !== undefined && !rustTargetOperationFactEquals(existingTarget, value.targetFact)) {

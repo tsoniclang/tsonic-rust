@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -49,9 +50,12 @@ for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
 
   test(`type-alias declarations publish their exact selected form on the alias declaration in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": aliasSource } });
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": aliasSource } });
     const { ast } = program.source;
     const alias = name => named(program, node => ast.kindName(node) === "KindTypeAliasDeclaration", name);
+    for (const name of ["Mode", "Count", "Borrowed", "Item", "Chain", "Local"]) {
+      assertRustRecordRequirement(requiredRecords, "typeAliasDeclaration", alias(name));
+    }
     const mode = program.records.typeAliasDeclaration.get(alias("Mode"));
     assert.equal(mode?.kind, "string-literal");
     assert.deepEqual(mode.variants.map(variant => variant.literal).sort(), ["off", "on"]);
@@ -72,14 +76,20 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`a conditional storage family alias is published as the family owner in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": familySource } });
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": familySource } });
     const { ast } = program.source;
     const storage = named(program, node => ast.kindName(node) === "KindTypeAliasDeclaration", "Storage");
+    assertRustRecordRequirement(requiredRecords, "typeAliasDeclaration", storage);
+    assert.equal(requiredRecords.some(row => row.family === "typeOnlyDeclaration" && row.subject === storage), false);
+    const predicate = named(program, node => ast.is.IsInterfaceDeclaration(node), "Stored");
+    const marker = named(program, node => ast.is.IsVariableDeclaration(node), "storageKey");
+    assertRustRecordRequirement(requiredRecords, "typeOnlyDeclaration", predicate);
+    assertRustRecordRequirement(requiredRecords, "typeOnlyDeclaration", marker);
     assert.equal(program.records.typeAliasDeclaration.get(storage)?.kind, "family");
   });
 
   test(`binding writes mark the binding and writes through a binding mark its referent in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       class Box { value = 0; }
       export function run(values: number[], box: Box): number {
         let total = 0;
@@ -94,10 +104,15 @@ for (const surfaces of [[], ["js"]]) {
     const variable = name => named(program, node => ast.is.IsVariableDeclaration(node), name);
     const parameter = name => named(program, node => ast.kindName(node) === "KindParameter", name);
     for (const name of ["total", "reset"]) {
+      assertRustRecordRequirement(requiredRecords, "mutatedBinding", variable(name));
       assert.deepEqual(program.records.mutatedBinding.get(variable(name)), { mutated: true }, name);
       assert.equal(program.records.mutatedReferent.get(variable(name)) === undefined, true, name);
     }
+    assertRustRecordRequirement(requiredRecords, "mutatedReferent", parameter("box"));
     assert.deepEqual(program.records.mutatedReferent.get(parameter("box")), { mutated: true });
+    for (const subject of [parameter("box"), parameter("values"), variable("value")]) {
+      assert.equal(requiredRecords.some(row => row.family === "mutatedBinding" && row.subject === subject), false);
+    }
     assert.equal(program.records.mutatedBinding.get(parameter("box")) === undefined, true, "the parameter binding is not reassigned");
     assert.equal(program.records.mutatedBinding.get(variable("value")) === undefined, true, "a const loop binding is not written");
     assert.equal(program.records.mutatedBinding.get(parameter("values")) === undefined, true);
@@ -107,7 +122,7 @@ for (const surfaces of [[], ["js"]]) {
 }
 
 test("in-place string append and iteration assignment mark the written binding", () => {
-  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+  const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: ["js"], files: { "index.ts": `
     import type { nativeUint } from "@tsonic/core/types.js";
     export function combine(values: string[]): string {
       let output = "";
@@ -119,6 +134,7 @@ test("in-place string append and iteration assignment mark the written binding",
   const { ast } = program.source;
   for (const name of ["output", "index", "item"]) {
     const declaration = named(program, node => ast.is.IsVariableDeclaration(node), name);
+    assertRustRecordRequirement(requiredRecords, "mutatedBinding", declaration);
     assert.deepEqual(program.records.mutatedBinding.get(declaration), { mutated: true }, name);
   }
 });

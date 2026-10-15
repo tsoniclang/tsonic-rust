@@ -6,10 +6,11 @@ import { rustBindingNormalizationContract } from "../../../target-model/types/bi
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { createRustRecordFamily } from "./family.js";
+import { requireRustRecord, type RustRequiredRecord } from "./required-records.js";
 
 export interface RustBindingProjectionProducer {
   readonly records: RustRecordFamily<RustBindingProjectionFact>;
-  resolve(binding: Node, sourceCarrier: TargetTypeRef, projectedCarrier: TargetTypeRef,
+  resolve(requiredRecords: RustRequiredRecord[], binding: Node, sourceCarrier: TargetTypeRef, projectedCarrier: TargetTypeRef,
     projection: RustBindingProjection, defaultCarrier?: TargetTypeRef, checkedArrayElement?: TargetTypeRef): RustBindingProjectionFact | undefined;
 }
 
@@ -27,11 +28,12 @@ export function createRustBindingProjectionProducer(
   }, assertOpen, inherited);
   return Object.freeze({
     records: family.reader,
-    resolve(binding: Node, sourceCarrier: TargetTypeRef, projectedCarrier: TargetTypeRef,
+    resolve(requiredRecords: RustRequiredRecord[], binding: Node, sourceCarrier: TargetTypeRef, projectedCarrier: TargetTypeRef,
       projection: RustBindingProjection, defaultCarrier?: TargetTypeRef, checkedArrayElement?: TargetTypeRef): RustBindingProjectionFact | undefined {
       assertOpen();
       const normalized = rustBindingNormalizationContract(projectedCarrier, defaultCarrier, checkedArrayElement);
       if (normalized === undefined) return undefined;
+      requireRustRecord(requiredRecords, "bindingProjection", binding, projection.kind, "bindingProjections.resolve");
       const fact = Object.freeze({ sourceCarrier, projectedCarrier,
         storageCarrier: normalized.storageCarrier, bindingCarrier: normalized.bindingCarrier,
         projection, normalization: normalized.normalization,

@@ -8,8 +8,10 @@ import type { RustProjectTypePolicy } from "../../target-model/types/project-typ
 import { rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustProjectDowncastEquals } from "../../target-model/records/equality.js";
 import { selectRustProjectProjection } from "../../policy/types/project/project-projections.js";
+import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
 
 export type RustProjectDowncastQuery = (
+  requiredRecords: RustRequiredRecord[],
   subject: Node,
   sourceCarrier: TargetTypeRef,
   targetCarrier: TargetTypeRef,
@@ -23,7 +25,7 @@ export function createRustProjectDowncastQuery(input: {
 }): RustProjectDowncastQuery {
   const completed = new WeakMap<Node, { readonly canonical: RustProjectDowncastFact;
     readonly policies: Set<RustProjectTypePolicy> }>();
-  return (subject, sourceCarrier, targetCarrier, projectTypes) => {
+  return (requiredRecords, subject, sourceCarrier, targetCarrier, projectTypes) => {
     input.assertOpen();
     const previous = input.records.get(subject);
     const completion = completed.get(subject);
@@ -41,6 +43,7 @@ export function createRustProjectDowncastQuery(input: {
     if (sourceDefinition === undefined || relationship.kind !== "related" ||
       !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier) || projection === undefined) return undefined;
     const selected = Object.freeze({ sourceCarrier, dispatchCarrier, targetCarrier, projection });
+    requireRustRecord(requiredRecords, "projectDowncast", subject, projection.kind, "projectDowncasts.resolve");
     if (previous !== undefined && !rustProjectDowncastEquals(previous, selected)) {
       failTargetAnalysisInvariant("tsonic-rust",
         "Conflicting Rust semantic plan 'tsonic.rust.projectDowncast' for one exact source subject.",

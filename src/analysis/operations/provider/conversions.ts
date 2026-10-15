@@ -75,7 +75,7 @@ export function selectRustCheckedConversion(
       : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
     if (reconciliation?.kind === "call-scoped-lifetime" ||
       reconciliation?.kind === "project-upcast") {
-      recordRustValueCarrierReconciliation(context.records, request.expression, reconciliation);
+      recordRustValueCarrierReconciliation(context.records, context.requiredRecords, request.expression, reconciliation);
       return acceptRustPolicy({ convertedType: targetCarrier }, [
         { message: reconciliation.kind === "call-scoped-lifetime"
           ? "rust selected call argument uses an exact call-scoped lifetime reconciliation"
@@ -126,9 +126,9 @@ export function selectRustCheckedConversion(
     : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
   const projectUpcast = reconciliation.kind === "project-upcast";
   if (projectUpcast) {
-    recordRustValueCarrierReconciliation(context.records, request.expression, reconciliation);
+    recordRustValueCarrierReconciliation(context.records, context.requiredRecords, request.expression, reconciliation);
   }
-  const projectDowncast = !identity && !projectUpcast && context.records.projectDowncasts.resolve(
+  const projectDowncast = !identity && !projectUpcast && context.records.projectDowncasts.resolve(context.requiredRecords,
     request.expression,
     sourceCarrier,
     targetCarrier,

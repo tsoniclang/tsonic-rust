@@ -21,7 +21,7 @@ const families = [
 
 test("guard/capture families expose frozen readers, not generic writers or sealed producers", () => {
   const builder = createRustProgramRecordBuilder();
-  const records = builder.seal();
+  const records = builder.seal([]);
   assert.equal(Object.keys(records).length, 66);
   for (const [family, producer, attempt] of families) {
     assert.equal(builder[family] === builder[producer].records && records[family] === builder[family], true, family);
@@ -45,7 +45,7 @@ for (const operationKind of ["method", "constructor", "property", "indexer"]) {
     assert.equal(first.resultCarrier === integer && Object.isFrozen(first), true);
     selected.operationId = "later:mutation";
     assert.equal(first.operationId, operation.operationId);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     child.preparedOperations.prepare(subject, { ...operation, operationKind }, { ...integer });
     assert.equal(child.preparedOperationResult.get(subject) === first, true);
     for (const [template, carrier] of [
@@ -78,7 +78,7 @@ for (const operationKind of ["property", "indexer", "method"]) for (const loweri
     assert.equal(Object.isFrozen(first), true);
     selected.guardDepth = 3;
     assert.equal(first.guardDepth, 2);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     const same = { ...contract, lowering, guardDepth: 2, sourceGuardCarrier: structuredClone(contract.sourceGuardCarrier) };
     child.optionalChains.guard(subject, guard, operationKind, same);
     assert.equal(child.optionalChain.get(subject) === first, true);
@@ -115,7 +115,7 @@ for (const storage of ["value", "location", "cell", "borrow-cell"]) for (const m
     firstCapture.reference = {};
     captures.reverse();
     assert.equal(first.captures[0].reference === firstCapture.reference, false);
-    const child = createRustProgramRecordBuilder(undefined, parent.seal());
+    const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
     const same = first.captures.map(capture => ({ ...capture, carrier: { ...capture.carrier } }));
     child.closureCaptures.capture(subject, same);
     assert.equal(child.closureCapture.get(subject) === first, true);
@@ -149,7 +149,7 @@ test("selected class-environment capture metadata survives canonical publication
   assert.equal(rustClosureCaptureEquals(record, record), true, "class capture equality is reflexive");
   const equivalent = { captures: [{ ...selected }], receivers: [], receiverFields: [] };
   assert.equal(rustClosureCaptureEquals(record, equivalent), true, "independent complete capture metadata is equivalent");
-  const child = createRustProgramRecordBuilder(undefined, builder.seal());
+  const child = createRustProgramRecordBuilder(undefined, builder.seal([]));
   child.closureCaptures.capture(subject, equivalent.captures);
   assert.equal(child.closureCapture.get(subject) === record, true, "an inherited exact class capture preserves its canonical record");
   const { fieldName: omitted, ...logical } = selected;
@@ -187,7 +187,7 @@ test("receiver, field and recursive captures retain all source roots, ordering a
   assert.equal(Object.isFrozen(first.receivers[0]) && Object.isFrozen(first.receivers[0].references) &&
     Object.isFrozen(first.receiverFields[0]) && Object.isFrozen(first.receiverFields[0].references) &&
     Object.isFrozen(first.receiverFields[0].storage) && Object.isFrozen(first.recursiveField) && Object.isFrozen(first.recursiveField.references), true);
-  const child = createRustProgramRecordBuilder(undefined, parent.seal());
+  const child = createRustProgramRecordBuilder(undefined, parent.seal([]));
   const admit = (receiver = first.receivers, field = first.receiverFields,
     recursion = { recursiveDeclaration, recursiveField: first.recursiveField }, owner = "shared-state") =>
     child.closureCaptures.capture(subject, [], receiver, field, recursion, owner);

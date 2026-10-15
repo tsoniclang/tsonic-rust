@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
@@ -98,7 +99,7 @@ for (const surfaces of [[], ["js"]]) {
   const surface = surfaces[0] ?? "native";
 
   test(`value-struct declarations and their exact initializers are erased, not ordinary same-named calls, in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       import { struct as valueRecord, field as valueField } from "@tsonic/core/lang.js";
       import type { uint32 } from "@tsonic/core/types.js";
       const Point = valueRecord({ count: valueField<uint32>() });
@@ -112,17 +113,20 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(initializer !== undefined, true);
     assert.equal(program.records.compileTimeSource.get(declaration), true);
     assert.equal(program.records.compileTimeSource.get(initializer), true);
+    assertRustRecordRequirement(requiredRecords, "compileTimeSource", declaration);
+    assertRustRecordRequirement(requiredRecords, "compileTimeSource", initializer);
     const selected = checkedNodes(program).filter(node => program.records.compileTimeSource.get(node) === true);
     assert.equal(selected.length, 2, "only the exact struct declaration and its initializer are erased");
     const call = checkedNodes(program).find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "struct");
     assert.equal(call !== undefined, true, "ordinary same-named function call is present");
     assert.equal(program.records.compileTimeSource.get(call) === undefined, true, "spelling never selects erasure");
+    assert.equal(requiredRecords.some(row => row.family === "compileTimeSource" && row.subject === call), false);
     assert.equal(program.records.compileTimeSource.get(named(program, "value")) === undefined, true);
     assert.equal(program.records.compileTimeSource.set === undefined, true);
   });
 
   test(`method receiver facts preserve selected read, write, accessor and interface modes in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       interface Reader { read(): number; }
       class Counter {
         value = 1;
@@ -170,7 +174,7 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`memory metadata is erased and every exact scalar observation, including zero, is retained in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
       import { abi } from "test:abi";
       import { memorylayout, memoryfield, sizeof, alignof, strideof, fieldoffsetof } from "@tsonic/core/lang.js";
       import type { uint32, uint8, nativeUint } from "@tsonic/core/types.js";
@@ -189,7 +193,15 @@ for (const surfaces of [[], ["js"]]) {
     ` } });
     const { ast } = program.source;
     for (const name of ["byte", "word", "tag", "header", "alias", "empty"]) {
+      assertRustRecordRequirement(requiredRecords, "compileTimeSource", named(program, name));
       assert.equal(program.records.compileTimeSource.get(named(program, name)), true, name);
+    }
+    const expectedCalls = checkedNodes(program).filter(node => ast.is.IsCallExpression(node) &&
+      ["sizeof", "alignof", "strideof", "fieldoffsetof"].includes(ast.text(ast.as.AsCallExpression(node).Expression)));
+    assert.equal(expectedCalls.length, 8);
+    for (const call of expectedCalls) {
+      assertRustRecordRequirement(requiredRecords, "memoryLayoutObservation", call);
+      assertRustRecordRequirement(requiredRecords, "compileTimeSource", ast.arguments(call)[0]);
     }
     const observations = checkedNodes(program).filter(node => program.records.memoryLayoutObservation.get(node) !== undefined);
     assert.equal(observations.length, 8);
@@ -208,29 +220,31 @@ for (const surfaces of [[], ["js"]]) {
   });
 
   test(`ordinary sizeof spelling publishes no layout observation in ${surface}`, () => {
-    const { program } = analyzeRust({ surfaces, files: { "index.ts": `
+    const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces, files: { "index.ts": `
       function sizeof(value: number): number { return value; }
       export function run(): number { return sizeof(4); }
     ` } });
     assert.equal(checkedNodes(program).some(node => program.records.memoryLayoutObservation.get(node) !== undefined), false);
     assert.equal(checkedNodes(program).some(node => program.records.compileTimeSource.get(node) !== undefined), false);
+    assert.equal(requiredRecords.some(row => row.family === "memoryLayoutObservation"), false);
   });
 }
 
 test("checked JS source-profile callable aliases erase exactly their immutable alias declarations", () => {
-  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+  const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: ["js"], files: { "index.ts": `
     const absolute = Math.abs;
     const parse = parseInt;
     export function run(value: string): number { return absolute(parse(value, 10)); }
   ` } });
   const declarations = [named(program, "absolute"), named(program, "parse")];
+  for (const declaration of declarations) assertRustRecordRequirement(requiredRecords, "compileTimeSource", declaration);
   const selected = checkedNodes(program).filter(node => program.records.compileTimeSource.get(node) === true);
   assert.equal(selected.length, 2);
   for (const declaration of declarations) assert.equal(selected.includes(declaration), true, "exact checked alias");
 });
 
 test("inline module alias transport erases only selected checked declarations when storage is elided", () => {
-  const { program } = analyzeRust({ files: { "index.ts": `
+  const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, files: { "index.ts": `
     function step(value: number): number { return value; }
     export function run(): number { const callback = step; return callback(2); }
   ` } });
@@ -241,11 +255,16 @@ test("inline module alias transport erases only selected checked declarations wh
   const selection = { stored: false, declarationValue: false, uses: [], aliases: [{
     declarations: [declaration], references: [], producer: {},
   }] };
-  recordRustInlineModuleCallableUses({ context: { records } }, selection);
+  const elidedRequirements = [];
+  recordRustInlineModuleCallableUses({ context: { requiredRecords: elidedRequirements, records } }, selection);
+  assertRustRecordRequirement(elidedRequirements, "compileTimeSource", declaration);
+  assert.equal(elidedRequirements.some(row => row.subject === reference), false);
   assert.equal(records.compileTimeSource.get(declaration), true, "the exact selected alias is erased");
   assert.equal(records.compileTimeSource.get(reference) === undefined, true, "erasure does not spread to its initializer");
   const retained = createRustProgramRecordBuilder();
-  recordRustInlineModuleCallableUses({ context: { records: retained } }, { ...selection, stored: true });
+  const storedRequirements = [];
+  recordRustInlineModuleCallableUses({ context: { requiredRecords: storedRequirements, records: retained } }, { ...selection, stored: true });
+  assert.equal(storedRequirements.length, 0);
   assert.equal(retained.compileTimeSource.get(declaration) === undefined, true, "stored callable identity is preserved");
 });
 

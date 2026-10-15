@@ -16,7 +16,7 @@ for (const [name, invoke] of [
   ["method receivers", walk => recordMethodSelfModeFacts(walk, [])],
 ]) test(`${name} rejects sealed analysis before source, metadata or empty-input inspection`, () => {
   const records = createRustProgramRecordBuilder();
-  records.seal();
+  records.seal([]);
   let reads = 0;
   const context = { records };
   for (const property of ["ast", "typeDefinitions", "sourceStorage", "callableValues"]) {

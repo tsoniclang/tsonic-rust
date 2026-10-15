@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { appendRustDiagnostic } from "../program/walk.js";
@@ -15,6 +16,7 @@ export function resolveRustRawPointerIdentityCarrier(
   walk: RustFactWalk, expression: Node, sourceFile: SourceFile,
   source: NonNullable<ReturnType<typeof readRustSourceRawPointerIdentity>>,
 ): { readonly carrier?: TargetTypeRef } {
+  walk.context.records.assertOpen();
   const inputs = source.operation === "equal-raw-pointer"
     ? [source.leftExpression, source.rightExpression] : [source.pointerExpression];
   const arguments_ = walk.context.ast.arguments(expression);
@@ -31,6 +33,7 @@ export function resolveRustRawPointerIdentityCarrier(
   });
   if (argumentsPlan.some(argument => argument === undefined)) return {};
   const resultCarrier = rustSourcePrimitiveTargetType(source.operation === "equal-raw-pointer" ? "bool" : "float64");
+  requireRustRecord(walk.context.requiredRecords, "rawAddressPlan", expression, source.operation, "resolveRustRawPointerIdentityCarrier");
   walk.context.records.rawAddresses.identity(expression, source.operation === "equal-raw-pointer" ? "same" : "hash",
     resultCarrier, argumentsPlan.filter(argument => argument !== undefined));
   return { carrier: setCarrierFact(walk, expression, resultCarrier) };
@@ -39,6 +42,7 @@ export function resolveRustRawPointerIdentityCarrier(
 export function resolveRustRawAddressCarrier(
   walk: RustFactWalk, expression: Node, sourceFile: SourceFile, source: RustSourceRawAddress,
 ): { readonly carrier?: TargetTypeRef } {
+  walk.context.records.assertOpen();
   const reject = (message: string): { readonly carrier?: TargetTypeRef } => {
     appendRustDiagnostic(walk, "RUST_RAW_ADDRESS_CONTRACT_NOT_PROVEN", message, expression,
       ["target.capability=rust.raw-address.exact-integer"]);
@@ -72,6 +76,7 @@ export function resolveRustRawAddressCarrier(
   if (argumentsPlan.some(argument => argument === undefined)) return reject("A raw address operand has no closed Rust value carrier.");
   const resultCarrier = source.operation === "raw-to-address-integer"
     ? rustSourcePrimitiveTargetType(source.addressWidth === 32 ? "uint32" : "uint64") : raw;
+  requireRustRecord(walk.context.requiredRecords, "rawAddressPlan", expression, source.operation, "resolveRustRawAddressCarrier");
   walk.context.records.rawAddresses.address(expression, source.operation === "raw-to-address-integer" ? "address"
       : source.operation === "address-integer-to-raw" ? "from_address"
         : source.offsetSignedness === "unsigned" ? "offset_unsigned" : "offset",

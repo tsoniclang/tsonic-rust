@@ -1,3 +1,4 @@
+import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -17,10 +18,23 @@ function nodesOf(source, program) {
 }
 
 test("source native arrays publish exact checked aliases, literals and element owner declarations", () => {
-  const { source, program } = analyzeRust({ capabilities: [memoryAbiCapability("rust")],
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, capabilities: [memoryAbiCapability("rust")],
     files: { "index.ts": nativeArrayProofSource + "\nmain();\n" } });
   const nodes = nodesOf(source, program);
   const identities = new Set(nodes);
+  const declarations = nodes.filter(node => source.ast.is.IsVariableDeclaration(node) && ["values", "alias"].includes(source.ast.text(source.ast.name(node))));
+  const references = nodes.filter(node => source.ast.is.IsIdentifier(node) && declarations.includes(program.sourceNavigation.sourceReferenceFor(node)?.declaration) &&
+    declarations.every(declaration => source.ast.name(declaration) !== node));
+  const literals = nodes.filter(node => {
+    if (!source.ast.is.IsArrayLiteralExpression(node)) return false;
+    const parent = source.ast.parent(node);
+    if (declarations.includes(parent)) return true;
+    const assignment = source.ast.as.AsBinaryExpression(parent);
+    return assignment !== undefined && assignment.Right === node && references.includes(assignment.Left);
+  });
+  const elements = nodes.filter(node => source.ast.is.IsElementAccessExpression(node) && references.includes(source.ast.as.AsElementAccessExpression(node).Expression));
+  assert.deepEqual([declarations.length, references.length, literals.length, elements.length], [2, 12, 2, 10]);
+  for (const subject of [...declarations, ...references, ...literals, ...elements]) assertRustRecordRequirement(requiredRecords, "nativeArrayStorage", subject);
   const counts = { binding: 0, reference: 0, literal: 0, element: 0 };
   for (const node of nodes) {
     const record = program.records.nativeArrayStorage.get(node);
@@ -39,7 +53,7 @@ test("source native arrays publish exact checked aliases, literals and element o
 });
 
 test("raw-location and native-backing source records preserve the selected parameter and operand identities", () => {
-  const { source, program } = analyzeRust({ capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
 import { abi } from "test:abi";
 import { memorylayout, addressof, torawptr, reinterpretrawptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { uint32 } from "@tsonic/core/types.js";
@@ -51,6 +65,12 @@ export function convert(value: uint32 = 7) {
 }` } });
   const nodes = nodesOf(source, program);
   const operations = new Set();
+  const parameter = nodes.find(node => source.ast.is.IsParameterDeclaration(node) && source.ast.text(source.ast.name(node)) === "value");
+  assertRustRecordRequirement(requiredRecords, "nativeBacking", parameter);
+  const rawCalls = nodes.filter(node => source.ast.is.IsCallExpression(node) &&
+    ["torawptr", "reinterpretrawptr"].includes(source.ast.text(source.ast.as.AsCallExpression(node).Expression)));
+  assert.equal(rawCalls.length, 2);
+  for (const call of rawCalls) assertRustRecordRequirement(requiredRecords, "rawLocationPlan", call);
   let backingCount = 0;
   for (const node of nodes) {
     const backing = program.records.nativeBacking.get(node);
@@ -73,9 +93,13 @@ export function convert(value: uint32 = 7) {
 });
 
 test("source raw-address publication retains all operation forms and exact native argument identities", () => {
-  const { source, program } = analyzeRust({ capabilities: [memoryAbiCapability("rust")],
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, capabilities: [memoryAbiCapability("rust")],
     files: { "index.ts": rawAddressProofSource } });
   const methods = new Set();
+  const calls = nodesOf(source, program).filter(node => source.ast.is.IsCallExpression(node) &&
+    ["fromAddress", "address", "offsetrawptr", "equalrawptr", "hashrawptr"].includes(source.ast.text(source.ast.as.AsCallExpression(node).Expression)));
+  assert.equal(calls.length, 17);
+  for (const call of calls) assertRustRecordRequirement(requiredRecords, "rawAddressPlan", call);
   for (const node of nodesOf(source, program)) {
     const record = program.records.rawAddressPlan.get(node);
     if (record === undefined) continue;
@@ -93,7 +117,7 @@ test("source raw-address publication retains all operation forms and exact nativ
 
 for (const value of [false, true]) {
   test(`source ${value ? "value" : "reference"} bound records retain the exact checked field locations`, () => {
-    const { source, program } = analyzeRust({ capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
+    const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
 import { abi } from "test:abi";
 import { memorylayout, memoryfield, bindmemoryfield, bindmemoryrecord, allocateptr, struct, field } from "@tsonic/core/lang.js";
 import type { uint32 } from "@tsonic/core/types.js";
@@ -104,6 +128,10 @@ const layout = memorylayout<Cell>({ datalayout: abi, bytesize: 4, bytealignment:
 export function create(value: uint32): Cell { return bindmemoryrecord(layout, bindmemoryfield(slot, allocateptr(value))); }
 ` } });
     const counts = { field: 0, record: 0 };
+    const calls = nodesOf(source, program).filter(node => source.ast.is.IsCallExpression(node) &&
+      ["bindmemoryfield", "bindmemoryrecord"].includes(source.ast.text(source.ast.as.AsCallExpression(node).Expression)));
+    assert.equal(calls.length, 2);
+    for (const call of calls) assertRustRecordRequirement(requiredRecords, "memoryBindingPlan", call);
     for (const node of nodesOf(source, program)) {
       const record = program.records.memoryBindingPlan.get(node);
       if (record === undefined) continue;
@@ -127,13 +155,16 @@ export function create(value: uint32): Cell { return bindmemoryrecord(layout, bi
 }
 
 test("empty bound source records publish present zero-field decisions rather than missing evidence", () => {
-  const { source, program } = analyzeRust({ capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
+  const { source, program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, capabilities: [memoryAbiCapability("rust")], files: { "index.ts": `
 import { abi } from "test:abi";
 import { memorylayout, bindmemoryrecord } from "@tsonic/core/lang.js";
 const layout = memorylayout<{}>({ datalayout: abi, bytesize: 0, bytealignment: 1, stride: 0, fields: [] });
 export function create(): {} { return bindmemoryrecord(layout); }
 ` } });
   let count = 0;
+  const call = nodesOf(source, program).find(node => source.ast.is.IsCallExpression(node) &&
+    source.ast.text(source.ast.as.AsCallExpression(node).Expression) === "bindmemoryrecord");
+  assertRustRecordRequirement(requiredRecords, "memoryBindingPlan", call);
   for (const node of nodesOf(source, program)) {
     const record = program.records.memoryBindingPlan.get(node);
     if (record === undefined) continue;

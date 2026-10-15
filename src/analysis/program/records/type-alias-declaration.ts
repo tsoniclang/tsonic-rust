@@ -7,6 +7,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { selectRustTypeAliasDeclaration } from "../../declarations/types-and-bindings.js";
 import type { RustFactWalk } from "../walk.js";
 import { createRustRecordFamily } from "./family.js";
+import { requireRustRecord } from "./required-records.js";
 
 export interface RustTypeAliasDeclarationProducer {
   readonly records: RustRecordFamily<RustTypeAliasDeclarationFact>;
@@ -32,6 +33,8 @@ export function createRustTypeAliasDeclarationProducer(
       if (existing !== undefined && completedRequests.get(declaration) === walk) return;
       const selected = selectRustTypeAliasDeclaration(walk, declaration);
       if (selected === undefined) return;
+      requireRustRecord(walk.context.requiredRecords, "typeAliasDeclaration", declaration,
+        selected.kind, "typeAliasDeclarations.register");
       if (existing !== undefined && !corresponds(existing, selected)) failTargetAnalysisInvariant("tsonic-rust",
         "Conflicting Rust semantic plan 'tsonic.rust.typeAliasDeclaration' for one exact source subject.");
       if (existing === undefined) family.writer.set(declaration, selected);

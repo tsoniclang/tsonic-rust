@@ -60,9 +60,9 @@ builder.bindingStoragePlans.capture(node, carrier, { storage: "borrow-cell" });
 builder.bindingStoragePlans.capture(node, carrier, { storage: "location", initialization: "deferred", iterationScope: node });
 builder.bindingStoragePlans.requireLocation(context, node, carrier);
 builder.retainedCalls.finalize(node, lifetimes);
-builder.bindingProjections.resolve(node, carrier, carrier, { kind: "tuple-element", index: 0 });
-builder.bindingProjections.resolve(node, carrier, carrier, { kind: "vec-element", index: 1, checked: true }, carrier, carrier);
-builder.bindingProjections.resolve(node, carrier, carrier, { kind: "object-field", storage: "project-object", storageIndex: 2,
+builder.bindingProjections.resolve([], node, carrier, carrier, { kind: "tuple-element", index: 0 });
+builder.bindingProjections.resolve([], node, carrier, carrier, { kind: "vec-element", index: 1, checked: true }, carrier, carrier);
+builder.bindingProjections.resolve([], node, carrier, carrier, { kind: "object-field", storage: "project-object", storageIndex: 2,
   accessor: { getter: true, setter: false } });
 builder.argumentPassing.get(node);
 builder.typedLocationPlan.get(node);
@@ -101,11 +101,11 @@ builder.bindingProjection.get(node);
     ["lifetimes subject", "builder.retainedCalls.finalize({}, lifetimes);", /missing.*properties.*Node/u],
     ["lifetimes old array", "builder.retainedCalls.finalize(node, []);", /missing.*properties.*ReadonlyMap/u],
     ["lifetimes invalid value", "builder.retainedCalls.finalize(node, new Map([['region', { kind: 'unknown' }]]));", /not assignable/u],
-    ["projection subject", "builder.bindingProjections.resolve({}, carrier, carrier, { kind: 'tuple-element', index: 0 });", /missing.*properties.*Node/u],
-    ["projection invalid field", "builder.bindingProjections.resolve(node, carrier, carrier, { kind: 'object-field', storageIndex: 0 });", /missing/u],
-    ["projection foreign kind", "builder.bindingProjections.resolve(node, carrier, carrier, { kind: 'map-element', index: 0 });", /not assignable/u],
-    ["projection invalid default", "builder.bindingProjections.resolve(node, carrier, carrier, { kind: 'tuple-element', index: 0 }, {});", /not assignable/u],
-    ["producer not on sealed output", "builder.seal().argumentPassingPlans.pass(node, 'by-value');", /does not exist/u],
+    ["projection subject", "builder.bindingProjections.resolve([], {}, carrier, carrier, { kind: 'tuple-element', index: 0 });", /missing.*properties.*Node/u],
+    ["projection invalid field", "builder.bindingProjections.resolve([], node, carrier, carrier, { kind: 'object-field', storageIndex: 0 });", /missing/u],
+    ["projection foreign kind", "builder.bindingProjections.resolve([], node, carrier, carrier, { kind: 'map-element', index: 0 });", /not assignable/u],
+    ["projection invalid default", "builder.bindingProjections.resolve([], node, carrier, carrier, { kind: 'tuple-element', index: 0 }, {});", /not assignable/u],
+    ["producer not on sealed output", "builder.seal([]).argumentPassingPlans.pass(node, 'by-value');", /does not exist/u],
   ];
   for (const [name, body, diagnostic] of invalid) {
     const result = check(directory, body);

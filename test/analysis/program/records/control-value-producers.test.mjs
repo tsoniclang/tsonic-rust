@@ -14,10 +14,11 @@ const projection = () => ({ kind: "js-value-from-properties", source: integer, f
 
 test("five producers publish exactly the original immutable family readers and no generic writer", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const families = [["nativeGuardResult", "nativeGuardResults"], ["nativeUnreachable", "nativeUnreachableNodes"],
     ["genericNumericOperands", "genericNumerics"], ["indexedFieldKeyArgument", "indexedFieldKeys"],
     ["propertyProjection", "propertyProjections"]];
-  const records = builder.seal();
+  const records = builder.seal(builderRequiredRecords);
   assert.equal(Object.keys(records).length, 66);
   for (const [family, producer] of families) {
     assert.equal(builder[family] === builder[producer].records, true, family);
@@ -35,6 +36,7 @@ test("five producers publish exactly the original immutable family readers and n
 
 test("native guard caching preserves false and skips re-selection of exact source identities", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const expression = {};
   let selected = 0;
   const select = () => { selected += 1; return false; };
@@ -52,6 +54,7 @@ test("native guard caching preserves false and skips re-selection of exact sourc
 
 test("unreachable publication caches only true and preserves repeated false evaluation", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const node = {};
   let selections = 0;
   const reachable = () => { selections += 1; return false; };
@@ -67,11 +70,13 @@ test("unreachable publication caches only true and preserves repeated false eval
 
 test("control-flow producers reuse inherited evidence without shadowing or mutating parent scopes", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const guard = {};
   const unreachable = {};
   parent.nativeGuardResults.resolve(guard, () => false);
   parent.nativeUnreachableNodes.resolve(unreachable, () => true);
   const child = createRustProgramRecordBuilder(undefined, parent);
+  const childRequiredRecords = [];
   const unexpected = () => { assert.fail("inherited exact proof must not be recomputed"); };
   assert.equal(child.nativeGuardResults.resolve(guard, unexpected), false);
   assert.equal(child.nativeUnreachableNodes.resolve(unreachable, unexpected), true);
@@ -81,14 +86,15 @@ test("control-flow producers reuse inherited evidence without shadowing or mutat
   const specialized = {};
   child.nativeGuardResults.resolve(specialized, () => false);
   assert.equal(parent.nativeGuardResult.get(specialized) === undefined, true);
-  const inherited = parent.seal();
-  const records = child.seal();
+  const inherited = parent.seal(parentRequiredRecords);
+  const records = child.seal(childRequiredRecords);
   assert.equal(records.nativeGuardResult.get(specialized), false);
   assert.equal(inherited.nativeGuardResult.get(specialized) === undefined, true);
 });
 
 test("generic comparison publication retains operation and operand identity, order and immutable pair", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const subject = {};
   const selected = comparison();
   assert.equal(builder.genericNumerics.comparison(subject, parameter, wide, selected) === selected, true);
@@ -107,11 +113,13 @@ test("generic comparison publication retains operation and operand identity, ord
 
 test("generic operands inherit canonical evidence and isolate genuinely new source subjects", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const subject = {};
   parent.genericNumerics.comparison(subject, integer, wide, comparison());
   const record = parent.genericNumericOperands.get(subject);
-  const inherited = parent.seal();
+  const inherited = parent.seal(parentRequiredRecords);
   const child = createRustProgramRecordBuilder(undefined, inherited);
+  const childRequiredRecords = [];
   child.genericNumerics.comparison(subject, { ...integer }, { ...wide }, comparison());
   assert.equal(child.genericNumericOperands.get(subject) === record, true);
   assert.throws(() => child.genericNumerics.comparison(subject, integer, parameter, comparison()), /Conflicting Rust semantic plan/u);
@@ -123,6 +131,7 @@ test("generic operands inherit canonical evidence and isolate genuinely new sour
 
 test("indexed-key finalization uses actual source bindings and calls evaluation only for admitted arguments", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const first = {};
   const second = {};
   const ignored = {};
@@ -133,7 +142,7 @@ test("indexed-key finalization uses actual source bindings and calls evaluation 
   ]);
   selected.member.parameters.push({ name: "ignored", type: integer });
   const seen = [];
-  assert.equal(builder.indexedFieldKeys.bind(selected, [first, second, ignored], new Map([["Key", wide]]), node => {
+  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, selected, [first, second, ignored], new Map([["Key", wide]]), node => {
     seen.push(node);
     return node === first;
   }), true);
@@ -147,13 +156,14 @@ test("indexed-key finalization uses actual source bindings and calls evaluation 
 
 test("indexed-key finalization preserves original partial admission before a later invalid binding", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const argument = {};
   const selected = selectedKey([
     { sourceParameterIndex: 0, sourceArgumentIndex: 0, sourceForm: "value" },
     { sourceParameterIndex: 0, sourceArgumentIndex: 1, sourceForm: "value" },
   ]);
   let selections = 0;
-  assert.equal(builder.indexedFieldKeys.bind(selected, [argument], new Map([["Key", wide]]), () => {
+  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, selected, [argument], new Map([["Key", wide]]), () => {
     selections += 1;
     return false;
   }), false);
@@ -164,23 +174,24 @@ test("indexed-key finalization preserves original partial admission before a lat
 
 test("indexed keys reject nonvalue bindings, skip unresolved keys and retain structural conflicts", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const argument = {};
   const keys = new Map([["Key", wide]]);
   const select = selectedKey();
-  assert.equal(builder.indexedFieldKeys.bind(select, [argument], keys, () => false), true);
+  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, select, [argument], keys, () => false), true);
   const record = builder.indexedFieldKeyArgument.get(argument);
-  assert.equal(builder.indexedFieldKeys.bind(select, [argument], new Map([["Key", { ...wide }]]), () => false), true);
+  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, select, [argument], new Map([["Key", { ...wide }]]), () => false), true);
   assert.equal(builder.indexedFieldKeyArgument.get(argument) === record, true);
   for (const [changedKeys, evaluate] of [[new Map([["Key", integer]]), () => false], [keys, () => true]]) {
-    assert.throws(() => builder.indexedFieldKeys.bind(select, [argument], changedKeys, evaluate),
+    assert.throws(() => builder.indexedFieldKeys.bind(builderRequiredRecords, select, [argument], changedKeys, evaluate),
       /Conflicting Rust semantic plan 'tsonic.rust.indexedFieldKeyArgument'/u);
     assert.equal(builder.indexedFieldKeyArgument.get(argument) === record, true);
   }
   const unseen = {};
-  assert.equal(builder.indexedFieldKeys.bind(selectedKey([{ sourceParameterIndex: 0, sourceArgumentIndex: 0, sourceForm: "spread" }]),
+  assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, selectedKey([{ sourceParameterIndex: 0, sourceArgumentIndex: 0, sourceForm: "spread" }]),
     [unseen], keys, () => { assert.fail("a spread cannot be evaluated as one key"); }), false);
   for (const selectedKeys of [new Map(), new Map([["Key", parameter]])]) {
-    assert.equal(builder.indexedFieldKeys.bind(select, [unseen], selectedKeys,
+    assert.equal(builder.indexedFieldKeys.bind(builderRequiredRecords, select, [unseen], selectedKeys,
       () => { assert.fail("unresolved key cannot be admitted"); }), true);
     assert.equal(builder.indexedFieldKeyArgument.get(unseen) === undefined, true);
   }
@@ -188,24 +199,27 @@ test("indexed keys reject nonvalue bindings, skip unresolved keys and retain str
 
 test("indexed keys retain inherited metadata identity and cannot leak into their parent", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const subject = {};
   const signature = selectedKey();
   const keys = new Map([["Key", wide]]);
-  parent.indexedFieldKeys.bind(signature, [subject], keys, () => false);
+  parent.indexedFieldKeys.bind(parentRequiredRecords, signature, [subject], keys, () => false);
   const original = parent.indexedFieldKeyArgument.get(subject);
-  const inherited = parent.seal();
+  const inherited = parent.seal(parentRequiredRecords);
   const child = createRustProgramRecordBuilder(undefined, inherited);
-  child.indexedFieldKeys.bind(signature, [subject], keys, () => false);
+  const childRequiredRecords = [];
+  child.indexedFieldKeys.bind(childRequiredRecords, signature, [subject], keys, () => false);
   assert.equal(child.indexedFieldKeyArgument.get(subject) === original, true);
-  assert.throws(() => child.indexedFieldKeys.bind(signature, [subject], keys, () => true), /Conflicting Rust semantic plan/u);
+  assert.throws(() => child.indexedFieldKeys.bind(childRequiredRecords, signature, [subject], keys, () => true), /Conflicting Rust semantic plan/u);
   const fresh = {};
-  child.indexedFieldKeys.bind(signature, [fresh], keys, () => true);
+  child.indexedFieldKeys.bind(childRequiredRecords, signature, [fresh], keys, () => true);
   assert.equal(inherited.indexedFieldKeyArgument.get(fresh) === undefined, true);
   assert.equal(child.indexedFieldKeyArgument.get(fresh).evaluate, true);
 });
 
 test("property projections freeze the selected cases and preserve exact conversion and read evidence", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const expression = {};
   const conversion = projection();
   const read = {};
@@ -228,11 +242,13 @@ test("property projections freeze the selected cases and preserve exact conversi
 
 test("property projection scopes preserve original case identity and reject incompatible specialization", () => {
   const parent = createRustProgramRecordBuilder();
+  const parentRequiredRecords = [];
   const subject = {};
   parent.propertyProjections.finalize(subject, projection(), []);
-  const inherited = parent.seal();
+  const inherited = parent.seal(parentRequiredRecords);
   const original = inherited.propertyProjection.get(subject);
   const child = createRustProgramRecordBuilder(undefined, inherited);
+  const childRequiredRecords = [];
   const equivalent = projection();
   assert.equal(child.propertyProjections.finalize(subject, equivalent, []) === undefined, true);
   assert.equal(child.propertyProjection.get(subject) === original, true);
@@ -245,11 +261,12 @@ test("property projection scopes preserve original case identity and reject inco
 
 test("sealing closes every producer before cache reads, rejected selections or source callbacks", () => {
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const guard = {};
   const unreachable = {};
   builder.nativeGuardResults.resolve(guard, () => false);
   builder.nativeUnreachableNodes.resolve(unreachable, () => true);
-  builder.seal();
+  builder.seal(builderRequiredRecords);
   const unexpected = () => { assert.fail("a sealed producer must not inspect source or read inheritance"); };
   for (const subject of [guard, unreachable, {}]) {
     for (const write of [
@@ -257,8 +274,8 @@ test("sealing closes every producer before cache reads, rejected selections or s
       () => builder.nativeUnreachableNodes.resolve(subject, unexpected),
       () => builder.genericNumerics.comparison(subject, integer, wide, comparison()),
       () => builder.genericNumerics.comparison(subject, integer, wide, undefined),
-      () => builder.indexedFieldKeys.bind(selectedKey(), [subject], new Map([["Key", wide]]), unexpected),
-      () => builder.indexedFieldKeys.bind({ member: { parameters: [] } }, [], new Map(), unexpected),
+      () => builder.indexedFieldKeys.bind(builderRequiredRecords, selectedKey(), [subject], new Map([["Key", wide]]), unexpected),
+      () => builder.indexedFieldKeys.bind(builderRequiredRecords, { member: { parameters: [] } }, [], new Map(), unexpected),
       () => builder.propertyProjections.finalize(subject, projection(), []),
       () => builder.propertyProjections.finalize(subject, undefined, []),
     ]) assert.throws(write, /after analysis is sealed/u);

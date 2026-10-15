@@ -28,7 +28,7 @@ export function selectRustGuardedValueCarrier(
     : sourceType === undefined || leaves === undefined || members.length >= leaves.length ? undefined
     : resolveRustNativeFlowCarrier(sourceType, members, context, options);
   if (selected === undefined) return undefined;
-  const projection = context.records.flowReadProjections.resolve(reference, sourceCarrier, selected, options.projectTypes, context.typeDefinitions);
+  const projection = context.records.flowReadProjections.resolve(context.requiredRecords, reference, sourceCarrier, selected, options.projectTypes, context.typeDefinitions);
   if (projection.kind !== "projection") return undefined;
   return projection.fact.selectedCarrier;
 }

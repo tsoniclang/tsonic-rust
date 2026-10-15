@@ -1,3 +1,4 @@
+import { requireRustRecord } from "./required-records.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustClassValueFact } from "../../../target-model/records/class-values.js";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
@@ -28,7 +29,10 @@ export function createRustClassValueProducer(
       if (existing !== undefined) return existing.carrier;
       const selection = selectRustClassValue(walk, expression, expected);
       if (selection === undefined) return undefined;
-      if (selection.kind === "constructor") family.writer.set(expression, selection.value);
+      if (selection.kind === "constructor") {
+        requireRustRecord(walk.context.requiredRecords, "classValue", expression, "constructor", "classValues.resolve");
+        family.writer.set(expression, selection.value);
+      }
       return setCarrierFact(walk, expression, selection.kind === "constructor" ? selection.value.carrier : selection.carrier);
     },
   });

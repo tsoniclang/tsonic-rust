@@ -27,25 +27,27 @@ test("native cast queries resolve and publish once per complete policy namespace
   for (const kind of ["closed", "checked"]) {
     const selected = fixture(kind);
     const builder = createRustProgramRecordBuilder();
+    const builderRequiredRecords = [];
     const node = {};
     const optional = rustOptionTargetType(selected.base);
-    const first = builder.projectDowncasts.resolve(node, optional, selected.derived, selected.policy);
+    const first = builder.projectDowncasts.resolve(builderRequiredRecords, node, optional, selected.derived, selected.policy);
     assert.equal(first === builder.projectDowncast.get(node), true, "complete canonical cast");
     assert.equal(first.projection.kind, kind);
     assert.equal(first.dispatchCarrier === selected.base, true);
     const counted = selected.resolutions();
-    assert.equal(builder.projectDowncasts.resolve(node, { ...optional }, { ...selected.derived }, selected.policy) === first, true);
+    assert.equal(builder.projectDowncasts.resolve(builderRequiredRecords, node, { ...optional }, { ...selected.derived }, selected.policy) === first, true);
     assert.equal(selected.resolutions(), counted, "completed native policy does not rerun selection");
-    assert.equal(builder.projectDowncasts.resolve(node, optional, selected.derived, { ...selected.policy }) === first, true);
+    assert.equal(builder.projectDowncasts.resolve(builderRequiredRecords, node, optional, selected.derived, { ...selected.policy }) === first, true);
     assert.equal(selected.resolutions() > counted, true, "another namespace validates the whole proof");
-    const child = createRustProgramRecordBuilder(undefined, builder.seal());
+    const child = createRustProgramRecordBuilder(undefined, builder.seal(builderRequiredRecords));
+    const childRequiredRecords = [];
     const beforeChild = selected.resolutions();
-    assert.equal(child.projectDowncasts.resolve(node, optional, selected.derived, selected.policy) === first, true);
+    assert.equal(child.projectDowncasts.resolve(childRequiredRecords, node, optional, selected.derived, selected.policy) === first, true);
     assert.equal(selected.resolutions() > beforeChild, true, "child does not inherit completion state");
-    assert.throws(() => builder.projectDowncasts.resolve(node, optional, selected.derived,
+    assert.throws(() => builder.projectDowncasts.resolve(builderRequiredRecords, node, optional, selected.derived,
       new Proxy({}, { get: () => assert.fail("closed query reads caller metadata") })), /after analysis is sealed/u);
     const conflicting = { ...selected.policy, downcastRoute: () => ({ kind, slot: "other" }) };
-    assert.throws(() => child.projectDowncasts.resolve(node, optional, selected.derived, conflicting), /Conflicting Rust semantic plan/u);
+    assert.throws(() => child.projectDowncasts.resolve(childRequiredRecords, node, optional, selected.derived, conflicting), /Conflicting Rust semantic plan/u);
     assert.equal(child.projectDowncast.get(node) === first, true);
   }
 });
@@ -54,11 +56,12 @@ test("unavailable cast premises stay retryable and flow facts never publish cast
   const selected = fixture();
   selected.setAvailable(false);
   const builder = createRustProgramRecordBuilder();
+  const builderRequiredRecords = [];
   const node = {};
-  assert.equal(builder.projectDowncasts.resolve(node, selected.base, selected.derived, selected.policy) === undefined, true);
+  assert.equal(builder.projectDowncasts.resolve(builderRequiredRecords, node, selected.base, selected.derived, selected.policy) === undefined, true);
   assert.equal(builder.projectDowncast.get(node) === undefined, true);
   selected.setAvailable(true);
-  assert.equal(builder.projectDowncasts.resolve(node, selected.base, selected.derived, selected.policy) !== undefined, true);
+  assert.equal(builder.projectDowncasts.resolve(builderRequiredRecords, node, selected.base, selected.derived, selected.policy) !== undefined, true);
   const narrowed = {};
   builder.flowReadProjections.project(narrowed, selected.base, selected.derived,
     { kind: "project-downcast", dispatchCarrier: selected.base, projection: { kind: "closed", slot: "cast" } });

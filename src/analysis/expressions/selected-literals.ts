@@ -1,4 +1,5 @@
 import type { RustOperationAnalysisContext } from "../program/operation-context.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 
 import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
@@ -61,6 +62,8 @@ export function normalizeSelectedLiteralCarrier(
 }
 
 function selectedLiteralCarrier(node: Node, expected: TargetTypeRef, context: RustOperationAnalysisContext): TargetTypeRef {
+  context.records.assertOpen();
+  requireRustRecord(context.requiredRecords, "runtimeCarrier", node, "selected literal", "selectedLiteralCarrier");
   if (context.records.runtimeCarriers.source(node, expected) !== undefined) failTargetAnalysisInvariant("tsonic-rust",
     "Conflicting Rust semantic plan 'tsonic.rust.runtimeCarrier' for one exact source subject.");
   const selected = context.records.runtimeCarrier.get(node);
@@ -71,6 +74,8 @@ function selectedLiteralCarrier(node: Node, expected: TargetTypeRef, context: Ru
 function recordSelectedLiteralOperation(
   node: Node, fact: RustTargetOperationFact, context: RustOperationAnalysisContext,
 ): RustTargetOperationFact {
+  context.records.assertOpen();
+  requireRustRecord(context.requiredRecords, "targetOperation", node, fact.kind, "recordSelectedLiteralOperation");
   const existing = context.records.targetOperation.get(node);
   if (existing !== undefined) {
     if (!rustTargetOperationFactEquals(existing, fact)) failTargetAnalysisInvariant("tsonic-rust",
@@ -84,6 +89,8 @@ function recordSelectedLiteralOperation(
 function recordSelectedLiteralOperator(
   node: Node, fact: RustTargetOperationFact, carrier: TargetTypeRef, context: RustOperationAnalysisContext,
 ): void {
+  context.records.assertOpen();
+  requireRustRecord(context.requiredRecords, "selectedOperation", node, fact.kind, "recordSelectedLiteralOperator");
   const existing = context.records.selectedOperation.get(node);
   if (existing === undefined) context.records.selectedOperations.operator(node, fact, carrier);
   else if (!rustSelectedTargetOperationEquals(existing, rustSelectedOperatorOperation(node, fact, carrier))) {

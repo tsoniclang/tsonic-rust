@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import type { Node } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, sourceBooleanShortCircuitBranch } from "@tsonic/target-api/source";
 import { finalizeValueConversion } from "./finalized-operation/conversions.js";
@@ -33,9 +34,11 @@ export function recordRustLogicalValueFact(walk: RustFactWalk, expression: Node)
     return true;
   }
   const operationId = "tsonic.rust.syntax.logical-value";
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "logical-value", "analysis/operations/logical-values.ts");
   walk.context.records.targetOperations.source(expression, { kind: "logical-value", operationId,
     operator: operator === "KindAmpersandAmpersandToken" ? "and" : "or", branch,
     leftCarrier: left!, rightCarrier: right, resultCarrier: result, leftConversion, rightConversion });
+  requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "logical-value", "recordRustLogicalValueFact");
   walk.context.records.selectedOperations.project(expression, operationId, "operator", operationId, result);
   setCarrierFact(walk, expression, result);
   return true;

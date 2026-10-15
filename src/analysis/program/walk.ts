@@ -1,4 +1,6 @@
 import type { RustOperationAnalysisContext } from "./operation-context.js";
+import { requireRustRecord } from "./records/required-records.js";
+import { rustPostCheckOperationKind } from "../../target-model/operations/model.js";
 import { rustSourceStorageContext } from "../../policy/types/resolution/source-storage-projection.js";
 import {
   BinaryExpression_Left,
@@ -156,19 +158,29 @@ export function recordPolicySelection<T extends { readonly operation?: RustSelec
   subject: Node,
   selection: import("../../policy/operations/contracts.js").RustPolicySelection<T>,
 ): void {
+  walk.context.records.assertOpen();
   if (selection.kind === "reject") {
     recordPolicyRejection(walk, selection);
     return;
   }
   const fact = selection.value.targetFact;
+  if (fact !== undefined) requireRustRecord(walk.context.requiredRecords, "targetOperation", subject,
+    fact.kind, "recordPolicySelection");
+  const operation = selection.value.operation;
+  if (operation !== undefined && rustPostCheckOperationKind(operation.operationId) === undefined) {
+    requireRustRecord(walk.context.requiredRecords, "selectedOperation", subject,
+      operation.operationKind, "recordPolicySelection");
+  }
   if (fact?.kind === "iteration") {
     const initializer = ForInOrOfStatement_Initializer(walk.context.ast, subject);
     if (initializer !== undefined) {
+      requireRustRecord(walk.context.requiredRecords, "runtimeCarrier", initializer, "iteration initializer", "recordPolicySelection");
       walk.context.records.runtimeCarriers.selected(initializer, fact.elementCarrier);
       const declarations = VariableDeclarationList_Declarations(walk.context.ast, initializer);
       if (declarations !== undefined && isDenseDataArray(declarations)) {
         for (const declaration of declarations) {
           if (declaration !== undefined && walk.context.ast.kindName(declaration) === "KindVariableDeclaration") {
+            requireRustRecord(walk.context.requiredRecords, "runtimeCarrier", declaration, "iteration declaration", "recordPolicySelection");
             walk.context.records.runtimeCarriers.selected(declaration, fact.elementCarrier);
           }
         }
@@ -347,7 +359,7 @@ export function selectExpressionOperation(
     }, context, walk.operationOptions);
     recordPolicySelection(walk, expression, selection);
     if (selection.kind === "accept" && selection.value.convertedType !== undefined) {
-      recordRustConversionSelection(walk.context.records, expression, selection.value.convertedType);
+      recordRustConversionSelection(walk.context.records, walk.context.requiredRecords, expression, selection.value.convertedType);
     }
     return;
   }

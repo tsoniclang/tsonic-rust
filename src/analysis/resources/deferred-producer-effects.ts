@@ -17,6 +17,7 @@ import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.
 import { rustStoredFutureValues, type RustStoredFutureValue } from "./future-storage.js";
 import { createRustEffectsWorkBudget } from "./effects-work-budget.js";
 import type { RustNativeCallableInput } from "../callables/native-inputs.js";
+import { requireRustRecord } from "../program/records/required-records.js";
 
 const infallible: TargetTypeRef = Object.freeze({ kind: "target-named", id: rustInfallibleTargetId });
 const noFuture: RustDeferredProducerEffectsFact = Object.freeze({ kind: "no-future" });
@@ -77,6 +78,10 @@ export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
     if (subject !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, subject,
       ["target.capability=rust.async.exact-deferred-producer"]);
     return;
+  }
+  for (const [declaration, selected] of completed) {
+    requireRustRecord(walk.context.requiredRecords, "deferredProducerEffects", declaration,
+      selected.kind, "recordRustDeferredProducerEffects");
   }
   records.deferredProducerChannels.finalize(completed);
 }

@@ -5,10 +5,16 @@ import { closedMetadataEquals } from "../../../target-model/metadata/closed-data
 import { selectRustObjectLiteralMethodAdapter,
   type RustObjectLiteralMethodAdapterInput, type RustObjectLiteralMethodAdapterIssue } from "../../objects/method-adapters.js";
 import { createRustRecordFamily } from "./family.js";
+import { requireRustRecord, type RustRequiredRecord } from "./required-records.js";
+
+interface RustObjectLiteralMethodAdapterFinalization extends RustObjectLiteralMethodAdapterInput {
+  readonly expressions: ReadonlySet<Node>;
+  readonly requiredRecords: RustRequiredRecord[];
+}
 
 export interface RustObjectLiteralMethodAdapterProducer {
   readonly records: RustRecordFamily<RustObjectLiteralMethodAdapterFact>;
-  finalize(input: RustObjectLiteralMethodAdapterInput & { readonly expressions: ReadonlySet<Node> }): readonly RustObjectLiteralMethodAdapterIssue[];
+  finalize(input: RustObjectLiteralMethodAdapterFinalization): readonly RustObjectLiteralMethodAdapterIssue[];
 }
 
 export function createRustObjectLiteralMethodAdapterProducer(
@@ -19,7 +25,7 @@ export function createRustObjectLiteralMethodAdapterProducer(
     assertOpen, inherited);
   return Object.freeze({
     records: family.reader,
-    finalize(input: RustObjectLiteralMethodAdapterInput & { readonly expressions: ReadonlySet<Node> }): readonly RustObjectLiteralMethodAdapterIssue[] {
+    finalize(input: RustObjectLiteralMethodAdapterFinalization): readonly RustObjectLiteralMethodAdapterIssue[] {
       assertOpen();
       const issues: RustObjectLiteralMethodAdapterIssue[] = [];
       for (const expression of input.expressions) {
@@ -30,7 +36,11 @@ export function createRustObjectLiteralMethodAdapterProducer(
           continue;
         }
         const fact = selectRustObjectLiteralMethodAdapter(input, expression, operation, issues);
-        if (fact !== undefined) family.writer.set(expression, fact);
+        if (fact !== undefined) {
+          requireRustRecord(input.requiredRecords, "objectLiteralMethodAdapter", expression,
+            "completed object method adapter", "objectLiteralMethodAdapters.finalize");
+          family.writer.set(expression, fact);
+        }
       }
       return Object.freeze(issues);
     },

@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustCallableInvocationResult } from "./results.js";
 import { rustUnionPayloadAdmission } from "../../target-model/conversions/union-injection.js";
@@ -107,6 +108,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
       const value = finalizedNativeCallableValue(walk, statement, valueName);
       if (valueName !== undefined && implementationName !== undefined && value !== undefined) {
         setCarrierFact(walk, statement, value.carrier);
+        requireRustRecord(walk.context.requiredRecords, "moduleBinding", statement, "function", "analysis/callables/signatures.ts");
         walk.context.records.moduleBindings.function(statement, implementationName, value);
       }
       continue;
@@ -151,6 +153,7 @@ export function recordPredeclaredNativeFunctionBindingFacts(
       if (value !== undefined) {
         setCarrierFact(walk, declaration, value.carrier);
       }
+      requireRustRecord(walk.context.requiredRecords, "moduleBinding", declaration, "callable", "analysis/callables/signatures.ts");
       walk.context.records.moduleBindings.callable(declaration, candidate.callableDeclaration, candidate.name, value);
     }
   }

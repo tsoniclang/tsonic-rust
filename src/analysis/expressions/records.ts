@@ -1,3 +1,4 @@
+import { requireRustRecord } from "../program/records/required-records.js";
 import {
   KindFunctionExpression,
   KindSpreadAssignment,
@@ -179,6 +180,7 @@ export function resolveRecordLiteralCarrier(
   }
   if (selectedExpected.kind === "target-named" && selectedExpected.id === rustEmptyObjectTargetId) {
     if (properties.length !== 0) return undefined;
+    requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "empty-object-literal", "analysis/expressions/records.ts");
     walk.context.records.targetOperations.source(expression, {
       kind: "empty-object-literal",
       operationId: "tsonic.rust.object.empty-literal",
@@ -186,7 +188,7 @@ export function resolveRecordLiteralCarrier(
     });
     const carrier = setCarrierFact(walk, expression, selectedExpected);
     if (carrier !== undefined && contextualReconciliation !== undefined) {
-      recordRustValueCarrierReconciliation(walk.context.records, expression, contextualReconciliation);
+      recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, contextualReconciliation);
     }
     return carrier;
   }
@@ -848,6 +850,7 @@ export function resolveRecordLiteralCarrier(
     );
     return undefined;
   }
+  requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "record-literal", "analysis/expressions/records.ts");
   walk.context.records.targetOperations.source(expression, {
     kind: "record-literal",
     operationId: "tsonic.rust.record.literal",
@@ -882,7 +885,7 @@ export function resolveRecordLiteralCarrier(
   const finalizedCarrier = setCarrierFact(walk, expression, resultCarrier);
   if (finalizedCarrier !== undefined && contextualReconciliation !== undefined) {
     recordRustValueCarrierReconciliation(
-      walk.context.records,
+      walk.context.records, walk.context.requiredRecords,
       expression,
       contextualReconciliation,
     );
