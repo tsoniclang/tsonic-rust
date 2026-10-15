@@ -102,6 +102,9 @@ export interface RustGenericCallableIdentityRequests {
     readonly left: RustNativeStorageSelection | undefined;
     readonly right: RustNativeStorageSelection | undefined;
   }>;
+  readonly budget: RustEffectsWorkBudget;
+  readonly failure: ReturnType<RustEffectsWorkBudget["run"]>;
+  readonly subject: Node | undefined;
 }
 
 export function prepareRustGenericCallableIdentityRequests(input: {
@@ -111,22 +114,27 @@ export function prepareRustGenericCallableIdentityRequests(input: {
   readonly nativeStorage: Pick<RustNativeStoragePlan, "valueFor">;
 }): RustGenericCallableIdentityRequests {
   const operands = new Map<Node, { readonly left: RustNativeStorageSelection | undefined; readonly right: RustNativeStorageSelection | undefined }>();
-  for (const node of input.nodes) {
-    const operation = input.records.targetOperation.get(node);
-    if (operation?.kind !== "operator-token" || operation.operator !== "==" && operation.operator !== "!=") continue;
-    const leftNode = BinaryExpression_Left(input.ast, node);
-    const rightNode = BinaryExpression_Right(input.ast, node);
-    if (rustGenericCallableValue(rustEffectiveValueCarrier(input.records, leftNode)) === undefined &&
-      rustGenericCallableValue(rustEffectiveValueCarrier(input.records, rightNode)) === undefined) continue;
-    operands.set(node, Object.freeze({ left: leftNode === undefined ? undefined : input.nativeStorage.valueFor(leftNode),
-      right: rightNode === undefined ? undefined : input.nativeStorage.valueFor(rightNode) }));
-  }
-  return Object.freeze({ operands });
+  const budget = createRustEffectsWorkBudget();
+  let subject: Node | undefined;
+  const failure = budget.run(() => {
+    for (const node of input.nodes) {
+      subject = node;
+      budget.step();
+      const operation = input.records.targetOperation.get(node);
+      if (operation?.kind !== "operator-token" || operation.operator !== "==" && operation.operator !== "!=") continue;
+      const leftNode = BinaryExpression_Left(input.ast, node);
+      const rightNode = BinaryExpression_Right(input.ast, node);
+      if (rustGenericCallableValue(rustEffectiveValueCarrier(input.records, leftNode)) === undefined &&
+        rustGenericCallableValue(rustEffectiveValueCarrier(input.records, rightNode)) === undefined) continue;
+      operands.set(node, Object.freeze({ left: leftNode === undefined ? undefined : input.nativeStorage.valueFor(leftNode),
+        right: rightNode === undefined ? undefined : input.nativeStorage.valueFor(rightNode) }));
+    }
+  });
+  return Object.freeze({ operands, budget, failure, subject });
 }
 
 export function createRustGenericCallableIdentityPlan(input: {
   readonly ast: AstReader;
-  readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
   readonly physical: RustGenericCallablePhysicalPlan;
   readonly requests: RustGenericCallableIdentityRequests;
@@ -134,8 +142,8 @@ export function createRustGenericCallableIdentityPlan(input: {
   const comparisons = new Map<Node, RustGenericCallableIdentityComparison>();
   const definitions = new Map<RustGenericCallablePhysicalDefinition, RustGenericCallableIdentitySelection>();
   const issues: RustSourceCallableSpecializationIssue[] = [];
-  const budget = createRustEffectsWorkBudget();
-  let subject: Node | undefined;
+  const { budget } = input.requests;
+  let subject = input.requests.subject;
   const storageFor = (definition: RustGenericCallablePhysicalDefinition): RustGenericCallableIdentitySelection | undefined => {
     if (!definition.identityObserved) return undefined;
     const existing = definitions.get(definition);
@@ -173,10 +181,9 @@ export function createRustGenericCallableIdentityPlan(input: {
     }
     comparisons.set(node, Object.freeze({ ...selected, operation, leftNode, rightNode }));
   };
-  const failure = budget.run(() => {
-    for (const node of input.nodes) {
+  const failure = input.requests.failure ?? budget.run(() => {
+    for (const node of input.requests.operands.keys()) {
       subject = node;
-      budget.step();
       visit(node);
     }
     for (const definition of input.physical.definitions()) {
