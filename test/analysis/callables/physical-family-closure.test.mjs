@@ -284,6 +284,24 @@ test("the planner phase label starts at publication, after the callable seal and
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_PLANNER_INVARIANT", "published");
 });
 
+test("a selected identity issue on a provider callback argument keeps the base diagnostic list", () => {
+  const source = `type Identity = <Value>(value: Value) => Value;
+export function run(left: Identity, right: Identity, values: number[]): boolean {
+  return values.reduce((same: boolean, item: number): boolean => same && item > 0, left === right);
+}
+`;
+  const { result, source: checked } = compileRust({ surfaces: ["js"], files: { "index.ts": source } });
+  const ast = createTargetSourceProgram(checked).ast;
+  const comparison = source.indexOf("left === right");
+  assert.deepEqual(result.diagnostics.map(diagnostic => ({ code: diagnostic.code, message: diagnostic.message,
+    start: ast.pos(diagnostic.sourceNode), end: ast.end(diagnostic.sourceNode) })), [{
+    code: "RUST_CALLABLE_VALUE_NOT_CLOSED",
+    message: "Native callable identity requires exact owned physical producers and their selected source comparison.",
+    start: comparison - 1, end: comparison + "left === right".length,
+  }], "the effect passes resolving the not-yet-rejected comparison add no record or diagnostic");
+  assert.equal(result.artifacts.length, 0);
+});
+
 test("published callable plans expose no construction capability", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
   const { generic, nativeCaptures } = program.callableValues;
