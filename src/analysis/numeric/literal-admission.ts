@@ -1,10 +1,36 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
-  BindingElement_PropertyName,
   KindNumericLiteral,
   parseFiniteNumberLiteral,
 } from "@tsonic/target-api/source";
+
+const rustTypeSyntaxRootKinds: ReadonlySet<string> = new Set([
+  "KindInterfaceDeclaration",
+  "KindTypeAliasDeclaration",
+  "KindTypeQuery",
+  "KindTypeReference",
+  "KindUnionType",
+  "KindIntersectionType",
+  "KindConditionalType",
+  "KindInferType",
+  "KindArrayType",
+  "KindIndexedAccessType",
+  "KindLiteralType",
+  "KindThisType",
+  "KindMappedType",
+  "KindTupleType",
+  "KindOptionalType",
+  "KindRestType",
+  "KindParenthesizedType",
+  "KindFunctionType",
+  "KindConstructorType",
+  "KindTemplateLiteralType",
+  "KindImportType",
+  "KindTypeLiteral",
+  "KindTypeOperator",
+  "KindTypePredicate",
+]);
 
 export function rustNumericLiteralIsFinite(ast: AstReader, literal: Node): boolean {
   return parseFiniteNumberLiteral(ast.text(literal)) !== undefined;
@@ -15,33 +41,37 @@ export function analyzeRustNumericLiteralAdmission(
   sourceFiles: readonly SourceFile[],
 ): readonly TargetDiagnostic[] {
   const diagnostics: TargetDiagnostic[] = [];
+  const pending: Node[] = [];
+  const enqueue = (child: Node | undefined): void => {
+    if (child !== undefined) pending.push(child);
+  };
   for (const sourceFile of sourceFiles) {
-    const pending: Node[] = [sourceFile];
+    pending.push(sourceFile);
     while (pending.length > 0) {
       const node = pending.pop()!;
-      if (ast.kindName(node) === KindNumericLiteral && isRustValueNumericLiteral(ast, node) &&
-        !rustNumericLiteralIsFinite(ast, node)) {
-        diagnostics.push({
-          code: "RUST_NUMERIC_LITERAL_NOT_FINITE",
-          category: "error",
-          source: "tsonic-rust",
-          message: "Numeric literal is not a finite double-precision value.",
-          sourceNode: node,
-          evidence: ["target.capability=rust.syntax.numeric-literal"],
-        });
+      const kind = ast.kindName(node);
+      if (kind === KindNumericLiteral) {
+        if (!rustNumericLiteralIsFinite(ast, node)) {
+          diagnostics.push({
+            code: "RUST_NUMERIC_LITERAL_NOT_FINITE",
+            category: "error",
+            source: "tsonic-rust",
+            message: "Numeric literal is not a finite double-precision value.",
+            sourceNode: node,
+            evidence: ["target.capability=rust.syntax.numeric-literal"],
+          });
+        }
+        continue;
       }
-      const children: Node[] = [];
-      ast.forEachChild(node, (child) => {
-        if (child !== undefined) children.push(child);
-      });
-      for (let index = children.length - 1; index >= 0; index -= 1) pending.push(children[index]!);
+      if (rustTypeSyntaxRootKinds.has(kind)) continue;
+      const first = pending.length;
+      ast.forEachChild(node, enqueue);
+      for (let left = first, right = pending.length - 1; left < right; left += 1, right -= 1) {
+        const swap = pending[left]!;
+        pending[left] = pending[right]!;
+        pending[right] = swap;
+      }
     }
   }
   return Object.freeze(diagnostics);
-}
-
-function isRustValueNumericLiteral(ast: AstReader, literal: Node): boolean {
-  const parent = ast.parent(literal);
-  return parent === undefined || ast.kindName(parent) !== "KindLiteralType" &&
-    ast.name(parent) !== literal && BindingElement_PropertyName(ast, parent) !== literal;
 }
