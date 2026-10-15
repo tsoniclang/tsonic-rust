@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-
 import { createRustSourceTypeRegistry } from "../../../dist/analysis/project-types/source-type-registry.js";
 import { rustSourceUnionTargetType, rustJsValueTargetType } from "../../../dist/target-model/types/index.js";
 
