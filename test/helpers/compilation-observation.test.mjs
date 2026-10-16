@@ -44,7 +44,14 @@ test("Rust session and helper observe the real wrapper's exact program and nativ
   assert.equal(program.source.ast === compiled.source.ast, true);
   assert.equal(compiled.result.program === program, true);
   assert.equal(compiled.result.plan === plan, true);
-  assert.equal(compiled.result.artifacts === productionResult.value.artifacts, true);
+  assert.equal(compiled.result.artifacts === productionResult.value.artifacts, false,
+    "the public session formats the raw backend artifacts");
+  for (const [index, artifact] of productionResult.value.artifacts.entries()) {
+    if (artifact.kind !== "source" || artifact.language !== "rust") {
+      assert.equal(compiled.result.artifacts[index] === artifact, true,
+        `non-Rust artifact ${artifact.path} retains its exact identity and order`);
+    }
+  }
   assert.equal(Object.isFrozen(program), true);
   assert.equal(Object.hasOwn(productionResult, "program"), false);
   assert.equal(Object.hasOwn(productionResult, "plan"), false);
@@ -93,10 +100,18 @@ test("Rust helper retains the production formatter diagnostic and never recovers
   const previous = process.env.RUSTFMT;
   process.env.RUSTFMT = "/definitely/missing/tsonic-stage-observer-rustfmt";
   try {
-    const compiled = compileRust({ files });
+    let rawResult;
+    const compiled = compileRust({ files, compileTarget(request, observer) {
+      rawResult = compileRustTarget(request, observer);
+      return rawResult;
+    } });
+    assert.equal(rawResult.kind, "resolved", "raw compilation never invokes the formatter");
+    assert.equal(rawResult.value.artifacts.length > 0, true, "raw backend artifacts exist");
+    assert.equal(Object.isFrozen(rawResult.value.artifacts), true);
     assert.deepEqual(compiled.result.diagnostics.map(diagnostic => diagnostic.code),
       ["RUST_SOURCE_FORMATTING_FAILED"]);
     assert.match(compiled.result.diagnostics[0].message, /Unable to execute Rust formatter/u);
+    assert.equal(compiled.result.diagnostics[0].source, "tsonic-rust");
     assert.deepEqual(compiled.result.diagnostics[0].evidence, ["target.capability=rust.toolchain.rustfmt"]);
     assert.equal(compiled.result.program.source.ast === compiled.source.ast, true);
     assert.equal(compiled.result.plan !== undefined, true);
