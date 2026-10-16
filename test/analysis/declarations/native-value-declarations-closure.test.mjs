@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { admitRustNativeValueDeclaration } from "../../../dist/analysis/declarations/native-value-declarations.js";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 
 function interfaceFixture(sourceText) {
   const { source, program } = analyzeRust({ files: { "index.ts": sourceText } });
   const declaration = source.ast.statements(source.getSourceFile("/src/index.ts"))
     .find(node => source.ast.kindName(node) === "KindInterfaceDeclaration");
   return { declaration, source, program, input: { ast: source.ast, records: program.records,
-    semanticsFor: source.semantics.forNode,
+    semanticsFor: createTargetSourceProgram(source).semantics.forNode,
     names: program.names, projectTypes: program.projectTypes, typeDefinitions: program.typeDefinitions,
     sourceLifetimes: program.sourceLifetimes, objectRepresentations: program.objectRepresentations,
     typeFamilies: program.typeFamilies } };

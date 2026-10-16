@@ -236,7 +236,7 @@ test("sealed family implementations have completed contracts and missing contrac
   assert.equal(program.nativeDeclarations.implementations.length, program.typeFamilies.implementations.length,
     "admission covers the complete finally sealed implementation domain in its existing order");
   assert.throws(() => analyzeRustNativeDeclarationForms({ ast: source.ast, sourceFiles: program.sourceFiles,
-    semanticsFor: source.semantics.forNode,
+    semanticsFor: createTargetSourceProgram(source).semantics.forNode,
     records: program.records, names: program.names, projectTypes: program.projectTypes,
     typeDefinitions: program.typeDefinitions, sourceLifetimes: program.sourceLifetimes,
     objectRepresentations: program.objectRepresentations,
