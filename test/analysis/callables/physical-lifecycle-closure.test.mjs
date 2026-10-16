@@ -346,6 +346,7 @@ export function choose(): typeof identity { return identity; }
       const selected = program.callableValues.nativeStorage.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
+  construction.selectConstructionErrors(new Map());
   const requests = new Map();
   for (const node of sourceNodes(program)) {
     const value = program.records.directCallableReference.get(node);
@@ -354,6 +355,7 @@ export function choose(): typeof identity { return identity; }
   }
   const published = construction.seal(requests);
   assert.equal("seal" in published, false, "the producer construction port is private");
+  assert.equal("selectConstructionErrors" in published, false, "constructor ABI selection is private");
   const before = selections;
   open = false;
   ast.revoke();

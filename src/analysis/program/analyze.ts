@@ -569,11 +569,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.sourceFiles, context.records,
     context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);
-  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType);
-  if (sourcePackageComponents.kind === "rejected") {
-    context.diagnostics.push(...sourcePackageComponents.diagnostics);
-    return;
-  }
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
@@ -595,6 +590,11 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType);
+  if (sourcePackageComponents.kind === "rejected") {
+    context.diagnostics.push(...sourcePackageComponents.diagnostics);
+    return;
+  }
   context.callableValues.preparePhysicalStorage(sourcePackageComponents.plan, fallibility.effectsFor);
   recordRustDeferredProducerEffects(walk);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,

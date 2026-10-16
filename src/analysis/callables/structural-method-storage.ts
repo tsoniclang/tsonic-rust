@@ -157,6 +157,8 @@ export function createRustStructuralMethodStorage(input: {
           const declared = protocol.error === undefined ? undefined : normalizeRustErrorType(protocol.error, context, declaration);
           if (intrinsic === undefined || declared === undefined)
             throw new Error("Retained constructor selection requires completed intrinsic error classification.");
+          const reference = error === undefined ? undefined : rustProducerErrorReference(error);
+          if (reference !== undefined) producerErrors.set(reference, intrinsic);
           errorByProducer.set(declaration, intrinsic);
           const requirements = demands.get(declaration) ?? [];
           if (!requirements.some(requirement => rustTargetTypeRefEquals(requirement, declared))) requirements.push(declared);
