@@ -74,7 +74,7 @@ test("native trait substitution includes conditions, associated types, lifetimes
   }
   const references = rustTargetGenericReferences(original);
   assert.deepEqual(references.typeIdentities, [parameter.identity]);
-  assert.deepEqual(references.lifetimeIdentities, [lifetime.identity]);
+  assert.deepEqual(references.lifetimeIdentities, [rustLifetimeKey(lifetime)]);
   assert.deepEqual(references.elisionInputs, []);
 });
 
