@@ -8,6 +8,8 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { bindRustGenericArguments } from "../../target-model/types/carriers/generic-argument-bindings.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 
@@ -43,7 +45,10 @@ export function selectRustProducerError(
     const result = asynchronous?.futureCarrier ??
       input.records.sourceCallableReturn.get(producer.declaration)?.returnCarrier;
     const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, input.definitions);
-    if (completion?.futures[reference.channel] === undefined) return undefined;
+    const future = completion?.futures[reference.channel];
+    if (future === undefined) return undefined;
+    if (rustJsPromiseOutputTargetType(future.carrier) !== undefined)
+      return Object.freeze({ kind: "carrier", carrier: rustJsValueTargetType() });
     if (asynchronous === undefined) {
       const error = input.producers.deferredErrorFor(producer.declaration, reference.channel);
       return error === undefined ? undefined : Object.freeze({ kind: "carrier",
