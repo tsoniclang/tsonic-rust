@@ -41,7 +41,8 @@ export function selectRustClosedCallableContext(
   expression: Node,
   carrier: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
-  const protocol = rustCallableProtocol(carrier);
+  const protocol = carrier?.kind === "function-pointer" ? { parameters: carrier.args, result: carrier.result }
+    : rustCallableProtocol(carrier) ?? rustClosureProtocol(carrier);
   if (carrier === undefined || protocol === undefined) return carrier;
   const { ast } = walk.context;
   const parameters = ast.parameters(expression);
