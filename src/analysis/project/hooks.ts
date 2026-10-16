@@ -5,7 +5,7 @@ import type { RustDispatchContextGroupInput } from "../../target-model/operation
 
 interface RustBinaryHookPlanBase {
   readonly id: string;
-  readonly phase: "before-initialization" | "async-execution" | "after-entry";
+  readonly phase: import("../../target-model/operations/binary-hooks.js").RustBinaryHookPhase;
   readonly path: string;
   readonly dispatchGroups: readonly RustDispatchContextGroupInput[];
 }

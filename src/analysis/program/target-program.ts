@@ -49,7 +49,8 @@ import {
 import {
   analyzeRustCountedLoopRepresentations,
 } from "../control-flow/counted-loop-representations.js";
-import { rustJsAsyncExecutor, rustJsEventLoopEpilogue, rustJsTimerDispatchContextId } from "../../providers/model/js-dispatch.js";
+import { rustJsAsyncExecutor, rustJsEntryOwner } from "../../providers/model/js-dispatch.js";
+import { analyzeRustBinaryExecution } from "../project/binary-execution.js";
 import { analyzeRustSourceModuleConstructions } from "../source-modules/index.js";
 import { analyzeRustFoundation } from "../foundation/plan.js";
 import { rustFoundationForCarrier } from "../foundation/requirements.js";
@@ -94,19 +95,10 @@ export function analyzeRustTargetProgram(
   const activeProviderHooks = analyzeRustBinaryHooks(providerBinaryHooks, runtimeReferences.plan.activeCrates);
   const binaryHooks = analyzeRustBinaryHooks(
     jsEnabled ? [...providerBinaryHooks,
-      ...(activeProviderHooks.some(hook => hook.phase === "after-entry" &&
-        hook.dispatchGroups?.some(group => group.contextIds.includes(rustJsTimerDispatchContextId)))
-        ? [] : [rustJsEventLoopEpilogue]),
-      ...(activeProviderHooks.some(hook => hook.phase === "async-execution") ? [] : [rustJsAsyncExecutor])] : providerBinaryHooks,
+      ...(activeProviderHooks.some(hook => hook.phase === "entry-execution") ? [] : [rustJsEntryOwner]),
+      ...(activeProviderHooks.some(hook => hook.phase === "async-entry-execution") ? [] : [rustJsAsyncExecutor])] : providerBinaryHooks,
     runtimeReferences.plan.activeCrates,
   );
-  if (binaryHooks.filter(hook => hook.phase === "async-execution").length > 1) {
-    return rejectedTargetStage([{
-      code: "RUST_AMBIGUOUS_ASYNC_EXECUTOR", category: "error", source: "tsonic-rust",
-      message: "An executable requires exactly one active provider async executor.",
-      evidence: ["target.capability=rust.runtime.binary-hooks"],
-    }]);
-  }
   const context = createRustAnalysisContext(
     input,
     providerSemantics,
@@ -335,6 +327,10 @@ export function analyzeRustTargetProgram(
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
+  const binaryExecution = analyzeRustBinaryExecution({ hooks: binaryHooks, outputType: configuration.outputType,
+    jsEnabled, asynchronous: initializationErrors.value.root.asynchronous ||
+      initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
+  if (binaryExecution.kind === "rejected") return binaryExecution;
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
   const program: Omit<RustTargetProgram, "reachability" | "records"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
@@ -389,6 +385,7 @@ export function analyzeRustTargetProgram(
     binaryDispatchDemand: binaryDispatchDemand.plan,
     foundation: foundation.plan,
     binaryHooks,
+    binaryExecution: binaryExecution.value,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
       context.ast,
       context.sourceFiles,

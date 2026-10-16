@@ -52,6 +52,7 @@ import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { verifyRustFoundationPlan } from "../foundation/verify.js";
 import { applyRustFoundationImports } from "../foundation/imports.js";
 import { planRustAsyncExecution } from "./async-execution.js";
+import { planRustOwnedBinaryEntry, rustBinaryExitCodeType } from "./owned-entry.js";
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
@@ -174,14 +175,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
   );
   const activeHooks = input.program.binaryHooks;
-  const executors = activeHooks.filter(hook => hook.phase === "async-execution");
-  if (executors.length > 1) {
-    return rejectedTargetStage([{
-      code: "RUST_AMBIGUOUS_ASYNC_EXECUTOR", category: "error", source: "tsonic-rust",
-      message: "Sealed binary hooks require one unambiguous async executor.",
-      evidence: ["target.capability=rust.runtime.binary-hooks"],
-    }]);
-  }
+  const binaryExecution = input.program.binaryExecution;
   const hookErrorTypes = new Map<
     (typeof activeHooks)[number],
     import("../../target-ast/syntax/nodes.js").RustType
@@ -409,15 +403,16 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       }),
     ]);
     const mainErrorType = errors.errorType;
-    const executor = executors[0];
+    const executor = binaryExecution.kind === "native" ? binaryExecution.executor : undefined;
     const hookCalls = new Map<(typeof activeHooks)[number], RustBinaryHookCallPlan>();
     for (const hook of activeHooks) {
       const plan = planRustBinaryHookCallPlan(hook, input, componentPlans, sourcePackageErrors, diagnostics);
       if (plan === undefined) return rejectedTargetStage(diagnostics);
       hookCalls.set(hook, plan);
     }
-    const executeAsync = (future: import("../../target-ast/syntax/nodes.js").RustExpr) =>
-      planRustAsyncExecution(executor === undefined
+    const executeAsync = (future: import("../../target-ast/syntax/nodes.js").RustExpr): import("../../target-ast/syntax/nodes.js").RustExpr =>
+      binaryExecution.kind === "owned" ? { kind: "await", expr: future }
+      : planRustAsyncExecution(executor === undefined
         ? { kind: "call", path: "tsonic_rust_runtime::block_on", args: [future] }
         : hookCalls.get(executor)!.call([future]), executor, (execution, selected) => errors.lifecycle(execution,
           rustErrorBoundaryOperandType(selected.errorBoundary, lifecycleErrorType, hookErrorTypes.get(selected))));
@@ -480,7 +475,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       lifecycleErrorType,
       completionType,
       successfulCompletion,
-      epilogueStatements,
+      binaryExecution.kind === "owned" ? [] : epilogueStatements,
       executeAsync,
       diagnostics,
     );
@@ -504,18 +499,22 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
           },
         }]
       : [];
+    const mainBody = binaryExecution.kind === "owned" ? planRustOwnedBinaryEntry({ execution: binaryExecution,
+      hook: hookCalls.get(binaryExecution.owner)!, errors, fallible: mainFallible,
+      ownerErrorType: binaryExecution.owner.isFallible ? rustErrorBoundaryOperandType(
+        binaryExecution.owner.errorBoundary, lifecycleErrorType, hookErrorTypes.get(binaryExecution.owner)) : lifecycleErrorType,
+      afterEntry: epilogueStatements,
+      body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...completionStatements] } })
+      : { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...epilogueStatements, ...completionStatements] };
     const mainItem: RustItem = {
       kind: "function",
       name: "main",
       visibility: "private",
       generics: emptyRustGenerics,
       params: [],
-      ...(mainFallible
-        ? {
-            errorType: mainErrorType,
-            body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...epilogueStatements, ...completionStatements] },
-          }
-        : { body: { statements: [...startupStatements, ...workerDispatchStatements, ...initializationStatements, ...epilogueStatements, ...completionStatements] } }),
+      ...(binaryExecution.kind === "owned" ? { returnType: rustBinaryExitCodeType } : {}),
+      ...(mainFallible ? { errorType: mainErrorType } : {}),
+      body: mainBody,
     };
     artifacts.push(rustSourceArtifact(
       "src/main.rs",

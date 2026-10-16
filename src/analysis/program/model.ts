@@ -105,6 +105,7 @@ export interface RustTargetProgram {
   readonly binaryDispatchDemand: import("../project/binary-dispatch-demand.js").RustBinaryDispatchDemandPlan;
   readonly foundation: RustFoundationPlan;
   readonly binaryHooks: readonly RustBinaryHookPlan[];
+  readonly binaryExecution: import("../project/binary-execution.js").RustBinaryExecution;
   readonly providerErrorCarriers: readonly import("../../target-model/types/model.js").TargetTypeRef[];
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly moduleInitialization: RustModuleInitializationPlan;

@@ -32,22 +32,22 @@ function timerGroup(targetArgumentIndex: number): RustDispatchContextGroupInput 
   };
 }
 
-export const rustJsEventLoopEpilogue: RustProviderBinaryHookRow = snapshotClosedMetadata({
+export const rustJsEntryOwner: RustProviderBinaryHookRow = snapshotClosedMetadata({
   id: "tsonic.rust.js.event-loop",
-  phase: "after-entry",
-  path: "tsonic_rust_js::event_loop::run_with_contexts",
+  phase: "entry-execution",
+  path: "tsonic_rust_js::event_loop::run_entry_with_contexts",
   requiredCrate: "tsonic_rust_js",
   isFallible: true,
   errorBoundary: "source-program",
-  dispatchGroups: [timerGroup(0)],
+  dispatchGroups: [timerGroup(1)],
   providerPackageId: "tsonic.rust.js-surface",
   providerVersion: "1",
 });
 
 export const rustJsAsyncExecutor: RustProviderBinaryHookRow = snapshotClosedMetadata({
-  ...rustJsEventLoopEpilogue,
+  ...rustJsEntryOwner,
   id: "tsonic.rust.js.async-executor",
-  phase: "async-execution",
+  phase: "async-entry-execution",
   path: "tsonic_rust_js::event_loop::block_on_with_contexts",
   dispatchGroups: [timerGroup(1)],
 });
