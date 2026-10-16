@@ -60,16 +60,6 @@ export function choose(left: () => number, right: () => number, flag: boolean): 
     rustTargetTypeRefEquals(selected.errorType, error.errorType)), true, "each exact invocation member has its own completed route");
 });
 
-const structuralSources = {
-  "four Promise body edges": `
-async function fail(): Promise<void> { throw new Error("selected rejection"); }
-const api = {
-  async reject(): Promise<void> { await fail(); },
-  async forward(): Promise<void> { await api.reject(); },
-  async caught(): Promise<void> { try { await fail(); } catch {} },
-  async plain(): Promise<void> {},
-};
-
 for (const budgetFailure of [false, true]) {
   test(`structural source admission rejects unavailable producer evidence before physical publication (${budgetFailure ? "budget" : "domain"})`, () => {
     let context;
@@ -107,6 +97,16 @@ for (const budgetFailure of [false, true]) {
       "no final physical error publication follows failed source admission");
   });
 }
+
+const structuralSources = {
+  "four Promise body edges": `
+async function fail(): Promise<void> { throw new Error("selected rejection"); }
+const api = {
+  async reject(): Promise<void> { await fail(); },
+  async forward(): Promise<void> { await api.reject(); },
+  async caught(): Promise<void> { try { await fail(); } catch {} },
+  async plain(): Promise<void> {},
+};
 export async function run(): Promise<void> { await api.forward(); await api.caught(); await api.plain(); }
 `,
   "two actual implementations of one canonical slot": `
