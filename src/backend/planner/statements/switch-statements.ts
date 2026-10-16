@@ -1,18 +1,11 @@
 import type { Node } from "@tsonic/tsts";
 import { CaseBlock_Clauses, CaseOrDefaultClause_Expression, CaseOrDefaultClause_Statements,
-  SwitchStatement_CaseBlock, SwitchStatement_Expression, KindCaseClause } from "@tsonic/target-api/source";
+  SwitchStatement_CaseBlock, SwitchStatement_Expression } from "@tsonic/target-api/source";
 import type { RustBlock, RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput } from "../program/plan-context.js";
-
-import { rustSwitchComparisonMatches } from "../../../analysis/operations/contracts/switch.js";
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression } from "../expressions/index.js";
-import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { directResourceDeclaration } from "./resources.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 import { planStatementSequence } from "./core.js";
 import { createRustBreakTarget, withRustControlTarget } from "./control-flow.js";
@@ -26,23 +19,14 @@ export function planSwitchStatement(
   const fact = context.input.program.records.targetOperation.get(node);
   const discriminantNode = SwitchStatement_Expression(ast, node);
   const clauseNodes = CaseBlock_Clauses(ast, SwitchStatement_CaseBlock(ast, node));
-  if (fact?.kind !== "switch" || fact.operationId !== "tsonic.rust.control.switch.strict-equality" ||
-    discriminantNode === undefined || clauseNodes === undefined || !isDenseDataArray(fact.clauses) ||
-    !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(discriminantNode, context), fact.discriminantCarrier) ||
-    clauseNodes.some((clause) => clause === undefined) || fact.clauses.length !== clauseNodes.length ||
-    fact.clauses.some((clause, index) => clause === null || typeof clause !== "object" || clause.clause !== clauseNodes[index])) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.switch-selection",
-      "Switch lowering requires one exact finalized discriminant and clause selection fact.",
-    ));
-    return undefined;
+  if (fact?.kind !== "switch" || discriminantNode === undefined || clauseNodes === undefined) {
+    failRustPlannerInvariant("Switch lowering requires its admitted native discriminant and clause selection.", node);
   }
   if (context.syntheticNames === undefined) {
     failRustPlannerInvariant("Switch lowering requires finalized hygienic-name state.", node);
   }
   const discriminant = planExpression(discriminantNode, context);
-  const target = createRustBreakTarget(context, "switch");
+  const target = createRustBreakTarget(context, node, "switch");
   if (discriminant === undefined || target === undefined) {
     return undefined;
   }
@@ -54,30 +38,8 @@ export function planSwitchStatement(
     const selected = fact.clauses[index]!;
     const sourceExpression = CaseOrDefaultClause_Expression(ast, clause);
     const statements = CaseOrDefaultClause_Statements(ast, clause);
-    if (statements === undefined || statements.some((statement) => statement === undefined) ||
-      (ast.kindName(clause) === KindCaseClause &&
-        (sourceExpression === undefined || selected.expression !== sourceExpression ||
-          selected.carrier === undefined ||
-          selected.comparison === undefined ||
-          !rustTargetTypeRefEquals(effectivePlannedExpressionCarrier(sourceExpression, context), selected.carrier) ||
-          !rustSwitchComparisonMatches(fact.discriminantCarrier, selected.carrier, selected.comparison))) ||
-      ast.kindName(clause) !== KindCaseClause &&
-        (selected.expression !== undefined || selected.carrier !== undefined || selected.comparison !== undefined)) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, clause),
-        "rust.backend.switch-clause",
-        "Switch clause conflicts with its finalized source selection fact.",
-      ));
-      return undefined;
-    }
-    if (statements.some((statement) =>
-      statement !== undefined && directResourceDeclaration(statement, context) !== undefined)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, clause),
-        "rust.backend.switch-resource-scope",
-        "A switch-clause resource declaration requires an explicit block so its lexical disposal boundary is exact.",
-      ));
-      return undefined;
+    if (statements === undefined) {
+      failRustPlannerInvariant("Switch clause requires its admitted dense source statement sequence.", clause);
     }
     const expression = sourceExpression === undefined
       ? undefined

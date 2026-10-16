@@ -46,6 +46,7 @@ import type { RustGeneratedDeclarationUse } from "./generated-declaration-uses.j
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
 import type { RustLocalStorageAliasPlan } from "../storage/local-aliases.js";
 import type { RustProjectConstructionQueries } from "../project-types/construction-plan.js";
+import type { RustStatementCompletionIndex } from "../../target-model/records/statement-completion.js";
 
 export interface RustTargetAnalysisRequest {
   readonly input: TargetCompileInput;
@@ -62,6 +63,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly statementCompletions: RustStatementCompletionIndex;
   readonly reachability: import("../reachability/model.js").RustReachability;
   readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;
   readonly genericCallableErrors: import("../callables/generic-errors.js").RustGenericCallableErrorIndex;

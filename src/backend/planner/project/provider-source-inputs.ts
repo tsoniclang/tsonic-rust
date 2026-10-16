@@ -5,7 +5,7 @@ import { isRustAbsenceCarrier, isRustUnitCarrier } from "../../../target-model/t
 import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
 
 export function sourceRuntimeSlots(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
 ): readonly { readonly key: string; readonly node: Node; readonly evaluationOnly?: "unit" | "value" }[] | undefined {
@@ -33,7 +33,7 @@ export function sourceRuntimeSlots(
 }
 
 export function providerTargetRuntimeSlotKeys(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
 ): readonly string[] {
   return rustFinalizedSourceInputs(fact.abi).map(providerSourceInputKey);
 }

@@ -70,7 +70,7 @@ export type RustProviderEvaluationScopeSelection =
 
 export function planRustProviderEvaluationScope(
   context: RustPlanContext,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   operationNode: Node,
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
@@ -320,7 +320,7 @@ export function applyRustProviderEvaluationScope(
 
 function providerInputStabilizationKeys(
   context: RustPlanContext,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   operationNode: Node,
   sourceSlots: readonly { readonly key: string; readonly node: Node }[],
   mutableInputs: ReadonlyMap<string, MutableProviderInput>,

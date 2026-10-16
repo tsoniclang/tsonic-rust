@@ -536,7 +536,13 @@ export function recordForOfFacts(
     resolveExpressionCarrier(walk, expression, sourceFile, undefined);
   }
   const source = walk.context.semantics(sourceFile).operations.iteration(statement);
-  if (expression !== undefined && source !== undefined) {
+  if (expression === undefined || source === undefined) {
+    appendRustDiagnostic(walk, "RUST_ITERATION_NOT_PROVEN",
+      "Iteration requires its exact checked receiver, element and control-flow evidence.", statement,
+      ["target.capability=rust.iteration"]);
+    return;
+  }
+  {
     recordPolicySelection(walk, statement, selectRustCheckedIteration({
       target: "rust",
       statement,

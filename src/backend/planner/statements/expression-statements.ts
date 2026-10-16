@@ -38,7 +38,7 @@ import {
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
 import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
-import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js";
+import { planRuntimeSetStatement } from "./iteration.js";
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
 import { planRustBuiltinErrorAssignment } from "./assignments.js";
 import { planRustSourceUnionFieldProjection, readRustUnionField, writeRustUnionField } from "../expressions/unions.js";
@@ -119,14 +119,8 @@ export function planExpressionAsStatement(
         ));
         return undefined;
       }
-      if (!selectedOperatorMatches(expression, assignment, context)) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, expression),
-          "rust.backend.assignment-selected-evidence",
-          "Assignment operation fact conflicts with the TSTS-selected operator fact.",
-        ));
-        return undefined;
-      }
+      if (context.input.program.statementCompletions.assignmentFor(expression) !== assignment)
+        failRustPlannerInvariant("Assignment requires its admitted native operator selection.", expression);
       selectedAssignmentFact = assignment;
     }
     if (operatorKind === KindEqualsToken || compoundTokens.includes(operatorKind)) {
@@ -145,14 +139,8 @@ export function planExpressionAsStatement(
         ));
         return undefined;
       }
-      if (!selectedOperatorMatches(expression, fact, context)) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, expression),
-          "rust.backend.operator-selected-evidence",
-          "Compound assignment fact conflicts with the TSTS-selected operator fact.",
-        ));
-        return undefined;
-      }
+      if (context.input.program.statementCompletions.assignmentFor(expression) !== fact)
+        failRustPlannerInvariant("Compound assignment requires its admitted native operator selection.", expression);
       const operator = fact.operator;
       if (!isRustAssignmentOperator(operator)) {
         context.diagnostics.push(missingFactDiagnostic(
@@ -295,7 +283,7 @@ export function planRustAssignmentWrite(
   const compoundWrite = context.input.program.records.compoundWrite.get(expression);
   if (compoundWrite !== undefined) {
     return operator === "="
-      ? planRuntimeSetStatement(expression, compoundWrite, context, { target: left, value: valueNode })
+      ? planRuntimeSetStatement(expression, compoundWrite, context)
       : planRustCompoundRuntimeWrite(expression, left, valueNode, fact, context);
   }
   const storageOverride = context.expressionOverrides?.get(left);

@@ -1,80 +1,35 @@
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import {
   planExpression,
-  planFinalizedSourceInput,
-  planFinalizedTargetInput,
 } from "../expressions/index.js";
 import {
-  BinaryExpression_Left,
-  BinaryExpression_Right,
-  ElementAccessExpression_ArgumentExpression,
-  ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement,
-  KindIdentifier,
-  KindArrayBindingPattern,
-  KindObjectBindingPattern,
   Node_Expression,
-  Node_Name,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustRecordCarrierValue } from "../../../target-model/types/carriers/records.js";
-import { finishProviderOperationExpression } from "../expressions/conversions.js";
-import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
+import { finishProviderOperationExpression, planProviderOperationExpression } from "../expressions/conversions.js";
+import { planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForPlanning } from "./resources.js";
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
-import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
-import { isRustUnitCarrier } from "../../../target-model/types/index.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
-
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
-import { validateRustFinalizedOperationAbi } from "../../../analysis/operations/finalized-operation/validation.js";
+import { planRustModuleBindingStore, planRustPromotedStorageWrite } from "../expressions/typed-locations.js";
+import { planRustDirectStorage } from "../expressions/updates/target.js";
 
 import type { Node } from "@tsonic/tsts";
-import type { RustAssignmentOperationFact } from "./core.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import type { RustIterationBindingCompletion } from "../../../target-model/records/statement-completion.js";
 
 export function planRuntimeSetStatement(
   expression: Node,
   fact: Extract<import("../../../target-model/records/operations.js").RustTargetOperationFact, { kind: "runtime-set" }>,
   context: RustPlanContext,
-  computedValue?: { readonly target: Node; readonly value: Node },
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input.program.source;
-  const left = computedValue?.target ?? BinaryExpression_Left(ast, expression);
-  const right = computedValue?.value ?? BinaryExpression_Right(ast, expression);
-  if (left === undefined || right === undefined) {
-    failRustPlannerInvariant(
-      "Runtime setter fact requires concrete assignment target and value nodes.",
-      expression,
-    );
-  }
-  const leftKind = ast.kindName(left);
-  const expectedOperationKind = leftKind === "KindPropertyAccessExpression"
-    ? "property-set"
-    : leftKind === "KindElementAccessExpression"
-      ? "index-set"
-      : undefined;
-  const indexNode = leftKind === "KindElementAccessExpression"
-    ? ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, left)
-    : undefined;
-  const sourceArgumentNodes = indexNode === undefined ? [right] : [indexNode, right];
-  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions) ||
-    expectedOperationKind === undefined || fact.abi.operationKind !== expectedOperationKind ||
-    (expectedOperationKind === "index-set" && indexNode === undefined) ||
-    sourceArgumentNodes.length !== fact.abi.sourceArguments.length ||
-    fact.abi.sourceArguments.some((argument) => argument.disposition !== "runtime") ||
-    fact.abi.effects.awaiting !== "not-applicable" ||
-    fact.abi.result.kind !== "sync" || !isRustUnitCarrier(fact.abi.result.carrier)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.runtime-set-abi",
-      "Runtime setter source shape, effects, and arguments do not match one valid total Rust setter ABI.",
-    ));
-    return undefined;
-  }
+  const admitted = context.input.program.statementCompletions.setterFor(expression);
+  if (admitted === undefined) failRustPlannerInvariant("Runtime setter requires its admitted native source operands and ABI correspondence.", expression);
+  const sourceArgumentNodes = admitted.sourceArguments;
   if (fact.abi.effects.safety === "requires-unsafe" &&
     (context.explicitUnsafeContextDepth ?? 0) === 0) {
     context.diagnostics.push({
@@ -86,241 +41,27 @@ export function planRuntimeSetStatement(
     });
     return undefined;
   }
-  const selectedResult = context.input.program.records.runtimeCarrier.get(right)?.carrier;
-  if (computedValue ? context.input.program.records.compoundWrite.get(expression) !== fact :
-    selectedResult === undefined || !selectedOperatorIdentityMatches(
-    expression,
-    fact.operationId,
-    fact.operationId,
-    selectedResult,
-    context,
-  )) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.runtime-set-selected-evidence",
-      "Runtime setter fact conflicts with the TSTS-selected assignment operation.",
-    ));
-    return undefined;
-  }
-  const receiverNode = Node_Expression(context.input.program.source.ast, left);
-  const receiver = fact.abi.targetReceiver.kind === "input" && receiverNode !== undefined
-    ? planFinalizedSourceInput(
-        context,
-        fact.abi.targetReceiver.input,
-        receiverNode,
-        sourceArgumentNodes,
-        expression,
-        "target-receiver",
-      )
-    : undefined;
-  if (fact.abi.targetReceiver.kind === "input" && receiver === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.runtime-set-receiver",
-      "Runtime setter ABI has no finalized target receiver input.",
-    ));
-    return undefined;
-  }
-  const targetArguments: RustExpr[] = [];
-  for (const input of fact.abi.targetArguments) {
-    const planned = planFinalizedTargetInput(context, input, receiverNode, sourceArgumentNodes, expression);
-    if (planned === undefined) {
-      return undefined;
-    }
-    targetArguments.push(planned);
-  }
-  if (fact.abi.target.form === "index") {
-    const [index, value] = targetArguments;
-    if (receiver === undefined || index === undefined || value === undefined ||
-      targetArguments.length !== 2) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.runtime-index-set-abi",
-        "Runtime index setter ABI must finalize exactly index and value target inputs.",
-      ));
-      return undefined;
-    }
-    return [{
-      kind: "index-assign",
-      receiver,
-      index,
-      value,
-    }];
-  }
-  if (fact.abi.target.form === "static") {
-    const [value] = targetArguments;
-    if (receiver !== undefined || value === undefined || targetArguments.length !== 1) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.runtime-static-set-abi",
-        "Runtime static setter ABI must finalize exactly one value and no target receiver.",
-      ));
-      return undefined;
-    }
-    registerAliasFromPath(context, fact.abi.target.path);
-    return [{
-      kind: "assign",
-      target: { kind: "path", path: fact.abi.target.path },
-      operator: "=",
-      value,
-    }];
-  }
-  if (fact.abi.target.form === "field") {
-    const [value] = targetArguments;
-    if (receiver === undefined || value === undefined || targetArguments.length !== 1) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.runtime-field-set-abi",
-        "Runtime field setter ABI must finalize one receiver and one value.",
-      ));
-      return undefined;
-    }
-    return [{
-      kind: "assign",
-      target: { kind: "field", receiver, name: fact.abi.target.name },
-      operator: "=",
-      value,
-    }];
-  }
-  if (fact.abi.target.form === "call" || fact.abi.target.form === "free-call" ||
-    fact.abi.target.form === "call-str-slice" ||
-    fact.abi.target.form === "free-call-str-slice" ||
-    fact.abi.target.form === "call-value-slice" ||
-    fact.abi.target.form === "call-value-array") {
-    registerAliasFromPath(context, fact.abi.target.path);
-    let call: RustExpr = {
-      kind: "call",
-      path: fact.abi.target.path,
-      args: targetArguments,
-    };
-    if (fact.abi.target.form === "call") {
-      for (const step of fact.abi.target.chain ?? []) {
-        call = { kind: "method-call", receiver: call, method: step.name, args: [] };
-      }
-    }
-    const completed = finishProviderOperationExpression(context, fact, call, expression);
-    return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
-  }
-  if (fact.abi.target.form === "receiver-method" || fact.abi.target.form === "method" ||
-    fact.abi.target.form === "arg-method" ||
-    fact.abi.target.form === "arg-receiver-method" ||
-    fact.abi.target.form === "receiver-value-array" ||
-    fact.abi.target.form === "receiver-tagged-array") {
-    if (receiver === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.runtime-set-receiver",
-        "Runtime setter method form has no finalized target receiver input.",
-      ));
-      return undefined;
-    }
-    let call: RustExpr = {
-      kind: "method-call",
-      receiver,
-      method: fact.abi.target.name,
-      args: targetArguments,
-      ...(fact.abi.targetReceiver.kind === "input"
-        ? { receiverMode: fact.abi.targetReceiver.input.mode }
-        : {}),
-    };
-    if (fact.abi.target.form === "receiver-method") {
-      for (const step of fact.abi.target.chain ?? []) {
-        if (step.kind !== "method") {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, expression),
-            "rust.backend.runtime-set-chain",
-            "Runtime setter method chain contains a non-method step after ABI validation.",
-          ));
-          return undefined;
-        }
-        call = { kind: "method-call", receiver: call, method: step.name, args: [] };
-      }
-    }
-    const completed = finishProviderOperationExpression(context, fact, call, expression);
-    return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
-  }
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, expression),
-    "rust.js.assignment",
-    "Runtime set operation form is not supported.",
-  ));
-  return undefined;
-}
-
-export function selectedOperatorMatches(
-  expression: Node,
-  fact: RustAssignmentOperationFact,
-  context: RustPlanContext,
-): boolean {
-  return selectedOperatorIdentityMatches(expression, fact.operationId, fact.operator, fact.resultCarrier, context);
-}
-
-function selectedOperatorIdentityMatches(
-  expression: Node,
-  operationId: string,
-  targetOperation: string,
-  resultCarrier: TargetTypeRef,
-  context: RustPlanContext,
-): boolean {
-  const selected = context.input.program.records.selectedOperation.get(expression);
-  return selected !== undefined && selected.operationKind === "operator" &&
-    selected.operationId === operationId && selected.targetOperation === targetOperation &&
-    selected.resultType !== undefined && rustTargetTypeRefEquals(selected.resultType, resultCarrier);
+  const native = planProviderOperationExpression(context, fact, admitted.receiver, sourceArgumentNodes, expression, { resultUse: "value" });
+  if (native === undefined) return undefined;
+  const completed = finishProviderOperationExpression(context, fact, native, expression);
+  return completed === undefined ? undefined : [{ kind: "expr", expr: completed }];
 }
 
 export function planForOfStatement(
   node: Node,
   context: RustPlanContext,
-  sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
-  const { ast } = context.input.program.source;
   const fact = context.input.program.records.targetOperation.get(node);
+  const completion = context.input.program.statementCompletions.iterationFor(node);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind === "for-in") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.loop",
-      "for-of statements require a finalized iteration fact.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("for-of requires its admitted native iteration selection.", node);
   }
-  const selectedIteration = context.input.program.records.selectedOperation.get(node);
-  if (selectedIteration === undefined || selectedIteration.operationKind !== "iteration" ||
-    selectedIteration.operationId !== fact.operationId || selectedIteration.resultType === undefined ||
-    !rustTargetTypeRefEquals(selectedIteration.resultType, fact.elementCarrier)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.iteration-selected-element",
-      "Finalized Rust iteration fact conflicts with the TSTS-selected iteration element carrier.",
-    ));
-    return undefined;
-  }
-  const initializer = ForInOrOfStatement_Initializer(context.input.program.source.ast, node);
-  const declarations = initializer === undefined
-    ? []
-    : collectVariableDeclarations(initializer, context);
-  const bindingDeclaration = declarations.length === 1 ? declarations[0] : undefined;
-  const bindingNameNode = bindingDeclaration === undefined
-    ? undefined
-    : Node_Name(context.input.program.source.ast, bindingDeclaration);
-  const bindingNameKind = bindingNameNode === undefined ? "" : ast.kindName(bindingNameNode);
-  const bindingPattern = bindingNameNode !== undefined &&
-      (bindingNameKind === KindArrayBindingPattern || bindingNameKind === KindObjectBindingPattern)
-    ? bindingNameNode
-    : undefined;
-  let binding = "";
-  if (bindingNameNode !== undefined && bindingNameKind === KindIdentifier) {
-    binding = context.input.program.names.nameForDeclaration(bindingDeclaration) ?? "";
-  } else if (bindingPattern !== undefined && context.syntheticNames !== undefined) {
-    binding = allocateRustSyntheticName(context.syntheticNames, "binding_element");
-  }
-  if (!isValidRustIdentifier(binding)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.loop",
-      "for-of bindings require an exact identifier or finalized binding pattern.",
-    ));
-    return undefined;
-  }
+  if (completion === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("for-of requires its admitted binding and native name frame.", node);
+  const selectedBinding = completion.binding;
+  const bindingDeclaration = selectedBinding.kind === "declaration" ? selectedBinding.declaration : undefined;
+  const bindingPattern = selectedBinding.kind === "pattern" ? selectedBinding.pattern : undefined;
+  const binding = selectedBinding.kind === "declaration" ? selectedBinding.name
+    : allocateRustSyntheticName(context.syntheticNames, "binding_element");
   const iterableNode = Node_Expression(context.input.program.source.ast, node);
   const borrowedIterable = fact.lowering.kind === "borrowed" && fact.lowering.input === "reference" || fact.lowering.kind === "js-array";
   const iterable = iterableNode === undefined ? undefined : planExpression(iterableNode, context, "value", borrowedIterable ? "shared-reference" : "value");
@@ -334,24 +75,13 @@ export function planForOfStatement(
       node,
     );
   }
-  const target = createRustLoopTarget(context, [], sourceLabel);
+  const target = createRustLoopTarget(context, node, []);
   if (target === undefined) {
     return undefined;
   }
-  const resourceKind = bindingDeclaration === undefined
-    ? undefined
-    : ast.variableDeclarationKind(bindingDeclaration);
-  const resourceBinding = resourceKind === "using" || resourceKind === "await using";
-  if (resourceBinding && bindingPattern !== undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, bindingPattern),
-      "rust.backend.resource-binding-pattern",
-      "Resource-managed iteration binding patterns require an exact per-binding disposal contract.",
-    ));
-    return undefined;
-  }
-  const resourceFact = resourceBinding && bindingDeclaration !== undefined
-    ? resourceFactForPlanning(bindingDeclaration, context)
+  const resourceBinding = completion.resource !== undefined;
+  const resourceFact = completion.resource !== undefined
+    ? resourceFactForPlanning(completion.resource, context)
     : undefined;
   if (resourceBinding && resourceFact === undefined) {
     return undefined;
@@ -405,16 +135,16 @@ export function planForOfStatement(
     }
     body = { statements: [...bindings, ...body.statements] };
   }
-  const bindingMutable = resourceFact !== undefined &&
-    resourceDisposalReceiverMode(resourceFact) === "mut-ref";
+  if (selectedBinding.kind === "assignment") {
+    const activation = activateIterationBinding(selectedBinding, { kind: "path", path: binding }, context);
+    if (activation === undefined) return undefined;
+    body = { statements: [...activation, ...body.statements] };
+  }
+  const bindingMutable = selectedBinding.kind === "declaration" && selectedBinding.mutable ||
+    resourceFact !== undefined && resourceDisposalReceiverMode(resourceFact) === "mut-ref";
   if (fact.lowering.kind === "async-generator") {
     if (context.asyncContext !== true || context.syntheticNames === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.async-iteration-context",
-        "Async generator iteration requires a finalized async function context and hygienic local-name state.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("Admitted async iteration requires its native execution and name frame.", node);
     }
     const iteratorName = allocateRustSyntheticName(context.syntheticNames, "async_iterator");
     const next: RustExpr = {
@@ -474,12 +204,7 @@ export function planForOfStatement(
   if (fact.lowering.kind === "fallible-owned") {
     const activeErrorType = rustActiveErrorType(context);
     if (context.syntheticNames === undefined || activeErrorType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.fallible-iteration-context",
-        "Fallible JavaScript iteration requires a finalized fallible context and hygienic local-name state.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("Admitted fallible iteration requires its native error and name frame.", node);
     }
     loopBinding = allocateRustSyntheticName(context.syntheticNames, "fallible_item");
     loopBindingMutable = false;
@@ -508,62 +233,26 @@ export function planForOfStatement(
   }];
 }
 
-type PlannedForInBinding =
-  | { readonly kind: "declaration"; readonly name: string; readonly mutable: boolean }
-  | { readonly kind: "assignment"; readonly name: string };
-
 export function planForInStatement(
   node: Node,
   context: RustPlanContext,
-  sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
   const { ast } = context.input.program.source;
   const fact = context.input.program.records.targetOperation.get(node);
+  const completion = context.input.program.statementCompletions.iterationFor(node);
   if (fact === undefined || fact.kind !== "iteration" || fact.iterationKind !== "for-in" ||
     (fact.lowering.kind !== "dense-index-keys" && fact.lowering.kind !== "js-array-index-keys" &&
       fact.lowering.kind !== "static-keys" && fact.lowering.kind !== "record-keys")) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.for-in",
-      "for-in statements require one finalized property-key iteration policy.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("for-in requires its admitted native property-key iteration selection.", node);
   }
-  const selectedIteration = context.input.program.records.selectedOperation.get(node);
-  if (selectedIteration === undefined || selectedIteration.operationKind !== "iteration" ||
-    fact.lowering.kind === "record-keys" && !rustTargetTypeRefEquals(rustRecordCarrierValue(fact.iterableCarrier)?.key, fact.elementCarrier) ||
-    selectedIteration.operationId !== fact.operationId || selectedIteration.resultType === undefined ||
-    !rustTargetTypeRefEquals(selectedIteration.resultType, fact.elementCarrier)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.for-in-selected-key",
-      "Finalized Rust property-key iteration conflicts with the TSTS-selected key carrier.",
-    ));
-    return undefined;
-  }
-  const initializer = ForInOrOfStatement_Initializer(ast, node);
-  if (initializer === undefined) {
-    failRustPlannerInvariant(
-      "for-in requires one exact binding initializer.",
-      node,
-    );
-  }
-  const binding = planForInBinding(initializer, fact.elementCarrier, context);
-  if (binding === undefined) {
-    return undefined;
-  }
+  if (completion === undefined || completion.binding.kind === "pattern") failRustPlannerInvariant("for-in requires its admitted key binding.", node);
+  const binding = completion.binding;
   const expressionNode = Node_Expression(ast, node);
   const expression = expressionNode === undefined ? undefined : planExpression(expressionNode, context);
   const bodyNode = ForInOrOfStatement_Statement(ast, node);
-  if (expression === undefined || bodyNode === undefined || context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.for-in-shape",
-      "for-in requires exact receiver, body, and hygienic-name evidence.",
-    ));
-    return undefined;
-  }
-  const target = createRustLoopTarget(context, [], sourceLabel);
+  if (bodyNode === undefined || expressionNode === undefined || context.syntheticNames === undefined) failRustPlannerInvariant("for-in requires its checked source body, receiver and native name frame.", node);
+  if (expression === undefined) return undefined;
+  const target = createRustLoopTarget(context, node, []);
   if (target === undefined) {
     return undefined;
   }
@@ -574,12 +263,13 @@ export function planForInStatement(
   if (fact.lowering.kind === "dense-index-keys") {
     const lengthName = allocateRustSyntheticName(context.syntheticNames, "for_in_length");
     const indexName = allocateRustSyntheticName(context.syntheticNames, "for_in_index");
-    const activation = activateForInBinding(binding, {
+    const activation = activateIterationBinding(binding, {
       kind: "method-call",
       receiver: { kind: "path", path: indexName },
       method: "to_string",
       args: [],
-    });
+    }, context);
+    if (activation === undefined) return undefined;
     return [{
       kind: "scope",
       body: {
@@ -614,8 +304,9 @@ export function planForInStatement(
     ? binding.name
     : allocateRustSyntheticName(context.syntheticNames, "for_in_key");
   const activation = binding.kind === "assignment"
-    ? activateForInBinding(binding, { kind: "path", path: keyName })
+    ? activateIterationBinding(binding, { kind: "path", path: keyName }, context)
     : [];
+  if (activation === undefined) return undefined;
   const iterable: RustExpr = fact.lowering.kind === "js-array-index-keys" || fact.lowering.kind === "record-keys"
     ? {
         kind: "method-call",
@@ -647,73 +338,25 @@ export function planForInStatement(
   }];
 }
 
-function planForInBinding(
-  initializer: Node,
-  elementCarrier: TargetTypeRef,
-  context: RustPlanContext,
-): PlannedForInBinding | undefined {
-  const declarations = collectVariableDeclarations(initializer, context);
-  if (declarations.length === 1) {
-    const declaration = declarations[0]!;
-    const directName = context.input.program.names.nameForDeclaration(declaration) ?? "";
-    const carrier = context.input.program.records.runtimeCarrier.get(declaration)?.carrier;
-    const declarationKind = context.input.program.source.ast.variableDeclarationKind(declaration);
-    if (!isValidRustIdentifier(directName) || carrier === undefined ||
-      !rustTargetTypeRefEquals(carrier, elementCarrier) ||
-      declarationKind === "using" || declarationKind === "await using") {
-      return rejectForInBinding(declaration, context, "for-in declarations require one plain non-resource binding with the finalized String key carrier.");
-    }
-    return {
-      kind: "declaration",
-      name: directName,
-      mutable: context.input.program.records.mutatedBinding.get(declaration) !== undefined,
-    };
-  }
-  if (context.input.program.source.ast.kindName(initializer) !== KindIdentifier) {
-    return rejectForInBinding(initializer, context, "for-in assignment targets require one exact identifier location.");
-  }
-  const assignmentDeclaration = context.input.program.records.sourceBinding.get(initializer)?.sourceDeclaration;
-  if (assignmentDeclaration === undefined) {
-    return rejectForInBinding(initializer, context, "for-in assignment targets require one exact source declaration.");
-  }
-  const assignmentName = context.input.program.names.nameForDeclaration(assignmentDeclaration) ?? "";
-  if (!isValidRustIdentifier(assignmentName)) {
-    return rejectForInBinding(initializer, context, "for-in assignment targets require one planned Rust binding name.");
-  }
-  const carrier = context.input.program.records.runtimeCarrier.get(assignmentDeclaration)?.carrier;
-  if (carrier === undefined || !rustTargetTypeRefEquals(carrier, elementCarrier)) {
-    return rejectForInBinding(initializer, context, "for-in assignment targets require one declaration carrier matching the finalized String key carrier.");
-  }
-  if (context.input.program.records.mutatedBinding.get(assignmentDeclaration) === undefined) {
-    return rejectForInBinding(initializer, context, "for-in assignment targets require one finalized mutable-binding fact.");
-  }
-  return { kind: "assignment", name: assignmentName };
-}
-
-function activateForInBinding(
-  binding: PlannedForInBinding,
+function activateIterationBinding(
+  binding: Exclude<RustIterationBindingCompletion, { readonly kind: "pattern" }>,
   value: RustExpr,
-): readonly RustStmt[] {
+  context: RustPlanContext,
+): readonly RustStmt[] | undefined {
   if (binding.kind === "declaration") {
     return [{ kind: "let", name: binding.name, mutable: binding.mutable, init: value }];
   }
+  const moduleStore = planRustModuleBindingStore(binding.reference, value, context);
+  if (moduleStore !== undefined) return [{ kind: "expr", expr: moduleStore }];
+  const promoted = planRustPromotedStorageWrite(binding.reference, "=", value, context, planExpression);
+  if (promoted.handled) return promoted.statement === undefined ? undefined : [promoted.statement];
+  const target = planRustDirectStorage(binding.reference, context);
+  if (target === undefined) return undefined;
   return [{
     kind: "assign",
-    target: { kind: "path", path: binding.name },
+    target,
     operator: "=",
     value,
   }];
 }
 
-function rejectForInBinding(
-  node: Node,
-  context: RustPlanContext,
-  message: string,
-): undefined {
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, node),
-    "rust.backend.for-in-binding",
-    message,
-  ));
-  return undefined;
-}

@@ -9,7 +9,7 @@ import { validateRustFinalizedOperationAbi } from "../../../analysis/operations/
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } from "../project/provider-evaluation-scope.js";
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustValueCarrierTransitionTarget } from "../../../analysis/conversions/value-carrier-queries.js";
@@ -72,7 +72,7 @@ function rustFloat64ConstantText(value: number): string {
 
 export function planProviderOperationExpression(
   context: RustPlanContext,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
   operationNode: Node,
@@ -81,7 +81,7 @@ export function planProviderOperationExpression(
     readonly overrides?: RustFinalizedInputPlanOverrides;
   },
 ): RustExpr | undefined {
-  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
+  if (fact.kind === "provider-operation" && !validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),
       "rust.backend.provider-operation-abi",
@@ -92,7 +92,7 @@ export function planProviderOperationExpression(
   const abiResultCarrier = fact.abi.result.kind === "async"
     ? fact.abi.result.futureCarrier
     : fact.abi.result.carrier;
-  if (!rustTargetTypeRefEquals(fact.resultCarrier, abiResultCarrier)) {
+  if (fact.kind === "provider-operation" && !rustTargetTypeRefEquals(fact.resultCarrier, abiResultCarrier)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),
       "rust.backend.provider-operation-result",
@@ -329,6 +329,11 @@ export function planProviderOperationExpression(
     }
     case "static": {
       registerAliasFromPath(context, form.path);
+      if (fact.kind === "runtime-set") {
+        const value = args[0];
+        if (value === undefined || args.length !== 1) failRustPlannerInvariant("Admitted static setter requires its finalized native value.", operationNode);
+        return scoped({ kind: "assignment", operator: "=", target: { kind: "path", path: form.path }, value });
+      }
       return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
     }
     case "method":
@@ -354,7 +359,7 @@ export function planProviderOperationExpression(
         receiver,
         form.storageIndex,
         args,
-        fact.resultCarrier,
+        abiResultCarrier,
         context,
       ));
     }
@@ -374,6 +379,15 @@ export function planProviderOperationExpression(
           ));
     case "field":
     case "index": {
+      if (fact.kind === "runtime-set") {
+        const value = args[form.form === "field" ? 0 : 1];
+        const index = form.form === "index" ? args[0] : undefined;
+        if (receiver === undefined || value === undefined || args.length !== (form.form === "field" ? 1 : 2) ||
+          form.form === "index" && index === undefined) failRustPlannerInvariant("Admitted storage setter requires its finalized native receiver and inputs.", operationNode);
+        const target: RustExpr = form.form === "field" ? { kind: "field", receiver, name: form.name }
+          : { kind: "index", receiver, index: index! };
+        return scoped({ kind: "assignment", operator: "=", target, value });
+      }
       if (receiver === undefined || args.length !== (form.form === "field" ? 0 : 1)) {
         return undefined;
       }
@@ -384,10 +398,10 @@ export function planProviderOperationExpression(
       if (options.resultUse === "storage") {
         return scoped(place);
       }
-      if (isRustCopyCarrier(fact.resultCarrier)) {
+      if (isRustCopyCarrier(abiResultCarrier)) {
         return scoped(place);
       }
-      if (!rustCarrierHasCloneContract(fact.resultCarrier, context)) {
+      if (!rustCarrierHasCloneContract(abiResultCarrier, context)) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           diagnosticInput(context, operationNode),
           `rust.backend.provider-${form.form}-read-ownership`,
