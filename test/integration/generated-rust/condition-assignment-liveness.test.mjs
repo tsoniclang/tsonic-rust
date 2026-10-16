@@ -192,23 +192,40 @@ export function main(): void {
 main();
 `;
 
+function validateControl(surface, text, name) {
+  const { result } = compileRust({
+    ...(surface === "native" ? {} : { surfaces: ["js"] }),
+    target: { id: "rust", options: { outputType: "bin", crateName: name } },
+    files: { "index.ts": text },
+  });
+  assert.equal(result.diagnostics.length, 0,
+    `${surface}: source diagnostics: ${JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message })))}`);
+  const project = writeGeneratedProject(name, result.artifacts);
+  runCargo(project, ["generate-lockfile", "--offline"]);
+  runCargo(project, ["fmt", "--all", "--check"]);
+  runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(project, ["build", "--all-targets", "--locked", "--offline"]);
+  runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(project, ["test", "--locked", "--offline"]);
+  assert.equal(runCargo(project, ["run", "--locked", "--offline"]).status, 0,
+    `${surface}: all branch, evaluation-count and overwrite controls execute successfully`);
+}
+
 for (const surface of ["native", "js"]) {
   test(`${surface}: condition stores retain branch reads, overwrite versions and native effect order`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({
-      ...(surface === "native" ? {} : { surfaces: ["js"] }),
-      target: { id: "rust", options: { outputType: "bin", crateName: `condition_liveness_${surface}` } },
-      files: { "index.ts": source },
-    });
-    assert.equal(result.diagnostics.length, 0,
-      `${surface}: source diagnostics: ${JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message })))}`);
-    const project = writeGeneratedProject(`condition-liveness-${surface}`, result.artifacts);
-    runCargo(project, ["generate-lockfile", "--offline"]);
-    runCargo(project, ["fmt", "--all", "--check"]);
-    runCargo(project, ["check", "--all-targets", "--locked", "--offline"]);
-    runCargo(project, ["build", "--all-targets", "--locked", "--offline"]);
-    runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
-    runCargo(project, ["test", "--locked", "--offline"]);
-    assert.equal(runCargo(project, ["run", "--locked", "--offline"]).status, 0,
-      `${surface}: all branch, evaluation-count and overwrite controls execute successfully`);
+    validateControl(surface, source, `condition_liveness_${surface}`);
   });
 }
+
+test("js: a for-in break preserves its selected key after the iteration", { timeout: 300_000 }, () => {
+  validateControl("js", `
+import type { int32 } from "@tsonic/core/types.js";
+export function main(): void {
+  const values: { first: int32; second: int32 } = { first: 1, second: 2 };
+  let selected = "";
+  for (const key in values) { if (key === "first") { selected = key; break; } }
+  if (selected !== "first") throw new Error("for-in break liveness");
+}
+main();
+`, "for_in_break_liveness");
+});
