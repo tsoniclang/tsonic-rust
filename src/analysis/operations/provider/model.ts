@@ -1,7 +1,7 @@
 import { rustSourceSemanticsModules } from "../../../source/profiles/source-modules.js";
 import { tsonicCoreSourceSemanticsModules } from "@tsonic/source-core";
 import { jsSourceSemanticsModules } from "@tsonic/js-source-profile";
-import type { RustProjectMethodPropertyPlanRegistry } from "../../project-types/method-properties.js";
+import type { RustProjectMethodPropertyPlan } from "../../project-types/method-properties.js";
 import type { RustProjectMethodDispatchPlanRegistry } from "../../project-types/method-dispatch.js";
 import type { RustProjectTypePolicy } from "../../project-types/type-policy.js";
 import type { RustSourceCallableAbiResolver } from "../../../policy/ownership/source-callable-abi.js";
@@ -30,5 +30,5 @@ export interface RustOperationsProviderOptions extends RustTargetTypeResolutionO
   readonly sourceCallableAbi: RustSourceCallableAbiResolver;
   readonly projectTypes: RustProjectTypePolicy;
   readonly projectMethodDispatch: RustProjectMethodDispatchPlanRegistry;
-  readonly projectMethodProperties: RustProjectMethodPropertyPlanRegistry;
+  readonly projectMethodProperties: RustProjectMethodPropertyPlan;
 }

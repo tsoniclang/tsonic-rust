@@ -43,7 +43,8 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
       const operand = use.kind === "awaited-in-scope" ? Node_Expression(context.ast, use.use) : undefined;
       const immediate = operand !== undefined && rustUnparenthesizedExpression(context.ast, operand) === call;
       const name = context.names.nativeBodyNameForDeclaration(declaration);
-      const stable = !context.source.navigation.declarationUseSummary(declaration).bindingWritten;
+      const stable = !context.source.navigation.declarationUseSummary(declaration).bindingWritten &&
+        (!context.ast.is.IsMethodDeclaration(declaration) || context.projectMethodProperties.usageFor(declaration)?.writable !== true);
       if (immediate && stable && name !== undefined && (target.form === "function" || target.form === "static-method" ||
         target.form === "method" && target.dispatch === undefined) && rustJsPromiseOutputTargetType(resultCarrier) !== undefined) {
         return Object.freeze({ declaration, targetName: name, logicalResultCarrier: resultCarrier,
