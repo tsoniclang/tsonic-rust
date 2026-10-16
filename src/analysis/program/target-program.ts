@@ -258,6 +258,7 @@ export function analyzeRustTargetProgram(
     producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
     components: sourcePackageComponents.plan });
   if (errorRegions.kind === "rejected") return errorRegions;
+  context.callableValues.finalizeStructuralStorage(errorRegions.value);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,

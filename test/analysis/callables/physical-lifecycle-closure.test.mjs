@@ -9,6 +9,8 @@ import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/ca
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const joinedSource = `
 type Identity = <Value>(value: Value) => Value;
@@ -21,6 +23,72 @@ export function choose(left: () => number, right: () => number, select: boolean)
   return select ? make(left) : make(right);
 }
 `;
+
+const structuralSources = {
+  "four Promise body edges": `
+async function fail(): Promise<void> { throw new Error("selected rejection"); }
+const api = {
+  async reject(): Promise<void> { await fail(); },
+  async forward(): Promise<void> { await api.reject(); },
+  async caught(): Promise<void> { try { await fail(); } catch {} },
+  async plain(): Promise<void> {},
+};
+export async function run(): Promise<void> { await api.forward(); await api.caught(); await api.plain(); }
+`,
+  "two actual implementations of one canonical slot": `
+export function choose(flag: boolean): { value(): Promise<number> } {
+  return flag ? { async value(): Promise<number> { return 1; } } : { async value(): Promise<number> { return 2; } };
+}
+`,
+  "copied async receiver slot": `
+const original = { async value(): Promise<number> { return 1; } };
+const copy = { ...original };
+export async function read(): Promise<number> { return await copy.value(); }
+`,
+  "generic captured result template": `
+export function make<Value>(value: Value): { read(): Promise<Value> } {
+  return { async read(): Promise<Value> { return value; } };
+}
+const integers = make<number>(7);
+const strings = make<string>("text");
+export async function read(): Promise<number> { await strings.read(); return await integers.read(); }
+`,
+};
+
+for (const [name, source] of Object.entries(structuralSources)) {
+  test(`structural method storage publishes the actual invocation facet: ${name}`, () => {
+    const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
+    let checked = 0;
+    for (const definition of program.structuralShapes.definitions) {
+      for (const [index, field] of definition.fields.entries()) {
+        const storage = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
+        const protocol = rustCallableProtocol(storage);
+        if (field.method !== true || field.nativeMethod === true || protocol === undefined) continue;
+        assert.equal(protocol.error?.id === "rust.core.Infallible", true, `${name}: exact native invocation error`);
+        const logical = rustCallableProtocol(field.carrier);
+        assert.equal(logical.error?.id === "rust.program.TsonicError", true, `${name}: source call contract is not overwritten`);
+        for (const carrier of definition.sourceCarriers) {
+          const selected = program.structuralShapes.field(carrier, index);
+          assert.equal(selected === program.structuralShapes.field(carrier, index), true, `${name}: indexed field identity`);
+          const physical = rustCallableProtocol(selected.presence === "optional"
+            ? rustOptionElementCarrier(selected.methodStorageCarrier) : selected.methodStorageCarrier);
+          assert.equal(physical.error?.id === "rust.core.Infallible", true, `${name}: every source instance is completed`);
+        }
+        checked += 1;
+      }
+    }
+    assert.equal(checked > 0, true, `${name}: actual stored method slots exercised`);
+    for (const node of sourceNodes(program)) {
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind !== "source-call" || operation.target.form !== "structural-method") continue;
+      const selected = program.callableValues.nativeStorage.invocationCallableFor(node);
+      assert.equal(selected.kind !== "unresolved", true, `${name}: final invocation storage is materialized at readiness`);
+      const field = program.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex);
+      const protocol = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier);
+      assert.equal(rustTargetTypeRefEquals(protocol.result, operation.resultCarrier), true, `${name}: checked result correspondence`);
+    }
+  });
+}
 
 function sourceNodes(program) {
   const nodes = [];

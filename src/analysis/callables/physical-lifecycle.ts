@@ -72,7 +72,23 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   const producerRequests = new Map<Node, TargetTypeRef[]>();
   const flows: { readonly node: Node; readonly conversion: RustGenericCallableConversion }[] = [];
   const destinations = new Map<Node, TargetTypeRef | undefined>();
+  const valueRoots = new Set<Node>();
+  const operandRoots = new Set<Node>();
+  const returnRoots = new Set<Node>();
+  let storageReady = false;
+  const genericCarriers = new Map<TargetTypeRef, boolean>();
+  const requiresFamilyAdmission = (carrier: TargetTypeRef | undefined): boolean => {
+    if (carrier === undefined) return false;
+    const existing = genericCarriers.get(carrier);
+    if (existing !== undefined) return existing;
+    genericCarriers.set(carrier, false);
+    const selected = rustGenericCallableValue(carrier) !== undefined || rustTargetTypeChildren(carrier).some(requiresFamilyAdmission);
+    genericCarriers.set(carrier, selected);
+    return selected;
+  };
   const value = (node: Node): RustNativeStorageSelection => {
+    valueRoots.add(node);
+    if (!storageReady && !requiresFamilyAdmission(rustEffectiveValueCarrier(records, node))) return unpreparedStorage;
     const existing = values.get(node);
     if (existing !== undefined) return existing;
     const selection = queries.valueFor(node);
@@ -80,6 +96,8 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     return selection;
   };
   const operand = (node: Node): RustNativeStorageSelection => {
+    operandRoots.add(node);
+    if (!storageReady && !requiresFamilyAdmission(rustValueCarrierBeforeContextualConversion(records, node))) return unpreparedStorage;
     const existing = operands.get(node);
     if (existing !== undefined) return existing;
     const selection = queries.operandFor(node);
@@ -87,6 +105,8 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     return selection;
   };
   const returned = (node: Node): RustNativeStorageSelection => {
+    returnRoots.add(node);
+    if (!storageReady && !requiresFamilyAdmission(records.sourceCallableReturn.get(node)?.returnCarrier)) return unpreparedStorage;
     const existing = returns.get(node);
     if (existing !== undefined) return existing;
     const selection = queries.returnFor(node);
@@ -173,13 +193,17 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   for (const flow of flows) {
     operand(flow.node);
     value(flow.node);
-    inheritedDestination(flow.node);
   }
-  for (const node of values.keys()) inheritedDestination(node);
   let complete = false;
   return Object.freeze({
     complete(physical: RustGenericCallablePhysicalConstruction): RustPhysicalCallablePublication {
       if (complete) throw new Error("Physical callable storage and applications complete exactly once.");
+      storageReady = true;
+      for (const node of returnRoots) returned(node);
+      for (const node of valueRoots) value(node);
+      for (const node of operandRoots) operand(node);
+      for (const flow of flows) inheritedDestination(flow.node);
+      for (const node of values.keys()) inheritedDestination(node);
       const nativeProducers = input.nativeProducers.seal(producerRequests);
       for (const node of input.sourceStorage.nodes) {
         const parameter = records.sourceParameterAbi.get(node);

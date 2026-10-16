@@ -37,12 +37,14 @@ import { createRustGenericCallableIdentityPlan, prepareRustGenericCallableIdenti
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPlan } from "./native-dispatch.js";
-import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
+import type { RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle,
   type RustPhysicalCallableStorage } from "./physical-lifecycle.js";
 import type { RustPhysicalCallableFlowApplications } from "../../target-model/records/physical-callables.js";
+import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
+import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -81,7 +83,7 @@ export interface RustCallableValuePlanInput {
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
-  readonly structuralShapes: RustStructuralStorageLookup;
+  readonly structuralShapes: RustStructuralShapePlanRegistry;
 }
 
 export interface RustCallableValueConstruction {
@@ -97,6 +99,7 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
   finalizeSelected(): readonly RustSourceCallableSpecializationIssue[];
   readonly selected: RustCallableValueSelection;
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
+  finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -104,6 +107,7 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
 interface RustCallableValueLifecycle {
   readonly construction: RustCallableValueConstruction;
   finalizeSelected(): { readonly plan: RustCallableValueSelection; readonly issues: readonly RustSourceCallableSpecializationIssue[] };
+  finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -145,6 +149,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
       completions = createRustGenericCallableCompletionPlan(input);
     },
     seal: () => requireLifecycle().seal(),
+    finalizeStructuralStorage: (errors: Pick<RustErrorRegionRecords, "producerError">) => requireLifecycle().finalizeStructuralStorage(errors),
     publish(): void {
       requireSelected();
       requireLifecycle().publish();
@@ -271,6 +276,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   const issues = Object.freeze([...generic.issues, ...nativeStorage.issues]);
   const construction: RustCallableValueConstruction = Object.freeze({ generic, native, nativeStorage, nativeProducers, issues });
   let physicalLifecycle: RustPhysicalCallableLifecycle | undefined;
+  let structuralMethodStorage: ReturnType<typeof createRustStructuralMethodStorage> | undefined;
   let selectedPlan: RustCallableValueSelection | undefined;
   let publishedPlan: RustCallableValuePlan | undefined;
   return Object.freeze({
@@ -282,6 +288,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const frames = createRustFrameCallablePlan({ ...input, usedNames });
       physicalLifecycle = createRustPhysicalCallableLifecycle({ ...input, generic, frames, suspended,
         nativeStorage, nativeProducers, adapterFlows: flows });
+      structuralMethodStorage = createRustStructuralMethodStorage({ ...input, native, nativeStorage, nativeProducers });
       const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
         records: input.records, generic, native, nativeStorage, definitions: input.typeDefinitions });
       const identityRequests = prepareRustGenericCallableIdentityRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
@@ -301,6 +308,10 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         issues: Object.freeze([...issues, ...selectedIssues]) });
       selectedPlan = plan;
       return Object.freeze({ plan, issues: selectedIssues });
+    },
+    finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">) {
+      if (structuralMethodStorage === undefined) throw new Error("Structural physical storage requires selected callable families.");
+      structuralMethodStorage.complete(errors);
     },
     seal(): RustCallableValuePlan {
       if (publishedPlan !== undefined) return publishedPlan;

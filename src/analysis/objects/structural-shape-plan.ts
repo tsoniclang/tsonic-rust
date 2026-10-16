@@ -88,12 +88,14 @@ export interface RustStructuralShapePlanRegistry extends RustStructuralShapePlan
     receiverIndependentMethods?: ReadonlySet<string>,
   ): RustStructuralShapePlan;
   initializeUnions(unions: readonly RustSourceUnionDefinition[]): void;
+  finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition, ReadonlyMap<number, TargetTypeRef>>): void;
   isInitialized(): boolean;
   seal(): RustStructuralShapePlan;
 }
 
 export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlanRegistry {
   let current: RustStructuralShapePlan | undefined;
+  let construction: ReturnType<typeof createRustStructuralShapeConstruction> | undefined;
   let unions: RustGeneratedUnionPlan | undefined;
   let componentForFile: ((fileName: string) => string) | undefined;
   const requireCurrent = (): RustStructuralShapePlan => {
@@ -119,10 +121,11 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
         throw new Error("Rust structural shape plan can be initialized only once.");
       }
       componentForFile = selectComponent;
-      current = createRustStructuralShapePlan(shapes, implementations, selectComponent, nativeFields, instantiations, {
+      construction = createRustStructuralShapeConstruction(shapes, implementations, selectComponent, nativeFields, instantiations, {
         get unionDefinitions() { return requireUnions().unionDefinitions; },
         unionForCarrier: (carrier: TargetTypeRef) => requireUnions().unionForCarrier(carrier),
       }, receiverIndependentMethods);
+      current = construction.plan;
       return current;
     },
     initializeUnions(definitions: readonly RustSourceUnionDefinition[]) {
@@ -137,6 +140,10 @@ export function createRustStructuralShapePlanRegistry(): RustStructuralShapePlan
         names.set(shape.componentId, selected);
       }
       unions = createRustGeneratedUnionPlan(definitions, componentForFile, names);
+    },
+    finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition, ReadonlyMap<number, TargetTypeRef>>) {
+      if (construction === undefined) throw new Error("Structural method storage requires its initialized shape builder.");
+      construction.finalizeMethodStorage(selections);
     },
     isInitialized() {
       return current !== undefined;
@@ -178,6 +185,22 @@ export function createRustStructuralShapePlan(
   unions: RustGeneratedUnionPlan = createRustGeneratedUnionPlan([], componentForFile, new Map()),
   receiverIndependentMethods: ReadonlySet<string> = new Set(),
 ): RustStructuralShapePlan {
+  return createRustStructuralShapeConstruction(shapes, implementations, componentForFile, nativeFields,
+    instantiations, unions, receiverIndependentMethods).plan;
+}
+
+function createRustStructuralShapeConstruction(
+  shapes: readonly RustSourceObjectShape[],
+  implementations: readonly RustStructuralFieldImplementation[],
+  componentForFile: (fileName: string) => string,
+  nativeFields: readonly RustNativeObjectField[],
+  instantiations: readonly RustStructuralInstantiation[],
+  unions: RustGeneratedUnionPlan,
+  receiverIndependentMethods: ReadonlySet<string>,
+): {
+  readonly plan: RustStructuralShapePlan;
+  finalizeMethodStorage(selections: ReadonlyMap<RustStructuralShapeDefinition, ReadonlyMap<number, TargetTypeRef>>): void;
+} {
   const selections = new Map<TargetTypeRef, ReturnType<typeof rustStructuralGenericCarrier>>();
   const physicalSelection = (carrier: TargetTypeRef): ReturnType<typeof rustStructuralGenericCarrier> => {
     const existing = selections.get(carrier);
@@ -243,7 +266,7 @@ export function createRustStructuralShapePlan(
   }
   const usedTypeNamesByComponent = new Map<string, Set<string>>();
   const nestedCarriers: { readonly source: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
-  const definitions = [...grouped]
+  let definitions: readonly RustStructuralShapeDefinition[] = Object.freeze([...grouped]
     .sort(([left], [right]) => left.localeCompare(right, "en"))
     .map(([key, instances]): RustStructuralShapeDefinition => {
       const sourceCarriers = Object.freeze([...instances]
@@ -351,7 +374,7 @@ export function createRustStructuralShapePlan(
           targetName: allocateSnakeName(usedFieldNames, "construct"), carrier: structural.construction,
         }) }),
       });
-    });
+    }));
   const byKey = new Map<string, RustStructuralShapeDefinition>();
   const byStorageKey = new Map<string, RustStructuralShapeDefinition>();
   const originsByKey = new Map<string, RustStructuralShapeDefinition>();
@@ -395,10 +418,10 @@ export function createRustStructuralShapePlan(
     if (instantiated !== undefined) byKey.set(key, instantiated);
     return instantiated;
   };
-  return Object.freeze({
+  const plan: RustStructuralShapePlan = Object.freeze({
     get unionDefinitions() { return unions.unionDefinitions; },
     unionForCarrier: (carrier: TargetTypeRef) => unions.unionForCarrier(carrier),
-    definitions: Object.freeze(definitions),
+    get definitions() { return definitions; },
     sharesStorage(left: TargetTypeRef, right: TargetTypeRef) {
       const leftDefinition = definitionFor(left);
       const rightDefinition = definitionFor(right);
@@ -422,6 +445,46 @@ export function createRustStructuralShapePlan(
         return undefined;
       }
       return definitionFor(carrier)?.fields[storageIndex];
+    },
+  });
+  let methodStorageFinalized = false;
+  return Object.freeze({ plan,
+    finalizeMethodStorage(selections) {
+      if (methodStorageFinalized) throw new Error("Structural method physical storage finalizes exactly once.");
+      const replacements = new Map<RustStructuralShapeDefinition, RustStructuralShapeDefinition>();
+      for (const definition of definitions) {
+        const fields = selections.get(definition);
+        if (fields === undefined) {
+          replacements.set(definition, definition);
+          continue;
+        }
+        for (const [index] of fields) {
+          if (definition.fields[index]?.method !== true)
+            throw new Error("Structural method storage can replace only an admitted method slot.");
+        }
+        replacements.set(definition, Object.freeze({ ...definition,
+          fields: Object.freeze(definition.fields.map((field, index) => {
+            const methodStorageCarrier = fields.get(index);
+            return methodStorageCarrier === undefined ? field : Object.freeze({ ...field, methodStorageCarrier });
+          })),
+        }));
+      }
+      for (const definition of selections.keys()) {
+        if (!replacements.has(definition)) throw new Error("Structural method storage requires its exact canonical definition.");
+      }
+      const instances = new Map<string, RustStructuralShapeDefinition>();
+      for (const [key, selected] of byKey) {
+        const origin = originsByKey.get(key) ?? byStorageKey.get(structuralStorageKey(selected.carrier, componentForFile));
+        const replacement = origin === undefined ? undefined : replacements.get(origin);
+        const instance = replacement === undefined ? undefined : instantiateStructuralDefinition(replacement, selected.carrier);
+        if (instance === undefined) throw new Error("Structural physical storage lost its exact template-to-instance correspondence.");
+        instances.set(key, instance);
+      }
+      for (const [key, selected] of instances) byKey.set(key, selected);
+      for (const [key, definition] of byStorageKey) byStorageKey.set(key, replacements.get(definition)!);
+      for (const [key, definition] of originsByKey) originsByKey.set(key, replacements.get(definition)!);
+      definitions = Object.freeze(definitions.map(definition => replacements.get(definition)!));
+      methodStorageFinalized = true;
     },
   });
 }
