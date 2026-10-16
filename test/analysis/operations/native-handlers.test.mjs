@@ -71,11 +71,11 @@ test("the final native owner visits the actual checked domain once, publishes ex
 
 test("the JS string root uses the finalized ABI and shadows remain ordinary in actual source", () => {
   const { source: checked, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
-    import { jsstr } from "@tsonic/js/lang.js";
+    import { jsstr as exactJsString } from "@tsonic/js/lang.js";
     import type { JsString } from "@tsonic/js/types.js";
-    export function exact(input: string): string { const value: JsString = jsstr(input); return value.toWellFormed(); }
-    function jsstrShadow(value: string): string { return value; }
-    export function ordinary(input: string): string { return jsstrShadow(input); }
+    export function exact(input: string): string { const value: JsString = exactJsString(input); return value.toWellFormed(); }
+    function jsstr(value: string): string { return value; }
+    export function ordinary(input: string): string { return jsstr(input); }
   ` } });
   const selections = [];
   const visit = node => {
@@ -87,8 +87,8 @@ test("the JS string root uses the finalized ABI and shadows remain ordinary in a
     checked.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
-  const call = selections.find(([name]) => name === "jsstr")[1];
-  const shadow = selections.find(([name]) => name === "jsstrShadow")[1];
+  const call = selections.find(([name]) => name === "exactJsString")[1];
+  const shadow = selections.find(([name]) => name === "jsstr")[1];
   const selected = program.records.nativeHandler.get(call);
   assert.equal(selected.kind, "js-string-conversion");
   assert.equal(selected.selection === program.records.targetOperation.get(call), true);
