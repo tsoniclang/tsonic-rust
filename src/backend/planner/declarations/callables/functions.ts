@@ -145,6 +145,7 @@ function planRustFunctionItem(
   outerContext: RustPlanContext,
 ): RustFunctionItemPlan | undefined {
   const node = source.callableDeclaration;
+  const { promiseBody: _enclosingPromiseBody, ...functionContext } = outerContext;
   const { ast } = outerContext.input.program.source;
   const isAsync = ast.hasModifierKind(node, "async");
   const generatorFact = outerContext.input.program.records.generator.get(node);
@@ -181,7 +182,7 @@ function planRustFunctionItem(
     source.nameDeclaration,
   );
   const declarationAttributes = [...safetyAttributes];
-  let context: RustPlanContext = nativeBody === undefined ? outerContext : { ...outerContext, promiseBody: true };
+  let context: RustPlanContext = nativeBody === undefined ? functionContext : { ...functionContext, promiseBody: true };
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -443,7 +444,7 @@ function planRustFunctionItem(
   };
   if (nativeBody === undefined || !context.input.program.promiseBodies.objects.has(node))
     return Object.freeze({ item, helper: undefined });
-  const adapterGenerics = planRustCallableGenerics(node, outerContext, specialization, lexical?.genericParameters);
+  const adapterGenerics = planRustCallableGenerics(node, functionContext, specialization, lexical?.genericParameters);
   if (adapterGenerics === undefined) return undefined;
   const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context,
     asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
