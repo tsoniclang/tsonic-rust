@@ -105,18 +105,53 @@ export async function main(): Promise<int32> { return await value() + value_nati
   assert.equal(current.nativeName(current.named(isFunction, "value")), "value_native_2");
 });
 
-test("a two-function await cycle counts as suspending, so both bodies are factories over owned 'static inputs", () => {
+test("a closed two-function await cycle has settled native bodies with no retained inputs", () => {
   const current = fixture(`${header}
 export async function ping(count: int32): Promise<int32> { return count <= 0 ? 0 : await pong(count - 1); }
 export async function pong(count: int32): Promise<int32> { return count <= 0 ? 0 : await ping(count - 1); }
 `);
   for (const name of ["ping", "pong"]) {
     const fact = current.fact(name);
-    assert.equal(fact?.kind === "js-promise" && fact.lowering.kind === "factory", true, `${name} is a factory`);
-    assert.equal(fact.lowering.capturedParameters.length, 1, `${name} moves its owned count into the task`);
+    assert.equal(fact?.kind === "js-promise" && fact.lowering.kind === "settled", true, `${name} is settled`);
+    assert.equal(Object.hasOwn(fact.lowering, "capturedParameters"), false, `${name} retains no task inputs`);
     assert.equal(Object.hasOwn(fact.lowering, "ownedReceiver"), false, `${name} has no receiver`);
   }
   assert.equal(current.context.diagnostics.length, 0);
+});
+
+test("self and nested mutual cycles use the same exact native-edge completion rule", () => {
+  const declarations = [
+    "async function ping(count: int32): Promise<int32> { return count <= 0 ? 0 : await pong(count - 1); }",
+    "async function pong(count: int32): Promise<int32> { return count <= 0 ? 0 : await ping(count - 1); }",
+  ];
+  for (const ordered of [declarations, [...declarations].reverse()]) {
+    const current = fixture(`${header}
+export async function outer(count: int32): Promise<int32> {
+  ${ordered.join("\n")}
+  return await ping(count);
+}
+export async function descend(count: int32): Promise<int32> { return count <= 0 ? 0 : await descend(count - 1); }
+`);
+    for (const name of ["outer", "ping", "pong", "descend"]) {
+      assert.equal(current.fact(name)?.lowering.kind, "settled", `${name}: ordered closed native recursion`);
+    }
+    assert.equal(current.context.diagnostics.length, 0, "closed native recursion has no source rejection");
+  }
+});
+
+test("an actual Promise-input suspension keeps every member of a recursive component suspending", () => {
+  const current = fixture(`${header}
+export async function ping(count: int32, pending: Promise<void>): Promise<int32> {
+  await pending;
+  return count <= 0 ? 0 : await pong(count - 1, pending);
+}
+export async function pong(count: int32, pending: Promise<void>): Promise<int32> {
+  return count <= 0 ? 0 : await ping(count - 1, pending);
+}
+`);
+  for (const name of ["ping", "pong"]) {
+    assert.equal(current.fact(name)?.lowering.kind, "factory", `${name}: real pending input remains suspending`);
+  }
 });
 
 test("an awaited method call is not a direct call when a subclass overrides it with a suspending body (R4-m1)", () => {
