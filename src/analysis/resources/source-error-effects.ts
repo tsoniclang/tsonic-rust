@@ -16,7 +16,7 @@ import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/me
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 import type { RustNativeCallableProducer } from "../callables/native-producers.js";
-import { rustNativeCallableErrorType } from "../callables/native-protocols.js";
+import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import type { SourceStorageBindings } from "@tsonic/target-api/analysis";
@@ -198,15 +198,7 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
         const producer = producers.get(original.owner.identity);
         const input = inputs.get(original.owner.identity);
         if (input === undefined || producer === undefined && !absentInputs.has(original.owner.identity)) return type;
-        const sourceItem = original.trait?.sourceItem;
-        const protocol = sourceItem === undefined ? undefined : native.protocolForSourceItem(sourceItem.fileName, sourceItem.typeName);
-        if (protocol === undefined) { valid = false; return type; }
-        const channels = ["invocation" as const, ...(protocol.completion?.futures.map(future => future.ordinal) ?? [])];
-        const channel = channels.find(channel => {
-          const expected = original.trait === undefined ? undefined : rustNativeCallableErrorType(
-            { protocol, trait: original.trait }, original.owner, channel, original.genericArguments ?? []);
-          return expected !== undefined && rustTargetTypeRefEquals(expected, original);
-        });
+        const channel = rustNativeCallableErrorChannel(input, input.implementation, original);
         const replacement: TargetTypeRef | undefined = channel === undefined ? undefined : absentInputs.has(original.owner.identity)
           ? { kind: "target-named", id: rustInfallibleTargetId } : producer === undefined ? undefined
           : walk.context.callableValues.nativeProducers.errorFor(producer.declaration, channel === "invocation" ? "invoke" : channel);

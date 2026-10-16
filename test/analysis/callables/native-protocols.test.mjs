@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustNativeCallableProtocolRegistry, rustNativeCallableErrorType, rustNativeCallableProtocolResult }
+import { createRustNativeCallableProtocolRegistry, rustNativeCallableErrorChannel, rustNativeCallableErrorType, rustNativeCallableProtocolResult }
   from "../../../dist/analysis/callables/native-protocols.js";
 import { rustCallableTargetType, rustFutureTargetType, rustJsPromiseTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType }
   from "../../../dist/target-model/types/index.js";
@@ -103,4 +103,35 @@ test("native protocol registry rejects invalid carriers and ambiguous borrowed r
   const reference = { kind: "reference", referent: integer, mutable: false };
   assert.equal(registry.bind("/source.ts", rustCallableTargetType([reference, reference], reference)) === undefined, true);
   assert.equal(registry.definitions().length, 0);
+});
+
+test("native error channel proof requires the exact implementation, protocol, environment and method arguments", () => {
+  const registry = create();
+  const value = { kind: "type-parameter", identity: "source:Value", name: "Value" };
+  const selected = registry.bind("/source.ts", rustCallableTargetType([value], rustFutureTargetType(value)));
+  const invocation = rustNativeCallableErrorType(selected, implementation, "invocation", []);
+  const awaited = rustNativeCallableErrorType(selected, implementation, 0, []);
+  assert.equal(rustNativeCallableErrorChannel(selected, implementation, invocation), "invocation");
+  assert.equal(rustNativeCallableErrorChannel(selected, implementation, awaited), 0);
+  const other = { kind: "type-parameter", identity: "input:other", name: "Other" };
+  const wrongEnvironment = { ...invocation.trait, genericArguments: [{ kind: "type", type: integer }] };
+  for (const invalid of [
+    { ...invocation, owner: other },
+    { ...invocation, trait: { ...invocation.trait, path: "OtherProtocol" } },
+    { ...invocation, trait: wrongEnvironment },
+    { ...invocation, name: "AwaitError1" },
+    { ...invocation, genericArguments: [{ kind: "type", type: integer }] },
+    { ...invocation, trait: { ...invocation.trait, associatedConstraints: [{ name: "Extra", type: integer }] } },
+  ]) assert.equal(rustNativeCallableErrorChannel(selected, implementation, invalid) === undefined, true);
+  const js = registry.bind("/source.ts", rustCallableTargetType([integer], rustJsPromiseTargetType(integer)));
+  assert.equal(rustNativeCallableErrorChannel(js, implementation,
+    rustNativeCallableErrorType(js, implementation, 0, [])) === undefined, true);
+  const borrowed = registry.bind("/source.ts", rustCallableTargetType([
+    { kind: "reference", referent: integer, mutable: false },
+  ], integer));
+  const arguments_ = borrowed.protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime", lifetime: parameter.lifetime }));
+  const borrowedError = rustNativeCallableErrorType(borrowed, implementation, "invocation", arguments_);
+  assert.equal(rustNativeCallableErrorChannel(borrowed, implementation, borrowedError), "invocation");
+  assert.equal(rustNativeCallableErrorChannel(borrowed, implementation,
+    { ...borrowedError, genericArguments: [{ kind: "type", type: integer }] }) === undefined, true);
 });
