@@ -14,6 +14,16 @@ function enumDeclarations(source) {
     .filter(declaration => source.ast.kindName(declaration) === "KindEnumDeclaration");
 }
 
+test("exact authored enum constants and implicit increments are emitted without a float64 roundtrip", () => {
+  const { result } = compileRust({ files: { "index.ts": `
+export enum Exact { First = 9007199254740993, Next }
+` } });
+  assert.equal(result.diagnostics.length, 0, "authored exact integer constants remain admitted");
+  const generated = artifactText(result, "src/index.rs");
+  assert.match(generated, /First = 9007199254740993/u, "the authored value does not round through Number");
+  assert.match(generated, /Next = 9007199254740994/u, "implicit increment consumes the exact preceding integer");
+});
+
 test("source enum definitions retain the identical early completed values and common width", () => {
   const { source, program } = analyzeRust({ files: { "index.ts": `
 export enum Narrow { Min = -2147483648, Max = 2147483647 }
