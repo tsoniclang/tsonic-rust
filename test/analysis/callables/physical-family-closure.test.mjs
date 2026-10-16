@@ -78,13 +78,14 @@ function compileObserved(options) {
   return { result, analyzed, inventory };
 }
 
-function construction(text, wrapCaptures = captures => captures) {
+function construction(text, wrapCaptures = captures => captures, wrapRecords = records => records) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const registry = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation);
+  const records = wrapRecords(program.records);
+  const registry = createRustGenericCallablePlan(source.ast, program.sourceFiles, records, program.names, source.navigation);
   let physical;
-  const input = { ast: source.ast, storage, records: program.records, definitions: program.typeDefinitions,
+  const input = { ast: source.ast, storage, records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, producers) => physical.carrierFor(carrier, ownerFileName, producers) };
@@ -101,7 +102,7 @@ function construction(text, wrapCaptures = captures => captures) {
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
   const implementations = registry.plan.definitions.flatMap(definition => definition.implementations);
-  return { physical, queries, declaration, implementations, captures, ast: source.ast };
+  return { physical, queries, declaration, implementations, captures, ast: source.ast, storage, program };
 }
 
 function countedCaptures(state) {
@@ -269,7 +270,14 @@ test("two backend plans over a published program read completed callable stores 
 });
 
 test("a family first requested by an invocation-storage request is admitted after every root and read by producers and dispatch", () => {
-  const context = checkedContext(genericObjectMethodStorageSource, { id: "rust", options: { outputType: "lib", crateName: "retained_closure" } });
+  const context = checkedContext(`${genericObjectMethodStorageSource}
+    function receiverOnly(seed: number) {
+      return { state: seed, retain<Item>(value: Item): Item { this.state; return value; } };
+    }
+    export function useReceiver(value: number): number {
+      return receiverOnly(value).retain(value);
+    }
+  `, { id: "rust", options: { outputType: "lib", crateName: "retained_closure" } });
   const { generic, nativeStorage, nativeGenericProducers, genericDispatch } = context.callableValues.selected;
   const physical = generic.physical;
   const inventory = physical.definitions();
@@ -574,6 +582,28 @@ test("an open physical conversion retries an unfinished environment instead of r
   current.physical.publish();
   assert.equal(early.conversionFor(carrier, carrier) === conversion, true, "the captured reader uses the final prepared conversion");
   assert.equal(state.selections, 1, "completion does not select the capture again");
+});
+
+test("private logical leaf construction retries unfinished source evidence and retains only the completed carrier", () => {
+  const state = { hidden: undefined };
+  const current = construction("export function read(value: number): number { return value; }", undefined,
+    records => Object.freeze({ ...records, sourceParameterAbi: Object.freeze({
+      get: node => node === state.hidden ? undefined : records.sourceParameterAbi.get(node),
+    }) }));
+  const parameter = current.ast.parameters(current.declaration("read"))[0];
+  const subject = current.storage.subject(parameter, "input");
+  assert.equal(subject.kind, "resolved", "the actual formal has its canonical private source-storage subject");
+  state.hidden = parameter;
+  assert.equal(current.queries.logicalCarrierFor(subject.subject, current.storage.emptyBindings) === undefined, true,
+    "unfinished source ABI evidence has no derived logical leaf");
+  state.hidden = undefined;
+  const completed = current.queries.logicalCarrierFor(subject.subject, current.storage.emptyBindings);
+  assert.equal(completed !== undefined && sameMetadata(completed,
+    current.program.records.sourceParameterAbi.get(parameter).parameterCarrier), true, "the identical query reads the actual completed ABI");
+  assert.equal(current.queries.logicalCarrierFor(subject.subject, current.storage.emptyBindings) === completed, true,
+    "completed derived evidence is retained once in the private construction owner");
+  assert.equal("logicalCarrierFor" in current.program.callableValues.nativeStorage, false,
+    "the logical construction reader is not a published native-storage service");
 });
 
 test("a required environment refusal settled at closure is final", () => {

@@ -110,10 +110,11 @@ export function createRustNativeStorageQueries(input: {
     ? input.storage.emptyBindings : nodes.has(owner) ? input.native.bindingsFor(owner) : undefined;
   const ownerFor = (node: Node): Node | undefined => sourceEnclosingCallable(node, input.ast);
   const futures = createRustNativeFutureInputPlan({ ...input, bindingsFor });
-  const logicalCarriers = new Map<SourceStorageSubject, Map<SourceStorageBindings, TargetTypeRef | undefined>>();
+  const logicalCarriers = new Map<SourceStorageSubject, Map<SourceStorageBindings, TargetTypeRef>>();
   const logicalCarrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | undefined => {
     const previous = logicalCarriers.get(subject);
-    if (previous?.has(bindings) === true) return previous.get(bindings);
+    const cached = previous?.get(bindings);
+    if (cached !== undefined) return cached;
     if (input.storage.typeFor(subject).kind === "unresolved" ||
       input.storage.boundOriginsFor(subject, bindings).kind === "unresolved") return undefined;
     const root = subject.kind === "input" ? input.records.sourceParameterAbi.get(subject.node)?.parameterCarrier
@@ -128,8 +129,9 @@ export function createRustNativeStorageQueries(input: {
       genericInvocationBindingsFor }, owner, bindings);
     const bound = carrier === undefined || generic?.kind === "unresolved" ? undefined : generic === undefined ? carrier
       : substituteRustTargetGenerics(carrier, generic.bindings.types, generic.bindings.lifetimes, generic.bindings.consts);
-    const selected = bound === undefined ? undefined : snapshotClosedMetadata(bound);
-    const entries = previous ?? new Map<SourceStorageBindings, TargetTypeRef | undefined>();
+    if (bound === undefined) return undefined;
+    const selected = snapshotClosedMetadata(bound);
+    const entries = previous ?? new Map<SourceStorageBindings, TargetTypeRef>();
     entries.set(bindings, selected);
     logicalCarriers.set(subject, entries);
     return selected;

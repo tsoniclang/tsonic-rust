@@ -47,7 +47,7 @@ export function createRustStructuralMethodStorage(input: {
   const canonical = new Map(structuralShapes.definitions.map(definition =>
     [`${definition.componentId}\0${definition.targetName}`, definition]));
   const roots: RustStructuralMethodRoot[] = [];
-  const seen = new Map<SourceStorageSubject, Set<TargetTypeRef>>();
+  const seen = new Map<SourceStorageSubject, Map<TargetTypeRef, Set<number>>>();
   const register = (node: Node, carrier: TargetTypeRef, index: number, subject: SourceStorageSubject): void => {
     const selected = structuralShapes.definitionForCarrier(carrier);
     const field = selected?.fields[index];
@@ -55,10 +55,12 @@ export function createRustStructuralMethodStorage(input: {
     if (selected === undefined || field?.nativeMethod === true || rustCallableProtocol(method) === undefined) return;
     const definition = canonical.get(`${selected.componentId}\0${selected.targetName}`);
     if (definition === undefined) throw new Error("Structural method storage requires its canonical shape owner.");
-    const carriers = seen.get(subject) ?? new Set<TargetTypeRef>();
-    if (carriers.has(carrier)) return;
+    const carriers = seen.get(subject) ?? new Map<TargetTypeRef, Set<number>>();
+    const indexes = carriers.get(carrier) ?? new Set<number>();
+    if (indexes.has(index)) return;
     seen.set(subject, carriers);
-    carriers.add(carrier);
+    carriers.set(carrier, indexes);
+    indexes.add(index);
     const owner = sourceEnclosingCallable(node, ast);
     const bindings = owner === undefined ? sourceStorage.emptyBindings : input.native.bindingsFor(owner);
     if (bindings === undefined) throw new Error("Structural method storage requires its checked lexical activation.");
