@@ -63,3 +63,20 @@ test("wide bigint literals retain their checked native signedness without roundi
     assertNoTargetDiagnostics(context.diagnostics);
   }
 });
+
+test("Rust owns floating grammar while shared source facts retain neutral decimal spelling", () => {
+  for (const [source, neutral, floating] of [["1", "1", "1.0"], ["1.", "1", "1.0"], ["1.0", "1.0", "1.0"],
+    ["1.00", "1.00", "1.00"], ["0", "0", "0.0"], ["0.000", "0.000", "0.0"],
+    ["0e999999999999999999999", "0e+999999999999999999999", "0.0"], ["0xFF", "255", "255.0"]]) {
+    for (const name of ["float32", "float64"]) {
+      const carrier = rustSourcePrimitiveTargetType(name);
+      const { node, context } = contextFor(source, "NumericLiteral", carrier);
+      const literal = context.input.program.records.literalValue.get(node);
+      assert.equal(literal?.numeric?.kind === "authored" && literal.numeric.token.decimalText === neutral, true,
+        `${name} ${source}: shared spelling`);
+      assert.deepEqual(planNumericLiteralWithCarrier(node, carrier, context),
+        { kind: "float-literal", text: name === "float32" ? `${floating}_f32` : floating }, `${name} ${source}: native grammar`);
+      assertNoTargetDiagnostics(context.diagnostics);
+    }
+  }
+});
