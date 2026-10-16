@@ -23,6 +23,8 @@ type SourcePrimitiveName = Extract<
   { readonly kind: "source-primitive" }
 >["name"];
 
+const rustFloat32LargestFiniteSourceLiteral = 3.4028235677973366e38;
+
 export function isUnannotatedRustNumericLiteral(node: Node, ast: AstReader): boolean {
   return selectedNumericLiteralValue(node, ast) !== undefined || sourceIntegerLiteralValue(ast, node) !== undefined;
 }
@@ -73,7 +75,8 @@ export function selectedSourceLiteralIsRepresentable(
   }
   if (primitive === "float32" || primitive === "float64") {
     const value = selectedNumericLiteralValue(node, ast);
-    return value !== undefined && Number.isFinite(value);
+    return value !== undefined && Number.isFinite(value) &&
+      (primitive === "float64" || Math.abs(value) <= rustFloat32LargestFiniteSourceLiteral);
   }
   const value = sourceIntegerLiteralValue(ast, node);
   if (primitive === "native-int" || primitive === "native-uint") {
