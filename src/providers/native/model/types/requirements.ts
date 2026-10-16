@@ -21,8 +21,10 @@ import {
 } from "./rustdoc-type-normalization.js";
 import {
   rustCompilerTypeSemanticKey,
+  substituteRustCompilerTrait,
   typeRequirementKey,
 } from "./substitution.js";
+import { implementationSubstitutions } from "../normalization/implementation-bindings.js";
 import {
   derivedNormalizationContext,
 } from "./normalization-context.js";
@@ -83,15 +85,12 @@ export function normalizeTypeTraits(
       const requirement = rustCompilerTraitRequirement(
         normalizeTraitDispatch(document, impl.trait, context.context),
       );
-      const implementationParameters = context.generics.parameters.filter(
-        (parameter): parameter is RustCompilerTypeParameter => parameter.kind === "type",
-      );
       const implementation = sourceTraitImplementation(
         document,
         dependency,
         impl,
         requirement,
-        implementationParameters,
+        context.generics.parameters,
         context.context,
         declaredGenericParameters,
         declaredTypeParameters,
@@ -370,7 +369,7 @@ function sourceTraitImplementation(
   dependency: RustCompilerDependency,
   impl: Readonly<Record<string, unknown>>,
   trait: RustCompilerTypeRequirement,
-  implementationParameters: readonly RustCompilerTypeParameter[],
+  implementationParameters: readonly RustCompilerGenericParameter[],
   implementationContext: RustCompilerNormalizationContext,
   declaredGenericParameters: readonly RustCompilerGenericParameter[],
   declaredTypeParameters: readonly RustCompilerTypeParameter[],
@@ -378,7 +377,7 @@ function sourceTraitImplementation(
   ownerIdentity: RustCompilerItemIdentity,
   resolveItem?: RustdocItemResolver,
 ): RustCompilerTraitImplementation | undefined {
-  const positions = directImplementationTypeParameterPositions(
+  const positions = directImplementationGenericParameterPositions(
     document,
     impl,
     implementationContext,
@@ -386,16 +385,29 @@ function sourceTraitImplementation(
     ownerIdentity,
   );
   if (positions === undefined) return undefined;
+  const substitutions = implementationSubstitutions(
+    implementationParameters,
+    positions,
+    declaredGenericParameters,
+  );
+  const rebind = (requirement: RustCompilerTypeRequirement): RustCompilerTypeRequirement =>
+    typeof requirement === "string" ? requirement : rustCompilerTraitRequirement(
+      substituteRustCompilerTrait(requirement.trait, substitutions),
+    );
   const requirements = new Map<string, RustCompilerTraitRequirement>();
   for (const parameter of implementationParameters) {
-    const typeArgumentIndex = positions.get(parameter.identity.itemId);
-    if (typeArgumentIndex === undefined) {
+    if (parameter.kind !== "type") continue;
+    const genericIndex = positions.get(parameter.identity.itemId);
+    const declared = genericIndex === undefined ? undefined : declaredGenericParameters[genericIndex];
+    if (declared === undefined) {
       if (parameter.requirements.length !== 0) return undefined;
       continue;
     }
-    const declared = declaredTypeParameters[typeArgumentIndex];
-    if (declared === undefined) return undefined;
-    for (const requirement of parameter.requirements) {
+    if (declared.kind !== "type") return undefined;
+    const typeArgumentIndex = declaredTypeParameters.indexOf(declared);
+    if (typeArgumentIndex < 0) return undefined;
+    for (const selected of parameter.requirements) {
+      const requirement = rebind(selected);
       if (typeParameterGuaranteesRequirement(declared, requirement)) continue;
       if (typeArgumentIndex < sourceTypeArgumentCount) {
         const condition = Object.freeze({ typeArgumentIndex, requirement });
@@ -415,7 +427,7 @@ function sourceTraitImplementation(
     }
   }
   return Object.freeze({
-    trait,
+    trait: rebind(trait),
     requirements: Object.freeze([...requirements.entries()]
       .sort(([left], [right]) => compareText(left, right))
       .map(([, requirement]) => requirement)),
