@@ -23,6 +23,7 @@ export function createRustRetainedEnvironmentQueries(
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
   const suspended = new Map<Node, readonly Node[] | undefined>();
   const lexical = new Map<Node, LexicalSelection>();
+  let opaqueInvocations: ReadonlySet<Node> | undefined;
   let remaining = Number.isSafeInteger(maximumSteps) && maximumSteps > 0 ? maximumSteps : 0;
   const step = (): boolean => remaining > 0 && --remaining >= 0;
   const unresolved = (reason = "Retained native environments require exact declaration-owned storage within the finite source work budget.") =>
@@ -84,6 +85,15 @@ export function createRustRetainedEnvironmentQueries(
         const pending = [{ subject, bindings }];
         const components = (subject: SourceStorageSubject, bindings: SourceStorageBindings): boolean => {
           if (!step()) return false;
+          if (opaqueInvocations === undefined) {
+            const invocations = new Set<Node>();
+            for (const boundary of storage.boundaries) {
+              if (!step()) return false;
+              if (boundary.kind === "opaque-invocation") invocations.add(boundary.invocation);
+            }
+            opaqueInvocations = invocations;
+          }
+          if (opaqueInvocations.has(subject.node)) return true;
           const selected = storage.typeFor(subject);
           if (selected.kind === "unresolved") return false;
           const semantics = input.source.semantics.forFile(selected.sourceFile);

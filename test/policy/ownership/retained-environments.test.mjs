@@ -100,6 +100,22 @@ test("returned source method traversal stays bounded and never invokes an access
     "an unused input is not retained by evaluating a getter");
 });
 
+test("retention respects the canonical opaque invocation leaf instead of traversing its advertised native members", () => {
+  const current = fixture(`
+interface NativeResult { next: NativeResult; read(): number; }
+declare function native(value: number): NativeResult;
+export function make(unused: number): NativeResult { return native(1); }
+`, input => ({ ...input, sourceStorage: { ...input.sourceStorage, subject(node, kind, projection) {
+    assert.equal(projection?.length > 0 && input.source.ast.is.IsCallExpression(node), false,
+      "an opaque native result is not a source record allocation");
+    return input.sourceStorage.subject(node, kind, projection);
+  } } }));
+  assert.equal(current.sourceStorage.boundaries.some(boundary => boundary.kind === "opaque-invocation"), true,
+    "the actual source transport declares the native result opaque");
+  assert.equal(current.queries.environmentFor(current.declarations.get("make")).kind, "none",
+    "the unused source input is not retained through an invented native field walk");
+});
+
 test("retention distinguishes type-only parameter uses from evaluated default and body uses", () => {
   const { source, queries, declarations } = fixture(`
 export async function outer(typeOnly: () => number, callback: () => number, value = callback()): Promise<number> {
