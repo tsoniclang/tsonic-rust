@@ -10,7 +10,7 @@ import {
 import type { Node } from "@tsonic/tsts";
 
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import { rustTargetOperationText } from "../../../analysis/operations/target-operation.js";
+import { rustTargetOperationText } from "../../../target-model/operations/text.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";

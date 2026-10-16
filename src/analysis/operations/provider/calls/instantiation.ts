@@ -31,7 +31,7 @@ import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/in
 import { rustArgumentPassingMode } from "../../../callables/parameter-passing.js";
 import { rustOptionElementCarrier, rustOptionValueCarrier } from "../../../../target-model/types/index.js";
 
-import { rustTargetOperationText } from "../../target-operation.js";
+import { rustTargetOperationText } from "../../../../target-model/operations/text.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { selectedCallArgumentNodes, selectedCallCalleeDeclaration, selectedCallCalleeSymbol, selectedSourceValueCarrier } from "../operators.js";
 import { selectRustOptionalChain } from "../../../../policy/operations/optional-chains.js";

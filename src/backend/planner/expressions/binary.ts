@@ -44,7 +44,7 @@ import {
   planRustProjectTypeTest,
   planRustProjectTypeTestSelection,
 } from "../objects/project-downcasts.js";
-import { rustTargetOperationText } from "../../../analysis/operations/target-operation.js";
+import { rustTargetOperationText } from "../../../target-model/operations/text.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { finalizedConversionIsValid } from "../../../analysis/operations/finalized-operation/conversions.js";
 import { hasExactObjectKeys, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";

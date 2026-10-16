@@ -25,7 +25,7 @@ import { retainRustSourceUnionInstantiation } from "../../../policy/types/resolu
 import { selectRustProviderObjectLiteralConstruction } from "../../../policy/types/resolution/providers.js";
 import { rustCallableProtocol, rustStructuralObjectCarrierValue } from "../../../target-model/types/index.js";
 
-import { rustTargetOperationText } from "../target-operation.js";
+import { rustTargetOperationText } from "../../../target-model/operations/text.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { normalizeSelectedLiteralCarrier, sourceLiteralIsRepresentableAsPrimitive } from "../../expressions/selected-literals.js";
 import { selectJsSurfaceOperation } from "../../../policy/operations/source-profiles/js/index.js";

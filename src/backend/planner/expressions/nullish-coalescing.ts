@@ -1,7 +1,7 @@
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import { rustTargetOperationText } from "../../../analysis/operations/target-operation.js";
+import { rustTargetOperationText } from "../../../target-model/operations/text.js";
 import { isRustNeverCarrier, rustOptionElementCarrier } from "../../../target-model/types/index.js";
 import { rustOptionNestingDepth } from "../../../target-model/types/carriers/optional.js";
 import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";

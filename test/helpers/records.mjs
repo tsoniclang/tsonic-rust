@@ -20,12 +20,16 @@ export function assertRustInheritedRecordConflict(family, subject, fact, attempt
 }
 
 export function createRustRecordFixture(overrides = {}, base) {
-  const records = createRustProgramRecordBuilder().seal([]);
+  const raw = createRustProgramRecordBuilder().seal([]);
+  const records = base === undefined ? raw : base;
+  const families = [...Object.keys(raw), "literalValue"].filter(family => Object.hasOwn(records, family));
+  if (families.length === 0) throw new Error("Missing Rust record reader: empty record domain");
+  const domain = new Set(families);
   for (const family of Object.keys(overrides)) {
-    if (!Object.hasOwn(records, family)) throw new Error("Unknown Rust record family: " + family);
+    if (!domain.has(family)) throw new Error("Unknown Rust record family: " + family);
   }
-  return Object.freeze(Object.fromEntries(Object.keys(records).map(family => {
-    const reader = Object.hasOwn(overrides, family) ? overrides[family] : (base === undefined ? records : base)[family];
+  return Object.freeze(Object.fromEntries(families.map(family => {
+    const reader = Object.hasOwn(overrides, family) ? overrides[family] : records[family];
     if (typeof reader?.get !== "function") throw new Error("Missing Rust record reader: " + family);
     return [family, Object.freeze({ get: subject => reader.get(subject) })];
   })));

@@ -32,7 +32,7 @@ import { planRustComputedMemberExpression } from "../computed-members.js";
 import { planRustSourceAccessorReceiver } from "../../objects/accessor-receivers.js";
 
 import { planRustRuntimeIndexUpdate } from "./runtime.js";
-import { rustTargetOperationText } from "../../../../analysis/operations/target-operation.js";
+import { rustTargetOperationText } from "../../../../target-model/operations/text.js";
 
 export function planUnaryExpression(
   node: Node,
