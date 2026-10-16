@@ -21,6 +21,7 @@ import type {
 } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
 import { analyzeRustSettledPromiseBodies } from "../callables/async-results.js";
+import { analyzeRustPromiseResults } from "../callables/promise-results.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -179,6 +180,9 @@ export function analyzeRustTargetProgram(
   analyzeRustNativeHandlers(context.sourceStorage.nodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, nodes: context.sourceStorage.nodes,
+    records, definitions: context.typeDefinitions });
+  if (promiseResults.diagnostics.length > 0) return rejectedTargetStage(promiseResults.diagnostics);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     typeDefinitions: context.typeDefinitions,
     projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
@@ -338,6 +342,7 @@ export function analyzeRustTargetProgram(
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
+    promiseResults: promiseResults.results,
     settledPromiseBodies: analyzeRustSettledPromiseBodies({ ast: context.ast, sourceFiles: context.sourceFiles,
       records, names: context.names }),
     lexicalFunctions,
