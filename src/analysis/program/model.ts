@@ -1,4 +1,5 @@
 import type { SourceFile } from "@tsonic/tsts";
+import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import type { RustNumericRepresentations } from "../numeric/representations.js";
 import type { TargetCompileInput } from "@tsonic/target-api";
 import type {
@@ -77,7 +78,7 @@ export interface RustTargetProgram {
   readonly source: TargetSourceSyntaxProgram;
   readonly sourceNavigation: TargetPlanningSourceNavigation;
   readonly sourceFiles: readonly SourceFile[];
-  readonly records: RustProgramRecords;
+  readonly records: RustProgramRecords & SourceLiteralIndex;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly projectConstructions: RustProjectConstructionQueries;

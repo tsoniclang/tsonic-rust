@@ -11,6 +11,10 @@ const local = value => `export function read(): float32 {\n  const value: float3
 const refused = [
   ["local overflow", local("3.5e38"), "3.5e38"],
   ["next canonical value above the rounding boundary", local("3.402823567797337e38"), "3.402823567797337e38"],
+  ["exact authored overflow midpoint", local("340282356779733661637539395458142568448"), "340282356779733661637539395458142568448"],
+  ["exact authored integer above midpoint", local("340282356779733661637539395458142568449"), "340282356779733661637539395458142568449"],
+  ["exact authored decimal overflow midpoint", local("3.40282356779733661637539395458142568448e38"), "3.40282356779733661637539395458142568448e38"],
+  ["exact authored decimal above midpoint", local("3.40282356779733661637539395458142568449e38"), "3.40282356779733661637539395458142568449e38"],
   ["largest finite float64", local("1.7976931348623157e308"), "1.7976931348623157e308"],
   ["decimal exponent overflow", local("1e39"), "1e39"],
   ["integer spelling of 2^128", local("340282366920938463463374607431768211456"), "340282366920938463463374607431768211456"],
@@ -43,7 +47,8 @@ const accepted = [
   ["3.4028234663852886e38", "0x7f7fffff"],
   ["3.4028235677973366e38", "0x7f7fffff"],
   ["-3.4028235677973366e38", "0xff7fffff"],
-  ["340282356779733661637539395458142568448", "0x7f7fffff"],
+  ["340282356779733661637539395458142568447", "0x7f7fffff"],
+  ["3.40282356779733661637539395458142568447e38", "0x7f7fffff"],
   ["1e-50", "0"],
   ["-1e-50", "0x80000000"],
   ["1.401298464324817e-45", "1"],
@@ -52,6 +57,18 @@ const accepted = [
   ["7.006492321624087e-46", "1"],
   ["5e-324", "0"],
   ["-0", "0x80000000"],
+  [".5", "0x3f000000"],
+  ["1.", "0x3f800000"],
+  ["0xF_F", "0x437f0000"],
+  ["0b10_01", "0x41100000"],
+  ["0o7_1", "0x42640000"],
+  ["1_2.3_4E+0_2", "0x449a4000"],
+  ["-(+0)", "0x80000000"],
+  ["((.5))", "0x3f000000"],
+  ["1e-9999999999999999999999999", "0"],
+  ["1.00000005960464477539062499999999", "0x3f800000"],
+  ["1.000000059604644775390625", "0x3f800000"],
+  ["1.00000005960464477539062500000001", "0x3f800001"],
 ];
 const acceptedSource = header + accepted.map(([value], index) =>
   `export function value${index}(): float32 { const value: float32 = ${value}; return value; }`).join("\n") + `
@@ -60,6 +77,7 @@ export function wideSum(value: float32): number { return value + 3.5e38; }
 export function compare(value: float32): boolean { return value < 3.5e38; }
 export function compareNegative(value: float32): boolean { return value > -3.5e38; }
 export function equalWide(value: float32): boolean { return value === 3.5e38; }
+export function grouped(flag: boolean): float32 { return flag ? ((.5)) : -(+1); }
 export function inferred(value: float32): float32[] { const values = [value, 3.4028235677973366e38]; return values; }
 export function integer(value: int8): int8[] { const values = [value, 1]; return values; }
 `;
@@ -163,6 +181,10 @@ for (const [surface, selected] of surfaces) {
     assert.equal(generated.includes("3.4028235677973366e+38_f32"), true, "keeps native rounded boundary token");
     assert.equal(generated.includes("5e-324_f32"), true, "keeps permitted native underflow token");
     assert.equal(generated.includes("let value: f64 = 3.5e+38;"), true, "does not narrow an f64 literal");
+    assert.equal(generated.includes("340282356779733661637539395458142568447.0_f32"), true,
+      "authored integer immediately below the overflow midpoint is not rounded through float64");
+    assert.equal(generated.includes("3.40282356779733661637539395458142568447e+38_f32"), true,
+      "authored decimal immediately below the overflow midpoint is preserved losslessly");
     const nativeTest = `#[test]
 fn float32_values() {
     use tsonic_generated::index;
@@ -175,6 +197,8 @@ ${accepted.map(([, bits], index) => `    assert_eq!(index::value${index}().to_bi
     assert!(index::compareNegative(-f32::MAX));
     assert!(!index::compareNegative(f32::NEG_INFINITY));
     assert!(!index::equalWide(f32::MAX));
+    assert_eq!(index::grouped(true), 0.5_f32);
+    assert_eq!(index::grouped(false), -1.0_f32);
 }
 `;
     const projectRoot = writeGeneratedProject(`float32-literal-range-${surface}`, [

@@ -11,6 +11,7 @@ import type {
   TargetSelection,
 } from "@tsonic/target-api";
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
+import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
@@ -141,7 +142,8 @@ export function createRustAnalysisContext(
           sourceFile !== undefined && !ast.isDeclarationFile(sourceFile))
       : [],
   );
-  const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles);
+  const literalValues = analyzeSourceLiteralValues(ast, sourceFiles);
+  const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues);
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
     sourceFiles,
@@ -179,6 +181,7 @@ export function createRustAnalysisContext(
   const memoryBindings = createTsonicMemoryBindingIndex(input.source);
   return Object.freeze({
     callableRepresentation: "storage" as const,
+    literalValues,
     sourceStorage,
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage),

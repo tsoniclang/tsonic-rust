@@ -21,7 +21,7 @@ export function sourceLiteralIsRepresentableAsPrimitive(
   primitive: Extract<TargetTypeRef, { readonly kind: "source-primitive" }>["name"],
   context: RustOperationAnalysisContext,
 ): boolean {
-  return selectedSourceLiteralIsRepresentable(node, primitive, context.ast);
+  return selectedSourceLiteralIsRepresentable(context.literalValues.literalValue.get(node), primitive);
 }
 
 export function normalizeSelectedLiteralCarrier(

@@ -6,6 +6,7 @@ import {
   snapshotTargetPlanningSourceNavigation,
   targetSourceSyntaxProgram,
 } from "@tsonic/target-api/analysis";
+import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
 import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { createRustProgramRecords } from "./records/create.js";
@@ -328,7 +329,10 @@ export function analyzeRustTargetProgram(
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
-  const program: Omit<RustTargetProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords } = {
+  const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
+  const program: Omit<RustTargetProgram, "reachability" | "records"> & {
+    readonly records: RustAnalysisRecords & SourceLiteralIndex;
+  } = {
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
@@ -347,7 +351,7 @@ export function analyzeRustTargetProgram(
     source: targetSourceSyntaxProgram(context.source),
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
-    records,
+    records: finalRecords,
     typeFamilies: context.typeFamilies.seal(),
     typeDefinitions,
     projectTypes,
@@ -395,7 +399,7 @@ export function analyzeRustTargetProgram(
       ast: context.ast,
       sourceFiles: context.sourceFiles,
       navigation: context.source.navigation,
-      records,
+      records: finalRecords,
       borrowedElementReads,
     }),
     projectFlowReadSelections: analyzeRustProjectFlowReadSelections({
@@ -408,7 +412,9 @@ export function analyzeRustTargetProgram(
   };
   const reachability = analyzeRustReachability(program);
   context.callableValues.publish();
-  return resolvedTargetStage(Object.freeze({ ...program, records: createRustProgramRecords(records), reachability }));
+  return resolvedTargetStage(Object.freeze({ ...program,
+    records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
+    reachability }));
 }
 
 export type {

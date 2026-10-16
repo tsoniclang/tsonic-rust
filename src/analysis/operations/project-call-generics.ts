@@ -182,7 +182,7 @@ function reconcileProjectSourceArgumentTypeParameters(
   const ordered = [...callArguments.entries()].sort((left, right) =>
     Number(contextual(left[1])) - Number(contextual(right[1])));
   for (const [argumentIndex, argument] of ordered) {
-    if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) continue;
+    if (isUnannotatedRustNumericLiteral(walk.context.literalValues.literalValue.get(argument))) continue;
     const matches = bindings.filter((binding) =>
       binding.sourceArgumentIndex === argumentIndex);
     if (matches.length === 0) continue;
@@ -269,7 +269,7 @@ function projectSourceArgumentInferencePairs(
   actualCarrier?: TargetTypeRef,
 ): ProjectSourceInference<readonly ProjectSourceInferencePair[] | undefined> {
   const { ast } = walk.context;
-  if (isUnannotatedRustNumericLiteral(argument, ast)) return { kind: "complete", value: [] };
+  if (isUnannotatedRustNumericLiteral(walk.context.literalValues.literalValue.get(argument))) return { kind: "complete", value: [] };
   if (ast.kindName(argument) === KindParenthesizedExpression || ast.kindName(argument) === KindSatisfiesExpression) {
     const inner = Node_Expression(ast, argument);
     return inner === undefined ? { kind: "complete", value: undefined } : projectSourceArgumentInferencePairs(walk, inner, pattern);
@@ -376,7 +376,7 @@ function resolveProjectSourceInferenceCarrier(
   if (kind === KindArrayLiteralExpression || kind === KindObjectLiteralExpression) {
     return { kind: "complete", value: walk.context.records.runtimeCarrier.get(argument)?.carrier };
   }
-  if (isUnannotatedRustNumericLiteral(argument, walk.context.ast)) {
+  if (isUnannotatedRustNumericLiteral(walk.context.literalValues.literalValue.get(argument))) {
     return { kind: "complete", value: walk.context.records.runtimeCarrier.get(argument)?.carrier };
   }
   const file = walk.context.ast.getSourceFile(argument);
@@ -399,7 +399,7 @@ function projectSourceTypeArgumentHasLiteralProof(
     }
     const argument = callArguments[index];
     if (argument === undefined ||
-      !selectedSourceLiteralIsRepresentable(argument, target.name, walk.context.ast)) {
+      !selectedSourceLiteralIsRepresentable(walk.context.literalValues.literalValue.get(argument), target.name)) {
       return false;
     }
     proven = true;

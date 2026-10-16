@@ -208,7 +208,7 @@ export function resolveBinaryOperandCarriers(
     left = resolveLeft(leftSemanticCarrier);
   }
   const initialRightExpectation = operatorKind === KindQuestionQuestionToken
-    ? isRustOptionCarrier(left) ? selectedIntegerLiteralJoin(rightNode, rustOptionValueCarrier(left), walk.context.ast) ?? rustOptionValueCarrier(left) : expected
+    ? isRustOptionCarrier(left) ? selectedIntegerLiteralJoin(walk.context.literalValues.literalValue.get(rightNode), rustOptionValueCarrier(left)) ?? rustOptionValueCarrier(left) : expected
     : operatorKind === KindEqualsToken
       ? selectedAssignmentValueCarrier ??
         (useAssignmentReadCarrier ? left : undefined)
@@ -292,29 +292,30 @@ function contextualBinaryLiteralCarrier(
 ): TargetTypeRef | undefined {
   const present = rustSourceOptionalElementCarrier(counterpart) ?? counterpart;
   return present === undefined || rustUnionAlternatives(present, walk.context.typeDefinitions) === undefined
-    ? contextualLiteralOperandCarrier(walk.context.ast, expression, counterpart)
-    : selectedIntegerLiteralUnionJoin(expression, present, walk.context.ast, walk.context.typeDefinitions);
+    ? contextualLiteralOperandCarrier(walk, expression, counterpart)
+    : selectedIntegerLiteralUnionJoin(walk.context.literalValues.literalValue.get(expression), present, walk.context.typeDefinitions);
 }
 
 function contextualLiteralOperandCarrier(
-  ast: AstReader,
+  walk: RustFactWalk,
   expression: Node,
   counterpart: TargetTypeRef | undefined,
 ): TargetTypeRef | undefined {
+  const ast = walk.context.ast;
   if (isRustAbsenceCarrier(counterpart) || counterpart?.kind === "type-parameter" ||
     rustTargetTypeRefEquals(counterpart, rustTsValueTargetType())) return undefined;
-  const integerJoin = selectedIntegerLiteralJoin(expression, counterpart, ast);
+  const integerJoin = selectedIntegerLiteralJoin(walk.context.literalValues.literalValue.get(expression), counterpart);
   if (integerJoin !== undefined) return integerJoin;
   const kind = ast.kindName(expression);
   if (kind === KindPrefixUnaryExpression || kind === KindParenthesizedExpression) {
     const operand = kind === KindPrefixUnaryExpression ? Node_Operand(ast, expression) : Node_Expression(ast, expression);
-    return operand === undefined ? undefined : contextualLiteralOperandCarrier(ast, operand, counterpart);
+    return operand === undefined ? undefined : contextualLiteralOperandCarrier(walk, operand, counterpart);
   }
   if (kind === KindNumericLiteral && isRustBigIntCarrier(counterpart) ||
     kind === KindBigIntLiteral && isRustNumericCarrier(counterpart) &&
       (counterpart.name === "float64" || counterpart.name === "float32")) return undefined;
   if (kind === KindNumericLiteral && isRustNumericCarrier(counterpart) &&
-    !selectedSourceLiteralIsRepresentable(expression, counterpart.name, ast)) return undefined;
+    !selectedSourceLiteralIsRepresentable(walk.context.literalValues.literalValue.get(expression), counterpart.name)) return undefined;
   return counterpart;
 }
 
@@ -443,7 +444,7 @@ export function resolvePostCheckBinaryCarrier(
   } else if (operatorKind === KindQuestionQuestionToken) {
     const inner = rustOptionalStorageValue(left) ?? (isRustOptionCarrier(left) ? rustOptionValueCarrier(left) : undefined);
     const leftOptionDepth = rustOptionalStorageNestingDepth(left, inner);
-    const integerJoin = selectedIntegerLiteralJoin(rightNode, inner, walk.context.ast);
+    const integerJoin = selectedIntegerLiteralJoin(walk.context.literalValues.literalValue.get(rightNode), inner);
     const leftConversion = inner?.kind === "source-primitive" && integerJoin?.kind === "source-primitive"
       ? rustNumericPromotionConversion(inner.name, integerJoin.name) : undefined;
     if (inner !== undefined && right !== undefined &&
@@ -789,7 +790,7 @@ export function resolvePostCheckUnaryCarrier(
   }
   const fixedWidthLiteral = expected?.kind === "source-primitive" &&
     isRustNumericCarrier(expected) &&
-    selectedSourceLiteralIsRepresentable(expression, expected.name, walk.context.ast);
+    selectedSourceLiteralIsRepresentable(walk.context.literalValues.literalValue.get(expression), expected.name);
   const bigintLiteral = isRustBigIntCarrier(expected) && operand !== undefined &&
     walk.context.ast.kindName(operand) === KindBigIntLiteral &&
     parseSourceBigIntLiteral(walk.context.ast.text(operand)) !== undefined;
