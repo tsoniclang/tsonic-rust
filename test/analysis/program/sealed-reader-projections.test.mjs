@@ -115,7 +115,7 @@ export function value(limit: number): number {
           const first = current.read(input);
           const second = current.read(input);
           requireStable(first, second, current.symbol);
-          if (first !== null && typeof first === "object") positiveObjects++;
+          if (first !== null && typeof first === "object" && !Array.isArray(first)) positiveObjects++;
           if (Array.isArray(first)) frozenArrays++;
         }
         const absent = current.unknown();
