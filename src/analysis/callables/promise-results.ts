@@ -1,13 +1,18 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { createSourceStorageBudget, defaultSourceStorageLimits, decideSourceAsyncResultUse, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { sourceExpressionResultDisposition, type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustPromiseResult, RustPromiseResults } from "../../target-model/records/promise-results.js";
+import type { RustPromiseResult, RustPromiseResults, RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { mapRustAwaitSelection, rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
+
+export function analyzeRustPromiseResultUses(ast: AstReader, nodes: readonly Node[]): RustPromiseResultUses {
+  return new Map(nodes.filter(node => ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node))
+    .map(node => [node, sourceExpressionResultDisposition(ast, node)]));
+}
 
 export function analyzeRustPromiseResults(input: {
   readonly ast: AstReader;
@@ -15,6 +20,7 @@ export function analyzeRustPromiseResults(input: {
   readonly storage: SourceStorageQueries;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
+  readonly uses: RustPromiseResultUses;
   readonly definitions: RustTypeDefinitions;
 }): { readonly results: RustPromiseResults; readonly diagnostics: readonly TargetDiagnostic[] } {
   const results = new Map<Node, RustPromiseResult>();
@@ -26,7 +32,9 @@ export function analyzeRustPromiseResults(input: {
     if (selection === undefined) continue;
     const leaves = rustAwaitSelectionLeaves(selection);
     if (!leaves.some(leaf => leaf.future !== undefined)) continue;
-    const disposition = sourceExpressionResultDisposition(input.ast, node);
+    const disposition = input.uses.get(node);
+    if (disposition === undefined)
+      failTargetAnalysisInvariant("tsonic-rust", "An indexed async producer requires its original source result-use selection.", node);
     if (disposition.kind !== "discarded") {
       results.set(node, Object.freeze({ disposition }));
       continue;
