@@ -232,7 +232,10 @@ export function omitted(): number { return omit(receiver(), value()); }
   const { ast } = program.source;
   let omitted;
   const visit = node => {
-    if (ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "omit") omitted = node;
+    if (ast.is.IsCallExpression(node)) {
+      const callee = ast.as.AsCallExpression(node).Expression;
+      if (ast.is.IsIdentifier(callee) && ast.text(callee) === "omit") omitted = node;
+    }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);

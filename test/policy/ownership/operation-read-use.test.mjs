@@ -115,7 +115,7 @@ function assign(values: number[], fields: Fields, first: number, second: number)
   const receiverCarrier = { kind: "target-named", id: "fixture.NativeReceiver" };
   const statements = [];
   const visit = node => {
-    if (source.ast.is.IsBinaryExpression(node) && source.ast.text(node).includes("=")) statements.push(node);
+    if (source.ast.is.IsBinaryExpression(node)) statements.push(node);
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   source.sourceFiles.forEach(visit);
