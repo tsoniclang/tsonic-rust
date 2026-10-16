@@ -35,7 +35,7 @@ type RustSourceErrorContext = Pick<RustAnalysisContext, "ast" | "records" | "sou
   readonly callableValues: {
     readonly native: RustNativeCallableInputPlan;
     readonly nativeProducers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor">;
-    readonly nativeStorage: Pick<RustNativeStoragePlan, "genericBindingsFor" | "invocationWitnessFor" | "invocationOriginsFor">;
+    readonly nativeStorage: Pick<RustNativeStoragePlan, "invocationWitnessFor" | "invocationOriginsFor">;
   };
 };
 
@@ -48,7 +48,8 @@ export interface RustSourceErrorBindings extends RustTargetGenericBindings {
 export interface RustSourceErrorEffectSelection {
   register(errors: readonly RustNativeErrorEffect[]): boolean;
   bindingsFor(node: Node, declaration: Node, carriers: readonly TargetTypeRef[],
-    storageBindings?: SourceStorageBindings): RustSourceErrorBindings | undefined;
+    activation?: { readonly storageBindings: SourceStorageBindings;
+      readonly genericBindings: RustTargetGenericBindings }): RustSourceErrorBindings | undefined;
   edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
     bindings: RustSourceErrorBindings | undefined): RustSourceErrorEffectEdge | undefined;
   pending(error: RustNativeErrorEffect, complete: () => RustNativeErrorEffect | undefined): boolean;
@@ -85,14 +86,12 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
   }
   if (!register([{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }]))
     throw new Error("JS object rejection requires its one canonical identity and carrier.");
-  const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, storageBindings) => {
+  const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, activation) => {
     const signature = walk.context.records.selectedCall.get(node);
     const operation = walk.context.records.targetOperation.get(node);
-    const activation = storageBindings === undefined ? undefined
-      : walk.context.callableValues.nativeStorage.genericBindingsFor(declaration, storageBindings);
-    if (activation?.kind === "unresolved") return undefined;
-    const generics = activation?.bindings ?? rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
-      operation?.kind === "source-call" ? operation.targetGenericArguments ?? [] : []);
+    const storageBindings = activation?.storageBindings;
+    const generics = activation === undefined ? rustTargetGenericBindingsForArguments(signature?.member.genericParameters ?? [],
+      operation?.kind === "source-call" ? operation.targetGenericArguments ?? [] : []) : activation.genericBindings;
     if (generics === undefined) return undefined;
     const caller = sourceEnclosingCallable(node, walk.context.ast);
     const available = new Set(caller === undefined ? [] : [...native.inputsFor(caller), ...native.capturesFor(caller)]);

@@ -16,6 +16,7 @@ import type { RustNativeCallableProducerPlan } from "../callables/native-produce
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 type RustSourceGenericInvocationContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage"> & {
   readonly callableValues: {
@@ -37,6 +38,7 @@ export interface RustSourceGenericCallableInvocation {
 export function prepareRustGenericCallableInvocation(
   node: Node, context: RustSourceGenericInvocationContext,
   effectsFor: (declaration: Node) => RustSourceCallEffectsFact | undefined,
+  sourceErrors: Pick<RustSourceErrorEffectSelection, "bindingsFor">,
 ): RustSourceGenericCallableInvocation | undefined {
   const { ast, records, sourceStorage: storage, callableValues } = context;
   const operation = records.targetOperation.get(node);
@@ -63,7 +65,7 @@ export function prepareRustGenericCallableInvocation(
     const implementation = callableValues.generic.implementationFor(declaration);
     const producer = callableValues.nativeProducers.forDeclaration(declaration);
     const effect = effectsFor(declaration);
-    const activation = storage.bindingsForInvocation(declaration, node, bindings!);
+    const activation = storage.bindingsForInvocation(declaration, node, bindings!, selected);
     const generics = activation.kind === "unresolved" ? undefined
       : callableValues.nativeStorage.genericBindingsFor(declaration, activation.bindings);
     if (implementation === undefined || producer === undefined || effect === undefined || generics?.kind !== "resolved") return undefined;
@@ -72,7 +74,11 @@ export function prepareRustGenericCallableInvocation(
       if (effect[channel] !== "fallible") continue;
       const error = callableValues.nativeProducers.errorFor(declaration, channel === "invocation" ? "invoke" : 0);
       if (error === undefined) return undefined;
-      const errorType = substituteRustTargetGenerics(error, generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts);
+      const bound = activation.kind === "unresolved" ? undefined : sourceErrors.bindingsFor(node, declaration, [error], {
+        storageBindings: activation.bindings, genericBindings: generics.bindings,
+      });
+      const errorType = bound?.substitute(error);
+      if (errorType === undefined) return undefined;
       const identity = `pending-generic-error:${closedMetadataKey({ invocation: sourceNodeIdentity(ast, node),
         producer: producer.identity, activation: ordinal, channel, errorType })}`;
       const values = channel === "invocation" ? invocation : awaiting;

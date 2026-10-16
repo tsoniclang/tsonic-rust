@@ -143,7 +143,7 @@ function collectFallibilityFacts(
       return { invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
         awaiting: !hasCompletion(result) ? "not-applicable"
           : genericAwaitIsFallible(declaration) ? "fallible" : "infallible" };
-    });
+    }, selectSourceErrors);
     const selected = pending?.selection;
     if (pending === undefined || selected === undefined || !selectSourceErrors.register([...selected.invocation, ...selected.awaiting])) {
       appendRustDiagnostic(walk, "RUST_GENERIC_CALLABLE_EFFECTS_NOT_CLOSED",
