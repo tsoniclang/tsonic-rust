@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
-import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
@@ -319,6 +320,72 @@ export function make<Region extends Life>(value: Ref<int32, Region>): { label: s
     }
   }
 });
+
+test("structural spread roots retain each actual source declaration through an authored destination contract", () => {
+  let context;
+  const roots = [];
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+export function make(left: number, right: number, choose: boolean): { label: string; read(): number } {
+  const first = { read(): number { return left; } };
+  const second = { read(): number { return right; } };
+  const firstCopy = { label: "first", ...first };
+  const secondCopy = { label: "second", ...second };
+  return choose ? firstCopy : secondCopy;
+}
+` }, compileTarget(request) {
+    context = analyzeRustCheckedContext(request, original => {
+      let preparing = false;
+      const callableValues = Object.create(original.callableValues, { preparePhysicalStorage: { value(...arguments_) {
+        preparing = true;
+        try { return original.callableValues.preparePhysicalStorage(...arguments_); }
+        finally { preparing = false; }
+      } } });
+      return { ...original, callableValues, sourceStorage: { ...original.sourceStorage,
+        subject(node, kind, projection) {
+          if (preparing && original.ast.is.IsIdentifier(node) && projection?.length === 1 && projection[0].kind === "method-value")
+            roots.push({ node, declaration: projection[0].declaration });
+          return original.sourceStorage.subject(node, kind, projection);
+        },
+      } };
+    });
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+  } });
+  assert.equal(result.diagnostics.length, 0, "both real source shapes are admitted without a destination-declaration projection");
+  const ast = context.ast;
+  const methods = context.sourceStorage.nodes.filter(node => ast.is.IsMethodDeclaration(node));
+  assert.equal(methods.length, 2, "two source declarations share the same native field layout");
+  assert.equal(roots.length, 2, "each spread registers its actual source value exactly once");
+  for (const [index, name] of ["first", "second"].entries()) {
+    const selected = roots.filter(root => ast.text(root.node) === name);
+    assert.equal(selected.length, 1, name + ": one exact source root");
+    assert.equal(selected[0].declaration === methods[index], true, name + ": checked source identity is not selected by layout or spelling");
+    assert.equal(ast.is.IsMethodSignatureDeclaration(selected[0].declaration), false, name + ": destination contract is never a source producer");
+  }
+});
+
+for (const surface of ["native", "js"]) {
+  test(`copied source method fields preserve scoped captures in generated storage (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: surface === "js" ? ["js"] : [],
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+function make<Region extends Life>(value: Ref<int32, Region>): { label: string; read(): int32 } {
+  const original = { read(): int32 { return load(value); } };
+  return { label: "borrowed", ...original };
+}
+export function main(): void {
+  const value: int32 = 29;
+  const copied = make(ref(value));
+  if (copied.read() !== value) throw new Error("copied native loan");
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("; "));
+    assert.doesNotMatch(artifactText(result, "src/index.rs"), /Callable<'static|transmute|unreachable_unchecked/u);
+    validateGeneratedProject(`physical-source-spread-${surface}`, result.artifacts, { run: true });
+  });
+}
 
 test("locally invoked copied borrowed methods preserve their exact producer retention", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `

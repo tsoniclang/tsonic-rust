@@ -51,6 +51,7 @@ import { normalizeRustErrorType } from "../program/error-types.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
+import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -86,6 +87,7 @@ export interface RustCallableValuePlanInput {
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
   readonly ownership: RustCallableOwnershipPlan;
   readonly sourceStorage: SourceStorageQueries;
+  readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: import("../project-types/object-representation.js").RustObjectRepresentationPlan;
   readonly typeDefinitions: RustTypeDefinitions;

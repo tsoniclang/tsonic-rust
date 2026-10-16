@@ -32,11 +32,15 @@ import type { RustDeclarationGenericRequirementIndex } from "../declarations/gen
 import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
 
-interface RustStructuralMethodRoot {
+interface RustStructuralMethodDestination {
   readonly carrier: TargetTypeRef;
   readonly definition: RustStructuralShapeDefinition;
   readonly index: number;
+}
+
+interface RustStructuralMethodRoot extends RustStructuralMethodDestination {
   readonly subject: SourceStorageSubject;
   readonly bindings: SourceStorageBindings;
 }
@@ -45,6 +49,7 @@ export function createRustStructuralMethodStorage(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly sourceStorage: SourceStorageQueries;
+  readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
@@ -70,13 +75,17 @@ export function createRustStructuralMethodStorage(input: {
   const reject = (subject: Node, message: string): readonly RustSourceCallableSpecializationIssue[] =>
     Object.freeze([{ subject, message }]);
   const seen = new Map<SourceStorageSubject, Map<TargetTypeRef, Set<number>>>();
-  const register = (node: Node, carrier: TargetTypeRef, index: number, subject: SourceStorageSubject): void => {
+  const destinationFor = (carrier: TargetTypeRef, index: number): RustStructuralMethodDestination | undefined => {
     const selected = structuralShapes.definitionForCarrier(carrier);
     const field = selected?.fields[index];
     const method = field?.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field?.methodStorageCarrier;
     if (selected === undefined || field?.nativeMethod === true || rustCallableProtocol(method) === undefined) return;
     const definition = canonical.get(`${selected.componentId}\0${selected.targetName}`);
     if (definition === undefined) throw new Error("Structural method storage requires its canonical shape owner.");
+    return Object.freeze({ carrier, definition, index });
+  };
+  const register = (node: Node, destination: RustStructuralMethodDestination, subject: SourceStorageSubject): void => {
+    const { carrier, index } = destination;
     const carriers = seen.get(subject) ?? new Map<TargetTypeRef, Set<number>>();
     const indexes = carriers.get(carrier) ?? new Set<number>();
     if (indexes.has(index)) return;
@@ -89,34 +98,68 @@ export function createRustStructuralMethodStorage(input: {
       sourceIssues.push({ subject: node, message: "Structural method storage requires its checked lexical activation." });
       return;
     }
-    roots.push(Object.freeze({ carrier, definition, index, subject, bindings }));
+    roots.push(Object.freeze({ ...destination, subject, bindings }));
   };
   for (const node of sourceStorage.nodes) {
     const operation = records.targetOperation.get(node);
     if (operation?.kind === "record-literal" && operation.storage === "structural-object") {
+      const destinations = new Map<number, RustStructuralMethodDestination>();
       for (const field of operation.fields) {
         if (field.method !== true) continue;
-        const contributions = operation.contributions.filter(contribution =>
-          contribution.kind === "structural-method" && contribution.targetStorageIndex === field.storageIndex);
-        const declarations = contributions.flatMap(contribution => contribution.kind === "structural-method"
-          ? [contribution.expression] : []);
-        if (declarations.length === 0 && operation.contributions.some(contribution => contribution.kind === "spread" &&
-          contribution.fields.some(selected => selected.targetStorageIndex === field.storageIndex && selected.method === true)))
-          declarations.push(...field.contractDeclarations);
-        for (const declaration of declarations) {
-          const selected = sourceStorage.subject(node, "value", [{ kind: "method-value", declaration }]);
-          if (selected.kind === "unresolved") sourceIssues.push({ subject: declaration, message: selected.reason });
-          else register(node, operation.resultCarrier, field.storageIndex, selected.subject);
+        const destination = destinationFor(operation.resultCarrier, field.storageIndex);
+        if (destination !== undefined) destinations.set(field.storageIndex, destination);
+      }
+      for (const contribution of operation.contributions) {
+        if (contribution.kind === "structural-method") {
+          const destination = destinations.get(contribution.targetStorageIndex);
+          if (destination === undefined) continue;
+          const selected = sourceStorage.subject(node, "value", [{ kind: "method-value", declaration: contribution.expression }]);
+          if (selected.kind === "unresolved") sourceIssues.push({ subject: contribution.expression, message: selected.reason });
+          else register(node, destination, selected.subject);
+        } else if (contribution.kind === "spread") {
+          const transported = contribution.fields.filter(selected => selected.method === true && destinations.has(selected.targetStorageIndex));
+          if (transported.length === 0) continue;
+          const source = sourceStorage.subjectFor(contribution.expression);
+          if (source.kind === "unresolved") {
+            sourceIssues.push({ subject: contribution.expression, message: source.reason });
+            continue;
+          }
+          const typed = sourceStorage.typeFor(source.subject);
+          if (typed.kind === "unresolved") {
+            sourceIssues.push({ subject: contribution.expression, message: typed.reason });
+            continue;
+          }
+          const type = sourceStorage.source.semantics.forFile(typed.sourceFile).types.nonNullableType(typed.type);
+          const shape = type === undefined ? undefined : input.sourceTypes.structuralObjectForType(type, contribution.sourceValueCarrier);
+          for (const field of transported) {
+            const destination = destinations.get(field.targetStorageIndex)!;
+            const original = shape?.fields[field.sourceStorageIndex];
+            if (original?.method !== true || original.declarations.length === 0 ||
+              original.storageIndex !== field.sourceStorageIndex || !rustTargetTypeRefEquals(original.resultCarrier, field.carrier)) {
+              sourceIssues.push({ subject: contribution.expression, message: "Structural method spread storage requires its exact checked source field layout." });
+              continue;
+            }
+            for (const declaration of original.declarations) {
+              const selected = sourceStorage.subject(source.subject.node, source.subject.kind,
+                [...source.subject.projection, { kind: "method-value", declaration }]);
+              if (selected.kind === "unresolved") sourceIssues.push({ subject: declaration, message: selected.reason });
+              else register(node, destination, selected.subject);
+            }
+          }
         }
       }
     } else if (operation?.kind === "source-call" && operation.target.form === "structural-method") {
+      const destination = destinationFor(operation.target.receiverCarrier, operation.target.storageIndex);
+      if (destination === undefined) continue;
       const callee = Node_Expression(ast, node);
       const subject = callee === undefined ? undefined : sourceStorage.subjectFor(callee);
-      if (subject?.kind === "resolved") register(node, operation.target.receiverCarrier, operation.target.storageIndex, subject.subject);
+      if (subject?.kind === "resolved") register(node, destination, subject.subject);
     } else if (operation?.kind === "source-field" && operation.storage === "structural-object" &&
       operation.valueSemantics.kind === "method") {
+      const destination = destinationFor(operation.receiverCarrier, operation.storageIndex);
+      if (destination === undefined) continue;
       const subject = sourceStorage.subjectFor(node);
-      if (subject.kind === "resolved") register(node, operation.receiverCarrier, operation.storageIndex, subject.subject);
+      if (subject.kind === "resolved") register(node, destination, subject.subject);
     }
   }
   let complete = false;

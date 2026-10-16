@@ -576,6 +576,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
+    sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
     retainedEnvironments: context.retainedEnvironments,
