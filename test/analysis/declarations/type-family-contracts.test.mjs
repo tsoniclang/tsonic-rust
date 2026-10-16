@@ -14,6 +14,11 @@ import { selectRustFlowReadProjection } from "../../../dist/policy/types/resolut
 import { rustOptionTargetType, rustSourceLocationTargetType } from "../../../dist/target-model/types/index.js";
 import { rustIndexedFieldKey, rustIndexedFieldProjection, rustIndexedFieldTrait } from "../../../dist/target-model/types/carriers/indexed-fields.js";
 import { rustSourceOptionalTargetType } from "../../../dist/target-model/types/projections.js";
+import { createRustNativeCallableProtocolRegistry, rustNativeCallableErrorChannel, rustNativeCallableErrorType }
+  from "../../../dist/analysis/callables/native-protocols.js";
+import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const signed = { kind: "source-primitive", name: "int32" };
 const unsigned = { kind: "source-primitive", name: "uint32" };
@@ -181,7 +186,7 @@ test("associated-output obligations are distinct from input Clone and propagate 
     (carrier, trait) => rustTargetTypeRefEquals(carrier, projection) && trait === "core::clone::Clone"), true);
   const registry = createRustSourceTypeFamilyRegistry();
   registry.register(family);
-  const collector = createRustAssociatedRequirementCollector(new Set(["T"]), registry, () => false);
+  const collector = createRustAssociatedRequirementCollector(new Set(["T"]), registry, () => false, () => false);
   assert.equal(collector.collect(projection), true);
   assert.equal(collector.require(projection, "clone"), true);
   assert.deepEqual(collector.seal(), [{ carrier: projection, requirements: ["clone"] }]);
@@ -279,7 +284,7 @@ test("indexed families distinguish exact keys and retain readonly storage and in
   assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, countKey)), signed);
   assert.deepEqual(rustTypeFamilyNormalizer(registry)(rustIndexedFieldProjection(owner, labelKey)), unsigned);
   const open = rustIndexedFieldProjection(parameter, { kind: "type-parameter", identity: "Key", name: "Key" });
-  const collector = createRustAssociatedRequirementCollector(new Set(["T", "Key"]), registry, () => false);
+  const collector = createRustAssociatedRequirementCollector(new Set(["T", "Key"]), registry, () => false, () => false);
   assert.equal(collector.requireField(open, ["read", "write"]), true);
   assert.equal(collector.requireField(rustIndexedFieldProjection(owner, labelKey), ["read"]), true);
   assert.equal(collector.requireField(rustIndexedFieldProjection(owner, labelKey), ["write"]), false);
@@ -316,7 +321,7 @@ test("inline native field reads do not invent shared-write capability", () => {
   assert.equal(registry.registerImplementation({ family: indexed, owner: signed, output: unsigned,
     arguments: [{ kind: "type", type: key }], sourceFileName: "/record.ts",
     field: { storage: "structural-object", storageIndex: 0, readonly: false, sharedWrite: false } }), true);
-  const collector = createRustAssociatedRequirementCollector(new Set(), registry, () => false);
+  const collector = createRustAssociatedRequirementCollector(new Set(), registry, () => false, () => false);
   const projection = rustIndexedFieldProjection(signed, key);
   assert.equal(collector.requireField(projection, ["read"]), true);
   assert.equal(collector.requireField(projection, ["write"]), false);
@@ -336,7 +341,7 @@ test("constrained field obligations preserve one exact native output equality", 
   assert.equal(registry.fieldKeyName({ ...key, genericArguments: [{ kind: "const", value: { kind: "integer", value: "invalid" } }] }), undefined);
   assert.equal(registry.fieldKeyName({ ...key, genericArguments: [{ kind: "const", value: { kind: "integer", value: "340282366920938463463374607431768211456" } }] }), undefined);
   const projection = rustIndexedFieldProjection(parameter, key);
-  const collector = createRustAssociatedRequirementCollector(new Set(["T"]), registry, () => true);
+  const collector = createRustAssociatedRequirementCollector(new Set(["T"]), registry, () => true, () => false);
   assert.equal(collector.requireField(projection, ["read"], unsigned), true);
   assert.equal(collector.requireField(projection, ["read"], signed), false);
   assert.equal(collector.requireField(projection, ["read"], unsigned), true);
@@ -344,4 +349,33 @@ test("constrained field obligations preserve one exact native output equality", 
   assert.deepEqual(contract[0].output, unsigned);
   assert.deepEqual(contract[0].fieldAccess, ["read"]);
   assert.equal(Object.isFrozen(contract[0]), true);
+});
+
+test("native associated error obligations require exact callable evidence and declared parameter closure", () => {
+  const protocols = createRustNativeCallableProtocolRegistry({ definitions: emptyRustTypeDefinitions, usedNames: new Set() });
+  const binding = protocols.bind("/source.ts", rustCallableTargetType([parameter], rustFutureTargetType(parameter)));
+  const implementation = { kind: "type-parameter", identity: "source:Implementation", name: "Implementation" };
+  const error = rustNativeCallableErrorType(binding, implementation, "invocation", []);
+  const families = createRustSourceTypeFamilyRegistry();
+  const proof = carrier => rustNativeCallableErrorChannel(binding, implementation, carrier) !== undefined;
+  const collector = createRustAssociatedRequirementCollector(new Set(["T", implementation.identity]), families, () => false, proof);
+  assert.equal(collector.collect({ kind: "tuple", elements: [error] }), true);
+  assert.equal(collector.require(error, "js-rejection"), true);
+  assert.deepEqual(collector.seal(), [{ carrier: error, requirements: ["js-rejection"] }]);
+  assert.equal(collector.requireField(error, ["read"]), false);
+  for (const invalid of [
+    { ...error, owner: { ...implementation, identity: "foreign:Implementation" } },
+    { ...error, trait: { ...error.trait, path: "Foreign" } },
+    { ...error, trait: { ...error.trait, genericArguments: [{ kind: "type", type: unsigned }] } },
+    { ...error, genericArguments: [{ kind: "type", type: parameter }] },
+    { ...error, name: "AwaitError1" },
+  ]) assert.equal(collector.require(invalid, "js-rejection"), false);
+  const unbound = createRustAssociatedRequirementCollector(new Set([implementation.identity]), families, () => false, proof);
+  assert.equal(unbound.require(error, "js-rejection"), false);
+  const absent = createRustAssociatedRequirementCollector(new Set(["T", implementation.identity]), families, () => false, () => false);
+  assert.equal(absent.require(error, "js-rejection"), false);
+  const closedError = rustNativeCallableErrorType(binding, signed, "invocation", []);
+  const concrete = createRustAssociatedRequirementCollector(new Set(["T"]), families, () => false,
+    carrier => rustNativeCallableErrorChannel(binding, signed, carrier) !== undefined);
+  assert.equal(concrete.require(closedError, "js-rejection"), false);
 });

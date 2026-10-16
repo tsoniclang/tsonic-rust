@@ -26,6 +26,6 @@ export function canRequireSourceClone(
   if (!storage.collect(carrier)) return false;
   const classify = (type: TargetTypeRef, required: readonly RustGenericRequirement[]): boolean =>
     classifyCarrierRequirements(type, required, parameters, requirements, associated.require, context.typeDefinitions);
-  const associated = createRustAssociatedRequirementCollector(parameters, families, classify);
+  const associated = createRustAssociatedRequirementCollector(parameters, families, classify, () => false);
   return associated.collect(carrier) && classify(carrier, ["clone"]);
 }
