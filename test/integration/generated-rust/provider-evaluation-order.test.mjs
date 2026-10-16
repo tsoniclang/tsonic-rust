@@ -206,6 +206,7 @@ test("evaluation-only provider temporaries retain native Drop scope through read
         { id: "Owner.drops", name: "drops", kind: "property", readonly: true, type: numeric },
       ] },
       { id: "BorrowingToken", name: "BorrowingToken", kind: "interface", members: [
+        { id: "BorrowingToken.read", name: "read", kind: "property", readonly: true, type: numeric },
         { id: "BorrowingToken.consume", name: "consume", kind: "method",
           signatures: [signature("BorrowingToken.consume", [parameter("value", numeric)], numeric)] },
       ] },
@@ -224,6 +225,8 @@ test("evaluation-only provider temporaries retain native Drop scope through read
         target: { form: "receiver-method", name: "guard" }, receiverCarrier: ownerCarrier, resultCarrier: borrowingToken },
       { exportId: "Owner", memberId: "Owner.drops", operationKind: "property",
         target: { form: "receiver-method", name: "drops" }, receiverCarrier: ownerCarrier, resultCarrier: number },
+      { exportId: "BorrowingToken", memberId: "BorrowingToken.read", operationKind: "property",
+        target: { form: "call", path: "crate::index::drop_probe::read" }, resultCarrier: number },
       { exportId: "BorrowingToken", memberId: "BorrowingToken.consume", operationKind: "method",
         target: { form: "call", path: "crate::index::drop_probe::consume", argModes: ["value"] },
         parameterCarriers: [number], resultCarrier: number },
@@ -257,6 +260,11 @@ export function borrowing(): boolean {
   const result = stored.guard.consume(value());
   return result === 7 && stored.drops === 1;
 }
+export function borrowingRead(): boolean {
+  const stored = owner();
+  const result = stored.guard.read;
+  return result === 7 && stored.drops === 1;
+}
 export function borrowingUnwind(): number {
   const stored = owner();
   return stored.guard.consume(abort());
@@ -267,23 +275,29 @@ export function borrowingUnwind(): number {
   const { ast } = program.source;
   let omitted;
   const borrowingCalls = [];
+  const borrowingReads = [];
   const visit = node => {
     if (ast.is.IsCallExpression(node)) {
       const callee = ast.as.AsCallExpression(node).Expression;
       if (ast.is.IsIdentifier(callee) && ast.text(callee) === "omit") omitted = node;
-      const operation = program.records.targetOperation.get(node);
-      if (operation?.kind === "provider-operation" && operation.abi.sourceReceiver.kind === "receiver" &&
-        rustNamedTypeCarrierValue(operation.abi.sourceReceiver.carrier)?.id === borrowingToken.id) borrowingCalls.push({ node, operation });
+    }
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "provider-operation" && operation.abi.sourceReceiver.kind === "receiver" &&
+      rustNamedTypeCarrierValue(operation.abi.sourceReceiver.carrier)?.id === borrowingToken.id) {
+      if (ast.is.IsCallExpression(node)) borrowingCalls.push({ node, operation });
+      else if (ast.is.IsPropertyAccessExpression(node)) borrowingReads.push({ node, operation });
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
   assert.equal(omitted !== undefined, true, "the owner-contract witness retains actual checked operand identities");
   assert.equal(borrowingCalls.length, 2, "real checked non-static borrowing receivers cover disjoint RHS and unwinding");
-  for (const { node, operation } of borrowingCalls) {
+  assert.equal(borrowingReads.length, 1, "the real checked non-static borrowing receiver also covers a native read");
+  for (const { node, operation } of [...borrowingCalls, ...borrowingReads]) {
     assert.equal(operation.abi.sourceReceiver.disposition, "evaluation-only", "the native target does not consume the owned borrowing result");
     assert.equal(rustNamedTypeCarrierValue(operation.abi.sourceReceiver.carrier).genericArguments[0].kind, "lifetime", "the actual producer retains its native lifetime argument");
-    const receiver = ast.as.AsPropertyAccessExpression(ast.as.AsCallExpression(node).Expression).Expression;
+    const access = ast.is.IsCallExpression(node) ? ast.as.AsCallExpression(node).Expression : node;
+    const receiver = ast.as.AsPropertyAccessExpression(access).Expression;
     assert.equal(program.ownership.reads.get(receiver)?.readsStorage, false, "owned guard construction is not a terminal stored-place read");
   }
   const argumentsList = ast.arguments(omitted);
@@ -413,27 +427,33 @@ mod provider_drop_tests {
     #[test]
     fn owned_borrow_holding_guards_retain_their_actual_native_drop_scope() {
         for _ in 0..64 {
-            drop_probe::reset();
-            let (actual, actual_cost) = measure(borrowing);
-            assert!(actual);
-            assert_eq!(drop_probe::order(), 1234);
-            drop_probe::reset();
-            let (expected, expected_cost) = measure(|| {
-                let owner = drop_probe::owner();
-                let result = {
-                    let _guard = owner.guard();
-                    drop_probe::consume(drop_probe::value())
-                };
-                result == 7.0 && owner.drops() == 1.0
-            });
-            assert_eq!(actual, expected);
-            assert_eq!(drop_probe::order(), 1234);
-            assert_eq!(actual_cost, expected_cost);
-            assert_eq!(actual_cost.allocations, 0);
-            assert_eq!(actual_cost.allocated_bytes, 0);
-            assert_eq!(actual_cost.reallocations, 0);
-            assert_eq!(actual_cost.deallocations, 0);
-            assert_eq!(actual_cost.deallocated_bytes, 0);
+            for (actual, expected_order) in [
+                (borrowingRead as fn() -> bool, 134),
+                (borrowing as fn() -> bool, 1234),
+            ] {
+                drop_probe::reset();
+                let (actual, actual_cost) = measure(actual);
+                assert!(actual);
+                assert_eq!(drop_probe::order(), expected_order);
+                drop_probe::reset();
+                let (expected, expected_cost) = measure(|| {
+                    let owner = drop_probe::owner();
+                    let result = {
+                        let _guard = owner.guard();
+                        if expected_order == 134 { drop_probe::read() }
+                        else { drop_probe::consume(drop_probe::value()) }
+                    };
+                    result == 7.0 && owner.drops() == 1.0
+                });
+                assert_eq!(actual, expected);
+                assert_eq!(drop_probe::order(), expected_order);
+                assert_eq!(actual_cost, expected_cost);
+                assert_eq!(actual_cost.allocations, 0);
+                assert_eq!(actual_cost.allocated_bytes, 0);
+                assert_eq!(actual_cost.reallocations, 0);
+                assert_eq!(actual_cost.deallocations, 0);
+                assert_eq!(actual_cost.deallocated_bytes, 0);
+            }
         }
         drop_probe::reset();
         assert!(std::panic::catch_unwind(borrowingUnwind).is_err());
