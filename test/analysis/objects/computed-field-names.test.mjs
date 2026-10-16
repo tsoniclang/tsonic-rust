@@ -83,8 +83,10 @@ export type Shape = typeof Shape;
 export function accept(value: Shape): void {}
 ` } });
     const issues = compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN");
-    assert.equal(issues.length === 1 && issues[0].message.includes("effectful"), true,
-      "the actual native field refuses the shared effectful-key evidence once");
+    assert.equal(issues.length, 1, "the actual native field refuses the shared effectful-key evidence once");
+    assert.equal(issues[0]?.message,
+      "A computed property key call must retain its effects and cannot be replaced with a static native field name.",
+      "the native struct consumes the exact source-owned key refusal");
     assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "the builder cannot erase a required key effect");
     assert.equal(compiled.result.artifacts.length, 0, "no native field is invented from the call's singleton return type");
   });
@@ -307,7 +309,7 @@ export function make(): number {
     { name: "mutable literal binding", source: 'export function make(): number { let key: "value" = "value"; const value = { [key]: 1 }; return 0; }' },
     { name: "effectful singleton call", source: 'function key(): "value" { return "value"; } export function make(): number { const value = { [key()]: 1 }; return 0; }' },
     { name: "effectful property getter", source: 'const key = { get name(): "value" { return "value"; } }; export function make(): number { const value = { [key.name]: 1 }; return 0; }' },
-    { name: "effectful enum receiver", source: 'enum Key { Value = "value" } const holder = { get selected(): typeof Key { return Key; } }; export function make(): number { const value = { [holder.selected.Value]: 1 }; return 0; }' },
+    { name: "effectful enum receiver", source: 'enum Key { Value = 1 } const holder = { get selected(): typeof Key { return Key; } }; export function make(): number { const value = { [holder.selected.Value]: 1 }; return 0; }' },
   ]) {
     test(`Rust ${surfaces[0] ?? "native"} rejects ${current.name} before sealing`, () => {
       const compiled = compileRust({ surfaces, files: { "index.ts": current.source } });
