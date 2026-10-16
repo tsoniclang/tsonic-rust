@@ -16,12 +16,11 @@ import {
   KindWhileStatement,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import { diagnosticInput } from "../program/plan-context.js";
 import { prepareRustFrameScope } from "../bindings/frame-storage.js";
 import { directResourceDeclaration, planLoopExitStatement, planResourceDeclarationScope } from "./resources.js";
 import { isErasedRustSafetyExpressionStatement, isRustExplicitUnsafeBlockMarker, withExplicitUnsafeContext } from "../safety/explicit-safety.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planDoStatement, planForStatement, planIfStatement, planLabeledStatement, planWhileStatement } from "./control-flow.js";
 import { planSwitchStatement } from "./switch-statements.js";
 import { planExpression } from "../expressions/index.js";
@@ -79,7 +78,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
   switch (kind) {
     case "KindFunctionDeclaration": {
       const participation = context.input.program.records.nativeParticipation.get(node);
-      if (participation === undefined) failTargetPlannerInvariant("tsonic-rust",
+      if (participation === undefined) failRustPlannerInvariant(
         "Authored function placement requires its sealed native participation.", node);
       if (participation === "erased") return [];
       const items = planFunctionDeclarations(node, context);
