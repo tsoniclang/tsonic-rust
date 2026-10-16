@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
@@ -42,7 +42,7 @@ export function choose(left: () => number, right: () => number, flag: boolean): 
   const ast = program.source.ast;
   const nodes = sourceNodes(program);
   const choose = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "choose");
-  const invocation = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.expression(node)) === "selected");
+  const invocation = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === "selected");
   assert.equal(invocation !== undefined, true, "the actual joined retained value is invoked");
   const fact = program.records.genericCallableInvocation.get(invocation);
   assert.equal(fact !== undefined, true, "one final generic invocation is published");
