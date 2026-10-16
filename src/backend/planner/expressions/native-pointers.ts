@@ -18,39 +18,19 @@ import {
 import type {
   RustPlanContext,
 } from "../program/plan-context.js";
-import { tryPlanRustRawAddress } from "./raw-addresses.js";
-
-import { tryPlanRustRawLocation } from "./native-memory.js";
-import { tryPlanRustMemoryBinding } from "./memory-bindings.js";
-
-export type RustNativePointerOperationPlan =
-  | { readonly handled: false }
-  | { readonly handled: true; readonly expression?: RustExpr };
-
-export function tryPlanRustNativePointerOperation(
+export function planRustNativePointerOperation(
   node: Node,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "native-pointer" }>,
   context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
-): RustNativePointerOperationPlan {
-  const rawLocation = tryPlanRustRawLocation(node, context, planExpression);
-  const memoryBinding = tryPlanRustMemoryBinding(node, context, planExpression);
-  if (memoryBinding.handled) return memoryBinding;
-  if (rawLocation.handled) return { handled: true, expression: rawLocation.expression };
-  const layout = context.input.program.records.memoryLayoutObservation.get(node);
-  if (layout !== undefined) return { handled: true, expression: { kind: "int-literal", text: `${layout.value}usize` } };
-  const rawAddress = tryPlanRustRawAddress(node, context, planExpression);
-  if (rawAddress.handled) return { handled: true, expression: rawAddress.expression };
-  const fact = context.input.program.records.targetOperation.get(node);
-  if (fact?.kind !== "native-pointer") {
-    return { handled: false };
-  }
+): RustExpr | undefined {
   if (!nativePointerFactIsClosed(fact, context)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.native-pointer-fact",
       "The finalized Rust native-pointer operation has inconsistent exact carrier evidence.",
     ));
-    return { handled: true };
+    return undefined;
   }
   if ((context.explicitUnsafeContextDepth ?? 0) === 0) {
     context.diagnostics.push({
@@ -60,51 +40,37 @@ export function tryPlanRustNativePointerOperation(
       message: `Rust native-pointer '${fact.operation}' requires an explicit unsafecontext() source region.`,
       sourceNode: node,
     });
-    return { handled: true };
+    return undefined;
   }
   const pointer = planExpression(fact.pointerExpression, context);
   if (pointer === undefined) {
-    return { handled: true };
+    return undefined;
   }
   const dereference: RustExpr = { kind: "dereference", pointer };
   switch (fact.operation) {
     case "load":
-      return { handled: true, expression: dereference };
+      return dereference;
     case "store": {
       const value = fact.valueExpression === undefined
         ? undefined
         : planExpression(fact.valueExpression, context);
-      return {
-        handled: true,
-        ...(value === undefined
-          ? {}
-          : {
-              expression: {
+      return value === undefined ? undefined : {
                 kind: "assignment",
                 operator: "=",
                 target: dereference,
                 value,
-              },
-            }),
-      };
+              };
     }
     case "offset": {
       const offset = fact.offsetExpression === undefined
         ? undefined
         : planExpression(fact.offsetExpression, context);
-      return {
-        handled: true,
-        ...(offset === undefined
-          ? {}
-          : {
-              expression: {
+      return offset === undefined ? undefined : {
                 kind: "method-call",
                 receiver: pointer,
                 method: "offset",
                 args: [offset],
-              },
-            }),
-      };
+              };
     }
   }
 }

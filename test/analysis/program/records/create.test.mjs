@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { assertRustInheritedRecordConflict, assertRustInheritedRecordCorrespondence } from "../../../helpers/records.mjs";
-import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
+import { createRustProgramRecordBuilder, createRustProgramRecords } from "../../../../dist/analysis/program/records/create.js";
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../../../dist/analysis/conversions/value-carrier-queries.js";
 
 
@@ -83,6 +83,7 @@ test("sealed records publish only frozen typed family readers without a native k
   const layout = { kind: "scalar", pointeeCarrier: carrier, size: 4, alignment: 4,
     width: 64, littleEndian: true, fields: [] };
   const producerAdmissions = {
+    nativeHandler: () => model.nativeHandlers.selected(subject, { kind: "memory-binding", selection: { kind: "field", carrier, expression: subject } }),
     selectedOperation: () => model.selectedOperations.checked(subject, { kind: "accept", value: {} }),
     runtimeCarrier: () => admitFamily(model, "runtimeCarrier", subject, { carrier }),
     selectedCall: () => admitFamily(model, "selectedCall", subject, {}),
@@ -159,9 +160,9 @@ test("sealed records publish only frozen typed family readers without a native k
     contextualValueConversion: () => model.contextualValueConversions.convert(subject, carrier, carrier,
       { kind: "semantic-conversion", id: "checked-f64-to-i32-trunc" }),
   };
-  assert.equal(Object.keys(producerAdmissions).length, 67, "every producer has a seal refusal witness");
+  assert.equal(Object.keys(producerAdmissions).length, 68, "every producer has a seal refusal witness");
   assert.equal(Object.isFrozen(records), true);
-  assert.equal(Object.keys(records).length, 67, "every native key has one family");
+  assert.equal(Object.keys(records).length, 68, "every native key has one family");
   for (const [name, family] of Object.entries(records)) {
     assert.deepEqual(Object.keys(family), ["get"], name + ": getter-only publication");
     assert.equal(Object.isFrozen(family), true, name + ": immutable family port");
@@ -181,6 +182,33 @@ test("sealed records publish only frozen typed family readers without a native k
     assert.equal(Object.hasOwn(records, removed), false, removed + ": no competing public API");
   }
   assert.throws(() => model.seal(modelRequiredRecords), /only once/u);
+});
+
+test("the backend projection removes exactly five applicability families and preserves every other reader by identity", () => {
+  const builder = createModel();
+  const subject = {};
+  const payload = Object.freeze({ kind: "field", carrier: { kind: "source-primitive", name: "int32" }, expression: subject });
+  const handler = Object.freeze({ kind: "memory-binding", selection: payload });
+  builder.nativeHandlers.selected(subject, handler);
+  assert.equal(builder.nativeHandler.get(subject) === handler, true);
+  assert.throws(() => builder.nativeHandlers.selected(subject, handler), /Duplicate Rust semantic plan/u);
+  const analysis = builder.seal([]);
+  const records = createRustProgramRecords(analysis);
+  const removed = new Set(["memoryBindingPlan", "rawLocationPlan", "rawAddressPlan", "memoryLayoutObservation", "typedLocationPlan"]);
+  assert.equal(Object.keys(analysis).length, 68);
+  assert.equal(Object.keys(records).length, 63);
+  assert.equal(Object.isFrozen(records), true);
+  for (const [family, reader] of Object.entries(analysis)) {
+    if (removed.has(family)) {
+      assert.equal(Object.hasOwn(records, family), false, family);
+      assert.throws(() => records[family].get(subject), TypeError, family);
+    } else assert.equal(records[family] === reader, true, family);
+  }
+  const child = createRustProgramRecordBuilder(undefined, analysis);
+  child.nativeHandlers.selected(subject, Object.freeze({ kind: "memory-binding", selection: payload }));
+  assert.equal(child.nativeHandler.get(subject) === handler, true, "inherited publication keeps the exact payload and descriptor");
+  child.seal([]);
+  assert.throws(() => child.nativeHandlers.selected({}, handler), /after analysis is sealed/u);
 });
 
 test("scoped guard producers preserve false, exact subjects and parent isolation without reselecting", () => {

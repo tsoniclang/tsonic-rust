@@ -9,7 +9,7 @@ import type { RustProjectFieldDispatchQueries } from "../project-types/field-dis
 import type { RustProjectMethodPropertyPlan } from "../project-types/method-properties.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
-import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
@@ -69,7 +69,7 @@ export interface RustGeneratedItemUsageInput {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly declarations: readonly Node[];
-  readonly records: RustProgramRecords;
+  readonly records: RustAnalysisRecords;
   readonly projectTypes: RustProjectTypePolicy;
   readonly classValues: RustClassValuePlan;
   readonly sourceCallableSpecializations: RustSourceCallableSpecializationPlan;

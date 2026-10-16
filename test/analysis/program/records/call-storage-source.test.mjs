@@ -1,4 +1,9 @@
 import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
+
+function selectedTypedLocationPlan(program, node) {
+  const handler = program.records.nativeHandler.get(node);
+  return handler?.kind === "typed-location" ? handler.selection.plan : undefined;
+}
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
@@ -134,12 +139,12 @@ for (const surfaces of [[], ["js"]]) {
     }
     const local = nodes.find(node => source.ast.is.IsVariableDeclaration(node) && source.ast.text(source.ast.name(node)) === "local");
     assertRustRecordRequirement(requiredRecords, "bindingStorage", local);
-    const selected = nodes.filter(node => program.records.typedLocationPlan.get(node) !== undefined);
+    const selected = nodes.filter(node => selectedTypedLocationPlan(program, node) !== undefined);
     assert.equal(selected.length, 7);
-    assert.deepEqual([...new Set(selected.map(node => program.records.typedLocationPlan.get(node).operation))].sort(),
+    assert.deepEqual([...new Set(selected.map(node => selectedTypedLocationPlan(program, node).operation))].sort(),
       ["address-of", "allocate", "equal-pointer", "hash-pointer", "load", "store"]);
     for (const call of selected) {
-      const plan = program.records.typedLocationPlan.get(call);
+      const plan = selectedTypedLocationPlan(program, call);
       assert.equal(source.ast.is.IsCallExpression(call), true);
       assert.equal(plan.call === call, true);
       assert.equal(plan.pointeeCarrier.name, "int32");
@@ -162,7 +167,8 @@ for (const surfaces of [[], ["js"]]) {
       }
     }
     assert.equal(nodes.filter(node => program.records.bindingStorage.get(node) !== undefined).length, 1);
-    assertReader(program.records, "typedLocationPlan");
+    assertReader(program.records, "nativeHandler");
+    assert.equal(Object.hasOwn(program.records, "typedLocationPlan"), false);
     assertReader(program.records, "bindingStorage");
   });
 
@@ -178,7 +184,7 @@ for (const surfaces of [[], ["js"]]) {
       }
     ` } });
     const nodes = nodesOf(source, program.sourceFiles);
-    const selected = nodes.filter(node => program.records.typedLocationPlan.get(node)?.operation === "project-pointer");
+    const selected = nodes.filter(node => selectedTypedLocationPlan(program, node)?.operation === "project-pointer");
     const expectedCalls = nodes.filter(node => source.ast.is.IsCallExpression(node));
     assert.equal(expectedCalls.length, 2);
     for (const call of expectedCalls) {
@@ -186,9 +192,9 @@ for (const surfaces of [[], ["js"]]) {
       for (const argument of source.ast.arguments(call)) assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
     }
     assert.equal(selected.length, 2);
-    assert.deepEqual(selected.map(node => program.records.typedLocationPlan.get(node).optional), [false, true]);
+    assert.deepEqual(selected.map(node => selectedTypedLocationPlan(program, node).optional), [false, true]);
     for (const call of selected) {
-      const fact = program.records.typedLocationPlan.get(call);
+      const fact = selectedTypedLocationPlan(program, call);
       const arguments_ = source.ast.arguments(call);
       assert.equal(fact.call === call && fact.pointerExpression === arguments_[0], true);
       assert.equal(fact.fromSourceExpression === arguments_[1] && fact.toSourceExpression === arguments_[2], true);
@@ -197,7 +203,8 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(Object.isFrozen(fact), true);
       for (const argument of arguments_) assert.equal(program.records.argumentPassing.get(argument)?.mode, "by-value");
     }
-    assertReader(program.records, "typedLocationPlan");
+    assertReader(program.records, "nativeHandler");
+    assert.equal(Object.hasOwn(program.records, "typedLocationPlan"), false);
   });
 
   test(`pointer views and bound callbacks use the same canonical location constructor in ${surface}`, () => {
@@ -209,7 +216,7 @@ for (const surfaces of [[], ["js"]]) {
       export function view(pointer: Pointer<int32>): Pointer<int32> { return viewptr<int32, int32>(pointer, () => 2, _next => {}); }
     ` } });
     const nodes = nodesOf(source, program.sourceFiles);
-    const selected = nodes.filter(node => program.records.typedLocationPlan.get(node) !== undefined);
+    const selected = nodes.filter(node => selectedTypedLocationPlan(program, node) !== undefined);
     assert.equal(selected.length, 2);
     const expectedCalls = nodes.filter(node => source.ast.is.IsCallExpression(node));
     assert.equal(expectedCalls.length, 2);
@@ -217,9 +224,9 @@ for (const surfaces of [[], ["js"]]) {
       assertRustRecordRequirement(requiredRecords, "typedLocationPlan", call);
       for (const argument of source.ast.arguments(call)) assertRustRecordRequirement(requiredRecords, "argumentPassing", argument);
     }
-    assert.deepEqual(selected.map(node => program.records.typedLocationPlan.get(node).operation).sort(), ["bind-pointer", "view-pointer"]);
+    assert.deepEqual(selected.map(node => selectedTypedLocationPlan(program, node).operation).sort(), ["bind-pointer", "view-pointer"]);
     for (const call of selected) {
-      const fact = program.records.typedLocationPlan.get(call);
+      const fact = selectedTypedLocationPlan(program, call);
       const arguments_ = source.ast.arguments(call);
       assert.equal(fact.call === call, true);
       assert.equal(fact.readExpression === arguments_[1] && fact.writeExpression === arguments_[2], true);
@@ -232,7 +239,8 @@ for (const surfaces of [[], ["js"]]) {
       } else assert.equal(fact.identityExpression === arguments_[0], true);
       for (const argument of arguments_) assert.equal(program.records.argumentPassing.get(argument)?.mode, "by-value");
     }
-    assertReader(program.records, "typedLocationPlan");
+    assertReader(program.records, "nativeHandler");
+    assert.equal(Object.hasOwn(program.records, "typedLocationPlan"), false);
   });
 
   test(`retained source calls preserve the actual callee/caller lifetime substitution in ${surface}`, () => {

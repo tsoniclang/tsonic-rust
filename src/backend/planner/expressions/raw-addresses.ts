@@ -3,17 +3,16 @@ import type { Node } from "@tsonic/tsts";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustPrimitiveTypeName } from "../../../target-model/types/carriers/primitives.js";
+import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
 
-export function tryPlanRustRawAddress(
-  node: Node, context: RustPlanContext,
+export function planRustRawAddress(
+  _node: Node, plan: RustRawAddressPlan, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
-): { readonly handled: boolean; readonly expression?: RustExpr } {
-  const plan = context.input.program.records.rawAddressPlan.get(node);
-  if (plan === undefined) return { handled: false };
+): RustExpr | undefined {
   const args: RustExpr[] = [];
   for (const argument of plan.arguments) {
     const value = planExpression(argument.expression, context);
-    if (value === undefined) return { handled: true };
+    if (value === undefined) return undefined;
     args.push(argument.input === "raw-ref"
       ? { kind: "method-call", receiver: value, method: "as_ref", args: [] }
       : argument.input === "raw-owner-ref"
@@ -24,8 +23,8 @@ export function tryPlanRustRawAddress(
   }
   if ("width" in plan) args.push({ kind: "int-literal", text: `${plan.width}u32` });
   const call: RustExpr = { kind: "call", path: `rt::RawPointer::${plan.method}`, args };
-  return { handled: true, expression: plan.method === "address" && plan.width === 32
-    ? { kind: "numeric-cast", expression: call, target: "u32" } : call };
+  return plan.method === "address" && plan.width === 32
+    ? { kind: "numeric-cast", expression: call, target: "u32" } : call;
 }
 
 function isUnsuffixedIntegerLiteral(expression: RustExpr): boolean {

@@ -7,30 +7,28 @@ import { createRustStructuralObjectFromCarrier } from "../objects/project-storag
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustEmptyObjectTargetType } from "../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
 
-export function tryPlanRustMemoryBinding(
-  node: Node, context: RustPlanContext,
+export function planRustMemoryBinding(
+  _node: Node, plan: RustMemoryBindingPlan, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
-): { readonly handled: boolean; readonly expression?: RustExpr } {
-  const plan = context.input.program.records.memoryBindingPlan.get(node);
-  if (plan === undefined) return { handled: false };
-  if (plan.kind === "field") return { handled: true, expression: planExpression(plan.expression, context) };
+): RustExpr | undefined {
+  if (plan.kind === "field") return planExpression(plan.expression, context);
   if (rustTargetTypeRefEquals(plan.carrier, rustEmptyObjectTargetType())) {
     return plan.fields.length === 0
-      ? { handled: true, expression: { kind: "call", path: "tsonic_rust_runtime::EmptyObject::new", args: [] } }
-      : { handled: true };
+      ? { kind: "call", path: "tsonic_rust_runtime::EmptyObject::new", args: [] }
+      : undefined;
   }
-  if (context.syntheticNames === undefined) return { handled: true };
+  if (context.syntheticNames === undefined) return undefined;
   const bindings: { name: string; value: RustExpr }[] = [];
   const fields: { kind: "bound"; value: RustExpr }[] = [];
   for (const field of plan.fields) {
     const value = planExpression(field.expression, context);
-    if (value === undefined) return { handled: true };
+    if (value === undefined) return undefined;
     const name = allocateRustSyntheticName(context.syntheticNames, "field_location");
     bindings.push({ name, value });
     fields[field.storageIndex] = { kind: "bound", value: { kind: "path", path: name } };
   }
   const value = createRustStructuralObjectFromCarrier(plan.carrier, fields, context);
-  return { handled: true, expression: value === undefined ? undefined :
-    bindings.length === 0 ? value : rustValueBlock(bindings, value) };
+  return value === undefined ? undefined : bindings.length === 0 ? value : rustValueBlock(bindings, value);
 }

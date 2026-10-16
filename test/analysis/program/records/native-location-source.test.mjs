@@ -1,4 +1,15 @@
 import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
+
+function selectedPointerPlan(program, node, kind) {
+  const handler = program.records.nativeHandler.get(node);
+  return handler?.kind === "native-pointer" && (handler.selection.kind === kind ||
+    kind === "raw-address" && handler.selection.kind === "raw-identity") ? handler.selection.plan : undefined;
+}
+
+function selectedMemoryBinding(program, node) {
+  const handler = program.records.nativeHandler.get(node);
+  return handler?.kind === "memory-binding" ? handler.selection : undefined;
+}
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
@@ -79,7 +90,7 @@ export function convert(value: uint32 = 7) {
       assert.equal(source.ast.is.IsParameterDeclaration(node), true);
       assert.equal(backing.pointeeCarrier.name, "uint32");
     }
-    const record = program.records.rawLocationPlan.get(node);
+    const record = selectedPointerPlan(program, node, "raw-location");
     if (record === undefined) continue;
     operations.add(record.operation);
     assert.equal(source.ast.is.IsCallExpression(node), true);
@@ -101,7 +112,7 @@ test("source raw-address publication retains all operation forms and exact nativ
   assert.equal(calls.length, 17);
   for (const call of calls) assertRustRecordRequirement(requiredRecords, "rawAddressPlan", call);
   for (const node of nodesOf(source, program)) {
-    const record = program.records.rawAddressPlan.get(node);
+    const record = selectedPointerPlan(program, node, "raw-address");
     if (record === undefined) continue;
     methods.add(record.method);
     const arguments_ = source.ast.arguments(node);
@@ -133,7 +144,7 @@ export function create(value: uint32): Cell { return bindmemoryrecord(layout, bi
     assert.equal(calls.length, 2);
     for (const call of calls) assertRustRecordRequirement(requiredRecords, "memoryBindingPlan", call);
     for (const node of nodesOf(source, program)) {
-      const record = program.records.memoryBindingPlan.get(node);
+      const record = selectedMemoryBinding(program, node);
       if (record === undefined) continue;
       counts[record.kind] += 1;
       const arguments_ = source.ast.arguments(node);
@@ -166,7 +177,7 @@ export function create(): {} { return bindmemoryrecord(layout); }
     source.ast.text(source.ast.as.AsCallExpression(node).Expression) === "bindmemoryrecord");
   assertRustRecordRequirement(requiredRecords, "memoryBindingPlan", call);
   for (const node of nodesOf(source, program)) {
-    const record = program.records.memoryBindingPlan.get(node);
+    const record = selectedMemoryBinding(program, node);
     if (record === undefined) continue;
     count += 1;
     assert.equal(record.kind, "record");

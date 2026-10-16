@@ -10,10 +10,12 @@ const temporary = join(root, ".temp/marker-layout-types");
 const prelude = `
 import { createRustProgramRecordBuilder } from "${join(root, "dist/analysis/program/records/create.js")}";
 import type { RustProgramRecords } from "${join(root, "dist/target-model/records/program.js")}";
+import type { RustAnalysisRecords } from "${join(root, "dist/analysis/program/records/model.js")}";
 import type { Node } from "@tsonic/tsts";
 declare const node: Node;
 const builder = createRustProgramRecordBuilder();
 declare const records: RustProgramRecords;
+declare const analysis: RustAnalysisRecords;
 `;
 
 function check(directory, text) {
@@ -42,14 +44,14 @@ builder.memoryLayoutObservations.observe(node, 0);
 builder.memoryLayoutObservations.observe(node, 65536);
 const erased: true | undefined = records.compileTimeSource.get(node);
 const mode: "ref" | "mut-ref" | undefined = records.selfMode.get(node)?.mode;
-const value: number | undefined = records.memoryLayoutObservation.get(node)?.value;
+const value: number | undefined = analysis.memoryLayoutObservation.get(node)?.value;
 const sealed: RustProgramRecords = builder;
 `);
   assert.equal(positive.status, 0, positive.diagnostics.slice(0, 2048));
   const invalid = [
     ...["compileTimeSource", "selfMode", "memoryLayoutObservation"].flatMap(family => [
       [`${family} builder writer`, `builder.${family}.set(node, undefined);`, /Property 'set' does not exist/u],
-      [`${family} final writer`, `records.${family}.set(node, undefined);`, /Property 'set' does not exist/u],
+      [`${family} final writer`, `${family === "memoryLayoutObservation" ? "analysis" : "records"}.${family}.set(node, undefined);`, /Property 'set' does not exist/u],
     ]),
     ...["compileTimeSources", "selfModes", "memoryLayoutObservations"].map(producer =>
       [`${producer} leaked port`, `records.${producer};`, /does not exist/u]),
@@ -75,11 +77,13 @@ const sealed: RustProgramRecords = builder;
     ["sealed erase port", "builder.seal([]).compileTimeSources.erase(node);", /does not exist/u],
     ["sealed receiver port", "builder.seal([]).selfModes.method(node, 'ref');", /does not exist/u],
     ["sealed layout port", "builder.seal([]).memoryLayoutObservations.observe(node, 4);", /does not exist/u],
+    ...["memoryBindingPlan", "rawLocationPlan", "rawAddressPlan", "memoryLayoutObservation", "typedLocationPlan"].map(family =>
+      [`${family} removed backend reader`, `records.${family}.get(node);`, /does not exist/u]),
   ];
   for (const [name, body, diagnostic] of invalid) {
     const result = check(directory, body);
     assert.equal(result.status !== 0, true, name);
     assert.match(result.diagnostics, diagnostic, name);
   }
-  assert.equal(invalid.length, 31);
+  assert.equal(invalid.length, 36);
 });
