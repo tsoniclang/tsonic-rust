@@ -166,7 +166,7 @@ export function analyzeRustTargetProgram(
     components: sourcePackageComponents.plan });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
   const records = context.records.seal(context.requiredRecords);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, nodes: context.sourceStorage.nodes,
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage, nodes: context.sourceStorage.nodes,
     records, definitions: context.typeDefinitions });
   if (promiseResults.diagnostics.length > 0) return rejectedTargetStage(promiseResults.diagnostics);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,

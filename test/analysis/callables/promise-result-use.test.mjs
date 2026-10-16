@@ -36,7 +36,7 @@ test("native discarded async calls are rejected before program publication", () 
     return selected.kind === "rejected" ? selected : { kind: "rejected", diagnostics: [] };
   } });
   assert.equal(published, false);
-  assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code), ["RUST_DISCARDED_NATIVE_ASYNC_CALL"]);
+  assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code), ["TSONIC_NATIVE_ASYNC_RESULT_DISCARDED"]);
   assert.equal(result.artifacts.length, 0);
 });
 
