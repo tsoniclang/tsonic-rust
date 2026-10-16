@@ -114,6 +114,35 @@ const staticKeys = [
 ];
 
 for (const surfaces of [[], ["js"]]) {
+  for (const [label, declarations, body] of [
+    ["object body", "", 'function unused(key: string): number { const value = { [key]: 7 }; return 1; }'],
+    ["native struct body", 'import { field, struct } from "@tsonic/core/lang.js"; function key(): "value" { return "value"; }',
+      'function unused(): number { const Shape = struct({ [key()]: field<number>() }); return 1; }'],
+  ]) {
+    for (const required of [false, true]) test(`Rust ${surfaces[0] ?? "native"} ${required ? "requires" : "erases"} a computed key in a nested ${label}`, () => {
+      const compiled = compileRust({ surfaces, files: { "index.ts": `${declarations}
+export function run(): number {
+  ${body}
+  return ${required ? label === "object body" ? 'unused("value")' : "unused()" : "42"};
+}` } });
+      if (!required) {
+        assert.equal(compiled.result.diagnostics.length, 0, "the actual participation owner erases the unused body's native obligations");
+        assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true, "the retained native program reaches emission");
+        const output = [...compiled.artifacts.values()].join("\n");
+        assert.equal(output.includes("42") && !/\bunused\b/u.test(output), true, "no native code is invented for the erased body");
+        return;
+      }
+      assert.equal(compiled.result.diagnostics.length, 1, "one demanded key owns the only source refusal");
+      assert.equal(compiled.result.diagnostics[0]?.code, "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN", "the actual native key is refused before generic missing carriers");
+      assert.equal(compiled.result.diagnostics[0]?.message, label === "object body"
+        ? "The computed key is not a const singleton binding or an exact enum constant."
+        : "A computed property key call must retain its effects and cannot be replaced with a static native field name.",
+      "the shared selected cause is preserved rather than reconstructed");
+      assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined && compiled.result.artifacts.length === 0, true,
+        "a required rejected key publishes no program, plan or native artifact");
+    });
+  }
+
   test(`Rust ${surfaces[0] ?? "native"} rejects an effectful native struct key without dropping its evaluation`, () => {
     const compiled = compileRust({ surfaces, files: { "index.ts": `
 import { field, struct } from "@tsonic/core/lang.js";
