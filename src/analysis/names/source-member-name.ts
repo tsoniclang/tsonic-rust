@@ -21,7 +21,7 @@ export function rustProjectCallableTargetName(
   if (name === undefined) {
     return undefined;
   }
-  if (ast.is.IsComputedPropertyName(name)) {
+  if (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)) {
     const selected = context.semanticsFor(declaration)
       .propertyNames.get(name);
     if (selected?.kind === "well-known-symbol") return selected.symbol === "dispose"

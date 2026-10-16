@@ -158,3 +158,27 @@ class Entry {
   assert.equal(rustProjectCallableTargetName(staticMethod, context), "some_key_2_static",
     "computed static methods retain the accepted static/instance collision rule");
 });
+
+test("ordinary numeric member names retain the shared source-token key without float64 rounding", () => {
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/project", compilerOptions: {
+    strict: true, target: "es2022", module: "esnext",
+  }, files: { "/project/index.ts": `
+class Entry {
+  9007199254740993(): number { return 1; }
+  1e2(): number { return 2; }
+}
+` } }).checkSource();
+  assert.equal(checked.diagnostics.length, 0, formatDiagnostics(checked.diagnostics));
+  const source = createTargetSourceProgram(checked);
+  const file = checked.getSourceFile("/project/index.ts");
+  const names = createRustNamePlan({ ast: source.ast, sourceFiles: [file],
+    semanticsFor: source.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
+  assert.equal(names.diagnostics.length, 0, "native numeric property keys do not become authored identifier failures");
+  const declaration = source.ast.statements(file).find(node => source.ast.is.IsClassDeclaration(node));
+  const [exact, exponent] = source.ast.members(declaration);
+  const context = { ast: source.ast, names, semanticsFor: source.semantics.forNode };
+  assert.equal(names.nameForDeclaration(exact), "value_9007199254740993", "the native key retains every authored integer digit");
+  assert.equal(rustProjectCallableTargetName(exact, context), "value_9007199254740993", "the callable consumer uses the same selected native key");
+  assert.equal(names.nameForDeclaration(exponent), "value_100", "exponent spelling is normalized by the shared owner");
+  assert.equal(rustProjectCallableTargetName(exponent, context), "value_100", "numeric callable names consume the canonical key");
+});

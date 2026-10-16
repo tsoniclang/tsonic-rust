@@ -219,9 +219,11 @@ function collectNameCandidates(
   if (role !== undefined && scope !== undefined) {
     const name = ast.name(node);
     const nameKind = name === undefined ? undefined : ast.kindName(name);
-    const propertyName = ObjectLiteralProperty_SourceName(ast, node);
-    const computedName = name !== undefined && ast.is.IsComputedPropertyName(name)
-      ? semanticsFor(node).propertyNames.get(name) : undefined;
+    const checkedKey = name !== undefined &&
+      (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name));
+    const propertyName = checkedKey
+      ? semanticsFor(node).propertyNames.get(name)
+      : ObjectLiteralProperty_SourceName(ast, node);
     const sourceName = ast.kindName(node) === "KindExportAssignment" &&
         ast.as.AsExportAssignment(node)?.IsExportEquals !== true
       ? "default"
@@ -229,10 +231,9 @@ function collectNameCandidates(
         ? "Anonymous"
       : nameKind === "KindPrivateIdentifier"
         ? ast.text(name)
-        : computedName?.kind === "resolved" ? computedName.name
-        : propertyName.kind === "resolved" ? propertyName.name : "";
-    const literalKey = computedName?.kind === "resolved" || name !== undefined &&
-      (ast.is.IsStringLiteral(name) || ast.is.IsNumericLiteral(name));
+        : propertyName?.kind === "resolved" ? propertyName.name : "";
+    const literalKey = checkedKey && propertyName?.kind === "resolved" ||
+      name !== undefined && ast.is.IsStringLiteral(name);
     if (sourceName.length > 0 || literalKey) {
       candidates.push({
         declaration: node,
