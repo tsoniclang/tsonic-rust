@@ -18,9 +18,10 @@ class Item {
 }
 export function value(limit: number): number {
   const item = new Item(limit);
-  let total = 0;
-  for (let index = 0; index < 3; index++) { total += item.read() + index; }
-  return total + Code.Second;
+  const code = Code.Second;
+  let total: number = limit;
+  for (let index = 0; index < 3; index++) { total = item.read(); }
+  return total;
 }
 ` }, compileTarget(request) {
       const source = request.input.source;
