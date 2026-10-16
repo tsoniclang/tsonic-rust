@@ -42,10 +42,19 @@ export function missing(values: (number | undefined)[]): boolean {
     const selected = context(createRustRecordFixture({
 targetOperation: { get: (subject) => subject === node
     ? { ...fact, nullishDepths } : program.records.targetOperation.get(subject) }}, program.records));
-    assert.equal(planBinaryExpression(node, selected), undefined);
-    assert.equal(selected.diagnostics.length, 1);
-    assert.equal(selected.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
-    assert.ok(selected.diagnostics[0].evidence.includes("target.capability=rust.backend.option-check-depths"));
+    let failure;
+    try {
+      planBinaryExpression(node, selected);
+    } catch (error) {
+      failure = error;
+    }
+    assert.equal(failure?.diagnostic?.code, "TSONIC_INTERNAL_PLANNER_INVARIANT");
+    assert.equal(failure.diagnostic.source, "tsonic-rust");
+    assert.equal(failure.diagnostic.category, "error");
+    assert.equal(failure.diagnostic.message,
+      "Option nullish depths must be ordered, unique and contained in the exact operand carrier.");
+    assert.equal(failure.diagnostic.sourceNode === node, true, "the exact option-check identity");
+    assert.equal(selected.diagnostics.length, 0, "no source rejection for malformed producer depths");
   }
 });
 
