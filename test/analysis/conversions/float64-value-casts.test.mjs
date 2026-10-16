@@ -25,7 +25,8 @@ function compile(body, surfaces, synthetic = false) {
         observer?.analyzed?.(program);
         const visit = node => {
           const kind = ast.kindName(node);
-          if (kind === "KindNumericLiteral" || kind === "KindAsExpression") {
+          if (kind === "KindNumericLiteral" || kind === "KindAsExpression" ||
+            kind === "KindPrefixUnaryExpression" || kind === "KindParenthesizedExpression") {
             observed.push({ kind, source: program.records.runtimeCarrier.get(node)?.carrier,
               literal: program.records.literalValue.get(node),
               contextual: program.records.contextualValueConversion.get(node),
@@ -103,6 +104,10 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
     ["optional", "export function narrow(): float32 | undefined { const pending: float32 | undefined = 1e40; return pending; }"],
     ["midpoint", `export function narrow(): float32 { return ${midpoint}; }`],
     ["negative-zero", "export function narrow(): float32 { return -0; }"],
+    ["positive-zero", "export function narrow(): float32 { return +0; }"],
+    ["negative-overflow", "export function narrow(): float32 { return -1e40; }"],
+    ["positive-overflow", "export function narrow(): float32 { return +1e40; }"],
+    ["nested-sign", "export function narrow(): float32 { return -(+0); }"],
   ]) {
     test(`${surface}: checked float64 ${name} seals its selected float32 adaptation without relabelling source storage`, () => {
       const compilation = compile(body, surfaces, true);
@@ -115,7 +120,11 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
       assert.equal(conversions.length, 1, "one contextual conversion");
       assert.equal(conversions[0].contextual.sourceCarrier?.name === "float64" &&
         conversions[0].contextual.targetCarrier?.name === "float32", true, "sealed actual value contract");
-      assert.equal(compilation.text.includes("_f64 as f32"), true, "existing native conversion consumer emits the cast");
+      assert.equal(/_f64\)* as f32/u.test(compilation.text), true, "existing native conversion consumer emits the cast");
+      assert.equal([...compilation.text.matchAll(/\bas f32\b/gu)].length, 1, "the selected cast occurs once after the source operation");
+      if (name === "negative-zero" || name === "negative-overflow" || name === "nested-sign") {
+        assert.equal(/-\d[^;\n]*_f64\)* as f32/u.test(compilation.text), true, "native sign precedes narrowing");
+      }
     });
   }
 

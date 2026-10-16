@@ -34,6 +34,7 @@ import {
   isRustNumericCarrier,
   isRustOptionCarrier,
   rustOptionElementCarrier,
+  rustSourcePrimitiveTargetType,
   rustStructuralObjectCarrierValue,
 } from "../../target-model/types/index.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
@@ -319,8 +320,10 @@ function resolveExpressionOperationDependencies(
     if (operand !== undefined) {
       const numericUnary = ast.operatorKindName(expression) === "KindMinusToken" ||
         ast.operatorKindName(expression) === "KindPlusToken";
-      const operandExpected = numericUnary && !isRustNumericCarrier(expected) && !isRustBigIntCarrier(expected)
-        ? undefined : expected;
+      const checkedFloat = numericUnary &&
+        walk.context.literalValues.literalValue.get(expression)?.numeric?.kind === "checked-float64";
+      const operandExpected = checkedFloat ? rustSourcePrimitiveTargetType("float64")
+        : numericUnary && !isRustNumericCarrier(expected) && !isRustBigIntCarrier(expected) ? undefined : expected;
       resolveExpressionCarrier(walk, operand, sourceFile, operandExpected);
     }
     return;
