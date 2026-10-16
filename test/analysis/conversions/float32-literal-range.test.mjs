@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
@@ -78,6 +79,8 @@ export function compare(value: float32): boolean { return value < 3.5e38; }
 export function compareNegative(value: float32): boolean { return value > -3.5e38; }
 export function equalWide(value: float32): boolean { return value === 3.5e38; }
 export function grouped(flag: boolean): float32 { return flag ? ((.5)) : -(+1); }
+function withDefault(value: float32 = 3.40282356779733661637539395458142568447e38): float32 { return value; }
+export function defaultValue(): float32 { return withDefault(); }
 export function inferred(value: float32): float32[] { const values = [value, 3.4028235677973366e38]; return values; }
 export function integer(value: int8): int8[] { const values = [value, 1]; return values; }
 `;
@@ -199,6 +202,7 @@ ${accepted.map(([, bits], index) => `    assert_eq!(index::value${index}().to_bi
     assert!(!index::equalWide(f32::MAX));
     assert_eq!(index::grouped(true), 0.5_f32);
     assert_eq!(index::grouped(false), -1.0_f32);
+    assert_eq!(index::defaultValue().to_bits(), 0x7f7fffff);
 }
 `;
     const projectRoot = writeGeneratedProject(`float32-literal-range-${surface}`, [
@@ -209,5 +213,33 @@ ${accepted.map(([, bits], index) => `    assert_eq!(index::value${index}().to_bi
     runCargo(projectRoot, ["fmt", "--all", "--check"]);
     runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
     runCargo(projectRoot, ["test", "--locked", "--offline", "--test", "float32_values"]);
+  });
+
+  test(`${surface}: actual synthetic float64 literals retain value conversion instead of authored float32 retargeting`, { timeout: 300_000 }, () => {
+    const source = header + "export function generated(): float32 { return 1.00000005960464477539062500000001; }";
+    const { result } = compileRust({ surfaces: selected, files: { "index.ts": source }, compileTarget(request) {
+      const ast = request.input.source.ast;
+      const synthetic = { ...ast, authoredRange(node) {
+        return node !== undefined && ast.is.IsNumericLiteral(node) ? { kind: "synthetic" } : ast.authoredRange(node);
+      } };
+      return compileRustTarget({ ...request, input: { ...request.input, source: { ...request.input.source, ast: synthetic } } });
+    } });
+    assert.equal(result.diagnostics.length === 0, true,
+      `synthetic input has no diagnostics: ${result.diagnostics.map(issue => issue.code).join(",")}`);
+    const generated = result.artifacts.filter(artifact => String(artifact.path).endsWith(".rs")).map(artifact => String(artifact.text)).join("\n");
+    assert.equal(generated.includes("1.0000000596046448_f64 as f32"), true,
+      "the actual double is converted, not retargeted as an authored float32 token");
+    const projectRoot = writeGeneratedProject(`float32-synthetic-value-${surface}`, [
+      ...result.artifacts.map(artifact => ({ path: String(artifact.path), text: String(artifact.text) })),
+      { path: "tests/synthetic_value.rs", text: `#[test]
+fn synthetic_value() {
+    assert_eq!(tsonic_generated::index::generated().to_bits(), 0x3f800000);
+}
+` },
+    ]);
+    runCargo(projectRoot, ["generate-lockfile", "--offline"]);
+    runCargo(projectRoot, ["fmt", "--all", "--check"]);
+    runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
+    runCargo(projectRoot, ["test", "--locked", "--offline", "--test", "synthetic_value"]);
   });
 }
