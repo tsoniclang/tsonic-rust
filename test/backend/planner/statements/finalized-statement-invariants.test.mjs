@@ -17,6 +17,8 @@ import { planRustAssignmentWrite } from "../../../../dist/backend/planner/statem
 import { validateRustFinalizedOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/validation.js";
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
 import { planStatement } from "../../../../dist/backend/planner/statements/core.js";
+import { finalizeRustProviderOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { finishProviderOperationExpression } from "../../../../dist/backend/planner/expressions/conversions.js";
 
 const source = `
 import type { int32 } from "@tsonic/core/types.js";
@@ -142,6 +144,24 @@ test("statement planning respects the same erased and compile-time domain as adm
     assert.equal(planStatement(node, context)?.length, 0, `${family}: no runtime statement is emitted`);
     assert.equal(context.diagnostics.length, 0, `${family}: no new source rejection is introduced`);
   }
+});
+
+test("native provider error renderability remains a precise diagnostic rather than an unproven invariant", () => {
+  const program = programFixture();
+  const node = nodeIn(program, "throwing", (ast, candidate) => ast.is.IsThrowStatement(candidate));
+  const context = planContext(program, node);
+  const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
+    form: { form: "call", path: "fixture::dispose" }, sourceArgumentCarriers: [],
+    resultCarrier: { kind: "tuple", elements: [] }, isAsync: false, isFallible: true,
+    errorBoundary: "provider-native", errorCarrier: { kind: "target-named", id: "fixture.UnresolvedError" },
+  }, program.typeDefinitions);
+  assert.equal(abi !== undefined, true, "structural carrier validity does not prove contextual native rendering");
+  const result = finishProviderOperationExpression(context, { abi }, { kind: "call", path: "fixture::dispose", args: [] }, node);
+  assert.equal(result === undefined, true, "an unrenderable provider error cannot produce a partial native expression");
+  assert.equal(context.diagnostics.length, 1, "one precise diagnostic is retained");
+  assert.equal(context.diagnostics[0].code, "RUST_MISSING_TARGET_FACT", "the failure is not relabelled as an internal invariant");
+  assert.equal(context.diagnostics[0].message.includes("exact rendered native error type"), true,
+    "the diagnostic identifies the unresolved renderability obligation");
 });
 
 test("an admitted throw cannot lose its mandatory source expression", () => {
