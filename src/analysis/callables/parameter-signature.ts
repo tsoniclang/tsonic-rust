@@ -1,11 +1,10 @@
-import { Node_Initializer, sourceCallableParameterEvidence } from "@tsonic/target-api/source";
+import { Node_Initializer } from "@tsonic/target-api/source";
 import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import { rustResolutionContext } from "../program/walk.js";
 import { recordRustParameterAbiSelection } from "../declarations/types-and-bindings.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { resolveRustSignatureParameterEvidence } from "../../policy/types/resolution/source-evidence.js";
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableProtocol, rustClosureProtocol, rustSourceOptionalTargetType } from "../../target-model/types/index.js";
@@ -18,6 +17,8 @@ export function recordCallableParameterInputFacts(
 ): readonly RustSourceParameterAbiFact[] | undefined {
   const { ast, records } = walk.context;
   records.assertOpen();
+  let state = walk.callableSignatures.get(declaration);
+  if (state?.inputActive) return undefined;
   const parameters = requireDenseSourceNodes(walk, ast.parameters(declaration),
     "Function declaration contains an undefined or non-data parameter slot.");
   if (parameters === undefined) return undefined;
@@ -25,33 +26,24 @@ export function recordCallableParameterInputFacts(
   if (selectedSignature === undefined && existing.every(parameter => parameter !== undefined)) {
     return Object.freeze(existing as RustSourceParameterAbiFact[]);
   }
-  let state = walk.callableSignatures.get(declaration);
-  if (state?.inputActive) return undefined;
   if (state === undefined) {
     state = { active: false, inputActive: false, completed: new Map(), suspensions: new Map() };
     walk.callableSignatures.set(declaration, state);
   }
   state.inputActive = true;
   try {
-    const semantics = walk.context.semanticsFor(declaration);
-    const signature = semantics.types.declarationSignatureInfo(declaration);
-    if (signature === undefined || semantics.declarations.signatureDeclaration(signature.signature) !== declaration ||
-      signature.parameters.length !== parameters.length ||
-      !signature.parameters.every((parameter, index) => parameter.declaration === parameters[index])) return undefined;
-    const context = rustResolutionContext(walk, declaration);
-    const declared = signature.parameters.map(parameter => resolveRustSignatureParameterEvidence(
-      sourceCallableParameterEvidence(parameter, ast), context, walk.operationOptions, new Set()));
+    const declared = parameters.map(parameter => walk.sourceCallableAbi.resolveParameterAbi(
+      parameter, rustResolutionContext(walk, parameter), walk.operationOptions));
     if (declared.some(parameter => parameter === undefined)) return undefined;
     const logical = (rustCallableProtocol(selectedSignature) ?? rustClosureProtocol(selectedSignature))?.parameters ??
-      declared as readonly TargetTypeRef[];
-    if (logical.length !== parameters.length) return undefined;
+      declared.map(abi => abi!.form === "default" ? abi!.parameterCarrier : abi!.valueCarrier);
     const selected = selectedSignature !== undefined || ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration)
       ? selectRustClosedCallableInputs(walk, declaration, logical) : logical;
     const abis = parameters.map((parameter, index) => {
       const input = selected[index]!;
       const parameterContext = rustResolutionContext(walk, parameter);
       return rustTargetTypeRefEquals(input, logical[index])
-        ? walk.sourceCallableAbi.resolveParameterAbi(parameter, parameterContext, walk.operationOptions)
+        ? declared[index]
         : resolveRustContextualParameterAbi(parameter,
           Node_Initializer(ast, parameter) === undefined ? input : rustSourceOptionalTargetType(input),
           parameterContext, walk.operationOptions);
