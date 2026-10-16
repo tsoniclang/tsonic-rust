@@ -26,6 +26,39 @@ export function choose(left: () => number, right: () => number, select: boolean)
 }
 `;
 
+test("one generic source producer retains both actual captured callback error activations", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+type Identity = <Value>(value: Value) => Value;
+function make(callback: () => number): Identity {
+  return <Value>(value: Value): Value => { callback(); return value; };
+}
+export function choose(left: () => number, right: () => number, flag: boolean): number {
+  const first = make(left);
+  const second = make(right);
+  const selected = flag ? first : second;
+  return selected<number>(7);
+}
+` } });
+  const ast = program.source.ast;
+  const nodes = sourceNodes(program);
+  const choose = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "choose");
+  const invocation = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.expression(node)) === "selected");
+  assert.equal(invocation !== undefined, true, "the actual joined retained value is invoked");
+  const fact = program.records.genericCallableInvocation.get(invocation);
+  assert.equal(fact !== undefined, true, "one final generic invocation is published");
+  const definition = program.callableValues.generic.physical.definitionFor(fact.carrier);
+  assert.equal(definition.members.length, 2, "both exact physical capture environments remain in the family");
+  assert.equal(new Set(definition.members.map(member => member.implementation.declaration)).size, 1,
+    "the source declaration alone cannot identify the physical member");
+  assert.equal(fact.invocation.length, 2, "the final invocation retains both member error channels");
+  assert.equal(rustTargetTypeRefEquals(fact.invocation[0].errorType, fact.invocation[1].errorType), false,
+    "left and right physical callback errors are not conflated");
+  const effects = program.records.errorEffects.get(choose);
+  assert.equal(effects.nativeErrors.length, 2, "both private pending activation routes reach final effects");
+  for (const error of fact.invocation) assert.equal(effects.nativeErrors.some(selected =>
+    rustTargetTypeRefEquals(selected.errorType, error.errorType)), true, "each exact invocation member has its own completed route");
+});
+
 const structuralSources = {
   "four Promise body edges": `
 async function fail(): Promise<void> { throw new Error("selected rejection"); }
