@@ -330,7 +330,8 @@ export function createRustStructuralMethodStorage(input: {
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">) {
       if (!complete || retentionValidated) throw new Error("Structural retention validates once against the completed declaration requirements.");
       for (const requirement of retainedRequirements) {
-        const contract = requirements.contractFor(requirement.declaration);
+        const owner = sourceEnclosingCallable(ast.parent(requirement.declaration), ast);
+        const contract = owner === undefined ? undefined : requirements.contractFor(owner, true);
         if (contract === undefined || !requirement.captures.every(carrier =>
           rustFinalContractSupportsStatic(contract, carrier, families, input.typeDefinitions)))
           throw new Error("Structural method retention is not proven by its actual final native generic contract.");

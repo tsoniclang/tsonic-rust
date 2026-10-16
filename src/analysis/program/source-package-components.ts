@@ -274,6 +274,7 @@ export function analyzeRustSourcePackageComponents(
   ));
   const byComponentId = new Map(components.map((component) =>
     [component.componentId, component] as const));
+  for (const componentId of order) reachable(componentId);
   const plan: RustSourcePackageComponentClassifications = {
     components,
     rootComponentId,
@@ -287,7 +288,7 @@ export function analyzeRustSourcePackageComponents(
     canReferenceFile(fromFileName: string, targetFileName: string) {
       const from = identities.componentIdForFile(fromFileName);
       const target = identities.componentIdForFile(targetFileName);
-      return from !== undefined && target !== undefined && reachable(from).has(target);
+      return from !== undefined && target !== undefined && dependencies.get(from)?.has(target) === true;
     },
   };
   return {
