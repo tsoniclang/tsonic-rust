@@ -62,6 +62,8 @@ import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
+import { analyzeRustNativeDeclarationForms } from "../declarations/native-forms.js";
+import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
@@ -106,6 +108,9 @@ export function analyzeRustTargetProgram(
     dispatchContexts.plan,
   );
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
+  const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
+    sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
+  if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
   const lexicalFunctions = analyzeRustProgram(context);
   if (context.diagnostics.length > 0) {
     return rejectedTargetStage(context.diagnostics);
@@ -316,6 +321,13 @@ export function analyzeRustTargetProgram(
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
+  const typeFamilies = context.typeFamilies.seal();
+  const enumMemberConstants = analyzeRustEnumMemberConstants(context.source, context.sourceFiles);
+  const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
+    names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
+    objectRepresentations, enumMemberConstants, typeFamilies,
+    genericRequirements: declarationGenericRequirements.index });
+  if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
     sourcePackageComponents: sourcePackageComponents.plan, errorStorageDemands: context.errorStorageDemands });
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
@@ -337,6 +349,8 @@ export function analyzeRustTargetProgram(
   const program: Omit<RustTargetProgram, "reachability" | "records"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
+    sourceOutputIdentities: sourceOutputIdentities.identities,
+    nativeDeclarations: nativeDeclarations.forms,
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
@@ -358,7 +372,7 @@ export function analyzeRustTargetProgram(
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
     records: finalRecords,
-    typeFamilies: context.typeFamilies.seal(),
+    typeFamilies,
     typeDefinitions,
     projectTypes,
     errorTransport: errorTransport.value,
@@ -396,10 +410,7 @@ export function analyzeRustTargetProgram(
     safetyApplications: context.safetyApplications,
     moduleInitialization,
     names: context.names,
-    enumMemberConstants: analyzeRustEnumMemberConstants(
-      context.source,
-      context.sourceFiles,
-    ),
+    enumMemberConstants,
     sourcePackageFacades: sourcePackageFacades.plan,
     sourcePackageComponents: sourcePackageComponents.plan,
     countedLoops: analyzeRustCountedLoopRepresentations({

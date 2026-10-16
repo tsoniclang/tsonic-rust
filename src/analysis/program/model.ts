@@ -8,6 +8,8 @@ import type {
 } from "@tsonic/target-api/analysis";
 import type { TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
+import type { RustNativeDeclarationForms } from "../../target-model/records/native-declaration-forms.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustSourceCallableSpecializationPlan } from "../callables/specializations.js";
 import type { RustCallableValuePlan } from "../callables/value-plan.js";
@@ -80,6 +82,8 @@ export interface RustTargetProgram {
   readonly source: TargetSourceSyntaxProgram;
   readonly sourceNavigation: TargetPlanningSourceNavigation;
   readonly sourceFiles: readonly SourceFile[];
+  readonly sourceOutputIdentities: ReadonlyMap<string, RustSourceFileOutputIdentity>;
+  readonly nativeDeclarations: RustNativeDeclarationForms;
   readonly records: RustProgramRecords & SourceLiteralIndex;
   readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
