@@ -39,7 +39,7 @@ import {
   rustJsWeakMapTargetId,
   rustJsWeakSetTargetId,
 } from "./source-types.js";
-import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustNativeTraitRef, rustNativeTraitRefEquals } from "./native.js";
+import { rustFixedArrayCarrierValue, rustNamedTargetType, rustNamedTypeCarrierValue, rustNativeTraitRef, rustNativeTraitRefEquals } from "./native.js";
 import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
 import { rustTargetGenericReferences } from "./generic-references.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
@@ -448,8 +448,15 @@ function rustNamedTypeSatisfiesTraitRef(
   active: Map<string, string> = new Map(),
 ): boolean {
   const typeArguments = rustTargetGenericTypeArguments(namedType.genericArguments);
+  const nativeDefault = (selected: RustTargetTraitRef): RustTargetTraitRef =>
+    (selected.path === "core::cmp::PartialEq" || selected.path === "core::cmp::PartialOrd") &&
+      selected.genericArguments.length === 0
+      ? { ...selected, genericArguments: [{ kind: "type", type: rustNamedTargetType(
+        namedType.id, namedType.path, namedType.genericArguments, namedType.genericDefaults) }] }
+      : selected;
+  const required = nativeDefault(trait);
   return namedType.traits.implementations.some((implementation) =>
-    rustNativeTraitRefEquals(implementation.trait, trait) && implementation.requirements.every((requirement) => {
+    rustNativeTraitRefEquals(nativeDefault(implementation.trait), required) && implementation.requirements.every((requirement) => {
       const argument = typeArguments[requirement.typeArgumentIndex];
       if (argument === undefined) return false;
       return requirement.trait.genericArguments.length === 0 && requirement.trait.associatedConstraints.length === 0 &&

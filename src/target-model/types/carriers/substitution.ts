@@ -527,13 +527,13 @@ type RustCarrierSubstitution = (
   normalize?: (type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef,
 ) => TargetTypeRef;
 
-function substituteRustTargetTraitRef(
+export function substituteRustTargetTraitRef(
   trait: RustTargetTraitRef,
   substitutions: ReadonlyMap<string, TargetTypeRef>,
   lifetimeSubstitutions: ReadonlyMap<string, RustLifetimeRef>,
   constSubstitutions: ReadonlyMap<string, RustTargetConstArgument>,
-  normalize: ((type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef) | undefined,
-  substitute: RustCarrierSubstitution,
+  normalize: ((type: TargetTypeRef, source: TargetTypeRef) => TargetTypeRef) | undefined = undefined,
+  substitute: RustCarrierSubstitution = substituteRustTargetGenerics,
 ): RustTargetTraitRef {
   const substituted = substitute(
     trait,

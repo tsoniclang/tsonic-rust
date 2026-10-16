@@ -134,6 +134,7 @@ export function collectRustProviderSemanticsFromDefinitions(
     }
     const carrierPathRows = definition.carrierPaths ?? {};
     const carrierTraitRows = definition.carrierTraits ?? {};
+    const typeDeclarations = definition.types ?? [];
     for (const [carrierId, path] of Object.entries(carrierPathRows)) {
       const existing = carrierPaths.get(carrierId);
       if (existing !== undefined && existing !== path) {
@@ -163,9 +164,10 @@ export function collectRustProviderSemanticsFromDefinitions(
                   parameter,
                   carrierPathRows,
                   carrierTraitRows,
+                  typeDeclarations,
                 ))),
             }),
-        targetCarrier: materializeProviderCarrier(type.targetCarrier, carrierPathRows, carrierTraitRows),
+        targetCarrier: materializeProviderCarrier(type.targetCarrier, carrierPathRows, carrierTraitRows, typeDeclarations),
         providerPackageId: definition.id,
         providerId,
         providerVersion: definition.version,
@@ -178,7 +180,7 @@ export function collectRustProviderSemanticsFromDefinitions(
       materializeProviderDispatchContextRow(context, aliases, carrierPathRows, carrierTraitRows, {
         providerPackageId: definition.id,
         providerVersion: definition.version,
-      })));
+      }, typeDeclarations)));
     binaryHooks.push(...(definition.binaryHooks ?? []).map((epilogue) =>
       snapshotClosedMetadata(materializeProviderBinaryHookRow(
         epilogue,
@@ -189,6 +191,7 @@ export function collectRustProviderSemanticsFromDefinitions(
           providerPackageId: definition.id,
           providerVersion: definition.version,
         },
+        typeDeclarations,
       ))));
     operations.push(...definition.operations.map((row) => {
       const owner = moduleByExportId.get(row.exportId);
@@ -201,7 +204,7 @@ export function collectRustProviderSemanticsFromDefinitions(
         providerVersion: definition.version,
         providerModuleId: owner.module.providerModuleId,
         moduleSpecifier: owner.module.moduleSpecifier,
-      });
+      }, typeDeclarations);
     }));
   }
   const canonicalCarrierPaths = freezeSortedRecord(carrierPaths);
@@ -209,7 +212,7 @@ export function collectRustProviderSemanticsFromDefinitions(
   return Object.freeze({
     exports: Object.freeze(exports),
     operations: Object.freeze(operations.map((row) =>
-      snapshotClosedMetadata(canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)))),
+      snapshotClosedMetadata(canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits, types)))),
     carrierPaths: canonicalCarrierPaths,
     carrierTraits: canonicalCarrierTraits,
     types: Object.freeze(types.map((row) => snapshotClosedMetadata({
@@ -222,12 +225,13 @@ export function collectRustProviderSemanticsFromDefinitions(
                 parameter,
                 canonicalCarrierPaths,
                 canonicalCarrierTraits,
+                types,
               )),
           }),
-      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits, types),
     }))),
     binaryHooks: Object.freeze(binaryHooks),
-    dispatchContexts: canonicalDispatchContexts(dispatchContexts, canonicalCarrierPaths, canonicalCarrierTraits),
+    dispatchContexts: canonicalDispatchContexts(dispatchContexts, canonicalCarrierPaths, canonicalCarrierTraits, types),
   });
 }
 
@@ -254,6 +258,7 @@ export function mergeRustProviderSemantics(
   }
   const canonicalCarrierPaths = freezeSortedRecord(carrierPaths);
   const canonicalCarrierTraits = freezeSortedRecord(carrierTraits);
+  const typeDeclarations = inputs.flatMap(input => input.types);
   const exports = mergeExactRows(inputs.flatMap((input) => input.exports), providerExportRowIdentity, "export");
   const globalOwners = new Map<string, RustProviderExportRow>();
   for (const exported of exports) {
@@ -266,7 +271,7 @@ export function mergeRustProviderSemantics(
   }
   const operations = mergeExactRows(
     inputs.flatMap((input) => input.operations).map((row) =>
-      canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits)),
+      canonicalizeProviderOperationRow(row, canonicalCarrierPaths, canonicalCarrierTraits, typeDeclarations)),
     providerOperationRowIdentity,
     "operation",
   );
@@ -281,9 +286,10 @@ export function mergeRustProviderSemantics(
                 parameter,
                 canonicalCarrierPaths,
                 canonicalCarrierTraits,
+                typeDeclarations,
               )),
           }),
-      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits),
+      targetCarrier: materializeProviderCarrier(row.targetCarrier, canonicalCarrierPaths, canonicalCarrierTraits, typeDeclarations),
     })),
     providerTypeRowIdentity,
     "type",
@@ -299,7 +305,7 @@ export function mergeRustProviderSemantics(
     types,
     binaryHooks,
     dispatchContexts: canonicalDispatchContexts(
-      inputs.flatMap((input) => input.dispatchContexts), canonicalCarrierPaths, canonicalCarrierTraits,
+      inputs.flatMap((input) => input.dispatchContexts), canonicalCarrierPaths, canonicalCarrierTraits, typeDeclarations,
     ),
     carrierPaths: canonicalCarrierPaths,
     carrierTraits: canonicalCarrierTraits,
@@ -310,9 +316,10 @@ function canonicalDispatchContexts(
   contexts: readonly RustProviderDispatchContextRow[],
   carrierPaths: Readonly<Record<string, string>>,
   carrierTraits: Readonly<Record<string, RustNamedTypeTraitContract>>,
+  typeDeclarations: readonly RustProviderTypeRow[],
 ): readonly RustProviderDispatchContextRow[] {
   return mergeExactRows(contexts.map(context =>
-    materializeProviderDispatchContextRow(context, new Map(), carrierPaths, carrierTraits, context)),
+    materializeProviderDispatchContextRow(context, new Map(), carrierPaths, carrierTraits, context, typeDeclarations)),
   context => context.id, "dispatch context");
 }
 
