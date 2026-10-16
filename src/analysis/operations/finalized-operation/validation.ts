@@ -241,12 +241,12 @@ const argumentModes = new Set<unknown>(["value", "ref", "mut-ref"]);
 
 const argumentRoles = new Set<unknown>(["parameter", "index", "evaluation-only"]);
 
-const dispositions = new Set<unknown>(["runtime", "compile-time"]);
+const dispositions = new Set<unknown>(["runtime", "evaluation-only"]);
 
 const argumentDispositions = new Set<unknown>(["runtime", "evaluation-only"]);
 
 function isSourceReceiver(value: unknown): value is RustFinalizedOperationAbi["sourceReceiver"] {
-  return isRecord(value) && (value.kind === "none"
+  return isRecord(value) && (value.kind === "none" || value.kind === "compile-time"
     ? hasExactKeys(value, ["kind"])
     : value.kind === "receiver" &&
       hasExactKeys(value, ["kind", "carrier", "declaredCarrier", "disposition"]) &&

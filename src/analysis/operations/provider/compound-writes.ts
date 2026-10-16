@@ -10,6 +10,7 @@ import { finalizeRustProviderOperationAbi } from "../finalized-operation/finaliz
 import { rustOperationContext, type RustFactWalk } from "../../program/walk.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
+import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
 
 export function recordRustCompoundWrite(
   walk: RustFactWalk,
@@ -48,9 +49,12 @@ export function selectRustCompoundWrite(
   }, members.readonly, context.typeDefinitions);
   if (selection?.fact.kind !== "runtime-set" ||
     !rustTargetTypeRefEquals(selection.parameterCarriers?.[1], resultCarrier)) return;
+  const sourceReceiver = receiver === undefined ? undefined
+    : selectRustProviderSourceReceiver(receiver, receiverCarrier, context, walk.operationOptions);
+  if (sourceReceiver === undefined) return;
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "index-set", form: selection.fact.target,
-    sourceReceiverCarrier: receiverCarrier,
+    sourceReceiver,
     sourceArgumentCarriers: [indexCarrier, resultCarrier],
     declaredSourceArgumentCarriers: selection.parameterCarriers,
     resultCarrier: rustUnitTargetType(), isAsync: false, isFallible: selection.fact.fallible === true,

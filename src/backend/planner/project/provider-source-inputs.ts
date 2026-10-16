@@ -10,12 +10,16 @@ export function sourceRuntimeSlots(
   argumentNodes: readonly (Node | undefined)[],
 ): readonly { readonly key: string; readonly node: Node; readonly evaluationOnly?: "unit" | "value" }[] | undefined {
   const slots: { readonly key: string; readonly node: Node; readonly evaluationOnly?: "unit" | "value" }[] = [];
-  if (fact.abi.sourceReceiver.kind === "receiver" &&
-    fact.abi.sourceReceiver.disposition === "runtime") {
+  if (fact.abi.sourceReceiver.kind === "receiver") {
     if (receiverNode === undefined) {
       return undefined;
     }
-    slots.push({ key: "receiver", node: receiverNode });
+    slots.push({ key: "receiver", node: receiverNode,
+      ...(fact.abi.sourceReceiver.disposition === "evaluation-only" ? {
+        evaluationOnly: isRustAbsenceCarrier(fact.abi.sourceReceiver.carrier) || isRustUnitCarrier(fact.abi.sourceReceiver.carrier)
+          ? "unit" as const : "value" as const,
+      } : {}),
+    });
   }
   for (const argument of fact.abi.sourceArguments) {
     const node = argumentNodes[argument.sourceIndex];
