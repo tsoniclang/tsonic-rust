@@ -42,6 +42,7 @@ import type { RustProjectStructuralView } from "../objects/project-structural-vi
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
@@ -103,6 +104,7 @@ export function analyzeRustDeclarationGenericRequirements(
   nativeCallables: RustNativeCallableInputPlan,
   errorRegions: RustAnalyzedErrorRegions,
   promiseBodies: RustPromiseBodies,
+  nativeStorage: RustNativeStoragePlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -193,6 +195,8 @@ export function analyzeRustDeclarationGenericRequirements(
         objectRepresentations,
         genericCallables,
         nativeCallables,
+        nativeStorage,
+        promiseBodies,
         errorRegions,
         frameCallables,
         structuralShapes: shapes,

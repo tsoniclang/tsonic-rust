@@ -72,19 +72,14 @@ export function planRustNativeCallableGenerics(
   }
   const parameters: RustGenericParameter[] = [];
   const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
-  if (context.promiseBody !== true && context.input.program.records.asyncFunction.get(declaration)?.kind === "js-promise") {
-    const errors = context.input.program.records.errorEffects.get(declaration)?.nativeErrors ?? [];
-    const selected = new Map(errors.map(error => [closedMetadataKey(error.errorType), error.errorType]));
-    for (const carrier of selected.values()) {
-      const type = rustTypeFromCarrierInContext(carrier, context);
-      if (type === undefined) return undefined;
-      predicates.push({ kind: "type", type, bounds: [{ kind: "trait", path: "core::clone::Clone" }] });
-    }
-  }
+  const objectInputs = context.promiseBody === true ? undefined
+    : context.input.program.promiseBodies.objects.get(declaration)?.staticInputs;
   for (const input of inputs) {
     const traits = [...bounds.get(input.implementation.identity)!.values()].map(trait => rustTypeFromCarrierInContext(trait, context));
     if (traits.some(trait => trait === undefined)) return undefined;
     const selectedBounds: RustTypeBound[] = traits.map(trait => ({ kind: "trait-type" as const, reference: { trait: trait! } }));
+    if (objectInputs?.has(input.implementation.identity) === true)
+      selectedBounds.push({ kind: "lifetime", lifetime: { kind: "static" } });
     const callableInput = callableInputs.find(selected => selected === input);
     const retained = callableInput === undefined ? [] : context.input.program.retainedCallableInputs.forInput(callableInput);
     if (retained.length > 0) {

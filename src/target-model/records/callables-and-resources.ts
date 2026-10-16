@@ -56,25 +56,18 @@ export interface RustSettledPromiseAwait {
   readonly callee: Node;
 }
 
-export interface RustSettledPromiseCall {
-  readonly call: Node;
-  readonly callee: Node;
-  readonly name: string;
-  readonly fallible: boolean;
-}
-
-export interface RustSettledPromiseBodies {
-  readonly helpers: ReadonlyMap<Node, string>;
-  readonly calls: ReadonlyMap<Node, RustSettledPromiseCall>;
-}
-
 export interface RustPromiseBodyDeclaration {
   readonly name: string;
 }
 
+export interface RustPromiseObjectDemand {
+  readonly at: Node;
+  readonly staticInputs: ReadonlySet<string>;
+}
+
 export interface RustPromiseBodies {
   readonly declarations: ReadonlyMap<Node, RustPromiseBodyDeclaration>;
-  readonly objects: ReadonlyMap<Node, Node>;
+  readonly objects: ReadonlyMap<Node, RustPromiseObjectDemand>;
 }
 
 export type RustJsPromiseLowering =

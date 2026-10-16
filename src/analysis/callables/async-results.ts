@@ -1,8 +1,5 @@
-import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { Node_Expression, Node_Type, sourceDeclarationIsModuleScoped, sourceEnclosingCallable } from "@tsonic/target-api/source";
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import type { RustNamePlan } from "../../target-model/names/model.js";
-import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { Node } from "@tsonic/tsts";
 import { rustCallableValueConversionMatches } from "../../target-model/conversions/callable.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
@@ -28,7 +25,7 @@ import { selectRustInferredReturn } from "./inferred-return.js";
 import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
 import type {
-  RustAsyncFunctionFact, RustJsPromiseLowering, RustSettledPromiseAwait, RustSettledPromiseBodies, RustSettledPromiseCall,
+  RustAsyncFunctionFact, RustJsPromiseLowering, RustSettledPromiseAwait,
 } from "../../target-model/records/callables-and-resources.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { rustNativeAsyncFunctionFact, rustPromiseAsyncFunctionFact } from "../program/records/async-function.js";
@@ -250,44 +247,8 @@ function directAsyncCallee(walk: RustFactWalk, operand: Node): Node | undefined 
   return target !== undefined && ast.is.IsFunctionDeclaration(target) && ast.body(target) !== undefined &&
     ast.hasModifierKind(target, "async") && walk.context.source.navigation.isProjectDeclaration(target) &&
     sourceDeclarationIsModuleScoped(target, ast) &&
-    !walk.context.source.navigation.declarationUseSummary(target).bindingWritten &&
-    ast.typeParameters(target).every(parameter => parameter !== undefined &&
-      walk.context.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime")
+    !walk.context.source.navigation.declarationUseSummary(target).bindingWritten
     ? target : undefined;
-}
-
-export function analyzeRustSettledPromiseBodies(input: {
-  readonly ast: AstReader;
-  readonly sourceFiles: readonly SourceFile[];
-  readonly records: RustProgramRecords;
-  readonly names: RustNamePlan;
-}): RustSettledPromiseBodies {
-  const helpers = new Map<Node, string>();
-  const calls = new Map<Node, RustSettledPromiseCall>();
-  const visit = (node: Node): void => {
-    const fact = input.records.asyncFunction.get(node);
-    if (fact?.kind === "js-promise" && fact.lowering.kind === "settled") {
-      for (const selected of fact.lowering.settledAwaits) {
-        const callee = input.records.asyncFunction.get(selected.callee);
-        const name = input.names.nativeBodyNameForDeclaration(selected.callee);
-        const operand = Node_Expression(input.ast, selected.expression);
-        const call = operand === undefined ? undefined : rustUnparenthesizedExpression(input.ast, operand);
-        const effects = input.records.errorEffects.get(selected.callee);
-        const awaited = input.records.awaitValue.get(selected.expression);
-        if (callee?.kind !== "js-promise" || callee.lowering.kind !== "settled" || name === undefined || call === undefined ||
-          effects === undefined || awaited?.selection.kind !== "leaf" || awaited.selection.value.future === undefined) {
-          failTargetAnalysisInvariant("tsonic-rust",
-            "A settled await requires a settled source callee with an allocated settled helper.", selected.expression);
-        }
-        helpers.set(selected.callee, name);
-        calls.set(selected.expression, Object.freeze({ call, callee: selected.callee, name,
-          fallible: effects.localErrors || effects.nativeErrors.length > 0 }));
-      }
-    }
-    input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
-  };
-  input.sourceFiles.forEach(visit);
-  return Object.freeze({ helpers, calls });
 }
 
 function expressionSuspension(walk: RustFactWalk, expression: Node): "ready" | "suspending" | "pending" {

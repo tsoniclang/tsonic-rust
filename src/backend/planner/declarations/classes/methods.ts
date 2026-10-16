@@ -28,7 +28,7 @@ import type { Node } from "@tsonic/tsts";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
-import type { RustImplFunction, RustStmt } from "../../../target-ast/syntax/nodes.js";
+import type { RustExpr, RustImplFunction, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "../callables/async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
@@ -37,6 +37,7 @@ import { rustClassEnvironmentParameter, rustClassMemberEnvironmentContext } from
 import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
+import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
 
 export function planProjectMethod(
   member: Node,
@@ -46,9 +47,13 @@ export function planProjectMethod(
     readonly safetyPlacement?: "getter" | "setter";
     readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
+    readonly promiseBody?: true;
   },
 ): RustImplFunction | undefined {
   let context = rustClassMemberEnvironmentContext(member, outerContext);
+  if (options?.promiseBody !== true && context.input.program.promiseBodies.declarations.has(member))
+    return planProjectPromiseObjectMethod(member, context, options);
+  if (options?.promiseBody === true) context = { ...context, promiseBody: true };
   const { ast } = context.input.program.source;
   const sourceMethodName = options?.targetName ??
     context.input.program.projectTypes.callableTargetName(member);
@@ -94,7 +99,7 @@ export function planProjectMethod(
   const asyncFact = context.input.program.records.asyncFunction.get(member);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
     ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+        options?.promiseBody !== true && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
       ? {
           requiredStaticParameters: generatorFact?.capturedParameters ??
             (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
@@ -111,7 +116,7 @@ export function planProjectMethod(
       ? rustClassEnvironmentParameter(owner.declaration, context, "borrowed") : undefined;
   const params = [...(environmentParameter === undefined ? [] : [environmentParameter]), ...parameterPlan.params];
   const returnTypeNode = Node_Type(ast, member);
-  const returnsJsPromise = asyncFact?.kind === "js-promise";
+  const returnsJsPromise = asyncFact?.kind === "js-promise" && options?.promiseBody !== true;
   const sourceAsync = ast.hasModifierKind(member, "async");
   if (sourceAsync && generatorFact === undefined && asyncFact === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
@@ -218,7 +223,7 @@ export function planProjectMethod(
     return undefined;
   }
   const receiverPlan = planRustSuspendedReceiver(
-    generatorFact?.ownedReceiver ?? (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+    generatorFact?.ownedReceiver ?? (returnsJsPromise && asyncFact.lowering.kind === "factory"
       ? asyncFact.lowering.ownedReceiver : undefined),
     { ...context, syntheticNames },
   );
@@ -345,7 +350,7 @@ export function planProjectMethod(
         }
       : { fallible: false, hasReturnValue: returnType !== undefined },
   );
-  const overridePrelude = options?.targetName === undefined && !isStatic
+  const overridePrelude = options?.promiseBody !== true && options?.targetName === undefined && !isStatic
     ? planDirectProjectMethodOverridePrelude(member, params, syntheticNames, context)
     : [];
   if (overridePrelude === undefined) {
@@ -360,7 +365,8 @@ export function planProjectMethod(
     ...(callableErrorBoundary === undefined || returnsJsPromise
       ? {}
       : { errorType: callableErrorBoundary.errorType }),
-    ...(sourceAsync && !returnsJsPromise ? { isAsync: true } : {}),
+    ...(sourceAsync && !returnsJsPromise && (asyncFact?.kind !== "js-promise" || asyncFact.lowering.kind === "factory")
+      ? { isAsync: true } : {}),
     ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
     generics,
     params,
@@ -371,6 +377,61 @@ export function planProjectMethod(
         }, fallible, asyncFact.lowering).statements] }
       : { statements: [...overridePrelude, ...finalizedBody.statements] },
   };
+}
+
+function planProjectPromiseObjectMethod(
+  member: Node,
+  outerContext: RustPlanContext,
+  options: Parameters<typeof planProjectMethod>[2],
+): RustImplFunction | undefined {
+  const { ast } = outerContext.input.program.source;
+  const body = outerContext.input.program.promiseBodies.declarations.get(member);
+  const asynchronous = outerContext.input.program.records.asyncFunction.get(member);
+  if (body === undefined || asynchronous?.kind !== "js-promise") return undefined;
+  const genericPlan = planRustCallableGenerics(member, outerContext, options?.typeArgumentSubstitutions);
+  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, options?.typeArgumentSubstitutions);
+  if (genericPlan === undefined || nativeGenerics === undefined) return undefined;
+  const syntheticNames = createRustSyntheticNameState(ast, member, []);
+  const context = { ...genericPlan.context, syntheticNames };
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
+    requiredStaticParameters: asynchronous.lowering.kind === "factory" ? asynchronous.lowering.capturedParameters : [],
+  });
+  if (parameterPlan === undefined || !requireRustCarrierRequirements(asynchronous.outputCarrier,
+    asynchronous.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], member, context)) return undefined;
+  const isStatic = ast.hasModifierKind(member, "static");
+  const selfMode = isStatic ? undefined : context.input.program.records.selfMode.get(member);
+  if (!isStatic && selfMode === undefined) return undefined;
+  const owner = context.input.program.projectTypes.definitionContainingDeclaration(member);
+  const environment = owner === undefined || !isStatic ? undefined
+    : context.input.program.classValues.forDeclaration(owner.declaration)?.environment?.consumers.includes(member)
+      ? rustClassEnvironmentParameter(owner.declaration, context, "borrowed") : undefined;
+  const params = [...(environment === undefined ? [] : [environment]), ...parameterPlan.params];
+  const arguments_: RustExpr[] = params.map(parameter => ({ kind: "path", path: parameter.name }));
+  const receiverPlan = planRustSuspendedReceiver(asynchronous.lowering.kind === "factory"
+    ? asynchronous.lowering.ownedReceiver : undefined, context);
+  const receiver: RustExpr = asynchronous.lowering.kind === "factory" && asynchronous.lowering.ownedReceiver !== undefined
+    ? receiverPlan.context.expressionOverrides?.get(asynchronous.lowering.ownedReceiver.occurrences[0]!)?.expression ?? { kind: "path", path: "self" }
+    : { kind: "path", path: "self" };
+  const genericArguments = rustPromiseBodyGenericArguments(nativeGenerics.finalizeGenerics());
+  const call: RustExpr = isStatic ? { kind: "call", path: `Self::${body.name}`, args: arguments_, genericArguments }
+    : { kind: "method-call", receiver, method: body.name, args: arguments_, genericArguments };
+  const nativeRegion = planRustErrorRegion(member, nativeGenerics.context);
+  const returnType = resolveRustJsPromiseReturnType(member, context);
+  const adapter = nativeRegion === undefined ? undefined
+    : planRustPromiseBodyObjectAdapter(member, call, nativeRegion.boundary, context);
+  const overrides = options?.targetName === undefined && !isStatic
+    ? planDirectProjectMethodOverridePrelude(member, params, syntheticNames, context) : [];
+  if (returnType === undefined || adapter === undefined || overrides === undefined) return undefined;
+  const isUnsafe = rustDeclarationRequiresUnsafe(member, options?.safetyPlacement ?? "declaration", context.input);
+  const attrs = [...rustSafetyAttributesForDeclaration(member, isUnsafe, context.input),
+    ...(genericPlan.preservesExplicitLifetimes ? [rustLintAttributes.needlessLifetimes] : [])];
+  const name = options?.targetName ?? context.input.program.projectTypes.callableTargetName(member);
+  if (name === undefined) return undefined;
+  return { kind: "function", name, visibility: ast.hasModifierKind(member, "private") || ast.hasModifierKind(member, "protected") ? "private" : "public",
+    ...(isUnsafe ? { isUnsafe: true } : {}), ...(attrs.length === 0 ? {} : { attrs }),
+    ...(isStatic ? {} : { selfParam: rustSelfParameter(selfMode!.mode) }),
+    generics: genericPlan.finalizeGenerics(), params, returnType,
+    body: { statements: [...overrides, ...receiverPlan.prelude, ...adapter.statements] } };
 }
 
 function planDirectProjectMethodOverridePrelude(
@@ -433,6 +494,14 @@ export function planProjectMethodVariants(
   }
   const specializations = context.input.program.sourceCallableSpecializations;
   if (!specializations.requiresSpecialization(member)) {
+    const body = context.input.program.promiseBodies.declarations.get(member);
+    if (body !== undefined) {
+      const native = planProjectMethod(member, context, { targetName: body.name, promiseBody: true });
+      if (native === undefined) return undefined;
+      if (!context.input.program.promiseBodies.objects.has(member)) return Object.freeze([native]);
+      const object = planProjectMethod(member, context);
+      return object === undefined ? undefined : Object.freeze([native, object]);
+    }
     const method = planProjectMethod(member, context);
     return method === undefined ? undefined : Object.freeze([method]);
   }
@@ -496,7 +565,8 @@ export function planProjectStaticFunctionItems(
       ? rustProjectGenerics(definition, context, environment.genericParameterIndexes) : emptyRustGenerics;
     for (const method of planned) {
       if (method.selfParam !== undefined) return undefined;
-      const targetName = specialized ? method.name : name;
+      const nativeName = context.input.program.promiseBodies.declarations.get(member)?.name;
+      const targetName = specialized || method.name === nativeName ? method.name : name;
       const publiclyReachable = context.input.program.source.ast.hasModifierKind(definition.declaration, "export") ||
         rustSourceItemIsPubliclyReachable(context, targetName);
       items.push({ ...method, kind: "function", name: targetName,

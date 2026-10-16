@@ -223,7 +223,8 @@ export function planSelectedSourceCall(
       if (type === undefined) return undefined;
       targetAstGenericArguments.push({ kind: "type", type });
     }
-    const contract = context.input.program.declarationGenericRequirements.contractFor(selectedDeclaration);
+    const contract = context.input.program.declarationGenericRequirements.contractFor(selectedDeclaration,
+      fact.asyncBody === undefined ? undefined : true);
     if (contract !== undefined) {
       const substitutions = new Map(contract.typeParameters.map((parameter, index) =>
         [parameter.identity, targetTypeArguments[index]!] as const));
@@ -274,7 +275,7 @@ export function planSelectedSourceCall(
       break;
     }
     case "function": {
-      const targetName = context.settledPromiseCall?.call === node ? context.settledPromiseCall.name
+      const targetName = fact.asyncBody !== undefined ? fact.asyncBody.targetName
         : callableSpecialization?.targetName ?? fact.target.name;
       const declaration = selected.sourceDeclaration;
       const lexical = declaration === undefined ? undefined : context.input.program.lexicalFunctions.forDeclaration(declaration);
@@ -295,9 +296,9 @@ export function planSelectedSourceCall(
       break;
     }
     case "method": {
-      const targetName = fact.target.dispatch === undefined
+      const targetName = fact.asyncBody?.targetName ?? (fact.target.dispatch === undefined
         ? callableSpecialization?.targetName ?? fact.target.name
-        : fact.target.name;
+        : fact.target.name);
       if (!isValidRustIdentifier(targetName)) {
         break;
       }
@@ -390,7 +391,7 @@ export function planSelectedSourceCall(
     case "static-method": {
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-      const targetName = callableSpecialization?.targetName ?? fact.target.name;
+      const targetName = fact.asyncBody?.targetName ?? callableSpecialization?.targetName ?? fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
         const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context, retainedClass);
         planned = {

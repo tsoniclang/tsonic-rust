@@ -20,7 +20,6 @@ import type {
   RustTargetProgram,
 } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
-import { analyzeRustSettledPromiseBodies } from "../callables/async-results.js";
 import { analyzeRustPromiseResults } from "../callables/promise-results.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
@@ -277,6 +276,7 @@ export function analyzeRustTargetProgram(
     context.callableValues.native,
     errorRegions.value,
     context.promiseBodies.plan,
+    context.callableValues.nativeStorage,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
@@ -341,8 +341,7 @@ export function analyzeRustTargetProgram(
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
     promiseResults: promiseResults.results,
-    settledPromiseBodies: analyzeRustSettledPromiseBodies({ ast: context.ast, sourceFiles: context.sourceFiles,
-      records, names: context.names }),
+    promiseBodies: context.promiseBodies.plan,
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
