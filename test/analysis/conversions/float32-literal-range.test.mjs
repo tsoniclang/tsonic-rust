@@ -32,12 +32,14 @@ const refused = [
   ["generic argument", "function id<T>(value: T): T { return value; }\nexport function read(): float32 { return id<float32>(3.5e38); }", "3.5e38"],
   ["tuple element", "export function read(): [float32, float32] { return [3.5e38, 1]; }", "3.5e38"],
   ["arrow return", "export function read(): float32 { const next = (): float32 => 3.5e38; return next(); }", "3.5e38"],
+  ["switch case", "export function read(value: float32): number { switch (value) { case 3.5e38: return 1; default: return 0; } }", "3.5e38"],
   ["interface property", "interface Box { value: float32 }\nexport function read(): float32 { const box: Box = { value: 3.5e38 }; return box.value; }", "3.5e38"],
   ["satisfies", local("3.5e38 satisfies float32"), "3.5e38"],
   ["const assertion", local("3.5e38 as const"), "3.5e38"],
   ["inferred array after a float32", "export function read(value: float32): float32[] { const values = [value, 3.5e38]; return values; }", "3.5e38"],
 ];
 const accepted = [
+  ["3.4028235e38", "0x7f7fffff"],
   ["3.4028234663852886e38", "0x7f7fffff"],
   ["3.4028235677973366e38", "0x7f7fffff"],
   ["-3.4028235677973366e38", "0xff7fffff"],
@@ -45,6 +47,7 @@ const accepted = [
   ["1e-50", "0"],
   ["-1e-50", "0x80000000"],
   ["1.401298464324817e-45", "1"],
+  ["1e-46", "0"],
   ["7.006492321624085e-46", "0"],
   ["7.006492321624087e-46", "1"],
   ["5e-324", "0"],
@@ -94,6 +97,13 @@ for (const [surface, selected] of surfaces) {
       const source = header + body;
       const { analysis, ast } = analyzeOnly(source, selected);
       assert.equal(analysis?.kind === "rejected", true, `${name}: source analysis rejects`);
+      const followers = name === "parenthesized negative overflow" ? ["RUST_INITIALIZER_CARRIER_MISMATCH"]
+        : name === "argument" || name === "generic argument" ? ["RUST_SOURCE_CALL_ARGUMENT_CARRIER_MISSING"]
+          : name === "default argument" ? ["RUST_DEFAULT_PARAMETER_INITIALIZER_CARRIER_UNSUPPORTED"]
+            : name === "switch case" ? ["RUST_SWITCH_CASE_NOT_CLOSED"] : [];
+      const leaders = surface === "js" && name === "element assignment" ? ["RUST_SELECTED_ASSIGNMENT_UNSUPPORTED"] : [];
+      assert.deepEqual(analysis.diagnostics.map(issue => issue.code), [...leaders, rangeCode, ...followers],
+        `${name}: complete ordered diagnostic list`);
       const issues = analysis.diagnostics.filter(issue => issue.code === rangeCode);
       assert.equal(issues.length, 1, `${name}: the selected failure is published exactly once`);
       const [issue] = issues;
@@ -118,12 +128,23 @@ for (const [surface, selected] of surfaces) {
     assertNoArtifacts("int8", source, selected, analysis.diagnostics);
   });
 
+  test(`${surface}: a wide binary result is not silently narrowed to a float32 return`, () => {
+    const source = header + "export function read(value: float32): float32 { return value + 3.5e38; }";
+    const { analysis } = analyzeOnly(source, selected);
+    assert.equal(analysis?.kind === "rejected", true, "the return destination cannot represent the wide operation");
+    assert.deepEqual(analysis.diagnostics.map(issue => issue.code), ["RUST_RETURN_CARRIER_MISMATCH"],
+      "the f64 literal remains valid; its result is refused by the return owner");
+    assertNoArtifacts("wide result", source, selected, analysis.diagnostics);
+  });
+
   for (const value of ["3.5e38", "-3.5e38"]) {
     test(`${surface}: explicit ${value} as float32 remains owned by assertion admission`, () => {
       const expression = `${value} as float32`;
       const source = header + `export function read(): float32 { return ${expression}; }`;
       const { analysis, ast } = analyzeOnly(source, selected);
       assert.equal(analysis?.kind === "rejected", true, "assertion admission rejects");
+      assert.deepEqual(analysis.diagnostics.map(issue => issue.code),
+        ["RUST_ASSERTION_UNSUPPORTED", "RUST_RETURN_CARRIER_MISMATCH"], "complete assertion diagnostics");
       assert.equal(analysis.diagnostics.filter(issue => issue.code === rangeCode).length, 0,
         "the f64 source operand is not incorrectly admitted as an f32 literal");
       const issues = analysis.diagnostics.filter(issue => issue.code === "RUST_ASSERTION_UNSUPPORTED");
