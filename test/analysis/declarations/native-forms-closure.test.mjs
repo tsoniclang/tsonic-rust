@@ -164,7 +164,7 @@ test("ordinary numeric member names retain the shared source-token key without f
     strict: true, target: "es2022", module: "esnext",
   }, files: { "/project/index.ts": `
 class Entry {
-  9007199254740993(): number { return 1; }
+  9007199254740994(): number { return 1; }
   1e2(): number { return 2; }
 }
 ` } }).checkSource();
@@ -177,10 +177,25 @@ class Entry {
   const declaration = source.ast.statements(file).find(node => source.ast.is.IsClassDeclaration(node));
   const [exact, exponent] = source.ast.members(declaration);
   const context = { ast: source.ast, names, semanticsFor: source.semantics.forNode };
-  assert.equal(names.nameForDeclaration(exact), "value_9007199254740993", "the native key retains every authored integer digit");
-  assert.equal(rustProjectCallableTargetName(exact, context), "value_9007199254740993", "the callable consumer uses the same selected native key");
+  assert.equal(names.nameForDeclaration(exact), "value_9007199254740994", "the native key retains every authored integer digit");
+  assert.equal(rustProjectCallableTargetName(exact, context), "value_9007199254740994", "the callable consumer uses the same selected native key");
   assert.equal(names.nameForDeclaration(exponent), "value_100", "exponent spelling is normalized by the shared owner");
   assert.equal(rustProjectCallableTargetName(exponent, context), "value_100", "numeric callable names consume the canonical key");
+});
+
+test("a checker-incoherent numeric named member receives one precise shared-key refusal", () => {
+  const { result } = compileRust({ files: { "index.ts": `
+export class Entry {
+  9007199254740993(): number { return 1; }
+}
+` } });
+  assert.equal(result.diagnostics.length, 1, "one declared numeric name has one owning refusal");
+  const diagnostic = result.diagnostics[0];
+  assert.equal(diagnostic.code, "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN", "the canonical shared-key consumer owns admission");
+  assert.match(diagnostic.message, /9007199254740993/u, "the exact authored spelling remains in the diagnostic");
+  assert.match(diagnostic.message, /checker key 9007199254740992/u, "the checker-selected conflicting identity is explicit");
+  assert.match(diagnostic.message, /string key "9007199254740993"/u, "the exact string-key alternative is preserved");
+  assert.equal(result.artifacts?.length ?? 0, 0, "the conflicting named member cannot reach publication");
 });
 
 test("native declaration admission preserves base-accepted local and unreachable declarations", () => {

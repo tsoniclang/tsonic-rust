@@ -14,21 +14,23 @@ function enumDeclarations(source) {
     .filter(declaration => source.ast.kindName(declaration) === "KindEnumDeclaration");
 }
 
-test("exact authored enum constants and implicit increments are emitted without a float64 roundtrip", () => {
+test("exact authored enum constants, explicit large successors and ordinary increments retain their native values", () => {
   const { result } = compileRust({ files: { "index.ts": `
-export enum Exact { First = 9007199254740993, Next }
+export enum Exact { First = 9007199254740993, Next = 9007199254740994 }
+export enum Ordinary { First = 7, Next }
 ` } });
   assert.equal(result.diagnostics.length, 0, "authored exact integer constants remain admitted");
   const generated = artifactText(result, "src/index.rs");
   assert.match(generated, /First = 9007199254740993/u, "the authored value does not round through Number");
-  assert.match(generated, /Next = 9007199254740994/u, "implicit increment consumes the exact preceding integer");
+  assert.match(generated, /Next = 9007199254740994/u, "the explicit large successor retains its exact native integer");
+  assert.match(generated, /Next = 8/u, "a checker-coherent ordinary implicit increment remains supported");
 });
 
 test("source enum definitions retain the identical early completed values and common width", () => {
   const { source, program } = analyzeRust({ files: { "index.ts": `
 export enum Narrow { Min = -2147483648, Max = 2147483647 }
 export enum Wide { First = 2147483648, Next }
-export enum Exact { First = 9007199254740993, Next }
+export enum Exact { First = 9007199254740993, Next = 9007199254740994 }
 export enum Duplicate { First = 2147483648, Again = 2147483648 }
 export enum Empty {}
 export function read(): Wide { return Wide.First; }
@@ -141,6 +143,20 @@ test("late enum admission cannot re-evaluate names, constants, width or physical
     typeDefinitions: program.typeDefinitions, names: { nameForDeclaration() { throw new Error("late name decision"); } } });
   assert.equal(admitted.kind, "accepted", "late admission consumes only completed enum evidence");
   assert.equal(admitted.form === form, true, "no replacement descriptor or second physical choice is introduced");
+});
+
+test("a checker-incoherent implicit successor rejects through the shared enum admission", () => {
+  const { source, result } = compileRust({ files: { "index.ts": `
+export enum Exact { First = 9007199254740993, Next }
+` } });
+  assert.equal(result.diagnostics.length, 1, "the original implicit source has one owning refusal");
+  const diagnostic = result.diagnostics[0];
+  assert.equal(diagnostic.code, "RUST_ENUM_CONSTANT_NOT_SUPPORTED", "the enum owner transports the shared R2 refusal");
+  assert.equal(source.ast.kindName(diagnostic.sourceNode), "KindEnumMember", "the refusal identifies the actual enum member");
+  assert.match(diagnostic.message, /exact value/u, "the shared reason preserves the exact native value");
+  assert.match(diagnostic.message, /checker value/u, "the shared reason identifies the incompatible checker value");
+  assert.match(diagnostic.message, /explicit/u, "the diagnostic gives the approved explicit-value alternative");
+  assert.equal(result.artifacts?.length ?? 0, 0, "no incoherent enum reaches native publication");
 });
 
 for (const [label, expression] of [
