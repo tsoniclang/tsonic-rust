@@ -221,26 +221,18 @@ function planResourceCleanup(
   if (disposal === undefined) {
     return undefined;
   }
-  if (fact.disposal.target.form === "source-method" && fact.disposal.kind === "async") {
+  const target = fact.disposal.target;
+  if (target.form === "source-method" && fact.disposal.kind === "async") {
     disposal = { kind: "await", expr: disposal };
   }
-  if (fact.disposal.target.form === "source-method" && fact.disposal.fallible) {
-    if (fact.disposal.errorBoundary === "none") failRustPlannerInvariant("A fallible source-method disposer requires its existing source error boundary.", declaration);
+  if (target.form === "source-method" && target.errorBoundary !== "none") {
     const resultErrorType = rustActiveErrorType(context);
-    const providerErrorType = fact.disposal.errorBoundary === "provider-native"
-      ? rustTypeFromCarrierInContext(fact.disposal.errorCarrier, context)
-      : undefined;
     if (resultErrorType === undefined) failRustPlannerInvariant("Admitted fallible disposal requires its native result error type.", declaration);
-    if (fact.disposal.errorBoundary === "provider-native" && providerErrorType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
-        "rust.backend.resource-error-type", "Fallible resource disposal requires its exact rendered native provider error type."));
-      return undefined;
-    }
     disposal = applyRustErrorBoundary(
       disposal,
-      fact.disposal.errorBoundary,
+      target.errorBoundary,
       resultErrorType,
-      providerErrorType,
+      undefined,
     );
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };

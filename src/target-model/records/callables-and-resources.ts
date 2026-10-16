@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustArgumentMode } from "../operations/model.js";
 import type { RustFinalizedOperationAbiFor } from "./finalized-operation.js";
-import type { RustFallibleErrorBoundary } from "../operations/error-boundary.js";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustLifetimeRef } from "../lifetimes/index.js";
 
@@ -105,6 +104,7 @@ export type RustResourceDisposalTarget =
       readonly form: "source-method";
       readonly name: string;
       readonly receiverMode: "ref" | "mut-ref";
+      readonly errorBoundary: "none" | "source-program";
       readonly dispatch?: {
         readonly virtualSlot: string;
         readonly ownerCarrier: TargetTypeRef;
@@ -123,30 +123,9 @@ export interface RustResourceManagementFact {
   readonly nullable: boolean;
   readonly disposal: {
     readonly kind: "sync" | "async";
+    readonly fallible: boolean;
     readonly target: RustResourceDisposalTarget;
-  } & (
-    | {
-        readonly fallible: true;
-        readonly errorBoundary: "provider-native";
-        readonly errorCarrier: TargetTypeRef;
-      }
-    | {
-        readonly fallible: true;
-        readonly errorBoundary: Exclude<RustFallibleErrorBoundary, "provider-native">;
-        readonly errorCarrier?: never;
-      }
-    | {
-        readonly fallible: true;
-        readonly errorBoundary: "none";
-        readonly errorCarrier?: never;
-        readonly target: Extract<RustResourceDisposalTarget, { readonly form: "provider" }>;
-      }
-    | {
-        readonly fallible: false;
-        readonly errorBoundary: "none";
-        readonly errorCarrier?: never;
-      }
-  );
+  };
 }
 
 export interface RustSourceParameterAbiFact {

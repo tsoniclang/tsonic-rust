@@ -28,7 +28,8 @@ test("disposal lifecycle consumes the one selected fact and rejects missing evid
   assert.equal(diagnostic?.sourceNode === declaration, true, "rejection retains the resource source identity");
   const original = program.records.resourceManagement.get(declaration);
   const fallible = { ...input, records: { ...program.records, resourceManagement: { get: () => ({ ...original,
-    disposal: { ...original.disposal, fallible: true, errorBoundary: "source-program" } }) } } };
+    disposal: { ...original.disposal, fallible: true,
+      target: { ...original.disposal.target, errorBoundary: "source-program" } } }) } } };
   assert.equal(validateRustDisposalLifecycle(fallible, declaration, { asynchronous: false, fallible: false })?.code,
     "RUST_RESOURCE_ERROR_FRAME_NOT_PROVEN", "native fallible disposal requires an admitted error owner");
   assert.equal(validateRustDisposalLifecycle(fallible, declaration, { asynchronous: false, fallible: true }) === undefined, true,
@@ -245,8 +246,10 @@ test("fallible disposer input conversion participates before the seal without in
   for (const declaration of declarations) {
     const fact = program.records.resourceManagement.get(declaration);
     assert.equal(fact.disposal.fallible, true, "the conversion participates in the pre-seal error summary");
-    assert.equal(fact.disposal.errorBoundary, "none", "the infallible native invocation has no fabricated error channel");
-    assert.equal(fact.disposal.errorCarrier === undefined, true, "no guessed native error carrier is added");
+    assert.equal(fact.disposal.target.abi.effects.errorBoundary, "none", "the infallible native invocation has no fabricated error channel");
+    assert.equal(fact.disposal.target.abi.effects.errorCarrier === undefined, true, "no guessed native error carrier is added");
+    assert.equal(Object.hasOwn(fact.disposal, "errorBoundary"), false, "the aggregate cannot duplicate the target channel");
+    assert.equal(Object.hasOwn(fact.disposal, "errorCarrier"), false, "the aggregate cannot duplicate the target carrier");
     assert.equal(fact.disposal.target.abi.effects.invocation, "infallible", "the original native call channel is preserved");
     assert.equal(fact.disposal.target.abi.targetArguments[0].conversion.fallible, true,
       "the actual canonical checked conversion owns its own failure");
