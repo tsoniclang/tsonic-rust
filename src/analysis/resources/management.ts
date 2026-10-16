@@ -224,8 +224,9 @@ function selectDisposalAlternative(
   const dispatchInputs = (row.dispatchInputs ?? []).map(input => options.dispatchContextInputFor(input));
   if (dispatchInputs.some(input => input === undefined)) return rejected("The selected provider disposer requires its exact native dispatch context inputs.");
   const abi = finalizeRustProviderOperationAbi({
-    operationKind: "method", form: row.target, sourceReceiverCarrier: resourceCarrier,
-    declaredSourceReceiverCarrier: row.receiverCarrier,
+    operationKind: "method", form: row.target,
+    sourceReceiver: { kind: "runtime", carrier: resourceCarrier,
+      ...(row.receiverCarrier === undefined ? {} : { declaredCarrier: row.receiverCarrier }) },
     sourceArgumentCarriers: [], declaredSourceArgumentCarriers: row.parameterCarriers,
     resultCarrier: row.resultCarrier, resultConversion: row.resultConversion,
     targetGenericArguments: row.targetGenericArguments, dispatchInputs: dispatchInputs.filter(input => input !== undefined),

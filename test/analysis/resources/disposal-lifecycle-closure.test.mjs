@@ -41,7 +41,7 @@ test("selected provider disposal transports all native receiver modes without a 
     const carrier = { kind: "target-named", id: "r05.Resource" };
     const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
       form: { form: "free-call", path: "core::mem::drop", receiverMode },
-      sourceReceiverCarrier: carrier, sourceArgumentCarriers: [], resultCarrier: unitCarrier,
+      sourceReceiver: { kind: "runtime", carrier }, sourceArgumentCarriers: [], resultCarrier: unitCarrier,
       isAsync: false, isFallible: false });
     assert.equal(abi !== undefined, true, `${receiverMode}: the canonical owner completes the selected disposal ABI`);
     const fact = { disposal: { target: { form: "provider", abi, receiverMode } } };
