@@ -12,6 +12,7 @@ import { planExpression } from "../../../dist/backend/planner/expressions/entry.
 import { planProviderOperationExpression } from "../../../dist/backend/planner/expressions/conversions.js";
 import { planRustProviderEvaluationScope } from "../../../dist/backend/planner/project/provider-evaluation-scope.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
+import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 
 function receiverEvaluationPackage() {
   const flag = { kind: "target-named", id: "r14.Flag" };
@@ -272,7 +273,7 @@ export function borrowingUnwind(): number {
       if (ast.is.IsIdentifier(callee) && ast.text(callee) === "omit") omitted = node;
       const operation = program.records.targetOperation.get(node);
       if (operation?.kind === "provider-operation" && operation.abi.sourceReceiver.kind === "receiver" &&
-        operation.abi.sourceReceiver.carrier.id === borrowingToken.id) borrowingCalls.push({ node, operation });
+        rustNamedTypeCarrierValue(operation.abi.sourceReceiver.carrier)?.id === borrowingToken.id) borrowingCalls.push({ node, operation });
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
@@ -281,7 +282,7 @@ export function borrowingUnwind(): number {
   assert.equal(borrowingCalls.length, 2, "real checked non-static borrowing receivers cover disjoint RHS and unwinding");
   for (const { node, operation } of borrowingCalls) {
     assert.equal(operation.abi.sourceReceiver.disposition, "evaluation-only", "the native target does not consume the owned borrowing result");
-    assert.equal(operation.abi.sourceReceiver.carrier.genericArguments[0].kind, "lifetime", "the actual producer retains its native lifetime argument");
+    assert.equal(rustNamedTypeCarrierValue(operation.abi.sourceReceiver.carrier).genericArguments[0].kind, "lifetime", "the actual producer retains its native lifetime argument");
     const receiver = ast.as.AsPropertyAccessExpression(ast.as.AsCallExpression(node).Expression).Expression;
     assert.equal(program.ownership.reads.get(receiver)?.readsStorage, false, "owned guard construction is not a terminal stored-place read");
   }
