@@ -7,15 +7,17 @@ import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carr
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { suspendedCallbackInputsSource } from "../../../../tsonic/test/fixtures/suspended-callback-inputs.mjs";
+import { selectRustSourcePackageComponentIdentities } from "../../../dist/analysis/program/source-package-components.js";
+import { sourcePackageGraphFixture } from "../../../../tsonic/test/fixtures/source-package-graph.mjs";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
 import { load } from "@tsonic/rust/lang.js";`;
 
-function analyze(text) {
+function analyze(text, options = {}) {
   let context;
   let program;
-  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text }, compileTarget(request) {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text }, ...options, compileTarget(request) {
     context = analyzeRustCheckedContext(request);
     const analyzed = analyzeRustTargetProgram(request);
     if (analyzed.kind === "rejected") return analyzed;
@@ -209,4 +211,95 @@ export async function consumer<Actual>(callback: () => Promise<Actual>) { return
   assert.match(rust, /pub fn consumer</u);
   assert.match(rust, /JsPromise<Value>/u);
   assert.match(rust, /JsPromise<Actual>/u);
+});
+
+test("a demanded lexical adapter preserves its captured ABI with distinct native and object bounds", () => {
+  const rust = lower(`import type { int32 } from "@tsonic/core/types.js";
+export async function outer<Value>(value: Value, pending: Promise<void>): Promise<Value> {
+  const expected: int32 = 1;
+  async function nested(inner: Value): Promise<Value> {
+    await pending;
+    if (expected !== 1) throw new Error("capture");
+    return inner;
+  }
+  const direct = await nested(value);
+  const stored = nested(direct);
+  return await stored;
+}`);
+  const native = rust.match(/async fn ([A-Za-z0-9_]*nested_native)[\s\S]*?\{/u)?.[0];
+  const adapter = rust.match(/fn ([A-Za-z0-9_]*nested)(?:<|\()[\s\S]*?\{/u)?.[0];
+  assert.equal(native !== undefined && adapter !== undefined, true, "both exact lexical facets are emitted");
+  assert.equal(native.includes("'static"), false, "the native body has no object-retention lifetime bound");
+  assert.equal(adapter.includes("'static"), true, "the retained object facet has its actual lifetime bound");
+  const captureNames = signature => [...signature.matchAll(/\b(__tsonic_capture[A-Za-z0-9_]*|capture[A-Za-z0-9_]*)\s*:/gu)]
+    .map(match => match[1]);
+  const nativeCaptures = captureNames(native);
+  assert.equal(nativeCaptures.length, 2, "checked pending and expected captures participate");
+  assert.deepEqual(captureNames(adapter), nativeCaptures, "the full lexical ABI is preserved in order");
+});
+
+test("native Promise bodies are private implementation details while authored exports retain their ABI", () => {
+  const current = analyze(`${header}
+export async function read(value: int32, pending: Promise<void>): Promise<int32> { await pending; return value; }
+export async function outer(value: int32, pending: Promise<void>): Promise<int32> { return await read(value, pending); }`);
+  assert.deepEqual(current.result.diagnostics.map(value => `${value.code}: ${value.message}`), []);
+  const declaration = current.named("read");
+  assert.equal(current.context.promiseBodies.plan.declarations.get(declaration).visibility, "crate");
+  assert.equal(current.context.promiseBodies.plan.objects.has(declaration), true, "the true public object ABI remains demanded");
+  const rust = lower(`${header}
+export async function read(value: int32, pending: Promise<void>): Promise<int32> { await pending; return value; }`);
+  assert.match(rust, /pub\(crate\) async fn read_native\(/u);
+  assert.match(rust, /pub fn read\(/u);
+  assert.equal(/pub async fn read_native\(/u.test(rust), false);
+});
+
+test("checked component identity admits same-component bodies and preserves an imported package object ABI", () => {
+  const files = {
+    "index.ts": `import type { int32 } from "@tsonic/core/types.js";
+import { read } from "@acme/read";
+export async function outer(value: int32, pending: Promise<void>): Promise<int32> { return await read(value, pending); }`,
+    "node_modules/@acme/read/package.json": JSON.stringify({ name: "@acme/read", version: "1.0.0", type: "module", exports: { ".": "./index.ts" } }),
+    "node_modules/@acme/read/index.ts": `${header}
+async function local(value: int32, pending: Promise<void>): Promise<int32> { await pending; return value; }
+export async function read(value: int32, pending: Promise<void>): Promise<int32> { return await local(value, pending); }`,
+  };
+  const current = analyze(files["index.ts"], { files,
+    sourcePackages: sourcePackageGraphFixture(["index.ts"], { "@acme/read": { files: ["index.ts"], dependencies: [] } }),
+  });
+  assert.deepEqual(current.result.diagnostics.map(value => `${value.code}: ${value.message}`), []);
+  const calls = name => current.calls.filter(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === name);
+  const external = calls("read");
+  const internal = calls("local");
+  assert.equal(external.length, 1);
+  assert.equal(internal.length, 1);
+  assert.equal(current.context.records.targetOperation.get(external[0]).asyncBody === undefined, true,
+    "cross-component invocation retains the public object contract");
+  assert.equal(current.context.records.targetOperation.get(internal[0]).asyncBody?.declaration === current.named("local"), true,
+    "the same package's internal immediate body remains native");
+});
+
+test("the component identity owner refuses missing and conflicting identities before Promise selection", () => {
+  const current = analyze(`${header}
+async function read(value: int32): Promise<int32> { return value; }
+export const marker = 0;`);
+  assert.deepEqual(current.result.diagnostics.map(value => `${value.code}: ${value.message}`), []);
+  const graph = current.context.sourcePackages;
+  const { ast, sourceFiles } = current.context;
+  const missing = selectRustSourcePackageComponentIdentities({ ...graph,
+    packages: graph.packages.map(entry => ({ ...entry, sourceFiles: [] })),
+  }, ast, sourceFiles);
+  assert.equal(missing.kind, "rejected");
+  assert.deepEqual(missing.diagnostics.map(issue => issue.code), ["RUST_SOURCE_PACKAGE_COMPONENT_IDENTITY_MISSING"]);
+  const root = graph.packages.find(entry => entry.id === graph.rootPackageId);
+  const conflict = selectRustSourcePackageComponentIdentities({ ...graph,
+    packages: [...graph.packages, { ...root, id: "conflicting-package", componentId: "conflicting-component" }],
+    components: [...graph.components, { id: "conflicting-component", packages: ["conflicting-package"], dependencies: [] }],
+  }, ast, sourceFiles);
+  assert.equal(conflict.kind, "rejected");
+  assert.deepEqual(conflict.diagnostics.map(issue => issue.code), ["RUST_SOURCE_PACKAGE_FILE_COMPONENT_CONFLICT"]);
+  const identities = current.context.sourcePackageComponentIdentities;
+  assert.equal(identities.kind, "resolved");
+  const fileName = ast.getFileName(sourceFiles[0]);
+  assert.equal(identities.identities.componentIdForFile(fileName), identities.identities.componentIdForFile(fileName.replaceAll("/", "\\")),
+    "one canonical file identity is reused across path spellings");
 });

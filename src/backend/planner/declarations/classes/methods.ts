@@ -38,6 +38,7 @@ import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 
 export function planProjectMethod(
   member: Node,
@@ -185,7 +186,10 @@ export function planProjectMethod(
     return undefined;
   }
   const isStatic = ast.hasModifierKind(member, "static");
-  const visibility = !ast.hasModifierKind(member, "private") &&
+  const nativeBody = options?.promiseBody === true ? context.input.program.promiseBodies.declarations.get(member) : undefined;
+  if (options?.promiseBody === true && nativeBody === undefined) failTargetPlannerInvariant("tsonic-rust",
+    "A selected native Promise method requires its sealed declaration contract.", member);
+  const visibility = nativeBody !== undefined ? nativeBody.visibility : !ast.hasModifierKind(member, "private") &&
       !ast.hasModifierKind(member, "protected")
     ? "public" as const
     : "private" as const;

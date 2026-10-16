@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { Node_Expression, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustPromiseBodies, RustPromiseBodyDeclaration } from "../../target-model/records/callables-and-resources.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -45,8 +45,20 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
       const name = context.names.nativeBodyNameForDeclaration(declaration);
       const stable = !context.source.navigation.declarationUseSummary(declaration).bindingWritten &&
         (!context.ast.is.IsMethodDeclaration(declaration) || context.projectMethodProperties.usageFor(declaration)?.writable !== true);
+      const selectedIdentities = context.sourcePackageComponentIdentities;
+      if (selectedIdentities.kind === "rejected") failTargetAnalysisInvariant("tsonic-rust",
+        "Promise body selection requires validated source-package component identities.", call);
+      const callerFile = context.ast.getSourceFile(call);
+      const calleeFile = context.ast.getSourceFile(declaration);
+      const callerComponent = callerFile === undefined ? undefined
+        : selectedIdentities.identities.componentIdForFile(context.ast.getFileName(callerFile));
+      const calleeComponent = calleeFile === undefined ? undefined
+        : selectedIdentities.identities.componentIdForFile(context.ast.getFileName(calleeFile));
+      if (callerComponent === undefined || calleeComponent === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A source Promise invocation requires exact caller and declaration component identities.", call);
       if (immediate && stable && name !== undefined && (target.form === "function" || target.form === "static-method" ||
-        target.form === "method" && target.dispatch === undefined) && rustJsPromiseOutputTargetType(resultCarrier) !== undefined) {
+        target.form === "method" && target.dispatch === undefined) && callerComponent === calleeComponent &&
+        rustJsPromiseOutputTargetType(resultCarrier) !== undefined) {
         return Object.freeze({ declaration, targetName: name, logicalResultCarrier: resultCarrier,
           maySuspend: asynchronous.lowering.kind === "factory" });
       }
@@ -63,7 +75,9 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
           (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration) ? declaration : undefined);
         if (demand !== undefined) objects.set(declaration, demand);
         if (name === undefined) continue;
-        declarations.set(declaration, Object.freeze({ name }));
+        declarations.set(declaration, Object.freeze({ name,
+          visibility: context.ast.is.IsFunctionDeclaration(declaration) &&
+            !sourceDeclarationIsModuleScoped(declaration, context.ast) ? "private" : "crate" }));
       }
       closed = true;
     },
