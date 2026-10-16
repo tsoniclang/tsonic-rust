@@ -25,8 +25,7 @@ import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js"
 import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustTypeContainsImplTrait } from "../types/type-observations.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
@@ -481,7 +480,7 @@ export function planNumericLiteralWithCarrier(
   const literal = context.input.program.records.literalValue.get(node);
   if (isFloatCarrier(carrier)) {
     const numeric = literal?.numeric;
-    if (numeric === undefined) return failTargetPlannerInvariant("tsonic-rust",
+    if (numeric === undefined) return failRustPlannerInvariant(
       "A floating literal requires its sealed source numeric evidence.", node);
     const float32 = carrier.kind === "source-primitive" && rustPrimitiveTypeName(carrier.name) === "f32";
     if (numeric.kind === "authored") {

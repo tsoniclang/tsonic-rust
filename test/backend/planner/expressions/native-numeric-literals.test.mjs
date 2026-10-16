@@ -80,3 +80,14 @@ test("Rust owns floating grammar while shared source facts retain neutral decima
     }
   }
 });
+
+test("missing sealed numeric evidence uses the canonical Rust planner invariant without changing its diagnostic", () => {
+  const carrier = rustSourcePrimitiveTargetType("float32");
+  const { node, context } = contextFor("1", "NumericLiteral", carrier);
+  context.input.program.records.literalValue = { get: () => undefined };
+  assert.throws(() => planNumericLiteralWithCarrier(node, carrier, context), failure =>
+    failure.message === "A floating literal requires its sealed source numeric evidence." &&
+    failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT" &&
+    failure.diagnostic?.source === "tsonic-rust" && failure.diagnostic?.sourceNode === node);
+  assertNoTargetDiagnostics(context.diagnostics);
+});
