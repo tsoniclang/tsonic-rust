@@ -178,7 +178,6 @@ export function createRustAnalysisContext(
     semanticsFor: input.source.semantics.forNode,
     runtimeValueUses,
     sourceFiles,
-    semanticsFor: input.source.semantics.forNode,
   });
   const lifetimes = analyzeRustLifetimes({
     source: input.source,
