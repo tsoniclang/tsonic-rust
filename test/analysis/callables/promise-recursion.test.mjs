@@ -3,6 +3,9 @@ import test from "node:test";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { sourcePackageGraphFixture } from "../../../../tsonic/test/fixtures/source-package-graph.mjs";
+import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/promise-recursion.js";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";`;
 
@@ -15,6 +18,29 @@ function compile(text, extra = {}) {
     `recursive Promise control: ${JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message })))}`);
   return result;
 }
+
+test("native body layout exhausts its canonical work and row budgets without publishing a partial cut", () => {
+  let context;
+  compile(`
+async function recursive(count: int32, pending: Promise<void>): Promise<int32> {
+  if (count <= 0) { await pending; return 0; }
+  return await recursive(count - 1, pending);
+}
+export { recursive };`, { compileTarget(request) {
+    context = analyzeRustCheckedContext(request);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+  } });
+  for (const [name, limits] of [
+    ["work", { maximumSteps: 1 }],
+    ["rows", { maximumTransportRows: 1 }],
+  ]) {
+    const budget = createSourceStorageBudget({ ...defaultSourceStorageLimits, ...limits });
+    const selected = selectRustPromiseBodyRecursion(context, budget);
+    assert.equal(selected.kind, "unresolved", `${name}: failure stays before publication`);
+    assert.equal(selected.reason === budget.failure(), true, `${name}: the actual canonical budget owns the refusal`);
+    assert.equal(Object.hasOwn(selected, "invocations"), false, `${name}: no partial feedback set escapes`);
+  }
+});
 
 test("a closed lexical await cycle executes with no future, object or heap indirection", { timeout: 300_000 }, () => {
   const result = compile(`

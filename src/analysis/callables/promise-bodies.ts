@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceDeclarationIsModuleScoped } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { RustPromiseBodies, RustPromiseBodyDeclaration } from "../../target-model/records/callables-and-resources.js";
@@ -105,7 +106,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
     },
     seal(context: RustAnalysisContext): void {
       assertOpen();
-      const recursion = selectRustPromiseBodyRecursion(context);
+      const recursion = selectRustPromiseBodyRecursion(context, createSourceStorageBudget(defaultSourceStorageLimits));
       if (recursion.kind === "unresolved") {
         context.diagnostics.push(Object.freeze({ code: "RUST_ASYNC_BODY_RECURSION_NOT_CLOSED", category: "error",
           source: "tsonic-rust", sourceNode: recursion.at, message: recursion.reason,

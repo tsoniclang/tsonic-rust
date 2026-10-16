@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
+import type { SourceStorageBudget } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -15,10 +15,9 @@ interface NativeBodyVertex {
   readonly pinned: Set<Node>;
 }
 
-export function selectRustPromiseBodyRecursion(context: RustAnalysisContext):
+export function selectRustPromiseBodyRecursion(context: RustAnalysisContext, budget: SourceStorageBudget):
   | { readonly kind: "resolved"; readonly invocations: ReadonlyMap<Node, ReadonlyMap<string, ReadonlySet<Node>>> }
   | { readonly kind: "unresolved"; readonly at?: Node; readonly reason: string } {
-  const budget = createSourceStorageBudget(defaultSourceStorageLimits);
   const rows = budget.createRows();
   const vertices = new Map<Node, readonly NativeBodyVertex[]>();
   for (const declaration of context.sourceStorage.nodes) {
