@@ -27,6 +27,65 @@ const staticKeys = [
 ];
 
 for (const surfaces of [[], ["js"]]) {
+  test(`Rust ${surfaces[0] ?? "native"} erases checked symbolic type-family metadata without a native field obligation`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+declare const storage: unique symbol;
+interface Stored<Value> { readonly [storage]: Value; }
+type Storage<Value> = Value extends Stored<infer Inner> ? Inner : Value;
+export function read(value: Storage<number>): number { return value; }
+` } });
+    assert.equal(compiled.result.diagnostics.length, 0, "a valid erased contract is not a global representation failure");
+    assert.equal(compiled.result.artifacts.length > 0, true, "the real primitive-valued program emits");
+  });
+
+  test(`Rust ${surfaces[0] ?? "native"} still refuses an actual symbolic native field`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+declare const storage: unique symbol;
+export interface Holder { readonly [storage]: number; }
+export function accept(value: Holder): void {}
+` } });
+    assert.equal(compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN").length, 1,
+      "the actual native field, not the valid source-only contract, owns one precise refusal");
+    assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "symbolic storage is rejected before sealing");
+    assert.equal(compiled.result.artifacts.length, 0, "no synthetic symbolic native field is invented");
+  });
+
+  test(`Rust ${surfaces[0] ?? "native"} keeps non-authored checked element arguments`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+export function read(): number {
+  const pair = { 1: 7 };
+  let index: 1 = 1;
+  return pair[index];
+}
+` } });
+    assert.equal(compiled.result.diagnostics.length, 0, "a checked literal-typed runtime index has no R1 disagreement");
+    assert.equal(compiled.result.artifacts.length > 0, true, "no authored numeric token is required from the user");
+  });
+
+  for (const [kind, declaration] of [
+    ["class", "export class Holder { [+1] = 1; }"],
+    ["interface", "export interface Holder { [-0]: number; }"],
+  ]) {
+    test(`Rust ${surfaces[0] ?? "native"} refuses an emitted signed bound ${kind} key`, () => {
+      const compiled = compileRust({ surfaces, files: { "index.ts": `${declaration}
+export function accept(value: Holder): void {}
+` } });
+      const issues = compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN");
+      assert.equal(issues.length === 1 && issues[0].message.includes("checker key") && issues[0].message.includes("exact string key"), true,
+        "one actual native field consumes the same precise checked identity refusal");
+      assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "bound key mismatch is pre-seal");
+      assert.equal(compiled.result.artifacts.length, 0, "no mismatched native field name is emitted");
+    });
+  }
+
+  test(`Rust ${surfaces[0] ?? "native"} object zero and its destructuring use the completed checked identity`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+export function read(): number { const object = { [-0]: 7 }; const { [-0]: value } = object; return value; }
+` } });
+    assert.equal(compiled.result.diagnostics.length, 0, "object and binding select the same checked zero name");
+    assert.equal(compiled.result.artifacts.length > 0, true, "canonical zero is not an unsupported native field");
+  });
+
   test(`Rust ${surfaces[0] ?? "native"} struct fields share checked computed names with finalized FieldFact evidence`, () => {
     const compiled = compileRust({ surfaces, files: { "index.ts": `
 import { field, struct } from "@tsonic/core/lang.js";
