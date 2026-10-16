@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeAllocationSupport } from "../../helpers/native-ownership-cost.mjs";
 import { spawnSync } from "node:child_process";
 import { printRustSourceFile } from "../../../dist/print/source/index.js";
 import { planRustErrorTransport, planRustSourceErrorTransport } from "../../../dist/backend/planner/program/error-transport.js";
@@ -36,21 +37,9 @@ impl From<tsonic_rust_runtime::JsError> for TsonicError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::alloc::{GlobalAlloc, Layout, System};
-    use std::cell::Cell;
+    ${nativeAllocationSupport}
     use tsonic_rust_runtime::{ErrorObject, JsError, MutableJsError, WritableErrorObject};
 
-    struct Allocator;
-    thread_local! { static COUNT: Cell<Option<usize>> = const { Cell::new(None) }; }
-    unsafe impl GlobalAlloc for Allocator {
-        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            COUNT.with(|count| { if let Some(value) = count.get() { count.set(Some(value + 1)); } });
-            unsafe { System.alloc(layout) }
-        }
-        unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) { unsafe { System.dealloc(pointer, layout) } }
-    }
-    #[global_allocator]
-    static ALLOCATOR: Allocator = Allocator;
 
     #[test]
     fn exact_physical_size_and_no_projection_allocation() {
@@ -61,11 +50,11 @@ mod tests {
         assert!(std::mem::size_of::<SourceError>() < 4096);
         let immutable = JsError::error("original");
         let identity = immutable.error_identity_key();
-        COUNT.with(|count| count.set(Some(0)));
+        let measurement = allocation_counts::Measurement::start();
         let readonly = SourceError::from(immutable);
         let transported = readonly.into_transport();
         let restored = SourceError::try_from(transported).ok().unwrap();
-        assert_eq!(COUNT.with(|count| count.replace(None).unwrap()), 0);
+        assert_eq!(measurement.finish().allocation_requests(), 0);
         match restored.as_transport() {
             ErrorTransport::Runtime(value) => assert_eq!(value.source_error().error_identity_key(), identity),
             _ => panic!("original native owner was replaced"),
@@ -85,12 +74,12 @@ mod tests {
         let original = MutableJsError::error("before");
         let identity = original.error_identity_key();
         let alias = original.clone();
-        COUNT.with(|count| count.set(Some(0)));
+        let measurement = allocation_counts::Measurement::start();
         let writable = WritableSourceError::from(original);
         let readonly = SourceError::from(writable);
         let transported = readonly.into_transport();
         let recovered = WritableSourceError::try_from(transported).ok().unwrap();
-        assert_eq!(COUNT.with(|count| count.replace(None).unwrap()), 0);
+        assert_eq!(measurement.finish().allocation_requests(), 0);
         match recovered.as_transport() {
             ErrorTransport::SourceCreated(value) => {
                 value.set_error_message(String::from("after"));

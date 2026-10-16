@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { nativeAllocationSupport } from "../../helpers/native-ownership-cost.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -126,30 +127,10 @@ test("unique mutable capture allocation matches an independent native owning Fn"
   const root = writeGeneratedProject("native-capture-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/cost.rs"), `
-use std::alloc::{GlobalAlloc, Layout, System};
+${nativeAllocationSupport}
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-struct Counting;
-thread_local! {
-    static ACTIVE: Cell<bool> = const { Cell::new(false) };
-    static CALLS: Cell<usize> = const { Cell::new(0) };
-    static BYTES: Cell<usize> = const { Cell::new(0) };
-}
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if ACTIVE.get() { CALLS.set(CALLS.get() + 1); BYTES.set(BYTES.get() + layout.size()); }
-        unsafe { System.alloc(layout) }
-    }
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) { unsafe { System.dealloc(pointer, layout) } }
-}
-#[global_allocator]
-static ALLOCATOR: Counting = Counting;
-fn measure<Value>(operation: impl FnOnce() -> Value) -> (Value, usize, usize) {
-    CALLS.set(0); BYTES.set(0); ACTIVE.set(true);
-    let result = std::hint::black_box(operation());
-    ACTIVE.set(false);
-    (result, CALLS.get(), BYTES.get())
-}
+
 fn handwritten(seed: i32) -> Rc<dyn Fn() -> i32> {
     let seed = Cell::new(seed);
     Rc::new(move || { let next = seed.get() + 1; seed.set(next); next })
@@ -164,11 +145,11 @@ fn handwritten_string(seed: String) -> Rc<dyn Fn(String) -> String> {
 }
 #[test]
 fn same_frame_and_no_call_allocation() {
-    let (actual, actual_calls, actual_bytes) = measure(|| capture_cost::index::counter(0));
-    let (expected, expected_calls, expected_bytes) = measure(|| handwritten(0));
+    let (actual, actual_calls, actual_bytes) = allocation_counts::measure_value_requests(|| capture_cost::index::counter(0));
+    let (expected, expected_calls, expected_bytes) = allocation_counts::measure_value_requests(|| handwritten(0));
     assert_eq!((actual_calls, actual_bytes), (expected_calls, expected_bytes));
     assert_eq!(actual_calls, 1);
-    let (_, calls, bytes) = measure(|| {
+    let (_, calls, bytes) = allocation_counts::measure_value_requests(|| {
         for _iteration in 0..10000 { assert_eq!(std::hint::black_box(actual.call(()).unwrap()), std::hint::black_box(expected())); }
     });
     assert_eq!((calls, bytes), (0, 0));
@@ -177,8 +158,8 @@ fn same_frame_and_no_call_allocation() {
 fn non_copy_capture_has_only_its_native_callable_frame() {
     let actual_seed = String::from("a");
     let expected_seed = String::from("a");
-    let (actual, actual_calls, actual_bytes) = measure(|| capture_cost::index::append(actual_seed));
-    let (expected, expected_calls, expected_bytes) = measure(|| handwritten_string(expected_seed));
+    let (actual, actual_calls, actual_bytes) = allocation_counts::measure_value_requests(|| capture_cost::index::append(actual_seed));
+    let (expected, expected_calls, expected_bytes) = allocation_counts::measure_value_requests(|| handwritten_string(expected_seed));
     assert_eq!((actual_calls, actual_bytes), (expected_calls, expected_bytes));
     assert_eq!(actual_calls, 1);
     assert_eq!(actual.call((String::from("x"),)).unwrap(), expected(String::from("x")));
