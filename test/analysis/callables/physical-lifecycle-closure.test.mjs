@@ -93,7 +93,7 @@ for (const [name, source] of Object.entries(structuralSources)) {
         const protocol = rustCallableProtocol(storage);
         if (field.method !== true || field.nativeMethod === true || protocol === undefined) continue;
         assert.equal(protocol.error?.id === "rust.core.Infallible", true, `${name}: exact native invocation error`);
-        const logical = rustCallableProtocol(field.carrier);
+        const logical = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.carrier) : field.carrier);
         assert.equal(logical.error?.id === "rust.program.TsonicError", true, `${name}: source call contract is not overwritten`);
         for (const carrier of definition.sourceCarriers) {
           const selected = program.structuralShapes.field(carrier, index);
