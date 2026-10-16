@@ -16,7 +16,7 @@ function fixture(second) {
     }
     export function main(): void { const read = choose(true); read<number>(1); }
   `);
-  const components = analyzeRustSourcePackageComponents(context, "lib");
+  const components = analyzeRustSourcePackageComponents(context, "lib", subject => context.records.errorEffects.get(subject));
   assert.equal(components.kind, "resolved", components.diagnostics?.map(row => `${row.code}: ${row.message}`).join("\n"));
   const input = { ast: context.ast, sourceLifetimes: context.sourceLifetimes, records: context.records,
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
