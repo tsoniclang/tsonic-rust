@@ -100,7 +100,7 @@ test("native trait equality ignores provider evidence but retains exact native a
     { kind: "lifetime", lifetime }, { kind: "const", value: { kind: "integer", value: "4" } }]),
     associatedConstraints: [{ kind: "equality", identity: "provider-one.Output", name: "Output",
       genericArguments: [], type: leftRow }] };
-  const other = { ...trait, id: "provider-two.Project", sourceItem: { fileName: "other.rs", typeName: "Project" },
+  const other = { ...trait, id: "provider-two.Project", sourceItem: { fileName: "other.rs", typeName: "foreign::Project" },
     genericArguments: [typeArgument(rightRow), ...trait.genericArguments.slice(1)],
     associatedConstraints: [{ ...trait.associatedConstraints[0], identity: "provider-two.Output", type: rightRow }] };
   assert.equal(rustNativeTraitRefEquals(trait, other), true);
