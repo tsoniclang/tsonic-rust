@@ -173,7 +173,7 @@ export function analyzeRustTargetProgram(
     context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
   const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage, nodes: context.sourceStorage.nodes,
-    records, definitions: context.typeDefinitions });
+    records, uses: context.promiseResultUses, definitions: context.typeDefinitions });
   if (promiseResults.diagnostics.length > 0) return rejectedTargetStage(promiseResults.diagnostics);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     typeDefinitions: context.typeDefinitions,

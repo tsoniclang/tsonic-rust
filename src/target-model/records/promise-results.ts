@@ -12,3 +12,5 @@ export interface RustPromiseResult {
 }
 
 export type RustPromiseResults = ReadonlyMap<Node, RustPromiseResult>;
+
+export type RustPromiseResultUses = ReadonlyMap<Node, SourceExpressionResultDisposition>;

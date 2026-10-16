@@ -87,9 +87,12 @@ import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry
 import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
 import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
+import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
+import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
+  readonly promiseResultUses: RustPromiseResultUses;
   readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
   readonly callableOwnership: RustCallableOwnershipRegistry;
   readonly errorStorageDemands: SourceErrorStorageDemandQueries;
@@ -159,6 +162,7 @@ export function createRustAnalysisContext(
   const sourceStorage = createSourceStorageQuery(input.source, sourceFiles, undefined,
     createRustSourceProfileStorageEffects(input.source, sourceProfiles));
   const sourceStorageFailure = sourceStorage.failureReason();
+  const promiseResultUses = analyzeRustPromiseResultUses(ast, sourceStorage.nodes);
   const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const records = createRustProgramRecordBuilder(typeDefinitions);
@@ -203,6 +207,7 @@ export function createRustAnalysisContext(
     ast,
     sourceFiles,
     sourcePackages: input.sourcePackages,
+    promiseResultUses,
     rootPublishesLibrary,
     records,
     requiredRecords: [],
