@@ -72,7 +72,7 @@ export function recordRustBindingPatternFacts(
   context.setCarrier(pattern, sourceCarrier);
   const elements = context.ast.elements(pattern);
   const objectExtractedNames = kind === KindObjectBindingPattern
-    ? collectObjectExtractedNames(elements, context.ast)
+    ? collectObjectExtractedNames(elements, context.ast, context.semanticsFor)
     : undefined;
   if (kind === KindObjectBindingPattern && objectExtractedNames === undefined) {
     return false;
@@ -248,7 +248,7 @@ function selectObjectProjection(
         };
   }
   const propertyName = BindingElement_PropertyName(context.ast, element) ?? name;
-  const sourceName = bindingPropertySourceName(propertyName, context.ast);
+  const sourceName = bindingPropertySourceName(propertyName, context.ast, context.semanticsFor);
   if (sourceName === undefined) {
     return undefined;
   }
@@ -421,6 +421,7 @@ function resolveObjectRestBindingCarrier(
 function collectObjectExtractedNames(
   elements: readonly (Node | undefined)[],
   ast: AstReader,
+  semanticsFor: RustBindingPatternFactContext["semanticsFor"],
 ): ReadonlySet<string> | undefined {
   const names = new Set<string>();
   for (const element of elements) {
@@ -435,6 +436,7 @@ function collectObjectExtractedNames(
     const sourceName = bindingPropertySourceName(
       BindingElement_PropertyName(ast, element) ?? name,
       ast,
+      semanticsFor,
     );
     if (sourceName === undefined) {
       return undefined;
@@ -447,7 +449,12 @@ function collectObjectExtractedNames(
 function bindingPropertySourceName(
   propertyName: Node | undefined,
   ast: AstReader,
+  semanticsFor: RustBindingPatternFactContext["semanticsFor"],
 ): string | undefined {
+  if (propertyName !== undefined && (ast.is.IsComputedPropertyName(propertyName) || ast.is.IsNumericLiteral(propertyName))) {
+    const selected = semanticsFor(propertyName).propertyNames.get(propertyName);
+    return selected?.kind === "resolved" ? selected.name : undefined;
+  }
   const kind = propertyName === undefined ? "" : ast.kindName(propertyName);
   return propertyName === undefined ||
       (kind !== KindIdentifier && kind !== KindStringLiteral && kind !== KindNumericLiteral)

@@ -160,7 +160,7 @@ export function resolveRustCheckedElementAccess(
 
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
     const declaration = request.sourceSelectedDeclaration;
-    const index = rustProjectObjectIndexSignature(declaration, context.ast);
+    const index = rustProjectObjectIndexSignature(declaration, options.projectTypes);
     const owner = index === undefined
       ? undefined
       : options.projectTypes.definitionContainingDeclaration(index.declaration);

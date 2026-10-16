@@ -18,7 +18,9 @@ test("project layouts read only admitted leaf names and never partial computed f
       return node.value;
     },
   };
-  const layout = rustProjectObjectLayout(declaration, ast);
+  const names = new WeakMap([[members[2].name, Object.freeze({ kind: "resolved", name: "0" })]]);
+  const semanticsFor = () => ({ propertyNames: { get: node => names.get(node) } });
+  const layout = rustProjectObjectLayout(declaration, ast, semanticsFor);
   assert.deepEqual(layout.fields.map(({ sourceName, storageIndex }) => [sourceName, storageIndex]), [["count", 0], ["label", 1], ["0", 2]]);
   assert.deepEqual(layout.fields.map(({ declaration }) => declaration), members);
   assert.deepEqual(layout.fields.map(({ presence }) => presence), ["required", "optional", "required"]);
@@ -26,8 +28,13 @@ test("project layouts read only admitted leaf names and never partial computed f
   assert.equal(Object.isFrozen(layout.fields), true);
   assert.equal(layout.fields.every(Object.isFrozen), true);
   assert.throws(() => { layout.fields[0].storageIndex = 4; }, TypeError);
-  assert.equal(rustProjectObjectLayout({ ...declaration, members: [...members, field("KindComputedPropertyName", undefined)] }, ast), undefined);
-  assert.equal(rustProjectObjectLayout({ ...declaration, members: [...members, field("KindIdentifier", "count")] }, ast), undefined);
+  assert.equal(rustProjectObjectLayout({ ...declaration, members: [...members, field("KindComputedPropertyName", undefined)] }, ast, semanticsFor), undefined);
+  assert.equal(rustProjectObjectLayout({ ...declaration, members: [...members, field("KindIdentifier", "count")] }, ast, semanticsFor), undefined);
+  const computed = field("KindComputedPropertyName", undefined);
+  names.set(computed.name, Object.freeze({ kind: "resolved", name: "computed" }));
+  const admitted = rustProjectObjectLayout({ ...declaration, members: [...members, computed] }, ast, semanticsFor);
+  assert.equal(admitted.fields[3].sourceName, "computed", "admitted computed field uses its exact shared key");
+  assert.equal(admitted.fields[3].declaration === computed, true, "admitted field preserves its original declaration identity");
 });
 
 test("project index layouts freeze exact key declarations and reject malformed signatures", () => {
@@ -39,7 +46,8 @@ test("project index layouts freeze exact key declarations and reject malformed s
     members: node => node.members,
     parameters: node => node.parameters,
   };
-  const layout = rustProjectObjectLayout(declaration, ast);
+  const semanticsFor = () => ({ propertyNames: { get: () => undefined } });
+  const layout = rustProjectObjectLayout(declaration, ast, semanticsFor);
   assert.equal(layout.indexSignatures[0].declaration === index, true);
   assert.equal(layout.indexSignatures[0].keyParameter === parameter, true);
   assert.equal(Object.isFrozen(layout.indexSignatures), true);
@@ -47,7 +55,7 @@ test("project index layouts freeze exact key declarations and reject malformed s
   assert.throws(() => { layout.indexSignatures[0].keyParameter = {}; }, TypeError);
   for (const parameters of [[], [parameter, parameter]]) {
     assert.equal(rustProjectObjectLayout({ ...declaration,
-      members: [{ ...index, parameters }] }, ast), undefined);
+      members: [{ ...index, parameters }] }, ast, semanticsFor), undefined);
   }
 });
 

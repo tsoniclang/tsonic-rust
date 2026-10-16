@@ -31,9 +31,13 @@ export function planRustClosedRecordLiteral(
   for (const [index, field] of fact.fields.entries()) {
     const property = properties[index];
     const name = property === undefined ? undefined : ast.name(property);
+    const selected = name !== undefined && (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name))
+      ? context.input.program.source.propertyNames.get(name) : undefined;
+    const sourceName = name === undefined ? undefined : ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)
+      ? selected?.kind === "resolved" ? selected.name : undefined : ast.text(name);
     if (property === undefined || property !== field.property ||
       !ast.is.IsPropertyAssignment(property) && !ast.is.IsShorthandPropertyAssignment(property) ||
-      name === undefined || ast.is.IsComputedPropertyName(name) || ast.text(name) !== field.sourceName ||
+      sourceName !== field.sourceName ||
       ObjectLiteralProperty_Value(ast, property) !== field.expression ||
       !rustTargetTypeRefEquals(rustEffectiveValueCarrier(context.input.program.records, field.expression),
         fact.resultCarrier)) return invalid();

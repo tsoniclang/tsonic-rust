@@ -13,7 +13,6 @@ import { resolveParameterAbi } from "../declarations/types-and-bindings.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 
-import { rustProjectObjectLayout } from "../project-types/object-layout.js";
 import { rustResolutionContext } from "../program/walk.js";
 
 import type { Node, Type } from "@tsonic/tsts";
@@ -133,10 +132,8 @@ export function resolveRustRecordShape(
 ): RustResolvedRecordShape | undefined {
   const sourceValue = rustSourceTypeCarrierValue(carrier);
   if (sourceValue?.shape === "object") {
-    const shapeDeclaration = walk.sourceTypes.declarationForCarrier(carrier);
-    const layout = shapeDeclaration === undefined
-      ? undefined
-      : rustProjectObjectLayout(shapeDeclaration, walk.context.ast);
+    const definition = walk.context.projectTypes.definitionForCarrier(carrier);
+    const layout = definition === undefined ? undefined : walk.context.projectTypes.objectLayoutForDefinition(definition);
     if (layout === undefined || requireInterface && layout.kind !== "interface") {
       return undefined;
     }

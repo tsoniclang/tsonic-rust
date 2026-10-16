@@ -5,6 +5,7 @@ import type {
   Type,
 } from "@tsonic/tsts";
 import { rustSourceDeclarationTypeName, rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { createRustSourceTypeFamilyRegistry } from "./type-families.js";
@@ -203,7 +204,7 @@ export function createRustSourceTypeRegistry(
       const key = keyForCarrier(carrier);
       return key === undefined ? undefined : declarations.get(key);
     },
-    propertyKeysForCarrier(carrier, ast) {
+    propertyKeysForCarrier(carrier, ast, semanticsFor: (node: Node) => SourceFileSemantics) {
       const key = keyForCarrier(carrier);
       const declaration = key === undefined ? undefined : declarations.get(key);
       if (declaration === undefined ||
@@ -229,13 +230,14 @@ export function createRustSourceTypeRegistry(
             continue;
           }
           if (ast.questionToken(member) !== undefined) return undefined;
-          const selectedName = ObjectLiteralProperty_SourceName(ast, member);
-          if (selectedName.kind !== "resolved" || selectedName.name.length === 0 || seen.has(selectedName.name)) {
+          const name = ast.name(member);
+          const selectedName = name !== undefined && (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name))
+            ? semanticsFor(member).propertyNames.get(name) : ObjectLiteralProperty_SourceName(ast, member);
+          if (selectedName?.kind !== "resolved" || seen.has(selectedName.name)) {
             return undefined;
           }
-          const name = selectedName.name;
-          seen.add(name);
-          keys.push(name);
+          seen.add(selectedName.name);
+          keys.push(selectedName.name);
           continue;
         }
         if ((declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") &&

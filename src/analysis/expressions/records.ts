@@ -50,6 +50,14 @@ import { rustGenericCallableProtocol } from "../../target-model/types/carriers/g
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { resolveRustClosedRecordLiteral } from "./closed-records.js";
 
+function recordPropertySourceName(walk: RustFactWalk, name: Node | undefined): string | undefined {
+  if (name === undefined) return undefined;
+  const { ast } = walk.context;
+  if (!ast.is.IsComputedPropertyName(name) && !ast.is.IsNumericLiteral(name)) return ast.text(name);
+  const selected = walk.context.semanticsFor(name).propertyNames.get(name);
+  return selected?.kind === "resolved" ? selected.name : undefined;
+}
+
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
   values: readonly (Node | undefined)[] | undefined,
@@ -230,8 +238,8 @@ export function resolveRecordLiteralCarrier(
       return undefined;
     }
     const nameNode = ast.name(property);
-    const fieldName = nameNode === undefined ? "" : ast.text(nameNode);
-    if (fieldName.length === 0 || explicitPropertiesByName.has(fieldName)) {
+    const fieldName = recordPropertySourceName(walk, nameNode);
+    if (fieldName === undefined || explicitPropertiesByName.has(fieldName)) {
       return undefined;
     }
     explicitPropertiesByName.set(fieldName, property);
@@ -720,7 +728,8 @@ export function resolveRecordLiteralCarrier(
       continue;
     }
     const nameNode = ast.name(property);
-    const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+    const sourceName = recordPropertySourceName(walk, nameNode);
+    if (sourceName === undefined) return undefined;
     const initializer = ObjectLiteralProperty_Value(ast, property);
     const initializerKind = initializer === undefined ? "" : ast.kindName(initializer);
     if (initializer !== undefined &&
