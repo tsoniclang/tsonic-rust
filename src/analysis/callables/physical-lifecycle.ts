@@ -15,6 +15,7 @@ import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloa
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion }
   from "../conversions/value-carrier-queries.js";
 import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup }
@@ -68,7 +69,6 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   const operands = new Map<Node, RustNativeStorageSelection>();
   const returns = new Map<Node, RustNativeStorageSelection>();
   const invocations = new Map<Node, RustNativeStorageSelection>();
-  const futureEnvironments = new Map<Node, ReturnType<RustNativeStoragePlan["futureEnvironmentFor"]>>();
   const producerRequests = new Map<Node, TargetTypeRef[]>();
   const flows: { readonly node: Node; readonly conversion: RustGenericCallableConversion }[] = [];
   const destinations = new Map<Node, TargetTypeRef | undefined>();
@@ -102,7 +102,10 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   for (const node of input.sourceStorage.nodes) {
     if (records.sourceCallableReturn.get(node) !== undefined) {
       returned(node);
-      futureEnvironments.set(node, queries.futureEnvironmentFor(node));
+    }
+    if (records.runtimeCarrier.get(node) !== undefined || records.contextualValueConversion.get(node) !== undefined) {
+      value(node);
+      operand(node);
     }
     const lexical = input.lexicalFunctions.forDeclaration(node);
     if (lexical?.kind === "resolved") for (const capture of lexical.captures) value(capture.reference);
@@ -172,6 +175,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     value(flow.node);
     inheritedDestination(flow.node);
   }
+  for (const node of values.keys()) inheritedDestination(node);
   let complete = false;
   return Object.freeze({
     complete(physical: RustGenericCallablePhysicalConstruction): RustPhysicalCallablePublication {
@@ -191,6 +195,24 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         nativeProducers.invocationResultFor(producer.declaration), nativeProducers.bodyResultFor(producer.declaration),
         ...(producerRequests.get(producer.declaration) ?? []).map(carrier => nativeProducers.physicalFor(producer.declaration, carrier))]) {
         if (carrier !== undefined) physical.prepare(carrier);
+      }
+      for (const [node, destination] of destinations) {
+        if (destination === undefined) continue;
+        const selected = values.get(node);
+        const logical = rustEffectiveValueCarrier(records, node);
+        if (selected === undefined || selected.kind === "unresolved" || logical === undefined) continue;
+        const visited = new Set<TargetTypeRef>();
+        const prepare = (carrier: TargetTypeRef): void => {
+          if (visited.has(carrier)) return;
+          visited.add(carrier);
+          if (rustGenericCallableValue(carrier) !== undefined) {
+            const source = rustPhysicalPayloadFor(logical, selected.carrier, carrier, input.typeDefinitions);
+            const target = rustPhysicalPayloadFor(logical, destination, carrier, input.typeDefinitions);
+            if (source !== undefined && target !== undefined) physical.prepareConversion(source, target);
+          }
+          for (const child of rustTargetTypeChildren(carrier)) prepare(child);
+        };
+        prepare(logical);
       }
       const applications = new Map<Node, Map<string, RustPhysicalCallableFlowApplication>>();
       const applicationKey = (conversion: RustGenericCallableConversion, destination: TargetTypeRef | undefined): string =>
@@ -233,11 +255,9 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
           return selected;
         },
       });
-      const noFutureEnvironment: ReturnType<RustNativeStoragePlan["futureEnvironmentFor"]> = Object.freeze({ kind: "unresolved",
-        reason: "Native future environment requires its exact prepared declaration." });
       const nativeStorage: RustPhysicalCallableStorage = Object.freeze({ issues: queries.issues,
         parameterFor: queries.parameterFor,
-        futureEnvironmentFor: (node: Node) => futureEnvironments.get(node) ?? noFutureEnvironment,
+        futureEnvironmentFor: queries.futureEnvironmentFor,
         valueFor: (node: Node) => values.get(node) ?? unpreparedStorage,
         operandFor: (node: Node) => operands.get(node) ?? unpreparedStorage,
         returnFor: (node: Node) => returns.get(node) ?? unpreparedStorage,

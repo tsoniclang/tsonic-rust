@@ -314,7 +314,13 @@ export function createRustGenericCallablePhysicalPlan(
       const read = (carrier: TargetTypeRef, required: boolean): RustGenericCallablePhysicalSelection | undefined => {
         const selected = selectedCarriers.get(closedMetadataKey(carrier));
         const value = selected === undefined && required ? rustGenericCallableValue(carrier) : undefined;
-        if (value?.physical !== undefined && value.physical.members.every(member => byOrigin.has(closedMetadataKey(member.origin))))
+        if (value?.physical !== undefined && value.physical.members.every(member => {
+          const implementation = byOrigin.get(closedMetadataKey(member.origin));
+          const environment = implementation === undefined ? undefined : environments.get(implementation);
+          return environment !== undefined && environment.parameters.length === member.arguments.length &&
+            environment.parameters.every((parameter, index) =>
+              parameter.kind === value.physical!.arguments[member.arguments[index]!]!.kind);
+        }))
           (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
             "A physical generic callable key was not prepared before publication; its selected contextual root is missing.");
         return selected;

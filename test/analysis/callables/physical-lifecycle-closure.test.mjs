@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
@@ -125,7 +126,7 @@ test("published producer physical lookup rejects a foreign declaration without i
 });
 
 test("frame reads and same-activation proofs remain data-only after construction inputs are revoked", () => {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": `
 class Value {
   recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
   rebind(): void { this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1); }
@@ -137,7 +138,7 @@ export function escaped(): (count: number) => number {
   return before;
 }
 ` } });
-  const sourceStorage = createSourceStorageQuery(program.source, program.sourceFiles);
+  const sourceStorage = createSourceStorageQuery(createTargetSourceProgram(checked), program.sourceFiles);
   const guarded = [];
   const guard = value => {
     const selected = Proxy.revocable(value, {});
