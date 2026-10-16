@@ -323,6 +323,7 @@ export function analyzeRustTargetProgram(
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
+  const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
   const program: Omit<RustTargetProgram, "reachability"> = {
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
@@ -342,7 +343,7 @@ export function analyzeRustTargetProgram(
     source: targetSourceSyntaxProgram(context.source),
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
-    records,
+    records: finalRecords,
     typeFamilies: context.typeFamilies.seal(),
     typeDefinitions,
     projectTypes,
@@ -390,7 +391,7 @@ export function analyzeRustTargetProgram(
       ast: context.ast,
       sourceFiles: context.sourceFiles,
       navigation: context.source.navigation,
-      records,
+      records: finalRecords,
       borrowedElementReads,
     }),
     projectFlowReadSelections: analyzeRustProjectFlowReadSelections({

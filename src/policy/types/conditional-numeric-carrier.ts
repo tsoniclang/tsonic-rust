@@ -1,4 +1,5 @@
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
+import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { isRustAbsenceCarrier, isRustIntegerCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType,
   rustSourceOptionalTargetType, rustSourcePrimitiveTargetType } from "../../target-model/types/index.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
@@ -11,7 +12,7 @@ export function selectRustConditionalNumericCarrier(
   whenFalse: Node,
   trueCarrier: TargetTypeRef | undefined,
   falseCarrier: TargetTypeRef | undefined,
-  ast: AstReader,
+  literalValues: SourceLiteralIndex,
 ): TargetTypeRef | undefined {
   const trueElement = rustOptionElementCarrier(trueCarrier);
   const falseElement = rustOptionElementCarrier(falseCarrier);
@@ -25,9 +26,9 @@ export function selectRustConditionalNumericCarrier(
   else if (isRustIntegerCarrier(left) && isRustIntegerCarrier(right)) {
     const promoted = rustNumericPromotionKind(left.name, right.name);
     selected = promoted === undefined ? undefined : rustSourcePrimitiveTargetType(promoted);
-  } else if (isRustIntegerCarrier(left) && selectedSourceLiteralIsRepresentable(whenFalse, left.name, ast)) {
+  } else if (isRustIntegerCarrier(left) && selectedSourceLiteralIsRepresentable(literalValues.literalValue.get(whenFalse), left.name)) {
     selected = left;
-  } else if (isRustIntegerCarrier(right) && selectedSourceLiteralIsRepresentable(whenTrue, right.name, ast)) {
+  } else if (isRustIntegerCarrier(right) && selectedSourceLiteralIsRepresentable(literalValues.literalValue.get(whenTrue), right.name)) {
     selected = right;
   } else if (isRustNumericCarrier(left) && isRustNumericCarrier(right)) {
     const promoted = rustNumericPromotionKind(left.name, right.name);

@@ -369,7 +369,7 @@ function resolveExpressionOperationDependencies(
       const asserted = ast.isConstAssertion(expression) ? expected : resolveRustTargetTypeRef(
         Node_Type(ast, expression), rustResolutionContext(walk, expression), walk.operationOptions);
       const literalExpected = asserted?.kind === "source-primitive" &&
-        selectedSourceLiteralIsRepresentable(operand, asserted.name, ast) ? asserted : undefined;
+        selectedSourceLiteralIsRepresentable(walk.context.literalValues.literalValue.get(operand), asserted.name) ? asserted : undefined;
       resolveExpressionCarrier(walk, operand, sourceFile, ast.isConstAssertion(expression) ? expected : literalExpected);
     }
     return;

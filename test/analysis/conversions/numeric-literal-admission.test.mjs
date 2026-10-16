@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import { analyzeRustNumericLiteralAdmission } from "../../../dist/analysis/numeric/literal-admission.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -113,8 +114,8 @@ function admissionOnly(source, selected) {
   compileRust({ ...surfaceOptions(selected), files: { "index.ts": source },
     compileTarget(request) {
       const ast = request.input.source.ast;
-      refusals = analyzeRustNumericLiteralAdmission(ast,
-        request.input.source.sourceFiles.filter(file => file !== undefined && !ast.isDeclarationFile(file)));
+      const files = request.input.source.sourceFiles.filter(file => file !== undefined && !ast.isDeclarationFile(file));
+      refusals = analyzeRustNumericLiteralAdmission(ast, files, analyzeSourceLiteralValues(ast, files));
       return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
     },
   });

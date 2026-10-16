@@ -89,7 +89,7 @@ export function resolveExpressionCarrierUncached(
   const kind = walk.context.ast.kindName(expression);
   switch (kind) {
     case KindNumericLiteral: {
-      if (!rustNumericLiteralIsFinite(walk.context.ast, expression)) {
+      if (!rustNumericLiteralIsFinite(walk.context.literalValues.literalValue.get(expression))) {
         return failTargetAnalysisInvariant("tsonic-rust",
           "Numeric literal admission must refuse a non-finite numeric literal before carrier resolution.", expression);
       }
@@ -105,13 +105,13 @@ export function resolveExpressionCarrierUncached(
         : contextualExpected;
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&
         (selectedSourceLiteralIsRepresentable(
-          expression,
+          walk.context.literalValues.literalValue.get(expression),
           effectiveExpected.name,
-          walk.context.ast,
         ) || selectedSourceLiteralOperandIsRepresentable(
           expression,
           effectiveExpected.name,
           walk.context.ast,
+          walk.context.literalValues,
         ))) {
         return setCarrierFact(walk, expression, effectiveExpected);
       }
@@ -147,13 +147,13 @@ export function resolveExpressionCarrierUncached(
         : expected;
       if (effectiveExpected !== undefined && isRustIntegerCarrier(effectiveExpected)) {
         if (selectedSourceLiteralIsRepresentable(
-          expression,
+          walk.context.literalValues.literalValue.get(expression),
           effectiveExpected.name,
-          walk.context.ast,
         ) || selectedSourceLiteralOperandIsRepresentable(
           expression,
           effectiveExpected.name,
           walk.context.ast,
+          walk.context.literalValues,
         )) {
           return setCarrierFact(walk, expression, effectiveExpected);
         }
@@ -436,7 +436,7 @@ export function resolveExpressionCarrierUncached(
           ? resolveExpressionCarrier(probe, whenTrue, sourceFile, undefined) : undefined;
         const right = sourceIntegerLiteralValue(walk.context.ast, whenFalse) === undefined
           ? resolveExpressionCarrier(probe, whenFalse, sourceFile, undefined) : undefined;
-        semanticCarrier = selectRustConditionalNumericCarrier(whenTrue, whenFalse, left, right, walk.context.ast) ?? semanticCarrier;
+        semanticCarrier = selectRustConditionalNumericCarrier(whenTrue, whenFalse, left, right, walk.context.literalValues) ?? semanticCarrier;
       }
       const trueCarrier = resolveExpressionCarrier(walk, whenTrue, sourceFile, semanticCarrier);
       const falseCarrier = resolveExpressionCarrier(walk, whenFalse, sourceFile, semanticCarrier ?? trueCarrier);
