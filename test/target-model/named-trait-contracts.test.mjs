@@ -240,10 +240,15 @@ test("metadata admission rejects undeclared native trait parameters while captur
 });
 
 test("native trait canonicalization deduplicates native identities rather than provider evidence keys", () => {
-  const first = rustNativeTraitRef("foreign::Required", [typeArgument(integer)]);
-  const second = { ...first, id: "other-provider.Required" };
-  const contract = rustNamedTypeTraitContract([implementation(first), implementation(second)]);
+  const first = rustNativeTraitRef("foreign::Required", [typeArgument(rustNamedTargetType("first.Row", "common::Row", []))]);
+  const second = { ...first, id: "other-provider.Required", genericArguments: [typeArgument(
+    rustNamedTargetType("second.Row", "common::Row", [], [], { implementations: [implementation(intoRetained)] }))] };
+  const condition = { typeArgumentIndex: 0, trait: first };
+  const otherCondition = { typeArgumentIndex: 0, trait: second };
+  const contract = rustNamedTypeTraitContract([implementation(first, [condition, otherCondition]),
+    implementation(second, [otherCondition, condition])]);
   assert.equal(contract.implementations.length, 1);
+  assert.equal(contract.implementations[0].requirements.length, 1);
   assert.equal(isRustNamedTypeTraitContract(contract), true);
   const duplicated = { implementations: [implementation(first), implementation(second)]
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))) };
