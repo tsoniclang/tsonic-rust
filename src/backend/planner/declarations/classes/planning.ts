@@ -187,9 +187,18 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         continue;
       }
       if (context.input.program.objectRepresentations.aliasFor(member) !== undefined) continue;
-      const fieldNameNode = ast.name(member);
-      const sourceFieldName = ast.text(fieldNameNode ?? member);
       const fieldName = context.input.program.projectTypes.fieldStorageName(definition, member) ?? "";
+      const layoutField = layout.fields.find((field) => field.declaration === member);
+      if (layoutField === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(
+          diagnosticInput(context, member),
+          "rust.backend.class-field-layout",
+          `Class field '${fieldName}' has no exact project-object storage slot.`,
+        ));
+        failed = true;
+        continue;
+      }
+      const sourceFieldName = layoutField.sourceName;
       const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
       const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
       if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
@@ -197,16 +206,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
           diagnosticInput(context, member),
           "rust.backend.class",
           `Class field '${sourceFieldName}' has no supported Rust storage identity or carrier fact.`,
-        ));
-        failed = true;
-        continue;
-      }
-      const layoutField = layout.fields.find((field) => field.declaration === member);
-      if (layoutField === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.class-field-layout",
-          `Class field '${fieldName}' has no exact project-object storage slot.`,
         ));
         failed = true;
         continue;
