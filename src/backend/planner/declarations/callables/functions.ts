@@ -419,7 +419,7 @@ function planRustFunctionItem(
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
     body: returnsJsPromise
-      ? wrapRustJsPromiseBody(finalizedBody, fallible)
+      ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering)
       : finalizedBody,
   };
   return item;

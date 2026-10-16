@@ -547,7 +547,7 @@ export function planRustCallableExpressionBody(
     }] };
   } else if (asynchronous?.kind === "js-promise") {
     context.usedAliases?.add("js_abi");
-    finalizedBlock = wrapRustJsPromiseBody(loweredBody, bodyIsFallible);
+    finalizedBlock = wrapRustJsPromiseBody(loweredBody, bodyIsFallible, asynchronous.lowering);
   }
   if (closureFact.invocationResult !== undefined) {
     const conversion = closureFact.invocationResult;
