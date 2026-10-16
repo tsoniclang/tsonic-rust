@@ -17,7 +17,7 @@ import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../..
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectRustProviderOperation } from "../../../policy/operations/provider-selection.js";
 import { rustValueConversionIdentity } from "../../../target-model/conversions/contracts.js";
-import { selectRustSourceAssertionConversion } from "../../../policy/conversions/selection.js";
+import { selectRustKnownNumericValueConversion, selectRustSourceAssertionConversion } from "../../../policy/conversions/selection.js";
 import type { RustCheckedConversionSelectionInput, RustCheckedConversionSelectionResult, RustCheckedOperationSelectionResult, RustCheckedPropertySelectionInput, RustPolicySelection, RustTargetOperationSelection } from "../../../policy/operations/contracts.js";
 import type { ExtensionFactSubject, ProviderDeclarationIdentity } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "./model.js";
@@ -51,6 +51,19 @@ export function selectRustCheckedConversion(
     }
     const sourceNode = asNode(request.expression, context);
     const sourceKind = sourceNode === undefined ? "" : context.ast.kindName(sourceNode);
+    const scalarTarget = rustOptionElementCarrier(targetCarrier) ?? targetCarrier;
+    const knownNumeric = sourceCarrier === undefined || sourceNode === undefined ? undefined
+      : selectRustKnownNumericValueConversion(sourceCarrier, scalarTarget, context.literalValues.literalValue.get(sourceNode));
+    if (knownNumeric !== undefined && sourceNode !== undefined && sourceCarrier !== undefined) {
+      recordRustValueCarrierReconciliation(context.records, context.requiredRecords, sourceNode, { kind: "conversion", fact: {
+        sourceCarrier, targetCarrier,
+        conversion: rustTargetTypeRefEquals(scalarTarget, targetCarrier) ? knownNumeric
+          : { kind: "option-some", source: sourceCarrier, element: scalarTarget, elementConversion: knownNumeric },
+      } });
+      return acceptRustPolicy({ convertedType: targetCarrier }, [
+        { message: "rust selected checked numeric argument uses its native value conversion" },
+      ]);
+    }
     if ((targetCarrier.kind === "function-pointer" || targetCarrier.kind === "closure" ||
       rustCallableProtocol(targetCarrier) !== undefined) &&
       (sourceKind === "KindArrowFunction" || sourceKind === "KindFunctionExpression")) {
@@ -136,7 +149,8 @@ export function selectRustCheckedConversion(
   ) !== undefined;
   const conversion = identity || projectUpcast || projectDowncast
     ? undefined
-    : selectRustSourceAssertionConversion(sourceCarrier, targetCarrier, context.typeDefinitions);
+    : selectRustSourceAssertionConversion(sourceCarrier, targetCarrier,
+      context.literalValues.literalValue.get(request.sourceExpression), context.typeDefinitions);
   if (!identity && !projectUpcast && !projectDowncast && conversion === undefined) {
     return rejectSelectedOperation(
       request.expression,

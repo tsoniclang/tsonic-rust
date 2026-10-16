@@ -33,7 +33,7 @@ test("numeric literal producers preserve each exact native width independently o
       { kind: "int-literal", text: suffix === undefined ? "7" : `7_${suffix}` });
     assertNoTargetDiagnostics(context.diagnostics);
   }
-  for (const [name, text] of [["float32", "7.0_f32"], ["float64", "7.0"]]) {
+  for (const [name, text] of [["float32", "7.0_f32"], ["float64", "7.0_f64"]]) {
     const carrier = rustSourcePrimitiveTargetType(name);
     const { node, context } = contextFor("7", "NumericLiteral", carrier);
     assert.deepEqual(planNumericLiteralWithCarrier(node, carrier, context), { kind: "float-literal", text });
@@ -45,12 +45,13 @@ test("authored float32 rounding and actual checked float64 conversion remain dis
   const authored = contextFor("1.00000005960464477539062500000001", "NumericLiteral", carrier);
   assert.deepEqual(planNumericLiteralWithCarrier(authored.node, carrier, authored.context),
     { kind: "float-literal", text: "1.00000005960464477539062500000001_f32" });
-  const actual = contextFor("1.0000000596046448", "NumericLiteral", carrier, "synthetic");
-  assert.deepEqual(planNumericLiteralWithCarrier(actual.node, carrier, actual.context),
-    { kind: "numeric-cast", expression: { kind: "float-literal", text: "1.0000000596046448_f64" }, target: "f32" });
-  const negativeZero = contextFor("-0", "NumericLiteral", carrier, "synthetic");
-  assert.deepEqual(planNumericLiteralWithCarrier(negativeZero.node, carrier, negativeZero.context),
-    { kind: "numeric-cast", expression: { kind: "unary", operator: "-", operand: { kind: "float-literal", text: "0.0_f64" } }, target: "f32" });
+  const actualCarrier = rustSourcePrimitiveTargetType("float64");
+  const actual = contextFor("1.0000000596046448", "NumericLiteral", actualCarrier, "synthetic");
+  assert.deepEqual(planNumericLiteralWithCarrier(actual.node, actualCarrier, actual.context),
+    { kind: "float-literal", text: "1.0000000596046448_f64" });
+  const negativeZero = contextFor("-0", "NumericLiteral", actualCarrier, "synthetic");
+  assert.deepEqual(planNumericLiteralWithCarrier(negativeZero.node, actualCarrier, negativeZero.context),
+    { kind: "unary", operator: "-", operand: { kind: "float-literal", text: "0.0_f64" } });
   assertNoTargetDiagnostics(authored.context.diagnostics);
   assertNoTargetDiagnostics(actual.context.diagnostics);
   assertNoTargetDiagnostics(negativeZero.context.diagnostics);
@@ -75,7 +76,7 @@ test("Rust owns floating grammar while shared source facts retain neutral decima
       assert.equal(literal?.numeric?.kind === "authored" && literal.numeric.token.decimalText === neutral, true,
         `${name} ${source}: shared spelling`);
       assert.deepEqual(planNumericLiteralWithCarrier(node, carrier, context),
-        { kind: "float-literal", text: name === "float32" ? `${floating}_f32` : floating }, `${name} ${source}: native grammar`);
+        { kind: "float-literal", text: `${floating}_${name === "float32" ? "f32" : "f64"}` }, `${name} ${source}: native grammar`);
       assertNoTargetDiagnostics(context.diagnostics);
     }
   }

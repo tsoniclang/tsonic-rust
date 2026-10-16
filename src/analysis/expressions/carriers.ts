@@ -39,6 +39,7 @@ import {
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { selectRustIntegerTruncationConversion } from "../../policy/conversions/integer-truncation.js";
+import { selectRustKnownNumericValueConversion } from "../../policy/conversions/selection.js";
 
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { recordRustConversionSelection, recordRustOptionProjection, recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
@@ -520,12 +521,14 @@ function applyOptionLane(
       sourceFacts: walk.context.source.sourceFacts }, expression, resolved, scalarTarget);
     const exactInteger = refined ?? (integerConversion === "exact"
       ? selectRustExactIntegerConversion(resolved, scalarTarget) : undefined);
-    if (exactInteger !== undefined || retained?.conversion.kind === "exact-integer" &&
+    const scalarConversion = selectRustKnownNumericValueConversion(resolved, scalarTarget,
+      walk.context.literalValues.literalValue.get(expression)) ?? exactInteger;
+    if (scalarConversion !== undefined || retained?.conversion.kind === "exact-integer" &&
       rustTargetTypeRefEquals(retained.sourceCarrier, resolved) &&
       rustTargetTypeRefEquals(retained.targetCarrier, scalarTarget)) {
       recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, { kind: "conversion", fact: {
         sourceCarrier: resolved, targetCarrier: scalarTarget,
-        conversion: exactInteger ?? retained!.conversion,
+        conversion: scalarConversion ?? retained!.conversion,
       } });
       projected = scalarTarget;
     } else {

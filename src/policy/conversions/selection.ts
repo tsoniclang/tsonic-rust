@@ -1,4 +1,5 @@
 import type { RustValueConversion } from "../../target-model/operations/model.js";
+import type { SourceLiteralValue } from "@tsonic/target-api/source";
 import { selectRustUnionArmMapping, rustUnionProjectionContract, rustUnionLeaves, type RustUnionLeaf } from "../../target-model/types/union-relations.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { rustCallableInputMatches } from "../../target-model/conversions/callable-input.js";
@@ -53,6 +54,25 @@ const float64Carrier = rustSourcePrimitiveTargetType("float64");
 const stringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 const tsValueCarrier = rustTsValueTargetType();
+const float32Carrier = rustSourcePrimitiveTargetType("float32");
+const nativeFloat64ToFloat32Conversion: RustValueConversion = Object.freeze({ kind: "semantic-conversion", id: "native-f64-to-f32" });
+
+export function selectRustKnownNumericValueConversion(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+  sourceLiteral: SourceLiteralValue | undefined,
+): RustValueConversion | undefined {
+  return sourceLiteral?.numeric?.kind === "checked-float64"
+    ? selectNativeFloat64ToFloat32Conversion(source, target) : undefined;
+}
+
+function selectNativeFloat64ToFloat32Conversion(
+  source: TargetTypeRef,
+  target: TargetTypeRef,
+): RustValueConversion | undefined {
+  return rustTargetTypeRefEquals(source, float64Carrier) && rustTargetTypeRefEquals(target, float32Carrier)
+    ? nativeFloat64ToFloat32Conversion : undefined;
+}
 
 export function selectRustSourceValueConversion(
   source: TargetTypeRef,
@@ -266,6 +286,7 @@ export function selectRustSourceValueConversion(
 export function selectRustSourceAssertionConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
+  sourceLiteral: SourceLiteralValue | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueConversion | undefined {
   if (rustUnionProjectionContract(source, target, definitions) !== undefined) return { kind: "union-project", source, target };
@@ -275,6 +296,9 @@ export function selectRustSourceAssertionConversion(
     if (source.name === "native-int") return rustIsizeToInt32ValueConversion;
     if (source.name === "native-uint") return rustUsizeToInt32ValueConversion;
   }
+  const nativeFloat = sourceLiteral?.numeric?.kind === "authored"
+    ? undefined : selectNativeFloat64ToFloat32Conversion(source, target);
+  if (nativeFloat !== undefined) return nativeFloat;
   const conversion = selectRustSourceValueConversion(source, target, definitions);
   return conversion ?? selectRustExactIntegerConversion(source, target);
 }

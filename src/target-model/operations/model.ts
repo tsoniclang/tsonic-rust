@@ -91,6 +91,7 @@ export type RustProviderChainStep =
   | { readonly kind: "copy-selected-carrier" };
 
 export type RustValueConversionId =
+  | "native-f64-to-f32"
   | "js-string-number-from-string"
   | "js-string-number-from-number"
   | "js-string-number-from-int32"
