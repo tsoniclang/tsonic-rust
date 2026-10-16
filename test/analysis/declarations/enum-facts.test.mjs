@@ -9,7 +9,8 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { admitRustNativeValueDeclaration } from "../../../dist/analysis/declarations/native-value-declarations.js";
 
 function enumDeclarations(source) {
-  return source.ast.statements(source.getSourceFile("/src/index.ts"))
+  const file = source.sourceFiles.find(sourceFile => source.ast.getFileName(sourceFile) === "/src/index.ts");
+  return source.ast.statements(file)
     .filter(declaration => source.ast.kindName(declaration) === "KindEnumDeclaration");
 }
 

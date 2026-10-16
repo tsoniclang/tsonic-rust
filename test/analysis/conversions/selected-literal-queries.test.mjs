@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompilerSessionFromFiles } from "@tsonic/tsts";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { analyzeSourceLiteralValues, createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { normalizeSelectedLiteralCarrier } from "../../../dist/analysis/expressions/selected-literals.js";
 import { rustPostCheckUnaryMinusOperationId } from "../../../dist/target-model/operations/model.js";
@@ -41,7 +41,8 @@ function fixture(expression) {
   assert.equal(node !== undefined, true);
   const builder = createRustProgramRecordBuilder();
   const tracked = track(builder);
-  const context = { ast: source.ast, records: tracked.records, requiredRecords: [] };
+  const context = { ast: source.ast, records: tracked.records, requiredRecords: [],
+    literalValues: analyzeSourceLiteralValues(source.ast, source.sourceFiles) };
   const options = { sourceTypes: { enumVariantForLiteral: () => undefined } };
   return { node, builder, context, options, admissions: tracked.admissions,
     select: (actual, expected) => normalizeSelectedLiteralCarrier(node, actual, expected, context, options) };
