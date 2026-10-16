@@ -40,6 +40,7 @@ export function selectRustProducerError(
   if (bindings === undefined) return undefined;
   const { types, lifetimes, consts } = bindings;
   const asynchronous = input.records.asyncFunction.get(producer.declaration);
+  if (reference.channel === "body" && asynchronous === undefined) return undefined;
   const suspended = asynchronous !== undefined || input.records.generator.get(producer.declaration) !== undefined;
   if (reference.channel === "invoke" && suspended) return Object.freeze({ kind: "carrier",
     carrier: Object.freeze({ kind: "target-named", id: rustInfallibleTargetId }) });
@@ -47,7 +48,7 @@ export function selectRustProducerError(
   if (reference.channel === "invoke" && closure?.kind === "closure" &&
     rustTargetTypeRefEquals(rustCallableProtocol(closure.resultCarrier)?.error, rustJsValueTargetType()))
     return Object.freeze({ kind: "carrier", carrier: rustJsValueTargetType() });
-  if (reference.channel !== "invoke") {
+  if (reference.channel !== "invoke" && reference.channel !== "body") {
     const result = asynchronous?.futureCarrier ??
       input.records.sourceCallableReturn.get(producer.declaration)?.returnCarrier;
     const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, input.definitions);
