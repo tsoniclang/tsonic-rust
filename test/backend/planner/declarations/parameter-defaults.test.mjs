@@ -1,7 +1,7 @@
 import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, rustSourceText } from "../../../helpers/rust-session.mjs";
 
 import { planRustCallableParameters, planRustCallableParameterPrelude } from "../../../../dist/backend/planner/declarations/callables/parameters.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
@@ -66,4 +66,23 @@ test("an absent default preserves the native parameter and independently require
       init: { kind: "path", path: "value" } }] : [],
     "no redundant native alias, while an actual mutability transition remains intact");
   }
+});
+
+test("a forwarding Promise adapter applies default and destructuring effects only in its canonical body", () => {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+let calls: int32 = 0;
+function next(): [int32] { calls += 1; return [calls]; }
+export async function read([value]: [int32] = next(), pending: Promise<void>): Promise<int32> {
+  await pending;
+  return value;
+}` } });
+  assert.deepEqual(result.diagnostics.map(issue => `${issue.code}: ${issue.message}`), []);
+  const rust = rustSourceText(result);
+  assert.equal((rust.match(/\bnext\(\)/gu) ?? []).length, 2, "one declaration and one actual default evaluation");
+  const adapter = rust.match(/pub fn read\([\s\S]*?(?=\npub|\nfn|\nasync fn|$)/u)?.[0];
+  assert.equal(adapter !== undefined, true, "a real demanded Promise adapter is emitted");
+  assert.equal(adapter.includes("next()"), false, "the adapter does not repeat default effects");
+  assert.equal(adapter.includes("let value"), false, "the adapter does not destructure again");
+  assert.match(adapter, /read_native\(binding_parameter, pending\)/u);
 });

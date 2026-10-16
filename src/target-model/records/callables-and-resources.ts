@@ -58,6 +58,7 @@ export interface RustSettledPromiseAwait {
 
 export interface RustPromiseBodyDeclaration {
   readonly name: string;
+  readonly visibility: "private" | "crate";
 }
 
 export interface RustPromiseBodies {

@@ -1,6 +1,8 @@
 import type {
   TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
+import type { AstReader, SourceFile } from "@tsonic/tsts";
+import type { TargetCompileInput } from "@tsonic/target-api";
 import type {
   RustErrorDomain,
 } from "../../target-model/operations/error-boundary.js";
@@ -45,12 +47,24 @@ export type AnalyzeRustSourcePackageComponentsResult =
       readonly diagnostics: readonly TargetDiagnostic[];
     };
 
-export function analyzeRustSourcePackageComponents(
-  context: RustAnalysisContext,
-  outputType: "bin" | "lib",
-): AnalyzeRustSourcePackageComponentsResult {
+export interface RustSourcePackageComponentIdentities {
+  readonly rootComponentId: string;
+  readonly componentById: ReadonlyMap<string, TargetCompileInput["sourcePackages"]["components"][number]>;
+  readonly sourceFileNamesByComponent: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly activeComponentIds: ReadonlySet<string>;
+  componentIdForFile(fileName: string): string | undefined;
+}
+
+export type SelectRustSourcePackageComponentIdentitiesResult =
+  | { readonly kind: "resolved"; readonly identities: RustSourcePackageComponentIdentities }
+  | Extract<AnalyzeRustSourcePackageComponentsResult, { readonly kind: "rejected" }>;
+
+export function selectRustSourcePackageComponentIdentities(
+  graph: TargetCompileInput["sourcePackages"],
+  ast: AstReader,
+  sourceFiles: readonly SourceFile[],
+): SelectRustSourcePackageComponentIdentitiesResult {
   const diagnostics: TargetDiagnostic[] = [];
-  const graph = context.sourcePackages;
   const componentById = new Map(graph.components.map((component) =>
     [component.id, component] as const));
   const rootPackage = graph.packages.find((sourcePackage) =>
@@ -80,8 +94,8 @@ export function analyzeRustSourcePackageComponents(
 
   const sourceFileNamesByComponent = new Map<string, Set<string>>();
   const activeComponentIds = new Set<string>([rootPackage.componentId]);
-  for (const sourceFile of context.sourceFiles) {
-    const fileName = context.ast.getFileName(sourceFile);
+  for (const sourceFile of sourceFiles) {
+    const fileName = ast.getFileName(sourceFile);
     const componentId = componentIdByFileName.get(normalizePath(fileName));
     if (componentId === undefined) {
       diagnostics.push(componentDiagnostic(
@@ -98,6 +112,26 @@ export function analyzeRustSourcePackageComponents(
   if (diagnostics.length > 0) {
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
+  return { kind: "resolved", identities: Object.freeze({
+    rootComponentId: rootPackage.componentId,
+    componentById,
+    sourceFileNamesByComponent,
+    activeComponentIds,
+    componentIdForFile(fileName: string) {
+      return componentIdByFileName.get(normalizePath(fileName));
+    },
+  }) };
+}
+
+export function analyzeRustSourcePackageComponents(
+  context: RustAnalysisContext,
+  outputType: "bin" | "lib",
+): AnalyzeRustSourcePackageComponentsResult {
+  const selected = context.sourcePackageComponentIdentities;
+  if (selected.kind === "rejected") return selected;
+  const identities = selected.identities;
+  const { componentById, sourceFileNamesByComponent, activeComponentIds, rootComponentId } = identities;
+  const diagnostics: TargetDiagnostic[] = [];
 
   const dependencies = new Map<string, ReadonlySet<string>>();
   const reachable = (componentId: string): ReadonlySet<string> => {
@@ -125,7 +159,7 @@ export function analyzeRustSourcePackageComponents(
     return selected;
   };
   for (const file of context.sourceFiles) {
-    const component = componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
+    const component = identities.componentIdForFile(context.ast.getFileName(file));
     if (component === undefined) continue;
     const visited = new Set<TargetTypeRef>();
     const inspected = new Set<string>();
@@ -135,7 +169,7 @@ export function analyzeRustSourcePackageComponents(
       const definition = generic.physical.existingSelectionFor(carrier)?.definition;
       if (definition !== undefined && !inspected.has(definition.identity)) {
         inspected.add(definition.identity);
-        const owner = componentIdByFileName.get(normalizePath(definition.ownerFileName));
+        const owner = identities.componentIdForFile(definition.ownerFileName);
         if (owner === undefined || !reachable(component).has(owner)) diagnostics.push(componentDiagnostic(
           "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
           "A generic callable's native implementation is not owned by this source package or a declared dependency; an upstream package cannot name a downstream environment.",
@@ -167,9 +201,9 @@ export function analyzeRustSourcePackageComponents(
     visit(file);
   }
   for (const definition of generic.physical.definitions()) {
-    const owner = componentIdByFileName.get(normalizePath(definition.ownerFileName));
+    const owner = identities.componentIdForFile(definition.ownerFileName);
     if (owner === undefined || definition.implementations.some(implementation => {
-      const member = componentIdByFileName.get(normalizePath(implementation.sourceFileName));
+      const member = identities.componentIdForFile(implementation.sourceFileName);
       return member === undefined || !reachable(owner).has(member);
     })) diagnostics.push(componentDiagnostic(
       "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
@@ -212,7 +246,7 @@ export function analyzeRustSourcePackageComponents(
     visited.add(componentId);
     order.push(componentId);
   };
-  visit(rootPackage.componentId);
+  visit(rootComponentId);
   for (const componentId of [...activeComponentIds].sort(compareNames)) {
     visit(componentId);
   }
@@ -224,7 +258,7 @@ export function analyzeRustSourcePackageComponents(
   const closedErrorsByComponent = new Map<string, { thrownCarriers: TargetTypeRef[]; retained: boolean; sourceView: boolean }>();
   for (const sourceFile of context.sourceFiles) {
     const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.records, context.typeDefinitions, context.projectTypes);
-    const componentId = componentIdByFileName.get(normalizePath(context.ast.getFileName(sourceFile)));
+    const componentId = identities.componentIdForFile(context.ast.getFileName(sourceFile));
     if (demand === undefined) return rejected("RUST_CLOSED_ERROR_DEMAND_UNRESOLVED",
       "Closed Error demand exceeds its bounded exact source-tree contract.");
     if (componentId === undefined) return rejected("RUST_CLOSED_ERROR_SOURCE_PACKAGE_MISSING",
@@ -240,7 +274,7 @@ export function analyzeRustSourcePackageComponents(
   }
   for (const boundary of context.errorStorageDemands.retainedBoundaries) {
     const file = context.ast.getSourceFile(boundary);
-    const componentId = file === undefined ? undefined : componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
+    const componentId = file === undefined ? undefined : identities.componentIdForFile(context.ast.getFileName(file));
     if (componentId === undefined) diagnostics.push(componentDiagnostic("RUST_RETAINED_ERROR_SOURCE_PACKAGE_MISSING",
       "Selected native Error retention has no exact source-package component identity."));
     else errorComponents.add(componentId);
@@ -248,16 +282,14 @@ export function analyzeRustSourcePackageComponents(
   for (const constructor of context.errorStorageDemands.nativeConstructors) {
     if (context.errorStorageDemands.storageFor(constructor).kind !== "writable") continue;
     const file = context.ast.getSourceFile(constructor.node);
-    const componentId = file === undefined ? undefined : componentIdByFileName.get(normalizePath(context.ast.getFileName(file)));
+    const componentId = file === undefined ? undefined : identities.componentIdForFile(context.ast.getFileName(file));
     if (componentId === undefined) {
       diagnostics.push(componentDiagnostic("RUST_NATIVE_ERROR_SOURCE_PACKAGE_MISSING",
         "Demanded writable Error storage has no exact source-package component identity."));
     } else errorComponents.add(componentId);
   }
   for (const definition of context.projectTypes.programErrorDefinitions) {
-    const componentId = componentIdByFileName.get(
-      normalizePath(definition.fileName),
-    );
+    const componentId = identities.componentIdForFile(definition.fileName);
     if (componentId === undefined || !activeComponentIds.has(componentId)) {
       diagnostics.push(componentDiagnostic(
         "RUST_PROJECT_ERROR_SOURCE_PACKAGE_MISSING",
@@ -284,7 +316,7 @@ export function analyzeRustSourcePackageComponents(
   const components = Object.freeze(order.map(
     (componentId): RustSourcePackageComponentSemantics => {
       const component = componentById.get(componentId)!;
-      const root = componentId === rootPackage.componentId;
+      const root = componentId === rootComponentId;
       return Object.freeze({
         componentId,
         sourceFileNames: Object.freeze([
@@ -307,22 +339,20 @@ export function analyzeRustSourcePackageComponents(
   ));
   const byComponentId = new Map(components.map((component) =>
     [component.componentId, component] as const));
-  const byFileName = new Map(components.flatMap((component) =>
-    component.sourceFileNames.map((fileName) =>
-      [normalizePath(fileName), component] as const)));
   const plan: RustSourcePackageComponentClassifications = {
     components,
-    rootComponentId: rootPackage.componentId,
+    rootComponentId,
     forComponent(componentId: string) {
       return byComponentId.get(componentId);
     },
     componentForFile(fileName: string) {
-      return byFileName.get(normalizePath(fileName));
+      const componentId = identities.componentIdForFile(fileName);
+      return componentId === undefined ? undefined : byComponentId.get(componentId);
     },
     canReferenceFile(fromFileName: string, targetFileName: string) {
-      const from = byFileName.get(normalizePath(fromFileName));
-      const target = byFileName.get(normalizePath(targetFileName));
-      return from !== undefined && target !== undefined && reachable(from.componentId).has(target.componentId);
+      const from = identities.componentIdForFile(fromFileName);
+      const target = identities.componentIdForFile(targetFileName);
+      return from !== undefined && target !== undefined && reachable(from).has(target);
     },
   };
   return {
@@ -334,7 +364,7 @@ export function analyzeRustSourcePackageComponents(
 function rejected(
   code: string,
   message: string,
-): AnalyzeRustSourcePackageComponentsResult {
+): Extract<AnalyzeRustSourcePackageComponentsResult, { readonly kind: "rejected" }> {
   return {
     kind: "rejected",
     diagnostics: Object.freeze([componentDiagnostic(code, message)]),

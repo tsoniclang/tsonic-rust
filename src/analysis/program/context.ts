@@ -90,6 +90,8 @@ import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/promise-bodies.js";
+import { selectRustSourcePackageComponentIdentities,
+  type SelectRustSourcePackageComponentIdentitiesResult } from "./source-package-components.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
@@ -107,6 +109,7 @@ export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourcePackages: TargetCompileInput["sourcePackages"];
+  readonly sourcePackageComponentIdentities: SelectRustSourcePackageComponentIdentitiesResult;
   readonly rootPublishesLibrary: boolean;
   readonly records: RustProgramRecordBuilder;
   readonly requiredRecords: RustRequiredRecord[];
@@ -149,6 +152,7 @@ export function createRustAnalysisContext(
   );
   const literalValues = analyzeSourceLiteralValues(ast, sourceFiles);
   const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues);
+  const sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(input.sourcePackages, ast, sourceFiles);
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
     sourceFiles,
@@ -209,6 +213,7 @@ export function createRustAnalysisContext(
     ast,
     sourceFiles,
     sourcePackages: input.sourcePackages,
+    sourcePackageComponentIdentities,
     promiseResultUses,
     promiseBodies: createRustPromiseBodySelection(),
     rootPublishesLibrary,
@@ -232,6 +237,7 @@ export function createRustAnalysisContext(
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
     diagnostics: [...numericLiteralAdmission, ...names.diagnostics, ...lifetimes.diagnostics,
+      ...(sourcePackageComponentIdentities.kind === "rejected" ? sourcePackageComponentIdentities.diagnostics : []),
       ...(receiverOccurrences.kind === "unresolved" ? [{ code: "RUST_RECEIVER_OCCURRENCES_UNRESOLVED",
         category: "error" as const, source: "tsonic-rust", message: receiverOccurrences.reason,
         evidence: ["target.capability=rust.analysis.ownership"] }] : []),

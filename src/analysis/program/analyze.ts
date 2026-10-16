@@ -61,6 +61,8 @@ import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carri
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 
 export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFunctionQueries | undefined {
+  if (context.sourcePackageComponentIdentities.kind === "rejected") return;
+  const sourcePackageIdentities = context.sourcePackageComponentIdentities.identities;
   const { ast } = context;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = context.source.sourceFiles;
   if (!isDenseDataArray(rawSourceFiles) || rawSourceFiles.some((sourceFile) => sourceFile === undefined)) {
@@ -89,6 +91,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   const { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations } = collectSourcePackageBoundaries(
     context,
     projectSourceFiles,
+    sourcePackageIdentities.rootComponentId,
   );
   for (const declaration of publishedDeclarations) context.promiseBodies.expose(declaration, declaration);
   const promotedStorageDeclarations = new Set<Node>();
@@ -216,8 +219,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       return rustProjectCallableTargetName(declaration, context);
     },
     sourcePackageComponentForFile(fileName) {
-      return context.sourcePackages.packages.find((entry) =>
-        entry.sourceFiles.includes(fileName))?.componentId;
+      return sourcePackageIdentities.componentIdForFile(fileName);
     },
     resolveSelectedType(authoredTypeNode, selectedType, heritage) {
       return resolveRustTargetTypeRef(
@@ -518,11 +520,9 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   recordRustTypeOnlyDeclarations(walk, projectSourceFiles);
   closeRustInheritedStructuralViews(walk);
   const structuralObjects = sourceTypes.structuralObjects();
-  const sourcePackageComponentByFile = new Map(context.sourcePackages.packages.flatMap((entry) =>
-    entry.sourceFiles.map((fileName) => [fileName, entry.componentId] as const)));
   for (const shape of structuralObjects) {
     const ownerFileName = rustStructuralObjectCarrierValue(shape.carrier)?.ownerFileName;
-    if (ownerFileName === undefined || !sourcePackageComponentByFile.has(ownerFileName)) {
+    if (ownerFileName === undefined || sourcePackageIdentities.componentIdForFile(ownerFileName) === undefined) {
       appendRustDiagnostic(
         walk,
         "RUST_STRUCTURAL_SHAPE_SOURCE_PACKAGE_MISSING",
@@ -536,10 +536,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   context.structuralShapes.initialize(
     structuralObjects,
     sourceTypes.structuralFieldImplementations(),
-    (fileName) => sourcePackageComponentByFile.get(fileName)!,
+    (fileName) => sourcePackageIdentities.componentIdForFile(fileName)!,
     nativeFields,
     sourceTypes.structuralInstantiations(),
-    walk.context.records.receiverIndependentMethods.finalize(walk, projectSourceFiles, fileName => sourcePackageComponentByFile.get(fileName)!),
+    walk.context.records.receiverIndependentMethods.finalize(walk, projectSourceFiles,
+      fileName => sourcePackageIdentities.componentIdForFile(fileName)!),
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
     representations: context.objectRepresentations, structuralShapes: context.structuralShapes,
@@ -590,6 +591,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
 function collectSourcePackageBoundaries(
   context: RustAnalysisContext,
   sourceFiles: readonly SourceFile[],
+  rootComponentId: string,
 ): {
   readonly externallyExtensibleDeclarations: ReadonlySet<Node>;
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
@@ -598,15 +600,10 @@ function collectSourcePackageBoundaries(
   const externallyExtensibleDeclarations = new Set<Node>();
   const closedSourceFiles = new Set<SourceFile>();
   const publishedDeclarations = new Set<Node>();
-  const rootPackage = context.sourcePackages.packages.find((sourcePackage) =>
-    sourcePackage.id === context.sourcePackages.rootPackageId);
-  if (rootPackage === undefined) {
-    return { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations };
-  }
   const sourceFileByName = new Map(sourceFiles.map((sourceFile) =>
     [normalizeSourceFileName(context.ast.getFileName(sourceFile)), sourceFile] as const));
   for (const sourcePackage of context.sourcePackages.packages) {
-    const publishesLibrary = sourcePackage.componentId !== rootPackage.componentId ||
+    const publishesLibrary = sourcePackage.componentId !== rootComponentId ||
       context.rootPublishesLibrary;
     if (!context.rootPublishesLibrary) {
       for (const fileName of sourcePackage.sourceFiles) {

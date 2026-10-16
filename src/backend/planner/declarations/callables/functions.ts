@@ -52,6 +52,37 @@ interface RustFunctionItemPlan {
   readonly helper: RustItem | undefined;
 }
 
+function planRustFunctionParameters(
+  node: Node,
+  inputContext: RustPlanContext,
+  requiredStaticParameters: readonly Node[],
+) {
+  const { ast } = inputContext.input.program.source;
+  const syntheticNames = createRustSyntheticNameState(ast, node, []);
+  const environment = planRustLexicalFunctionEnvironment(node, { ...inputContext, syntheticNames });
+  if (environment === undefined) return undefined;
+  const parameterPlan = planRustCallableParameters(node, environment.context, syntheticNames, {
+    requiredStaticParameters,
+  });
+  if (parameterPlan === undefined) return undefined;
+  const operation = environment.context.input.program.records.targetOperation.get(node);
+  const leading = planRustCallableLeadingParameters(node,
+    operation?.kind === "closure" ? operation.leadingParameters ?? [] : [], environment.context);
+  if (leading === undefined) return undefined;
+  const leadingParams = leading.parameters.map(parameter => {
+    const type = rustTypeFromCarrierInContext(parameter.carrier, environment.context);
+    return type === undefined ? undefined : { name: parameter.name, type };
+  });
+  if (leadingParams.some(parameter => parameter === undefined)) return undefined;
+  return {
+    params: [...leadingParams as NonNullable<typeof leadingParams[number]>[],
+      ...parameterPlan.params, ...environment.parameters],
+    parameterPlan,
+    syntheticNames,
+    context: leading.context,
+  };
+}
+
 export function planFunctionDeclarations(
   node: Node,
   outerContext: RustPlanContext,
@@ -186,34 +217,14 @@ function planRustFunctionItem(
   if (genericPlan.preservesExplicitLifetimes) {
     declarationAttributes.push(rustLintAttributes.needlessLifetimes);
   }
-  const syntheticNames = createRustSyntheticNameState(ast, node, []);
-  const environment = planRustLexicalFunctionEnvironment(node, { ...context, syntheticNames });
-  if (environment === undefined) return undefined;
-  context = environment.context;
-  const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
-    ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        nativeBody === undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-      ? {
-          requiredStaticParameters: generatorFact?.capturedParameters ??
-            (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-              ? asyncFact.lowering.capturedParameters : []),
-        }
-      : {}),
-  });
-  if (parameterPlan === undefined) {
-    return undefined;
-  }
-  const operation = context.input.program.records.targetOperation.get(node);
-  const leading = planRustCallableLeadingParameters(node, operation?.kind === "closure" ? operation.leadingParameters ?? [] : [],
-    { ...context, syntheticNames });
-  if (leading === undefined) return undefined;
-  const leadingParams = leading.parameters.map(parameter => {
-    const type = rustTypeFromCarrierInContext(parameter.carrier, context);
-    return type === undefined ? undefined : { name: parameter.name, type };
-  });
-  if (leadingParams.some(parameter => parameter === undefined)) return undefined;
-  context = leading.context;
-  const params = [...leadingParams as NonNullable<typeof leadingParams[number]>[], ...parameterPlan.params, ...environment.parameters];
+  const parameters = planRustFunctionParameters(node, context,
+    generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
+      ? generatorFact.capturedParameters
+      : nativeBody === undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+        ? asyncFact.lowering.capturedParameters : []);
+  if (parameters === undefined) return undefined;
+  const { params, parameterPlan, syntheticNames } = parameters;
+  context = parameters.context;
   const returnTypeNode = Node_Type(ast, node);
   const sourceReturn = context.input.program.records.sourceCallableReturn.get(node);
   const returnCarrier = generatorFact?.resultCarrier ?? asyncFact?.outputCarrier ??
@@ -413,7 +424,7 @@ function planRustFunctionItem(
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name: nativeBody?.name ?? name,
-    visibility,
+    visibility: nativeBody === undefined ? visibility : nativeBody.visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
     ...(declarationAttributes.length === 0
       ? {}
@@ -434,25 +445,26 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   const adapterGenerics = planRustCallableGenerics(node, outerContext, specialization, lexical?.genericParameters);
   if (adapterGenerics === undefined) return undefined;
-  const adapterContext: RustPlanContext = { ...adapterGenerics.context, syntheticNames: createRustSyntheticNameState(ast, node, []) };
-  const adapterParameters = planRustCallableParameters(node, adapterContext, adapterContext.syntheticNames!, {
-    requiredStaticParameters: asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-      ? asyncFact.lowering.capturedParameters : [],
-  });
-  if (adapterParameters === undefined || asyncFact?.kind !== "js-promise" ||
+  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context,
+    asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+      ? asyncFact.lowering.capturedParameters : []);
+  if (adapterParameters === undefined) return undefined;
+  const adapterContext = adapterParameters.context;
+  if (asyncFact?.kind !== "js-promise" ||
     !requireRustCarrierRequirements(asyncFact.outputCarrier,
       asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], node, adapterContext)) return undefined;
   const adapterReturn = resolveRustJsPromiseReturnType(node, adapterContext);
   const adapterBody = planRustPromiseBodyObjectAdapter(node, { kind: "call", path: nativeBody.name,
     genericArguments: rustPromiseBodyGenericArguments(generics),
-    args: params.map(parameter => ({ kind: "path", path: parameter.name })),
+    args: adapterParameters.params.map(parameter => ({ kind: "path", path: parameter.name })),
   }, callableErrorBoundary, adapterContext);
   if (adapterReturn === undefined || adapterBody === undefined) return undefined;
   const helper: RustItem = { kind: "function", name, visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
     ...(declarationAttributes.length === 0 ? {} : { attrs: declarationAttributes }),
     ...(isUnsafe ? { isUnsafe: true } : {}),
-    generics: adapterGenerics.finalizeGenerics(), params, returnType: adapterReturn, body: adapterBody };
+    generics: adapterGenerics.finalizeGenerics(), params: adapterParameters.params,
+    returnType: adapterReturn, body: adapterBody };
   return Object.freeze({ item, helper });
 }
 import { planRustReturnValueExpression } from "../../expressions/value-destinations.js";

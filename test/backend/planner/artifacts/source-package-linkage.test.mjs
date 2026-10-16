@@ -7,6 +7,7 @@ import {
 } from "../../../../dist/backend/planner/program/source-package-components.js";
 import {
   analyzeRustSourcePackageComponents,
+  selectRustSourcePackageComponentIdentities,
 } from "../../../../dist/analysis/program/source-package-components.js";
 import {
   planRustSourcePackageCargo,
@@ -116,7 +117,7 @@ test("library roots retain exact facade linkage and component cycles fail closed
   assert.equal(Object.hasOwn(library.components[0], "targetLinkage"), false);
   assert.equal(library.components[0].publishesImplementationAbi, true);
 
-  const cycle = analyzeRustSourcePackageComponents({
+  const cycleContext = {
     sourcePackages: {
       rootPackageId: "root-package",
       packages: [{
@@ -141,6 +142,10 @@ test("library roots retain exact facade linkage and component cycles fail closed
     callableValues: { generic: { definitions: [], definitionFor: () => undefined } },
     records: createRustRecordFixture({}),
     projectTypes: { programErrorDefinitions: [] },
+  };
+  const cycle = analyzeRustSourcePackageComponents({ ...cycleContext,
+    sourcePackageComponentIdentities: selectRustSourcePackageComponentIdentities(cycleContext.sourcePackages,
+      cycleContext.ast, cycleContext.sourceFiles),
   }, "bin");
   assert.equal(cycle.kind, "rejected");
   assert.deepEqual(cycle.diagnostics.map((diagnostic) => diagnostic.code), [
