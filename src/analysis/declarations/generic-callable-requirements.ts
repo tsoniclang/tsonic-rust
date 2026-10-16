@@ -58,6 +58,7 @@ import { rustSourceCallCallableStorageCarrier } from "../operations/target-opera
 import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 import { rustProjectViewBindings } from "../objects/view-implementations.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
+import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
 import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
 
@@ -82,6 +83,7 @@ interface ClassifyCallableInput {
   readonly idByDeclaration: WeakMap<Node, string>;
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
+  readonly errorRegions: RustAnalyzedErrorRegions;
 }
 
 export function classifyRustCallableRequirements(input: ClassifyCallableInput):
@@ -199,6 +201,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   }
   const asynchronous = records.asyncFunction.get(declaration);
   if (asynchronous?.kind === "js-promise") {
+    const rejection = input.errorRegions.get(declaration)?.jsRejection;
+    if (rejection === undefined) return { kind: "rejected", reason: "A JS Promise body has no selected rejection region." };
+    for (const carrier of rejection.requiredCarriers) {
+      const error = addUse(declaration, carrier, ["js-rejection"]);
+      if (error !== undefined) return { kind: "rejected", reason: error };
+    }
     const lowering = asynchronous.lowering;
     const error = addUse(
       declaration,

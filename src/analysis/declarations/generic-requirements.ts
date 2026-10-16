@@ -41,6 +41,7 @@ import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js"
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
+import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
@@ -99,6 +100,7 @@ export function analyzeRustDeclarationGenericRequirements(
   structuralViews: readonly RustProjectStructuralView[],
   frameCallables: RustFrameCallablePlan,
   nativeCallables: RustNativeCallableInputPlan,
+  errorRegions: RustAnalyzedErrorRegions,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -182,6 +184,7 @@ export function analyzeRustDeclarationGenericRequirements(
         objectRepresentations,
         genericCallables,
         nativeCallables,
+        errorRegions,
         frameCallables,
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
