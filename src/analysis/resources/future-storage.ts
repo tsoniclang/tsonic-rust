@@ -71,8 +71,11 @@ export function rustStoredFutureValues(
       const original = futureForProducer(walk, producer, leaf.carrier);
       const owner = sourceEnclosingCallable(producer, ast);
       if (original === undefined || owner === undefined) return undefined;
+      const generics = walk.context.callableValues.nativeStorage.genericBindingsFor(owner, source.bindings);
+      if (generics.kind !== "resolved") return undefined;
       const substitution = rebind.bindingsFor(node, owner, [leaf.carrier,
-        ...(original.errorCarrier === undefined ? [] : [original.errorCarrier])], source.bindings);
+        ...(original.errorCarrier === undefined ? [] : [original.errorCarrier])],
+        { storageBindings: source.bindings, genericBindings: generics.bindings });
       if (substitution === undefined) return undefined;
       const outputCarrier = substitution.substitute(original.outputCarrier);
       const awaitedConversion = substituteFutureConversion(original.awaitedConversion, substitution, definitions);
