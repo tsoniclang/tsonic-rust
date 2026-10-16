@@ -321,13 +321,6 @@ export function analyzeRustTargetProgram(
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
-  const typeFamilies = context.typeFamilies.seal();
-  const enumMemberConstants = analyzeRustEnumMemberConstants(context.source, context.sourceFiles);
-  const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
-    names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
-    objectRepresentations, enumMemberConstants, typeFamilies,
-    genericRequirements: declarationGenericRequirements.index });
-  if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
     sourcePackageComponents: sourcePackageComponents.plan, errorStorageDemands: context.errorStorageDemands });
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
@@ -346,11 +339,10 @@ export function analyzeRustTargetProgram(
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
-  const program: Omit<RustTargetProgram, "reachability" | "records"> & {
+  const program: Omit<RustTargetProgram, "reachability" | "records" | "nativeDeclarations"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
     sourceOutputIdentities: sourceOutputIdentities.identities,
-    nativeDeclarations: nativeDeclarations.forms,
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
@@ -372,7 +364,7 @@ export function analyzeRustTargetProgram(
     sourceNavigation: snapshotTargetPlanningSourceNavigation(context.source),
     sourceFiles: context.sourceFiles,
     records: finalRecords,
-    typeFamilies,
+    typeFamilies: context.typeFamilies.seal(),
     typeDefinitions,
     projectTypes,
     errorTransport: errorTransport.value,
@@ -427,9 +419,16 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
+  const enumMemberConstants = analyzeRustEnumMemberConstants(context.source, context.sourceFiles);
+  const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
+    names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
+    objectRepresentations, enumMemberConstants, typeFamilies: program.typeFamilies,
+    genericRequirements: declarationGenericRequirements.index });
+  if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const reachability = analyzeRustReachability(program);
   context.callableValues.publish();
   return resolvedTargetStage(Object.freeze({ ...program,
+    nativeDeclarations: nativeDeclarations.forms,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
     reachability }));
 }

@@ -4,7 +4,7 @@ import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
+import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import * as backendNames from "../../../dist/backend/planner/names/source-output-identities.js";
 
@@ -181,4 +181,43 @@ class Entry {
   assert.equal(rustProjectCallableTargetName(exact, context), "value_9007199254740993", "the callable consumer uses the same selected native key");
   assert.equal(names.nameForDeclaration(exponent), "value_100", "exponent spelling is normalized by the shared owner");
   assert.equal(rustProjectCallableTargetName(exponent, context), "value_100", "numeric callable names consume the canonical key");
+});
+
+test("native declaration admission preserves base-accepted local and unreachable declarations", () => {
+  for (const [label, body] of [
+    ["local alias after return", "return 1; type Unused = number;"],
+    ["local interface after return", "return 1; interface Unused { value: number; }"],
+    ["constant-false local alias", "if (false) { type Unused = number; } return 1;"],
+    ["constant-false local interface", "if (false) { interface Unused { value: number; } } return 1;"],
+    ["enum in unused nested function", 'function unused(): void { enum Unused { value = "text" } } return 1;'],
+  ]) {
+    const { result } = compileRust({ files: { "index.ts": `export function read(): number { ${body} }` } });
+    assert.equal(result.diagnostics.length, 0, `${label}: ${result.diagnostics.map(issue => issue.code).join(",")}`);
+    const text = artifactText(result, "src/index.rs");
+    assert.match(text, /pub fn read\(/u, `${label}: the actually participating native function is retained`);
+    assert.doesNotMatch(text, /(?:enum|struct|type) Unused\b/u, `${label}: no nonparticipating native declaration is emitted`);
+  }
+});
+
+test("sealed family implementations have completed contracts and missing contracts are internal invariants", async () => {
+  const { compoundTypeFamilyOwnerFiles } = await import("../../fixtures/compound-type-family-owners.mjs");
+  const { analyzeRustNativeDeclarationForms } = await import("../../../dist/analysis/declarations/native-forms.js");
+  const { source, program } = analyzeRust({ files: compoundTypeFamilyOwnerFiles, packages: [acmeTestingPackage()] });
+  assert.equal(program.typeFamilies.implementations.length > 0, true, "the checked fixture registers actual native family implementations");
+  for (const implementation of program.typeFamilies.implementations) {
+    const contract = program.declarationGenericRequirements.contractForCarrier({ kind: "tuple",
+      elements: [implementation.owner, implementation.output] });
+    assert.equal(contract !== undefined, true, "every implementation is covered by the completed generic-requirement closure");
+  }
+  assert.equal(program.nativeDeclarations.implementations.length, program.typeFamilies.implementations.length,
+    "admission covers the complete finally sealed implementation domain in its existing order");
+  assert.throws(() => analyzeRustNativeDeclarationForms({ ast: source.ast, sourceFiles: program.sourceFiles,
+    records: program.records, names: program.names, projectTypes: program.projectTypes,
+    typeDefinitions: program.typeDefinitions, sourceLifetimes: program.sourceLifetimes,
+    enumMemberConstants: { forMember: () => undefined }, objectRepresentations: program.objectRepresentations,
+    typeFamilies: program.typeFamilies,
+    genericRequirements: { ...program.declarationGenericRequirements, contractForCarrier: () => undefined },
+  }), error => error instanceof Error && error.message.includes(
+    "A sealed type-family implementation has no completed native generic requirement contract."),
+  "a broken completed internal contract cannot become a user source rejection");
 });

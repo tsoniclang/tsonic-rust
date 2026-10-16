@@ -1,5 +1,6 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "../../target-model/records/native-declaration-forms.js";
 import { admitRustNativeValueDeclaration, type RustNativeValueDeclarationInput } from "./native-value-declarations.js";
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
@@ -15,23 +16,26 @@ export function analyzeRustNativeDeclarationForms(
 ): AnalyzeRustNativeDeclarationFormsResult {
   const forms = new WeakMap<Node, RustNativeDeclarationForm>();
   const diagnostics: TargetDiagnostic[] = [];
-  const visit = (node: Node): void => {
-    const kind = input.ast.kindName(node);
-    if (kind === "KindEnumDeclaration" || kind === "KindInterfaceDeclaration" || kind === "KindTypeAliasDeclaration") {
-      const admitted = admitRustNativeValueDeclaration(node, input);
-      if (admitted.kind === "accepted") forms.set(node, admitted.form);
+  for (const sourceFile of input.sourceFiles) {
+    for (const declaration of input.ast.statements(sourceFile)) {
+      if (declaration === undefined) continue;
+      const kind = input.ast.kindName(declaration);
+      if (kind !== "KindEnumDeclaration" && kind !== "KindInterfaceDeclaration" && kind !== "KindTypeAliasDeclaration") continue;
+      const admitted = admitRustNativeValueDeclaration(declaration, input);
+      if (admitted.kind === "accepted") forms.set(declaration, admitted.form);
       else if (admitted.kind === "rejected") diagnostics.push(...admitted.diagnostics);
     }
-    input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
-  };
-  for (const sourceFile of input.sourceFiles) visit(sourceFile);
+  }
   const implementations: RustNativeDeclarationForms["implementations"][number][] = [];
   for (const implementation of input.typeFamilies.implementations) {
     const contract = input.genericRequirements.contractForCarrier({ kind: "tuple",
       elements: [implementation.owner, implementation.output] });
+    if (contract === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A sealed type-family implementation has no completed native generic requirement contract.",
+      implementation.family.kind === "conditional" ? implementation.family.declaration : undefined);
     const projectDefinition = input.projectTypes.definitionForCarrier(implementation.owner);
     const references = rustTargetGenericReferences(implementation.owner);
-    if (contract === undefined || projectDefinition === undefined &&
+    if (projectDefinition === undefined &&
       (references.lifetimes.length !== 0 || references.constIdentities.length !== 0)) {
       diagnostics.push({ code: "RUST_TYPE_FAMILY_IMPLEMENTATION_NOT_CLOSED", category: "error",
         source: "tsonic-rust", message: "A checked type family implementation requires its exact native generic declaration contract.",

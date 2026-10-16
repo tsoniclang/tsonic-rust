@@ -22,7 +22,7 @@ export function rustModuleNameForSourcePath(
 }
 
 export function rustSourceModuleSegments(relativeSourcePath: string): readonly string[] | undefined {
-  const normalized = normalizePath(relativeSourcePath);
+  const normalized = normalizeRustSourceOutputPath(relativeSourcePath);
   const sourcePath = stripTypeScriptExtension(normalized);
   if (sourcePath === undefined || sourcePath.length === 0 ||
     sourcePath.startsWith("/") || sourcePath.endsWith("/")) {
@@ -43,6 +43,6 @@ function stripTypeScriptExtension(value: string): string | undefined {
   return undefined;
 }
 
-function normalizePath(value: string): string {
+export function normalizeRustSourceOutputPath(value: string): string {
   return value.split("\\").join("/");
 }

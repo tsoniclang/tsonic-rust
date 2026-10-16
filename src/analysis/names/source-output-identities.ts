@@ -11,7 +11,7 @@ import {
   rustPackageModuleName,
 } from "../../target-model/names/identifiers.js";
 
-import { rustSourceModuleSegments } from "../../target-model/names/source-output-identities.js";
+import { normalizeRustSourceOutputPath, rustSourceModuleSegments } from "../../target-model/names/source-output-identities.js";
 import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
 
 export type RustSourceOutputIdentityPlan =
@@ -65,7 +65,7 @@ export function analyzeRustSourceOutputIdentities(
   const seenSourcePaths = new Map<string, string>();
   for (const sourceFile of host.sourceFiles) {
     const fileName = host.ast.getFileName(sourceFile);
-    const sourcePackage = packageBySourceFile.get(normalizePath(resolve(fileName)));
+    const sourcePackage = packageBySourceFile.get(normalizeRustSourceOutputPath(resolve(fileName)));
     if (sourcePackage === undefined) {
       diagnostics.push(sourcePackageIdentityDiagnostic(
         "RUST_SOURCE_PACKAGE_IDENTITY_MISSING",
@@ -295,9 +295,9 @@ function packageRelativeSourcePath(
   fileName: string,
   diagnostics: TargetDiagnostic[],
 ): string | undefined {
-  const sourceRoot = normalizePath(resolve(sourceRootValue));
-  const absoluteFileName = normalizePath(resolve(fileName));
-  const relativeName = normalizePath(relative(sourceRoot, absoluteFileName));
+  const sourceRoot = normalizeRustSourceOutputPath(resolve(sourceRootValue));
+  const absoluteFileName = normalizeRustSourceOutputPath(resolve(fileName));
+  const relativeName = normalizeRustSourceOutputPath(relative(sourceRoot, absoluteFileName));
   if (relativeName.length !== 0 && relativeName !== "." &&
     relativeName !== ".." && !relativeName.startsWith("../")) {
     return relativeName;
@@ -318,7 +318,7 @@ function sourcePackageByFileName(
   const result = new Map<string, TargetSourcePackageGraph["packages"][number]>();
   for (const sourcePackage of graph.packages) {
     for (const sourceFile of sourcePackage.sourceFiles) {
-      result.set(normalizePath(resolve(sourceFile)), sourcePackage);
+      result.set(normalizeRustSourceOutputPath(resolve(sourceFile)), sourcePackage);
     }
   }
   return result;
@@ -369,10 +369,6 @@ function sourcePackageIdentityDiagnostic(
     message,
     evidence: ["target.capability=rust.backend.source-package-identity"],
   };
-}
-
-function normalizePath(value: string): string {
-  return value.split("\\").join("/");
 }
 
 function identityCollisionDiagnostic(
