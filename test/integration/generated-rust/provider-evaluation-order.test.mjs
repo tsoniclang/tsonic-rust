@@ -10,7 +10,7 @@ import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 import { planExpression } from "../../../dist/backend/planner/expressions/entry.js";
 import { planProviderOperationExpression } from "../../../dist/backend/planner/expressions/conversions.js";
-import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } from "../../../dist/backend/planner/project/provider-evaluation-scope.js";
+import { planRustProviderEvaluationScope } from "../../../dist/backend/planner/project/provider-evaluation-scope.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 
 function receiverEvaluationPackage() {
@@ -256,10 +256,11 @@ export function omitted(): number { return omit(receiver(), value()); }
     planExpression, planProviderOperationExpression);
   assert.equal(scope.kind, "selected", "the actual owner schedules the omitted operand before the consumed argument");
   const planned = planProviderOperationExpression(context, fact, undefined, argumentsList, omitted,
-    { resultUse: "value", overrides: scope.overrides });
-  assert.equal(planned !== undefined, true, "the native operation consumes only its admitted native argument");
+    { resultUse: "value" });
+  assert.equal(planned !== undefined, true, "the native operation consumes only its admitted native argument: " +
+    context.diagnostics.map(row => row.message).join("; ").slice(0, 2048));
   assert.equal(context.diagnostics.length, 0, "the canonical owner-contract fixture has no late diagnostic");
-  const omittedExpression = printRustExpr(applyRustProviderEvaluationScope(planned, scope));
+  const omittedExpression = printRustExpr(planned);
   const output = artifactText(result, "src/index.rs");
   assert.doesNotMatch(output, /stored\.clone\(/u, "an evaluation-only stored non-Copy local is not cloned");
   const root = writeGeneratedProject("r14-provider-drop", result.artifacts);
