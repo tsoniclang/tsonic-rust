@@ -102,4 +102,5 @@ test("provider trait aliases materialize exact arguments and self references wit
   const argument = rustNamedTypeCarrierValue(actual.genericArguments[0].type);
   assert.equal(argument.path, "foreign_alias::Cause");
   assert.deepEqual(argument.traits.implementations, []);
+  assert.equal(rustCarrierSatisfiesTraitRef(selected, { ...actual, genericArguments: [typeArgument(selected)] }), true);
 });
