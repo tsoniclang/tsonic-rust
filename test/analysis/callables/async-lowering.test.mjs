@@ -3,7 +3,7 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
-import { analyzeRustSettledPromiseBodies, selectRustAsyncBodyLowering } from "../../../dist/analysis/callables/async-results.js";
+import { selectRustAsyncBodyLowering } from "../../../dist/analysis/callables/async-results.js";
 
 function fixture(text) {
   const { context, walk } = analyzeRustOperations(text);
@@ -20,8 +20,8 @@ function fixture(text) {
   const fact = (name, owner) => records.asyncFunction.get(owner === undefined
     ? named(node => ast.is.IsFunctionDeclaration(node), name)
     : named(node => ast.is.IsMethodDeclaration(node), name, owner));
-  const helpers = () => analyzeRustSettledPromiseBodies({ ast, sourceFiles: context.sourceFiles, records, names: context.names }).helpers;
-  return { context, walk, ast, records, nodes, named, fact, helpers };
+  const nativeName = declaration => context.names.nativeBodyNameForDeclaration(declaration);
+  return { context, walk, ast, records, nodes, named, fact, nativeName };
 }
 
 const header = `
@@ -42,8 +42,8 @@ export async function read<Region extends Life>(value: Ref<int32, Region>): Prom
     "the settled Promise names its output only");
   assert.equal(Object.hasOwn(fact.lowering, "capturedParameters") || Object.hasOwn(fact.lowering, "ownedReceiver"), false,
     "a settled body stores no inputs");
-  assert.equal(current.helpers().get(current.named(node => current.ast.is.IsFunctionDeclaration(node), "read")) === undefined,
-    true, "a settled function that no settled body awaits has no helper");
+  assert.equal(current.nativeName(current.named(node => current.ast.is.IsFunctionDeclaration(node), "read")),
+    "read_native", "the settled declaration has its one canonical native body name");
 });
 
 test("an await of a non-future operand cannot suspend, so the method is settled while its awaiting caller is a factory", () => {
@@ -66,7 +66,7 @@ export async function main(): Promise<void> {
     "an awaited method call may dispatch, so it may suspend");
 });
 
-test("an await of a directly called settled function is settled through the callee's allocated helper", () => {
+test("an await of a directly called settled function is settled through the callee's canonical native body", () => {
   const current = fixture(`${header}
 function identity<Region extends Life, Value>(value: Ref<Value, Region>): Ref<Value, Region> { return value; }
 function read<Region extends Life>(value: Ref<int32, Region>): int32 { return load(value); }
@@ -90,21 +90,19 @@ export async function main(value: Ref<int32, Life>): Promise<int32> { return awa
   assert.equal(current.ast.is.IsAwaitExpression(selected.expression), true, "the settled await names its await expression");
   const main = current.fact("main");
   assert.equal(main?.kind === "js-promise" && main.lowering.kind === "settled", true, "a settled callee chain stays settled");
-  const helpers = current.helpers();
-  assert.equal(helpers.get(suspendedDeclaration), "suspended_settled");
-  assert.equal(helpers.get(forwardDeclaration), "forward_settled");
-  assert.equal(current.context.names.settledHelperNameForDeclaration(suspendedDeclaration), "suspended_settled");
+  assert.equal(current.nativeName(suspendedDeclaration), "suspended_native");
+  assert.equal(current.nativeName(forwardDeclaration), "forward_native");
 });
 
-test("an existing source name moves the settled helper name to the next free name without renaming the source", () => {
+test("an existing source name moves the native body name to the next free name without renaming the source", () => {
   const current = fixture(`${header}
 async function value(): Promise<int32> { return 1; }
-export function value_settled(): int32 { return 2; }
-export async function main(): Promise<int32> { return await value() + value_settled(); }
+export function value_native(): int32 { return 2; }
+export async function main(): Promise<int32> { return await value() + value_native(); }
 `);
   const isFunction = node => current.ast.is.IsFunctionDeclaration(node);
-  assert.equal(current.context.names.functionNameForDeclaration(current.named(isFunction, "value_settled")), "value_settled");
-  assert.equal(current.helpers().get(current.named(isFunction, "value")), "value_settled_2");
+  assert.equal(current.context.names.functionNameForDeclaration(current.named(isFunction, "value_native")), "value_native");
+  assert.equal(current.nativeName(current.named(isFunction, "value")), "value_native_2");
 });
 
 test("a two-function await cycle counts as suspending, so both bodies are factories over owned 'static inputs", () => {
@@ -194,7 +192,7 @@ test("pending carrier evidence is not memoized as a final suspending answer", ()
   assert.equal(selected.settledAwaits.length, 0);
 });
 
-test("a mutable async function value never selects a declaration's settled helper", () => {
+test("a mutable async function value never receives a named native body", () => {
   const current = fixture(`
     let value = async (): Promise<number> => 1;
     value = async (): Promise<number> => { await Promise.resolve(0); return 2; };
@@ -203,7 +201,7 @@ test("a mutable async function value never selects a declaration's settled helpe
   const value = current.named(node => current.ast.is.IsVariableDeclaration(node), "value");
   assert.equal(current.context.source.navigation.declarationUseSummary(value).bindingWritten, true);
   assert.equal(current.fact("root")?.lowering.kind, "factory");
-  assert.equal(current.helpers().get(value) === undefined, true);
+  assert.equal(current.nativeName(value) === undefined, true);
 });
 
 test("direct helper selection requires the exact declaration's immutable binding evidence", () => {
