@@ -21,7 +21,7 @@ import {
 } from "@tsonic/target-api/source";
 import { isRustAssignmentOperator } from "../../../target-model/syntax/tokens.js";
 import { isRustCopyCarrier, isRustStringCarrier } from "../../../target-model/types/index.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
 import { planRustMutableProjectReceiver, planRustPromotedStorageLocation } from "../expressions/typed-locations.js";
 import { rustSelectedAccessorRequiresUnsafe } from "../safety/explicit-safety.js";
 import { planRustSourceStaticFieldStorage } from "../declarations/classes/static-field-storage.js";
@@ -253,12 +253,10 @@ export function planRustDirectOperatorCallAssignment(
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
   if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, targetNode),
-      "rust.backend.compound-assignment-temporary",
+    failRustPlannerInvariant(
       "Fallible compound assignment requires a finalized hygienic-name scope.",
-    ));
-    return undefined;
+      targetNode,
+    );
   }
   const promoted = planRustPromotedStorageLocation(
     targetNode,
@@ -434,12 +432,10 @@ export function planRustSourceAccessorAssignment(
     return undefined;
   }
   if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, target),
-      "rust.backend.source-accessor-temporary",
+    failRustPlannerInvariant(
       "Project accessor assignment requires a finalized hygienic-name scope.",
-    ));
-    return undefined;
+      target,
+    );
   }
   const bindings: { name: string; value: RustExpr; mutable?: boolean }[] = [];
   let receiver: RustExpr | undefined;

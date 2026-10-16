@@ -84,7 +84,9 @@ export type RustResourceDisposalTarget =
     }
   | {
       readonly form: "provider";
-      readonly target: RustProviderOperationForm;
+      readonly target: Extract<RustProviderOperationForm, {
+        readonly form: "method" | "receiver-method" | "free-call";
+      }>;
     };
 
 export interface RustResourceManagementFact {

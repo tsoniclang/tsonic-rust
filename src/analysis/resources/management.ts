@@ -269,7 +269,7 @@ function optionalCarrierEquals(
 
 function providerDisposalTargetIsSupported(
   target: import("../../target-model/operations/model.js").RustProviderOperationForm,
-): boolean {
+): target is Extract<RustResourceDisposalTarget, { readonly form: "provider" }>["target"] {
   return target.form === "method" ||
     target.form === "receiver-method" ||
     target.form === "free-call";

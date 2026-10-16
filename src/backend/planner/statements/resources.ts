@@ -14,7 +14,7 @@ import {
   registerAliasFromPath,
   rustActiveErrorType,
 } from "../program/plan-context.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planStatementSequence } from "./core.js";
 import { planVariableStatement } from "./variable-declarations.js";
 
@@ -88,12 +88,10 @@ export function resourceFactForPlanning(
 ): RustResourceManagementFact | undefined {
   const fact = context.input.program.records.resourceManagement.get(declaration);
   if (fact === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.resource-management",
+    failRustPlannerInvariant(
       "Resource declaration has no finalized exact Rust disposal fact.",
-    ));
-    return undefined;
+      declaration,
+    );
   }
   if ((fact.declarationKind === "await using" || fact.disposal.kind === "async") &&
     context.asyncContext !== true) {
@@ -123,12 +121,10 @@ export function planResourceManagedBody(
   planBody: (context: RustPlanContext) => RustBlock | undefined,
 ): Extract<RustStmt, { readonly kind: "resource-scope" }> | undefined {
   if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.resource-names",
+    failRustPlannerInvariant(
       "Resource management requires a finalized hygienic-name scope.",
-    ));
-    return undefined;
+      declaration,
+    );
   }
   if (!isValidRustIdentifier(resourceName)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -345,21 +341,13 @@ function planResourceDisposalExpression(
         : "ref",
     };
   }
-  if (operation.form === "free-call") {
-    registerAliasFromPath(context, operation.path);
-    const argument = alreadyBorrowed
+  registerAliasFromPath(context, operation.path);
+  const argument = alreadyBorrowed
+    ? receiver
+    : operation.receiverMode === "value"
       ? receiver
-      : operation.receiverMode === "value"
-        ? receiver
-        : { kind: "reference" as const, expr: receiver, mutable: operation.receiverMode === "mut-ref" };
-    return { kind: "call", path: operation.path, args: [argument] };
-  }
-  context.diagnostics.push(missingFactDiagnostic(
-    diagnosticInput(context, context.sourceFile),
-    "rust.backend.resource-disposer",
-    "Finalized provider resource disposal target is not a closed Rust receiver operation.",
-  ));
-  return undefined;
+      : { kind: "reference" as const, expr: receiver, mutable: operation.receiverMode === "mut-ref" };
+  return { kind: "call", path: operation.path, args: [argument] };
 }
 
 export function planLoopExitStatement(
