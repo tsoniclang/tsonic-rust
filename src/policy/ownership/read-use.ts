@@ -38,6 +38,8 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     for (const argument of operation.abi.sourceArguments) {
       if (argument.disposition === "evaluation-only") select(input.arguments?.[argument.sourceIndex], "shared");
     }
+  }
+  if (operation?.kind === "provider-operation") {
     const modes = new Map<number, Set<"ref" | "mut-ref" | undefined>>();
     for (const selected of input.nativeInputs) {
       const index = selected.source.kind === "argument" ? selected.source.sourceIndex

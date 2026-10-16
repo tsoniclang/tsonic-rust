@@ -47,7 +47,7 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
         : [BinaryExpression_Right(ast, node)]
       : rustBorrowedOperationArguments(node, ast);
     const selected = selectRustOperationReadUses(ast, node, { operation, address, location, guard, callableMode, arguments: argumentsList,
-      nativeInputs: operation?.kind === "provider-operation" || operation?.kind === "runtime-set" ? rustFinalizedSourceInputs(operation.abi).map(input =>
+      nativeInputs: operation?.kind === "provider-operation" ? rustFinalizedSourceInputs(operation.abi).map(input =>
         ({ source: input.source, mode: rustProviderInputBorrowMode(input) })) : [],
       argumentModes: (argumentsList ?? []).map(argument => records.argumentPassing.get(argument)?.mode) });
     for (const [subject, use] of selected) uses.set(subject, use);
