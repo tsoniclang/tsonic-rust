@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
@@ -130,7 +130,7 @@ export function inspect(input: { count: number; callbacks: (() => number)[]; pai
   let projected = 0;
   for (const node of context.sourceStorage.nodes) {
     if (!context.ast.is.IsVariableDeclaration(node)) continue;
-    const initializer = context.ast.initializer(node);
+    const initializer = Node_Initializer(context.ast, node);
     const subject = initializer === undefined ? undefined : context.sourceStorage.subjectFor(initializer);
     if (subject?.kind !== "resolved") continue;
     const origin = context.sourceStorage.boundOriginsFor(subject.subject, bindings);

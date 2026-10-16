@@ -301,7 +301,8 @@ function createRustStructuralShapeConstruction(
           instances.has(closedMetadataKey(implementation.carrier)));
         const propertyStorage = field.accessor !== undefined ||
           fieldImplementations.some((implementation) => implementation.kind === "accessor" || implementation.kind === "dispatch" && field.method !== true);
-        const independent = receiverIndependentMethods.has(`${structuralStorageKey(carrier, componentForFile)}#${storageIndex}`);
+        const independent = sourceCarriers.some(source =>
+          receiverIndependentMethods.has(`${structuralStorageKey(source, componentForFile)}#${storageIndex}`));
         const methodStorageCarrier = field.method !== true ? undefined : independent ? field.type
           : rustStructuralMethodStorageCarrier(carrier, field.type, field.presence);
         return Object.freeze({
