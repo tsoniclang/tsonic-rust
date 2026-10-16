@@ -11,6 +11,6 @@ export function analyzeRustCheckedContext(request, configureContext) {
   let context = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
     request.rootPublishesLibrary, dispatch.plan);
   if (configureContext !== undefined) context = configureContext(context);
-  analyzeRustProgram(context);
+  analyzeRustProgram(context, request.configuration.outputType);
   return context;
 }

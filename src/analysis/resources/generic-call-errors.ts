@@ -7,11 +7,110 @@ import { rustGenericCallableInvocationBindings } from "../callables/generic-bind
 import { selectRustGenericCallableErrors } from "../callables/generic-errors.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { Node_Expression, sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import type { RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
+import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustNativeCallableProducerPlan } from "../callables/native-producers.js";
+import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
+import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+
+type RustSourceGenericInvocationContext = Pick<RustAnalysisContext, "ast" | "records" | "sourceStorage"> & {
+  readonly callableValues: {
+    readonly generic: Pick<RustGenericCallablePlan, "definitionFor" | "implementationFor">;
+    readonly native: Pick<RustNativeCallableInputPlan, "bindingsFor">;
+    readonly nativeProducers: Pick<RustNativeCallableProducerPlan, "forDeclaration" | "errorFor">;
+    readonly nativeStorage: Pick<RustNativeStoragePlan, "genericBindingsFor">;
+  };
+};
+
+export interface RustSourceGenericCallableInvocation {
+  readonly selection: RustGenericCallableInvocationFact;
+  complete(context: RustAnalysisContext): {
+    readonly selection: RustGenericCallableInvocationFact;
+    readonly replacements: ReadonlyMap<string, RustNativeErrorEffect>;
+  } | undefined;
+}
+
+export function prepareRustGenericCallableInvocation(
+  node: Node, context: RustSourceGenericInvocationContext,
+  effectsFor: (declaration: Node) => RustSourceCallEffectsFact | undefined,
+): RustSourceGenericCallableInvocation | undefined {
+  const { ast, records, sourceStorage: storage, callableValues } = context;
+  const operation = records.targetOperation.get(node);
+  if (operation?.kind !== "source-call") return undefined;
+  const target = operation.target;
+  const logical = target.form === "callable" ? target.carrier
+    : target.form === "structural-method" || target.form === "constructor-value" ? target.callableCarrier : undefined;
+  if (rustGenericCallableValue(logical) === undefined) return undefined;
+  const callee = Node_Expression(ast, node);
+  const subject = callee === undefined ? undefined : storage.subjectFor(callee);
+  const owner = sourceEnclosingCallable(node, ast);
+  const bindings = owner === undefined ? storage.emptyBindings : callableValues.native.bindingsFor(owner);
+  const producers = subject?.kind !== "resolved" || bindings === undefined ? undefined : storage.storageProducersFor(subject.subject, bindings);
+  const definition = logical === undefined ? undefined : callableValues.generic.definitionFor(logical);
+  if (definition === undefined || producers?.kind !== "complete" || producers.producers.length === 0) return undefined;
+  const invocation: RustGenericCallableInvocationFact["invocation"][number][] = [];
+  const awaiting: RustGenericCallableInvocationFact["awaiting"][number][] = [];
+  const requests: { readonly declaration: Node; readonly channel: "invocation" | "awaiting"; readonly identity: string }[] = [];
+  const effects: RustSourceCallEffectsFact[] = [];
+  for (const selected of producers.producers) {
+    const subject = selected.subject;
+    if (subject.kind !== "value" || subject.projection.length !== 0) return undefined;
+    const declaration = subject.node;
+    const implementation = callableValues.generic.implementationFor(declaration);
+    const producer = callableValues.nativeProducers.forDeclaration(declaration);
+    const effect = effectsFor(declaration);
+    const activation = storage.bindingsForInvocation(declaration, node, bindings!);
+    const generics = activation.kind === "unresolved" ? undefined
+      : callableValues.nativeStorage.genericBindingsFor(declaration, activation.bindings);
+    if (implementation === undefined || producer === undefined || effect === undefined || generics?.kind !== "resolved") return undefined;
+    effects.push(effect);
+    for (const channel of ["invocation", "awaiting"] as const) {
+      if (effect[channel] !== "fallible") continue;
+      const error = callableValues.nativeProducers.errorFor(declaration, channel === "invocation" ? "invoke" : 0);
+      if (error === undefined) return undefined;
+      const errorType = substituteRustTargetGenerics(error, generics.bindings.types, generics.bindings.lifetimes, generics.bindings.consts);
+      const identity = `pending-generic-error:${closedMetadataKey({ invocation: sourceNodeIdentity(ast, node),
+        producer: producer.identity, channel, errorType })}`;
+      const values = channel === "invocation" ? invocation : awaiting;
+      if (values.some(value => value.identity === identity)) continue;
+      values.push(Object.freeze({ identity, variant: `Error${values.length}`, errorType: snapshotClosedMetadata(errorType) }));
+      requests.push(Object.freeze({ declaration, channel, identity }));
+    }
+  }
+  const selection: RustGenericCallableInvocationFact = Object.freeze({ carrier: snapshotClosedMetadata(logical!),
+    ownerFileName: definition.ownerFileName, invocation: Object.freeze(invocation), awaiting: Object.freeze(awaiting),
+    effects: Object.freeze({ invocation: invocation.length === 0 ? "infallible" : "fallible",
+      awaiting: awaiting.length !== 0 ? "fallible" : effects.some(effect => effect.awaiting !== "not-applicable")
+        ? "infallible" : "not-applicable" }) });
+  return Object.freeze({ selection,
+    complete(finalContext: RustAnalysisContext) {
+      const completed = resolveRustGenericCallableInvocation(node, finalContext, effectsFor);
+      if (completed === undefined) return undefined;
+      const replacements = new Map<string, RustNativeErrorEffect>();
+      for (const request of requests) {
+        const selected = completed.forDeclaration(request.declaration, request.channel);
+        if (selected === undefined) return undefined;
+        replacements.set(request.identity, selected);
+      }
+      return Object.freeze({ selection: completed.selection, replacements });
+    },
+  });
+}
 
 export function selectRustGenericCallableInvocation(
   node: Node, context: RustAnalysisContext,
   effectsFor: (declaration: Node) => RustSourceCallEffectsFact | undefined,
 ): RustGenericCallableInvocationFact | undefined {
+  return resolveRustGenericCallableInvocation(node, context, effectsFor)?.selection;
+}
+
+function resolveRustGenericCallableInvocation(
+  node: Node, context: RustAnalysisContext,
+  effectsFor: (declaration: Node) => RustSourceCallEffectsFact | undefined,
+): { readonly selection: RustGenericCallableInvocationFact;
+  forDeclaration(declaration: Node, channel: "invocation" | "awaiting"): RustNativeErrorEffect | undefined } | undefined {
   const storage = selectRustGenericCallableInvocationStorage(node, {
     ast: context.ast, records: context.records, generic: context.callableValues.generic,
     nativeStorage: context.callableValues.nativeStorage,
@@ -28,11 +127,19 @@ export function selectRustGenericCallableInvocation(
     producers: context.callableValues.nativeProducers, effectsFor,
   });
   if (selected === undefined) return undefined;
-  const instantiate = (sources: typeof selected.invocation): typeof selected.invocation => Object.freeze(sources.map(source => {
+  const instantiateOne = (source: typeof selected.invocation[number]): typeof source => {
     const errorType = substituteRustTargetGenerics(source.errorType, bindings.types, bindings.lifetimes, bindings.consts);
     return Object.freeze({ ...source, errorType,
       identity: `generic-callable-error:${closedMetadataKey({ origin: source.identity, errorType })}` });
-  }));
-  return Object.freeze({ carrier: snapshotClosedMetadata(storage.carrier), ownerFileName: definition.ownerFileName,
+  };
+  const instantiate = (sources: typeof selected.invocation): typeof selected.invocation => Object.freeze(sources.map(instantiateOne));
+  const selection = Object.freeze({ carrier: snapshotClosedMetadata(storage.carrier), ownerFileName: definition.ownerFileName,
     effects: selected.effects, invocation: instantiate(selected.invocation), awaiting: instantiate(selected.awaiting) });
+  return Object.freeze({ selection,
+    forDeclaration(declaration: Node, channel: "invocation" | "awaiting") {
+      const member = definition.members.find(member => member.implementation.declaration === declaration);
+      const error = member === undefined ? undefined : selected.forMember(member)?.[channel];
+      return error === undefined ? undefined : instantiateOne(error);
+    },
+  });
 }

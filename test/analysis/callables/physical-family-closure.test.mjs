@@ -95,6 +95,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
       const selected = queries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
+  producers.selectConstructionErrors(new Map());
   const queries = createRustNativeStorageQueries({ ...input, native, producers });
   const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
   physical = registry.initializePhysical({ ...input, native, captures,

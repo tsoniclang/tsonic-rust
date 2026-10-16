@@ -15,8 +15,6 @@ import { substituteRustValueConversion } from "../../target-model/conversions/su
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustAwaitCarrier } from "../../target-model/types/index.js";
 
-import { rustErrorEffectsAreFallible } from "../errors/error-effects.js";
-
 export function rustFutureValueForStoredBranch(
   walk: RustFactWalk,
   node: Node,
@@ -141,8 +139,8 @@ function futureForProducer(walk: RustFactWalk, producer: Node, branch: TargetTyp
     if (implementations.kind !== "resolved" || !implementations.exact ||
       !implementations.nodes.some(declaration => records.asyncFunction.get(declaration) !== undefined)) return undefined;
     infallible = implementations.nodes.every(declaration => {
-      const effects = records.errorEffects.get(declaration);
-      return records.asyncFunction.get(declaration) !== undefined && effects !== undefined && !rustErrorEffectsAreFallible(effects);
+      const effects = records.sourceCallEffects.get(declaration);
+      return records.asyncFunction.get(declaration) !== undefined && effects?.awaiting === "infallible";
     });
   }
   const selected = records.futureValue.get(producer) ??

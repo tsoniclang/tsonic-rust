@@ -42,12 +42,12 @@ import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustGenericCallablePhysicalCarrierSelector } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
-import { selectRustGenericCallableInvocationStorage } from "./generic-dispatch.js";
-import { rustGenericCallableMemberInvocationBindings } from "./generic-bindings.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
 import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
 import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
+import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 
 export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef }
@@ -137,21 +137,9 @@ export function createRustNativeStorageQueries(input: {
     return selected;
   };
   const genericInvocationBindingsFor = (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
-    arguments_: readonly RustTargetGenericArgument[]): RustNativeStorageGenericSelection | undefined => {
-    const operation = input.records.targetOperation.get(invocation);
-    const carrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
-    if (input.native.callFor(invocation) !== undefined || rustGenericCallableValue(carrier) === undefined) return undefined;
-    const selected = selectRustGenericCallableInvocationStorage(invocation, { ...input, nativeStorage: {
-      invocationCallableFor: node => invocationCallableFor(node, bindings),
-    } });
-    const member = selected?.definition.members.find(member => member.implementation.declaration === declaration);
-    const bound = selected === undefined || member === undefined ? undefined : rustGenericCallableMemberInvocationBindings(
-      selected.definition, member, selected.carrier, arguments_, {
-        ast: input.ast, sourceLifetimes: input.lifetimes, physical: input.generic.physical,
-      });
-    return bound === undefined ? unresolved("A generic activation lost its exact implementation-to-invocation correspondence.")
-      : Object.freeze({ kind: "resolved", bindings: bound });
-  };
+    arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings): RustNativeStorageGenericSelection | undefined =>
+    input.native.callFor(invocation) !== undefined ? undefined : selectRustSourceCallableInvocationBindings(input,
+      declaration, invocation, bindings, arguments_, caller);
   const invocationBindingsFor = (implementation: Node, invocation: Node, owner?: Node): SourceStorageBindingsSelection => {
     if (!nodes.has(implementation) || !nodes.has(invocation))
       return unresolved("Native invocation storage requires its exact owned invocation and implementation.");

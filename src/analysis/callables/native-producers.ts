@@ -40,6 +40,7 @@ export interface RustNativeCallableProducerPlan {
 }
 
 export interface RustNativeCallableProducerConstruction extends RustNativeCallableProducerPlan {
+  selectConstructionErrors(errors: ReadonlyMap<Node, TargetTypeRef>): void;
   seal(requests: ReadonlyMap<Node, readonly TargetTypeRef[]>): RustNativeCallableProducerPlan;
 }
 
@@ -111,6 +112,7 @@ export function createRustNativeCallableProducerPlan(input: {
     return ordinal < Math.max(1, completion?.futures.length ?? 0) ? noFuture : undefined;
   };
   const resolving = new Set<string>();
+  let constructionErrors: ReadonlyMap<Node, TargetTypeRef> | undefined;
   const outward = createRustNativeOutwardResults({ ...input, producers: {
     forDeclaration: declaration => byDeclaration.get(declaration), errorFor, deferredFor,
   } });
@@ -123,7 +125,11 @@ export function createRustNativeCallableProducerPlan(input: {
     physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
       const producer = byDeclaration.get(declaration);
       const signature = rustCallableProtocol(carrier);
-      const error = errorFor(declaration, "invoke");
+      const intrinsic = errorFor(declaration, "invoke");
+      const retained = rustCallableInputProtocol(carrier) === undefined;
+      if (retained && constructionErrors === undefined)
+        throw new Error("Native retained constructors require their completed source-error ABI selection.");
+      const error = retained && constructionErrors?.has(declaration) ? constructionErrors.get(declaration) : intrinsic;
       if (producer === undefined || signature === undefined || error === undefined) return undefined;
       const operation = input.records.targetOperation.get(declaration);
       const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(
@@ -154,6 +160,11 @@ export function createRustNativeCallableProducerPlan(input: {
   });
   let sealed = false;
   return Object.freeze({ ...plan,
+    selectConstructionErrors(errors: ReadonlyMap<Node, TargetTypeRef>): void {
+      if (constructionErrors !== undefined || [...errors.keys()].some(declaration => !byDeclaration.has(declaration)))
+        throw new Error("Native retained construction errors select once from exact admitted producer declarations.");
+      constructionErrors = new Map(errors);
+    },
     seal(requests: ReadonlyMap<Node, readonly TargetTypeRef[]>): RustNativeCallableProducerPlan {
       if (sealed) throw new Error("Native callable producer results seal exactly once after selected effects and storage.");
       const errors = new Map<Node, ReadonlyMap<RustProducerErrorReference["channel"], TargetTypeRef>>();

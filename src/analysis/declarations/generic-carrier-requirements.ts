@@ -1,6 +1,6 @@
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { RustGenericRequirement, RustDeclarationGenericRequirementContract } from "./generic-requirements.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
@@ -8,6 +8,33 @@ import { rustCarrierSatisfiesTraitRef } from "../../target-model/types/carriers/
 import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments,
   rustTargetLifetimeArguments, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+
+export function rustFinalContractSupportsStatic(
+  contract: RustDeclarationGenericRequirementContract,
+  carrier: TargetTypeRef,
+  families: Pick<RustSourceTypeFamilyRegistry, "implementation">,
+  definitions: RustTypeDefinitions,
+): boolean {
+  const normalized = mapRustTargetTypes(carrier, rustTypeFamilyNormalizer(families));
+  const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters, ...contract.nativeInputs,
+    ...contract.optionalStorage.map(entry => ({ identity: entry.carrier.identity, requirements: entry.requirements }))];
+  const available = new Map<string, Set<RustGenericRequirement>>();
+  for (const parameter of parameters) {
+    const requirements = available.get(parameter.identity) ?? new Set<RustGenericRequirement>();
+    for (const requirement of parameter.requirements) requirements.add(requirement);
+    available.set(parameter.identity, requirements);
+  }
+  if (rustTargetTypeParameterIdentities(normalized).some(identity => !available.has(identity))) return false;
+  const demanded = new Map([...available.keys()].map(identity => [identity, new Set<RustGenericRequirement>()]));
+  return classifyCarrierRequirements(normalized, ["static"], new Set(available.keys()), demanded,
+    (projection, requirement) => contract.associatedTypes.some(associated =>
+      rustTargetTypeRefEquals(associated.carrier, projection) && associated.requirements.includes(requirement)), definitions) &&
+    [...demanded].every(([identity, requirements]) => [...requirements].every(requirement => available.get(identity)!.has(requirement)));
+}
 
 export function classifyCarrierRequirements(
   carrier: TargetTypeRef,

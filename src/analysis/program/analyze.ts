@@ -59,8 +59,14 @@ import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "..
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
+import { analyzeRustSourcePackageComponents, type RustSourcePackageComponentClassifications } from "./source-package-components.js";
 
-export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFunctionQueries | undefined {
+interface RustSourceStageOutput {
+  readonly lexicalFunctions: RustLexicalFunctionQueries;
+  readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
+}
+
+export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bin" | "lib"): RustSourceStageOutput | undefined {
   if (context.sourcePackageComponentIdentities.kind === "rejected") return;
   const sourcePackageIdentities = context.sourcePackageComponentIdentities.identities;
   const { ast } = context;
@@ -563,6 +569,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.sourceFiles, context.records,
     context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);
+  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType);
+  if (sourcePackageComponents.kind === "rejected") {
+    context.diagnostics.push(...sourcePackageComponents.diagnostics);
+    return;
+  }
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
@@ -580,19 +591,22 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   const selectedIssuePosition = context.diagnostics.length;
   context.promiseBodies.seal(context);
   if (context.diagnostics.length !== selectedIssuePosition) return undefined;
-  recordFallibilityFacts(walk, projectSourceFiles);
+  const fallibility = recordFallibilityFacts(walk, projectSourceFiles);
+  if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+  context.callableValues.preparePhysicalStorage(sourcePackageComponents.plan, fallibility.effectsFor);
   recordRustDeferredProducerEffects(walk);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);
   const effectDiagnosticEnd = context.diagnostics.length;
   try {
     context.callableValues.finalizeSelected().forEach(callableIssue);
+    fallibility.complete();
   } finally {
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
-  return lexicalFunctions;
+  return Object.freeze({ lexicalFunctions, sourcePackageComponents: sourcePackageComponents.plan });
 }
 
 function collectSourcePackageBoundaries(

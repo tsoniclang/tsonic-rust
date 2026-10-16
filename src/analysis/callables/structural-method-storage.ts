@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { rustLifetimeOutlives, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -19,10 +19,18 @@ import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-s
 import type { RustStructuralShapeDefinition, RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeCallableProducerPlan } from "./native-producers.js";
+import type { RustNativeCallableProducerPlan, RustNativeCallableProducerConstruction } from "./native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import { rustRetainedValueLifetime } from "./retained-environments.js";
 import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
+import { normalizeRustErrorType } from "../program/error-types.js";
+import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-environments.js";
+import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
+import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier-requirements.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 
 interface RustStructuralMethodRoot {
   readonly carrier: TargetTypeRef;
@@ -44,7 +52,13 @@ export function createRustStructuralMethodStorage(input: {
   readonly lifetimes: RustLifetimeIndex;
   readonly retainedEnvironments: RustRetainedEnvironmentQueries;
 }): {
+  prepareConstructors(components: RustSourcePackageComponentClassifications,
+    effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
+    producers: Pick<RustNativeCallableProducerConstruction, "selectConstructionErrors">): void;
   complete(errors: Pick<RustErrorRegionRecords, "producerError">): void;
+  validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">): void;
+  validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): void;
 } {
   const { ast, records, sourceStorage, structuralShapes } = input;
   const canonical = new Map(structuralShapes.definitions.map(definition =>
@@ -98,7 +112,82 @@ export function createRustStructuralMethodStorage(input: {
     }
   }
   let complete = false;
+  const producerErrors = new Map<import("../../target-model/types/carriers/producer-errors.js").RustProducerErrorReference, TargetTypeRef>();
+  const retainedRequirements: { readonly declaration: Node; readonly captures: readonly TargetTypeRef[] }[] = [];
+  let retentionValidated = false;
   return Object.freeze({
+    prepareConstructors(components: RustSourcePackageComponentClassifications,
+      effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
+      producers: Pick<RustNativeCallableProducerConstruction, "selectConstructionErrors">) {
+      const parent = new Map<Node, Node>();
+      const errorByProducer = new Map<Node, TargetTypeRef>();
+      const demands = new Map<Node, TargetTypeRef[]>();
+      const slots = new Map<RustStructuralShapeDefinition, Map<number, Node>>();
+      const rootFor = (declaration: Node): Node => {
+        const previous = parent.get(declaration);
+        if (previous === undefined) { parent.set(declaration, declaration); return declaration; }
+        if (previous === declaration) return declaration;
+        const root = rootFor(previous);
+        parent.set(declaration, root);
+        return root;
+      };
+      const context = { ast, components, records: { ...records, errorEffects: { get: (subject: import("@tsonic/tsts").ExtensionFactSubject | undefined) => {
+        const node = asSourceNode(subject, ast);
+        return node === undefined ? undefined : effectsFor(node);
+      } } },
+        producers: input.nativeProducers, definitions: input.typeDefinitions };
+      for (const root of roots) {
+        const selected = sourceStorage.storageProducersFor(root.subject, root.bindings);
+        if (selected.kind !== "complete") throw new Error(selected.kind === "unresolved" ? selected.reason
+          : "Retained constructor selection requires its exact admitted source producer domain.");
+        const fields = slots.get(root.definition) ?? new Map<number, Node>();
+        slots.set(root.definition, fields);
+        const field = structuralShapes.field(root.carrier, root.index)!;
+        const protocol = rustCallableProtocol(field.presence === "optional"
+          ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier)!;
+        for (const producer of selected.producers) {
+          const subject = producer.subject;
+          if (subject.kind !== "value" || subject.projection.length !== 0 ||
+            records.targetOperation.get(subject.node)?.kind !== "closure")
+            throw new Error("Retained constructor selection requires its admitted physical closure producer.");
+          const declaration = subject.node;
+          rootFor(declaration);
+          const error = input.nativeProducers.errorFor(declaration, "invoke");
+          const intrinsic = error === undefined ? undefined : normalizeRustErrorType(error, context, declaration);
+          const declared = protocol.error === undefined ? undefined : normalizeRustErrorType(protocol.error, context, declaration);
+          if (intrinsic === undefined || declared === undefined)
+            throw new Error("Retained constructor selection requires completed intrinsic error classification.");
+          errorByProducer.set(declaration, intrinsic);
+          const requirements = demands.get(declaration) ?? [];
+          if (!requirements.some(requirement => rustTargetTypeRefEquals(requirement, declared))) requirements.push(declared);
+          demands.set(declaration, requirements);
+          const existing = fields.get(root.index);
+          if (existing === undefined) fields.set(root.index, declaration);
+          else parent.set(rootFor(declaration), rootFor(existing));
+        }
+      }
+      const groups = new Map<Node, Node[]>();
+      for (const declaration of parent.keys()) {
+        const root = rootFor(declaration);
+        const members = groups.get(root) ?? [];
+        members.push(declaration);
+        groups.set(root, members);
+      }
+      const errors = new Map<Node, TargetTypeRef>();
+      const infallible = (carrier: TargetTypeRef): boolean => carrier.kind === "target-named" && carrier.id === rustInfallibleTargetId;
+      for (const members of groups.values()) {
+        const intrinsic = members.map(member => errorByProducer.get(member)!);
+        let selected = intrinsic[0]!;
+        if (!intrinsic.every(error => rustTargetTypeRefEquals(error, selected))) {
+          const candidates = members.flatMap(member => demands.get(member) ?? []);
+          const shared = candidates.find(candidate => intrinsic.every(error => infallible(error) || rustTargetTypeRefEquals(error, candidate)));
+          if (shared === undefined) throw new Error("Connected retained method slots require one admitted native construction error ABI.");
+          selected = shared;
+        }
+        for (const member of members) errors.set(member, selected);
+      }
+      producers.selectConstructionErrors(errors);
+    },
     complete(errors) {
       if (complete) throw new Error("Structural method physical storage completes exactly once.");
       const normalize = (carrier: TargetTypeRef): TargetTypeRef => mapRustTargetTypes(carrier, current => {
@@ -106,6 +195,7 @@ export function createRustStructuralMethodStorage(input: {
         if (reference === undefined) return current;
         const selected = errors.producerError(reference);
         if (selected === undefined) throw new Error("Structural method storage lost its completed producer error channel.");
+        producerErrors.set(reference, selected);
         return selected;
       });
       const candidates = new Map<RustStructuralMethodRoot, readonly TargetTypeRef[]>();
@@ -140,8 +230,11 @@ export function createRustStructuralMethodStorage(input: {
             ast, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
           } });
           if (retained === undefined || protocol.lifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
-            protocol.lifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes)))
-            throw new Error("Structural method storage lost its admitted retained-lifetime correspondence.");
+            protocol.lifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes))) {
+            if (protocol.lifetime.kind !== "static" || !captureCarriers.some(rustHasOpenOwnedStorage))
+              throw new Error("Structural method storage lost its admitted retained-lifetime correspondence.");
+            retainedRequirements.push(Object.freeze({ declaration: subject.node, captures: Object.freeze(captureCarriers) }));
+          }
           let carrier = rustCallableTargetType(source.signature.parameters, source.signature.result,
             protocol.lifetime, source.signature.error);
           if (bound !== undefined) carrier = substituteRustTargetGenerics(carrier,
@@ -223,6 +316,24 @@ export function createRustStructuralMethodStorage(input: {
       }
       structuralShapes.finalizeMethodStorage(selections);
       complete = true;
+    },
+    validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">) {
+      if (!complete) throw new Error("Structural method error validation requires its complete physical field plan.");
+      for (const [reference, carrier] of producerErrors) {
+        if (!rustTargetTypeRefEquals(errors.producerError(reference), carrier))
+          throw new Error("Structural method storage changed its selected intrinsic error layout after physical materialization.");
+      }
+    },
+    validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
+      families: Pick<RustSourceTypeFamilyRegistry, "implementation">) {
+      if (!complete || retentionValidated) throw new Error("Structural retention validates once against the completed declaration requirements.");
+      for (const requirement of retainedRequirements) {
+        const contract = requirements.contractFor(requirement.declaration);
+        if (contract === undefined || !requirement.captures.every(carrier =>
+          rustFinalContractSupportsStatic(contract, carrier, families, input.typeDefinitions)))
+          throw new Error("Structural method retention is not proven by its actual final native generic contract.");
+      }
+      retentionValidated = true;
     },
   });
 }
