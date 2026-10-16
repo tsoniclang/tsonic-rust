@@ -346,7 +346,8 @@ export function resolveFunctionExpressionCarrier(
     const lifetime = rustRetainedValueLifetime(expression,
       [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier), walk);
     if (lifetime === undefined) return undefined;
-    constructionCarrier = rustCallableTargetType(selectedParameters, selectedResult, lifetime);
+    constructionCarrier = rustCallableTargetType(selectedParameters, selectedResult, lifetime,
+      rustCallableProtocol(constructionCarrier)?.error);
   }
   const logicalCarrier = rebindRustCallableCarrier(constructionCarrier, finalizedParameterCarriers, valueResult,
     selectedGeneric === undefined ? {} : { typeParameters: genericParameters ?? [],
