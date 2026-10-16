@@ -496,7 +496,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
       ...valid,
       carrierTraits: {
         "acme.validation.Missing": {
-          implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+          implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
         },
       },
     }),
@@ -507,7 +507,7 @@ test("provider type relations remain target-owned and require closed Rust paths"
       ...valid,
       carrierTraits: {
         "acme.validation.Value": {
-          implementations: [{ traitPath: "core::marker::Copy", requirements: [] }],
+          implementations: [{ trait: { kind: "trait-ref", id: "core::marker::Copy", path: "core::marker::Copy", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
         },
       },
     }),

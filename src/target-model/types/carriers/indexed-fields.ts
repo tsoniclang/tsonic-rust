@@ -1,5 +1,5 @@
 import type { RustTargetTraitRef, TargetTypeRef } from "../model.js";
-import { rustNamedTargetType } from "./native.js";
+import { rustNamedTargetType, rustNativeTraitRef } from "./native.js";
 
 export const rustIndexedFieldTrait: RustTargetTraitRef = Object.freeze({
   kind: "trait-ref",
@@ -21,7 +21,7 @@ export function rustIndexedFieldKey(identity: string): TargetTypeRef {
   return rustNamedTargetType("rust.source.field-key", "rt::FieldKey", [
     { kind: "const", value: { kind: "integer", value: BigInt(`0x${identity}`).toString() } },
   ], [], { implementations: [
-    { traitPath: "core::clone::Clone", requirements: [] },
-    { traitPath: "core::marker::Copy", requirements: [] },
+    { trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] },
+    { trait: rustNativeTraitRef("core::marker::Copy"), requirements: [] },
   ] });
 }

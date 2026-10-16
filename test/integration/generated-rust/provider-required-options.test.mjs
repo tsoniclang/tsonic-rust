@@ -33,7 +33,7 @@ function provider({ missingWrite = false, wrongAbsence = false } = {}) {
     types: [{ exportId: "Input", targetCarrier: input },
       { exportId: "Options", targetCarrier: options, objectLiteralConstruction: { kind: "struct" } }],
     carrierPaths: { [input.id]: "acme_required_options::Input", [options.id]: "acme_required_options::Options" },
-    carrierTraits: { [input.id]: { implementations: [{ traitPath: "core::clone::Clone", requirements: [] }] } },
+    carrierTraits: { [input.id]: { implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }] } },
     operations: [
       { exportId: "createInput", signatureId: "createInput.signature", operationKind: "method",
         target: { form: "call", path: "acme_required_options::create_input" }, parameterCarriers: [], resultCarrier: input },

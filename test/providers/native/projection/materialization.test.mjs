@@ -29,6 +29,29 @@ function project(exports, materialization) {
     exports, unsupportedExports: [], standardTypeLocations: [] }, owner, materialization);
 }
 
+test("native trait projection preserves instantiated arguments and conditional bounds including Self", () => {
+  const exported = declaration("First");
+  exported.genericParameters = [{ kind: "type", identity: identity("First::Value"), name: "Value",
+    requirements: [], outlives: [], maybeSized: false }];
+  const trait = { identity: { itemId: "core::Into", canonicalPath: ["core", "convert", "Into"] },
+    path: "core::convert::Into", genericArguments: [{ kind: "type", type: scalar }], associatedConstraints: [] };
+  const selfTrait = { identity: { itemId: "core::PartialEq", canonicalPath: ["core", "cmp", "PartialEq"] },
+    path: "core::cmp::PartialEq", genericArguments: [{ kind: "type", type: { kind: "self" } }], associatedConstraints: [] };
+  exported.traits = { implementations: [
+    { trait: { kind: "trait", trait }, requirements: [{ typeArgumentIndex: 0, requirement: { kind: "trait", trait } }] },
+    { trait: { kind: "trait", trait: selfTrait }, requirements: [] },
+  ] };
+  const selected = project([exported], { kind: "incremental", completeExports: [] });
+  const native = selected.types.find(row => row.targetCarrier.value?.path === "example::First").targetCarrier.value;
+  const implemented = native.traits.implementations.find(row => row.trait.path === "core::convert::Into");
+  assert.deepEqual(implemented.trait.genericArguments, [{ kind: "type", type: { kind: "source-primitive", name: "uint64" } }]);
+  assert.deepEqual(implemented.requirements[0].trait.genericArguments, implemented.trait.genericArguments);
+  assert.equal(implemented.requirements[0].typeArgumentIndex, 0);
+  const equality = native.traits.implementations.find(row => row.trait.path === "core::cmp::PartialEq");
+  assert.equal(equality.trait.genericArguments[0].type.value.path, "example::First");
+  assert.deepEqual(equality.trait.genericArguments[0].type.value.traits.implementations, []);
+});
+
 test("native declarations materialize only demanded members with stable identities and metadata", () => {
   const exports = [declaration("First"), declaration("Second")];
   const headers = project(exports, { kind: "incremental", completeExports: [] });

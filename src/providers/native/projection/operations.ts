@@ -2,11 +2,13 @@ import { compareText, digestText } from "./utilities.js";
 import { compilerTypeRequirementCanonicalPath } from "../model/rustdoc-types.js";
 import { sourceGenericParameterName } from "./type-arguments.js";
 import { closedMetadataKey } from "../../../target-model/metadata/closed-data.js";
+import { rustNamedTypeTraitContract, rustNativeTraitRef } from "../../../target-model/types/carriers/native.js";
 import type {
   RustCompilerDependency,
   RustCompilerFunction,
   RustCompilerTypeParameter,
   RustCompilerTypeTraits,
+  RustCompilerTraitDispatch,
 } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
 import type {
@@ -58,29 +60,20 @@ export function recordCarrierTraits(
 export function projectCompilerTraitContract(
   contract: RustCompilerTypeTraits,
   context: ProjectionContext,
+  projectTrait: (trait: RustCompilerTraitDispatch) => RustTargetTraitRef,
 ): RustNamedTypeTraitContract {
+  const project = (requirement: RustCompilerTypeParameter["requirements"][number]): RustTargetTraitRef =>
+    typeof requirement === "string"
+      ? rustNativeTraitRef(targetTraitPath(compilerRequirementTraitPath(requirement), context))
+      : projectTrait(requirement.trait);
   const projected = contract.implementations.map((implementation) => Object.freeze({
-    traitPath: targetTraitPath(
-      compilerRequirementTraitPath(implementation.trait),
-      context,
-    ),
+    trait: project(implementation.trait),
     requirements: Object.freeze(implementation.requirements.map((requirement) => Object.freeze({
       typeArgumentIndex: requirement.typeArgumentIndex,
-      traitPath: targetTraitPath(
-        compilerRequirementTraitPath(requirement.requirement),
-        context,
-      ),
-    })).sort((left, right) =>
-      left.typeArgumentIndex - right.typeArgumentIndex || compareText(left.traitPath, right.traitPath))),
+      trait: project(requirement.requirement),
+    }))),
   }));
-  const implementations = [...new Map(projected.map((implementation) => [
-    `${implementation.traitPath}\0${JSON.stringify(implementation.requirements)}`,
-    implementation,
-  ])).values()].sort((left, right) => compareText(
-    `${left.traitPath}\0${JSON.stringify(left.requirements)}`,
-    `${right.traitPath}\0${JSON.stringify(right.requirements)}`,
-  ));
-  return Object.freeze({ implementations: Object.freeze(implementations) });
+  return rustNamedTypeTraitContract(projected);
 }
 
 function compilerRequirementTraitPath(

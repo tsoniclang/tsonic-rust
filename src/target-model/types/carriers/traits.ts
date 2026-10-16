@@ -39,7 +39,7 @@ import {
   rustJsWeakMapTargetId,
   rustJsWeakSetTargetId,
 } from "./source-types.js";
-import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue } from "./native.js";
+import { rustFixedArrayCarrierValue, rustNamedTypeCarrierValue, rustNativeTraitRef, rustNativeTraitRefEquals } from "./native.js";
 import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
 import { rustTargetGenericReferences } from "./generic-references.js";
 import type { RustNamedTypeCarrierValue } from "./native.js";
@@ -341,6 +341,10 @@ export function rustCarrierSatisfiesTraitRef(
   typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): boolean {
+  const named = rustNamedTypeCarrierValue(carrier);
+  if (named !== undefined && rustNamedTypeSatisfiesTraitRef(named, trait, typeParameterSupports, undefined, definitions)) {
+    return true;
+  }
   if (trait.lifetimeBinder !== undefined || trait.associatedConstraints.length > 0) {
     return false;
   }
@@ -431,16 +435,28 @@ export function rustNamedTypeSupportsTrait(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
   active: Map<string, string> = new Map(),
 ): boolean {
+  return rustNamedTypeSatisfiesTraitRef(namedType, rustNativeTraitRef(traitPath), typeParameterSupports,
+    associatedTypeSupports, definitions, active);
+}
+
+function rustNamedTypeSatisfiesTraitRef(
+  namedType: RustNamedTypeCarrierValue,
+  trait: RustTargetTraitRef,
+  typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
+  associatedTypeSupports: RustAssociatedTypeSupport = () => false,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  active: Map<string, string> = new Map(),
+): boolean {
   const typeArguments = rustTargetGenericTypeArguments(namedType.genericArguments);
   return namedType.traits.implementations.some((implementation) =>
-    implementation.traitPath === traitPath && implementation.requirements.every((requirement) => {
+    rustNativeTraitRefEquals(implementation.trait, trait) && implementation.requirements.every((requirement) => {
       const argument = typeArguments[requirement.typeArgumentIndex];
-      return argument !== undefined && rustCarrierSupportsTrait(
-        argument,
-        requirement.traitPath,
-        typeParameterSupports,
-        associatedTypeSupports, definitions, active,
-      );
+      if (argument === undefined) return false;
+      return requirement.trait.genericArguments.length === 0 && requirement.trait.associatedConstraints.length === 0 &&
+          requirement.trait.lifetimeBinder === undefined
+        ? rustCarrierSupportsTrait(argument, requirement.trait.path, typeParameterSupports,
+          associatedTypeSupports, definitions, active)
+        : rustCarrierSatisfiesTraitRef(argument, requirement.trait, typeParameterSupports, definitions);
     }));
 }
 

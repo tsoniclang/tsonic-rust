@@ -1,6 +1,8 @@
 import {
   hasExactObjectKeys,
   isDenseDataArray,
+  isClosedMetadata,
+  closedMetadataKey,
 } from "../../metadata/closed-data.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustAbsenceTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId} from "./source-types.js";
@@ -12,6 +14,7 @@ import type {
   RustNamedTypeTraitRequirement,
   RustTargetConstArgument,
   RustTargetGenericArgument,
+  RustTargetTraitRef,
   TargetTypeRef,
 } from "../model.js";
 import { rustTargetGenericTypeArguments } from "../generic-arguments.js";
@@ -239,7 +242,7 @@ function isRustNamedGenericArgument(value: unknown): value is RustTargetGenericA
 }
 
 export function isRustNamedTypeTraitContract(value: unknown): value is RustNamedTypeTraitContract {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== "object" || value === null || Array.isArray(value) || !isClosedMetadata(value)) {
     return false;
   }
   const keys = Object.keys(value).sort();
@@ -253,31 +256,31 @@ export function isRustNamedTypeTraitContract(value: unknown): value is RustNamed
   let previousIdentity: string | undefined;
   for (const implementation of candidate.implementations) {
     if (typeof implementation !== "object" || implementation === null || Array.isArray(implementation) ||
-      !hasExactObjectKeys(implementation, ["requirements", "traitPath"])) {
+      !hasExactObjectKeys(implementation, ["requirements", "trait"])) {
       return false;
     }
     const selected = implementation as Partial<RustNamedTypeTraitImplementation>;
-    if (!isRustTraitPath(selected.traitPath) || !isDenseDataArray(selected.requirements)) {
+    if (!isRustNamedTraitRef(selected.trait) || !isDenseDataArray(selected.requirements)) {
       return false;
     }
     let previousRequirementIdentity: string | undefined;
     for (const requirement of selected.requirements) {
       if (typeof requirement !== "object" || requirement === null || Array.isArray(requirement) ||
-        !hasExactObjectKeys(requirement, ["traitPath", "typeArgumentIndex"])) {
+        !hasExactObjectKeys(requirement, ["trait", "typeArgumentIndex"])) {
         return false;
       }
       const condition = requirement as Partial<RustNamedTypeTraitRequirement>;
       if (!Number.isSafeInteger(condition.typeArgumentIndex) || condition.typeArgumentIndex! < 0 ||
-        !isRustTraitPath(condition.traitPath)) {
+        !isRustNamedTraitRef(condition.trait)) {
         return false;
       }
-      const identity = `${String(condition.typeArgumentIndex).padStart(12, "0")}\0${condition.traitPath}`;
+      const identity = rustNamedTraitRequirementKey(condition as RustNamedTypeTraitRequirement);
       if (previousRequirementIdentity !== undefined && previousRequirementIdentity >= identity) {
         return false;
       }
       previousRequirementIdentity = identity;
     }
-    const identity = `${selected.traitPath}\0${JSON.stringify(selected.requirements)}`;
+    const identity = rustNamedTraitImplementationKey(selected as RustNamedTypeTraitImplementation);
     if (previousIdentity !== undefined && previousIdentity >= identity) {
       return false;
     }
@@ -285,22 +288,56 @@ export function isRustNamedTypeTraitContract(value: unknown): value is RustNamed
   }
   const implementations = candidate.implementations as readonly RustNamedTypeTraitImplementation[];
   return implementations
-    .filter((implementation) => implementation.traitPath === "core::marker::Copy")
+    .filter((implementation) => rustNativeTraitRefEquals(implementation.trait, rustNativeTraitRef("core::marker::Copy")))
     .every((copy) => implementations.some((clone) =>
-      clone.traitPath === "core::clone::Clone" && clone.requirements.every((requirement) =>
+      rustNativeTraitRefEquals(clone.trait, rustNativeTraitRef("core::clone::Clone")) && clone.requirements.every((requirement) =>
         copy.requirements.some((candidate) =>
           candidate.typeArgumentIndex === requirement.typeArgumentIndex &&
-          rustTraitPathImplies(candidate.traitPath, requirement.traitPath)))));
+          (rustNativeTraitRefEquals(candidate.trait, requirement.trait) ||
+            rustNativeTraitRefEquals(candidate.trait, rustNativeTraitRef("core::marker::Copy")) &&
+            rustNativeTraitRefEquals(requirement.trait, rustNativeTraitRef("core::clone::Clone")))))));
 }
 
-function rustTraitPathImplies(actual: string, required: string): boolean {
-  return actual === required ||
-    actual === "core::marker::Copy" && required === "core::clone::Clone";
+export function rustNativeTraitRef(
+  path: string,
+  genericArguments: readonly RustTargetGenericArgument[] = [],
+): RustTargetTraitRef {
+  return { kind: "trait-ref", id: path, path, genericArguments, associatedConstraints: [] };
 }
 
-function isRustTraitPath(value: unknown): value is string {
-  return typeof value === "string" &&
-    /^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)+$/u.test(value);
+export function rustNativeTraitRefEquals(actual: RustTargetTraitRef, required: RustTargetTraitRef): boolean {
+  return actual.path === required.path && rustTargetTypeRefEquals({ ...actual, id: required.id }, required);
+}
+
+export function rustNamedTraitRequirementKey(requirement: RustNamedTypeTraitRequirement): string {
+  return `${String(requirement.typeArgumentIndex).padStart(12, "0")}\0${rustNativeTraitKey(requirement.trait)}`;
+}
+
+export function rustNamedTraitImplementationKey(implementation: RustNamedTypeTraitImplementation): string {
+  return `${rustNativeTraitKey(implementation.trait)}\0${implementation.requirements.map(rustNamedTraitRequirementKey).join("\0")}`;
+}
+
+export function rustNamedTypeTraitContract(
+  implementations: readonly RustNamedTypeTraitImplementation[],
+): RustNamedTypeTraitContract {
+  const compare = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
+  const selected = implementations.map(implementation => Object.freeze({ trait: implementation.trait,
+    requirements: Object.freeze([...new Map(implementation.requirements.map(requirement =>
+      [rustNamedTraitRequirementKey(requirement), requirement] as const)).entries()]
+      .sort(([left], [right]) => compare(left, right)).map(([, requirement]) => requirement)),
+  }));
+  return Object.freeze({ implementations: Object.freeze([...new Map(selected.map(implementation =>
+    [rustNamedTraitImplementationKey(implementation), implementation] as const)).entries()]
+    .sort(([left], [right]) => compare(left, right)).map(([, implementation]) => implementation)) });
+}
+
+function rustNativeTraitKey(trait: RustTargetTraitRef): string {
+  return `${trait.path}\0${closedMetadataKey({ ...trait, id: trait.path })}`;
+}
+
+function isRustNamedTraitRef(value: unknown): value is RustTargetTraitRef {
+  return isRustTargetTypeRef(value) && value.kind === "trait-ref" &&
+    /^(?:r#)?[A-Za-z_][A-Za-z0-9_]*(?:::(?:r#)?[A-Za-z_][A-Za-z0-9_]*)+$/u.test(value.path);
 }
 
 export function rustFixedArrayTargetType(

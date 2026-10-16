@@ -265,7 +265,7 @@ test("provider paths and named carriers materialize before facts reach the backe
     carrierPaths: { "acme.materialized.Value": "acme_runtime::Value" },
     carrierTraits: {
       "acme.materialized.Value": {
-        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+        implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
       },
     },
     crates: [],
@@ -290,7 +290,7 @@ test("provider paths and named carriers materialize before facts reach the backe
       id: "acme.materialized.Value",
       path: "acme_runtime::Value",
       traits: {
-        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+        implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
       },
       genericArguments: [],
       genericDefaults: [],
@@ -415,7 +415,7 @@ test("conflicting provider carrier trait contracts fail before operation facts a
   assert.throws(
     () => collectRustProviderSemantics(providerContext([
       packageWithTraits("acme-first", "@acme/first", {
-        implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+        implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
       }),
       packageWithTraits("acme-second", "@acme/second", { implementations: [] }),
     ])),
