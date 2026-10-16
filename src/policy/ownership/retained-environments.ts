@@ -20,7 +20,7 @@ export function rustSuspendedCapturedParameters(declaration: Node, context: Rust
 export function rustRetainedEnvironment(
   declaration: Node,
   parameterCarriers: readonly (TargetTypeRef | undefined)[],
-  context: RustSourcePolicyContext,
+  context: Pick<RustSourcePolicyContext, "ast" | "retainedEnvironments">,
 ): RustRetainedEnvironmentSelection {
   const parameters = context.ast.parameters(declaration);
   if (parameters.length !== parameterCarriers.length || parameters.some(parameter => parameter === undefined) ||

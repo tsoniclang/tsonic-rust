@@ -2,6 +2,7 @@ import type { Node } from "@tsonic/tsts";
 import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
+import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustHasOpenOwnedStorage, rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
@@ -113,7 +114,8 @@ export function rustRetainedCallResult(result: TargetTypeRef, lifetimes: Readonl
 }
 
 export function rustRetainedValueLifetime(
-  declaration: Node, captures: readonly TargetTypeRef[], walk: RustFactWalk,
+  declaration: Node, captures: readonly TargetTypeRef[],
+  walk: { readonly context: Pick<RustSourcePolicyContext, "ast" | "sourceLifetimes" | "records" | "retainedEnvironments"> },
 ): RustLifetimeRef | undefined {
   const { context } = walk;
   if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime(captures,

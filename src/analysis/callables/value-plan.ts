@@ -46,6 +46,7 @@ import type { RustPhysicalCallableFlowApplications } from "../../target-model/re
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
 import type { RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
+import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -87,6 +88,7 @@ export interface RustCallableValuePlanInput {
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly carrierHost: RustValueDomainCarrierHost;
+  readonly retainedEnvironments: RustRetainedEnvironmentQueries;
 }
 
 export interface RustCallableValueConstruction {

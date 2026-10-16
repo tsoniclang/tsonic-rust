@@ -21,6 +21,8 @@ import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
+import { rustRetainedValueLifetime } from "./retained-environments.js";
+import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 
 interface RustStructuralMethodRoot {
   readonly carrier: TargetTypeRef;
@@ -40,6 +42,7 @@ export function createRustStructuralMethodStorage(input: {
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lifetimes: RustLifetimeIndex;
+  readonly retainedEnvironments: RustRetainedEnvironmentQueries;
 }): {
   complete(errors: Pick<RustErrorRegionRecords, "producerError">): void;
 } {
@@ -128,8 +131,14 @@ export function createRustStructuralMethodStorage(input: {
           if (bound?.kind === "unresolved") throw new Error(bound.reason);
           if (source === undefined || protocol.lifetime === undefined)
             throw new Error("Structural method storage requires its existing physical callable signature and destination lifetime.");
-          const retained = rustCallableProtocol(bound === undefined ? logical : substituteRustTargetGenerics(logical,
-            bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts))?.lifetime;
+          const captures = records.closureCapture.get(subject.node);
+          if (captures === undefined) throw new Error("Structural method storage requires its admitted closure capture inventory.");
+          const captureCarriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture =>
+            bound === undefined ? capture.carrier : substituteRustTargetGenerics(capture.carrier,
+              bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
+          const retained = rustRetainedValueLifetime(subject.node, captureCarriers, { context: {
+            ast, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
+          } });
           if (retained === undefined || protocol.lifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
             protocol.lifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes)))
             throw new Error("Structural method storage lost its admitted retained-lifetime correspondence.");

@@ -569,6 +569,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
+    retainedEnvironments: context.retainedEnvironments,
     carrierHost: { sourceStorage: context.sourceStorage, sourceTypes: walk.sourceTypes,
       projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: context.semantics,
       types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier } } });
