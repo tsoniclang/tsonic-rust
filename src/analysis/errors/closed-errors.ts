@@ -1,5 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { Node_Expression, isSourceCallableBodyBoundary, TryStatement_CatchClause,
+import { Node_Expression, TryStatement_CatchClause,
   TryStatement_TryBlock } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -16,6 +16,7 @@ import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion }
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 
 export interface RustClosedErrorTransportDemand {
   readonly thrownCarriers: readonly TargetTypeRef[];
@@ -26,6 +27,7 @@ export interface RustClosedErrorTransportDemand {
 export function rustClosedErrorTransportDemand(
   sourceFile: SourceFile, ast: AstReader, records: RustProgramRecords,
   definitions: RustTypeDefinitions, projectTypes: RustProjectTypePolicy,
+  effectsFor: (node: Node) => RustErrorEffectsFact | undefined,
 ): RustClosedErrorTransportDemand | undefined {
   const carriers: TargetTypeRef[] = [];
   let retained = false;
@@ -90,22 +92,12 @@ export function rustClosedErrorTransportDemand(
       retained = true;
     }
     const operation = records.targetOperation.get(node);
-    if (ast.kindName(node) === "KindAwaitExpression") {
-      const operand = Node_Expression(ast, node);
-      const rejections = [records.errorEffects.get(node), operand === undefined ? undefined : records.errorEffects.get(operand)];
-      if (rejections.some(effects => effects?.nativeErrors.some(error => error.identity === rustJsRejectionErrorIdentity &&
-        rustTargetTypeRefEquals(error.errorType, rustJsValueTargetType())) === true)) {
-        let child = node;
-        let depth = 0;
-        for (let parent = ast.parent(child); parent !== undefined; child = parent, parent = ast.parent(parent)) {
-          if (++depth > 2048) return undefined;
-          if (isSourceCallableBodyBoundary(ast, parent)) break;
-          if (TryStatement_TryBlock(ast, parent) === child && TryStatement_CatchClause(ast, parent) !== undefined) {
-            collect(rustJsValueTargetType(), { kind: "closed" });
-            break;
-          }
-        }
-      }
+    if (ast.kindName(node) === "KindTryStatement" && TryStatement_CatchClause(ast, node) !== undefined) {
+      const body = TryStatement_TryBlock(ast, node);
+      const effects = body === undefined ? undefined : effectsFor(body);
+      if (effects === undefined) return undefined;
+      if (effects.nativeErrors.some(error => error.identity === rustJsRejectionErrorIdentity &&
+        rustTargetTypeRefEquals(error.errorType, rustJsValueTargetType()))) collect(rustJsValueTargetType(), { kind: "closed" });
     }
     if (ast.kindName(node) === "KindThrowStatement" && operation?.kind === "throw-op" &&
       operation.error.kind === "conversion" && operation.error.expression === Node_Expression(ast, node)) {
