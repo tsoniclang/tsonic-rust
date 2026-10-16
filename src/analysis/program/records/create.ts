@@ -1,5 +1,5 @@
 import { assertRustRequiredRecords, type RustRequiredRecord } from "./required-records.js";
-import type { RustProgramRecordBuilder } from "./model.js";
+import type { RustAnalysisRecords, RustProgramRecordBuilder } from "./model.js";
 import type { RustProgramRecords } from "../../../target-model/records/program.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { maximumRustFoundation, type RustFoundation } from "../../../target-model/foundation/model.js";
@@ -70,10 +70,11 @@ import { createRustTypeAliasDeclarationProducer } from "./type-alias-declaration
 import { createRustMutatedBindingProducer } from "./mutated-binding.js";
 import { createRustMutatedReferentProducer } from "./mutated-referent.js";
 import { createRustMemoryLayoutObservationProducer } from "./memory-layout-observation.js";
+import { createRustNativeHandlerProducer } from "./native-handlers.js";
 
 export function createRustProgramRecordBuilder(
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
-  parent?: RustProgramRecords,
+  parent?: RustAnalysisRecords,
 ): RustProgramRecordBuilder {
   let sealed = false;
   let minimumFoundation: RustFoundation = "core";
@@ -150,8 +151,10 @@ export function createRustProgramRecordBuilder(
   const rawAddresses = createRustRawAddressProducer(assertOpen, parent?.rawAddressPlan);
   const memoryLayoutObservations = createRustMemoryLayoutObservationProducer(assertOpen, parent?.memoryLayoutObservation);
   const classValues = createRustClassValueProducer(assertOpen, parent?.classValue);
+  const nativeHandlers = createRustNativeHandlerProducer(assertOpen, parent?.nativeHandler);
 
-  const records: RustProgramRecords = Object.freeze({
+  const records: RustAnalysisRecords = Object.freeze({
+    nativeHandler: nativeHandlers.records,
     typeAliasDeclaration: typeAliasDeclarations.records,
     asyncFunction: asyncFunctions.records,
     generator: generators.records,
@@ -223,6 +226,7 @@ export function createRustProgramRecordBuilder(
   return Object.freeze({
     ...records,
     assertOpen,
+    nativeHandlers,
     typeAliasDeclarations,
     asyncFunctions,
     generators,
@@ -293,7 +297,7 @@ export function createRustProgramRecordBuilder(
     minimumFoundation(): RustFoundation {
       return maximumRustFoundation(minimumFoundation, selectedOperations.minimumFoundation());
     },
-    seal(required: readonly RustRequiredRecord[]): RustProgramRecords {
+    seal(required: readonly RustRequiredRecord[]): RustAnalysisRecords {
       if (sealed) throw new Error("Rust semantic plans can be sealed only once.");
       assertRustRequiredRecords(records, required);
       selectedOperations.seal();
@@ -301,4 +305,9 @@ export function createRustProgramRecordBuilder(
       return records;
     },
   });
+}
+
+export function createRustProgramRecords(records: RustAnalysisRecords): RustProgramRecords {
+  const { memoryBindingPlan, rawLocationPlan, rawAddressPlan, memoryLayoutObservation, typedLocationPlan, ...published } = records;
+  return Object.freeze(published);
 }

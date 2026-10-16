@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
+import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../../target-model/records/operations.js";
 
 import { rustProgramErrorTargetType } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
@@ -20,11 +20,11 @@ import type { RustExpressionPlanner } from "./typed-locations.js";
 export function planRustTypedLocationCall(
   node: Node,
   fact: Extract<RustTargetOperationFact, { readonly kind: "typed-location" }>,
+  plan: RustTypedLocationPlan,
   context: RustPlanContext,
   planExpression: RustExpressionPlanner,
 ): RustExpr | undefined {
-  const plan = context.input.program.records.typedLocationPlan.get(node);
-  if (plan === undefined || !typedLocationFactMatchesPlan(fact, plan)) {
+  if (!typedLocationFactMatchesPlan(fact, plan)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
       "rust.backend.typed-location-plan",

@@ -9,33 +9,32 @@ import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustRuntimeNativeLayoutTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
 import { rustNativeMemoryPaths } from "../../../target-model/names/native-memory.js";
+import type { RustRawLocationPlan } from "../../../target-model/records/native-memory.js";
 
 export function planRustNativeAllocation(node: Node, initial: RustExpr, context: RustPlanContext, errorCarrier?: TargetTypeRef): RustExpr | undefined {
   const layout = context.input.program.records.nativeBacking.get(node);
   return layout === undefined ? undefined : planRustNativeMemoryCall("allocate_native_location", initial, layout, context, errorCarrier);
 }
 
-export function tryPlanRustRawLocation(
-  node: Node, context: RustPlanContext,
+export function planRustRawLocation(
+  node: Node, plan: RustRawLocationPlan, context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
-): { readonly handled: boolean; readonly expression?: RustExpr } {
-  const plan = context.input.program.records.rawLocationPlan.get(node);
-  if (plan === undefined) return { handled: false };
+): RustExpr | undefined {
   if (plan.operation === "reinterpret" && (context.explicitUnsafeContextDepth ?? 0) === 0) {
     context.diagnostics.push({ code: "RUST_NATIVE_POINTER_UNSAFE_CONTEXT_REQUIRED", category: "error",
       source: "tsonic-rust", sourceNode: node,
       message: "Raw memory reinterpretation requires an explicit unsafecontext() source region." });
-    return { handled: true };
+    return undefined;
   }
   const value = planExpression(plan.expression, context);
-  if (value === undefined) return { handled: true };
-  if (value.kind === "bottom") return { handled: true, expression: value };
+  if (value === undefined) return undefined;
+  if (value.kind === "bottom") return value;
   const borrowed = value;
   const argument: RustExpr = rustOptionElementCarrier(plan.inputCarrier) === undefined
     ? { kind: "call", path: "Some", args: [{ kind: "reference", expr: borrowed }] }
     : { kind: "method-call", receiver: borrowed, method: "as_ref", args: [] };
-  return { handled: true, expression: planRustNativeMemoryCall(plan.operation === "to-raw"
-    ? "location_to_raw" : "reinterpret_raw_location", argument, plan.layout, context, rustProgramErrorTargetType()) };
+  return planRustNativeMemoryCall(plan.operation === "to-raw"
+    ? "location_to_raw" : "reinterpret_raw_location", argument, plan.layout, context, rustProgramErrorTargetType());
 }
 
 export function planRustNativeMemoryCall(method: "allocate_native_location" | "location_to_raw" | "reinterpret_raw_location", value: RustExpr, layout: RustNativeMemoryLayout, context: RustPlanContext, errorCarrier?: TargetTypeRef): RustExpr | undefined {

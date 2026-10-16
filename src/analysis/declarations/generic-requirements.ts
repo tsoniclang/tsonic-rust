@@ -26,7 +26,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCarrierSupportsTrait } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -86,7 +86,7 @@ export type AnalyzeRustDeclarationGenericRequirementsResult =
 export function analyzeRustDeclarationGenericRequirements(
   source: TargetSourceProgram,
   sourceFiles: readonly SourceFile[],
-  records: RustProgramRecords,
+  records: RustAnalysisRecords,
   names: RustNamePlan,
   sourceLifetimes: RustLifetimeIndex,
   typeFamilies: RustSourceTypeFamilyRegistry,

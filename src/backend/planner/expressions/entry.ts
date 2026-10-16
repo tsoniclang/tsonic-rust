@@ -31,13 +31,13 @@ import { planRustFlowReadProjection } from "./flow-reads.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { planRustProjectDowncast } from "../objects/project-downcasts.js";
 import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
-import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe, tryPlanRustExplicitSafetyExpression } from "../safety/explicit-safety.js";
+import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches, rustValueReferenceReborrow } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
-import { tryPlanRustNativePointerOperation } from "./native-pointers.js";
+import { planRustNativeHandler } from "./native-handlers.js";
 import type { Node } from "@tsonic/tsts";
 import { planRustGenericCallableFlow } from "./generic-callable-flow.js";
 import { planRustCallableConversion } from "./callable-conversions.js";
@@ -334,19 +334,11 @@ export function planRawExpression(
   access: RustExpressionAccess = "value",
 ): RustExpr | undefined {
   const diagnosticCount = context.diagnostics.length;
-  const explicitSafety = tryPlanRustExplicitSafetyExpression(
-    node,
-    context,
-    planExpression,
-  );
-  const nativePointer = explicitSafety.handled
-    ? undefined
-    : tryPlanRustNativePointerOperation(node, context, planExpression);
+  const nativeHandler = context.input.program.records.nativeHandler.get(node);
+  const nativeCall = nativeHandler?.kind === "js-string-conversion" || nativeHandler?.kind === "typed-location";
   let planned: RustExpr | undefined;
-  if (explicitSafety.handled) {
-    planned = explicitSafety.expression;
-  } else if (nativePointer?.handled === true) {
-    planned = nativePointer.expression;
+  if (nativeHandler !== undefined && !nativeCall) {
+    planned = planRustNativeHandler(node, nativeHandler, context, resultUse, planExpression);
   } else if (
     rustExpressionUnsafeRequirement(node, context) !== undefined &&
     (context.explicitUnsafeContextDepth ?? 0) === 0
@@ -359,6 +351,8 @@ export function planRawExpression(
       sourceNode: node,
     });
     planned = undefined;
+  } else if (nativeHandler !== undefined) {
+    planned = planRustNativeHandler(node, nativeHandler, context, resultUse, planExpression);
   } else {
     planned = planExpressionInner(node, context, resultUse, access);
   }

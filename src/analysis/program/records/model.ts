@@ -1,6 +1,11 @@
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import type { RustRequiredRecord } from "./required-records.js";
-import type { RustProgramRecords } from "../../../target-model/records/program.js";
+import type { RustProgramRecords, RustRecordFamily } from "../../../target-model/records/program.js";
+import type { RustRawLocationPlan } from "../../../target-model/records/native-memory.js";
+import type { RustMemoryBindingPlan } from "../../../target-model/records/memory-bindings.js";
+import type { RustRawAddressPlan } from "../../../target-model/records/raw-addresses.js";
+import type { RustTypedLocationPlan } from "../../../target-model/records/operations.js";
+import type { RustNativeHandlerProducer } from "./native-handlers.js";
 import type { RustConversionProducer } from "./conversion.js";
 import type { RustOptionProjectionProducer } from "./option-projection.js";
 import type { RustFlowReadProjectionProducer } from "./flow-read-projection.js";
@@ -69,7 +74,16 @@ import type { RustPreparedOperationResultProducer } from "./prepared-operation-r
 import type { RustOptionalChainProducer } from "./optional-chain.js";
 import type { RustClosureCaptureProducer } from "./closure-capture.js";
 
-export type RustProgramRecordWriter = RustProgramRecords & {
+export interface RustAnalysisRecords extends RustProgramRecords {
+  readonly rawLocationPlan: RustRecordFamily<RustRawLocationPlan>;
+  readonly memoryBindingPlan: RustRecordFamily<RustMemoryBindingPlan>;
+  readonly rawAddressPlan: RustRecordFamily<RustRawAddressPlan>;
+  readonly memoryLayoutObservation: RustRecordFamily<{ readonly value: number }>;
+  readonly typedLocationPlan: RustRecordFamily<RustTypedLocationPlan>;
+}
+
+export type RustProgramRecordWriter = RustAnalysisRecords & {
+  readonly nativeHandlers: RustNativeHandlerProducer;
   readonly assertOpen: () => void;
   readonly conversions: RustConversionProducer;
   readonly optionProjections: RustOptionProjectionProducer;
@@ -141,6 +155,6 @@ export type RustProgramRecordWriter = RustProgramRecords & {
 };
 
 export interface RustProgramRecordBuilder extends RustProgramRecordWriter {
-  seal(required: readonly RustRequiredRecord[]): RustProgramRecords;
+  seal(required: readonly RustRequiredRecord[]): RustAnalysisRecords;
   minimumFoundation(): RustFoundation;
 }

@@ -12,10 +12,11 @@ import type { RustAwaitSourceErrorEffectsFact } from "./await-source-error-effec
 import type { RustObjectLiteralMethodAdapterFact, RustSourceCallEffectsFact, RustSourceAccessorEffectsFact, RustFutureValueFact } from "./object-methods.js";
 import type { RustOptionProjectionFact, RustFlowReadProjectionFact, RustContextualValueConversionFact, RustCallScopedLifetimeReconciliationFact, RustProjectUpcastFact, RustSourceBindingFact, RustBindingProjectionFact } from "./value-projections.js";
 import type { RustProjectDowncastFact } from "../types/project-projections.js";
-import type { RustTargetOperationFact, RustTypedLocationPlan } from "./operations.js";
+import type { RustTargetOperationFact } from "./operations.js";
+import type { RustNativeHandler } from "./native-handlers.js";
 import type { RustPreparedOperationResultFact, RustBindingStorageFact, RustClosureCaptureFact, RustSourceCallableValueFact, RustModuleBindingFact, RustComputedMemberFact } from "./operation-selections.js";
 import type { RustOptionalChainFact } from "../operations/model.js";
-import type { RustNativeArrayStorage, RustRawLocationPlan } from "./native-memory.js";
+import type { RustNativeArrayStorage } from "./native-memory.js";
 import type { RustNativeMemoryLayout } from "../operations/native-memory.js";
 import type { RustObjectReferenceView } from "./object-reference-views.js";
 import type { RustProjectCallableAdapter } from "./project-callable-adapters.js";
@@ -24,8 +25,6 @@ import type { RustLifetimeRef } from "../lifetimes/model.js";
 import type { RustGenericCallableInvocationFact } from "./generic-callable-effects.js";
 import type { RustCapturedFieldStorageFact } from "./receiver-captures.js";
 import type { RustPropertyProjectionFact } from "./property-projections.js";
-import type { RustMemoryBindingPlan } from "./memory-bindings.js";
-import type { RustRawAddressPlan } from "./raw-addresses.js";
 import type { RustClassValueFact } from "./class-values.js";
 
 export interface RustRecordFamily<T> {
@@ -71,12 +70,12 @@ export interface RustProgramRecords {
   readonly mutatedReferent: RustRecordFamily<{ readonly mutated: true }>;
   readonly selfMode: RustRecordFamily<{ readonly mode: "ref" | "mut-ref" }>;
   readonly targetOperation: RustRecordFamily<RustTargetOperationFact>;
+  readonly nativeHandler: RustRecordFamily<RustNativeHandler>;
   readonly compoundWrite: RustRecordFamily<Extract<RustTargetOperationFact, { kind: "runtime-set" }>>;
   readonly computedMember: RustRecordFamily<RustComputedMemberFact>;
   readonly receiverIndependentMethod: RustRecordFamily<{ readonly carrier: TargetTypeRef }>;
   readonly preparedOperationResult: RustRecordFamily<RustPreparedOperationResultFact>;
   readonly optionalChain: RustRecordFamily<RustOptionalChainFact>;
-  readonly typedLocationPlan: RustRecordFamily<RustTypedLocationPlan>;
   readonly bindingStorage: RustRecordFamily<RustBindingStorageFact>;
   readonly closureCapture: RustRecordFamily<RustClosureCaptureFact>;
   readonly sourceCallableValue: RustRecordFamily<RustSourceCallableValueFact>;
@@ -87,7 +86,6 @@ export interface RustProgramRecords {
 }>;
   readonly nativeArrayStorage: RustRecordFamily<RustNativeArrayStorage>;
   readonly nativeBacking: RustRecordFamily<RustNativeMemoryLayout>;
-  readonly rawLocationPlan: RustRecordFamily<RustRawLocationPlan>;
   readonly indexedFieldKeyArgument: RustRecordFamily<{
   readonly carrier: TargetTypeRef;
   readonly evaluate: boolean;
@@ -103,8 +101,5 @@ export interface RustProgramRecords {
   readonly genericCallableInvocation: RustRecordFamily<RustGenericCallableInvocationFact>;
   readonly capturedFieldStorage: RustRecordFamily<RustCapturedFieldStorageFact>;
   readonly propertyProjection: RustRecordFamily<RustPropertyProjectionFact>;
-  readonly memoryBindingPlan: RustRecordFamily<RustMemoryBindingPlan>;
-  readonly rawAddressPlan: RustRecordFamily<RustRawAddressPlan>;
-  readonly memoryLayoutObservation: RustRecordFamily<{ readonly value: number }>;
   readonly classValue: RustRecordFamily<RustClassValueFact>;
 }
