@@ -57,7 +57,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 
 export interface RustSourceFallibilityConstruction {
-  effectsFor(declaration: Node): RustErrorEffectsFact | undefined;
+  effectsFor(subject: Node): RustErrorEffectsFact | undefined;
   complete(): void;
 }
 
@@ -715,8 +715,18 @@ function collectFallibilityFacts(
       "fallible-source", "recordFallibilityFacts");
     walk.context.records.fallibleSubjects.selected(subject);
   }
+  const intrinsicEffects = new Map<Node, RustErrorEffectsFact>();
+  for (const selections of [effectsByDeclaration, effectsByExpression, effectsByRegion, effectsByModule]) {
+    for (const [subject, effects] of selections) {
+      budget.step();
+      const existing = intrinsicEffects.get(subject);
+      if (existing !== undefined && !rustErrorEffectsEqual(existing, effects))
+        throw new Error("One checked intrinsic effect subject cannot have contradictory completed source effects.");
+      intrinsicEffects.set(subject, effects);
+    }
+  }
   let published = false;
-  return Object.freeze({ effectsFor: (declaration: Node) => effectsByDeclaration.get(declaration),
+  return Object.freeze({ effectsFor: (subject: Node) => intrinsicEffects.get(subject),
     complete() {
       if (published) throw new Error("Rust intrinsic error applications publish exactly once after physical binding.");
       const failure = budget.run(() => {
