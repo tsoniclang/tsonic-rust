@@ -46,7 +46,8 @@ export function selectRustAwaitSourceErrors(
       budget.step();
       const asynchronous = records.asyncFunction.get(target);
       if (asynchronous === undefined) continue;
-      const topology = rustAwaitSelection(asynchronous.futureCarrier, definitions);
+      const sourceFuture = operation.asyncBody?.declaration === target ? operation.resultCarrier : asynchronous.futureCarrier;
+      const topology = rustAwaitSelection(sourceFuture, definitions);
       const activation = storage.bindingsForInvocation(target, invocation, producer.bindings);
       if (topology === undefined || activation.kind !== "resolved") return undefined;
       const effects = effectsFor(target);

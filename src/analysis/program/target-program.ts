@@ -254,6 +254,7 @@ export function analyzeRustTargetProgram(
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
   const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
+    promiseBodies: context.promiseBodies.plan,
     names: context.names, callables: context.callableValues.selected,
     producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
     components: sourcePackageComponents.plan });
@@ -275,6 +276,7 @@ export function analyzeRustTargetProgram(
     context.callableValues.selected.frames,
     context.callableValues.native,
     errorRegions.value,
+    context.promiseBodies.plan,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);

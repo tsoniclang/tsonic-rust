@@ -72,7 +72,7 @@ export function planRustNativeCallableGenerics(
   }
   const parameters: RustGenericParameter[] = [];
   const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
-  if (context.input.program.records.asyncFunction.get(declaration)?.kind === "js-promise") {
+  if (context.promiseBody !== true && context.input.program.records.asyncFunction.get(declaration)?.kind === "js-promise") {
     const errors = context.input.program.records.errorEffects.get(declaration)?.nativeErrors ?? [];
     const selected = new Map(errors.map(error => [closedMetadataKey(error.errorType), error.errorType]));
     for (const carrier of selected.values()) {

@@ -160,6 +160,7 @@ function planRustSourceCallableGenerics(
   );
   const requirementContract = context.input.program.declarationGenericRequirements.contractFor(
     declaration,
+    context.promiseBody,
   );
   if (requirementContract === undefined ||
     requirementContract.typeParameters.length !== ordinaryParameters.length ||

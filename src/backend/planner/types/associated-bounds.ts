@@ -14,7 +14,7 @@ export function rustDeclarationAssociatedPredicates(
   context: RustPlanContext,
   inScope: (carrier: TargetTypeRef) => boolean = () => true,
 ): readonly RustWherePredicate[] {
-  const contract = context.input.program.declarationGenericRequirements.contractFor(declaration);
+  const contract = context.input.program.declarationGenericRequirements.contractFor(declaration, context.promiseBody);
   if (contract === undefined) throw new Error("A Rust declaration has no sealed generic requirement contract.");
   return [...rustAssociatedPredicates(contract.associatedTypes.filter(requirement => inScope(requirement.carrier)), context),
     ...rustProjectProjectionPredicates(contract.projectProjections.filter(requirement =>

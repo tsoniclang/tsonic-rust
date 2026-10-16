@@ -25,8 +25,7 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
-import { resolveRustSuspendedCallableStorage, rustSuspendingPromiseBorrowReason } from "./suspension-storage.js";
-import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
 import { rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
 import type {
   RustAsyncFunctionFact, RustJsPromiseLowering, RustSettledPromiseAwait, RustSettledPromiseBodies, RustSettledPromiseCall,
@@ -132,15 +131,15 @@ export function selectRustAsyncBodyFacts(
       ...(environment.kind === "selected" ? { retainedEnvironment: environment.environment } : {}),
     };
   }
-  const storage = resolveRustSuspendedCallableStorage(walk, declaration, [selected.outputCarrier], ownedReceiver,
-    rustStaticLifetime);
-  if (storage.kind === "rejected" || storage.storage.kind !== "static") {
+  const storage = resolveRustSuspendedCallableStorage(walk, declaration, [selected.outputCarrier], ownedReceiver);
+  if (storage.kind === "rejected") {
     appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
-      storage.kind === "rejected" ? storage.reason : rustSuspendingPromiseBorrowReason,
+      storage.reason,
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
     return;
   }
   return { fact: rustPromiseAsyncFunctionFact(closedFutureCarrier, selected.outputCarrier, { kind: "factory",
+    storage: storage.storage,
     capturedParameters: storage.capturedParameters,
     ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
   }), ...(storage.retainedEnvironment === undefined ? {} : { retainedEnvironment: storage.retainedEnvironment }) };
@@ -270,7 +269,7 @@ export function analyzeRustSettledPromiseBodies(input: {
     if (fact?.kind === "js-promise" && fact.lowering.kind === "settled") {
       for (const selected of fact.lowering.settledAwaits) {
         const callee = input.records.asyncFunction.get(selected.callee);
-        const name = input.names.settledHelperNameForDeclaration(selected.callee);
+        const name = input.names.nativeBodyNameForDeclaration(selected.callee);
         const operand = Node_Expression(input.ast, selected.expression);
         const call = operand === undefined ? undefined : rustUnparenthesizedExpression(input.ast, operand);
         const effects = input.records.errorEffects.get(selected.callee);

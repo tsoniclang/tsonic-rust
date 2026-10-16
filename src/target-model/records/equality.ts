@@ -36,7 +36,8 @@ function rustJsPromiseLoweringEquals(left: RustJsPromiseLowering, right: RustJsP
       left.settledAwaits.every((selected, index) => selected.expression === right.settledAwaits[index]!.expression &&
         selected.callee === right.settledAwaits[index]!.callee);
   }
-  return left.capturedParameters.length === right.capturedParameters.length &&
+  return rustSuspendedCallableStorageEquals(left.storage, right.storage) &&
+    left.capturedParameters.length === right.capturedParameters.length &&
     left.capturedParameters.every((parameter, index) => parameter === right.capturedParameters[index]) &&
     rustSuspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver);
 }

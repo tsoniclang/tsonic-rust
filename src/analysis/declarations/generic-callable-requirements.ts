@@ -81,8 +81,12 @@ interface ClassifyCallableInput {
   readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
   readonly idByDeclaration: WeakMap<Node, string>;
+  readonly bodyIdByDeclaration: WeakMap<Node, string>;
+  readonly promiseObjectFacet?: true;
+  readonly nativePromiseBody: boolean;
+  readonly inheritedBody?: RequirementContractState;
   readonly implementationDeclaration: (declaration: Node) => Node;
-  readonly contractFor: (declaration: Node) => RequirementContractState | undefined;
+  readonly contractFor: (declaration: Node, body?: true) => RequirementContractState | undefined;
   readonly errorRegions: RustAnalyzedErrorRegions;
 }
 
@@ -131,10 +135,21 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (dispatchLifetime?.kind === "static") byParameter.get(name)!.add("static");
     }
   }
-  const uses: RequirementUse[] = [];
+  const uses: RequirementUse[] = [...input.inheritedBody?.uses ?? []];
   const dependencies = new Set<string>();
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
     (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require, input.typeDefinitions));
+  for (const parameter of [...input.inheritedBody?.typeParameters ?? [], ...input.inheritedBody?.capturedTypeParameters ?? []])
+    for (const requirement of parameter.requirements) byParameter.get(parameter.identity)?.add(requirement);
+  for (const projection of input.inheritedBody?.optionalStorage ?? []) {
+    if (!optionalStorage.collect(projection.carrier)) return { kind: "rejected", reason: "A Promise object lost its native body's exact optional-storage contract." };
+    for (const requirement of projection.requirements) byParameter.get(projection.carrier.identity)?.add(requirement);
+  }
+  for (const requirement of input.inheritedBody?.associatedTypes ?? []) {
+    if (!associated.require(requirement.carrier) || requirement.requirements.some(value => !associated.require(requirement.carrier, value)) ||
+      requirement.fieldAccess !== undefined && !associated.requireField(requirement.carrier, requirement.fieldAccess, requirement.output))
+      return { kind: "rejected", reason: "A Promise object lost its native body's exact associated-type contract." };
+  }
   const addUse = (
     node: Node,
     carrier: TargetTypeRef | undefined,
@@ -168,13 +183,13 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     return undefined;
   };
-  for (const adapter of records.projectCallableAdapters.get(declaration) ?? []) {
+  for (const adapter of input.promiseObjectFacet === true ? [] : records.projectCallableAdapters.get(declaration) ?? []) {
     for (const carrier of rustCallableRestCloneSources(adapter.parameterAdapters)) {
       const error = addUse(declaration, carrier, ["clone"]);
       if (error !== undefined) return { kind: "rejected", reason: error };
     }
   }
-  const generator = records.generator.get(declaration);
+  const generator = input.promiseObjectFacet === true ? undefined : records.generator.get(declaration);
   if (generator !== undefined) {
     if (generator.storage.kind === "static" && generator.ownedReceiver !== undefined) {
       const receiverError = addUse(declaration, generator.ownedReceiver.carrier, ["static"]);
@@ -201,11 +216,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   }
   const asynchronous = records.asyncFunction.get(declaration);
   const rejection = input.errorRegions.get(declaration)?.jsRejection;
-  for (const carrier of rejection?.requiredCarriers ?? []) {
+  const objectOperation = !input.nativePromiseBody || input.promiseObjectFacet === true;
+  for (const carrier of objectOperation ? rejection?.requiredCarriers ?? [] : []) {
     const error = addUse(declaration, carrier, ["js-rejection"]);
     if (error !== undefined) return { kind: "rejected", reason: error };
   }
-  if (asynchronous?.kind === "js-promise") {
+  if (asynchronous?.kind === "js-promise" && objectOperation) {
     if (rejection === undefined) return { kind: "rejected", reason: "A JS Promise body has no selected rejection region." };
     const lowering = asynchronous.lowering;
     const error = addUse(
@@ -685,7 +701,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         : genericDefinition.implementations);
       for (const implementation of callees) {
         const selectedDeclaration = implementation.declaration;
-        const calleeId = input.idByDeclaration.get(selectedDeclaration);
+        const calleeId = (operation.asyncBody === undefined ? input.idByDeclaration : input.bodyIdByDeclaration).get(selectedDeclaration);
         if ((genericDefinition !== undefined || frameEntry !== undefined) && calleeId === undefined) {
           return "A sealed callable implementation has no exact source generic-contract owner.";
         }
@@ -700,7 +716,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         );
         if (calleeId !== undefined) {
           dependencies.add(calleeId);
-          const callee = input.contractFor(selectedDeclaration);
+          const callee = input.contractFor(selectedDeclaration, operation.asyncBody === undefined ? undefined : true);
           if (callee !== undefined) {
             if (callee.typeParameters.length !== targetTypeArguments.length) {
               return "A selected Rust source call has inconsistent generic contract arity.";
@@ -793,7 +809,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     });
     return childError;
   };
-  const error = visit(declaration);
+  const error = input.promiseObjectFacet === true ? undefined : visit(declaration);
   if (error !== undefined) {
     return { kind: "rejected", reason: error };
   }
@@ -809,7 +825,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     contract: Object.freeze({
       declaration,
       associatedTypes: associated.seal(),
-      projectProjections: projections.seal(),
+      projectProjections: input.inheritedBody?.projectProjections ?? projections.seal(),
       optionalStorage: optionalStorage.seal(),
       typeParameters: Object.freeze(ownParameters.map((parameter) => Object.freeze({
         identity: parameter.identity, name: parameter.name,
