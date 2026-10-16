@@ -19,6 +19,7 @@ import type {
 } from "../model.js";
 import { rustTargetGenericTypeArguments } from "../generic-arguments.js";
 import { isRustLifetimeRef } from "../../lifetimes/index.js";
+import { mapRustTargetTypes } from "./substitution.js";
 
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
   return { kind: "source-primitive", name: kind };
@@ -306,7 +307,13 @@ export function rustNativeTraitRef(
 }
 
 export function rustNativeTraitRefEquals(actual: RustTargetTraitRef, required: RustTargetTraitRef): boolean {
-  return actual.path === required.path && rustTargetTypeRefEquals({ ...actual, id: required.id }, required);
+  if (actual.path !== required.path || !isRustTargetTypeRef(actual) || !isRustTargetTypeRef(required)) return false;
+  const nativeIdentity = (type: TargetTypeRef): TargetTypeRef => {
+    if (type.kind === "trait-ref") return { ...type, id: type.path };
+    const named = rustNamedTypeCarrierValue(type);
+    return named === undefined ? type : rustNamedTargetType(named.id, named.path, named.genericArguments, named.genericDefaults);
+  };
+  return rustTargetTypeRefEquals(mapRustTargetTypes(actual, nativeIdentity), mapRustTargetTypes(required, nativeIdentity));
 }
 
 export function rustNamedTraitRequirementKey(requirement: RustNamedTypeTraitRequirement): string {
