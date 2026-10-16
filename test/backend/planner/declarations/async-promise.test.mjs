@@ -13,7 +13,7 @@ test("settled JS bodies run synchronously inside a native stack closure", () => 
     assert.equal(call.args[0].callee.async, false);
     assert.equal(call.args[0].callee.body === body, true);
     const printed = printRustExpr(call);
-    assert.equal(printed.includes("(move || { return 7; })()"), true);
+    assert.equal(printed.replace(/\s+/gu, " ").includes("(move || { return 7; })()"), true, printed);
     assert.equal(printed.includes("async"), false);
   }
 });

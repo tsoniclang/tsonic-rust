@@ -115,6 +115,7 @@ export interface RustPlanContext {
   // Exact callable contract whose generic obligations were sealed by target
   // analysis before this syntax-planning context was created.
   readonly callableDeclaration?: Node;
+  readonly settledPromiseCall?: import("../../../target-model/records/callables-and-resources.js").RustSettledPromiseCall;
   readonly generator?: {
     readonly declaration: Node;
     readonly controllerName: string;

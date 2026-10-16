@@ -46,6 +46,11 @@ import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
 
+interface RustFunctionItemPlan {
+  readonly item: RustItem;
+  readonly helper: RustItem | undefined;
+}
+
 export function planFunctionDeclarations(
   node: Node,
   outerContext: RustPlanContext,
@@ -57,8 +62,9 @@ export function planFunctionDeclarations(
       nameDeclaration: node,
       name: outerContext.input.program.names.functionNameForDeclaration(node),
       exported: outerContext.input.program.source.ast.hasModifierKind(node, "export"),
+      includeSettledHelper: true,
     }, outerContext);
-    return item === undefined ? undefined : Object.freeze([item]);
+    return item === undefined ? undefined : Object.freeze(item.helper === undefined ? [item.item] : [item.item, item.helper]);
   }
   const variants = specializations.variantsForCallable(node);
   if (variants.length === 0) {
@@ -72,11 +78,13 @@ export function planFunctionDeclarations(
       name: variant.targetName,
       exported: false,
       specialization: variant,
+      includeSettledHelper: true,
     }, outerContext);
     if (item === undefined) {
       return undefined;
     }
-    items.push(item);
+    items.push(item.item);
+    if (item.helper !== undefined) items.push(item.helper);
   }
   return Object.freeze(items);
 }
@@ -93,7 +101,7 @@ export function planNativeModuleFunction(
     nameDeclaration: declaration,
     name,
     exported,
-  }, outerContext);
+  }, outerContext)?.item;
 }
 
 function planRustFunctionItem(
@@ -103,9 +111,10 @@ function planRustFunctionItem(
     readonly name?: string;
     readonly exported: boolean;
     readonly specialization?: RustSourceCallableSpecializationVariant;
+    readonly includeSettledHelper?: boolean;
   },
   outerContext: RustPlanContext,
-): RustItem | undefined {
+): RustFunctionItemPlan | undefined {
   const node = source.callableDeclaration;
   const { ast } = outerContext.input.program.source;
   const isAsync = ast.hasModifierKind(node, "async");
@@ -380,7 +389,7 @@ function planRustFunctionItem(
         }],
       },
     };
-    return item;
+    return Object.freeze({ item, helper: undefined });
   }
   if (!isUnit && !rustBlockTerminates(body)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -402,6 +411,12 @@ function planRustFunctionItem(
         }
       : { fallible: false, hasReturnValue: returnType !== undefined },
   );
+  const helperName = source.includeSettledHelper === true
+    ? context.input.program.settledPromiseBodies.helpers.get(node) : undefined;
+  const helperCall = helperName === undefined ? undefined : {
+    kind: "call" as const, path: helperName,
+    args: params.map(parameter => ({ kind: "path" as const, path: parameter.name })),
+  };
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
     name,
@@ -419,9 +434,16 @@ function planRustFunctionItem(
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
     body: returnsJsPromise
-      ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering)
+      ? helperCall === undefined ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering)
+        : { statements: [{ kind: "tail", expr: { kind: "call",
+          path: fallible ? "js_abi::JsPromise::from_result" : "js_abi::JsPromise::resolved", args: [helperCall] } }] }
       : finalizedBody,
   };
-  return item;
+  const helper: RustItem | undefined = helperName === undefined ? undefined : {
+    ...item, name: helperName, visibility: "crate", returnType,
+    ...(callableErrorBoundary === undefined ? {} : { errorType: callableErrorBoundary.errorType }),
+    body: finalizedBody,
+  };
+  return Object.freeze({ item, helper });
 }
 import { planRustReturnValueExpression } from "../../expressions/value-destinations.js";

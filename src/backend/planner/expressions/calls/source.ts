@@ -274,7 +274,8 @@ export function planSelectedSourceCall(
       break;
     }
     case "function": {
-      const targetName = callableSpecialization?.targetName ?? fact.target.name;
+      const targetName = context.settledPromiseCall?.call === node ? context.settledPromiseCall.name
+        : callableSpecialization?.targetName ?? fact.target.name;
       const declaration = selected.sourceDeclaration;
       const lexical = declaration === undefined ? undefined : context.input.program.lexicalFunctions.forDeclaration(declaration);
       const path = lexical === undefined ? sourceModuleItemPath(context, fact.target.fileName, targetName) : targetName;
