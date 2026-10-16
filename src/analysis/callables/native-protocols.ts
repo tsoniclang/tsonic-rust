@@ -17,6 +17,7 @@ import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export interface RustNativeCallableProtocol {
   readonly identity: string;
@@ -110,6 +111,19 @@ export function rustNativeCallableErrorType(
 export function rustNativeCallableMethodArguments(protocol: RustNativeCallableProtocol): readonly RustTargetGenericArgument[] {
   return Object.freeze([...protocol.method.binder.parameters.map(parameter => ({ kind: "lifetime" as const,
     lifetime: parameter.lifetime })), ...rustTypeGenericArguments(protocol.signature.typeParameters)]);
+}
+
+export function rustNativeCallableErrorChannel(
+  binding: Pick<RustNativeCallableProtocolBinding, "protocol" | "trait">,
+  implementation: TargetTypeRef,
+  carrier: TargetTypeRef,
+): "invocation" | number | undefined {
+  if (carrier.kind !== "associated-type" || !rustTargetTypeRefEquals(carrier.owner, implementation)) return undefined;
+  const channels = ["invocation" as const, ...(binding.protocol.completion?.futures.map(future => future.ordinal) ?? [])];
+  return channels.find(channel => {
+    const expected = rustNativeCallableErrorType(binding, implementation, channel, carrier.genericArguments ?? []);
+    return expected !== undefined && rustTargetTypeRefEquals(expected, carrier);
+  });
 }
 
 export function rustNativeCallableProtocolResult(
