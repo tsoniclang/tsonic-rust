@@ -15,15 +15,38 @@ const staticKeys = [
   { name: "parenthesized const", prelude: 'const key = "value";', key: "((key))", declarationKey: "key", ordinary: "value" },
   { name: "nonidentifier string", prelude: 'const key = "x-y";', key: "key", ordinary: '"x-y"' },
   { name: "empty string", prelude: 'const key = "";', key: "key", ordinary: '""' },
-  { name: "exact large integer literal", prelude: "", key: "9007199254740993", ordinary: "9007199254740993" },
-  { name: "exact large const integer", prelude: "const key = 9007199254740993;", key: "key", ordinary: "9007199254740993" },
+  { name: "exact large integer literal", prelude: "", key: "9007199254740993", ordinary: "9007199254740993", refused: true },
+  { name: "exact large const integer", prelude: "const key = 9007199254740993;", key: "key", ordinary: "9007199254740993", refused: true },
   { name: "destructured const string", prelude: 'const { key } = { key: "value" } as const;', key: "key", ordinary: "value" },
-  { name: "destructured const integer", prelude: "const [key] = [9007199254740993] as const;", key: "key", ordinary: "9007199254740993" },
-  { name: "destructured spread const integer", prelude: "const prefix = [1, 9007199254740993] as const; const [, key] = [...prefix, 3] as const;", key: "key", ordinary: "9007199254740993" },
+  { name: "destructured const integer", prelude: "const [key] = [9007199254740993] as const;", key: "key", ordinary: "9007199254740993", refused: true },
+  { name: "destructured spread const integer", prelude: "const prefix = [1, 9007199254740993] as const; const [, key] = [...prefix, 3] as const;", key: "key", ordinary: "9007199254740993", refused: true },
+  { name: "coherent wide integer", prelude: "", key: "9007199254740994", ordinary: "9007199254740994" },
+  { name: "coherent rounded binary integer spelling", prelude: "", key: "1152921504606847000", ordinary: "1152921504606847000" },
+  { name: "radix exponent spelling", prelude: "", key: "0x3635c9adc5dea00000", ordinary: "1e21", expected: "1e+21" },
   { name: "reserved native identifier", prelude: 'const key = "class";', key: "key", ordinary: '"class"' },
 ];
 
 for (const surfaces of [[], ["js"]]) {
+  test(`Rust ${surfaces[0] ?? "native"} struct fields share checked computed names with finalized FieldFact evidence`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+import { field, struct } from "@tsonic/core/lang.js";
+const key = "value";
+export const Shape = struct({ ["ok"]: field<number>(), [key]: field<number>() });
+export type Shape = typeof Shape;
+export function read(value: Shape): number { return value.ok + value[key]; }
+` } });
+    assert.equal(compiled.result.diagnostics.length, 0, "both finalized computed fields reach target analysis without a source rejection");
+    assert.equal(compiled.result.artifacts.length > 0, true, "both checked field names reach native generation");
+  });
+
+  test(`Rust ${surfaces[0] ?? "native"} computed names do not admit a non-field struct initializer`, () => {
+    assert.throws(() => compileRust({ surfaces, files: { "index.ts": `
+import { struct } from "@tsonic/core/lang.js";
+export const Shape = struct({ ["bad"]: 1 });
+` } }), /TSEXT9901109: struct\(\.\.\.\) field shape members require finalized field<T>\(\) facts/u,
+    "a static name does not manufacture the existing required FieldFact type evidence");
+  });
+
   test(`Rust ${surfaces[0] ?? "native"} regular string enums are refused for ordinary and computed fields`, () => {
     for (const computed of [false, true]) {
       const compiled = compileRust({ surfaces, files: { "index.ts": `
@@ -42,7 +65,25 @@ export function make(): number {
     }
   });
   for (const current of staticKeys) {
-    test(`Rust ${surfaces[0] ?? "native"} admits ${current.name} as an ordinary exact field`, () => {
+    test(`Rust ${surfaces[0] ?? "native"} ${current.refused ? "refuses a conflicting checker identity for" : "admits"} ${current.name} as an ordinary exact field`, () => {
+      if (current.refused) {
+        for (const computed of [false, true]) {
+          const compiled = compileRust({ surfaces, files: { "index.ts": `
+${current.prelude}
+interface Holder { ${computed ? `[${current.declarationKey ?? current.key}]` : current.ordinary}: number; }
+export function make(): number {
+  const value: Holder = { ${computed ? `[${current.key}]` : current.ordinary}: 7 };
+  return value[${current.key}];
+}
+` } });
+          const issues = compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN");
+          assert.equal(issues.length > 0 && issues.every(issue => issue.message.includes("checker key") && issue.message.includes("exact string key")), true,
+            "every conflicting named identity has the precise shared admission reason");
+          assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "R1 rejects before sealing and planning");
+          assert.equal(compiled.result.artifacts.length, 0, "R1 emits no incorrect native field");
+        }
+        return;
+      }
       const compiled = compileRust({ surfaces, files: { "index.ts": `
 ${current.prelude}
 interface Holder { [${current.declarationKey ?? current.key}]: number; }
@@ -116,18 +157,29 @@ export function make(): number { return new Holder()[key](); }
       compiled.result.diagnostics.slice(0, 8).map(issue => `${issue.code}: ${issue.message.slice(0, 512)}`).join("; "));
   });
 
-  test(`Rust ${surfaces[0] ?? "native"} inferred objects retain exact large computed keys`, () => {
+  test(`Rust ${surfaces[0] ?? "native"} inferred objects refuse disagreeing large numeric names`, () => {
     const compiled = compileRust({ surfaces, files: { "index.ts": `
 export function make(): number {
   const value = { [9007199254740993]: 7 };
   return value[9007199254740993];
 }
 ` } });
-    assert.equal(compiled.result.diagnostics.length, 0, "inferred computed field compiles");
-    assert.equal(compiled.result.program.structuralShapes.definitions.some(shape =>
-      shape.fields.some(field => field.sourceName === "9007199254740993")), true,
-    "inferred source field identity stays lossless");
+    assert.equal(compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN").length, 2,
+      "the inferred declaration and member access both require the same coherent name");
+    assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "the disagreement is rejected before sealing");
+    assert.equal(compiled.result.artifacts.length, 0, "no rounded or unselectable native field is emitted");
   });
+
+  for (const key of ["-9007199254740993", "1152921504606846976", "18446744073709551616", "1.0000000000000001", "1e-400"]) {
+    test(`Rust ${surfaces[0] ?? "native"} refuses numeric named key ${key} without a representability cap`, () => {
+      const compiled = compileRust({ surfaces, files: { "index.ts": `export function make(): number { const value = { [${key}]: 1 }; return 0; }` } });
+      const issues = compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN");
+      assert.equal(issues.length === 1 && issues[0].message.includes("checker key") && issues[0].message.includes("exact string key"), true,
+        "one precise exact/checker name disagreement");
+      assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "the numeric mismatch is a pre-seal source rejection");
+      assert.equal(compiled.result.artifacts.length, 0, "no dynamic or rounded-key fallback is emitted");
+    });
+  }
 
   for (const current of [
     { name: "dynamic argument", source: 'export function make(key: string): number { const value = { [key]: 1 }; return 0; }' },
