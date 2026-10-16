@@ -179,7 +179,7 @@ export function validateGenericReferences(
   const lifetimeIdentities = new Set<string>();
   const constIdentities = new Set<string>();
   for (const carrier of carriers) {
-    const references = rustTargetGenericReferences(carrier);
+    const references = rustTargetGenericReferences(carrier, "metadata");
     references.typeIdentities.forEach((name) => typeIdentities.add(name));
     references.lifetimeIdentities.forEach((identity) =>
       lifetimeIdentities.add(identity));
