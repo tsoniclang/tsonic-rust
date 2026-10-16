@@ -16,6 +16,7 @@ export function rustPromiseAsyncFunctionFact(
   const selected: RustJsPromiseLowering = lowering.kind === "settled"
     ? Object.freeze({ kind: "settled", settledAwaits: lowering.settledAwaits })
     : Object.freeze({ kind: "factory", storage: lowering.storage, capturedParameters: lowering.capturedParameters,
+      capturedCarriers: Object.freeze([...lowering.capturedCarriers]),
       ...(lowering.ownedReceiver === undefined ? {} : { ownedReceiver: lowering.ownedReceiver }) });
   return Object.freeze({ kind: "js-promise", isAsync: true, futureCarrier, outputCarrier, lowering: selected });
 }

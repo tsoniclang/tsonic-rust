@@ -2,13 +2,12 @@ import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
-import type { RustPromiseBodies, RustPromiseBodyDeclaration, RustPromiseObjectDemand } from "../../target-model/records/callables-and-resources.js";
+import type { RustPromiseBodies, RustPromiseBodyDeclaration } from "../../target-model/records/callables-and-resources.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureTargetType } from "../../target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
-import { rustSuspendingPromiseBorrowReason } from "./suspension-storage.js";
 
 type SourceCall = Extract<RustTargetOperationFact, { readonly kind: "source-call" }>;
 
@@ -23,7 +22,7 @@ export interface RustPromiseBodySelection {
 export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   const declarations = new Map<Node, RustPromiseBodyDeclaration>();
   const demands = new Map<Node, Node>();
-  const objects = new Map<Node, RustPromiseObjectDemand>();
+  const objects = new Map<Node, Node>();
   let closed = false;
   const assertOpen = (): void => {
     if (closed) failTargetAnalysisInvariant("tsonic-rust", "Promise body selection is closed.");
@@ -61,22 +60,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         const name = context.names.nativeBodyNameForDeclaration(declaration);
         const demand = demands.get(declaration) ??
           (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration) ? declaration : undefined);
-        if (demand !== undefined) {
-          const staticInputs = new Set<string>();
-          if (asynchronous.lowering.kind === "factory") {
-            const capturedParameters = new Set(asynchronous.lowering.capturedParameters);
-            const native = context.callableValues.native;
-            for (const input of native.inputsFor(declaration))
-              if (capturedParameters.has(input.subject.node)) staticInputs.add(input.implementation.identity);
-            for (const input of native.capturesFor(declaration)) staticInputs.add(input.implementation.identity);
-          }
-          objects.set(declaration, Object.freeze({ at: demand, staticInputs }));
-        }
-        if (demand !== undefined && asynchronous.lowering.kind === "factory" && asynchronous.lowering.storage.kind !== "static") {
-          context.diagnostics.push({ code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", category: "error", source: "tsonic-rust",
-            sourceNode: demand, message: rustSuspendingPromiseBorrowReason,
-            evidence: ["target.capability=rust.async.js-promise-storage-lifetime"] });
-        }
+        if (demand !== undefined) objects.set(declaration, demand);
         if (name === undefined) continue;
         declarations.set(declaration, Object.freeze({ name }));
       }

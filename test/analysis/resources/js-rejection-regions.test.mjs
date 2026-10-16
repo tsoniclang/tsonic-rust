@@ -20,7 +20,7 @@ function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
       forEachChild: (node, visit) => { if (node === file) visit(declaration); } },
     sourceFiles: [file],
     promiseBodies: { declarations: new Map(asynchronous ? [[declaration, { name: "body" }]] : []),
-      objects: new Map(asynchronous ? [[declaration, { at: declaration, staticInputs: new Set() }]] : []) },
+      objects: new Map(asynchronous ? [[declaration, declaration]] : []) },
     records: { errorEffects: { get: node => node === declaration ? effects : undefined },
       asyncFunction: { get: node => asynchronous && node === declaration
         ? { kind: "js-promise", outputCarrier, futureCarrier: rustJsPromiseTargetType(outputCarrier),

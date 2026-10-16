@@ -37,6 +37,8 @@ function rustJsPromiseLoweringEquals(left: RustJsPromiseLowering, right: RustJsP
         selected.callee === right.settledAwaits[index]!.callee);
   }
   return rustSuspendedCallableStorageEquals(left.storage, right.storage) &&
+    left.capturedCarriers.length === right.capturedCarriers.length &&
+    left.capturedCarriers.every((carrier, index) => rustTargetTypeRefEquals(carrier, right.capturedCarriers[index])) &&
     left.capturedParameters.length === right.capturedParameters.length &&
     left.capturedParameters.every((parameter, index) => parameter === right.capturedParameters[index]) &&
     rustSuspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver);
