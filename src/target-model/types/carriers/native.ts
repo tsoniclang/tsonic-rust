@@ -264,7 +264,7 @@ export function isRustNamedTypeTraitContract(value: unknown): value is RustNamed
       return false;
     }
     let previousRequirementIdentity: string | undefined;
-    for (const requirement of selected.requirements) {
+    for (const [index, requirement] of selected.requirements.entries()) {
       if (typeof requirement !== "object" || requirement === null || Array.isArray(requirement) ||
         !hasExactObjectKeys(requirement, ["trait", "typeArgumentIndex"])) {
         return false;
@@ -278,6 +278,8 @@ export function isRustNamedTypeTraitContract(value: unknown): value is RustNamed
       if (previousRequirementIdentity !== undefined && previousRequirementIdentity >= identity) {
         return false;
       }
+      if (selected.requirements.slice(0, index).some(previous => previous.typeArgumentIndex === condition.typeArgumentIndex &&
+        rustNativeTraitRefEquals(previous.trait, condition.trait!))) return false;
       previousRequirementIdentity = identity;
     }
     const identity = rustNamedTraitImplementationKey(selected as RustNamedTypeTraitImplementation);
@@ -287,6 +289,8 @@ export function isRustNamedTypeTraitContract(value: unknown): value is RustNamed
     previousIdentity = identity;
   }
   const implementations = candidate.implementations as readonly RustNamedTypeTraitImplementation[];
+  if (implementations.some((implementation, index) => implementations.slice(0, index)
+    .some(previous => rustNamedTraitImplementationEquals(previous, implementation)))) return false;
   return implementations
     .filter((implementation) => rustNativeTraitRefEquals(implementation.trait, rustNativeTraitRef("core::marker::Copy")))
     .every((copy) => implementations.some((clone) =>
@@ -324,11 +328,21 @@ export function rustNamedTypeTraitContract(
   const selected = implementations.map(implementation => Object.freeze({ trait: implementation.trait,
     requirements: Object.freeze([...new Map(implementation.requirements.map(requirement =>
       [rustNamedTraitRequirementKey(requirement), requirement] as const)).entries()]
-      .sort(([left], [right]) => compare(left, right)).map(([, requirement]) => requirement)),
+      .sort(([left], [right]) => compare(left, right)).map(([, requirement]) => requirement)
+      .filter((requirement, index, all) => !all.slice(0, index).some(previous =>
+        previous.typeArgumentIndex === requirement.typeArgumentIndex && rustNativeTraitRefEquals(previous.trait, requirement.trait)))),
   }));
   return Object.freeze({ implementations: Object.freeze([...new Map(selected.map(implementation =>
     [rustNamedTraitImplementationKey(implementation), implementation] as const)).entries()]
-    .sort(([left], [right]) => compare(left, right)).map(([, implementation]) => implementation)) });
+    .sort(([left], [right]) => compare(left, right)).map(([, implementation]) => implementation)
+    .filter((implementation, index, all) => !all.slice(0, index).some(previous =>
+      rustNamedTraitImplementationEquals(previous, implementation)))) });
+}
+
+function rustNamedTraitImplementationEquals(left: RustNamedTypeTraitImplementation, right: RustNamedTypeTraitImplementation): boolean {
+  return rustNativeTraitRefEquals(left.trait, right.trait) && left.requirements.length === right.requirements.length &&
+    left.requirements.every(requirement => right.requirements.some(other =>
+      requirement.typeArgumentIndex === other.typeArgumentIndex && rustNativeTraitRefEquals(requirement.trait, other.trait)));
 }
 
 function rustNativeTraitKey(trait: RustTargetTraitRef): string {

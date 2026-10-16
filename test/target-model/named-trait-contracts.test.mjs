@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   isRustNamedTypeTraitContract, rustNamedTargetType, rustNamedTypeCarrierValue,
-  rustNativeTraitRef, rustNativeTraitRefEquals,
+  rustNativeTraitRef, rustNativeTraitRefEquals, rustNamedTypeTraitContract,
 } from "../../dist/target-model/types/carriers/native.js";
 import { rustCarrierSatisfiesTraitRef, rustNamedTypeSupportsTrait } from "../../dist/target-model/types/carriers/traits.js";
 import { rustRetainedErrorTargetType } from "../../dist/target-model/types/carriers/source-error.js";
@@ -11,6 +11,7 @@ import { rustTargetGenericReferences, rustTargetCaptureArguments } from "../../d
 import { materializeProviderCarrier } from "../../dist/providers/packages/materialization.js";
 import { rustLifetimeKey } from "../../dist/target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
+import { validateGenericReferences } from "../../dist/providers/packages/validation/generics.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const typeArgument = type => ({ kind: "type", type });
@@ -179,4 +180,72 @@ test("provider trait aliases materialize exact arguments and self references wit
   assert.equal(argument.path, "foreign_alias::Cause");
   assert.deepEqual(argument.traits.implementations, []);
   assert.equal(rustCarrierSatisfiesTraitRef(selected, { ...actual, genericArguments: [typeArgument(selected)] }), true);
+});
+
+test("provider native trait materialization binds the declaration's exact generic identities", () => {
+  const parameter = { kind: "type-parameter", identity: "native:Box.Value", name: "Value" };
+  const lifetime = { kind: "parameter", identity: "native:Box.region", name: "region" };
+  const constant = { kind: "parameter", identity: "native:Box.Count", name: "Count" };
+  const formal = [typeArgument(parameter), { kind: "lifetime", lifetime }, { kind: "const", value: constant }];
+  const self = rustNamedTargetType("foreign.Box", "foreign::Box", formal);
+  const contract = rustNamedTypeTraitContract([
+    implementation(rustNativeTraitRef("core::convert::Into", [typeArgument(parameter)]), [
+      { typeArgumentIndex: 0, trait: rustNativeTraitRef("foreign::Required", formal) },
+    ]),
+    implementation(rustNativeTraitRef("core::cmp::PartialEq", [typeArgument(self)])),
+  ]);
+  const declarations = [{ exportId: "Box", genericParameters: [
+    { kind: "type", sourceName: "Value", targetIdentity: parameter.identity },
+    { kind: "lifetime", sourceName: "region", targetIdentity: rustLifetimeKey(lifetime) },
+    { kind: "const", sourceName: "Count", targetIdentity: constant.identity },
+  ], targetCarrier: self }];
+  const arguments_ = [typeArgument(integer), { kind: "lifetime", lifetime: { kind: "static" } },
+    { kind: "const", value: { kind: "integer", value: "4" } }];
+  const actual = { kind: "target-named", id: "foreign.Box", genericArguments: arguments_ };
+  const paths = { "foreign.Box": "aliased::Box" };
+  const selected = materializeProviderCarrier(actual, paths, { "foreign.Box": contract }, declarations);
+  const native = rustNamedTypeCarrierValue(selected);
+  const into = native.traits.implementations.find(value => value.trait.path === "core::convert::Into");
+  assert.deepEqual(into.trait.genericArguments, [typeArgument(integer)]);
+  assert.deepEqual(into.requirements[0].trait.genericArguments, arguments_);
+  const equality = native.traits.implementations.find(value => value.trait.path === "core::cmp::PartialEq");
+  assert.deepEqual(rustNamedTypeCarrierValue(equality.trait.genericArguments[0].type).genericArguments, arguments_);
+  assert.equal(rustNamedTypeSupportsTrait(native, "core::cmp::PartialEq"), true);
+  assert.throws(() => materializeProviderCarrier(actual, paths, { "foreign.Box": contract }), /exact generic declaration owner/);
+  assert.throws(() => materializeProviderCarrier({ ...actual, genericArguments: [typeArgument(integer)] }, paths,
+    { "foreign.Box": contract }, declarations), /exact generic argument correspondence/);
+});
+
+test("native PartialEq applies its exact Self default, never an arbitrary RHS", () => {
+  const self = rustNamedTargetType("foreign.Value", "foreign::Value", []);
+  const other = rustNamedTargetType("foreign.Value", "another::Value", []);
+  const selected = rustNamedTargetType("foreign.Value", "foreign::Value", [], [], {
+    implementations: [implementation(rustNativeTraitRef("core::cmp::PartialEq", [typeArgument(self)]))],
+  });
+  assert.equal(rustNamedTypeSupportsTrait(rustNamedTypeCarrierValue(selected), "core::cmp::PartialEq"), true);
+  assert.equal(rustCarrierSatisfiesTraitRef(selected, rustNativeTraitRef("core::cmp::PartialEq", [typeArgument(self)])), true);
+  assert.equal(rustCarrierSatisfiesTraitRef(selected, rustNativeTraitRef("core::cmp::PartialEq", [typeArgument(other)])), false);
+  assert.equal(rustCarrierSatisfiesTraitRef(carrier(rustNativeTraitRef("core::cmp::PartialEq")),
+    rustNativeTraitRef("core::cmp::PartialEq", [typeArgument(integer)])), false);
+});
+
+test("metadata admission rejects undeclared native trait parameters while captures ignore evidence", () => {
+  const parameter = { kind: "type-parameter", identity: "metadata:Value", name: "Value" };
+  const selected = carrier(rustNativeTraitRef("foreign::Required", [typeArgument(parameter)]));
+  const fail = message => { throw new Error(message); };
+  const declared = { typeIdentities: new Set(), lifetimeIdentities: new Set(), constIdentities: new Set() };
+  assert.throws(() => validateGenericReferences([selected], declared, "native trait evidence", fail), /undeclared type parameter/);
+  validateGenericReferences([selected], { ...declared, typeIdentities: new Set([parameter.identity]) }, "native trait evidence", fail);
+  assert.deepEqual(rustTargetCaptureArguments([typeArgument(selected)]), []);
+});
+
+test("native trait canonicalization deduplicates native identities rather than provider evidence keys", () => {
+  const first = rustNativeTraitRef("foreign::Required", [typeArgument(integer)]);
+  const second = { ...first, id: "other-provider.Required" };
+  const contract = rustNamedTypeTraitContract([implementation(first), implementation(second)]);
+  assert.equal(contract.implementations.length, 1);
+  assert.equal(isRustNamedTypeTraitContract(contract), true);
+  const duplicated = { implementations: [implementation(first), implementation(second)]
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))) };
+  assert.equal(isRustNamedTypeTraitContract(duplicated), false);
 });
