@@ -56,6 +56,21 @@ test("JS Promise producer completions expose one rejection value independent of 
   }
 });
 
+test("a native async body keeps its exact region independently of its JS object rejection", () => {
+  for (const surfaces of [[], ["js"]]) {
+    const current = fixture(surfaces);
+    for (const name of ["pure", "failed"]) {
+      const body = selectRustProducerError(current.reference(name, "body"), current.input);
+      assert.equal(body?.kind, "region", `${surfaces[0] ?? "native"}:${name}`);
+      assert.equal(body.declaration === current.producer(name).declaration, true, name);
+      assert.equal(body.effects.localErrors, name === "failed", name);
+      assert.equal(Object.isFrozen(body) && Object.isFrozen(body.effects), true, name);
+    }
+    assert.equal(selectRustProducerError(current.reference("forward", "body"), current.input) === undefined, true,
+      "a synchronous Promise forwarder is not a native async body");
+  }
+});
+
 test("producer error selection substitutes the exact captured native implementation rather than its signature", () => {
   const current = fixture();
   const reference = current.reference("invoke", "invoke");
