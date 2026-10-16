@@ -64,7 +64,8 @@ class Holder {
 }
 export function make(): number { return new Holder()[readKey](); }
 ` } });
-    assert.equal(compiled.result.diagnostics.length, 0, "computed field and method compile as native Rust members");
+    assert.equal(compiled.result.diagnostics.length, 0, "computed field and method compile as native Rust members: " +
+      compiled.result.diagnostics.slice(0, 8).map(issue => `${issue.code}: ${issue.message.slice(0, 512)}`).join("; "));
   });
 
   test(`Rust ${surfaces[0] ?? "native"} imported computed fields use the declaration file's sealed evidence`, () => {
