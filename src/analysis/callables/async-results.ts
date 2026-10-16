@@ -252,6 +252,7 @@ function directAsyncCallee(walk: RustFactWalk, operand: Node): Node | undefined 
   if (ast.is.IsFunctionDeclaration(target)) return ast.is.IsIdentifier(callee) &&
     sourceDeclarationIsModuleScoped(target, ast) ? target : undefined;
   if (!ast.is.IsMethodDeclaration(target) || !ast.is.IsPropertyAccessExpression(callee)) return undefined;
+  if (walk.context.projectMethodProperties.usageFor(target)?.writable === true) return undefined;
   const owner = walk.context.projectTypes.definitionContainingDeclaration(target);
   return owner !== undefined && !walk.context.projectTypes.isPolymorphic(owner) ? target : undefined;
 }

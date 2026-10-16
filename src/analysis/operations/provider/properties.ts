@@ -33,6 +33,7 @@ import { selectRustUnionProperty } from "../union-properties.js";
 import { selectRustGuardedSourceValueTypes } from "../native-flow-refinement.js";
 import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-profiles/js/member-reads.js";
 import { resolveRustIndexedProperty } from "../../../policy/types/resolution/indexed-fields.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export function checkedPropertySelectionInput(
   context: RustOperationAnalysisContext,
@@ -597,18 +598,9 @@ function selectProjectSourceMethodProperty(
       "Selected project method property has no deterministic replacement slot.",
     );
   }
-  const registration = options.projectMethodProperties.record(
-    declaration,
-    request.accessMode,
-  );
-  if (registration.kind === "rejected") {
-    return rejectSelectedOperation(
-      request.expression,
-      context,
-      "RUST_PROJECT_METHOD_PROPERTY_CONFLICT",
-      registration.reason,
-    );
-  }
+  const usage = options.projectMethodProperties.usageFor(declaration);
+  if (usage === undefined || needsRead && !usage.readable || needsWrite && !usage.writable)
+    failTargetAnalysisInvariant("tsonic-rust", "A checked method-property use requires its completed usage selection.", request.expression);
   return acceptRustMemberOperation(request, "property", {
     kind: "source-method-property",
     operationId: sourceOperationId(context, declaration, "method-property"),

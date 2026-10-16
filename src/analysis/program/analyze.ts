@@ -58,6 +58,7 @@ import type { RustSourceCallableSpecializationIssue } from "../callables/special
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
+import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 
 export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFunctionQueries | undefined {
   const { ast } = context;
@@ -240,6 +241,19 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     );
   }
   if (projectTypes.issues.length > 0) {
+    return;
+  }
+  const methodProperties = context.projectMethodProperties.initialize({
+    ast,
+    navigation: context.source.navigation,
+    projectTypes,
+    semanticsFor: context.semanticsFor,
+    isRuntimeReference: context.runtimeValueUses.isRuntimeReference,
+    budget: createSourceStorageBudget(defaultSourceStorageLimits),
+  });
+  if (methodProperties.kind === "unresolved") {
+    appendRustDiagnostic(walk, "RUST_PROJECT_METHOD_PROPERTY_USAGE_NOT_CLOSED", methodProperties.reason, undefined,
+      ["target.capability=rust.project-method-property.usage"]);
     return;
   }
   for (const carrier of walk.providerErrorCarriers) {
@@ -481,11 +495,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     names: context.names,
     projectTypes,
     sourceLifetimes: context.sourceLifetimes,
-  });
-  context.projectMethodProperties.initialize({
-    ast,
-    navigation: context.source.navigation,
-    projectTypes,
   });
   for (const issue of walk.context.records.objectLiteralMethodAdapters.finalize({
     ast: walk.context.ast,
