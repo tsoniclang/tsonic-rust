@@ -138,7 +138,8 @@ export function escaped(): (count: number) => number {
   return before;
 }
 ` } });
-  const sourceStorage = createSourceStorageQuery(createTargetSourceProgram(checked), program.sourceFiles);
+  const source = createTargetSourceProgram(checked);
+  const sourceStorage = createSourceStorageQuery(source, program.sourceFiles);
   const guarded = [];
   const guard = value => {
     const selected = Proxy.revocable(value, {});
@@ -147,7 +148,7 @@ export function escaped(): (count: number) => number {
   };
   const frames = createRustFrameCallablePlan({ ast: guard(program.source.ast), records: guard(program.records),
     ownership: guard(program.callableOwnership), sourceStorage: guard(sourceStorage), usedNames: new Set(),
-    navigation: guard(program.source.navigation), projectTypes: guard(program.projectTypes),
+    navigation: guard(source.navigation), projectTypes: guard(program.projectTypes),
     objectRepresentations: guard(program.objectRepresentations) });
   const nodes = sourceNodes(program);
   const witnesses = frames.definitions.flatMap(definition => definition.entries.flatMap(entry => entry.implementations
