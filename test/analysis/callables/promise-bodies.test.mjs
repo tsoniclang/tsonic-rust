@@ -87,7 +87,9 @@ export const marker = 0;`);
   assert.equal(issues.length, 1);
   const call = current.calls.find(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === "read");
   assert.equal(issues[0].sourceNode === call, true);
-  assert.equal(current.context.promiseBodies.plan.objects.get(current.named("read")) === issues[0].sourceNode, true);
+  const demands = current.context.promiseBodies.plan.objects.get(current.named("read"));
+  assert.equal(demands?.length === 1 && demands[0] === issues[0].sourceNode, true,
+    "the single actual object demand retains its exact checked call identity");
   assert.equal(current.program === undefined && current.result.artifacts.length === 0, true);
 });
 

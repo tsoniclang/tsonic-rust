@@ -666,13 +666,23 @@ export function resolveRecordLiteralCarrier(
         }
         const storedMethod = rustStructuralMethodStorageCarrier(resultCarrier, targetField.carrier, targetField.presence);
         const methodCarrier = targetField.presence === "optional" ? rustOptionElementCarrier(storedMethod) : storedMethod;
-        if (methodCarrier === undefined || resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
+        if (methodCarrier === undefined) return undefined;
+        const selectedMethodCarrier = resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
           leadingParameters: [{ kind: "this", carrier: resultCarrier }],
           preserveSourceParameterForms: true,
           selectedMethodDeclaration: selectedDeclaration,
           sourceCarrier: selectedCallableCarrier,
-        }) === undefined) {
+        });
+        if (selectedMethodCarrier === undefined) return undefined;
+        const methodReconciliation = selectRustValueCarrierReconciliation(
+          selectedMethodCarrier, methodCarrier, walk.context.projectTypes, walk.context.typeDefinitions,
+        );
+        if (methodReconciliation.kind === "incompatible") {
           return undefined;
+        }
+        if (methodReconciliation.kind !== "identity") {
+          recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords,
+            property, methodReconciliation);
         }
         contributions.push({
           kind: "structural-method",

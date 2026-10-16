@@ -29,8 +29,8 @@ export interface RustPromiseBodySelection {
 
 export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   const declarations = new Map<Node, RustPromiseBodyDeclaration>();
-  const demands = new Map<Node, Node>();
-  const objects = new Map<Node, Node>();
+  const demands = new Map<Node, Set<Node>>();
+  const objects = new Map<Node, readonly Node[]>();
   const pinnedInvocations = new Map<Node, ReadonlyMap<string, ReadonlySet<Node>>>();
   const nativeDeclarations = new Map<Node, {
     readonly name: string; readonly form: "function" | "method" | "static-method";
@@ -40,6 +40,11 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   let closed = false;
   const assertOpen = (): void => {
     if (closed) failTargetAnalysisInvariant("tsonic-rust", "Promise body selection is closed.");
+  };
+  const recordDemand = (declaration: Node, demand: Node): void => {
+    const selected = demands.get(declaration) ?? new Set<Node>();
+    selected.add(demand);
+    demands.set(declaration, selected);
   };
   return Object.freeze({
     plan: Object.freeze({ declarations, objects, pinnedInvocations }),
@@ -93,7 +98,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
     namesForScope: (scope: Node) => scopeNames.get(scope) ?? emptyScopeNames,
     expose(declaration: Node, demand: Node): void {
       assertOpen();
-      if (!demands.has(declaration)) demands.set(declaration, demand);
+      recordDemand(declaration, demand);
     },
     invocation(context: RustAnalysisContext, call: Node, declaration: Node, target: SourceCall["target"],
       resultCarrier: TargetTypeRef): SourceCall["asyncBody"] | undefined {
@@ -109,7 +114,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
           maySuspend: asynchronous.lowering.kind === "factory" });
       }
       for (const targetDeclaration of target.form === "union-method" ? target.variants.map(variant => variant.declaration) : [declaration])
-        if (!demands.has(targetDeclaration)) demands.set(targetDeclaration, call);
+        recordDemand(targetDeclaration, call);
       return undefined;
     },
     seal(context: RustAnalysisContext): void {
@@ -126,9 +131,15 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         const asynchronous = context.records.asyncFunction.get(declaration);
         if (asynchronous?.kind !== "js-promise") continue;
         const name = rustPromiseBodyNativeName(context, declaration);
-        const demand = demands.get(declaration) ??
-          (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration) ? declaration : undefined);
-        if (demand !== undefined) objects.set(declaration, demand);
+        const selectedDemands = new Set(demands.get(declaration));
+        if (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration)) selectedDemands.add(declaration);
+        if (selectedDemands.size > 0) objects.set(declaration, Object.freeze([...selectedDemands].sort((left, right) => {
+          const leftFile = context.ast.getSourceFile(left);
+          const rightFile = context.ast.getSourceFile(right);
+          const leftName = leftFile === undefined ? "" : context.ast.getFileName(leftFile);
+          const rightName = rightFile === undefined ? "" : context.ast.getFileName(rightFile);
+          return leftName.localeCompare(rightName, "en") || context.ast.pos(left) - context.ast.pos(right);
+        })));
         if (name === undefined) continue;
         declarations.set(declaration, Object.freeze({ name,
           visibility: context.ast.is.IsFunctionDeclaration(declaration) &&
@@ -172,7 +183,8 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
       !(binding?.storage === "native-callable" && binding.callableDeclaration === declaration)) return undefined;
   } else if (ast.is.IsMethodDeclaration(declaration) && ast.is.IsPropertyAccessExpression(callee)) {
     const access = semantics.operations.propertyAccess(callee);
-    if (access === undefined || semantics.types.isUnion(access.receiver.type)) return undefined;
+    const receiverType = access === undefined ? undefined : semantics.types.expressionType(access.receiver.expression);
+    if (access === undefined || receiverType === undefined || semantics.types.isUnion(receiverType)) return undefined;
     if (context.projectMethodProperties.usageFor(declaration)?.writable === true) return undefined;
   } else return undefined;
   const identities = context.sourcePackageComponentIdentities;

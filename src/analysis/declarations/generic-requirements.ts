@@ -223,8 +223,10 @@ export function analyzeRustDeclarationGenericRequirements(
         },
       });
       if (result.kind === "rejected" && result.promiseStorage === true) {
-        diagnostics.push(diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
-          rustSuspendingPromiseBorrowReason, promiseBodies.objects.get(declaration) ?? declaration));
+        for (const demand of promiseBodies.objects.get(declaration) ?? [declaration]) {
+          diagnostics.push(diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
+            rustSuspendingPromiseBorrowReason, demand));
+        }
       }
       return result.kind === "rejected"
         ? result

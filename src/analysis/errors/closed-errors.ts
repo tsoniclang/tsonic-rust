@@ -14,9 +14,8 @@ import type { RustProgramErrorRoute } from "../../target-model/conversions/progr
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
-import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 
 export interface RustClosedErrorTransportDemand {
   readonly thrownCarriers: readonly TargetTypeRef[];
@@ -93,10 +92,9 @@ export function rustClosedErrorTransportDemand(
     const operation = records.targetOperation.get(node);
     if (ast.kindName(node) === "KindAwaitExpression") {
       const operand = Node_Expression(ast, node);
-      const topology = operand === undefined ? undefined
-        : rustAwaitSelection(records.runtimeCarrier.get(operand)?.carrier, definitions);
-      if (topology !== undefined && rustAwaitSelectionLeaves(topology).some(leaf =>
-        leaf.future !== undefined && rustJsPromiseOutputTargetType(leaf.carrier) !== undefined)) {
+      const rejections = [records.errorEffects.get(node), operand === undefined ? undefined : records.errorEffects.get(operand)];
+      if (rejections.some(effects => effects?.nativeErrors.some(error => error.identity === rustJsRejectionErrorIdentity &&
+        rustTargetTypeRefEquals(error.errorType, rustJsValueTargetType())) === true)) {
         let child = node;
         let depth = 0;
         for (let parent = ast.parent(child); parent !== undefined; child = parent, parent = ast.parent(parent)) {
