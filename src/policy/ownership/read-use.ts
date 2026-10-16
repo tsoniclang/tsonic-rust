@@ -27,9 +27,18 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     if (subject !== undefined) uses.set(subject, Object.freeze({ mode, later, laterStart, stableAcrossEffects }));
   };
   const operation = input.operation;
-  const callee = Node_Expression(ast, node);
-  const receiver = ast.is.IsCallExpression(node) ? callee === undefined ? undefined : Node_Expression(ast, callee) : callee;
+  const source = operation?.kind === "runtime-set" ? BinaryExpression_Left(ast, node) : node;
+  const callee = source === undefined ? undefined : Node_Expression(ast, source);
+  const receiver = source !== undefined && ast.is.IsCallExpression(source) ? callee === undefined ? undefined : Node_Expression(ast, callee) : callee;
   const argumentsList = Object.freeze((input.arguments ?? []).filter((value): value is Node => value !== undefined));
+  if (operation?.kind === "provider-operation" || operation?.kind === "runtime-set") {
+    if (operation.abi.sourceReceiver.kind === "receiver" && operation.abi.sourceReceiver.disposition === "evaluation-only") {
+      select(receiver, "shared");
+    }
+    for (const argument of operation.abi.sourceArguments) {
+      if (argument.disposition === "evaluation-only") select(input.arguments?.[argument.sourceIndex], "shared");
+    }
+  }
   if (operation?.kind === "provider-operation") {
     const modes = new Map<number, Set<"ref" | "mut-ref" | undefined>>();
     for (const selected of input.nativeInputs) {

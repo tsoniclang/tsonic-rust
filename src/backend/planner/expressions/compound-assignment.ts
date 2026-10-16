@@ -18,7 +18,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
 import type { RustAssignmentOperationFact } from "../statements/core.js";
 import { planRustAssignmentWrite } from "../statements/expression-statements.js";
-import { selectedOperatorMatches } from "../statements/iteration.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier } from "./fundamentals.js";
@@ -39,7 +38,7 @@ export function planCompoundAssignmentExpression(
   }
   if (left === undefined || right === undefined || context.syntheticNames === undefined ||
     !requireExpressionCarrier(node, fact.resultCarrier, context, "rust.backend.compound-assignment-carrier") ||
-    !selectedOperatorMatches(node, fact, context)) return undefined;
+    context.input.program.statementCompletions.assignmentFor(node) !== fact) return undefined;
   const evaluation = prepareRustComputedMemberEvaluation(left, context);
   if (evaluation === undefined) return undefined;
   if (evaluation.bindings.length !== 0) {

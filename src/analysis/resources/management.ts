@@ -23,6 +23,10 @@ import {
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
+import { finalizeRustProviderOperationAbi } from "../operations/finalized-operation/finalize.js";
+import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustOperationAbiInvocationIsFallible, rustOperationAbiAwaitIsFallible } from "../operations/target-operation.js";
 
 export interface RustProjectDisposerEffects {
   readonly selfMode: { readonly mode: "ref" | "mut-ref" };
@@ -71,8 +75,6 @@ export function selectRustResourceManagement(
       !rustTargetTypeRefEquals(alternative.resourceCarrier, first.resourceCarrier) ||
       alternative.disposal.kind !== first.disposal.kind ||
       alternative.disposal.fallible !== first.disposal.fallible ||
-      alternative.disposal.errorBoundary !== first.disposal.errorBoundary ||
-      !optionalCarrierEquals(alternative.disposal.errorCarrier, first.disposal.errorCarrier) ||
       !resourceDisposalTargetsEqual(alternative.disposal.target, first.disposal.target))) {
     return rejected("Rust resource alternatives must resolve to one identical carrier and disposal operation.");
   }
@@ -176,24 +178,14 @@ function selectDisposalAlternative(
       kind: "selected",
       resourceCarrier,
       projectDisposerDeclaration: declaration,
-      disposal: effects.fallible ? {
+      disposal: {
         kind: alternative.kind,
-        fallible: true,
-        errorBoundary: "source-program",
+        fallible: effects.fallible,
         target: {
           form: "source-method",
           name: targetName,
           receiverMode: effects.selfMode.mode,
-          ...(dispatch === undefined ? {} : { dispatch }),
-        },
-      } : {
-        kind: alternative.kind,
-        fallible: false,
-        errorBoundary: "none",
-        target: {
-          form: "source-method",
-          name: targetName,
-          receiverMode: effects.selfMode.mode,
+          errorBoundary: effects.fallible ? "source-program" : "none",
           ...(dispatch === undefined ? {} : { dispatch }),
         },
       },
@@ -229,47 +221,44 @@ function selectDisposalAlternative(
   if (!isRustUnitCarrier(row.resultCarrier)) {
     return rejected("The selected provider resource disposer must have an exact void result.");
   }
-  const target = { form: "provider" as const, target: row.target };
-  const disposal: RustResourceManagementFact["disposal"] = row.isFallible !== true
-    ? {
-        kind: alternative.kind,
-        fallible: false,
-        errorBoundary: "none",
-        target,
-      }
-    : row.errorBoundary === "provider-native"
-      ? {
-          kind: alternative.kind,
-          fallible: true,
-          errorBoundary: "provider-native",
-          errorCarrier: row.errorCarrier,
-          target,
-        }
-      : {
-          kind: alternative.kind,
-          fallible: true,
-          errorBoundary: row.errorBoundary,
-          target,
-        };
+  const dispatchInputs = (row.dispatchInputs ?? []).map(input => options.dispatchContextInputFor(input));
+  if (dispatchInputs.some(input => input === undefined)) return rejected("The selected provider disposer requires its exact native dispatch context inputs.");
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method", form: row.target,
+    sourceReceiver: { kind: "runtime", carrier: resourceCarrier,
+      ...(row.receiverCarrier === undefined ? {} : { declaredCarrier: row.receiverCarrier }) },
+    sourceArgumentCarriers: [], declaredSourceArgumentCarriers: row.parameterCarriers,
+    resultCarrier: row.resultCarrier, resultConversion: row.resultConversion,
+    targetGenericArguments: row.targetGenericArguments, dispatchInputs: dispatchInputs.filter(input => input !== undefined),
+    isAsync: row.isAsync === true, isFallible: row.isFallible === true,
+    errorBoundary: row.isFallible === true ? row.errorBoundary : undefined,
+    errorCarrier: row.isFallible === true && row.errorBoundary === "provider-native" ? row.errorCarrier : undefined,
+    ...(Object.prototype.hasOwnProperty.call(row, "nativeErrorCarriers") ? { nativeErrorCarriers: row.nativeErrorCarriers } : {}), isUnsafe: row.isUnsafe,
+    evaluation: row.evaluation,
+  }, context.typeDefinitions);
+  if (abi === undefined) return rejected("The selected provider resource disposer has no complete finalized Rust operation ABI.");
+  const receiverInput = abi.targetReceiver.kind === "input" ? abi.targetReceiver.input
+    : abi.targetArguments.find(input => isRustFinalizedSourceInput(input) && input.source.kind === "receiver");
+  if (receiverInput === undefined || !isRustFinalizedSourceInput(receiverInput)) {
+    return rejected("The selected provider resource disposer has no exact native resource input.");
+  }
+  const conversion = receiverInput.conversion.kind === "sequence" ? receiverInput.conversion.steps[0] : receiverInput.conversion;
+  const receiverMode = conversion?.kind === "semantic"
+    ? rustValueConversionContract(conversion.conversion, context.typeDefinitions)?.sourceMode
+    : conversion?.kind === "identity" ? receiverInput.mode : undefined;
+  if (receiverMode === undefined) return rejected("The selected provider disposer has no exact pre-conversion resource mode.");
+  const target = { form: "provider" as const, abi, receiverMode };
+  const fallible = rustOperationAbiInvocationIsFallible(abi) || rustOperationAbiAwaitIsFallible(abi);
   return {
     kind: "selected",
     resourceCarrier,
-    disposal,
+    disposal: { kind: alternative.kind, fallible, target },
   };
-}
-
-function optionalCarrierEquals(
-  left: TargetTypeRef | undefined,
-  right: TargetTypeRef | undefined,
-): boolean {
-  return left === undefined
-    ? right === undefined
-    : right !== undefined && rustTargetTypeRefEquals(left, right);
 }
 
 function providerDisposalTargetIsSupported(
   target: import("../../target-model/operations/model.js").RustProviderOperationForm,
-): target is Extract<RustResourceDisposalTarget, { readonly form: "provider" }>["target"] {
+): boolean {
   return target.form === "method" ||
     target.form === "receiver-method" ||
     target.form === "free-call";
@@ -284,12 +273,13 @@ function resourceDisposalTargetsEqual(
   }
   if (left.form === "source-method" && right.form === "source-method") {
     return left.name === right.name && left.receiverMode === right.receiverMode &&
+      left.errorBoundary === right.errorBoundary &&
       (left.dispatch === undefined ? right.dispatch === undefined
         : right.dispatch !== undefined && left.dispatch.virtualSlot === right.dispatch.virtualSlot &&
           rustTargetTypeRefEquals(left.dispatch.ownerCarrier, right.dispatch.ownerCarrier));
   }
   return left.form === "provider" && right.form === "provider" &&
-    closedMetadataEquals(left.target, right.target);
+    left.receiverMode === right.receiverMode && closedMetadataEquals(left.abi, right.abi);
 }
 
 function rejected(reason: string): Extract<RustResourceManagementSelection, { readonly kind: "rejected" }> {

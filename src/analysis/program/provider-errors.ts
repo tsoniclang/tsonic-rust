@@ -65,9 +65,12 @@ export function analyzeRustProviderErrorCarriers(
     if (future?.errorBoundary === "provider-native") {
       add(future.errorCarrier);
     }
-    const resource = records.resourceManagement.get(node);
-    if (resource?.disposal.errorBoundary === "provider-native") {
-      add(resource.disposal.errorCarrier);
+    const disposalTarget = records.resourceManagement.get(node)?.disposal.target;
+    if (disposalTarget?.form === "provider") {
+      for (const carrier of disposalTarget.abi.effects.nativeErrorCarriers ?? []) add(carrier);
+      if (disposalTarget.abi.effects.errorBoundary === "provider-native") {
+        add(disposalTarget.abi.effects.errorCarrier);
+      }
     }
     ast.forEachChild(node, (child) => {
       if (child !== undefined) {

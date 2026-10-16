@@ -37,14 +37,9 @@ export function planRustRuntimeIndexUpdate(
         expressionOverrides: new Map(overrides).set(operand, {
           expression: value, carrier: update.resultCarrier, valueForm: "value",
         }),
-      }, { target: operand, value: operand });
+      });
       const statement = written?.length === 1 ? written[0] : undefined;
-      return statement?.kind === "expr" ? statement.expr
-        : statement?.kind === "index-assign" ? {
-          kind: "assignment", operator: "=",
-          target: { kind: "index", receiver: statement.receiver, index: statement.index },
-          value: statement.value,
-        } : undefined;
+      return statement?.kind === "expr" ? statement.expr : undefined;
     },
     update, step, returnsPrevious, context,
   });

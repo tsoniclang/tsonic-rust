@@ -108,7 +108,7 @@ test("receiver calls interleave native roots without changing receiver or author
       const input = catalog.resolveInput({ ...request, targetArgumentIndex: position });
       const options = { ...base, form: {
         form: "receiver-method", name: "accept", mutatesReceiver: mutable, argOrder: [1, 0],
-      }, sourceReceiverCarrier: receiver, dispatchInputs: [input] };
+      }, sourceReceiver: { kind: "runtime", carrier: receiver }, dispatchInputs: [input] };
       const abi = finalizeRustProviderOperationAbi(options);
       assert.equal(abi !== undefined, true, `receiver root position ${position}`);
       assert.equal(validateRustFinalizedOperationAbi(abi), true);

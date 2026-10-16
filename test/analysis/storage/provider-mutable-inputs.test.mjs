@@ -26,7 +26,8 @@ export function main(): void {
   };
   for (const file of program.sourceFiles) visit(file);
   assert.equal(calls.length, 3, "independent variables, disjoint fields and independently owned temporary values");
-  return { program, input: { ast, records: program.records, navigation: program.sourceNavigation }, calls };
+  return { program, input: { ast, records: program.records, navigation: program.sourceNavigation,
+    statementCompletions: program.statementCompletions }, calls };
 }
 
 test("native mutable admission is sealed and retains exact operation and source-input ownership", () => {

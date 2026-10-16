@@ -1,5 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression,
+  sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
@@ -39,7 +40,12 @@ export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], reco
     const callTrait = callable?.kind === "closure" ? callable.callTrait ?? "Fn" : undefined;
     const callableMode = callTrait === "FnOnce" ? "move" : callTrait === "FnMut" ? "mutable"
       : callTrait === "Fn" || rustCallableProtocol(callable) !== undefined ? "shared" : undefined;
-    const argumentsList = rustBorrowedOperationArguments(node, ast);
+    const left = operation?.kind === "runtime-set" ? BinaryExpression_Left(ast, node) : undefined;
+    const argumentsList = operation?.kind === "runtime-set"
+      ? operation.abi.operationKind === "index-set"
+        ? [left === undefined ? undefined : ElementAccessExpression_ArgumentExpression(ast, left), BinaryExpression_Right(ast, node)]
+        : [BinaryExpression_Right(ast, node)]
+      : rustBorrowedOperationArguments(node, ast);
     const selected = selectRustOperationReadUses(ast, node, { operation, address, location, guard, callableMode, arguments: argumentsList,
       nativeInputs: operation?.kind === "provider-operation" ? rustFinalizedSourceInputs(operation.abi).map(input =>
         ({ source: input.source, mode: rustProviderInputBorrowMode(input) })) : [],

@@ -46,3 +46,25 @@ test("source evaluation slots remain separate from native target input consumpti
   assert.equal(sourceRuntimeSlots({ abi }, undefined, nodes) === undefined, true, "missing required receiver rejects");
   assert.equal(sourceRuntimeSlots({ abi }, receiver, [nodes[0]]) === undefined, true, "missing evaluated source argument rejects");
 });
+
+test("evaluation-only receivers precede arguments while qualifiers have no runtime slot", () => {
+  const receiver = { name: "receiver" };
+  const argument = { name: "value" };
+  const carrier = { kind: "target-named", id: "fixture.NativeValue" };
+  const abi = { sourceReceiver: { kind: "receiver", carrier, declaredCarrier: carrier, disposition: "evaluation-only" },
+    sourceArguments: [{ sourceIndex: 0, disposition: "runtime", carrier }], targetReceiver: { kind: "none" },
+    targetArguments: [{ source: { kind: "argument", sourceIndex: 0 } }] };
+  assert.deepEqual(sourceRuntimeSlots({ abi }, receiver, [argument]), [
+    { key: "receiver", node: receiver, evaluationOnly: "value" },
+    { key: "argument:0", node: argument },
+  ]);
+  assert.deepEqual(providerTargetRuntimeSlotKeys({ abi }), ["argument:0"]);
+  assert.equal(sourceRuntimeSlots({ abi }, undefined, [argument]) === undefined, true,
+    "an actual effect-only receiver is still required");
+  assert.deepEqual(sourceRuntimeSlots({ abi: { ...abi, sourceReceiver: { kind: "compile-time" } } }, receiver, [argument]),
+    [{ key: "argument:0", node: argument }]);
+  const unit = { kind: "tuple", elements: [] };
+  assert.deepEqual(sourceRuntimeSlots({ abi: { ...abi,
+    sourceReceiver: { ...abi.sourceReceiver, carrier: unit, declaredCarrier: unit } } }, receiver, [argument])[0],
+  { key: "receiver", node: receiver, evaluationOnly: "unit" });
+});

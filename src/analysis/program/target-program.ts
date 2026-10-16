@@ -1,6 +1,7 @@
 import {
   rejectedTargetStage,
   resolvedTargetStage,
+  type TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
 import {
   snapshotTargetPlanningSourceNavigation,
@@ -67,6 +68,7 @@ import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
 import { analyzeRustReachability } from "../reachability/plan.js";
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
+import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -154,16 +156,6 @@ export function analyzeRustTargetProgram(
   if (foundation.plan === undefined) {
     return rejectedTargetStage(foundation.diagnostics);
   }
-  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records: context.records,
-    navigation: context.source.navigation, nodes: context.sourceStorage.nodes });
-  for (const node of context.sourceStorage.nodes) {
-    const selection = providerMutableInputs.forOperation(node);
-    if (selection?.kind === "rejected") context.diagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
-      category: "error", source: "tsonic-rust", message: selection.reason,
-      sourceNode: selection.node,
-      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
-  }
-  if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
   const retainedCallableInputs = analyzeRustRetainedCallableInputs({ ast: context.ast, records: context.records,
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents.plan });
@@ -334,10 +326,27 @@ export function analyzeRustTargetProgram(
       initializationErrors.value.workers.some(worker => worker.initializer.asynchronous) });
   if (binaryExecution.kind === "rejected") return binaryExecution;
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
+  const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value);
+  const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles, records });
+  const statementCompletions = analyzeRustStatementCompletions({ source: context.source, sourceFiles: context.sourceFiles,
+    records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections });
+  if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
+  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
+    navigation: context.source.navigation, nodes: context.sourceStorage.nodes, statementCompletions: statementCompletions.plan });
+  const mutableInputDiagnostics: TargetDiagnostic[] = [];
+  for (const node of context.sourceStorage.nodes) {
+    const selection = providerMutableInputs.forOperation(node);
+    if (selection?.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
+      category: "error", source: "tsonic-rust", message: selection.reason,
+      sourceNode: selection.node,
+      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
+  }
+  if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const program: Omit<RustTargetProgram, "reachability" | "records"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
-    errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
+    statementCompletions: statementCompletions.plan,
+    errorRegions: completedErrorRegions,
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
     promiseResults: promiseResults.results,
@@ -409,11 +418,7 @@ export function analyzeRustTargetProgram(
       records: finalRecords,
       borrowedElementReads,
     }),
-    projectFlowReadSelections: analyzeRustProjectFlowReadSelections({
-      ast: context.ast,
-      sourceFiles: context.sourceFiles,
-      records,
-    }),
+    projectFlowReadSelections,
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };

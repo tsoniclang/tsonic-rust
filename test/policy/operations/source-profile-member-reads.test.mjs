@@ -23,7 +23,7 @@ test("synthesized index contributors retain one native read ABI and checker-sele
       assert.deepEqual(selected.fact.sourceResultCarrier, element);
       const location = !readonly && owners.includes("Array");
       assert.equal(selected.fact.indexedLocationMethod, location ? "element_location" : undefined);
-      const fact = finalizeProviderOperationFact(selected.fact, [integer], receiver);
+      const fact = finalizeProviderOperationFact(selected.fact, [integer], { kind: "runtime", carrier: receiver });
       assert.ok(fact);
       assert.ok(Object.isFrozen(fact.borrowedIndexOperation));
       assert.equal(fact.abi.effects.evaluation, "observable");

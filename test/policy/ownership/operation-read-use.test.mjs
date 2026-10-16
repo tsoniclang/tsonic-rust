@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Expression } from "@tsonic/target-api/source";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 
 function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, nativeInputs: [], argumentModes: [],
@@ -35,6 +36,120 @@ test("operator ownership consumes selected operand modes instead of rediscoverin
       assert.deepEqual([uses.get(binary.Left)?.mode, uses.get(binary.Right)?.mode], expected);
       if (uses.has(binary.Left)) assert.equal(uses.get(binary.Left).later[0] === binary.Right, true);
     }
+  }
+});
+
+test("evaluation-only native source inputs have terminal nonconsuming uses for reads, calls and setters", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-evaluation-only-inputs", {
+    "src/index.ts": `
+interface Native { value: Native; call(value: Native): Native; [index: number]: Native; }
+function observed(receiver: Native, value: Native, index: number): void {
+  receiver.value;
+  receiver.call(value);
+  receiver.value = value;
+  receiver[index] = value;
+}
+`,
+  }));
+  const carrier = { kind: "target-named", id: "fixture.Native" };
+  const integer = { kind: "source-primitive", name: "int32" };
+  const nodes = [];
+  const visit = node => {
+    if (source.ast.is.IsCallExpression(node) || source.ast.is.IsBinaryExpression(node) ||
+      source.ast.is.IsPropertyAccessExpression(node) && source.ast.is.IsExpressionStatement(source.ast.parent(node))) nodes.push(node);
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of source.sourceFiles) visit(file);
+  assert.equal(nodes.length, 4, "the source covers read, call, property set and indexed set");
+  for (const node of nodes) {
+    const binary = source.ast.is.IsBinaryExpression(node) ? source.ast.as.AsBinaryExpression(node) : undefined;
+    const call = source.ast.is.IsCallExpression(node) ? source.ast.as.AsCallExpression(node) : undefined;
+    const selected = binary?.Left ?? node;
+    const property = call === undefined ? selected : call.Expression;
+    const receiver = source.ast.is.IsPropertyAccessExpression(property)
+      ? source.ast.as.AsPropertyAccessExpression(property).Expression
+      : source.ast.as.AsElementAccessExpression(property).Expression;
+    const indexed = source.ast.is.IsElementAccessExpression(selected) ? source.ast.as.AsElementAccessExpression(selected) : undefined;
+    const argumentsList = binary === undefined ? call === undefined ? [] : source.ast.arguments(node)
+      : indexed === undefined ? [binary.Right] : [indexed.ArgumentExpression, binary.Right];
+    const operationKind = binary !== undefined ? indexed === undefined ? "property-set" : "index-set"
+      : call === undefined ? "property" : "method";
+    const abi = finalizeRustProviderOperationAbi({ operationKind,
+      form: { form: "call", path: "fixture::observe", ...(indexed === undefined ? {} : { argOrder: [1] }) },
+      sourceReceiver: { kind: "runtime", carrier },
+      sourceArgumentCarriers: argumentsList.map((_, index) => indexed !== undefined && index === 0 ? integer : carrier),
+      ...(indexed === undefined ? {} : { evaluationOnlySourceArgumentIndexes: [0] }),
+      resultCarrier: { kind: "tuple", elements: [] }, isAsync: false, isFallible: false });
+    assert.equal(abi !== undefined, true, `${operationKind} has a canonical source-evaluation ABI`);
+    const operation = { kind: binary === undefined ? "provider-operation" : "runtime-set", operationId: "fixture::observe", abi };
+    const uses = selectRustOperationReadUses(source.ast, node, { operation, arguments: argumentsList,
+      nativeInputs: [], argumentModes: [], address: undefined, location: undefined, guard: undefined, callableMode: undefined });
+    const use = uses.get(receiver);
+    assert.equal(use?.mode, "shared", `${operationKind} does not consume its source-only receiver`);
+    assert.equal(use.later.length, 0, `${operationKind} holds no receiver borrow across later arguments`);
+    assert.equal(use.stableAcrossEffects, false, `${operationKind} invents no cross-effect stability proof`);
+    if (indexed !== undefined) {
+      assert.equal(uses.get(indexed.ArgumentExpression)?.mode, "shared", "an evaluation-only index is not consumed");
+      assert.equal(uses.get(indexed.ArgumentExpression)?.later.length, 0, "the discarded index has a terminal use");
+    }
+    for (const argument of argumentsList.slice(indexed === undefined ? 0 : 1)) {
+      assert.equal(uses.has(argument), false, "a value-consumed target argument is not changed to a borrow");
+    }
+  }
+});
+
+test("runtime setters add only evaluation-only terminal uses, not native receiver borrows", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-runtime-set-native-aliases", {
+    "src/index.ts": `
+interface Fields { left: number; right: number; }
+function index(values: number[]): number { values[0] = 1; return 0; }
+function value(values: number[]): number { values[1] = 2; return 3; }
+function assign(values: number[], fields: Fields, first: number, second: number): void {
+  values[first] = values[second];
+  fields.left = fields.right;
+  values[index(values)] = value(values);
+}
+`,
+  }));
+  const number = { kind: "source-primitive", name: "float64" };
+  const receiverCarrier = { kind: "target-named", id: "fixture.NativeReceiver" };
+  const statements = [];
+  const visit = node => {
+    if (source.ast.is.IsBinaryExpression(node)) statements.push(node);
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.sourceFiles.forEach(visit);
+  assert.equal(statements.length, 5, "plain and aliasing field/index writes all participate");
+  for (const node of statements) {
+    const binary = source.ast.as.AsBinaryExpression(node);
+    const indexed = source.ast.is.IsElementAccessExpression(binary.Left)
+      ? source.ast.as.AsElementAccessExpression(binary.Left) : undefined;
+    const receiver = Node_Expression(source.ast, binary.Left);
+    const argumentsList = indexed === undefined ? [binary.Right] : [indexed.ArgumentExpression, binary.Right];
+    const sourceArguments = argumentsList.map((_, sourceIndex) => ({ sourceIndex, carrier: number, disposition: "runtime" }));
+    const nativeInputs = [
+      { source: { kind: "receiver" }, mode: "mut-ref" },
+      ...sourceArguments.map(argument => ({ source: { kind: "argument", sourceIndex: argument.sourceIndex }, mode: "ref" })),
+    ];
+    const operation = { kind: "runtime-set", abi: {
+      sourceReceiver: { kind: "receiver", disposition: "runtime", carrier: receiverCarrier }, sourceArguments,
+    } };
+    const select = selected => selectRustOperationReadUses(source.ast, selected.kind === "runtime-set" ? node : binary.Left, { operation: selected,
+      arguments: argumentsList, nativeInputs, argumentModes: [], address: undefined, location: undefined,
+      guard: undefined, callableMode: undefined });
+    assert.equal(select(operation).size, 0, "consumed runtime-set native inputs do not acquire new read uses");
+    const evaluationOnly = select({ ...operation, abi: { ...operation.abi,
+      sourceReceiver: { ...operation.abi.sourceReceiver, disposition: "evaluation-only" },
+    } });
+    assert.equal(evaluationOnly.size, 1, "only the admitted source-only receiver is selected");
+    const use = evaluationOnly.get(receiver);
+    assert.equal(use?.mode, "shared", "source-only receiver stays nonconsuming");
+    assert.equal(use.later.length, 0, "no borrow is held across RHS mutation");
+    assert.equal(use.stableAcrossEffects, false, "no alias stability is invented");
+    const provider = select({ ...operation, kind: "provider-operation" });
+    assert.equal(provider.get(receiver)?.mode, "mutable", "provider-operation native mode selection is unchanged");
+    assert.equal(provider.get(receiver)?.later === argumentsList, false, "the immutable use owns its argument list");
+    assert.equal(provider.get(receiver)?.later.length, argumentsList.length, "existing provider borrow scope is retained");
   }
 });
 

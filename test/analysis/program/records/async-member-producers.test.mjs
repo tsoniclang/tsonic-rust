@@ -24,7 +24,7 @@ const ast = { kindName: node => node.kind };
 function indexAbi(value = integer) {
   const abi = finalizeRustProviderOperationAbi({ operationKind: "index-set", form: { form: "index",
     indexConversion: { kind: "semantic-conversion", id: "checked-i32-to-usize" } },
-    sourceReceiverCarrier: { kind: "array", element: value }, sourceArgumentCarriers: [integer, value],
+    sourceReceiver: { kind: "runtime", carrier: { kind: "array", element: value } }, sourceArgumentCarriers: [integer, value],
     declaredSourceArgumentCarriers: [integer, value], resultCarrier: rustUnitTargetType(),
     isAsync: false, isFallible: false });
   assert.equal(abi !== undefined, true, "a real finalized native index-set ABI");

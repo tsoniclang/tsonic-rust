@@ -23,7 +23,7 @@ test("indexed location metadata retains the exact receiver, pointee and index co
     const index = rustSourcePrimitiveTargetType(name);
     const template = selected("Array", index);
     assert.ok(template);
-    const fact = finalizeProviderOperationFact(template, [index], receiver);
+    const fact = finalizeProviderOperationFact(template, [index], { kind: "runtime", carrier: receiver });
     assert.ok(fact);
     const contract = rustIndexedLocationContract(fact);
     assert.equal(contract.method, "element_location");
@@ -33,7 +33,7 @@ test("indexed location metadata retains the exact receiver, pointee and index co
     assert.equal(contract.index.conversion.kind, "identity");
     assert.deepEqual(contract.index.conversion.sourceCarrier, index);
     assert.deepEqual(contract.index.conversion.targetCarrier, index);
-    const readonly = finalizeProviderOperationFact(selected("ReadonlyArray", index), [index], receiver);
+    const readonly = finalizeProviderOperationFact(selected("ReadonlyArray", index), [index], { kind: "runtime", carrier: receiver });
     assert.ok(readonly);
     assert.equal(rustIndexedLocationContract(readonly), undefined);
   }
@@ -44,7 +44,7 @@ test("indexed location pointees use raw storage rather than collapsed read absen
   const sourceReceiver = rustJsArrayTargetType(pointee);
   const index = rustSourcePrimitiveTargetType("int32");
   const template = selected("Array", index, sourceReceiver);
-  const fact = finalizeProviderOperationFact(template, [index], sourceReceiver);
+  const fact = finalizeProviderOperationFact(template, [index], { kind: "runtime", carrier: sourceReceiver });
   assert.ok(fact);
   assert.deepEqual(fact.abi.result.rawCarrier, rustOptionTargetType(pointee));
   assert.deepEqual(fact.abi.result.carrier, pointee);
@@ -67,7 +67,7 @@ test("indexed results retain explicit native Option nesting instead of manufactu
   const pointee = rustOptionTargetType(element);
   const sourceReceiver = rustJsArrayTargetType(pointee);
   const index = rustSourcePrimitiveTargetType("int32");
-  const fact = finalizeProviderOperationFact(selected("Array", index, sourceReceiver), [index], sourceReceiver);
+  const fact = finalizeProviderOperationFact(selected("Array", index, sourceReceiver), [index], { kind: "runtime", carrier: sourceReceiver });
   assert.ok(fact);
   assert.deepEqual(fact.abi.result.rawCarrier, rustSourceOptionalTargetType(pointee));
   assert.deepEqual(fact.abi.result.carrier, rustSourceOptionalTargetType(pointee));
@@ -88,9 +88,9 @@ test("indexed location finalization rejects invalid protocols rather than recove
     { isUnsafe: true },
     { isAsync: true },
   ]) {
-    assert.equal(finalizeProviderOperationFact({ ...template, ...mutation }, [index], receiver), undefined, JSON.stringify(mutation));
+    assert.equal(finalizeProviderOperationFact({ ...template, ...mutation }, [index], { kind: "runtime", carrier: receiver }), undefined, JSON.stringify(mutation));
   }
-  const fact = finalizeProviderOperationFact(template, [index], receiver);
+  const fact = finalizeProviderOperationFact(template, [index], { kind: "runtime", carrier: receiver });
   for (const mutate of [
     candidate => { candidate.abi.effects.invocation = "fallible"; },
     candidate => { candidate.abi.targetArguments[0].source.sourceIndex = 1; },
