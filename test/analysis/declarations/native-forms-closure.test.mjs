@@ -189,7 +189,6 @@ test("native declaration admission preserves base-accepted local and unreachable
     ["local interface after return", "return 1; interface Unused { value: number; }"],
     ["constant-false local alias", "if (false) { type Unused = number; } return 1;"],
     ["constant-false local interface", "if (false) { interface Unused { value: number; } } return 1;"],
-    ["enum in unused nested function", 'function unused(): void { enum Unused { value = "text" } } return 1;'],
   ]) {
     const { result } = compileRust({ files: { "index.ts": `export function read(): number { ${body} }` } });
     assert.equal(result.diagnostics.length, 0, `${label}: ${result.diagnostics.map(issue => issue.code).join(",")}`);
@@ -197,6 +196,16 @@ test("native declaration admission preserves base-accepted local and unreachable
     assert.match(text, /pub fn read\(/u, `${label}: the actually participating native function is retained`);
     assert.doesNotMatch(text, /(?:enum|struct|type) Unused\b/u, `${label}: no nonparticipating native declaration is emitted`);
   }
+});
+
+test("an unused nested function's enum imposes no native obligations", () => {
+  const label = "enum in unused nested function";
+  const body = 'function unused(): void { enum Unused { value = "text" } } return 1;';
+  const { result } = compileRust({ files: { "index.ts": `export function read(): number { ${body} }` } });
+  assert.equal(result.diagnostics.length, 0, `${label}: ${result.diagnostics.map(issue => issue.code).join(",")}`);
+  const text = artifactText(result, "src/index.rs");
+  assert.match(text, /pub fn read\(/u, `${label}: the actually participating native function is retained`);
+  assert.doesNotMatch(text, /(?:enum|struct|type) Unused\b/u, `${label}: no nonparticipating native declaration is emitted`);
 });
 
 test("sealed family implementations have completed contracts and missing contracts are internal invariants", async () => {
