@@ -175,9 +175,10 @@ test("copied borrowed methods retain the actual closure lifetime without a stati
 import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
 import { load } from "@tsonic/rust/lang.js";
-export function make<Region extends Life>(value: Ref<int32, Region>) {
+export function make<Region extends Life>(value: Ref<int32, Region>): { label: string; read(): Promise<int32> } {
   const original = { async read(): Promise<int32> { return load(value); } };
-  return { label: "borrowed", ...original };
+  const copy = { label: "borrowed", ...original };
+  return copy;
 }
 ` } });
   const method = sourceNodes(program).find(node => program.source.ast.is.IsMethodDeclaration(node));
