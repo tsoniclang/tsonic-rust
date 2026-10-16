@@ -368,7 +368,7 @@ const values: number[] = [1, 2, 3];
 function index(): number { values[1] = 4; return 0; }
 function value(): number { values[2] = 5; return 6; }
 export function main(): void {
-  values[0] = values[1];
+  values[0] = values[1]!;
   check(values[0] === 2);
   const fields = { left: 1, right: 2 };
   fields.left = fields.right;
