@@ -296,7 +296,7 @@ export function render(): string {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /let mut index: f64 = 0\.0;/u);
+  assert.match(source, /let mut index: f64 = 0\.0_f64;/u);
   assert.match(source, /rt::source_string\(&index\)/u);
   validateGeneratedProject("inferred-number-carrier", result.artifacts);
 });
