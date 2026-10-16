@@ -147,13 +147,13 @@ fn float32_values() {
     use tsonic_generated::index;
 ${accepted.map(([, bits], index) => `    assert_eq!(index::value${index}().to_bits(), ${bits});`).join("\n")}
     assert_eq!(index::wide(), 3.5e38_f64);
-    assert_eq!(index::wide_sum(1.0), 3.5e38_f64);
+    assert_eq!(index::wideSum(1.0), 3.5e38_f64);
     assert!(index::compare(f32::MAX));
     assert!(!index::compare(f32::INFINITY));
     assert!(!index::compare(f32::NAN));
-    assert!(index::compare_negative(-f32::MAX));
-    assert!(!index::compare_negative(f32::NEG_INFINITY));
-    assert!(!index::equal_wide(f32::MAX));
+    assert!(index::compareNegative(-f32::MAX));
+    assert!(!index::compareNegative(f32::NEG_INFINITY));
+    assert!(!index::equalWide(f32::MAX));
 }
 `;
     const projectRoot = writeGeneratedProject(`float32-literal-range-${surface}`, [
