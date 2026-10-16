@@ -103,7 +103,7 @@ function verifyNativeCaptureOwnership(edition) {
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
 use capture_owned_inputs::index;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 fn handwritten(seed: i32) -> Rc<dyn Fn() -> i32> {

@@ -43,6 +43,7 @@ test("native callable adapters retain one construction frame and no per-call all
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
 use native_callable_cost::index;
+use std::cell::Cell;
 use tsonic_rust_runtime::{Callable, TsonicResult};
 
 #[test]
