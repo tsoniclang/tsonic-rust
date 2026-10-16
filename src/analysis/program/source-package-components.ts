@@ -52,6 +52,7 @@ export interface RustSourcePackageComponentIdentities {
   readonly componentById: ReadonlyMap<string, TargetCompileInput["sourcePackages"]["components"][number]>;
   readonly sourceFileNamesByComponent: ReadonlyMap<string, ReadonlySet<string>>;
   readonly activeComponentIds: ReadonlySet<string>;
+  readonly componentOrder: readonly string[];
   componentIdForFile(fileName: string): string | undefined;
 }
 
@@ -112,11 +113,51 @@ export function selectRustSourcePackageComponentIdentities(
   if (diagnostics.length > 0) {
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
+  const order: string[] = [];
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (componentId: string): void => {
+    if (visited.has(componentId) || diagnostics.length > 0) {
+      return;
+    }
+    if (visiting.has(componentId)) {
+      diagnostics.push(componentDiagnostic(
+        "RUST_SOURCE_PACKAGE_COMPONENT_GRAPH_CYCLE",
+        `Source-package component '${componentId}' participates in a cycle outside one compiler-owned component.`,
+      ));
+      return;
+    }
+    const component = componentById.get(componentId);
+    if (component === undefined) {
+      diagnostics.push(componentDiagnostic(
+        "RUST_SOURCE_PACKAGE_COMPONENT_DEPENDENCY_MISSING",
+        `Source-package component '${componentId}' is referenced but absent from the checked component graph.`,
+      ));
+      return;
+    }
+    visiting.add(componentId);
+    for (const dependency of [...component.dependencies]
+      .filter((candidate) => activeComponentIds.has(candidate))
+      .sort(compareNames)) {
+      visit(dependency);
+    }
+    visiting.delete(componentId);
+    visited.add(componentId);
+    order.push(componentId);
+  };
+  visit(rootPackage.componentId);
+  for (const componentId of [...activeComponentIds].sort(compareNames)) {
+    visit(componentId);
+  }
+  if (diagnostics.length > 0) {
+    return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+  }
   return { kind: "resolved", identities: Object.freeze({
     rootComponentId: rootPackage.componentId,
     componentById,
     sourceFileNamesByComponent,
     activeComponentIds,
+    componentOrder: Object.freeze(order),
     componentIdForFile(fileName: string) {
       return componentIdByFileName.get(normalizePath(fileName));
     },
@@ -130,7 +171,7 @@ export function analyzeRustSourcePackageComponents(
   const selected = context.sourcePackageComponentIdentities;
   if (selected.kind === "rejected") return selected;
   const identities = selected.identities;
-  const { componentById, sourceFileNamesByComponent, activeComponentIds, rootComponentId } = identities;
+  const { componentById, sourceFileNamesByComponent, activeComponentIds, rootComponentId, componentOrder: order } = identities;
   const diagnostics: TargetDiagnostic[] = [];
 
   const dependencies = new Map<string, ReadonlySet<string>>();
@@ -209,46 +250,6 @@ export function analyzeRustSourcePackageComponents(
       "RUST_GENERIC_CALLABLE_COMPONENT_NOT_CLOSED",
       "A physical generic callable environment has no component path to its exact producer implementation.",
     ));
-  }
-  if (diagnostics.length > 0) {
-    return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
-  }
-
-  const order: string[] = [];
-  const visiting = new Set<string>();
-  const visited = new Set<string>();
-  const visit = (componentId: string): void => {
-    if (visited.has(componentId) || diagnostics.length > 0) {
-      return;
-    }
-    if (visiting.has(componentId)) {
-      diagnostics.push(componentDiagnostic(
-        "RUST_SOURCE_PACKAGE_COMPONENT_GRAPH_CYCLE",
-        `Source-package component '${componentId}' participates in a cycle outside one compiler-owned component.`,
-      ));
-      return;
-    }
-    const component = componentById.get(componentId);
-    if (component === undefined) {
-      diagnostics.push(componentDiagnostic(
-        "RUST_SOURCE_PACKAGE_COMPONENT_DEPENDENCY_MISSING",
-        `Source-package component '${componentId}' is referenced but absent from the checked component graph.`,
-      ));
-      return;
-    }
-    visiting.add(componentId);
-    for (const dependency of [...component.dependencies]
-      .filter((candidate) => activeComponentIds.has(candidate))
-      .sort(compareNames)) {
-      visit(dependency);
-    }
-    visiting.delete(componentId);
-    visited.add(componentId);
-    order.push(componentId);
-  };
-  visit(rootComponentId);
-  for (const componentId of [...activeComponentIds].sort(compareNames)) {
-    visit(componentId);
   }
   if (diagnostics.length > 0) {
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
