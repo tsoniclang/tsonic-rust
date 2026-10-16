@@ -1,5 +1,5 @@
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import {
-  failTargetPlannerInvariant,
   rejectedTargetStage,
   resolvedTargetStage,
 } from "@tsonic/target-api/artifacts";
@@ -325,7 +325,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     rootBindings,
   );
   if (initialization.root.modules.length > 0 && crateInitializer === undefined) {
-    failTargetPlannerInvariant("tsonic-rust",
+    failRustPlannerInvariant(
       "The completed root initializer error composition has no exact native reconstruction.",
       entrySourceFile);
   }

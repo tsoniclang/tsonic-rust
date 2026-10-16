@@ -1,6 +1,6 @@
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustInitializerSelection } from "../../../target-model/records/error-regions.js";
 import type { RustItem, RustStmt, RustType } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
@@ -40,7 +40,7 @@ export function planRustModuleInitializers(
         ? `${contract.crateName}::${contract.facadeModuleName}::${contract.facadeFunctionName}` : undefined;
     const region = planRustSelectedErrorRegion(selected.region, rendering);
     if (path === undefined || region === undefined) {
-      failTargetPlannerInvariant("tsonic-rust",
+      failRustPlannerInvariant(
         `Completed initializer '${selected.identity}' has no exact native symbol or rendered error payload.`,
         selected.sourceFile);
     }

@@ -1,4 +1,4 @@
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustExpr, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustTypeEquals } from "../../target-ast/inspection/type-equality.js";
 import { planRustNativeErrorJoin, type RustNativeErrorJoinSelection } from "../types/native-error-joins.js";
@@ -25,12 +25,12 @@ export function planRustBinaryErrors(
       errorType: source.kind === "lifecycle" ? lifecycleType : nativeByIdentity.get(source.identity)!,
     })) });
   if (join?.errorType === undefined) {
-    failTargetPlannerInvariant("tsonic-rust", "Binary startup requires a complete native error composition.");
+    failRustPlannerInvariant("Binary startup requires a complete native error composition.");
   }
   const propagate = (source: RustNativeErrorJoinSelection, result: RustExpr): RustExpr => {
     const selected = join.propagate(source, result);
     if (selected === undefined) {
-      failTargetPlannerInvariant("tsonic-rust", "Binary startup propagation requires an exact selected native error channel.");
+      failRustPlannerInvariant("Binary startup propagation requires an exact selected native error channel.");
     }
     return selected;
   };
@@ -47,7 +47,7 @@ export function planRustBinaryErrors(
         : { kind: "associated-call", owner: lifecycleType, method: "from", args: [error] };
       const selected = join.inject(lifecycle, converted);
       if (selected === undefined) {
-        failTargetPlannerInvariant("tsonic-rust", "Binary lifecycle errors require the exact selected native channel.");
+        failRustPlannerInvariant("Binary lifecycle errors require the exact selected native channel.");
       }
       return selected;
     },

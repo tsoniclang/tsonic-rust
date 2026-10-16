@@ -19,7 +19,6 @@ import {
   KindVariableDeclarationList,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, planResourceManagedBody, resourceFactForPlanning } from "./resources.js";
 import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
@@ -32,7 +31,7 @@ import {
 } from "../expressions/index.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
 import { isRustBoolCarrier } from "../../../target-model/types/index.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
@@ -62,7 +61,7 @@ function planCondition(condition: Node, context: RustPlanContext, construct: str
 
 function planEmbeddedBlock(node: Node | undefined, context: RustPlanContext): RustBlock | undefined {
   if (node === undefined) {
-    failTargetPlannerInvariant("tsonic-rust", "Control-flow construct has no source body statement.", context.sourceFile);
+    failRustPlannerInvariant("Control-flow construct has no source body statement.", context.sourceFile);
   }
   return planBlockLike(node, context);
 }
@@ -205,7 +204,7 @@ export function planLabeledStatement(
   const bodyNode = LabeledStatement_Statement(ast, node);
   const sourceLabel = labelNode === undefined ? "" : ast.text(labelNode);
   if (bodyNode === undefined || sourceLabel.length === 0) {
-    failTargetPlannerInvariant("tsonic-rust", "Labeled statements require exact label and body nodes.", node);
+    failRustPlannerInvariant("Labeled statements require exact label and body nodes.", node);
   }
   switch (ast.kindName(bodyNode)) {
     case KindWhileStatement:
@@ -278,7 +277,7 @@ export function planDoStatement(
   const condition = Node_Expression(context.input.program.source.ast, node);
   const bodyNode = DoStatement_Statement(context.input.program.source.ast, node);
   if (condition === undefined || bodyNode === undefined) {
-    failTargetPlannerInvariant("tsonic-rust", "do-while requires concrete body and condition nodes.", node);
+    failRustPlannerInvariant("do-while requires concrete body and condition nodes.", node);
   }
   const plannedCondition = planCondition(condition, context, "do-while");
   const baseTarget = createRustLoopTarget(context, [], sourceLabel);
@@ -482,7 +481,7 @@ export function createRustLoopTarget(
   sourceLabel?: string,
 ): RustLoopTarget | undefined {
   if (context.syntheticNames === undefined || context.controlFlow === undefined) {
-    failTargetPlannerInvariant("tsonic-rust", "Loop lowering requires finalized hygienic names and control-flow state.", context.sourceFile);
+    failRustPlannerInvariant("Loop lowering requires finalized hygienic names and control-flow state.", context.sourceFile);
   }
   const target: RustLoopTarget = {
     kind: "loop",
@@ -506,7 +505,7 @@ export function createRustBreakTarget(
   sourceLabel?: string,
 ): RustControlTarget | undefined {
   if (context.syntheticNames === undefined || context.controlFlow === undefined) {
-    failTargetPlannerInvariant("tsonic-rust", "Labeled control flow requires finalized hygienic names and control-flow state.", context.sourceFile);
+    failRustPlannerInvariant("Labeled control flow requires finalized hygienic names and control-flow state.", context.sourceFile);
   }
   const target: RustControlTarget = {
     kind,

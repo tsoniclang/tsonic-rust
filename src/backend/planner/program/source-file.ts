@@ -9,7 +9,6 @@ import { planRustClassEnvironmentItems } from "../objects/class-environments.js"
 import { planRustClassValueImplementations } from "../objects/constructor-values.js";
 import { planRustProjectStructuralImplementations } from "../objects/project-structural-views.js";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 
 import {
   KindFunctionDeclaration,
@@ -36,6 +35,7 @@ import type {
 import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type { RustPlanningContext } from "../context.js";
 import {
+  failRustPlannerInvariant,
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
 } from "../diagnostics.js";
@@ -258,7 +258,7 @@ function planModuleItems(
   const errorRegion = context.input.program.errorRegions.get(context.sourceFile);
   const region = planRustErrorRegion(context.sourceFile, context);
   if (errorRegion === undefined || region === undefined) {
-    failTargetPlannerInvariant("tsonic-rust",
+    failRustPlannerInvariant(
       "Module initializer has no exact finalized error region.",
       context.sourceFile);
   }
@@ -289,7 +289,7 @@ function planModuleItems(
     }
     if (kind === KindFunctionDeclaration) {
       const participation = context.input.program.records.nativeParticipation.get(statement);
-      if (participation === undefined) failTargetPlannerInvariant("tsonic-rust",
+      if (participation === undefined) failRustPlannerInvariant(
         "Authored function placement requires its sealed native participation.", statement);
       if (participation === "erased") continue;
       const diagnosticCount = context.diagnostics.length;

@@ -1,4 +1,4 @@
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
@@ -80,7 +80,7 @@ export function createRustProjectObject(
   }
   const carrierPath = rustSharedObjectCarrierPath(representation);
   if (carrierPath === undefined) {
-    failTargetPlannerInvariant("tsonic-rust", "Polymorphic project objects require their dedicated construction planner.");
+    failRustPlannerInvariant("Polymorphic project objects require their dedicated construction planner.");
   }
   return {
     kind: "struct-literal",
