@@ -48,6 +48,7 @@ test("producer errors reject malformed channels environments and accessor metada
   assert.equal(rustProducerErrorReference({ ...valid, value: withGetter }) === undefined, true);
   assert.equal(reads, 0);
   assert.equal(rustProducerErrorReference(rustProducerErrorTargetType({ ...reference, channel: 0 })).channel, 0);
+  assert.equal(rustProducerErrorReference(rustProducerErrorTargetType({ ...reference, channel: "body" })).channel, "body");
 });
 
 test("const environment collection rejects contradictory names for one declaration identity", () => {
