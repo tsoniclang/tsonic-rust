@@ -13,7 +13,7 @@ const subject = context.sourceStorage.nodes.find(node => context.ast.is.IsFuncti
 const other = context.ast.parameters(subject)[0];
 assert.equal(subject !== undefined && other !== undefined, true);
 const families = Object.keys(createRustProgramRecordBuilder().seal([]));
-assert.equal(families.length, 66);
+assert.equal(families.length, 68, "67 receiving families plus the one canonical native-handler family");
 
 function requirement(family, node = subject) {
   return { subject: node, construct: "checked selected construct", family, producer: "selected native owner" };

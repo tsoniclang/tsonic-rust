@@ -7,6 +7,9 @@ import {
   targetSourceSyntaxProgram,
 } from "@tsonic/target-api/analysis";
 import { analyzeRustProgram } from "./analyze.js";
+import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
+import { createRustProgramRecords } from "./records/create.js";
+import type { RustAnalysisRecords } from "./records/model.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
 import { analyzeRustBinaryDispatchDemand } from "../project/binary-dispatch-demand.js";
 import { createRustAnalysisContext } from "./context.js";
@@ -171,6 +174,8 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents.plan });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
+  analyzeRustNativeHandlers(context.sourceStorage.nodes, context.records, { get: context.safetyApplications.operationForExpression },
+    context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     typeDefinitions: context.typeDefinitions,
@@ -323,7 +328,7 @@ export function analyzeRustTargetProgram(
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
-  const program: Omit<RustTargetProgram, "reachability"> = {
+  const program: Omit<RustTargetProgram, "reachability" | "records"> & { readonly records: RustAnalysisRecords } = {
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
@@ -403,7 +408,7 @@ export function analyzeRustTargetProgram(
   };
   const reachability = analyzeRustReachability(program);
   context.callableValues.publish();
-  return resolvedTargetStage(Object.freeze({ ...program, reachability }));
+  return resolvedTargetStage(Object.freeze({ ...program, records: createRustProgramRecords(records), reachability }));
 }
 
 export type {

@@ -28,7 +28,7 @@ import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindE
 import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../operations/finalized-operation/conversions.js";
@@ -68,7 +68,7 @@ interface ClassifyCallableInput {
   readonly typeDefinitions: RustTypeDefinitions;
   readonly ast: AstReader;
   readonly declaration: Node;
-  readonly records: RustProgramRecords;
+  readonly records: RustAnalysisRecords;
   readonly names: RustNamePlan;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;

@@ -1,17 +1,17 @@
 import type { Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import type { RustProgramRecords } from "../../../target-model/records/program.js";
+import type { RustAnalysisRecords } from "./model.js";
 
 export interface RustRequiredRecord {
   readonly subject: Node;
   readonly construct: string;
-  readonly family: keyof RustProgramRecords;
+  readonly family: keyof RustAnalysisRecords;
   readonly producer: string;
 }
 
 export function requireRustRecord(
   requirements: RustRequiredRecord[],
-  family: keyof RustProgramRecords,
+  family: keyof RustAnalysisRecords,
   subject: Node,
   construct: string,
   producer: string,
@@ -20,7 +20,7 @@ export function requireRustRecord(
 }
 
 export function assertRustRequiredRecords(
-  records: RustProgramRecords,
+  records: RustAnalysisRecords,
   requirements: readonly RustRequiredRecord[],
 ): void {
   for (const requirement of requirements) {

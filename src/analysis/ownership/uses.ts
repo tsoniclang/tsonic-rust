@@ -1,6 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
 import { rustBorrowedOperationArguments, rustProviderInputBorrowMode } from "../storage/provider-borrows.js";
 import { selectRustOperationReadUses, type RustReadUse } from "../../policy/ownership/read-use.js";
@@ -26,7 +27,7 @@ export function rustNativeArgumentBorrowsRead(argument: Node, reference: Node,
   return true;
 }
 
-export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustProgramRecords): ReadonlyMap<Node, RustReadUse> {
+export function analyzeRustReadUses(ast: AstReader, nodes: readonly Node[], records: RustAnalysisRecords): ReadonlyMap<Node, RustReadUse> {
   const uses = new Map<Node, RustReadUse>();
   for (const node of nodes) {
     const operation = records.targetOperation.get(node);

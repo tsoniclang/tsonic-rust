@@ -1,5 +1,4 @@
 import type {
-  TsonicSafetyApplicationFact,
   TsonicSafetyBuilderFact,
   TsonicUnsafeContextFact,
 } from "@tsonic/source-core/facts";
@@ -10,9 +9,7 @@ import type {
 } from "@tsonic/tsts";
 import { createTargetSafetyApplicationIndex } from "@tsonic/target-api/analysis";
 import type {
-  TargetSafetyApplication,
   TargetSafetyApplicationIndex,
-  TargetSafetyOperation,
 } from "@tsonic/target-api/analysis";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import {
@@ -20,9 +17,7 @@ import {
   readRustSourceUnsafeContext,
 } from "../../policy/operations/safety/source-explicit-safety.js";
 
-export type RustSafetyApplication = TargetSafetyApplication<TsonicSafetyApplicationFact>;
-
-export type RustSafetyOperation = TargetSafetyOperation<TsonicUnsafeContextFact, TsonicSafetyBuilderFact>;
+import type { RustSafetyApplication } from "../../target-model/records/safety.js";
 
 export type RustSafetyApplicationFactIndex = TargetSafetyApplicationIndex<
   TsonicUnsafeContextFact,

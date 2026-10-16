@@ -34,11 +34,15 @@ import { planRustValueProjection } from "../flow-reads.js";
 import { planRustClosedTypeTest } from "../type-tests.js";
 import { rustMemberAccessReceiver } from "../../../../target-model/syntax/expressions.js";
 import { planRustComputedMemberExpression } from "../computed-members.js";
+import type { RustNativeHandler } from "../../../../target-model/records/native-handlers.js";
 
-export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value"): RustExpr | undefined {
+type RustNativeCallHandler = Extract<RustNativeHandler, { readonly kind: "js-string-conversion" | "typed-location" }>;
+
+export function planCallExpression(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse = "value",
+  nativeCall?: RustNativeCallHandler): RustExpr | undefined {
   const borrowed = context.input.program.borrowedElementReads.forExpression(node);
   if (borrowed !== undefined) return planRustBorrowedElementRead(node, borrowed, context,
-    (expression, inner) => planCallExpressionInner(expression, inner, resultUse));
+    (expression, inner) => planCallExpressionInner(expression, inner, resultUse, nativeCall));
   return planOptionalChainExpression(
     node,
     context,
@@ -46,14 +50,15 @@ export function planCallExpression(node: Node, context: RustPlanContext, resultU
     innerContext => {
       const callee = Node_Expression(innerContext.input.program.source.ast, node);
       return callee === undefined ? undefined : planRustComputedMemberExpression(callee, innerContext,
-        selectedContext => planCallExpressionInner(node, selectedContext, resultUse));
+        selectedContext => planCallExpressionInner(node, selectedContext, resultUse, nativeCall));
     },
   );
 }
 
-function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse): RustExpr | undefined {
-  const { ast } = context.input.program.source;
-  const fact = rustOperationFact(node, context);
+function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse: RustExpressionResultUse,
+  nativeCall: RustNativeCallHandler | undefined): RustExpr | undefined {
+  const fact = nativeCall?.kind === "typed-location" ? nativeCall.selection.operation
+    : nativeCall?.selection ?? rustOperationFact(node, context);
   if (fact?.kind === "closed-type-test") return planRustClosedTypeTest(node, fact, context);
   const callCarrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
   const innerResultCarrier = fact?.kind === "source-call" ||
@@ -100,8 +105,8 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
   if (fact?.kind === "reference-operation") {
     return planRustReferenceOperationCall(node, fact, context, planExpression);
   }
-  if (fact?.kind === "typed-location") {
-    return planRustTypedLocationCall(node, fact, context, planExpression);
+  if (nativeCall?.kind === "typed-location") {
+    return planRustTypedLocationCall(node, nativeCall.selection.operation, nativeCall.selection.plan, context, planExpression);
   }
   if (fact !== undefined && fact.kind === "flow-marker") {
     const args = planRustCallArguments(node, context);
@@ -151,6 +156,20 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
       : rustValueBlock(argumentPlan.bindings, planned);
   }
   if (fact !== undefined && fact.kind === "provider-operation") {
+    return planRustProviderCall(node, fact, context);
+  }
+  context.diagnostics.push(missingFactDiagnostic(
+    diagnosticInput(context, node),
+    "rust.backend.call",
+    "Call expression has no finalized Rust operation fact.",
+  ));
+  return undefined;
+}
+
+function planRustProviderCall(node: Node, fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  context: RustPlanContext): RustExpr | undefined {
+    const { ast } = context.input.program.source;
+    const callee = Node_Expression(ast, node);
     const superConstruction = fact.abi.operationKind === "constructor" &&
       callee !== undefined && ast.kindName(callee) === "KindSuperKeyword";
     if (fact.abi.operationKind !== "method" && !superConstruction) {
@@ -202,13 +221,6 @@ function planCallExpressionInner(node: Node, context: RustPlanContext, resultUse
       return undefined;
     }
     return finishProviderOperationExpression(context, fact, planned, node);
-  }
-  context.diagnostics.push(missingFactDiagnostic(
-    diagnosticInput(context, node),
-    "rust.backend.call",
-    "Call expression has no finalized Rust operation fact.",
-  ));
-  return undefined;
 }
 
 function planRustDefaultValueCall(

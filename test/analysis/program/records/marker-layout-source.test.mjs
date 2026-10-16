@@ -1,4 +1,9 @@
 import { assertRustRecordRequirement } from "../../../helpers/required-records.mjs";
+
+function selectedLayoutObservation(program, node) {
+  const handler = program.records.nativeHandler.get(node);
+  return handler?.kind === "native-pointer" && handler.selection.kind === "layout-query" ? handler.selection.observation : undefined;
+}
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust } from "../../../helpers/rust-session.mjs";
@@ -203,20 +208,21 @@ for (const surfaces of [[], ["js"]]) {
       assertRustRecordRequirement(requiredRecords, "memoryLayoutObservation", call);
       assertRustRecordRequirement(requiredRecords, "compileTimeSource", ast.arguments(call)[0]);
     }
-    const observations = checkedNodes(program).filter(node => program.records.memoryLayoutObservation.get(node) !== undefined);
+    const observations = checkedNodes(program).filter(node => selectedLayoutObservation(program, node) !== undefined);
     assert.equal(observations.length, 8);
-    assert.deepEqual(observations.map(node => program.records.memoryLayoutObservation.get(node).value), [8, 4, 8, 4, 0, 0, 0, 1]);
+    assert.deepEqual(observations.map(node => selectedLayoutObservation(program, node).value), [8, 4, 8, 4, 0, 0, 0, 1]);
     for (const node of observations) {
       assert.equal(ast.is.IsCallExpression(node), true, "the observation is attached to the exact checked call");
-      const record = program.records.memoryLayoutObservation.get(node);
+      const record = selectedLayoutObservation(program, node);
       assert.equal(Object.isFrozen(record), true);
       const carrier = program.records.runtimeCarrier.get(node)?.carrier;
       assert.equal(carrier?.kind, "source-primitive");
       assert.equal(carrier.name, "native-uint");
       assert.equal(program.records.compileTimeSource.get(ast.arguments(node)[0]), true, "the metadata operand is erased, not evaluated");
     }
-    assert.equal(program.records.memoryLayoutObservation.get({}) === undefined, true, "no shape-based layout observation");
-    assert.equal(program.records.memoryLayoutObservation.set === undefined, true);
+    assert.equal(selectedLayoutObservation(program, {}) === undefined, true, "no shape-based layout observation");
+    assert.equal(program.records.nativeHandler.set === undefined, true);
+    assert.equal(Object.hasOwn(program.records, "memoryLayoutObservation"), false);
   });
 
   test(`ordinary sizeof spelling publishes no layout observation in ${surface}`, () => {
@@ -224,7 +230,7 @@ for (const surfaces of [[], ["js"]]) {
       function sizeof(value: number): number { return value; }
       export function run(): number { return sizeof(4); }
     ` } });
-    assert.equal(checkedNodes(program).some(node => program.records.memoryLayoutObservation.get(node) !== undefined), false);
+    assert.equal(checkedNodes(program).some(node => selectedLayoutObservation(program, node) !== undefined), false);
     assert.equal(checkedNodes(program).some(node => program.records.compileTimeSource.get(node) !== undefined), false);
     assert.equal(requiredRecords.some(row => row.family === "memoryLayoutObservation"), false);
   });

@@ -7,7 +7,7 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type {
   RustSafetyApplication,
   RustSafetyOperation,
-} from "../../../analysis/safety/application-index.js";
+} from "../../../target-model/records/safety.js";
 import type {
   RustPlanningContext,
 } from "../context.js";
@@ -20,26 +20,19 @@ import type {
 } from "../program/plan-context.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 
-export type RustExplicitSafetyExpressionPlan =
-  | { readonly handled: false }
-  | { readonly handled: true; readonly expression?: RustExpr };
-
-export function tryPlanRustExplicitSafetyExpression(
+export function planRustExplicitSafetyExpression(
   node: Node,
+  selected: RustSafetyOperation,
   context: RustPlanContext,
   planExpression: (node: Node, context: RustPlanContext) => RustExpr | undefined,
-): RustExplicitSafetyExpressionPlan {
-  const selected = exactSafetyOperation(node, context.input);
-  if (selected?.kind !== "unsafe-context") {
-    if (selected?.kind === "safety-builder") {
+): RustExpr | undefined {
+  if (selected.kind === "safety-builder") {
       context.diagnostics.push(targetDiagnostic(
         "RUST_SAFETY_MARKER_RUNTIME_POSITION_UNSUPPORTED",
         "Rust declaration safety markers must be complete standalone expression statements.",
         node,
       ));
-      return { handled: true };
-    }
-    return { handled: false };
+      return undefined;
   }
   if (selected.fact.kind !== "expression") {
     context.diagnostics.push(targetDiagnostic(
@@ -47,18 +40,13 @@ export function tryPlanRustExplicitSafetyExpression(
       "The no-argument unsafe-context marker must be handled as the first direct statement of a source block.",
       node,
     ));
-    return { handled: true };
+    return undefined;
   }
   const expression = planExpression(
     selected.fact.expression,
     withExplicitUnsafeContext(context),
   );
-  return {
-    handled: true,
-    ...(expression === undefined
-      ? {}
-      : { expression: { kind: "unsafe", expression } }),
-  };
+  return expression === undefined ? undefined : { kind: "unsafe", expression };
 }
 
 export function isRustExplicitUnsafeBlockMarker(
