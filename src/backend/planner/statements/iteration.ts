@@ -23,7 +23,7 @@ import { collectVariableDeclarations, planResourceManagedBody, resourceDisposalR
 import { createRustLoopTarget, withRustControlTarget } from "./control-flow.js";
 import { diagnosticInput, isValidRustIdentifier, registerAliasFromPath, rustActiveErrorType } from "../program/plan-context.js";
 import { isRustUnitCarrier } from "../../../target-model/types/index.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planRustBindingPattern } from "../bindings/patterns.js";
 
@@ -46,12 +46,10 @@ export function planRuntimeSetStatement(
   const left = computedValue?.target ?? BinaryExpression_Left(ast, expression);
   const right = computedValue?.value ?? BinaryExpression_Right(ast, expression);
   if (left === undefined || right === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.runtime-set-shape",
+    failRustPlannerInvariant(
       "Runtime setter fact requires concrete assignment target and value nodes.",
-    ));
-    return undefined;
+      expression,
+    );
   }
   const leftKind = ast.kindName(left);
   const expectedOperationKind = leftKind === "KindPropertyAccessExpression"
@@ -197,14 +195,6 @@ export function planRuntimeSetStatement(
     };
     if (fact.abi.target.form === "call") {
       for (const step of fact.abi.target.chain ?? []) {
-        if (step.kind !== "method") {
-          context.diagnostics.push(missingFactDiagnostic(
-            diagnosticInput(context, expression),
-            "rust.backend.runtime-set-chain",
-            "Runtime setter call chain contains a non-method step after ABI validation.",
-          ));
-          return undefined;
-        }
         call = { kind: "method-call", receiver: call, method: step.name, args: [] };
       }
     }
@@ -339,12 +329,10 @@ export function planForOfStatement(
   }
   const bodyNode = ForInOrOfStatement_Statement(context.input.program.source.ast, node);
   if (bodyNode === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.iteration-body",
+    failRustPlannerInvariant(
       "for-of statements require a concrete source body.",
-    ));
-    return undefined;
+      node,
+    );
   }
   const target = createRustLoopTarget(context, [], sourceLabel);
   if (target === undefined) {
@@ -555,12 +543,10 @@ export function planForInStatement(
   }
   const initializer = ForInOrOfStatement_Initializer(ast, node);
   if (initializer === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.for-in-binding",
+    failRustPlannerInvariant(
       "for-in requires one exact binding initializer.",
-    ));
-    return undefined;
+      node,
+    );
   }
   const binding = planForInBinding(initializer, fact.elementCarrier, context);
   if (binding === undefined) {
