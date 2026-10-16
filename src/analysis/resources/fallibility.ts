@@ -36,7 +36,7 @@ import { rustPropertyProjectionGetters } from "../conversions/property-projectio
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustPreparedDeferredCheckedCall } from "../operations/provider/index.js";
 
-import { rustFutureValuesForSourceStorage } from "../callables/future-values.js";
+import { rustFutureValueForSourceStorage, rustFutureValuesForSourceStorage } from "../callables/future-values.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { collectRustErrorRegionEffects } from "./error-regions.js";
@@ -44,6 +44,8 @@ import { collectRustErrorDeclarations } from "./error-declarations.js";
 import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqual, rustLocalErrorEffects, rustPureErrorEffects } from "../errors/error-effects.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { createRustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
@@ -426,8 +428,13 @@ function collectFallibilityFacts(
         const topology = operand === undefined ? undefined
           : rustAwaitSelection(walk.context.records.runtimeCarrier.get(operand)?.carrier, walk.context.typeDefinitions);
         const branches = topology === undefined ? [] : rustAwaitSelectionLeaves(topology);
-        const sourceEdges = operand === undefined || branches.every(branch => branch.future === undefined) ? []
-          : selectRustAwaitSourceErrors(walk, operand, branches.filter(branch => branch.future !== undefined)
+        const sourceBranches = branches.filter(branch => branch.future !== undefined &&
+          rustFutureValueForSourceStorage(branch.carrier) === undefined);
+        if (branches.some(branch => branch.future !== undefined &&
+          rustFutureValueForSourceStorage(branch.carrier) !== undefined)) selected.push({ localErrors: false,
+          nativeErrors: [{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }] });
+        const sourceEdges = operand === undefined || sourceBranches.length === 0 ? []
+          : selectRustAwaitSourceErrors(walk, operand, sourceBranches
             .map(branch => branch.carrier), declarationEffects, selectSourceErrors, budget);
         if (sourceEdges === undefined) {
           appendRustDiagnostic(walk, "RUST_AWAIT_SOURCE_ERRORS_NOT_EXACT",
@@ -436,7 +443,7 @@ function collectFallibilityFacts(
           return undefined;
         }
         awaitSourceEdges.set(node, Object.freeze(sourceEdges.map(({ carrier, edge }) => Object.freeze({ carrier, edge }))));
-        for (const branch of branches) {
+        for (const branch of sourceBranches) {
           if (operand === undefined || branch.future === undefined) continue;
           const edges = sourceEdges.filter(source => rustTargetTypeRefEquals(source.carrier, branch.carrier));
           if (edges.length !== 0) {
