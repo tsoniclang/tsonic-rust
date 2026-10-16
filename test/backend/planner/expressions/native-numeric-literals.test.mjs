@@ -2,6 +2,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../dist/backend/planner/expressions/fundamentals.js";
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
@@ -10,11 +11,16 @@ function contextFor(text, kindName, carrier) {
   const node = { ...fakeStatement({ kindName: `Kind${kindName}`, pos: 0, end: text.length }), text };
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text, statements: [node] });
   const ast = fakeAstReader([sourceFile]);
-  const literals = { ...ast, is: { ...ast.is, IsPrefixUnaryExpression: () => false },
+  const literals = { ...ast, is: { ...ast.is, IsPrefixUnaryExpression: () => false,
+    IsStringLiteral: () => false, IsNoSubstitutionTemplateLiteral: () => false,
+    IsNumericLiteral: candidate => candidate === node && kindName === "NumericLiteral",
+    IsBigIntLiteral: candidate => candidate === node && kindName === "BigIntLiteral" },
+    forEachChild: (candidate, visit) => { if (candidate === sourceFile) visit(node); },
     authoredRange: () => ({ kind: "authored", start: 0, end: text.length }) };
+  const literalValues = analyzeSourceLiteralValues(literals, [sourceFile]);
   return { node, context: { input: { program: { source: { ast: literals },
-    records: createRustRecordFixture({conversion: { get: () => undefined },
-runtimeCarrier: { get: () => ({ carrier }) }}) } }, sourceFile, diagnostics: [] } };
+    records: { ...createRustRecordFixture({conversion: { get: () => undefined },
+runtimeCarrier: { get: () => ({ carrier }) }}), literalValue: literalValues.literalValue } } }, sourceFile, diagnostics: [] } };
 }
 
 test("numeric literal producers preserve each exact native width independently of contextual inference", () => {

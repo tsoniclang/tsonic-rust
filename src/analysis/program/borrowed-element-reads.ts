@@ -1,6 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { BinaryExpression_Right, Node_Expression, type SourceProgramNavigation } from "@tsonic/target-api/source";
-import type { RustTargetProgram } from "./model.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { analyzeRustBorrowedElementLocals, type RustBorrowedElementLocal } from "./borrowed-element-locals.js";
 import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
@@ -25,7 +25,7 @@ export interface RustBorrowedElementReads {
 export function analyzeRustBorrowedElementReads(
   ast: AstReader,
   files: readonly SourceFile[],
-  records: RustTargetProgram["records"],
+  records: RustProgramRecords,
   navigation: SourceProgramNavigation,
 ): RustBorrowedElementReads {
   const reads = new WeakMap<Node, RustBorrowedElementRead>();
