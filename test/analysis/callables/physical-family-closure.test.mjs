@@ -270,14 +270,7 @@ test("two backend plans over a published program read completed callable stores 
 });
 
 test("a family first requested by an invocation-storage request is admitted after every root and read by producers and dispatch", () => {
-  const context = checkedContext(`${genericObjectMethodStorageSource}
-    function receiverOnly(seed: number) {
-      return { state: seed, retain<Item>(value: Item): Item { this.state; return value; } };
-    }
-    export function useReceiver(value: number): number {
-      return receiverOnly(value).retain(value);
-    }
-  `, { id: "rust", options: { outputType: "lib", crateName: "retained_closure" } });
+  const context = checkedContext(genericObjectMethodStorageSource, { id: "rust", options: { outputType: "lib", crateName: "retained_closure" } });
   const { generic, nativeStorage, nativeGenericProducers, genericDispatch } = context.callableValues.selected;
   const physical = generic.physical;
   const inventory = physical.definitions();
