@@ -55,13 +55,14 @@ const stringCarrier = rustStringTargetType();
 const jsValueCarrier = rustJsValueTargetType();
 const tsValueCarrier = rustTsValueTargetType();
 const float32Carrier = rustSourcePrimitiveTargetType("float32");
-const nativeFloat64ToFloat32Conversion: RustValueConversion = Object.freeze({ kind: "semantic-conversion", id: "native-f64-to-f32" });
+const nativeFloat64ToFloat32Conversion: Extract<RustValueConversion, { readonly kind: "semantic-conversion" }> =
+  Object.freeze({ kind: "semantic-conversion", id: "native-f64-to-f32" });
 
 export function selectRustKnownNumericValueConversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
   sourceLiteral: SourceLiteralValue | undefined,
-): RustValueConversion | undefined {
+): Extract<RustValueConversion, { readonly kind: "semantic-conversion" }> | undefined {
   return sourceLiteral?.numeric?.kind === "checked-float64"
     ? selectNativeFloat64ToFloat32Conversion(source, target) : undefined;
 }
@@ -69,7 +70,7 @@ export function selectRustKnownNumericValueConversion(
 function selectNativeFloat64ToFloat32Conversion(
   source: TargetTypeRef,
   target: TargetTypeRef,
-): RustValueConversion | undefined {
+): Extract<RustValueConversion, { readonly kind: "semantic-conversion" }> | undefined {
   return rustTargetTypeRefEquals(source, float64Carrier) && rustTargetTypeRefEquals(target, float32Carrier)
     ? nativeFloat64ToFloat32Conversion : undefined;
 }
