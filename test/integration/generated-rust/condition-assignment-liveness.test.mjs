@@ -220,8 +220,9 @@ for (const surface of ["native", "js"]) {
 test("js: a for-in break preserves its selected key after the iteration", { timeout: 300_000 }, () => {
   validateControl("js", `
 import type { int32 } from "@tsonic/core/types.js";
+interface Keys { first: int32; second: int32; }
 export function main(): void {
-  const values: { first: int32; second: int32 } = { first: 1, second: 2 };
+  const values: Keys = { first: 1, second: 2 };
   let selected = "";
   for (const key in values) { if (key === "first") { selected = key; break; } }
   if (selected !== "first") throw new Error("for-in break liveness");
