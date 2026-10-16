@@ -46,7 +46,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   const demandedArities = new Map<string, Set<number>>();
   const producers = new Map<string, {
     readonly producer: RustNativeCallableProducer;
-    readonly channels: ReadonlyMap<"invoke" | number, TargetTypeRef>;
+    readonly channels: ReadonlyMap<RustProducerErrorReference["channel"], TargetTypeRef>;
   }>();
   const diagnostics: TargetDiagnostic[] = [];
   const reject = (node: Node, message: string): void => {
@@ -128,8 +128,9 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     const asynchronous = input.records.asyncFunction.get(producer.declaration);
     const result = asynchronous?.futureCarrier ?? input.records.sourceCallableReturn.get(producer.declaration)?.returnCarrier;
     const completion = result === undefined ? undefined : rustNativeCallableCompletion(result, input.definitions);
-    const channels = new Map<"invoke" | number, TargetTypeRef>();
-    for (const channel of ["invoke" as const, ...Array.from({ length: completion?.futures.length ?? 0 }, (_value, index) => index)]) {
+    const channels = new Map<RustProducerErrorReference["channel"], TargetTypeRef>();
+    const body: readonly RustProducerErrorReference["channel"][] = asynchronous === undefined ? [] : ["body"];
+    for (const channel of ["invoke" as const, ...body, ...Array.from({ length: completion?.futures.length ?? 0 }, (_value, index) => index)]) {
       const carrier = normalizeRustErrorType(rustProducerErrorTargetType({ identity: producer.identity,
         fileName: producer.fileName, channel, genericArguments: producer.environment }), input);
       if (carrier !== undefined) { channels.set(channel, carrier); inspectCarrier(carrier); }

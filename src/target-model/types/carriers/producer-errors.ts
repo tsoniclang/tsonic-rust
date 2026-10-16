@@ -5,7 +5,7 @@ import { isRustTargetGenericArgument } from "../equality.js";
 export interface RustProducerErrorReference {
   readonly identity: string;
   readonly fileName: string;
-  readonly channel: "invoke" | number;
+  readonly channel: "invoke" | "body" | number;
   readonly genericArguments: readonly RustTargetGenericArgument[];
 }
 
@@ -20,7 +20,7 @@ export function rustProducerErrorReference(type: TargetTypeRef | undefined): Rus
     !hasExactObjectKeys(value, ["identity", "fileName", "channel", "genericArguments"]) ||
     typeof value.identity !== "string" || value.identity.length === 0 ||
     typeof value.fileName !== "string" || value.fileName.length === 0 ||
-    value.channel !== "invoke" && (!Number.isSafeInteger(value.channel) || (value.channel as number) < 0) ||
+    value.channel !== "invoke" && value.channel !== "body" && (!Number.isSafeInteger(value.channel) || (value.channel as number) < 0) ||
     !isDenseDataArray(value.genericArguments) || !value.genericArguments.every(isRustTargetGenericArgument)
     ? undefined : value as RustProducerErrorReference;
 }

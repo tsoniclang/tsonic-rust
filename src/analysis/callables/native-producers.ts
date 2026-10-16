@@ -4,6 +4,7 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustProducerErrorTargetType } from "../../target-model/types/carriers/producer-errors.js";
+import type { RustProducerErrorReference } from "../../target-model/types/carriers/producer-errors.js";
 import { rustCallableProtocol, rustCallableInputProtocol, rustClosureTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments, rustLifetimeGenericArgument } from "../../target-model/types/generic-arguments.js";
@@ -29,7 +30,7 @@ export interface RustNativeCallableProducerPlan {
   readonly producers: readonly RustNativeCallableProducer[];
   forDeclaration(declaration: Node): RustNativeCallableProducer | undefined;
   forIdentity(identity: string): RustNativeCallableProducer | undefined;
-  errorFor(declaration: Node, channel: "invoke" | number): TargetTypeRef | undefined;
+  errorFor(declaration: Node, channel: RustProducerErrorReference["channel"]): TargetTypeRef | undefined;
   deferredFor(declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined;
   deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined;
   outwardReturnFor(declaration: Node): TargetTypeRef | undefined;
@@ -87,7 +88,7 @@ export function createRustNativeCallableProducerPlan(input: {
     byDeclaration.set(declaration, producer);
     byIdentity.set(producer.identity, producer);
   }
-  const errorFor = (declaration: Node, channel: "invoke" | number): TargetTypeRef | undefined => {
+  const errorFor = (declaration: Node, channel: RustProducerErrorReference["channel"]): TargetTypeRef | undefined => {
     const producer = byDeclaration.get(declaration);
     return producer === undefined ? undefined : rustProducerErrorTargetType({
       identity: producer.identity, fileName: producer.fileName, channel, genericArguments: producer.environment,
