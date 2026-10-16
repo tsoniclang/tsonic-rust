@@ -8,7 +8,7 @@ import {
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
-import type { RustTargetProgram } from "./model.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 
@@ -18,7 +18,7 @@ export interface RustBorrowedIterationBinding {
 }
 
 export function selectRustBorrowedIterationBinding(
-  node: Node, ast: AstReader, records: RustTargetProgram["records"], navigation: SourceProgramNavigation,
+  node: Node, ast: AstReader, records: RustProgramRecords, navigation: SourceProgramNavigation,
 ): RustBorrowedIterationBinding | undefined {
   const iteration = records.targetOperation.get(node);
   const iterable = Node_Expression(ast, node);
@@ -108,7 +108,7 @@ export function selectRustBorrowedIterationBinding(
 }
 
 export function analyzeRustBorrowedIterationBindings(
-  ast: AstReader, files: readonly SourceFile[], records: RustTargetProgram["records"], navigation: SourceProgramNavigation,
+  ast: AstReader, files: readonly SourceFile[], records: RustProgramRecords, navigation: SourceProgramNavigation,
 ): (node: Node) => RustBorrowedIterationBinding | undefined {
   const bindings = new WeakMap<Node, RustBorrowedIterationBinding>();
   const visit = (node: Node): void => {

@@ -73,7 +73,7 @@ export function selectedSourceLiteralIsRepresentable(
   }
   if (primitive === "float32" || primitive === "float64") {
     const numeric = literal?.numeric;
-    if (numeric === undefined || literal.number === undefined) return false;
+    if (literal === undefined || numeric === undefined || literal.number === undefined) return false;
     return primitive === "float64" || (numeric.kind === "authored"
       ? compareSourceNumericLiteralMagnitude(numeric.token, rustFloat32OverflowMidpoint) < 0
       : Number.isFinite(Math.fround(numeric.value)));
@@ -100,7 +100,6 @@ export function selectedSourceLiteralIsRepresentable(
   const range = ranges[primitive];
   return value !== undefined && range !== undefined && value >= range[0] && value <= range[1];
 }
-
 export function selectedSourceLiteralOperandIsRepresentable(
   node: Node,
   primitive: SourcePrimitiveName,
@@ -128,4 +127,3 @@ export function selectedSourceNumericLiteralOperationId(
       ? rustPostCheckUnaryPlusOperationId
       : undefined;
 }
-
