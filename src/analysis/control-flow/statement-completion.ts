@@ -22,7 +22,6 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustRecordCarrierValue } from "../../target-model/types/carriers/records.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
-import { validateRustFinalizedOperationAbi } from "../operations/finalized-operation/validation.js";
 import { rustSwitchComparisonMatches } from "../operations/contracts/switch.js";
 import type { RustProjectFlowReadSelectionIndex } from "./project-flow-read-selections.js";
 import { validateRustDisposalLifecycle } from "../resources/disposal-lifecycle.js";
@@ -222,7 +221,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       : target !== undefined && ast.is.IsElementAccessExpression(target) ? "index-set" : undefined;
     const argumentsList = value === undefined ? [] : index === undefined ? [value] : [index, value];
     if (target === undefined || value === undefined || expectedKind === undefined ||
-      !validateRustFinalizedOperationAbi(operation.abi, input.typeDefinitions) || operation.abi.operationKind !== expectedKind ||
+      operation.abi.operationKind !== expectedKind ||
       expectedKind === "index-set" && index === undefined || argumentsList.length !== operation.abi.sourceArguments.length ||
       operation.abi.sourceArguments.some(argument => argument.disposition !== "runtime") ||
       operation.abi.effects.awaiting !== "not-applicable" || operation.abi.result.kind !== "sync" || !isRustUnitCarrier(operation.abi.result.carrier)) {

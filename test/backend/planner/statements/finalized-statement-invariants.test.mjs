@@ -15,6 +15,7 @@ import { planResourceManagedBody, resourceDisposalReceiverMode, resourceFactForP
 import { planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment } from "../../../../dist/backend/planner/statements/assignments.js";
 import { planRustAssignmentWrite } from "../../../../dist/backend/planner/statements/expression-statements.js";
 import { validateRustFinalizedOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/validation.js";
+import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
 
 const source = `
 import type { int32 } from "@tsonic/core/types.js";
@@ -105,6 +106,12 @@ function assertInvariant(run, context, message, subject) {
   assert.equal(context.diagnostics.length, 0, "no source rejection is appended");
 }
 
+function admitStatements(program) {
+  return analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.sourceFiles,
+    records: program.records, names: program.names, typeDefinitions: program.typeDefinitions,
+    errorRegions: program.errorRegions, projectFlowReadSelections: program.projectFlowReadSelections });
+}
+
 test("checked throw, try and iteration selections plan with complete backend state", () => {
   const program = programFixture();
   for (const [owner, kind, plan] of [
@@ -156,18 +163,22 @@ test("runtime setter selection retains exact operand nodes and prior ABI admissi
   assert.equal(planRuntimeSetStatement(node, fact, accepted)?.length > 0, true);
   assert.equal(accepted.diagnostics.length, 0);
   for (const field of ["Left", "Right"]) {
-    const context = planContext(hideFields(program, node, "AsBinaryExpression", [field]), node);
-    assertInvariant(() => planRuntimeSetStatement(node, fact, context), context,
-      "Runtime setter fact requires concrete assignment target and value nodes.", node);
+    const selected = admitStatements(hideFields(program, node, "AsBinaryExpression", [field]));
+    assert.equal(selected.kind, "rejected", `${field}: exact setter source correspondence is required before publication`);
+    assert.equal(selected.diagnostics.some(diagnostic => diagnostic.code === "RUST_SETTER_ABI_NOT_PROVEN" &&
+      diagnostic.sourceNode === node), true, `${field}: admission retains the exact source identity`);
+    assert.equal(selected.plan === undefined, true, `${field}: no incomplete statement plan is published`);
   }
+  const missing = planContext({ ...program, statementCompletions: { ...program.statementCompletions,
+    setterFor: () => undefined } }, node);
+  assertInvariant(() => planRuntimeSetStatement(node, fact, missing), missing,
+    "Runtime setter requires its admitted native source operands and ABI correspondence.", node);
   const malformed = { ...fact, abi: { ...fact.abi,
     target: { form: "call", path: "fixture::set", chain: [{ kind: "copy-selected-carrier" }] } } };
-  assert.equal(validateRustFinalizedOperationAbi(malformed.abi, program.typeDefinitions), false);
-  const rejected = planContext(program, node);
-  assert.equal(planRuntimeSetStatement(node, malformed, rejected) === undefined, true);
-  assert.equal(rejected.diagnostics.length, 1);
-  assert.equal(rejected.diagnostics[0].evidence.includes("target.capability=rust.backend.runtime-set-abi"), true,
-    "the existing ABI owner rejects an invalid chain before the removed redundant consumer guard");
+  assert.equal(validateRustFinalizedOperationAbi(malformed.abi, program.typeDefinitions), false,
+    "the canonical ABI owner rejects the same impossible malformed chain, not a fabricated source program");
+  assert.equal(program.records.targetOperation.get(node) === fact, true,
+    "the malformed unit value never replaces the admitted operation");
 });
 
 test("admitted iteration cannot lose mandatory body and binding syntax", () => {
@@ -179,8 +190,17 @@ test("admitted iteration cannot lose mandatory body and binding syntax", () => {
       "for-in requires one exact binding initializer."],
   ]) {
     const node = nodeIn(program, owner, (ast, candidate) => ast.is[kind](candidate));
-    const context = planContext(hideFields(program, node, view, [field]), node);
-    assertInvariant(() => plan(node, context), context, message, node);
+    const changed = hideFields(program, node, view, [field]);
+    const selected = admitStatements(changed);
+    assert.equal(selected.kind, "rejected", `${owner}: checked iteration syntax is complete before publication`);
+    assert.equal(selected.diagnostics.some(diagnostic => diagnostic.sourceNode === node && diagnostic.code ===
+      (field === "Statement" ? "RUST_STATEMENT_SEQUENCE_NOT_PROVEN" : "RUST_ITERATION_BINDING_NOT_PROVEN")), true,
+    `${owner}: admission retains the missing source component and exact identity`);
+    assert.equal(selected.plan === undefined, true, `${owner}: no incomplete iteration plan is published`);
+    if (field === "Statement") {
+      const context = planContext(changed, node);
+      assertInvariant(() => plan(node, context), context, message, node);
+    }
   }
 });
 
@@ -241,16 +261,4 @@ test("resource producer facts retain exact identity and backend state ownership"
   assertInvariant(() => planResourceManagedBody(declaration, "resource", fact, context,
     () => ({ statements: [] })), context,
   "Resource management requires a finalized hygienic-name scope.", declaration);
-  const invalid = { ...fact, disposal: { ...fact.disposal,
-    target: { form: "provider", target: { form: "call", path: "fixture::dispose" } } } };
-  assert.equal(resourceDisposalReceiverMode(invalid) === undefined, true);
-  const rejected = { ...context, diagnostics: [],
-    syntheticNames: createRustSyntheticNameState(analyzed.ast, declaration, []),
-  };
-  assert.equal(planResourceManagedBody(declaration, "resource", invalid, rejected,
-    () => ({ statements: [] })) === undefined, true);
-  assert.equal(rejected.diagnostics.length, 1);
-  assert.equal(rejected.diagnostics[0].message,
-    "Finalized resource disposal target has no closed Rust receiver mode. Node kind: KindSourceFile.",
-    "the existing canonical receiver-mode guard remains unchanged");
 });

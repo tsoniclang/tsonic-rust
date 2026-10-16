@@ -59,10 +59,9 @@ export function planResourceDeclarations(
     return undefined;
   }
   const initialization = planVariableStatement(declaration, context);
-  const resourceName = context.input.program.names.nameForDeclaration(declaration) ?? "";
-  if (initialization === undefined || !isValidRustIdentifier(resourceName)) {
-    return undefined;
-  }
+  const resourceName = context.input.program.names.nameForDeclaration(declaration);
+  if (resourceName === undefined) failRustPlannerInvariant("Admitted resource binding requires its sealed native name.", declaration);
+  if (initialization === undefined) return undefined;
   const scope = planResourceManagedBody(
     declaration,
     resourceName,
