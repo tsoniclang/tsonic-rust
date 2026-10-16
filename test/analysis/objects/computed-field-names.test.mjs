@@ -11,7 +11,6 @@ const staticKeys = [
   { name: "exponent numeric literal", prelude: "", key: "1e21", ordinary: "1e21", expected: "1e+21" },
   { name: "const string", prelude: 'const key = "value";', key: "key", ordinary: "value" },
   { name: "const numeric", prelude: "const key = 16;", key: "key", ordinary: "16" },
-  { name: "string enum", prelude: 'enum Key { Value = "value" }', key: "Key.Value", ordinary: "value" },
   { name: "numeric enum", prelude: "enum Key { Value = 16 }", key: "Key.Value", ordinary: "16" },
   { name: "parenthesized const", prelude: 'const key = "value";', key: "((key))", declarationKey: "key", ordinary: "value" },
   { name: "nonidentifier string", prelude: 'const key = "x-y";', key: "key", ordinary: '"x-y"' },
@@ -25,6 +24,23 @@ const staticKeys = [
 ];
 
 for (const surfaces of [[], ["js"]]) {
+  test(`Rust ${surfaces[0] ?? "native"} regular string enums are refused for ordinary and computed fields`, () => {
+    for (const computed of [false, true]) {
+      const compiled = compileRust({ surfaces, files: { "index.ts": `
+enum Key { Value = "value" }
+interface Holder { ${computed ? "[Key.Value]" : "value"}: number; }
+export function make(): number {
+  const value: Holder = { ${computed ? "[Key.Value]" : "value"}: 7 };
+  return value[Key.Value];
+}
+` } });
+      assert.equal(compiled.result.diagnostics.filter(issue => issue.code === "RUST_ENUM_CONSTANT_NOT_SUPPORTED").length, 1,
+        `${computed ? "computed" : "ordinary"} field preserves the precise native enum-domain refusal`);
+      assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true,
+        "a regular string enum is refused before sealing, not misclassified as an unknown key");
+      assert.equal(compiled.result.artifacts.length, 0, "no unadmitted native enum is emitted");
+    }
+  });
   for (const current of staticKeys) {
     test(`Rust ${surfaces[0] ?? "native"} admits ${current.name} as an ordinary exact field`, () => {
       const compiled = compileRust({ surfaces, files: { "index.ts": `
