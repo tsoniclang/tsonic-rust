@@ -42,6 +42,41 @@ export function step<Region extends Life>(value: Ref<int32, Region>): int32 {
     "even a purported ready stage cannot substitute a missing canonical input record");
 });
 
+for (const [name, parameter] of [
+  ["object", "{ value }: { value: Ref<int32, Region> }"],
+  ["tuple", "[value]: [Ref<int32, Region>]"],
+]) test(`captured ${name} binding elements consume their canonical native binding projection`, () => {
+  const { context, walk } = analyzeRustOperations(`
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function step<Region extends Life>(${parameter}): int32 {
+  const read = (): int32 => load(value);
+  return read();
+}`, { surfaces: [] });
+  const closure = context.sourceStorage.nodes.find(node => context.ast.is.IsArrowFunction(node));
+  assert.equal(closure !== undefined, true, name + ": actual captured callable");
+  const lexical = context.retainedEnvironments.lexicalFor(closure);
+  assert.equal(lexical.kind, "resolved", name + ": checked lexical capture inventory");
+  const capture = lexical.captures.find(captured => context.ast.is.IsBindingElement(captured.declaration));
+  assert.equal(capture !== undefined, true, name + ": exact authored binding declaration");
+  const projection = context.records.bindingProjection.get(capture.declaration);
+  assert.equal(projection?.bindingCarrier.kind === "reference" && projection.bindingCarrier.lifetime?.name === "Region", true,
+    name + ": the existing binding owner preserves the actual native region");
+  const masked = new Set([capture.declaration, ...capture.references]);
+  const resolution = { ...rustResolutionContext(walk, closure), records: createRustRecordFixture({ runtimeCarrier: {
+    get: node => masked.has(node) ? undefined : context.records.runtimeCarrier.get(node),
+  } }, context.records) };
+  const selected = resolveRustCallableEnvironment(closure, resolution, walk.operationOptions, new Set());
+  assert.equal(selected?.length === 1 && selected[0] === projection.bindingCarrier, true,
+    name + ": source retention reads the one completed binding projection, never erased checked reference evidence");
+  const missing = { ...resolution, records: createRustRecordFixture({ bindingProjection: {
+    get: node => node === capture.declaration ? undefined : context.records.bindingProjection.get(node),
+  } }, resolution.records) };
+  assert.equal(resolveRustCallableEnvironment(closure, missing, walk.operationOptions, new Set()) === undefined, true,
+    name + ": missing required projection remains unresolved even when the checked primitive is available");
+});
+
 function inputFixture(source, select = (ast, node) => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "step") {
   assert.equal(typeof callableSignatures.finalizeRustCallableParameterAbis, "function", "the actual signature lifecycle exposes its input stage");
   const { context, walk } = analyzeRustOperations(source, { surfaces: ["js"] });

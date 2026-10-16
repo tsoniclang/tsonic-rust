@@ -23,6 +23,12 @@ export function resolveRustCallableEnvironment(
     .flatMap(capture => capture.references.slice(0, 1).map(reference => ({ reference, declaration: capture.declaration }))),
     ...lexical.receivers.filter(receiver => !excludedCaptures.has(receiver.owner))
       .flatMap(receiver => receiver.references.slice(0, 1).map(reference => ({ reference, declaration: receiver.owner })))]) {
+    if (context.ast.is.IsBindingElement(capturedDeclaration)) {
+      const projected = context.records.bindingProjection.get(capturedDeclaration);
+      if (projected === undefined) return undefined;
+      carriers.push(projected.bindingCarrier);
+      continue;
+    }
     const semantics = context.semanticsFor(reference);
     const refinement = context.source.semantics.selectValueTypeRefinement(reference);
     if (refinement.kind === "unresolved") return undefined;
