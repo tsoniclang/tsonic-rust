@@ -7,7 +7,7 @@ import {
 import { rustCarrierSatisfiesTraitRef, rustNamedTypeSupportsTrait } from "../../dist/target-model/types/carriers/traits.js";
 import { rustRetainedErrorTargetType } from "../../dist/target-model/types/carriers/source-error.js";
 import { substituteRustTargetGenerics } from "../../dist/target-model/types/carriers/substitution.js";
-import { rustTargetGenericReferences } from "../../dist/target-model/types/carriers/generic-references.js";
+import { rustTargetGenericReferences, rustTargetCaptureArguments } from "../../dist/target-model/types/carriers/generic-references.js";
 import { materializeProviderCarrier } from "../../dist/providers/packages/materialization.js";
 import { rustLifetimeKey } from "../../dist/target-model/lifetimes/index.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
@@ -73,10 +73,33 @@ test("native trait substitution includes conditions, associated types, lifetimes
       { kind: "const", value: { kind: "integer", value: "4" } }]);
     assert.deepEqual(value.associatedConstraints[0].type, integer);
   }
-  const references = rustTargetGenericReferences(original);
+  const references = rustTargetGenericReferences(original, "metadata");
   assert.deepEqual(references.typeIdentities, [parameter.identity]);
   assert.deepEqual(references.lifetimeIdentities, [rustLifetimeKey(lifetime)]);
   assert.deepEqual(references.elisionInputs, []);
+});
+
+test("trait evidence is admitted as metadata but never adds physical captures", () => {
+  const parameter = { kind: "type-parameter", identity: "metadata:Value", name: "Value" };
+  const lifetime = { kind: "parameter", identity: "metadata:region", name: "region" };
+  const constant = { kind: "parameter", identity: "metadata:Count", name: "Count" };
+  const arguments_ = [typeArgument(parameter), { kind: "lifetime", lifetime }, { kind: "const", value: constant }];
+  const evidenceOnly = carrier(rustNativeTraitRef("foreign::Project", arguments_));
+  const physical = rustTargetGenericReferences(evidenceOnly);
+  assert.deepEqual(physical.typeIdentities, []);
+  assert.deepEqual(physical.lifetimeIdentities, []);
+  assert.deepEqual(physical.constIdentities, []);
+  assert.deepEqual(rustTargetCaptureArguments([typeArgument(evidenceOnly)]), []);
+  const metadata = rustTargetGenericReferences(evidenceOnly, "metadata");
+  assert.deepEqual(metadata.typeIdentities, [parameter.identity]);
+  assert.deepEqual(metadata.lifetimeIdentities, [rustLifetimeKey(lifetime)]);
+  assert.deepEqual(metadata.constIdentities, [constant.identity]);
+  const actual = rustNamedTargetType("foreign.Actual", "foreign::Actual", arguments_);
+  const references = rustTargetGenericReferences(actual);
+  assert.deepEqual(references.typeIdentities, metadata.typeIdentities);
+  assert.deepEqual(references.lifetimeIdentities, metadata.lifetimeIdentities);
+  assert.deepEqual(references.constIdentities, metadata.constIdentities);
+  assert.equal(rustTargetCaptureArguments([typeArgument(actual)]).length, 3);
 });
 
 test("higher-ranked native trait evidence uses the existing alpha-equivalent binder equality", () => {

@@ -58,8 +58,9 @@ export interface RustTargetGenericReferences {
 
 export function rustTargetGenericReferences(
   type: TargetTypeRef,
+  scope: "physical" | "metadata" = "physical",
 ): RustTargetGenericReferences {
-  return collectRustTargetGenericReferences({ kind: "type", type });
+  return collectRustTargetGenericReferences({ kind: "type", type }, scope);
 }
 
 export function rustTargetCaptureArguments(
@@ -78,6 +79,7 @@ export function rustTargetCaptureArguments(
 function collectRustTargetGenericReferences(
   root: { readonly kind: "type"; readonly type: TargetTypeRef } |
     { readonly kind: "arguments"; readonly arguments: readonly RustTargetGenericArgument[] },
+  scope: "physical" | "metadata" = "physical",
 ): RustTargetGenericReferences {
   const typeParameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
   const lifetimes = new Map<string, Extract<
@@ -293,7 +295,7 @@ function collectRustTargetGenericReferences(
           visitArguments(named.genericArguments, bound);
           metadataDepth += 1;
           visitArguments(named.genericDefaults, bound);
-          named.traits.implementations.forEach(implementation => {
+          if (scope === "metadata") named.traits.implementations.forEach(implementation => {
             visitType(implementation.trait, bound);
             implementation.requirements.forEach(requirement => visitType(requirement.trait, bound));
           });
