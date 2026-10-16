@@ -4,9 +4,137 @@ import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
+import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/signature-query.js";
+import * as callableSignatures from "../../../dist/analysis/callables/signature-query.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed-data.js";
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
+
+function inputFixture(source, select = (ast, node) => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "step") {
+  assert.equal(typeof callableSignatures.finalizeRustCallableParameterAbis, "function", "the actual signature lifecycle exposes its input stage");
+  const { context, walk } = analyzeRustOperations(source, { surfaces: ["js"] });
+  const declaration = context.sourceStorage.nodes.find(node => select(context.ast, node));
+  assert.equal(declaration !== undefined, true, "the checked source owns the selected callable");
+  const parameters = context.ast.parameters(declaration);
+  const inputs = new Set(parameters);
+  const inherited = createRustRecordFixture({
+    sourceParameterAbi: { get: node => inputs.has(node) ? undefined : context.records.sourceParameterAbi.get(node) },
+    ...Object.fromEntries(["asyncFunction", "generator", "sourceCallableReturn"].map(family =>
+      [family, { get: node => node === declaration ? undefined : context.records[family].get(node) }])),
+  }, context.records);
+  const current = createRustCarrierProbe({ ...walk, context: { ...context,
+    records: createRustProgramRecordBuilder(context.typeDefinitions, inherited) } });
+  return { current, declaration, parameters, original: context.records,
+    complete: current => callableSignatures.finalizeRustCallableParameterAbis(current, declaration) };
+}
+
+for (const [name, source, select, forms] of [
+  ["declaration", "export function step(value: number): number { return value; }", undefined, ["required"]],
+  ["arrow", "export const step = (value: number): number => value;", (ast, node) => ast.is.IsArrowFunction(node), ["required"]],
+  ["function expression", "export const step = function(value: number): number { return value; };", (ast, node) => ast.is.IsFunctionExpression(node), ["required"]],
+  ["destructuring/default/rest", "export function step({ value }: { value: number }, count: number = 1, ...rest: number[]): number { return value + count; }", undefined, ["required", "default", "rest"]],
+  ["optional", "export function step(value?: number): number { return value ?? 7; }", undefined, ["optional"]],
+  ["no inputs", "export function step(): number { return 7; }", undefined, []],
+]) test(`the ${name} input stage completes actual formal ABIs without selecting its owner result`, () => {
+  const input = inputFixture(source, select);
+  const expected = input.parameters.map(parameter => input.current.sourceCallableAbi.resolveParameterAbi(
+    parameter, rustResolutionContext(input.current, parameter), input.current.operationOptions));
+  assert.equal(expected.every(abi => abi !== undefined), true, name + ": the existing intrinsic formal owner admits the inputs");
+  let ownerQueries = 0;
+  const current = { ...input.current, context: { ...input.current.context,
+    semanticsFor(node) {
+      const semantics = input.current.context.semanticsFor(node);
+      return node !== input.declaration ? semantics : { ...semantics, types: { ...semantics.types,
+        declarationSignatureInfo() { ownerQueries++; throw new Error("input admission queried its owner's result signature"); },
+        expressionType(expression) {
+          if (expression === input.declaration) { ownerQueries++; throw new Error("input admission queried its owner's complete callable type"); }
+          return semantics.types.expressionType(expression);
+        },
+      } };
+    },
+  } };
+  const actual = input.complete(current);
+  assert.equal(actual !== undefined, true, name + ": the actual input stage completes");
+  assert.equal(actual.length, forms.length, name + ": source formals are not expanded invocation arguments");
+  for (const [index, abi] of actual.entries()) {
+    assert.equal(abi.form, forms[index], name + ": form " + index);
+    assert.equal(closedMetadataEquals(abi, expected[index]), true, name + ": exact existing ABI " + index);
+    assert.equal(current.context.records.sourceParameterAbi.get(input.parameters[index]) === abi, true,
+      name + ": one admitted canonical input " + index);
+  }
+  assert.equal(ownerQueries, 0, name + ": no owner return query");
+  for (const family of ["asyncFunction", "generator", "sourceCallableReturn"])
+    assert.equal(current.context.records[family].get(input.declaration) === undefined, true, name + ": no " + family + " publication");
+});
+
+for (const [name, source] of [
+  ["tuple rest", "export function step(...values: [number, string]): number { return values[0]; }"],
+  ["explicit receiver", "export function step(this: { value: number }, offset: number): number { return offset; }"],
+]) test(`the ${name} input stage preserves the actual formal ABI owner's disposition`, () => {
+  const input = inputFixture(source);
+  const expected = input.parameters.map(parameter => input.current.sourceCallableAbi.resolveParameterAbi(
+    parameter, rustResolutionContext(input.current, parameter), input.current.operationOptions));
+  const actual = input.complete(input.current);
+  assert.equal(actual === undefined, expected.some(abi => abi === undefined), name + ": no new effective-argument count rejection");
+  if (actual === undefined) {
+    for (const parameter of input.parameters) assert.equal(input.current.context.records.sourceParameterAbi.get(parameter) === undefined, true,
+      name + ": an unresolved vector publishes no input");
+  } else {
+    assert.equal(actual.length, input.parameters.length, name + ": one ABI per source formal");
+    for (const [index, abi] of actual.entries())
+      assert.equal(closedMetadataEquals(abi, expected[index]), true, name + ": unchanged intrinsic ABI " + index);
+  }
+});
+
+test("input-stage reentrancy is unresolved independently of an active full signature", () => {
+  const input = inputFixture("export function step(value: number): number { return value; }");
+  const state = { active: true, inputActive: false, completed: new Map(), suspensions: new Map() };
+  input.current.callableSignatures.set(input.declaration, state);
+  let reentries = 0;
+  const current = { ...input.current, sourceCallableAbi: { ...input.current.sourceCallableAbi,
+    resolveParameterAbi(...arguments_) {
+      reentries++;
+      assert.equal(input.complete(current) === undefined, true, "a genuine input dependency remains unresolved");
+      return input.current.sourceCallableAbi.resolveParameterAbi(...arguments_);
+    },
+  } };
+  assert.equal(input.complete(current)?.length, 1, "the outer real input stage completes");
+  assert.equal(reentries, 1, "a completed input lookup cannot recompute its ABI");
+  assert.equal(input.complete(current)?.[0] === current.context.records.sourceParameterAbi.get(input.parameters[0]), true,
+    "repeated completion keeps the canonical admitted ABI");
+  assert.equal(reentries, 1, "the second read remains a lookup");
+  assert.equal(state.active, true, "input completion does not end full result selection");
+  assert.equal(state.inputActive, false, "the input guard is released");
+  assert.equal(state.completed.size, 0, "input selection publishes no full completion");
+  assert.equal(state.suspensions.size, 0, "input selection publishes no suspension");
+});
+
+test("an unresolved actual input vector publishes no partial ABIs and can complete when its real input is ready", () => {
+  const input = inputFixture("export function step(left: number, right: number): number { return left + right; }");
+  let ready = false;
+  const current = { ...input.current, sourceCallableAbi: { ...input.current.sourceCallableAbi,
+    resolveParameterAbi(parameter, ...arguments_) {
+      return !ready && parameter === input.parameters[1] ? undefined
+        : input.current.sourceCallableAbi.resolveParameterAbi(parameter, ...arguments_);
+    },
+  } };
+  assert.equal(input.complete(current) === undefined, true, "the actual unresolved formal is not a default ABI");
+  for (const parameter of input.parameters) assert.equal(current.context.records.sourceParameterAbi.get(parameter) === undefined, true,
+    "the incomplete input vector publishes nothing");
+  ready = true;
+  assert.equal(input.complete(current)?.length, 2, "only actual readiness permits both admissions");
+});
+
+test("the carrier probe's required input callback writes only its own construction records", () => {
+  const input = inputFixture("export function step(value: number): number { return value; }");
+  const original = input.original.sourceParameterAbi.get(input.parameters[0]);
+  const carriers = input.current.operationOptions.callableParameterCarriers(input.declaration);
+  const actual = input.current.context.records.sourceParameterAbi.get(input.parameters[0]);
+  assert.equal(actual !== undefined && carriers?.length === 1, true, "the probe's own input stage admitted its missing record");
+  assert.equal(carriers[0] === actual.parameterCarrier, true, "the callback returns its exact local admitted carrier");
+  assert.equal(input.original.sourceParameterAbi.get(input.parameters[0]) === original, true, "the original source walk is untouched");
+});
 
 function fixture(inherit, source = "export async function step(value: number): Promise<number> { return value; }", surfaces = ["js"]) {
   const { context, walk } = analyzeRustOperations(source, { surfaces });
