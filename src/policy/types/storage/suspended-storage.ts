@@ -18,7 +18,7 @@ export function closeRustSuspendedStorage(
       const lifetime = retainedLifetime ?? (parameters.some(parameter => parameter === undefined) ? undefined
         : selectRustCallableStorageLifetime(parameters as readonly TargetTypeRef[], parameters as readonly TargetTypeRef[], contract));
       if (lifetime === undefined) { unresolved = true; return carrier; }
-      return rustCallableTargetType(callable.parameters, callable.result, lifetime);
+      return rustCallableTargetType(callable.parameters, callable.result, lifetime, callable.error);
     }
     return carrier;
   }, rustOwnedStorageChild);

@@ -31,7 +31,7 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
   const selected = mapRustTargetTypes(carrier, (type, source) => {
     const callable = rustCallableProtocol(type);
     if (callable?.lifetime?.kind === "placeholder") {
-      type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime());
+      type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime(), callable.error);
     }
     if (source !== carrier && rustStructuralObjectCarrierValue(source) !== undefined) {
       nestedCarriers.push(Object.freeze({ source, carrier: type }));
