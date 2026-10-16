@@ -116,15 +116,16 @@ export function resolveExpressionCarrierUncached(
         return setCarrierFact(walk, expression, effectiveExpected);
       }
       if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected)) {
+        const carrierName = effectiveExpected.name;
         const integer = isRustIntegerCarrier(effectiveExpected);
         appendRustDiagnostic(
           walk,
           integer ? "RUST_INTEGER_LITERAL_NOT_EXACT" : "RUST_NUMERIC_LITERAL_OUT_OF_RANGE",
           integer
             ? "Integer literal cannot be proven exact for the finalized Rust fixed-width carrier."
-            : `Numeric literal is outside the '${effectiveExpected.name}' range.`,
+            : `Numeric literal is outside the '${carrierName}' range.`,
           expression,
-          [`target.carrier=${effectiveExpected.name}`],
+          [`target.carrier=${carrierName}`],
         );
       }
       return undefined;
