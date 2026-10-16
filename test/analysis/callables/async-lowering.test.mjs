@@ -194,14 +194,38 @@ test("pending carrier evidence is not memoized as a final suspending answer", ()
   assert.equal(selected.settledAwaits.length, 0);
 });
 
-test("a rebound named async function never selects the original settled helper", () => {
+test("a mutable async function value never selects a declaration's settled helper", () => {
   const current = fixture(`
-    async function value(): Promise<number> { return 1; }
+    let value = async (): Promise<number> => 1;
     value = async (): Promise<number> => { await Promise.resolve(0); return 2; };
     export async function root(): Promise<number> { return await value(); }
   `);
-  const value = current.named(node => current.ast.is.IsFunctionDeclaration(node), "value");
+  const value = current.named(node => current.ast.is.IsVariableDeclaration(node), "value");
   assert.equal(current.context.source.navigation.declarationUseSummary(value).bindingWritten, true);
   assert.equal(current.fact("root")?.lowering.kind, "factory");
   assert.equal(current.helpers().get(value) === undefined, true);
+});
+
+test("direct helper selection requires the exact declaration's immutable binding evidence", () => {
+  const current = fixture(`
+    async function value(): Promise<number> { return 1; }
+    export async function root(): Promise<number> { return await value(); }
+  `);
+  const root = current.named(node => current.ast.is.IsFunctionDeclaration(node), "root");
+  const value = current.named(node => current.ast.is.IsFunctionDeclaration(node), "value");
+  const navigation = current.context.source.navigation;
+  const walk = { ...current.walk, context: { ...current.context,
+    records: { ...current.records, asyncFunction: { get: () => undefined } },
+    source: { ...current.context.source, navigation: { ...navigation,
+      declarationUseSummary(declaration) {
+        const summary = navigation.declarationUseSummary(declaration);
+        return declaration === value ? { ...summary, bindingWritten: true } : summary;
+      },
+    } },
+  } };
+  assert.equal(selectRustAsyncBodyLowering(walk, root).kind, "suspending");
+  assert.throws(() => fixture(`
+    async function value(): Promise<number> { return 1; }
+    value = async (): Promise<number> => 2;
+  `), /TS2630/u);
 });
