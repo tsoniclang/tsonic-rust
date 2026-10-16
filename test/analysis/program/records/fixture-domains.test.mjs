@@ -33,3 +33,8 @@ test("record fixtures still reject missing readers in the supplied domain", () =
   assert.throws(() => createRustRecordFixture({}, { targetOperation: undefined }),
     /Missing Rust record reader: targetOperation/u, "domain preservation never substitutes a missing reader");
 });
+
+test("record fixtures reject a fabricated family even when it is supplied as the base", () => {
+  assert.throws(() => createRustRecordFixture({}, { fabricatedFamily: { get: () => undefined } }),
+    /Unknown Rust record family: fabricatedFamily/u, "a supplied domain must stay inside the canonical raw vocabulary");
+});

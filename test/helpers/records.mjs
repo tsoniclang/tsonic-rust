@@ -20,7 +20,11 @@ export function assertRustInheritedRecordConflict(family, subject, fact, attempt
 }
 
 export function createRustRecordFixture(overrides = {}, base) {
-  const records = base ?? createRustProgramRecordBuilder().seal([]);
+  const raw = createRustProgramRecordBuilder().seal([]);
+  const records = base ?? raw;
+  for (const family of Object.keys(records)) {
+    if (!Object.hasOwn(raw, family)) throw new Error("Unknown Rust record family: " + family);
+  }
   for (const family of Object.keys(overrides)) {
     if (!Object.hasOwn(records, family)) throw new Error("Unknown Rust record family: " + family);
   }
