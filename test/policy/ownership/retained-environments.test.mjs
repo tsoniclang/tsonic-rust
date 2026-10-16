@@ -8,6 +8,29 @@ import { closeRustRetainedParameter, rustHasOpenOwnedStorage, rustRetainedEnviro
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+
+test("complete source capture carriers preserve the canonical generic and frame environment normalization", () => {
+  const captured = { kind: "type-parameter", identity: "captured:value", name: "Captured" };
+  const nested = { kind: "type-parameter", identity: "captured:nested", name: "Nested" };
+  const parameter = { kind: "type-parameter", identity: "method:value", name: "Value" };
+  const region = { kind: "parameter", identity: "source:Region", name: "Region" };
+  const carriers = [{ kind: "reference", mutable: false, referent: captured, lifetime: region },
+    { kind: "tuple", elements: [nested, captured] }];
+  const reduced = [captured, nested];
+  const origin = { fileName: "/src/index.ts", declarationIdentity: "source:retained-method" };
+  const generic = rustGenericCallableTargetType([parameter], [parameter], parameter, origin, carriers);
+  const previousGeneric = rustGenericCallableTargetType([parameter], [parameter], parameter, origin, reduced);
+  assert.equal(generic !== undefined && rustTargetTypeRefEquals(generic, previousGeneric), true,
+    "the existing generic signature owner retains exactly the same ordered free parameters");
+  const owner = { kind: "lexical", origin };
+  const frame = rustFrameCallableTargetType([parameter], parameter, owner, carriers);
+  const previousFrame = rustFrameCallableTargetType([parameter], parameter, owner, reduced);
+  assert.equal(frame !== undefined && rustTargetTypeRefEquals(frame, previousFrame), true,
+    "the existing frame signature owner performs the same normalization without losing source capture evidence early");
+});
 
 function fixture(text, configure = input => input, maximumSteps) {
   const checked = checkRustSession(createRustSession({ surfaces: ["js"], files: { "index.ts": text } }));
