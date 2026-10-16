@@ -12,7 +12,7 @@ import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { effectiveMemberResultCarrier, planOptionalChainExpression } from "./special.js";
 import { effectivePlannedExpressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { finishProviderOperationExpression, planProviderOperationExpression } from "./conversions.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
@@ -165,12 +165,7 @@ function planPropertyAccessInner(node: Node, context: RustPlanContext): RustExpr
       );
     }
     if (context.syntheticNames === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.project-dispatch-temporary",
-        "Project property dispatch requires a finalized hygienic-name scope.",
-      ));
-      return undefined;
+      return failRustPlannerInvariant("Project property dispatch requires a finalized hygienic-name scope.", node);
     }
     const dispatchPlan = fact.declaration === undefined
       ? undefined

@@ -428,12 +428,8 @@ export function planRustPromotedStorageWrite(
     return { handled: true };
   }
   if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, expression),
-      "rust.backend.compound-assignment-temporary",
-      "Promoted-location compound assignment requires a finalized hygienic-name scope.",
-    ));
-    return { handled: true };
+    return failRustPlannerInvariant(
+      "Promoted-location compound assignment requires a finalized hygienic-name scope.", expression);
   }
   const locationName = allocateRustSyntheticName(context.syntheticNames, "location");
   const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
