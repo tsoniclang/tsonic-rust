@@ -18,7 +18,8 @@ const source = `
   export function create(value: uint32): Cell { return bindmemoryrecord(layout, bindmemoryfield(slot, allocateptr(value))); }
   export function read(value: uint32): uint32 {
     unsafecontext(); const pointer = allocateptr(value); const raw = torawptr(pointer, scalar);
-    return loadptr(reinterpretrawptr(raw, scalar));
+    const restored = reinterpretrawptr(raw, scalar);
+    return restored === undefined ? 0 : loadptr(restored);
   }
   export function size(): nativeUint { return sizeof(scalar); }
   function sizeofShadow(value: uint32): uint32 { return value; }
@@ -78,7 +79,11 @@ test("the JS string root uses the finalized ABI and shadows remain ordinary in a
   ` } });
   const selections = [];
   const visit = node => {
-    if (checked.ast.is.IsCallExpression(node)) selections.push([checked.ast.text(checked.ast.as.AsCallExpression(node).Expression), node]);
+    if (checked.ast.is.IsCallExpression(node)) {
+      const callee = checked.ast.as.AsCallExpression(node).Expression;
+      const text = String(checked.ast.getSourceText(checked.ast.getSourceFile(node)));
+      selections.push([text.slice(checked.ast.pos(callee), checked.ast.end(callee)).trim(), node]);
+    }
     checked.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
