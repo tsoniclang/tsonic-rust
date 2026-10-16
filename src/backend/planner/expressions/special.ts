@@ -11,7 +11,7 @@ import {
   KindPropertyAccessExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, planRawExpression } from "./entry.js";
 import { readRustStructuralObjectMethodStorage } from "../objects/project-storage.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
@@ -178,12 +178,8 @@ export function planOptionalChainExpression(
     return undefined;
   }
   if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.optional-chain-name-state",
-      "Optional-chain lowering requires the compilation-owned synthetic-name state.",
-    ));
-    return undefined;
+    return failRustPlannerInvariant(
+      "Optional-chain lowering requires the compilation-owned synthetic-name state.", node);
   }
   const guardFlowRead = context.input.program.records.flowReadProjection.get(fact.guard);
   if (structuralMethodGuard === undefined && guardFlowRead !== undefined &&

@@ -153,12 +153,6 @@ export function planRustValueProjection(
       return undefined;
     }
     if (fact.project !== undefined) {
-      if (!rustTargetTypeRefEquals(fact.project.targetCarrier, fact.selectedCarrier) ||
-        !rustTargetTypeRefEquals(fact.project.sourceCarrier, fact.project.dispatchCarrier)) {
-        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-          "rust.backend.source-union-projection", "Union payload refinement conflicts with its exact selected carrier."));
-        return undefined;
-      }
       const projected = planRustProjectProjection(node, result.arms[0]!.expression, fact.project, context,
         ownsValue ? "owned" : "borrowed");
       if (projected === undefined) return undefined;
@@ -168,12 +162,6 @@ export function planRustValueProjection(
   }
   if (fact.kind === "option-value" || fact.kind === "option-reference") {
     const reborrow = fact.kind === "option-reference";
-    if (reborrow && (fact.selectedCarrier.kind !== "reference" || !fact.selectedCarrier.mutable ||
-      !rustTargetTypeRefEquals(rustOptionElementCarrier(fact.sourceCarrier), fact.selectedCarrier))) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-        "rust.backend.flow-read-reference", "An optional exclusive-reference projection requires the exact native reference payload."));
-      return undefined;
-    }
     if (rustOptionalStorageValue(fact.sourceCarrier) !== undefined) {
       return planRustOptionalStorageOperation(fact.sourceCarrier, ownsValue ? "into_present" : "clone_present",
         [ownsValue ? expression : { kind: "reference", expr: expression }], context);
