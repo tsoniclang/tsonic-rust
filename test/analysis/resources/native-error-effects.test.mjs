@@ -55,7 +55,7 @@ function assertChannels(actual, expected, localErrors = false) {
 
 for (const surfaces of [[], ["js"]]) {
   test(`captured generic producer errors bind concrete caller inputs (${surfaces[0] ?? "native"})`, () => {
-    const current = fixture(`
+    const current = analyzedFixture(analyzeRustErrorEffects(`
       type Identity = <Value>(value: Value) => Value;
       function make(callback: () => number): Identity {
         return <Value>(value: Value): Value => { callback(); return value; };
@@ -66,7 +66,7 @@ for (const surfaces of [[], ["js"]]) {
         return first<number>(7) === 7 && second<string>("native") === "native";
       }
       export function main(): boolean { return compare(() => 1, () => 2); }
-    `, { surfaces });
+    `, { surfaces }));
     const declaration = current.declaration("compare");
     const inputs = current.program.callableValues.native.inputsFor(declaration);
     assert.equal(inputs.length, 2);
@@ -79,17 +79,17 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(inputs.some(input => references.typeIdentities.includes(input.implementation.identity)), false,
       "callee-only C0/C1 parameters cannot escape in a nested producer reference");
     const invocation = current.calls("compare")[0];
-    const unresolved = createRustSourceErrorEffectSelection({ context: {
-      ast: current.ast, records: current.program.records, typeDefinitions: current.program.typeDefinitions,
-      sourceStorage: current.program.sourceStorage, callableValues: { ...current.program.callableValues,
-        nativeStorage: { ...current.program.callableValues.nativeStorage,
-          invocationInputFor: () => ({ kind: "unresolved", reason: "missing exact physical input" }) },
-      },
-    } });
+    const unresolved = createRustSourceErrorEffectSelection({ context: current.program });
     assert.equal(unresolved.register(effects.nativeErrors), true);
-    assert.equal(unresolved.bindingsFor(invocation, declaration,
-      effects.nativeErrors.map(source => source.errorType)) === undefined, true,
+    const bindings = unresolved.bindingsFor(invocation, declaration,
+      effects.nativeErrors.map(source => source.errorType));
+    assert.equal(bindings !== undefined, true, "the actual logical activation is completed before physical payload admission");
+    const requiredInputs = { kind: "tuple", elements: inputs.map(input => input.implementation) };
+    assert.equal(bindings.complete(requiredInputs, { ...current.program.callableValues.nativeStorage,
+      invocationInputFor: () => ({ kind: "unresolved", reason: "missing exact physical input" }) }) === undefined, true,
     "a concrete origin alone cannot replace missing physical ABI evidence");
+    assert.equal(bindings.complete(requiredInputs, current.program.callableValues.nativeStorage) !== undefined, true,
+      "the same actual native input payloads are admitted by their completed private construction owner");
   });
 }
 
