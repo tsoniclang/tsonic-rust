@@ -646,8 +646,7 @@ export function applySelectedProjectSourceCall(
     );
     return undefined;
   }
-  const asyncBody = optionalCall === undefined && sourceResult.projection === undefined
-    ? walk.context.promiseBodies.invocation(walk.context, expression, selectedDeclaration, target, resultCarrier) : undefined;
+  const asyncBody = walk.context.promiseBodies.invocation(walk.context, expression, selectedDeclaration, target, nativeResultCarrier);
   const physicalResultCarrier = asyncBody === undefined ? resultCarrier : rustPromiseBodyInvocationCarrier(asyncBody);
   const finalResultCarrier = optionalCall?.resultCarrier ?? physicalResultCarrier;
   const computedKey = recordRustComputedCallEvaluation(ast, walk.context.records, walk.context.requiredRecords,

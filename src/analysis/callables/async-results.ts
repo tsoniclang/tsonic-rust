@@ -234,7 +234,7 @@ function loadRustAsyncCompletion(
       if (rustAwaitSelectionLeaves(selection).some(leaf => leaf.future !== undefined)) {
         const promise = selection.kind === "leaf" ? selection.value.future?.futureCarrier : undefined;
         const callee = promise?.kind === "target-named" && promise.id === rustJsPromiseTargetId && operand !== undefined
-          ? rustDirectPromiseBodyCallee(walk.context, operand) : undefined;
+          ? rustDirectPromiseBodyCallee(walk.context, operand, promise) : undefined;
         if (callee === undefined) {
           suspends = true;
           return;

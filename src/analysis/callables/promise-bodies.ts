@@ -19,6 +19,7 @@ export interface RustPromiseBodySelection {
   readonly namesReady: boolean;
   initializeNames(context: RustAnalysisContext): void;
   nativeNameForDeclaration(declaration: Node | undefined): string | undefined;
+  nativeFormForDeclaration(declaration: Node): "function" | "method" | "static-method" | undefined;
   namesForScope(scope: Node): ReadonlySet<string>;
   expose(declaration: Node, demand: Node): void;
   invocation(context: RustAnalysisContext, call: Node, declaration: Node, target: SourceCall["target"],
@@ -31,7 +32,9 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   const demands = new Map<Node, Node>();
   const objects = new Map<Node, Node>();
   const pinnedInvocations = new Map<Node, ReadonlyMap<string, ReadonlySet<Node>>>();
-  const nativeNames = new Map<Node, string>();
+  const nativeDeclarations = new Map<Node, {
+    readonly name: string; readonly form: "function" | "method" | "static-method";
+  }>();
   const scopeNames = new Map<Node, Set<string>>();
   let namesReady = false;
   let closed = false;
@@ -66,9 +69,11 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
       if (context.jsEnabled) for (const declaration of context.sourceStorage.nodes) {
         if ((!context.ast.is.IsFunctionDeclaration(declaration) && !context.ast.is.IsMethodDeclaration(declaration)) ||
           !context.ast.hasModifierKind(declaration, "async") || context.ast.body(declaration) === undefined) continue;
-        if (context.ast.is.IsMethodDeclaration(declaration) && !context.ast.hasModifierKind(declaration, "static")) {
+        if (context.ast.is.IsMethodDeclaration(declaration)) {
+          const parent = context.ast.parent(declaration);
+          if (parent === undefined || !context.ast.is.IsClassDeclaration(parent) && !context.ast.is.IsClassExpression(parent)) continue;
           const owner = context.projectTypes.definitionContainingDeclaration(declaration);
-          if (owner !== undefined && context.projectTypes.isPolymorphic(owner)) continue;
+          if (owner === undefined || !context.ast.hasModifierKind(declaration, "static") && context.projectTypes.isPolymorphic(owner)) continue;
         }
         const staticSlot = context.projectTypes.memberSlotName(declaration, "static");
         const scope = staticSlot === undefined ? context.names.sourceScopeForDeclaration(declaration)
@@ -77,11 +82,14 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
           ? context.names.functionNameForDeclaration(declaration) : context.names.nameForDeclaration(declaration);
         if (scope === undefined || name === undefined) continue;
         const base = name.startsWith("r#") ? name.slice(2) : name;
-        nativeNames.set(declaration, allocateRustGeneratedName(usedIn(scope), `${base}_native`));
+        const form = context.ast.is.IsFunctionDeclaration(declaration) || staticSlot !== undefined ? "function"
+          : context.ast.hasModifierKind(declaration, "static") ? "static-method" : "method";
+        nativeDeclarations.set(declaration, Object.freeze({ name: allocateRustGeneratedName(usedIn(scope), `${base}_native`), form }));
       }
       namesReady = true;
     },
-    nativeNameForDeclaration: (declaration: Node | undefined) => declaration === undefined ? undefined : nativeNames.get(declaration),
+    nativeNameForDeclaration: (declaration: Node | undefined) => declaration === undefined ? undefined : nativeDeclarations.get(declaration)?.name,
+    nativeFormForDeclaration: (declaration: Node) => nativeDeclarations.get(declaration)?.form,
     namesForScope: (scope: Node) => scopeNames.get(scope) ?? emptyScopeNames,
     expose(declaration: Node, demand: Node): void {
       assertOpen();
@@ -93,15 +101,15 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
       const asynchronous = context.records.asyncFunction.get(declaration);
       if (asynchronous?.kind !== "js-promise") return undefined;
       const name = rustPromiseBodyNativeName(context, declaration);
-      if (rustDirectPromiseBodyCallee(context, call) === declaration && name !== undefined &&
-        rustJsPromiseOutputTargetType(resultCarrier) !== undefined) {
-        if (target.form !== "function" && target.form !== "static-method" &&
-          (target.form !== "method" || target.dispatch !== undefined)) failTargetAnalysisInvariant("tsonic-rust",
+      if (rustDirectPromiseBodyCallee(context, call, resultCarrier) === declaration && name !== undefined) {
+        if (target.form !== context.promiseBodies.nativeFormForDeclaration(declaration) ||
+          target.form === "method" && target.dispatch !== undefined) failTargetAnalysisInvariant("tsonic-rust",
           "The selected native Promise edge conflicts with its physical invocation form.", call);
         return Object.freeze({ declaration, targetName: name, logicalResultCarrier: resultCarrier,
           maySuspend: asynchronous.lowering.kind === "factory" });
       }
-      if (!demands.has(declaration)) demands.set(declaration, call);
+      for (const targetDeclaration of target.form === "union-method" ? target.variants.map(variant => variant.declaration) : [declaration])
+        if (!demands.has(targetDeclaration)) demands.set(targetDeclaration, call);
       return undefined;
     },
     seal(context: RustAnalysisContext): void {
@@ -133,7 +141,8 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
 
 const emptyScopeNames: ReadonlySet<string> = new Set();
 
-export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operand: Node): Node | undefined {
+export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operand: Node, resultCarrier: TargetTypeRef): Node | undefined {
+  if (rustJsPromiseOutputTargetType(resultCarrier) === undefined) return undefined;
   const { ast } = context;
   const call = rustUnparenthesizedExpression(ast, operand);
   if (!ast.is.IsCallExpression(call) || ast.as.AsCallExpression(call)?.QuestionDotToken !== undefined) return undefined;
@@ -162,6 +171,8 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
       !(lexical !== undefined && lexical === reference) &&
       !(binding?.storage === "native-callable" && binding.callableDeclaration === declaration)) return undefined;
   } else if (ast.is.IsMethodDeclaration(declaration) && ast.is.IsPropertyAccessExpression(callee)) {
+    const access = semantics.operations.propertyAccess(callee);
+    if (access === undefined || semantics.types.isUnion(access.receiver.type)) return undefined;
     if (context.projectMethodProperties.usageFor(declaration)?.writable === true) return undefined;
   } else return undefined;
   const identities = context.sourcePackageComponentIdentities;
@@ -170,7 +181,9 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
   const calleeFile = ast.getSourceFile(declaration);
   const callerComponent = callerFile === undefined ? undefined : identities.identities.componentIdForFile(ast.getFileName(callerFile));
   const calleeComponent = calleeFile === undefined ? undefined : identities.identities.componentIdForFile(ast.getFileName(calleeFile));
-  return callerComponent !== undefined && callerComponent === calleeComponent ? declaration : undefined;
+  if (callerComponent === undefined || calleeComponent === undefined) failTargetAnalysisInvariant("tsonic-rust",
+    "A native Promise edge requires both exact validated source-package component identities.", call);
+  return callerComponent === calleeComponent ? declaration : undefined;
 }
 
 export function rustPromiseBodyInvocationCarrier(body: NonNullable<SourceCall["asyncBody"]>): TargetTypeRef {

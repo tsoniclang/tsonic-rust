@@ -572,6 +572,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   const callableIssue = (issue: RustSourceCallableSpecializationIssue): void => appendRustDiagnostic(walk,
     "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject, ["target.capability=rust.callable-value.exact-implementation"]);
   callableValues.issues.forEach(callableIssue);
+  if (context.diagnostics.length !== 0) return undefined;
   const selectedIssuePosition = context.diagnostics.length;
   context.promiseBodies.seal(context);
   if (context.diagnostics.length !== selectedIssuePosition) return undefined;

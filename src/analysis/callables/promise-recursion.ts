@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { SourceStorageBudget } from "@tsonic/target-api/analysis";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustAnalysisContext } from "../program/context.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -33,8 +34,8 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext, bud
       })) : [{ declaration, name, arguments: [], substitutions: new Map<string, TargetTypeRef>() }];
     for (const variant of variants) if (!budget.step() || !rows.add(4 + variant.arguments.length + variant.substitutions.size))
       return { kind: "unresolved", reason: budget.failure()! };
-    if (variants.some(variant => variant.name === undefined)) return { kind: "unresolved", at: declaration,
-      reason: "A recursive native Promise body requires every selected specialization's physical name." };
+    if (variants.some(variant => variant.name === undefined)) failTargetAnalysisInvariant("tsonic-rust",
+      "A recursive native Promise body requires every selected specialization's physical name.", declaration);
     vertices.set(declaration, variants.map(variant => ({ ...variant, name: variant.name!, edges: [], pinned: new Set<Node>() })));
   }
   for (const call of context.sourceStorage.nodes) {
@@ -45,8 +46,8 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext, bud
     const callers = caller === undefined ? undefined : vertices.get(caller);
     if (callers === undefined) continue;
     const callees = vertices.get(fact.asyncBody.declaration);
-    if (callees === undefined) return { kind: "unresolved", at: call,
-      reason: "A selected suspending native Promise edge requires its complete physical body set." };
+    if (callees === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A selected suspending native Promise edge requires its complete physical body set.", call);
     for (const vertex of callers) {
       if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
       const specialized = context.sourceCallableSpecializations.requiresSpecialization(fact.asyncBody.declaration);
@@ -62,12 +63,12 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext, bud
           if (!rustTargetTypeRefEquals(argument, arguments_[index])) { matches = false; break; }
         }
         if (!matches) continue;
-        if (target !== undefined) return { kind: "unresolved", at: call,
-          reason: "A native Promise edge cannot have competing physical specializations." };
+        if (target !== undefined) failTargetAnalysisInvariant("tsonic-rust",
+          "A native Promise edge cannot have competing physical specializations.", call);
         target = candidate;
       }
-      if (target === undefined) return { kind: "unresolved", at: call,
-        reason: "A native Promise edge requires exactly its selected physical specialization." };
+      if (target === undefined) failTargetAnalysisInvariant("tsonic-rust",
+        "A native Promise edge requires exactly its selected physical specialization.", call);
       if (!rows.add(1)) return { kind: "unresolved", reason: budget.failure()! };
       vertex.edges.push({ call, target });
     }
