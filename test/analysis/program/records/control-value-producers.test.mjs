@@ -21,7 +21,7 @@ test("five producers publish exactly the original immutable family readers and n
     ["genericNumericOperands", "genericNumerics"], ["indexedFieldKeyArgument", "indexedFieldKeys"],
     ["propertyProjection", "propertyProjections"]];
   const records = builder.seal(builderRequiredRecords);
-  assert.equal(Object.keys(records).length, 66);
+  assert.equal(Object.keys(records).length, 68, "67 receiving analysis families plus the canonical nativeHandler family");
   for (const [family, producer] of families) {
     assert.equal(builder[family] === builder[producer].records, true, family);
     assert.equal(records[family] === builder[family], true, family);
