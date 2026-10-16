@@ -74,7 +74,7 @@ export function main(): void {
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /JsArray::from_dense\(vec!\[4\.0, 5\.0, 6\.0\]\)\.enumerable_own_keys\(\)/u);
+  assert.match(source, /JsArray::from_dense\(vec!\[4\.0_f64, 5\.0_f64, 6\.0_f64\]\)\.enumerable_own_keys\(\)/u);
   assert.match(source, /enumerable_own_keys\(\)/u);
   assert.match(source, /String::from\("first"\)/u);
   assert.match(source, /assignedKey = for_in_key;/u);

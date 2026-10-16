@@ -397,7 +397,7 @@ main();
 
   assert.deepEqual(result.diagnostics, []);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /value\.unwrap_or\(3\.5\)/u);
+  assert.match(source, /value\.unwrap_or\(3\.5_f64\)/u);
   assert.doesNotMatch(source, /manual_unwrap_or|let_and_return/u);
   assert.match(source, /optional\(Some\(rt::conversions::i32_to_f64\(value\)\)\)/u);
   assert.match(source, /defaulted\(Some\(rt::conversions::i32_to_f64\(value\)\)\)/u);

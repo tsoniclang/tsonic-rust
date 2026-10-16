@@ -67,13 +67,13 @@ const typeMemberKeys = [
 const declarationFileUse = "import { big } from \"./values.js\";\nexport function f(): number {\n  const y: number = big;\n  return y;\n}\n";
 
 const accepted = [
-  ["float64 local 1.7976931348623157e308", "number", "1.7976931348623157e308", "let y: f64 = 1.7976931348623157e+308;"],
-  ["float64 local -0", "number", "-0", "let y: f64 = -0.0;"],
-  ["float64 local 5e-324", "number", "5e-324", "let y: f64 = 5e-324;"],
-  ["float64 local 1e-400", "number", "1e-400", "let y: f64 = 1e-400;"],
-  ["float64 local 1e3", "number", "1e3", "let y: f64 = 1e+3;"],
-  ["float64 local 1e21", "number", "1e21", "let y: f64 = 1e+21;"],
-  ["float64 local -(2.5)", "number", "-(2.5)", "let y: f64 = -2.5;"],
+  ["float64 local 1.7976931348623157e308", "number", "1.7976931348623157e308", "let y: f64 = 1.7976931348623157e+308_f64;"],
+  ["float64 local -0", "number", "-0", "let y: f64 = -0.0_f64;"],
+  ["float64 local 5e-324", "number", "5e-324", "let y: f64 = 5e-324_f64;"],
+  ["float64 local 1e-400", "number", "1e-400", "let y: f64 = 1e-400_f64;"],
+  ["float64 local 1e3", "number", "1e3", "let y: f64 = 1e+3_f64;"],
+  ["float64 local 1e21", "number", "1e21", "let y: f64 = 1e+21_f64;"],
+  ["float64 local -(2.5)", "number", "-(2.5)", "let y: f64 = -2.5_f64;"],
   ["float32 local -0", "float32", "-0", "let y: f32 = -0.0_f32;"],
   ["float32 local 5e-324", "float32", "5e-324", "let y: f32 = 5e-324_f32;"],
   ["float32 local 1.5", "float32", "1.5", "let y: f32 = 1.5_f32;"],
