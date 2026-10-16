@@ -423,7 +423,14 @@ function inferArrayLiteralElement(
     }
     const literalContext = first !== undefined && isRustNumericCarrier(first) &&
       (ast.kindName(operand) === KindNumericLiteral || ast.is.IsBigIntLiteral(operand)) ? first : undefined;
+    const issueStart = probe.context.diagnostics.length;
     const value = resolveExpressionCarrier(probe, operand, sourceFile, literalContext);
+    if (value === undefined && literalContext !== undefined) {
+      for (const issue of probe.context.diagnostics.slice(issueStart)) {
+        appendRustDiagnostic(walk, issue.code, issue.message, issue.sourceNode, issue.evidence ?? []);
+      }
+      return undefined;
+    }
     const carrier = value;
     const source = types.expressionType(operand);
     const elementType = source === undefined ? undefined : spread ? types.typeArguments(source)[0] : source;
