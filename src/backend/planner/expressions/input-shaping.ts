@@ -7,9 +7,8 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { rustValueReferenceReborrow } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustBorrowedStringView } from "../../target-ast/syntax/expressions.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { diagnosticInput } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustErrorFieldSharedView } from "./error-field-borrows.js";
@@ -22,12 +21,7 @@ export function planRustCallArguments(
   const arguments_: RustExpr[] = [];
   for (const argument of context.input.program.source.ast.arguments(node)) {
     if (argument === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.call-argument",
-        "Call expression contains an undefined argument slot.",
-      ));
-      return undefined;
+      return failRustPlannerInvariant("Call expression contains an undefined argument slot.", node);
     }
     const planned = planArgument(argument, context);
     if (planned === undefined) {
