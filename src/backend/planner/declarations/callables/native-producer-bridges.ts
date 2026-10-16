@@ -17,7 +17,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { registerAliasFromPath } from "../../program/plan-context.js";
 import { rustLifetimeBinderToAst, rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
-import { rustNativeCompletionErrorBounds } from "./native-completion-bounds.js";
+import { rustJsPromiseOutputTargetType } from "../../../../target-model/types/carriers/promises.js";
 
 export function planRustNativeProducerBridge(
   protocol: RustNativeCallableProtocol,
@@ -36,7 +36,8 @@ export function planRustNativeProducerBridge(
   const implementation = parameter("Implementation");
   const invocationError = parameter("InvocationError");
   const futures = protocol.completion?.futures ?? [];
-  const errors = futures.map(future => parameter(`AwaitError${future.ordinal}`));
+  const nativeFutures = futures.filter(future => rustJsPromiseOutputTargetType(future.carrier) === undefined);
+  const errors = new Map(nativeFutures.map(future => [future.ordinal, parameter(`AwaitError${future.ordinal}`)]));
   const pending = new Map(futures.filter(future => future.carrier.kind === "target-named" &&
     future.carrier.id === rustFutureTargetId).map(future => [future.ordinal, parameter(`Pending${future.ordinal}`)]));
   const environment = signature.environmentParameters;
@@ -53,10 +54,9 @@ export function planRustNativeProducerBridge(
   }
   const boundTypes = [argumentsParameter, ...[...outputs.values()].map(output => output.parameter)];
   const genericTypes = [implementation, ...(lifetimes.length === 0 ? environment : boundTypes),
-    invocationError, ...errors, ...pending.values()];
+    invocationError, ...errors.values(), ...pending.values()];
   const genericParameters: readonly RustGenericParameter[] = genericTypes.map(type => ({
-    kind: "type", name: type.name, bounds: errors.includes(type)
-      ? rustNativeCompletionErrorBounds(futures[errors.indexOf(type)]!) : [],
+    kind: "type", name: type.name, bounds: [],
   }));
   const environmentParameters: readonly RustGenericParameter[] = environment.map(type => ({
     kind: "type", name: type.name, bounds: [],
@@ -77,9 +77,9 @@ export function planRustNativeProducerBridge(
     if (type === undefined) return undefined;
     parameters.push({ name: `argument_${index}`, type });
   }
-  const channels = ["InvocationError", ...futures.map(future => `AwaitError${future.ordinal}`)];
-  const errorTypes = [invocationError, ...errors];
-  const concreteResult = result(invocationError, ordinal => errors[ordinal]!, undefined);
+  const channels = ["InvocationError", ...nativeFutures.map(future => `AwaitError${future.ordinal}`)];
+  const errorTypes = [invocationError, ...errors.values()];
+  const concreteResult = result(invocationError, ordinal => errors.get(ordinal)!, undefined);
   if (concreteResult === undefined) return undefined;
   const inputTuple: RustType = { kind: "tuple", elements: parameters.map(parameter => parameter.type) };
   const argumentsType = lifetimes.length === 0 ? inputTuple : named(argumentsParameter.name);
@@ -97,11 +97,11 @@ export function planRustNativeProducerBridge(
     if (output === undefined) return undefined;
     predicates.push({ kind: "type", type: named(selected.name), bounds: [{ kind: "trait-type", reference: {
       trait: named("core::future::Future", [{ kind: "associated-equality", name: "Output", genericArguments: [],
-        type: named("Result", [typeArgument(output), typeArgument(named(errors[future.ordinal]!.name))]),
+        type: named("Result", [typeArgument(output), typeArgument(named(errors.get(future.ordinal)!.name))]),
       }]),
     } }] });
   }
-  const implResult = result(invocationError, ordinal => errors[ordinal]!, [
+  const implResult = result(invocationError, ordinal => errors.get(ordinal)!, [
     ...targetLifetimes, ...rustTypeGenericArguments(genericTypes),
   ]);
   if (implResult === undefined) return undefined;
@@ -152,8 +152,7 @@ export function planRustNativeProducerBridge(
       generics: { ...emptyRustGenerics, parameters: [...lifetimes, ...boundTypes.map(type => ({
         kind: "type" as const, name: type.name, bounds: [],
       }))] },
-      members: [...channels.map((name, index) => ({ kind: "type" as const, name, generics: emptyRustGenerics,
-        bounds: index === 0 ? [] : rustNativeCompletionErrorBounds(futures[index - 1]!) })),
+      members: [...channels.map(name => ({ kind: "type" as const, name, generics: emptyRustGenerics, bounds: [] })),
         ...(invoked ? [{ kind: "function" as const, name: "invoke", generics: emptyRustGenerics,
           selfParam: { kind: "reference" as const, mutable: false }, params: directParameters, returnType: helperResult,
         }] : [])],
@@ -186,10 +185,7 @@ export function planRustNativeProducerBridge(
       instantiateRustNativeCompletion(protocol.completion, future => {
         if (future.carrier.kind !== "target-named") return undefined;
         if (future.carrier.id === rustJsPromiseTargetId) {
-          const arguments_ = future.carrier.genericArguments;
-          return arguments_?.length !== 3 ? undefined : { ...future.carrier,
-            genericArguments: [arguments_[0]!, arguments_[1]!, { kind: "type", type: awaitError(future.ordinal) }],
-          };
+          return rustJsPromiseOutputTargetType(future.carrier) === undefined ? undefined : future.carrier;
         }
         if (future.carrier.id !== rustFutureTargetId) return undefined;
         return captures === undefined ? pending.get(future.ordinal) : rustNativeCompletionFutureType({

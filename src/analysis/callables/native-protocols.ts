@@ -16,6 +16,7 @@ import { bindRustCallableInputLifetimes } from "../../target-model/types/carrier
 import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 
 export interface RustNativeCallableProtocol {
   readonly identity: string;
@@ -99,6 +100,9 @@ export function rustNativeCallableErrorType(
   const lifetimeCount = protocol.method.binder.parameters.length;
   if (arguments_.length !== lifetimeCount + protocol.signature.typeParameters.length ||
     arguments_.some((argument, index) => argument.kind !== (index < lifetimeCount ? "lifetime" : "type"))) return undefined;
+  const future = channel === "invocation" ? undefined : protocol.completion?.futures[channel];
+  if (future?.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId)
+    return rustJsValueTargetType();
   return Object.freeze({ kind: "associated-type", owner: implementation, trait: binding.trait,
     name: channel === "invocation" ? "InvocationError" : `AwaitError${channel}`, genericArguments: arguments_ });
 }

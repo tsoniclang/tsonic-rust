@@ -64,17 +64,17 @@ test("borrowed inputs add only the reserved lifetime-bound producer helper", () 
   assert.equal(planRustNativeProducerBridge({ ...fixture.protocol, boundProducerName: undefined }, fixture.context) === undefined, true);
 });
 
-test("JS completion remains the concrete Promise carrier with its selected error type", () => {
+test("JS completion remains the concrete one-payload Promise without an unconstrained error parameter", () => {
   const fixture = nativeProducerFixture({ parameters: [integer], result: rustSourceOptionalTargetType(
     rustJsPromiseTargetType(integer)),
   });
   const items = nativeProducerItems(fixture);
   assert.equal(items.length, 2);
   assert.deepEqual(items[1].generics.parameters.map(parameter => parameter.name),
-    ["Implementation", "InvocationError", "AwaitError0"]);
+    ["Implementation", "InvocationError"]);
   const printed = printNativeProducerItems(items);
-  assert.match(printed, /Option<js_abi::JsPromise<'static, u64, AwaitError0>>/u);
-  assert.doesNotMatch(printed, /impl core::future::Future|Pending0|TsonicError|TsonicResult/u);
+  assert.match(printed, /Option<js_abi::JsPromise<u64>>/u);
+  assert.doesNotMatch(printed, /impl core::future::Future|Pending0|AwaitError|TsonicError|TsonicResult|'static/u);
 });
 
 test("borrowed generic environments share exact GAT bounds without imposing a static helper environment", () => {
@@ -105,8 +105,8 @@ test("borrowed JS completion uses its input lifetime without manufacturing a nat
   });
   const items = nativeProducerItems(fixture);
   const printed = printNativeProducerItems(items);
-  assert.match(printed, /js_abi::JsPromise<'input, Output0, AwaitError0>/u);
-  assert.doesNotMatch(printed, /'static|impl core::future::Future|Pending0|Box|dyn /u);
+  assert.match(printed, /js_abi::JsPromise<Output0>/u);
+  assert.doesNotMatch(printed, /'static|AwaitError|impl core::future::Future|Pending0|Box|dyn /u);
 });
 
 test("environment parameters remain on the protocol while universal methods require their existing state owner", () => {

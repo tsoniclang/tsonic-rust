@@ -10,6 +10,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustNativeCallableMethodGenerics } from "./native-method-generics.js";
 import { planRustGenericCallableErrors } from "./generic-errors.js";
 import { rustGenericCallableEnvironmentGenerics, rustGenericCallableCapturePredicates } from "./generic-signatures.js";
+import { rustJsPromiseOutputTargetType } from "../../../../target-model/types/carriers/promises.js";
 
 export function planRustNativeGenericProducerBridges(
   protocol: RustNativeCallableProtocol,
@@ -90,7 +91,8 @@ function planImplementation(
   return { kind: "impl", target, trait,
     generics: { ...environment, wherePredicates: capturePredicates },
     members: [{ kind: "type", name: "InvocationError", generics: methodGenerics, type: invocationError ?? infallible },
-      ...(protocol.completion?.futures ?? []).map(future => ({ kind: "type" as const, name: `AwaitError${future.ordinal}`,
+      ...(protocol.completion?.futures ?? []).filter(future => rustJsPromiseOutputTargetType(future.carrier) === undefined)
+        .map(future => ({ kind: "type" as const, name: `AwaitError${future.ordinal}`,
         generics: methodGenerics, type: errors.awaiting.errorType ?? infallible })),
       ...(invoked ? [{ kind: "function" as const, name: "invoke", visibility: "private" as const,
         selfParam: { kind: "reference" as const, mutable: false },
