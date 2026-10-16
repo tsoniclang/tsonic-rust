@@ -18,6 +18,7 @@ export type RustSuspendedCallableStorageResolution =
   | {
       readonly kind: "resolved";
       readonly capturedParameters: readonly Node[];
+      readonly capturedCarriers: readonly TargetTypeRef[];
       readonly storage: RustSuspendedCallableStorage;
       readonly ownedReceiver?: RustSuspendedOwnedReceiver;
       readonly retainedEnvironment?: RustRetainedEnvironment;
@@ -69,17 +70,19 @@ export function resolveRustSuspendedCallableStorage(
     return {
       kind: "resolved",
       capturedParameters: Object.freeze(capturedParameters),
+      capturedCarriers: Object.freeze([]),
       storage: Object.freeze({ kind: "receiver" }),
     };
   }
 
   const carriers: TargetTypeRef[] = [...storedCarriers, ...(ownedReceiver === undefined ? [] : [ownedReceiver.carrier])];
+  const capturedCarriers: TargetTypeRef[] = [];
   for (const field of capturedFields) {
     const carrier = walk.context.records.capturedFieldStorage.get(field.declaration)?.valueCarrier;
     if (carrier === undefined) {
       return { kind: "rejected", reason: "A captured suspended-callable field has no exact finalized Rust storage carrier." };
     }
-    carriers.push(carrier);
+    capturedCarriers.push(carrier);
   }
   for (const parameter of capturedParameters) {
     const carrier = walk.context.records.sourceParameterAbi.get(parameter)
@@ -105,7 +108,7 @@ export function resolveRustSuspendedCallableStorage(
     const instance = definition === undefined ? undefined : walk.context.projectTypes.openCarrier(definition);
     if (instance === undefined) return { kind: "rejected",
       reason: "A suspended class activation has no exact native instance storage carrier." };
-    carriers.push(instance);
+    capturedCarriers.push(instance);
   }
   const captures = ownership.kind === "frame" ? ownership.activation.externalCaptures
     : lexical.captures.map(capture => ({ ...capture, kind: "lexical" as const }));
@@ -121,8 +124,9 @@ export function resolveRustSuspendedCallableStorage(
         : resolveExpressionCarrier(walk, reference, sourceFile, undefined));
     if (carrier === undefined) return { kind: "rejected",
       reason: "A suspended callable's lexical capture has no exact native storage carrier." };
-    carriers.push(carrier);
+    capturedCarriers.push(carrier);
   }
+  carriers.push(...capturedCarriers);
   const sourceContract = rustEnclosingStorageContract(declaration, ast, walk.context.sourceLifetimes);
   const inferred = rustCallableInputLifetimeParameters(declaration, ast, walk.context.records);
   const contract = inferred.length === 0 ? sourceContract : { declaration,
@@ -152,6 +156,7 @@ export function resolveRustSuspendedCallableStorage(
     return {
       kind: "resolved",
       capturedParameters: Object.freeze(capturedParameters),
+      capturedCarriers: Object.freeze(capturedCarriers),
       storage: Object.freeze({ kind: "static" }),
       ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
       ...(retainedEnvironment === undefined ? {} : { retainedEnvironment }),
@@ -160,6 +165,7 @@ export function resolveRustSuspendedCallableStorage(
   return {
     kind: "resolved",
     capturedParameters: Object.freeze(capturedParameters),
+    capturedCarriers: Object.freeze(capturedCarriers),
     storage: Object.freeze({ kind: "lifetime", lifetime }),
     ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
     ...(retainedEnvironment === undefined ? {} : { retainedEnvironment }),

@@ -10,6 +10,7 @@ import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
 
 import { rustNativeCallableInputPhysicalSignature } from "../../../../analysis/callables/native-conversions.js";
+import { rustGenericRequirementBounds } from "../../types/generic-bounds.js";
 
 export function planRustNativeCallableGenerics(
   declaration: Node,
@@ -72,14 +73,14 @@ export function planRustNativeCallableGenerics(
   }
   const parameters: RustGenericParameter[] = [];
   const predicates: RustWherePredicate[] = [...sourceGenerics.wherePredicates];
-  const objectInputs = context.promiseBody === true ? undefined
-    : context.input.program.promiseBodies.objects.get(declaration)?.staticInputs;
+  const requirements = context.input.program.declarationGenericRequirements.contractFor(declaration, context.promiseBody)?.nativeInputs;
+  if (requirements === undefined) return undefined;
   for (const input of inputs) {
     const traits = [...bounds.get(input.implementation.identity)!.values()].map(trait => rustTypeFromCarrierInContext(trait, context));
     if (traits.some(trait => trait === undefined)) return undefined;
     const selectedBounds: RustTypeBound[] = traits.map(trait => ({ kind: "trait-type" as const, reference: { trait: trait! } }));
-    if (objectInputs?.has(input.implementation.identity) === true)
-      selectedBounds.push({ kind: "lifetime", lifetime: { kind: "static" } });
+    const required = requirements.find(parameter => parameter.identity === input.implementation.identity);
+    if (required !== undefined) selectedBounds.push(...rustGenericRequirementBounds(required.requirements));
     const callableInput = callableInputs.find(selected => selected === input);
     const retained = callableInput === undefined ? [] : context.input.program.retainedCallableInputs.forInput(callableInput);
     if (retained.length > 0) {

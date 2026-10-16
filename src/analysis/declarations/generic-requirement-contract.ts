@@ -32,6 +32,11 @@ export function requirementContractsEqual(
   right: RequirementContractState,
 ): boolean {
   return left.declaration === right.declaration &&
+    left.nativeInputs.length === right.nativeInputs.length &&
+    left.nativeInputs.every((parameter, index) => {
+      const other = right.nativeInputs[index];
+      return other !== undefined && parameter.identity === other.identity && stringListsEqual(parameter.requirements, other.requirements);
+    }) &&
     left.optionalStorage.length === right.optionalStorage.length &&
     left.optionalStorage.every((entry, index) => {
       const other = right.optionalStorage[index];

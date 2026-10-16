@@ -60,14 +60,9 @@ export interface RustPromiseBodyDeclaration {
   readonly name: string;
 }
 
-export interface RustPromiseObjectDemand {
-  readonly at: Node;
-  readonly staticInputs: ReadonlySet<string>;
-}
-
 export interface RustPromiseBodies {
   readonly declarations: ReadonlyMap<Node, RustPromiseBodyDeclaration>;
-  readonly objects: ReadonlyMap<Node, RustPromiseObjectDemand>;
+  readonly objects: ReadonlyMap<Node, Node>;
 }
 
 export type RustJsPromiseLowering =
@@ -79,6 +74,7 @@ export type RustJsPromiseLowering =
       readonly kind: "factory";
       readonly storage: RustSuspendedCallableStorage;
       readonly capturedParameters: readonly Node[];
+      readonly capturedCarriers: readonly TargetTypeRef[];
       readonly ownedReceiver?: RustSuspendedOwnedReceiver;
     };
 

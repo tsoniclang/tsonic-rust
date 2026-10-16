@@ -43,6 +43,7 @@ import { rustStructuralViewRequirementUses } from "./structural-view-requirement
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
@@ -56,6 +57,7 @@ export interface RustDeclarationGenericRequirementContract {
   readonly declaration: Node;
   readonly typeParameters: readonly RustDeclarationTypeParameterRequirements[];
   readonly capturedTypeParameters: readonly RustDeclarationTypeParameterRequirements[];
+  readonly nativeInputs: readonly RustDeclarationTypeParameterRequirements[];
   readonly associatedTypes: readonly RustAssociatedTypeRequirement[];
   readonly projectProjections: readonly RustProjectProjectionRequirement[];
   readonly optionalStorage: readonly RustOptionalStorageRequirement[];
@@ -196,7 +198,6 @@ export function analyzeRustDeclarationGenericRequirements(
         genericCallables,
         nativeCallables,
         nativeStorage,
-        promiseBodies,
         errorRegions,
         frameCallables,
         structuralShapes: shapes,
@@ -221,6 +222,10 @@ export function analyzeRustDeclarationGenericRequirements(
           return candidateId === undefined ? undefined : context.get(candidateId);
         },
       });
+      if (result.kind === "rejected" && result.promiseStorage === true) {
+        diagnostics.push(diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
+          rustSuspendingPromiseBorrowReason, promiseBodies.objects.get(declaration) ?? declaration));
+      }
       return result.kind === "rejected"
         ? result
         : {
@@ -239,7 +244,7 @@ export function analyzeRustDeclarationGenericRequirements(
   if (closure.kind === "rejected") {
     return {
       kind: "rejected",
-      diagnostics: Object.freeze([diagnostic(
+      diagnostics: Object.freeze(diagnostics.length > 0 ? diagnostics : [diagnostic(
         "RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED",
         closure.reason,
         closure.contractId === undefined

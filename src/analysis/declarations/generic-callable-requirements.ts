@@ -62,7 +62,7 @@ import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
 import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
-import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
+import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 
 interface ClassifyCallableInput {
   readonly ownershipFlow: RustOwnershipFlow;
@@ -80,7 +80,6 @@ interface ClassifyCallableInput {
   readonly genericCallables: RustGenericCallablePlan;
   readonly nativeCallables: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
-  readonly promiseBodies: RustPromiseBodies;
   readonly frameCallables: RustFrameCallablePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
@@ -100,7 +99,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       readonly contract: RequirementContractState;
       readonly dependencies: readonly string[];
     }
-  | { readonly kind: "rejected"; readonly reason: string } {
+  | { readonly kind: "rejected"; readonly reason: string; readonly promiseStorage?: true } {
   const { ast, declaration, records } = input;
   const definition = input.projectTypes.definitionForDeclaration(declaration);
   const typeParameterNodes = (definition === undefined ? ast.typeParameters(declaration)
@@ -127,8 +126,9 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (!exactNames.includes(selected.identity)) capturedParameters.set(selected.identity, rustTypeParameterFromSourceContract(selected));
     }
   }
-  const staticInputs = input.promiseObjectFacet === true ? input.promiseBodies.objects.get(declaration)?.staticInputs : undefined;
-  const declared = new Set([...exactNames, ...capturedParameters.keys(), ...staticInputs ?? []]);
+  const nativeInputs = new Map([...input.nativeCallables.inputsFor(declaration), ...input.nativeCallables.capturesFor(declaration)]
+    .map(selected => [selected.implementation.identity, selected.implementation]));
+  const declared = new Set([...exactNames, ...capturedParameters.keys(), ...nativeInputs.keys()]);
   const projections = createRustProjectProjectionRequirementCollector(declared, input.projectTypes);
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
@@ -144,7 +144,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   const dependencies = new Set<string>();
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
     (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require, input.typeDefinitions));
-  for (const parameter of [...input.inheritedBody?.typeParameters ?? [], ...input.inheritedBody?.capturedTypeParameters ?? []])
+  for (const parameter of [...input.inheritedBody?.typeParameters ?? [], ...input.inheritedBody?.capturedTypeParameters ?? [],
+    ...input.inheritedBody?.nativeInputs ?? []])
     for (const requirement of parameter.requirements) byParameter.get(parameter.identity)?.add(requirement);
   for (const projection of input.inheritedBody?.optionalStorage ?? []) {
     if (!optionalStorage.collect(projection.carrier)) return { kind: "rejected", reason: "A Promise object lost its native body's exact optional-storage contract." };
@@ -238,9 +239,15 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       return { kind: "rejected", reason: error };
     }
     if (lowering.kind === "factory") {
+      if (lowering.storage.kind === "receiver") return { kind: "rejected", promiseStorage: true,
+        reason: "An owned Promise cannot retain an unowned method receiver." };
       if (lowering.ownedReceiver !== undefined) {
         const receiverError = addUse(declaration, lowering.ownedReceiver.carrier, ["static"]);
-        if (receiverError !== undefined) return { kind: "rejected", reason: receiverError };
+        if (receiverError !== undefined) return { kind: "rejected", promiseStorage: true, reason: receiverError };
+      }
+      for (const carrier of lowering.capturedCarriers) {
+        const captureError = addUse(declaration, carrier, ["static"]);
+        if (captureError !== undefined) return { kind: "rejected", promiseStorage: true, reason: captureError };
       }
       for (const parameter of lowering.capturedParameters) {
         const physical = input.nativeCallables.inputsFor(declaration).some(value => value.subject.node === parameter)
@@ -251,7 +258,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
           ["static"],
         );
         if (parameterError !== undefined) {
-          return { kind: "rejected", reason: parameterError };
+          return { kind: "rejected", promiseStorage: true, reason: parameterError };
         }
       }
     }
@@ -262,6 +269,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (nestedId !== undefined) {
         dependencies.add(nestedId);
         for (const parameter of input.contractFor(node)?.capturedTypeParameters ?? []) {
+          if (parameter.requirements.length === 0) continue;
+          const error = addUse(node, { kind: "type-parameter", identity: parameter.identity, name: parameter.name }, parameter.requirements);
+          if (error !== undefined) return error;
+        }
+        for (const parameter of input.contractFor(node)?.nativeInputs ?? []) {
           if (parameter.requirements.length === 0) continue;
           const error = addUse(node, { kind: "type-parameter", identity: parameter.identity, name: parameter.name }, parameter.requirements);
           if (error !== undefined) return error;
@@ -736,6 +748,14 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.identity, targetTypeArguments[index]!] as const));
+            for (const parameter of [...input.nativeCallables.inputsFor(selectedDeclaration),
+              ...input.nativeCallables.capturesFor(selectedDeclaration)]) {
+              const physical = input.nativeStorage.invocationInputFor(parameter, node, declaration);
+              const payload = physical.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(parameter.carrier,
+                physical.carrier, rustOptionElementCarrier(parameter.carrier) ?? parameter.carrier, input.typeDefinitions);
+              if (payload === undefined) return "A source call lost the exact physical native input required by its callee contract.";
+              substitutions.set(parameter.implementation.identity, payload);
+            }
             if (frameEntry !== undefined && "carrier" in implementation && callableCarrier !== undefined) {
               const bindings = bindRustExactTypeParameters(implementation.carrier, callableCarrier,
                 new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
@@ -776,6 +796,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
               return receiver === undefined || input.projectTypes.definitionContainingDeclaration(selectedDeclaration) === undefined
                 ? instantiated : input.projectTypes.instantiateMemberCarrier(selectedDeclaration, receiver, instantiated);
             };
+            for (const parameter of callee.nativeInputs) {
+              if (parameter.requirements.length === 0) continue;
+              const carrier = instantiate({ kind: "type-parameter", identity: parameter.identity, name: parameter.name });
+              const error = addUse(node, carrier, parameter.requirements);
+              if (error !== undefined) return error;
+            }
             for (const parameter of callee.capturedTypeParameters) {
               if (parameter.requirements.length === 0) continue;
               const carrier = instantiate({ kind: "type-parameter", identity: parameter.identity, name: parameter.name });
@@ -839,6 +865,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         requirements: normalizeRustGenericRequirements([...(byParameter.get(parameter.identity) ?? [])]),
       }))),
       capturedTypeParameters: Object.freeze([...capturedParameters.values()].map((parameter) => Object.freeze({
+        identity: parameter.identity, name: parameter.name,
+        requirements: normalizeRustGenericRequirements([...(byParameter.get(parameter.identity) ?? [])]),
+      }))),
+      nativeInputs: Object.freeze([...nativeInputs.values()].map(parameter => Object.freeze({
         identity: parameter.identity, name: parameter.name,
         requirements: normalizeRustGenericRequirements([...(byParameter.get(parameter.identity) ?? [])]),
       }))),

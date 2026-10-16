@@ -138,6 +138,7 @@ export function selectRustAsyncBodyFacts(
   return { fact: rustPromiseAsyncFunctionFact(closedFutureCarrier, selected.outputCarrier, { kind: "factory",
     storage: storage.storage,
     capturedParameters: storage.capturedParameters,
+    capturedCarriers: storage.capturedCarriers,
     ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
   }), ...(storage.retainedEnvironment === undefined ? {} : { retainedEnvironment: storage.retainedEnvironment }) };
 }

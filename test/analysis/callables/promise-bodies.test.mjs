@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustTargetProgram } from "../../../dist/analysis/program/target-program.js";
 import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { Node_Expression } from "@tsonic/target-api/source";
@@ -13,15 +14,19 @@ import { load } from "@tsonic/rust/lang.js";`;
 
 function analyze(text) {
   let context;
+  let program;
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text }, compileTarget(request) {
     context = analyzeRustCheckedContext(request);
-    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+    const analyzed = analyzeRustTargetProgram(request);
+    if (analyzed.kind === "rejected") return analyzed;
+    program = analyzed.value;
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: analyzed.diagnostics };
   } });
   const declarations = context.sourceStorage.nodes.filter(node => context.records.asyncFunction.get(node) !== undefined);
   const named = name => declarations.find(node => context.ast.name(node) !== undefined &&
     context.ast.text(context.ast.name(node)) === name);
   const calls = context.sourceStorage.nodes.filter(node => context.records.targetOperation.get(node)?.kind === "source-call");
-  return { context, result, named, calls };
+  return { context, result, program, named, calls };
 }
 
 test("an immediate native body keeps its borrowed storage before effects instead of demanding an owned object", () => {
@@ -80,7 +85,8 @@ export const marker = 0;`);
   assert.equal(issues.length, 1);
   const call = current.calls.find(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === "read");
   assert.equal(issues[0].sourceNode === call, true);
-  assert.equal(current.context.promiseBodies.plan.objects.get(current.named("read")).at === issues[0].sourceNode, true);
+  assert.equal(current.context.promiseBodies.plan.objects.get(current.named("read")) === issues[0].sourceNode, true);
+  assert.equal(current.program === undefined && current.result.artifacts.length === 0, true);
 });
 
 test("a real library export demands an object without changing an internal immediate body's selection", () => {
@@ -96,6 +102,7 @@ export async function outer<Region extends Life>(value: Ref<int32, Region>, pend
   assert.equal(issues[0].sourceNode === current.named("outer"), true);
   assert.equal(current.context.promiseBodies.plan.objects.has(current.named("read")), false);
   assert.equal(current.calls.some(node => current.context.records.targetOperation.get(node).asyncBody?.declaration === current.named("read")), true);
+  assert.equal(current.program === undefined && current.result.artifacts.length === 0, true);
 });
 
 function lower(text) {
