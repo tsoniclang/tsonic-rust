@@ -49,7 +49,7 @@ export function createRustStructuralMethodStorage(input: {
     const selected = structuralShapes.definitionForCarrier(carrier);
     const field = selected?.fields[index];
     const method = field?.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field?.methodStorageCarrier;
-    if (selected === undefined || rustCallableProtocol(method) === undefined) return;
+    if (selected === undefined || field?.nativeMethod === true || rustCallableProtocol(method) === undefined) return;
     const definition = canonical.get(`${selected.componentId}\0${selected.targetName}`);
     if (definition === undefined) throw new Error("Structural method storage requires its canonical shape owner.");
     const carriers = seen.get(subject) ?? new Set<TargetTypeRef>();
