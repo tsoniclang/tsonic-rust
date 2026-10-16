@@ -4,6 +4,7 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analysis/callables/generic-dispatch.js";
@@ -296,7 +297,7 @@ test("a family first requested by an invocation-storage request is admitted afte
   assert.equal(physical.definitions() === inventory, true, "re-reading invocation storage after closure admits nothing");
 });
 
-test("published physical reads return stored keys, link late keys without storing them, and fail only required reads of an unrooted shape", () => {
+test("published physical reads return stored keys and reject required unprepared keys without selection", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
   const physical = program.callableValues.generic.physical;
   const inventory = physical.definitions();
@@ -310,10 +311,10 @@ test("published physical reads return stored keys, link late keys without storin
   }
   assert.equal(physical.conversionFor(joined.carrier, joined.carrier)?.kind, "identity");
   const late = concreteKey(joined.carrier);
-  const linked = physical.argumentsFor(late);
-  assert.equal(sameMetadata(physical.argumentsFor(late), linked), true, "repeated late-key reads link the same arguments");
-  assert.equal(physical.definitionFor(late) === joined && physical.argumentsFor(late) !== linked, true,
-    "a late key links to its existing family on every read and is not stored");
+  for (const read of [() => physical.argumentsFor(late), () => physical.definitionFor(late)]) {
+    assert.equal(invariantCode(read), "TSONIC_INTERNAL_PLANNER_INVARIANT", "unprepared required keys do not recompute their selection");
+  }
+  assert.equal(physical.existingSelectionFor(late) === undefined, true, "a missing optional key is not admitted by a read");
   const value = rustGenericCallableValue(joined.carrier);
   const reordered = reorderedKey(joined.carrier);
   for (const read of [() => physical.definitionFor(reordered), () => physical.argumentsFor(reordered),
@@ -353,8 +354,8 @@ test("a logical carrier whose family was never admitted stays absent in every re
   current.physical.closeAdmission();
   assert.equal(current.physical.plan.definitions().length === 0 && current.physical.plan.environmentFor(implementation) !== undefined, true,
     "the family has a completed environment and no admitted shape");
+  const physical = current.physical.closeKeys();
   current.physical.publish();
-  const physical = current.physical.plan;
   for (const [name, read] of [["definitionFor", () => physical.definitionFor(logical)], ["argumentsFor", () => physical.argumentsFor(logical)],
     ["existingSelectionFor", () => physical.existingSelectionFor(logical)], ["conversionFor", () => physical.conversionFor(logical, logical)]]) {
     assert.equal(invariantCode(read) === undefined && read() === undefined, true, `${name}: a logical carrier is not a physical storage key`);
@@ -409,6 +410,11 @@ test("the planner phase label starts at publication, after the callable seal and
   const value = rustGenericCallableValue(joined.carrier);
   const reordered = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: [...value.physical.members].reverse() } });
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "closed, not sealed");
+  const components = analyzeRustSourcePackageComponents(context, "lib");
+  assert.equal(components.kind, "resolved", "the existing component owner completes before publication");
+  context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
+    records: context.records, physical, producers: context.callableValues.nativeProducers,
+    definitions: context.typeDefinitions, components: components.plan });
   const published = context.callableValues.seal();
   assert.equal(published !== context.callableValues.selected, true, "publication does not expose the analysis construction view");
   assert.equal(context.callableValues.seal() === published, true, "repeated seals read the same completed publication");

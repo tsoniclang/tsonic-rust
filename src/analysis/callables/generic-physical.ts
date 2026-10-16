@@ -313,7 +313,8 @@ export function createRustGenericCallablePhysicalPlan(
       for (const definition of inventory) prepareConversion(definition.carrier, definition.carrier);
       const read = (carrier: TargetTypeRef, required: boolean): RustGenericCallablePhysicalSelection | undefined => {
         const selected = selectedCarriers.get(closedMetadataKey(carrier));
-        if (selected === undefined && required && rustGenericCallableValue(carrier)?.physical !== undefined)
+        const value = selected === undefined && required ? rustGenericCallableValue(carrier) : undefined;
+        if (value?.physical !== undefined && value.physical.members.every(member => byOrigin.has(closedMetadataKey(member.origin))))
           (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
             "A physical generic callable key was not prepared before publication; its selected contextual root is missing.");
         return selected;
@@ -325,8 +326,10 @@ export function createRustGenericCallablePhysicalPlan(
         definitionFor: (carrier: TargetTypeRef) => read(carrier, true)?.definition,
         argumentsFor: (carrier: TargetTypeRef) => read(carrier, true)?.arguments,
         existingSelectionFor: (carrier: TargetTypeRef) => read(carrier, false),
-        conversionFor: (source: TargetTypeRef, target: TargetTypeRef) =>
-          conversions.get(closedMetadataKey(source))?.get(closedMetadataKey(target)),
+        conversionFor(source: TargetTypeRef, target: TargetTypeRef) {
+          if (read(source, true) === undefined || read(target, true) === undefined) return undefined;
+          return conversions.get(closedMetadataKey(source))?.get(closedMetadataKey(target));
+        },
       });
       openCarriers = undefined;
       return closedKeys;

@@ -5,7 +5,6 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
-import { independentFrameAlternativesSource } from "../../../../tsonic/test/fixtures/independent-frame-alternatives.mjs";
 
 const joinedSource = `
 type Identity = <Value>(value: Value) => Value;
@@ -126,7 +125,18 @@ test("published producer physical lookup rejects a foreign declaration without i
 });
 
 test("frame reads and same-activation proofs remain data-only after construction inputs are revoked", () => {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": independentFrameAlternativesSource } });
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+class Value {
+  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
+  rebind(): void { this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1); }
+}
+export function escaped(): (count: number) => number {
+  const value = new Value();
+  const before = value.recurse;
+  value.rebind();
+  return before;
+}
+` } });
   const sourceStorage = createSourceStorageQuery(program.source, program.sourceFiles);
   const guarded = [];
   const guard = value => {
