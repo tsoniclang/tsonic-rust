@@ -184,10 +184,11 @@ function planRustFunctionItem(
   context = environment.context;
   const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
     ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        asyncFact?.kind === "js-promise" && asyncFact.storage.kind === "static"
+        asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
       ? {
           requiredStaticParameters: generatorFact?.capturedParameters ??
-            (asyncFact?.kind === "js-promise" ? asyncFact.capturedParameters : []),
+            (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+              ? asyncFact.lowering.capturedParameters : []),
         }
       : {}),
   });
@@ -249,7 +250,7 @@ function planRustFunctionItem(
   }
   if (returnsJsPromise && !requireRustCarrierRequirements(
     asyncFact.outputCarrier,
-    asyncFact.storage.kind === "static" ? ["clone", "static"] : ["clone"],
+    asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
     node,
     context,
   )) {

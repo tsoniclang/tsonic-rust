@@ -175,6 +175,17 @@ export function createRustNamePlan(input: {
     if (moduleScoped) moduleValueNames.set(candidate.scope, used);
     callableValueNames.set(candidate.declaration, valueName);
   }
+  const settledHelperNames = new WeakMap<Node, string>();
+  for (const candidate of callableCandidates) {
+    const functionName = functionNames.get(candidate.declaration);
+    if (functionName === undefined || input.ast.kindName(candidate.declaration) !== "KindFunctionDeclaration" ||
+      input.ast.kindName(candidate.scope) !== "KindSourceFile" || !input.ast.hasModifierKind(candidate.declaration, "async") ||
+      input.ast.body(candidate.declaration) === undefined) continue;
+    const used = moduleValueNames.get(candidate.scope) ?? new Set<string>();
+    const base = functionName.startsWith("r#") ? functionName.slice(2) : functionName;
+    settledHelperNames.set(candidate.declaration, allocateRustGeneratedName(used, `${base}_settled`));
+    moduleValueNames.set(candidate.scope, used);
+  }
   return Object.freeze({
     diagnostics: Object.freeze(diagnostics),
     nameForDeclaration(declaration: Node | undefined) {
@@ -185,6 +196,9 @@ export function createRustNamePlan(input: {
     },
     callableValueNameForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : callableValueNames.get(declaration);
+    },
+    settledHelperNameForDeclaration(declaration: Node | undefined) {
+      return declaration === undefined ? undefined : settledHelperNames.get(declaration);
     },
     scopeForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : declarationScopes.get(declaration);

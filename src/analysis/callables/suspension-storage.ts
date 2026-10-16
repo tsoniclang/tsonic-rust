@@ -24,6 +24,9 @@ export type RustSuspendedCallableStorageResolution =
     }
   | { readonly kind: "rejected"; readonly reason: string };
 
+export const rustSuspendingPromiseBorrowReason =
+  "A suspending JS Promise body cannot retain a borrowed value across a pending point; its task requires owned storage.";
+
 export function resolveRustSuspendedCallableStorage(
   walk: RustFactWalk,
   declaration: Node,
@@ -131,7 +134,7 @@ export function resolveRustSuspendedCallableStorage(
   if (requiredLifetime !== undefined) {
     const captured = selectRustSuspendedStorageLifetime(carriers, contract);
     if (captured === undefined || !rustLifetimeOutlives(captured, requiredLifetime, contract)) return {
-      kind: "rejected", reason: "A selected native promise lifetime requires every captured carrier to outlive its declared storage contract.",
+      kind: "rejected", reason: rustSuspendingPromiseBorrowReason,
     };
   }
   const lifetime = requiredLifetime ?? (environment.kind === "selected" ? environment.environment.lifetime

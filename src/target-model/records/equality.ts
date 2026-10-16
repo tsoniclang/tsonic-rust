@@ -6,7 +6,9 @@ import { closedMetadataEquals, hasExactObjectKeys, isDenseDataArray, isMetadataR
 import { isRustCapturedFieldStorage } from "../types/field-storage.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustLifetimesEqual } from "../lifetimes/index.js";
-import type { RustAsyncFunctionFact, RustGeneratorFact, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver } from "./callables-and-resources.js";
+import type {
+  RustAsyncFunctionFact, RustGeneratorFact, RustJsPromiseLowering, RustSuspendedCallableStorage, RustSuspendedOwnedReceiver,
+} from "./callables-and-resources.js";
 
 export function rustSourceCallableReturnFactEquals(left: RustSourceCallableReturnFact, right: RustSourceCallableReturnFact): boolean {
   return rustTargetTypeRefEquals(left.returnCarrier, right.returnCarrier) &&
@@ -24,10 +26,19 @@ export function rustAsyncFunctionFactEquals(left: RustAsyncFunctionFact, right: 
   return left.kind === right.kind && rustTargetTypeRefEquals(left.futureCarrier, right.futureCarrier) &&
     rustTargetTypeRefEquals(left.outputCarrier, right.outputCarrier) &&
     (left.kind === "native-future" || right.kind === "native-future" ||
-      left.capturedParameters.length === right.capturedParameters.length &&
-      left.capturedParameters.every((parameter, index) => parameter === right.capturedParameters[index]) &&
-      rustSuspendedCallableStorageEquals(left.storage, right.storage) &&
-      rustSuspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver));
+      rustJsPromiseLoweringEquals(left.lowering, right.lowering));
+}
+
+function rustJsPromiseLoweringEquals(left: RustJsPromiseLowering, right: RustJsPromiseLowering): boolean {
+  if (left.kind === "settled" || right.kind === "settled") {
+    return left.kind === "settled" && right.kind === "settled" &&
+      left.settledAwaits.length === right.settledAwaits.length &&
+      left.settledAwaits.every((selected, index) => selected.expression === right.settledAwaits[index]!.expression &&
+        selected.callee === right.settledAwaits[index]!.callee);
+  }
+  return left.capturedParameters.length === right.capturedParameters.length &&
+    left.capturedParameters.every((parameter, index) => parameter === right.capturedParameters[index]) &&
+    rustSuspendedOwnedReceiverEquals(left.ownedReceiver, right.ownedReceiver);
 }
 
 export function rustGeneratorFactEquals(left: RustGeneratorFact, right: RustGeneratorFact): boolean {

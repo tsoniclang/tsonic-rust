@@ -1,9 +1,13 @@
-import { Node_Type } from "@tsonic/target-api/source";
-import type { Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { Node_Expression, Node_Type, sourceDeclarationIsModuleScoped, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { RustNamePlan } from "../../target-model/names/model.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCallableValueConversionMatches } from "../../target-model/conversions/callable.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustAwaitSelection, rustAwaitSelectionLeaves, type RustAwaitSelection } from "../../target-model/types/await.js";
+import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
 import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 import {
   isRustNeverCarrier,
@@ -21,8 +25,12 @@ import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
 import { selectRustInferredReturn } from "./inferred-return.js";
-import { resolveRustSuspendedCallableStorage } from "./suspension-storage.js";
-import type { RustAsyncFunctionFact } from "../../target-model/records/callables-and-resources.js";
+import { resolveRustSuspendedCallableStorage, rustSuspendingPromiseBorrowReason } from "./suspension-storage.js";
+import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
+import { rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
+import type {
+  RustAsyncFunctionFact, RustJsPromiseLowering, RustSettledPromiseAwait, RustSettledPromiseHelpers,
+} from "../../target-model/records/callables-and-resources.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import { rustNativeAsyncFunctionFact, rustPromiseAsyncFunctionFact } from "../program/records/async-function.js";
 
@@ -109,21 +117,181 @@ export function selectRustAsyncBodyFacts(
       declaration, ["target.capability=rust.async.contextual-promise-output"]);
     return;
   }
-  const storage = resolveRustSuspendedCallableStorage(walk, declaration, [selected.outputCarrier], ownedReceiver);
-  if (storage.kind === "rejected") {
-    appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", storage.reason,
-      declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
-    return;
-  }
   const closedFutureCarrier = rustJsPromiseTargetType(selected.outputCarrier);
-  if (selected.contextualPromise !== undefined &&
-    !rustNativeRepresentationMatches(closedFutureCarrier, selected.contextualPromise)) {
+  const lowering = selectRustAsyncBodyLowering(walk, declaration);
+  if (lowering.kind === "pending") return undefined;
+  if (lowering.kind === "settled") {
+    const environment = rustRetainedEnvironment(declaration, ast.parameters(declaration).map(parameter =>
+      parameter === undefined ? undefined : walk.context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), walk.context);
+    if (environment.kind === "unresolved") {
+      appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", environment.reason,
+        declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
+      return;
+    }
+    return { fact: rustPromiseAsyncFunctionFact(closedFutureCarrier, selected.outputCarrier, lowering),
+      ...(environment.kind === "selected" ? { retainedEnvironment: environment.environment } : {}),
+    };
+  }
+  const storage = resolveRustSuspendedCallableStorage(walk, declaration, [selected.outputCarrier], ownedReceiver,
+    rustStaticLifetime);
+  if (storage.kind === "rejected" || storage.storage.kind !== "static") {
     appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
-      "The authored async body's proven storage lifetime cannot enter its selected contextual promise.",
+      storage.kind === "rejected" ? storage.reason : rustSuspendingPromiseBorrowReason,
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
     return;
   }
-  return { fact: rustPromiseAsyncFunctionFact(closedFutureCarrier, selected.outputCarrier, storage),
-    ...(storage.retainedEnvironment === undefined ? {} : { retainedEnvironment: storage.retainedEnvironment }),
+  return { fact: rustPromiseAsyncFunctionFact(closedFutureCarrier, selected.outputCarrier, { kind: "factory",
+    capturedParameters: storage.capturedParameters,
+    ...(storage.ownedReceiver === undefined ? {} : { ownedReceiver: storage.ownedReceiver }),
+  }), ...(storage.retainedEnvironment === undefined ? {} : { retainedEnvironment: storage.retainedEnvironment }) };
+}
+
+export type RustAsyncBodyLowering =
+  | Extract<RustJsPromiseLowering, { readonly kind: "settled" }>
+  | { readonly kind: "pending" }
+  | { readonly kind: "suspending" };
+
+const suspendingLowering: RustAsyncBodyLowering = Object.freeze({ kind: "suspending" });
+const pendingLowering: RustAsyncBodyLowering = Object.freeze({ kind: "pending" });
+
+export function selectRustAsyncBodyLowering(walk: RustFactWalk, declaration: Node): RustAsyncBodyLowering {
+  const states = new Map<Node, "active" | RustAsyncBodyLowering>();
+  const select = (target: Node): RustAsyncBodyLowering => {
+    const previous = states.get(target);
+    if (previous === "active") return suspendingLowering;
+    if (previous !== undefined) return previous;
+    const finalized = walk.context.records.asyncFunction.get(target);
+    if (finalized?.kind === "js-promise") return finalized.lowering.kind === "settled"
+      ? finalized.lowering : suspendingLowering;
+    states.set(target, "active");
+    const selected = selectBodyLowering(walk, target, select);
+    states.set(target, selected);
+    return selected;
   };
+  return select(declaration);
+}
+
+function selectBodyLowering(
+  walk: RustFactWalk, declaration: Node, select: (target: Node) => RustAsyncBodyLowering,
+): RustAsyncBodyLowering {
+  const { ast } = walk.context;
+  const body = ast.body(declaration);
+  if (body === undefined) return suspendingLowering;
+  if (!ast.is.IsBlock(body)) {
+    const state = expressionSuspension(walk, body);
+    if (state === "pending") return pendingLowering;
+    if (state === "suspending") return suspendingLowering;
+  }
+  const settledAwaits: RustSettledPromiseAwait[] = [];
+  let suspends = false;
+  let pending = false;
+  const visit = (node: Node): void => {
+    if (suspends || node !== body && sourceEnclosingCallable(node, ast) === node) return;
+    if (ast.is.IsForOfStatement(node) && ast.as.AsForInOrOfStatement(node)?.AwaitModifier !== undefined ||
+      ast.is.IsVariableDeclaration(node) && ast.variableDeclarationKind(node) === "await using") {
+      suspends = true;
+      return;
+    }
+    if (ast.is.IsReturnStatement(node)) {
+      const returned = Node_Expression(ast, node);
+      if (returned !== undefined) {
+        const state = expressionSuspension(walk, returned);
+        if (state === "pending") pending = true;
+        if (state === "suspending") {
+          suspends = true;
+          return;
+        }
+      }
+    }
+    if (ast.is.IsAwaitExpression(node)) {
+      const operand = Node_Expression(ast, node);
+      const outcome = operand === undefined ? undefined : awaitOutcome(walk, operand, select);
+      if (outcome === "pending") {
+        pending = true;
+        return;
+      }
+      if (outcome === undefined) {
+        suspends = true;
+        return;
+      }
+      if (outcome !== "ready") settledAwaits.push(Object.freeze({ expression: node, callee: outcome }));
+    }
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(body);
+  return suspends ? suspendingLowering : pending ? pendingLowering
+    : Object.freeze({ kind: "settled", settledAwaits: Object.freeze(settledAwaits) });
+}
+
+function awaitOutcome(
+  walk: RustFactWalk, operand: Node, select: (target: Node) => RustAsyncBodyLowering,
+): "ready" | "pending" | Node | undefined {
+  const selection = expressionAwaitSelection(walk, operand);
+  if (selection === undefined) return "pending";
+  if (rustAwaitSelectionLeaves(selection).every(leaf => leaf.future === undefined)) return "ready";
+  const promise = selection.kind === "leaf" ? selection.value.future?.futureCarrier : undefined;
+  if (promise?.kind !== "target-named" || promise.id !== rustJsPromiseTargetId) return undefined;
+  const callee = directAsyncCallee(walk, operand);
+  if (callee === undefined) return undefined;
+  const selected = select(callee);
+  return selected.kind === "pending" ? "pending" : selected.kind === "settled" ? callee : undefined;
+}
+
+function directAsyncCallee(walk: RustFactWalk, operand: Node): Node | undefined {
+  const { ast } = walk.context;
+  const call = rustUnparenthesizedExpression(ast, operand);
+  if (!ast.is.IsCallExpression(call) || ast.as.AsCallExpression(call)?.QuestionDotToken !== undefined) return undefined;
+  const callee = Node_Expression(ast, call);
+  if (callee === undefined || !ast.is.IsIdentifier(rustUnparenthesizedExpression(ast, callee))) return undefined;
+  const semantics = walk.context.semanticsFor(call);
+  const resolved = semantics.operations.call(call);
+  const signature = resolved === undefined ? undefined : semantics.declarations.signatureDeclaration(resolved.selectedSignature);
+  const implementation = signature === undefined ? undefined : walk.context.source.navigation.callableImplementation(signature);
+  const target = implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
+  return target !== undefined && ast.is.IsFunctionDeclaration(target) && ast.body(target) !== undefined &&
+    ast.hasModifierKind(target, "async") && walk.context.source.navigation.isProjectDeclaration(target) &&
+    sourceDeclarationIsModuleScoped(target, ast) &&
+    !walk.context.source.navigation.declarationUseSummary(target).bindingWritten &&
+    ast.typeParameters(target).every(parameter => parameter !== undefined &&
+      walk.context.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime")
+    ? target : undefined;
+}
+
+export function analyzeRustSettledPromiseHelpers(input: {
+  readonly ast: AstReader;
+  readonly sourceFiles: readonly SourceFile[];
+  readonly records: RustProgramRecords;
+  readonly names: RustNamePlan;
+}): RustSettledPromiseHelpers {
+  const helpers = new Map<Node, string>();
+  const visit = (node: Node): void => {
+    const fact = input.records.asyncFunction.get(node);
+    if (fact?.kind === "js-promise" && fact.lowering.kind === "settled") {
+      for (const selected of fact.lowering.settledAwaits) {
+        const callee = input.records.asyncFunction.get(selected.callee);
+        const name = input.names.settledHelperNameForDeclaration(selected.callee);
+        if (callee?.kind !== "js-promise" || callee.lowering.kind !== "settled" || name === undefined) {
+          failTargetAnalysisInvariant("tsonic-rust",
+            "A settled await requires a settled source callee with an allocated settled helper.", selected.expression);
+        }
+        helpers.set(selected.callee, name);
+      }
+    }
+    input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  input.sourceFiles.forEach(visit);
+  return helpers;
+}
+
+function expressionSuspension(walk: RustFactWalk, expression: Node): "ready" | "suspending" | "pending" {
+  const selection = expressionAwaitSelection(walk, expression);
+  return selection === undefined ? "pending" : rustAwaitSelectionLeaves(selection).some(leaf => leaf.future !== undefined)
+    ? "suspending" : "ready";
+}
+
+function expressionAwaitSelection(walk: RustFactWalk, expression: Node): RustAwaitSelection | undefined {
+  const type = walk.context.semanticsFor(expression).types.expressionType(expression);
+  const carrier = type === undefined ? undefined
+    : resolveRustTargetTypeRef(type, rustResolutionContext(walk, expression), walk.operationOptions);
+  return carrier === undefined ? undefined : rustAwaitSelection(carrier, walk.context.typeDefinitions);
 }

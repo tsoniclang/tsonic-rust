@@ -48,8 +48,24 @@ export type RustAsyncFunctionFact =
       readonly isAsync: true;
       readonly futureCarrier: TargetTypeRef;
       readonly outputCarrier: TargetTypeRef;
+      readonly lowering: RustJsPromiseLowering;
+    };
+
+export interface RustSettledPromiseAwait {
+  readonly expression: Node;
+  readonly callee: Node;
+}
+
+export type RustSettledPromiseHelpers = ReadonlyMap<Node, string>;
+
+export type RustJsPromiseLowering =
+  | {
+      readonly kind: "settled";
+      readonly settledAwaits: readonly RustSettledPromiseAwait[];
+    }
+  | {
+      readonly kind: "factory";
       readonly capturedParameters: readonly Node[];
-      readonly storage: RustSuspendedCallableStorage;
       readonly ownedReceiver?: RustSuspendedOwnedReceiver;
     };
 

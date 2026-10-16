@@ -4,13 +4,15 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import type { RustSuspendedCallableStorage } from "../../target-model/records/callables-and-resources.js";
 
+const ownedPromiseStorage: RustSuspendedCallableStorage = Object.freeze({ kind: "static" });
+
 export function rustRetainedCallableStorage(
   records: RustProgramRecords, declaration: Node,
 ): RustSuspendedCallableStorage | undefined {
   const generator = records.generator.get(declaration);
   if (generator !== undefined) return generator.storage;
   const asynchronous = records.asyncFunction.get(declaration);
-  return asynchronous?.kind === "js-promise" ? asynchronous.storage : undefined;
+  return asynchronous?.kind === "js-promise" && asynchronous.lowering.kind === "factory" ? ownedPromiseStorage : undefined;
 }
 
 export function rustCallableInvocationResult(
