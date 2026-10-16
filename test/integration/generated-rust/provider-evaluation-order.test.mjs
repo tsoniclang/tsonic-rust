@@ -177,9 +177,15 @@ main();
 test("evaluation-only provider temporaries retain native Drop scope through reads, calls, writes and omitted arguments", { timeout: 300_000 }, () => {
   const moduleSpecifier = "@r14/drop";
   const token = { kind: "target-named", id: "r14.drop.Token" };
+  const ownerCarrier = { kind: "target-named", id: "r14.drop.Owner" };
+  const borrowingToken = { kind: "target-named", id: "r14.drop.BorrowingToken", genericArguments: [
+    { kind: "lifetime", lifetime: { kind: "placeholder" } },
+  ] };
   const number = { kind: "source-primitive", name: "float64" };
   const unit = { kind: "tuple", elements: [] };
   const reference = { kind: "provider-ref", moduleSpecifier, exportName: "Token" };
+  const ownerReference = { kind: "provider-ref", moduleSpecifier, exportName: "Owner" };
+  const borrowingReference = { kind: "provider-ref", moduleSpecifier, exportName: "BorrowingToken" };
   const numeric = { kind: "number" };
   const signature = (name, parameters, returnType) => ({ id: `${name}.signature`, parameters, returnType });
   const parameter = (name, type) => ({ name, type });
@@ -194,13 +200,32 @@ test("evaluation-only provider temporaries retain native Drop scope through read
         { id: "Token.consume", name: "consume", kind: "method",
           signatures: [signature("Token.consume", [parameter("value", numeric)], numeric)] },
       ] },
+      { id: "Owner", name: "Owner", kind: "interface", members: [
+        { id: "Owner.guard", name: "guard", kind: "property", readonly: true, type: borrowingReference },
+        { id: "Owner.drops", name: "drops", kind: "property", readonly: true, type: numeric },
+      ] },
+      { id: "BorrowingToken", name: "BorrowingToken", kind: "interface", members: [
+        { id: "BorrowingToken.consume", name: "consume", kind: "method",
+          signatures: [signature("BorrowingToken.consume", [parameter("value", numeric)], numeric)] },
+      ] },
       callable("receiver", [], reference), callable("value", [], numeric),
+      callable("owner", [], ownerReference),
       callable("omit", [parameter("unused", reference), parameter("value", numeric)], numeric),
       callable("abort", [], numeric),
-    ] }], types: [{ exportId: "Token", targetCarrier: token }],
-    carrierPaths: { [token.id]: "crate::index::drop_probe::Token" }, crates: [], operations: [
+    ] }], types: [{ exportId: "Token", targetCarrier: token }, { exportId: "Owner", targetCarrier: ownerCarrier },
+      { exportId: "BorrowingToken", targetCarrier: borrowingToken }],
+    carrierPaths: { [token.id]: "crate::index::drop_probe::Token", [ownerCarrier.id]: "crate::index::drop_probe::Owner",
+      [borrowingToken.id]: "crate::index::drop_probe::BorrowingToken" }, crates: [], operations: [
       { exportId: "receiver", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::receiver" }, resultCarrier: token },
       { exportId: "value", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::value" }, resultCarrier: number },
+      { exportId: "owner", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::owner" }, resultCarrier: ownerCarrier },
+      { exportId: "Owner", memberId: "Owner.guard", operationKind: "property",
+        target: { form: "receiver-method", name: "guard" }, receiverCarrier: ownerCarrier, resultCarrier: borrowingToken },
+      { exportId: "Owner", memberId: "Owner.drops", operationKind: "property",
+        target: { form: "receiver-method", name: "drops" }, receiverCarrier: ownerCarrier, resultCarrier: number },
+      { exportId: "BorrowingToken", memberId: "BorrowingToken.consume", operationKind: "method",
+        target: { form: "call", path: "crate::index::drop_probe::consume", argModes: ["value"] },
+        parameterCarriers: [number], resultCarrier: number },
       { exportId: "abort", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::abort" },
         resultCarrier: number },
       { exportId: "omit", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::consume_owned", argModes: ["value", "value"] },
@@ -215,7 +240,7 @@ test("evaluation-only provider temporaries retain native Drop scope through read
     ] });
   const { result } = compileRust({ surfaces: [], packages: [provider],
     target: { id: "rust", options: { outputType: "lib", crateName: "r14_provider_drop" } }, files: { "index.ts": `
-import { receiver, value, omit, abort } from "@r14/drop";
+import { receiver, value, omit, abort, owner } from "@r14/drop";
 export function read(): number { return receiver().read; }
 export function call(): number { return receiver().consume(value()); }
 export function write(): void { receiver().value = value(); }
@@ -226,20 +251,40 @@ export function retained(): boolean {
 }
 export function unwinding(): number { return receiver().consume(abort()); }
 export function omitted(): number { return omit(receiver(), value()); }
+export function borrowing(): boolean {
+  const stored = owner();
+  const result = stored.guard.consume(value());
+  return result === 7 && stored.drops === 1;
+}
+export function borrowingUnwind(): number {
+  const stored = owner();
+  return stored.guard.consume(abort());
+}
 ` } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n").slice(0, 2048));
   const program = result.program;
   const { ast } = program.source;
   let omitted;
+  const borrowingCalls = [];
   const visit = node => {
     if (ast.is.IsCallExpression(node)) {
       const callee = ast.as.AsCallExpression(node).Expression;
       if (ast.is.IsIdentifier(callee) && ast.text(callee) === "omit") omitted = node;
+      const operation = program.records.targetOperation.get(node);
+      if (operation?.kind === "provider-operation" && operation.abi.sourceReceiver.kind === "receiver" &&
+        operation.abi.sourceReceiver.carrier.id === borrowingToken.id) borrowingCalls.push({ node, operation });
     }
     ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
   assert.equal(omitted !== undefined, true, "the owner-contract witness retains actual checked operand identities");
+  assert.equal(borrowingCalls.length, 2, "real checked non-static borrowing receivers cover disjoint RHS and unwinding");
+  for (const { node, operation } of borrowingCalls) {
+    assert.equal(operation.abi.sourceReceiver.disposition, "evaluation-only", "the native target does not consume the owned borrowing result");
+    assert.equal(operation.abi.sourceReceiver.carrier.genericArguments[0].kind, "lifetime", "the actual producer retains its native lifetime argument");
+    const receiver = ast.as.AsPropertyAccessExpression(ast.as.AsCallExpression(node).Expression).Expression;
+    assert.equal(program.ownership.reads.get(receiver)?.readsStorage, false, "owned guard construction is not a terminal stored-place read");
+  }
   const argumentsList = ast.arguments(omitted);
   const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
     form: { form: "call", path: "crate::index::drop_probe::consume", argModes: ["value"], argOrder: [1] },
@@ -281,6 +326,19 @@ pub(crate) mod drop_probe {
     impl Token { pub fn live(&self) -> bool { true } }
 
     pub fn receiver() -> Token { note(1); Token }
+    pub struct Owner { drops: Cell<u32> }
+    pub struct BorrowingToken<'owner> { owner: &'owner Owner }
+    impl Drop for BorrowingToken<'_> {
+        fn drop(&mut self) {
+            self.owner.drops.set(self.owner.drops.get() + 1);
+            note(4);
+        }
+    }
+    impl Owner {
+        pub fn guard(&self) -> BorrowingToken<'_> { note(1); BorrowingToken { owner: self } }
+        pub fn drops(&self) -> f64 { f64::from(self.drops.get()) }
+    }
+    pub fn owner() -> Owner { Owner { drops: Cell::new(0) } }
     pub fn value() -> f64 { note(2); 7.0 }
     pub fn read() -> f64 { note(3); 7.0 }
     pub fn consume(value: f64) -> f64 { note(3); value }
@@ -348,6 +406,36 @@ mod provider_drop_tests {
         assert_eq!(drop_probe::order(), 1234);
         drop_probe::reset();
         assert!(std::panic::catch_unwind(unwinding).is_err());
+        assert_eq!(drop_probe::order(), 124);
+    }
+
+    #[test]
+    fn owned_borrow_holding_guards_retain_their_actual_native_drop_scope() {
+        for _ in 0..64 {
+            drop_probe::reset();
+            let (actual, actual_cost) = measure(borrowing);
+            assert!(actual);
+            assert_eq!(drop_probe::order(), 1234);
+            drop_probe::reset();
+            let (expected, expected_cost) = measure(|| {
+                let owner = drop_probe::owner();
+                let result = {
+                    let _guard = owner.guard();
+                    drop_probe::consume(drop_probe::value())
+                };
+                result == 7.0 && owner.drops() == 1.0
+            });
+            assert_eq!(actual, expected);
+            assert_eq!(drop_probe::order(), 1234);
+            assert_eq!(actual_cost, expected_cost);
+            assert_eq!(actual_cost.allocations, 0);
+            assert_eq!(actual_cost.allocated_bytes, 0);
+            assert_eq!(actual_cost.reallocations, 0);
+            assert_eq!(actual_cost.deallocations, 0);
+            assert_eq!(actual_cost.deallocated_bytes, 0);
+        }
+        drop_probe::reset();
+        assert!(std::panic::catch_unwind(borrowingUnwind).is_err());
         assert_eq!(drop_probe::order(), 124);
     }
 }

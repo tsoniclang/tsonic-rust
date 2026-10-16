@@ -81,9 +81,6 @@ export function observed(): number { return target(first(), second()); }
     ["unit", { kind: "tuple", elements: [] }, { kind: "call", path: "fixture::unit", args: [] }, "unit"],
     ["absence", { kind: "target-named", id: "rust.native.absence" }, { kind: "call", path: "fixture::absence", args: [] }, "unit"],
     ["future", rustFutureTargetType(number), { kind: "call", path: "fixture::future", args: [] }, "unit"],
-    ["borrow-holding", { kind: "target-named", id: "fixture.Guard", genericArguments: [
-      { kind: "lifetime", lifetime: { kind: "placeholder" } },
-    ] }, { kind: "call", path: "fixture::guard", args: [] }, "value"],
   ]) {
     const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
       form: { form: "call", path: "fixture::consume", argModes: ["value"], argOrder: [1] },
