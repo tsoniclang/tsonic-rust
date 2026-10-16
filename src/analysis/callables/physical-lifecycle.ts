@@ -75,6 +75,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   const valueRoots = new Set<Node>();
   const operandRoots = new Set<Node>();
   const returnRoots = new Set<Node>();
+  const invocationRoots = new Set<Node>();
   let storageReady = false;
   const genericCarriers = new Map<TargetTypeRef, boolean>();
   const requiresFamilyAdmission = (carrier: TargetTypeRef | undefined): boolean => {
@@ -137,6 +138,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       rustCallableProtocol(rustValueCarrierBeforeContextualConversion(records, node)) !== undefined) operand(node);
     const operation = records.targetOperation.get(node);
     if (operation?.kind === "source-call") {
+      invocationRoots.add(node);
       const callee = Node_Expression(ast, node);
       if (callee !== undefined && rustCallableProtocol(rustValueCarrierBeforeContextualConversion(records, callee)) !== undefined)
         operand(callee);
@@ -202,6 +204,9 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       for (const node of returnRoots) returned(node);
       for (const node of valueRoots) value(node);
       for (const node of operandRoots) operand(node);
+      for (const node of invocationRoots) {
+        if (!invocations.has(node)) invocations.set(node, queries.invocationCallableFor(node));
+      }
       for (const flow of flows) inheritedDestination(flow.node);
       for (const node of values.keys()) inheritedDestination(node);
       const nativeProducers = input.nativeProducers.seal(producerRequests);

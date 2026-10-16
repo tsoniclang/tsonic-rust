@@ -150,20 +150,30 @@ export function createRustStructuralMethodStorage(input: {
         const bindings = inferRustTargetGenericBindings(aligned, root.definition.carrier, {
           typeIdentities: new Set(refs.typeIdentities), lifetimeIdentities: new Set(refs.lifetimeIdentities), constIdentities: new Set(refs.constIdentities),
         });
-        if (bindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(aligned,
-          bindings.types, bindings.lifetimes, bindings.consts), root.definition.carrier)) continue;
+        const exactBindings = bindings !== undefined && rustTargetTypeRefEquals(substituteRustTargetGenerics(aligned,
+          bindings.types, bindings.lifetimes, bindings.consts), root.definition.carrier) ? bindings : undefined;
         const fields = selections.get(root.definition) ?? new Map<number, TargetTypeRef>();
         selections.set(root.definition, fields);
         for (const candidate of candidates.get(root)!) {
-          const mapped = substituteRustTargetGenerics(candidate, bindings.types, bindings.lifetimes, bindings.consts,
-            (carrier, original) => rustTargetTypeRefEquals(original, root.carrier) ? root.definition.carrier : carrier);
+          const mapped = exactBindings === undefined ? candidate : substituteRustTargetGenerics(candidate,
+            exactBindings.types, exactBindings.lifetimes, exactBindings.consts);
           const templateField = root.definition.fields[root.index]!;
           const templateProtocol = rustCallableProtocol(templateField.presence === "optional"
             ? rustOptionElementCarrier(templateField.methodStorageCarrier) : templateField.methodStorageCarrier)!;
           const mappedProtocol = rustCallableProtocol(root.definition.fields[root.index]!.presence === "optional"
             ? rustOptionElementCarrier(mapped) : mapped)!;
+          const actualProtocol = rustCallableProtocol(root.definition.fields[root.index]!.presence === "optional"
+            ? rustOptionElementCarrier(candidate) : candidate)!;
+          const sourceField = structuralShapes.field(root.carrier, root.index)!;
+          const sourceProtocol = rustCallableProtocol(sourceField.presence === "optional"
+            ? rustOptionElementCarrier(sourceField.methodStorageCarrier) : sourceField.methodStorageCarrier)!;
           if (templateProtocol.lifetime === undefined) throw new Error("Structural method template requires its admitted destination lifetime.");
-          const carrier = rustCallableTargetType(mappedProtocol.parameters, mappedProtocol.result,
+          const parameters = mappedProtocol.parameters.map((parameter, index) =>
+            rustTargetTypeRefEquals(actualProtocol.parameters[index], sourceProtocol.parameters[index])
+              ? templateProtocol.parameters[index]! : parameter);
+          const result = rustTargetTypeRefEquals(actualProtocol.result, sourceProtocol.result)
+            ? templateProtocol.result : mappedProtocol.result;
+          const carrier = rustCallableTargetType(parameters, result,
             templateProtocol.lifetime, mappedProtocol.error);
           const selected = templateField.presence === "optional" ? rustOptionTargetType(carrier) : carrier;
           const existing = fields.get(root.index);
