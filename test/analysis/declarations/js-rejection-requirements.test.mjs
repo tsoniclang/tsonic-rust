@@ -8,7 +8,8 @@ import { rustMutableJsErrorTargetType, rustRetainedErrorTargetType, rustSourceEr
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const retained = rustRetainedErrorTargetType();
-const obligation = { path: "core::convert::Into", genericArguments: [{ kind: "type", type: retained }], associatedConstraints: [] };
+const obligation = { kind: "trait-ref", id: "core::convert::Into", path: "core::convert::Into",
+  genericArguments: [{ kind: "type", type: retained }], associatedConstraints: [] };
 const accepts = carrier => classifyCarrierRequirements(carrier, ["js-rejection"], new Set(), new Map(), () => false, emptyRustTypeDefinitions);
 
 test("JS rejection obligations use the exact native Into<RetainedError> contract", () => {

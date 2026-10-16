@@ -31,7 +31,8 @@ export function classifyCarrierRequirements(
         byParameter.get(carrier.identity)!.add(requirement);
       } else if (!(requirement === "number-predicate" ? rustCarrierSupportsNumberPredicate(carrier)
         : requirement === "js-rejection" ? rustCarrierSatisfiesTraitRef(carrier, {
-          path: "core::convert::Into", genericArguments: [{ kind: "type", type: rustRetainedErrorTargetType() }],
+          kind: "trait-ref", id: "core::convert::Into", path: "core::convert::Into",
+          genericArguments: [{ kind: "type", type: rustRetainedErrorTargetType() }],
           associatedConstraints: [],
         }, undefined, definitions)
         : rustCarrierSupportsSourceNumeric(carrier))) return false;
