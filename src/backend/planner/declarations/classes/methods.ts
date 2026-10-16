@@ -11,7 +11,7 @@ import {
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../program/reachability-directives.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { planBlockLike } from "../../statements/index.js";
 import { planExpression } from "../../expressions/index.js";
@@ -38,7 +38,6 @@ import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 
 export function planProjectMethod(
   member: Node,
@@ -187,7 +186,7 @@ export function planProjectMethod(
   }
   const isStatic = ast.hasModifierKind(member, "static");
   const nativeBody = options?.promiseBody === true ? context.input.program.promiseBodies.declarations.get(member) : undefined;
-  if (options?.promiseBody === true && nativeBody === undefined) failTargetPlannerInvariant("tsonic-rust",
+  if (options?.promiseBody === true && nativeBody === undefined) failRustPlannerInvariant(
     "A selected native Promise method requires its sealed declaration contract.", member);
   const visibility = nativeBody !== undefined ? nativeBody.visibility : !ast.hasModifierKind(member, "private") &&
       !ast.hasModifierKind(member, "protected")

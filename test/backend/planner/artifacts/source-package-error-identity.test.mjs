@@ -3,7 +3,7 @@ import { assertNoTargetDiagnostics } from "../../../../../tsonic/test/scripts/di
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fakeAstReader } from "../../../helpers/fake-compile-input.mjs";
-import { analyzeRustSourcePackageComponents } from "../../../../dist/analysis/program/source-package-components.js";
+import { analyzeRustSourcePackageComponents, selectRustSourcePackageComponentIdentities } from "../../../../dist/analysis/program/source-package-components.js";
 import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary, resolveRustPhysicalProgramErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
 import { selectRustPhysicalProgramErrorOwner } from "../../../../dist/analysis/program/error-types.js";
 import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";
@@ -31,6 +31,9 @@ function classify(dependencies, errors, views = []) {
     ? { carrier: rustSourceErrorTargetType() } : undefined }}),
     projectTypes: { programErrorDefinitions: definitions, programErrorVariant: definition => definition.sourceName },
   };
+  context.sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(
+    context.sourcePackages, context.ast, context.sourceFiles,
+  );
   const classified = analyzeRustSourcePackageComponents(context, "bin");
   assert.equal(classified.kind, "resolved");
   context.sourcePackageComponents = classified.plan;
