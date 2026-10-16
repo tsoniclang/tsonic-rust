@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
+import { analyzeRustTargetProgram } from "../../../dist/analysis/program/target-program.js";
 
 for (const [name, statement, observations] of [
   ["ordinary discard", "leaf();", 1],
@@ -10,11 +11,12 @@ for (const [name, statement, observations] of [
   ["direct await", "return await leaf();", 0],
 ]) {
   test(`Promise result use is selected before planning: ${name}`, () => {
-    const { result, program } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
       async function leaf(): Promise<number> { return 1; }
       export async function outer(flag: boolean): Promise<number> { ${statement} return 0; }
     ` } });
     assert.deepEqual(result.diagnostics.map(({ code, message }) => `${code}: ${message}`), []);
+    const { program } = result;
     assert.equal(program.promiseResults instanceof Map, true);
     assert.equal([...program.promiseResults.values()].filter(row => row.discard !== undefined).length, observations);
     assert.equal((rustSourceText(result).match(/\.observe_discarded\(\)/gu) ?? []).length, observations);
@@ -28,24 +30,19 @@ test("native discarded async calls are rejected before program publication", () 
     async function leaf(): Promise<number> { return 1; }
     export function outer(): void { leaf(); }
   ` }, compileTarget(request) {
-    return importAnalysis(request);
-  } });
-  function importAnalysis(request) {
     const selected = analyzeRustTargetProgram(request);
     published = selected.kind === "resolved";
     return selected.kind === "rejected" ? selected : { kind: "rejected", diagnostics: [] };
-  }
+  } });
   assert.equal(published, false);
   assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code), ["RUST_DISCARDED_NATIVE_ASYNC_CALL"]);
   assert.equal(result.artifacts.length, 0);
 });
 
-import { analyzeRustTargetProgram } from "../../../dist/analysis/program/target-program.js";
-
 test("stored native futures remain admitted and do not gain JS observers", () => {
   const { program } = analyzeRust({ files: { "index.ts": `
     async function leaf(): Promise<number> { return 1; }
-    export async function outer(): Promise<number> { const pending = leaf(); return await pending; }
+    export function outer(): void { const pending = leaf(); }
   ` } });
   assert.equal([...program.promiseResults.values()].some(row => row.discard !== undefined), false);
   assert.equal([...program.promiseResults.values()].some(row => row.disposition.kind === "stored"), true);

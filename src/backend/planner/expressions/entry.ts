@@ -49,6 +49,7 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
 import { cloneRustExpression } from "../../target-ast/syntax/expressions.js";
+import { planRustDiscardedPromise } from "./discarded-promises.js";
 
 export type RustExpressionResultUse = "value" | "discarded";
 export type RustExpressionAccess = "value" | "shared-reference" | "shared-place" | "shared-receiver";
@@ -372,7 +373,8 @@ export function planRawExpression(
     }
     return undefined;
   }
-  return planned;
+  const discardedPromise = context.input.program.promiseResults.get(node)?.discard;
+  return discardedPromise === undefined ? planned : planRustDiscardedPromise(node, planned, discardedPromise, context);
 }
 
 function applyRustContextualValueConversion(
