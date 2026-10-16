@@ -1,7 +1,7 @@
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { rustHiddenAttribute } from "../../target-ast/syntax/attributes.js";
 import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
 import type { RustItem, RustType } from "../../target-ast/syntax/nodes.js";
@@ -101,7 +101,7 @@ export function planRustWorkerEntries(input: {
     }
     const selection = input.planning.program.errorRegions.initialization.workerFor(target.sourceFile);
     if (selection === undefined) {
-      failTargetPlannerInvariant("tsonic-rust",
+      failRustPlannerInvariant(
         "A worker initializer has no completed exact error composition.", target.sourceFile);
     }
     const initializers = planRustModuleInitializers(
@@ -125,7 +125,7 @@ export function planRustWorkerEntries(input: {
       occupied,
     );
     if (selection.modules.length > 0 && initializer === undefined) {
-      failTargetPlannerInvariant("tsonic-rust",
+      failRustPlannerInvariant(
         "A completed worker error composition has no exact native reconstruction.", target.sourceFile);
     }
     const emptyItem: RustItem = {

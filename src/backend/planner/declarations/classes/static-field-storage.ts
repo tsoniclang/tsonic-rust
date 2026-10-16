@@ -1,4 +1,4 @@
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustValueBlock } from "../../../target-ast/syntax/value-block.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustTargetOperationFact } from "../../../../target-model/records/operations.js";
@@ -38,7 +38,7 @@ export function readRustSourceStaticField(
       ? local.readonly ? value : { kind: "dereference", pointer: value }
       : { kind: "method-call", receiver: value, method: "clone", args: [] };
     if (local.bindings.length === 0) return read;
-    if (context.syntheticNames === undefined) failTargetPlannerInvariant("tsonic-rust", "A static-field read has no native local-name allocator.", fact.declaration);
+    if (context.syntheticNames === undefined) failRustPlannerInvariant("A static-field read has no native local-name allocator.", fact.declaration);
     const name = allocateRustSyntheticName(context.syntheticNames, "static_value");
     return rustValueBlock([...local.bindings, { name, value: read }], { kind: "path", path: name });
   }
@@ -107,7 +107,7 @@ function classStaticField(fact: RustSourceStaticFieldFact, context: RustPlanCont
   if (field === undefined || receiver === undefined) throw new Error("A local static field lost its sealed environment storage.");
   const bindings: { name: string; value: RustExpr }[] = [];
   if (fact.classReceiver !== undefined) {
-    if (context.syntheticNames === undefined) failTargetPlannerInvariant("tsonic-rust", "A selected class receiver has no native local-name allocator.", fact.declaration);
+    if (context.syntheticNames === undefined) failRustPlannerInvariant("A selected class receiver has no native local-name allocator.", fact.declaration);
     const name = allocateRustSyntheticName(context.syntheticNames, "class_receiver");
     bindings.push({ name, value: receiver });
     receiver = { kind: "path", path: name };

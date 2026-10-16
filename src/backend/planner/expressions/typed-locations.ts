@@ -25,6 +25,7 @@ import {
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
+  failRustPlannerInvariant,
   missingFactDiagnostic,
   unsupportedConstructDiagnostic,
 } from "../diagnostics.js";
@@ -54,7 +55,6 @@ import { rustRecordFieldStorageType, rustRecordFieldSelector } from "../objects/
 import { rustExpressionHasReferenceObjectField, planRustReferenceObjectFieldLocation } from "./object-field-locations.js";
 import { rustPreparedValueLocation } from "../objects/value-fields.js";
 import type { RustExpressionAccess } from "./entry.js";
-import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import type { RustCaptureReadOwnership, RustReadOwnershipFact } from "../../../target-model/records/ownership.js";
 
 export type RustExpressionPlanner = (
@@ -129,14 +129,14 @@ export function planRustValueRead(
 
 export function requireRustReadOwnership(node: Node, context: RustPlanContext): RustReadOwnershipFact {
   const selected = context.input.program.ownership.reads.get(node);
-  if (selected === undefined) return failTargetPlannerInvariant("tsonic-rust",
+  if (selected === undefined) return failRustPlannerInvariant(
     "A value read has no selected ownership record at the sealed-program boundary.", node);
   return selected;
 }
 
 export function requireRustCaptureOwnership(owner: Node, declaration: Node, context: RustPlanContext): RustCaptureReadOwnership {
   const selected = context.input.program.ownership.captures.get(owner)?.find(capture => capture.declaration === declaration);
-  if (selected === undefined) return failTargetPlannerInvariant("tsonic-rust",
+  if (selected === undefined) return failRustPlannerInvariant(
     "A capture read has no selected ownership record at the sealed-program boundary.", owner);
   return selected;
 }
@@ -156,7 +156,7 @@ export function planRustCaptureValue(
   if (storage === "cell" || storage === "borrow-cell") return capturedValue;
   const selected = requireRustCaptureOwnership(owner, capture.declaration, context);
   const read = captured?.borrowed === undefined ? selected[use] : selected.borrowed;
-  if (read === undefined) return failTargetPlannerInvariant("tsonic-rust",
+  if (read === undefined) return failRustPlannerInvariant(
     "A borrowed capture has no selected native snapshot operation.", node);
   return read.kind === "clone" ? cloneRustExpression(capturedValue) : capturedValue;
 }
@@ -170,7 +170,7 @@ export function planRustSharedReceiver(
   const value = expression;
   if (later !== undefined && !requireRustReadOwnership(node, context).borrowedAcross.has(later) &&
     requireRustReadOwnership(node, context).value.kind === "borrow") {
-    return failTargetPlannerInvariant("tsonic-rust", "A shared receiver lost its selected source evaluation-order borrow.", node);
+    return failRustPlannerInvariant("A shared receiver lost its selected source evaluation-order borrow.", node);
   }
   const override = context.expressionOverrides?.get(node);
   if (override?.valueForm === "shared-reference") {
