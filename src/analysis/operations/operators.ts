@@ -783,6 +783,9 @@ export function resolvePostCheckUnaryCarrier(
 ): TargetTypeRef | undefined {
   const pendingKind = walk.postCheckOperations.get(expression);
   const operand = Node_Operand(walk.context.ast, expression);
+  if (walk.context.literalValues.literalValue.get(expression)?.numeric?.kind === "checked-float64") {
+    expected = rustSourcePrimitiveTargetType("float64");
+  }
   if (!isRustNumericCarrier(expected) && !isRustBigIntCarrier(expected)) {
     expected = operand !== undefined && walk.context.ast.kindName(operand) === KindBigIntLiteral
       ? rustBigIntTargetType()
