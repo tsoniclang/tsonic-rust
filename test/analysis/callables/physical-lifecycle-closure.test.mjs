@@ -3,7 +3,10 @@ import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/frame-values.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 
@@ -123,6 +126,45 @@ test("published producer physical lookup rejects a foreign declaration without i
   const foreign = Object.defineProperty({}, "kind", { get() { inspected += 1; throw new Error("foreign carrier"); } });
   assert.equal(program.callableValues.nativeProducers.physicalFor(foreign, foreign) === undefined, true, "unknown declaration is absent");
   assert.equal(inspected, 0, "foreign declaration/metadata is not source-inspected");
+});
+
+test("a physical reader captured during construction becomes the same terminal lookup without family reselection", () => {
+  const context = analyzeRustErrorEffects(`export function make(): <Value>(value: Value) => Value {
+    return <Value>(value: Value): Value => value;
+  }`, { surfaces: [] });
+  const generic = context.callableValues.generic;
+  let open = true;
+  let selections = 0;
+  const captures = createRustNativeCapturePlan({ records: context.records, storage: context.sourceStorage,
+    nativeStorage: context.callableValues.nativeStorage });
+  const construction = createRustGenericCallablePhysicalPlan(generic.definitions, carrier => {
+    assert.equal(open, true, "logical family selection is construction-only");
+    selections += 1;
+    return generic.definitionFor(carrier);
+  }, { ast: context.ast, storage: context.sourceStorage, captures, native: context.callableValues.native,
+    boundSubjectFor: (subject, carrier, bindings) =>
+      context.callableValues.nativeStorage.boundSubjectFor(subject, carrier, bindings) });
+  const implementation = generic.definitions[0].implementations[0];
+  const subject = context.sourceStorage.subject(implementation.declaration, "value");
+  assert.equal(subject.kind, "resolved", "actual source producer");
+  const selected = construction.carrierFor(implementation.carrier, implementation.sourceFileName,
+    [{ subject: subject.subject, bindings: context.sourceStorage.emptyBindings }]);
+  assert.equal(selected !== undefined, true, "actual owned physical source admitted");
+  const captured = construction.plan;
+  construction.closeAdmission();
+  const published = construction.closeKeys();
+  construction.publish();
+  const count = selections;
+  open = false;
+  assert.equal(captured.definitionFor(selected.carrier) === published.definitionFor(selected.carrier), true,
+    "early reader uses the same completed definition");
+  assert.equal(captured.argumentsFor(selected.carrier) === published.argumentsFor(selected.carrier), true,
+    "early reader uses the same completed argument object");
+  assert.equal(captured.existingSelectionFor(selected.carrier) === published.existingSelectionFor(selected.carrier), true,
+    "early optional reader uses the identical completed selection");
+  assert.equal(captured.conversionFor(selected.carrier, selected.carrier) === published.conversionFor(selected.carrier, selected.carrier), true,
+    "early conversion reader uses the identical completed application");
+  assert.equal(selections, count, "captured completion/error inputs never select a family after publication");
 });
 
 test("frame reads and same-activation proofs remain data-only after construction inputs are revoked", () => {

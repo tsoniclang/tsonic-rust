@@ -86,6 +86,7 @@ export function createRustGenericCallablePhysicalPlan(
   let inventory: readonly RustGenericCallablePhysicalDefinition[] | undefined;
   let published = false;
   let closedKeys: RustGenericCallablePhysicalPlan | undefined;
+  let closedSelection: ((carrier: TargetTypeRef, required: boolean) => RustGenericCallablePhysicalSelection | undefined) | undefined;
   let openCarriers: Map<string, RustGenericCallablePhysicalSelection> | undefined = new Map();
   const selectedCarriers: ReadonlyMap<string, RustGenericCallablePhysicalSelection> = openCarriers;
   const conversions = new Map<string, Map<string, RustGenericCallablePhysicalConversion | undefined>>();
@@ -121,17 +122,13 @@ export function createRustGenericCallablePhysicalPlan(
     }
   };
   const select = (carrier: TargetTypeRef, mode: "admit" | "prepare" | "link" | "inspect"): RustGenericCallablePhysicalSelection | undefined => {
+    if (closedSelection !== undefined) return closedSelection(carrier, mode !== "inspect");
     const value = rustGenericCallableValue(carrier);
     const family = value === undefined ? undefined : familyFor(carrier);
     if (value === undefined || family === undefined) return undefined;
     const cacheKey = closedMetadataKey(carrier);
     const cached = selectedCarriers.get(cacheKey);
     if (cached !== undefined) return cached;
-    if (closedKeys !== undefined) {
-      if (mode === "inspect" || value.physical === undefined) return undefined;
-      (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
-        "A physical generic callable key was not prepared before publication; its selected contextual root is missing.");
-    }
     const physical = value.physical;
     const members = physical?.members ?? family.implementations.map(implementation => ({
       origin: origins.get(implementation)!, arguments: [] as readonly number[],
@@ -231,7 +228,8 @@ export function createRustGenericCallablePhysicalPlan(
     definitionFor: (carrier: TargetTypeRef) => select(carrier, "link")?.definition,
     argumentsFor: (carrier: TargetTypeRef) => select(carrier, "link")?.arguments,
     existingSelectionFor: (carrier: TargetTypeRef) => select(carrier, "inspect"),
-    conversionFor: prepareConversion,
+    conversionFor: (source: TargetTypeRef, target: TargetTypeRef) => closedKeys === undefined
+      ? prepareConversion(source, target) : closedKeys.conversionFor(source, target),
   });
   return Object.freeze({
     plan,
@@ -326,6 +324,7 @@ export function createRustGenericCallablePhysicalPlan(
         return selected;
       };
       const finalInventory = inventory;
+      closedSelection = read;
       closedKeys = Object.freeze({
         definitions: () => finalInventory,
         environmentFor,
