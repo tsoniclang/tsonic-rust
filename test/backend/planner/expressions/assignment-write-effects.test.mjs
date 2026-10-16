@@ -20,7 +20,8 @@ for (const fixture of assignmentWriteEffectCases) {
     program.sourceFiles.forEach(visit);
     assert.equal(evaluations.length > 0, true, "real checked computed write is selected");
     assert.equal(evaluations.every(fact => fact.evaluateKey), true, "selected call keys retain evaluation");
-    assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), []);
+    assert.equal(Array.isArray(result.diagnostics), true, `${fixture.id}: target diagnostics are an array`);
+    assert.equal(result.diagnostics.length, 0, `${fixture.id}: no target diagnostics`);
     assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
       "the complete native write and assignment result are emitted");
   });
