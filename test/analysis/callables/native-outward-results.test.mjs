@@ -49,17 +49,36 @@ test("native outward results distinguish pure async T from fallible Result<T,pro
   assert.equal(current.producers.invocationResultFor({}) === undefined, true, "foreign declarations rejected");
 });
 
-test("JS outward results retain exact Promise error and lifetime independently of native output normalization", () => {
+test("JS outward results contain only the exact completion payload rather than task lifetime or producer error", () => {
   const current = fixture(`export async function pure(): Promise<string> { return "value"; }`, ["js"]);
   const declaration = current.declaration("pure");
   const asynchronous = current.context.records.asyncFunction.get(declaration);
   const value = current.producers.invocationResultFor(declaration);
   assert.equal(value?.id, "rust.js.JsPromise");
+  assert.equal(value.genericArguments.length, 1);
   assert.deepEqual(value.genericArguments[0], asynchronous.futureCarrier.genericArguments[0]);
-  assert.equal(rustTargetTypeRefEquals(value.genericArguments[1].type, current.producers.outwardReturnFor(declaration)), true);
-  const error = rustProducerErrorReference(value.genericArguments[2].type);
-  assert.equal(error?.channel, 0);
-  assert.equal(current.producers.forIdentity(error.identity)?.declaration === declaration, true);
+  assert.equal(rustTargetTypeRefEquals(value.genericArguments[0].type, current.producers.outwardReturnFor(declaration)), true);
+  assert.equal(value.genericArguments.some(argument => argument.kind === "lifetime" ||
+    argument.kind === "type" && rustProducerErrorReference(argument.type) !== undefined), false);
+});
+
+test("native body completion uses the existing Future owner and its independent exact body-error channel", () => {
+  for (const surfaces of [[], ["js"]]) {
+    const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+      export async function pure(): Promise<int32> { return 3; }
+      export async function failed(): Promise<int32> { throw "failure"; }
+      export function forward(): Promise<int32> { return failed(); }`, surfaces);
+    const pure = current.declaration("pure");
+    assert.equal(rustTargetTypeRefEquals(futureOutput(current.producers.bodyResultFor(pure)),
+      current.producers.outwardReturnFor(pure)), true);
+    const failed = current.declaration("failed");
+    const result = rustNamedTypeCarrierValue(futureOutput(current.producers.bodyResultFor(failed)));
+    assert.equal(result?.id, "rust.core.Result");
+    const error = rustProducerErrorReference(result.genericArguments[1].type);
+    assert.equal(error?.channel, "body");
+    assert.equal(current.producers.forIdentity(error.identity).declaration === failed, true);
+    assert.equal(current.producers.bodyResultFor(current.declaration("forward")) === undefined, true);
+  }
 });
 
 test("contextual async physical invocation preserves the finalized optional union topology", () => {
