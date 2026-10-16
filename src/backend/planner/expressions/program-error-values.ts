@@ -6,7 +6,7 @@ import { rustValueConversionContract } from "../../../target-model/conversions/c
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { diagnosticInput, registerAliasFromPath, rustCurrentErrorBoundary,
+import { diagnosticInput, registerAliasFromPath,
   type RustPlanContext } from "../program/plan-context.js";
 import { planRustErrorVariants } from "../program/error-variants.js";
 import type { RustErrorPayloadVariant } from "../../../analysis/program/error-transport.js";
@@ -19,10 +19,10 @@ export function planRustProgramErrorClosedValue(
   target: TargetTypeRef,
   node: Node | undefined,
   context: RustPlanContext,
+  boundary: RustSourcePackageErrorBoundary | undefined,
 ): RustExpr | undefined {
   const ownerPath = rustTargetTypeRefEquals(target, rustTsValueTargetType()) ? "rt::TsValue"
     : rustTargetTypeRefEquals(target, rustJsValueTargetType()) ? "js_abi::JsValue" : undefined;
-  const boundary = rustCurrentErrorBoundary(context);
   if (ownerPath === undefined || boundary === undefined) return reject(
     "Program-error value admission requires an exact native error domain and closed destination.");
   registerAliasFromPath(context, ownerPath);

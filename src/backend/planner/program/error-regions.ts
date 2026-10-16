@@ -11,6 +11,7 @@ import { registerAliasFromPath, type RustPlanContext } from "./plan-context.js";
 import type { RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
+import { planRustJsRejectionRegion } from "./js-rejection-regions.js";
 
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
@@ -70,7 +71,8 @@ export function planRustErrorRegion(
   context: RustPlanContext,
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
   const selected = context.input.program.errorRegions.get(declaration);
-  return selected === undefined ? undefined : planRustSelectedErrorRegion(selected, context);
+  return selected === undefined ? undefined : selected.jsRejection === undefined
+    ? planRustSelectedErrorRegion(selected, context) : planRustJsRejectionRegion(declaration, selected, context);
 }
 
 export function planRustSelectedErrorRegion(
@@ -78,6 +80,7 @@ export function planRustSelectedErrorRegion(
   context: RustTypeRenderingContext,
   render: (carrier: TargetTypeRef) => RustType | undefined = carrier => rustTypeFromCarrierInContext(carrier, context),
 ): { readonly boundary: RustFallibleBoundary | undefined } | undefined {
+  if (selected.jsRejection !== undefined) return undefined;
   const owner = selected.localOwner === undefined || context.sourcePackageErrors === undefined ? undefined
     : resolveRustPhysicalProgramErrorBoundary(context.sourcePackageErrors, context.sourcePackageComponentId, selected.localOwner);
   if (selected.localOwner !== undefined && owner === undefined) return undefined;

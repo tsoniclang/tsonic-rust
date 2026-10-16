@@ -1,3 +1,4 @@
+import { rustCurrentErrorBoundary } from "../../../../dist/backend/planner/program/plan-context.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
@@ -50,7 +51,7 @@ test("runtime transport uses native Error admission without copying, projection 
   for (const target of [rustTsValueTargetType(), rustJsValueTargetType()]) {
     const input = context("runtime");
     seal(input);
-    const result = planRustProgramErrorClosedValue(source, target, undefined, input);
+    const result = planRustProgramErrorClosedValue(source, target, undefined, input, rustCurrentErrorBoundary(input));
     assert.equal(result !== undefined, true, target.id);
     assert.equal(result.kind, "call");
     assert.equal(result.path, target.id === rustTsValueTargetType().id
@@ -71,7 +72,7 @@ test("project transport exhaustively preserves same-carrier payloads and Error c
     assert.equal(Object.isFrozen(selected) && selected.every(Object.isFrozen), true);
     const source = { kind: "path", path: "original" };
     seal(input);
-    const result = planRustProgramErrorClosedValue(source, target, undefined, input);
+    const result = planRustProgramErrorClosedValue(source, target, undefined, input, rustCurrentErrorBoundary(input));
     assert.equal(result !== undefined, true, target.id);
     assert.equal(result.kind, "match");
     assert.equal(result.expression === source, true);
@@ -97,7 +98,7 @@ test("program carrier admission uses its component-owned value domain, not an ou
     errorTypePath: "unrelated_crate::program::TsonicError", errorTypeIdentity: "unrelated:error" });
   seal(input);
   const result = planRustProgramErrorClosedValue({ kind: "path", path: "original" },
-    rustTsValueTargetType(), undefined, input);
+    rustTsValueTargetType(), undefined, input, rustCurrentErrorBoundary(input));
   assert.equal(result !== undefined, true);
   assert.equal(result.kind, "match");
   assert.equal(result.arms.every(arm => arm.pattern.path.startsWith("rt::TsonicError::")), true);
@@ -120,7 +121,7 @@ test("a forwarding component projects the exact owner inventory through the publ
   assert.equal(planRustErrorVariants(input.input.program, forwarding) === undefined, true);
   const source = { kind: "path", path: "original" };
   seal(input);
-  const result = planRustProgramErrorClosedValue(source, target, undefined, input);
+  const result = planRustProgramErrorClosedValue(source, target, undefined, input, rustCurrentErrorBoundary(input));
   assert.equal(result !== undefined, true);
   assert.equal(result.kind, "match");
   assert.equal(result.expression === source, true);
@@ -137,7 +138,7 @@ test("a forwarding component projects the exact owner inventory through the publ
     owner.errorTypeIdentity = forwarding.errorTypeIdentity;
     mutate();
     seal(input);
-    assert.equal(planRustProgramErrorClosedValue(source, target, undefined, input) === undefined, true);
+    assert.equal(planRustProgramErrorClosedValue(source, target, undefined, input, rustCurrentErrorBoundary(input)) === undefined, true);
   }
   assert.equal(input.diagnostics.length, 2);
 });
@@ -156,7 +157,7 @@ test("external transport projection moves its exact nested payload without a wra
   });
   const source = { kind: "path", path: "original" };
   seal(input);
-  const result = planRustProgramErrorClosedValue(source, target, undefined, input);
+  const result = planRustProgramErrorClosedValue(source, target, undefined, input, rustCurrentErrorBoundary(input));
   assert.equal(result !== undefined, true);
   assert.equal(result.expression === source, true);
   const nested = result.arms.find(arm => arm.pattern.path === "rt::TsonicError::DependencyError");
@@ -193,7 +194,7 @@ test("sealed transport inventory rejects unsupported carriers and duplicate nati
       input.sourcePackageErrors.domainsByComponentId.get("root")) === undefined, true);
     seal(input);
     assert.equal(planRustProgramErrorClosedValue({ kind: "path", path: "original" },
-      rustTsValueTargetType(), undefined, input) === undefined, true);
+      rustTsValueTargetType(), undefined, input, rustCurrentErrorBoundary(input)) === undefined, true);
     assert.equal(input.diagnostics.length, 1);
   }
 });
@@ -212,7 +213,7 @@ test("missing and cyclic component evidence fails closed without boxing a transp
     const input = context("project");
     mutate(input);
     seal(input);
-    assert.equal(planRustProgramErrorClosedValue(source, rustTsValueTargetType(), undefined, input) === undefined, true);
+    assert.equal(planRustProgramErrorClosedValue(source, rustTsValueTargetType(), undefined, input, rustCurrentErrorBoundary(input)) === undefined, true);
     assert.equal(input.diagnostics.length, 1);
     assert.equal(input.diagnostics[0].code, "RUST_MISSING_TARGET_FACT");
   }
@@ -222,7 +223,7 @@ test("unproved cross-carrier admission is not a passive or lossy fallback", () =
   const input = context("project", [rustTsValueTargetType()], true);
   seal(input);
   const result = planRustProgramErrorClosedValue({ kind: "path", path: "original" },
-    rustJsValueTargetType(), undefined, input);
+    rustJsValueTargetType(), undefined, input, rustCurrentErrorBoundary(input));
   assert.equal(result === undefined, true);
   assert.equal(input.diagnostics.length, 1);
   assert.equal(input.diagnostics[0].message.includes("exact infallible conversion"), true);
@@ -244,7 +245,7 @@ test("deep component evidence remains bounded without producing a partial value"
   }
   seal(input);
   assert.equal(planRustProgramErrorClosedValue({ kind: "path", path: "original" },
-    rustTsValueTargetType(), undefined, input) === undefined, true);
+    rustTsValueTargetType(), undefined, input, rustCurrentErrorBoundary(input)) === undefined, true);
   assert.equal(input.diagnostics.length, 1);
   assert.equal(input.diagnostics[0].message.includes("bounded acyclic component graph"), true);
 });
