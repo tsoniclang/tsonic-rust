@@ -40,13 +40,16 @@ import { createRustNativeCallableDispatchPlan, type RustNativeCallableDispatchPl
 import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
 import { createRustGenericCallableCompletionPlan, type RustGenericCallableCompletionInput,
   type RustGenericCallableCompletionPlan } from "./generic-completions.js";
+import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle,
+  type RustPhysicalCallableStorage } from "./physical-lifecycle.js";
+import type { RustPhysicalCallableFlowApplications } from "../../target-model/records/physical-callables.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
   readonly frames: RustFrameCallablePlan;
   readonly native: RustNativeCallableInputPlan;
-  readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeStorage: RustPhysicalCallableStorage;
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly nativeGenericProducers: RustNativeGenericProducerPlan;
@@ -55,7 +58,12 @@ export interface RustCallableValuePlan {
   readonly nativeDispatch: RustNativeCallableDispatchPlan;
   readonly genericCompletions: RustGenericCallableCompletionPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
+  readonly flowApplications: RustPhysicalCallableFlowApplications;
 }
+
+export type RustCallableValueSelection = Omit<RustCallableValuePlan, "nativeStorage" | "flowApplications"> & {
+  readonly nativeStorage: RustNativeStoragePlan;
+};
 
 export interface RustCallableValuePlanInput {
   readonly ast: AstReader;
@@ -87,7 +95,7 @@ export interface RustCallableValueConstruction {
 export interface RustCallableValuePlanRegistry extends RustCallableValueConstruction {
   initialize(input: RustCallableValuePlanInput): RustCallableValueConstruction;
   finalizeSelected(): readonly RustSourceCallableSpecializationIssue[];
-  readonly selected: RustCallableValuePlan;
+  readonly selected: RustCallableValueSelection;
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
   seal(): RustCallableValuePlan;
   publish(): void;
@@ -95,13 +103,14 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
 
 interface RustCallableValueLifecycle {
   readonly construction: RustCallableValueConstruction;
-  finalizeSelected(): { readonly plan: RustCallableValuePlan; readonly issues: readonly RustSourceCallableSpecializationIssue[] };
+  finalizeSelected(): { readonly plan: RustCallableValueSelection; readonly issues: readonly RustSourceCallableSpecializationIssue[] };
+  seal(): RustCallableValuePlan;
   publish(): void;
 }
 
 export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegistry {
   let lifecycle: RustCallableValueLifecycle | undefined;
-  let selected: RustCallableValuePlan | undefined;
+  let selected: RustCallableValueSelection | undefined;
   let completions: RustGenericCallableCompletionPlan | undefined;
   const requireCompletions = (): RustGenericCallableCompletionPlan => {
     if (completions === undefined) throw new Error("Generic callable completions require sealed producer effects and component owners.");
@@ -111,7 +120,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     if (lifecycle === undefined) throw new Error("Rust callable values must be finalized after their selected adapters and before effect analysis.");
     return lifecycle;
   };
-  const requireSelected = (): RustCallableValuePlan => {
+  const requireSelected = (): RustCallableValueSelection => {
     if (selected === undefined) throw new Error("Rust callable value inventories require their selected physical families after effect analysis.");
     return selected;
   };
@@ -135,7 +144,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
         throw new Error("Generic callable completions finalize exactly once from their owned physical family and producer plans.");
       completions = createRustGenericCallableCompletionPlan(input);
     },
-    seal: requireSelected,
+    seal: () => requireLifecycle().seal(),
     publish(): void {
       requireSelected();
       requireLifecycle().publish();
@@ -261,6 +270,9 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   const nativeDispatch = createRustNativeCallableDispatchPlan({ ...input, native });
   const issues = Object.freeze([...generic.issues, ...nativeStorage.issues]);
   const construction: RustCallableValueConstruction = Object.freeze({ generic, native, nativeStorage, nativeProducers, issues });
+  let physicalLifecycle: RustPhysicalCallableLifecycle | undefined;
+  let selectedPlan: RustCallableValueSelection | undefined;
+  let publishedPlan: RustCallableValuePlan | undefined;
   return Object.freeze({
     construction,
     finalizeSelected() {
@@ -268,6 +280,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
       const frames = createRustFrameCallablePlan({ ...input, usedNames });
+      physicalLifecycle = createRustPhysicalCallableLifecycle({ ...input, generic, frames, suspended,
+        nativeStorage, nativeProducers, adapterFlows: flows });
       const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
         records: input.records, generic, native, nativeStorage, definitions: input.typeDefinitions });
       const identityRequests = prepareRustGenericCallableIdentityRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
@@ -282,11 +296,25 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const genericDispatch = createRustGenericCallableDispatchPlan({ ast: input.ast, generic, closedSourceFiles: input.closedSourceFiles,
         nativeGenericProducers, invocations: dispatchRequests });
       const selectedIssues = Object.freeze([...suspended.issues, ...frames.issues, ...genericIdentities.issues]);
-      const plan: RustCallableValuePlan = Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers,
+      const plan: RustCallableValueSelection = Object.freeze({ generic, suspended, frames, native, nativeStorage, nativeCaptures, nativeProducers,
         nativeGenericProducers, genericDispatch, genericIdentities, nativeDispatch, get genericCompletions() { return completions(); },
         issues: Object.freeze([...issues, ...selectedIssues]) });
+      selectedPlan = plan;
       return Object.freeze({ plan, issues: selectedIssues });
     },
-    publish: () => physical.publish(),
+    seal(): RustCallableValuePlan {
+      if (publishedPlan !== undefined) return publishedPlan;
+      if (physicalLifecycle === undefined || selectedPlan === undefined)
+        throw new Error("Physical callable publication requires completed source-selected families and effects.");
+      const publication = physicalLifecycle.complete(physical);
+      const finalPhysical = physical.closeKeys();
+      genericRegistry.publishPhysical(finalPhysical);
+      publishedPlan = Object.freeze({ ...selectedPlan, ...publication });
+      return publishedPlan;
+    },
+    publish(): void {
+      if (publishedPlan === undefined) throw new Error("Callable values publish only after their physical applications seal.");
+      physical.publish();
+    },
   });
 }

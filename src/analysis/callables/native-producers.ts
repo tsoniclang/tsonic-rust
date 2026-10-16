@@ -39,6 +39,10 @@ export interface RustNativeCallableProducerPlan {
   physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
 }
 
+export interface RustNativeCallableProducerConstruction extends RustNativeCallableProducerPlan {
+  seal(requests: ReadonlyMap<Node, readonly TargetTypeRef[]>): RustNativeCallableProducerPlan;
+}
+
 export function createRustNativeCallableProducerPlan(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
@@ -46,7 +50,7 @@ export function createRustNativeCallableProducerPlan(input: {
   readonly native: RustNativeCallableInputPlan;
   readonly definitions: RustTypeDefinitions;
   readonly returnCarrierFor: (declaration: Node) => TargetTypeRef | undefined;
-}): RustNativeCallableProducerPlan {
+}): RustNativeCallableProducerConstruction {
   const byDeclaration = new Map<Node, RustNativeCallableProducer>();
   const byIdentity = new Map<string, RustNativeCallableProducer>();
   for (const declaration of input.nodes) {
@@ -110,7 +114,7 @@ export function createRustNativeCallableProducerPlan(input: {
   const outward = createRustNativeOutwardResults({ ...input, producers: {
     forDeclaration: declaration => byDeclaration.get(declaration), errorFor, deferredFor,
   } });
-  return Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
+  const plan: RustNativeCallableProducerPlan = Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
     outwardReturnFor: outward.returnFor, invocationResultFor: outward.invocationFor, bodyResultFor: outward.bodyFor,
     forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
     forIdentity: (identity: string) => byIdentity.get(identity),
@@ -145,6 +149,60 @@ export function createRustNativeCallableProducerPlan(input: {
           : rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [rustLifetimeGenericArgument(signature.lifetime),
             ...rustTypeGenericArguments([arguments_, result])])
         : rustClosureTargetType([arguments_], result);
+    },
+  });
+  let sealed = false;
+  return Object.freeze({ ...plan,
+    seal(requests: ReadonlyMap<Node, readonly TargetTypeRef[]>): RustNativeCallableProducerPlan {
+      if (sealed) throw new Error("Native callable producer results seal exactly once after selected effects and storage.");
+      const errors = new Map<Node, ReadonlyMap<RustProducerErrorReference["channel"], TargetTypeRef>>();
+      const deferred = new Map<Node, ReadonlyMap<number, RustDeferredProducerChannel>>();
+      const outwardReturns = new Map<Node, TargetTypeRef>();
+      const invocationResults = new Map<Node, TargetTypeRef>();
+      const bodyResults = new Map<Node, TargetTypeRef>();
+      const physical = new Map<Node, ReadonlyMap<string, TargetTypeRef | undefined>>();
+      for (const producer of plan.producers) {
+        const declaration = producer.declaration;
+        const result = input.records.sourceCallableReturn.get(declaration);
+        const asynchronous = input.records.asyncFunction.get(declaration);
+        const logical = asynchronous?.futureCarrier ?? result?.returnCarrier;
+        const completion = logical === undefined ? undefined : rustNativeCallableCompletion(logical, input.definitions);
+        const channels = new Map<RustProducerErrorReference["channel"], TargetTypeRef>();
+        for (const channel of ["invoke", "body", ...Array.from({ length: Math.max(1, completion?.futures.length ?? 0) },
+          (_value, index) => index)] as const) {
+          const selected = plan.errorFor(declaration, channel);
+          if (selected !== undefined) channels.set(channel, selected);
+        }
+        errors.set(declaration, channels);
+        const completions = new Map<number, RustDeferredProducerChannel>();
+        for (let ordinal = 0; ordinal < Math.max(1, completion?.futures.length ?? 0); ordinal += 1) {
+          const selected = plan.deferredFor(declaration, ordinal);
+          if (selected !== undefined) completions.set(ordinal, selected);
+        }
+        deferred.set(declaration, completions);
+        const outwardResult = plan.outwardReturnFor(declaration);
+        const invocationResult = plan.invocationResultFor(declaration);
+        const bodyResult = plan.bodyResultFor(declaration);
+        if (outwardResult !== undefined) outwardReturns.set(declaration, outwardResult);
+        if (invocationResult !== undefined) invocationResults.set(declaration, invocationResult);
+        if (bodyResult !== undefined) bodyResults.set(declaration, bodyResult);
+        const selections = new Map<string, TargetTypeRef | undefined>();
+        for (const carrier of requests.get(declaration) ?? []) {
+          const key = closedMetadataKey(carrier);
+          if (!selections.has(key)) selections.set(key, plan.physicalFor(declaration, carrier));
+        }
+        physical.set(declaration, selections);
+      }
+      sealed = true;
+      return Object.freeze({ producers: plan.producers, forDeclaration: plan.forDeclaration, forIdentity: plan.forIdentity,
+        errorFor: (declaration: Node, channel: RustProducerErrorReference["channel"]) => errors.get(declaration)?.get(channel),
+        deferredFor: (declaration: Node, ordinal: number) => deferred.get(declaration)?.get(ordinal),
+        deferredErrorFor: (declaration: Node, ordinal: number) => deferred.get(declaration)?.get(ordinal)?.errorCarrier,
+        outwardReturnFor: (declaration: Node) => outwardReturns.get(declaration),
+        invocationResultFor: (declaration: Node) => invocationResults.get(declaration),
+        bodyResultFor: (declaration: Node) => bodyResults.get(declaration),
+        physicalFor: (declaration: Node, carrier: TargetTypeRef) => physical.get(declaration)?.get(closedMetadataKey(carrier)),
+      });
     },
   });
 }

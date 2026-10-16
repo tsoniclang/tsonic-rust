@@ -241,11 +241,9 @@ test("two backend plans over a published program read completed callable stores 
   assert.equal(joined !== undefined, true, "the joined family is admitted before closure");
   const late = concreteKey(joined.carrier);
   const unstored = () => {
-    const first = generic.physical.argumentsFor(late);
-    const second = generic.physical.argumentsFor(late);
-    assert.equal(sameMetadata(second, first), true, "repeated late-key reads link the same arguments");
-    assert.equal(generic.physical.definitionFor(late) === joined && first !== second, true,
-      "a key outside admission and closure preparation links on every read and is never stored");
+    assert.equal(generic.physical.existingSelectionFor(late) === undefined, true, "a fabricated unprepared key remains absent");
+    assert.equal(invariantCode(() => generic.physical.argumentsFor(late)), "TSONIC_INTERNAL_PLANNER_INVARIANT",
+      "required unprepared keys fail without computing or storing a selection");
   };
   const before = snapshot();
   assert.equal(before.environments.every(environment => environment !== undefined), true);
@@ -384,14 +382,23 @@ test("closure prepares the canonical self-carrier of every admitted family", () 
   const inventory = current.physical.plan.definitions();
   assert.equal(inventory.length > 0 && inventory.every(definition => definition.parameters.length > 0), true,
     "admission selects concrete physical arguments, never the canonical parameters");
+  const lateKeys = [];
   for (const definition of inventory) {
     const prepared = current.physical.plan.argumentsFor(definition.carrier);
     assert.equal(sameMetadata(prepared, definition.parameters), true, `${definition.targetName}: the canonical key links the family's own parameters`);
     assert.equal(current.physical.plan.argumentsFor(definition.carrier) === prepared, true,
       `${definition.targetName}: the canonical key read after closure is the one stored at closure`);
     const late = concreteKey(definition.carrier);
-    assert.equal(current.physical.plan.argumentsFor(late) !== current.physical.plan.argumentsFor(late), true,
-      `${definition.targetName}: a key neither admitted nor prepared is not stored after closure`);
+    current.physical.prepare(late);
+    lateKeys.push(late);
+  }
+  const published = current.physical.closeKeys();
+  current.physical.publish();
+  for (const late of lateKeys) {
+    const selected = published.argumentsFor(late);
+    assert.equal(selected !== undefined, true, "explicit key preparation links the admitted physical family");
+    assert.equal(published.argumentsFor(late) === selected, true,
+      "actual prepared keys are stable lookups after publication");
   }
 });
 
@@ -402,7 +409,9 @@ test("the planner phase label starts at publication, after the callable seal and
   const value = rustGenericCallableValue(joined.carrier);
   const reordered = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: [...value.physical.members].reverse() } });
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "closed, not sealed");
-  assert.equal(context.callableValues.seal() === context.callableValues.selected, true);
+  const published = context.callableValues.seal();
+  assert.equal(published !== context.callableValues.selected, true, "publication does not expose the analysis construction view");
+  assert.equal(context.callableValues.seal() === published, true, "repeated seals read the same completed publication");
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "sealed, not published");
   context.callableValues.publish();
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_PLANNER_INVARIANT", "published");
@@ -472,6 +481,7 @@ test("a family requested after admission closes fails as an internal invariant o
   assert.throws(() => current.queries.returnFor(make), failure =>
     failure.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" && /admission closed/u.test(failure.message));
   assert.equal(current.physical.plan.definitions() === inventory, true);
+  current.physical.closeKeys();
   current.physical.publish();
   assert.throws(() => current.queries.returnFor(make), failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT");
   assert.throws(() => current.physical.closeAdmission(), /exactly once/u);
