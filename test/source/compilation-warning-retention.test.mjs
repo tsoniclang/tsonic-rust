@@ -11,10 +11,30 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 const moduleUrl = pathToFileURL(resolve("dist/analysis/program/target-program.js")).href;
-const state = { hooks: 0, warnings: 0, warning: undefined, node: undefined };
+const sessionUrl = pathToFileURL(resolve("dist/compilation/session.js")).href;
+const state = { hooks: 0, sessionHooks: 0, compilations: 0, warnings: 0,
+  warning: undefined, node: undefined, boundary: undefined };
 globalThis[Symbol.for("tsonic.formatter-warning-contract")] = state;
 registerHooks({ load(url, context, nextLoad) {
   const loaded = nextLoad(url, context);
+  if (url === sessionUrl) {
+    state.sessionHooks++;
+    const text = String(loaded.source);
+    const signature = "export function createRustCompilationSession(";
+    assert.equal(text.split(signature).length - 1, 1, "the actual session export is found exactly once");
+    return { ...loaded, source: text.replace(signature, "function createRustCompilationSessionBeforeObservation(") + \`
+export function createRustCompilationSession(...args) {
+  const session = createRustCompilationSessionBeforeObservation(...args);
+  return Object.freeze({ ...session, compile(input) {
+    const result = session.compile(input);
+    const state = globalThis[Symbol.for("tsonic.formatter-warning-contract")];
+    state.compilations++;
+    state.boundary = result;
+    return result;
+  } });
+}
+\` };
+  }
   if (url !== moduleUrl) return loaded;
   state.hooks++;
   const text = String(loaded.source);
@@ -46,18 +66,23 @@ const { result } = compileRust({
   files: { "index.ts": "export function value(): number { return 1; }" },
 });
 assert.equal(state.hooks, 1, "the real analysis module is intercepted exactly once");
+assert.equal(state.sessionHooks, 1, "the real session factory is observed exactly once");
+assert.equal(state.compilations, 1, "one actual compilation result is observed without transformation");
 assert.equal(state.warnings, 1, "one successful real analysis receives one contract warning");
 assert.equal(state.warning?.category, "warning", "the actual contract adapter creates the warning");
 assert.equal(state.warning.sourceNode === state.node, true, "the adapter retains the checked source node");
 assert.equal(result.artifacts.length, 0, "formatting failure returns no partial artifacts");
 assert.deepEqual(result.diagnostics.map(diagnostic => diagnostic.code),
   ["FORMAT_CONTRACT_WARNING", "RUST_SOURCE_FORMATTING_FAILED"]);
-assert.equal(result.diagnostics[0] === state.warning, true, "the original warning is retained by identity");
+assert.equal(state.boundary.diagnostics[0] === state.warning, true,
+  "the genuine session result retains the original warning before bounded test-helper inspection");
+assert.equal(result.diagnostics[0].sourceNode === state.node, true, "bounded inspection preserves the checked source identity");
 assert.equal(result.diagnostics[1].source, "tsonic-rust");
 assert.equal(result.diagnostics[1].category, "error");
 assert.match(result.diagnostics[1].message, /Unable to execute Rust formatter/u);
 assert.deepEqual(result.diagnostics[1].evidence, ["target.capability=rust.toolchain.rustfmt"]);
-console.log(JSON.stringify({ hooks: state.hooks, warnings: state.warnings,
+console.log(JSON.stringify({ hooks: state.hooks, sessionHooks: state.sessionHooks,
+  compilations: state.compilations, warnings: state.warnings,
   diagnostics: result.diagnostics.map(diagnostic => diagnostic.code) }));
 `;
   const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
@@ -67,6 +92,8 @@ console.log(JSON.stringify({ hooks: state.hooks, warnings: state.warnings,
   assert.equal(result.status, 0, `${result.error?.message ?? ""}\n${result.stdout}\n${result.stderr}`);
   const proof = JSON.parse(result.stdout.trim());
   assert.equal(proof.hooks, 1);
+  assert.equal(proof.sessionHooks, 1);
+  assert.equal(proof.compilations, 1);
   assert.equal(proof.warnings, 1);
   assert.deepEqual(proof.diagnostics, ["FORMAT_CONTRACT_WARNING", "RUST_SOURCE_FORMATTING_FAILED"]);
 });
