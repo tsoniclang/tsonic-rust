@@ -128,7 +128,7 @@ errorEffects: { get: (node) => { return !finalized ? undefined : records.errorEf
   assert.equal(rustTargetTypeRefEquals(selected.invocationFor(declaration), current.producers.invocationResultFor(declaration)), true);
 });
 
-test("sync JS Promise output retains a resolvable producer error reference before deferred-effect sealing", () => {
+test("sync JS Promise output uses the uniform rejection channel before deferred-effect sealing", () => {
   const current = fixture(`export function forward(callback: () => Promise<string>): Promise<string> { return callback(); }`, ["js"]);
   const declaration = current.declaration("forward");
   const selected = createRustNativeOutwardResults({ records: current.context.records,
@@ -142,13 +142,10 @@ test("sync JS Promise output retains a resolvable producer error reference befor
   });
   const carrier = selected.invocationFor(declaration);
   assert.equal(carrier?.id, "rust.js.JsPromise");
-  const error = rustProducerErrorReference(carrier.genericArguments[2].type);
-  assert.equal(error?.channel, 0);
-  assert.equal(current.producers.forIdentity(error.identity)?.declaration === declaration, true);
-  const resolved = current.producers.deferredErrorFor(declaration, error.channel);
-  const [input] = current.context.callableValues.native.inputsFor(declaration);
-  assert.equal(resolved?.kind, "associated-type");
-  assert.equal(rustTargetTypeRefEquals(resolved.owner, input.implementation), true, "late resolution keeps the actual input error");
+  assert.equal(carrier.genericArguments.length, 1);
+  assert.equal(carrier.genericArguments.some(argument => argument.kind === "type" &&
+    rustProducerErrorReference(argument.type) !== undefined), false);
+  assert.equal(current.producers.deferredErrorFor(declaration, 0)?.id, "rust.js.JsValue");
 });
 
 test("outward result recursion is bounded at the producer owner", () => {
