@@ -29,7 +29,7 @@ for (const surfaces of [[], ["js"]]) {
 #[cfg(test)]
 mod optional_input_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn optional_inputs_do_not_allocate_a_callback_or_copy_the_owned_string() {

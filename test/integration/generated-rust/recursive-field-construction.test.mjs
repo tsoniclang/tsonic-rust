@@ -23,7 +23,7 @@ for (const surfaces of [[], ["js"]]) test(`recursive field transport retains a l
 #[cfg(test)]
 mod constructor_frame_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
     #[test]
     fn transported_entries_allocate_only_their_frames_and_release_them() {
         for _ in 0..32 {

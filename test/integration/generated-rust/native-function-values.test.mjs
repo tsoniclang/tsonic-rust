@@ -51,7 +51,7 @@ test("named native future values add no allocation at first construction or over
     assert.doesNotMatch(generated, /JsPromise|Callable::new|ModuleCell|Rc::new|Box<dyn|Pin<Box/u);
     const directory = writeGeneratedProject("native-function-value-cost", result.artifacts);
     mkdirSync(join(directory, "tests"), { recursive: true });
-    writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport}
+    writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport(directory)}
 #[test]
 fn first_construction_and_every_invocation_stay_native() {
     use std::future::Future;

@@ -232,7 +232,7 @@ export function projectionCount(count: number): number {
 `, { outputType: "lib", crateName: "bounded_allocations" });
   const root = writeGeneratedProject("bounded-native-allocations", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/allocations.rs"), `${nativeAllocationSupport}
+  writeFileSync(join(root, "tests/allocations.rs"), `${nativeAllocationSupport(root)}
 use bounded_allocations::index;
 use tsonic_rust_js::JsArray;
 use std::rc::Rc;

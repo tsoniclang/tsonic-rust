@@ -81,7 +81,7 @@ test("wrapped immutable reads match handwritten native borrowing without snapsho
   assert.doesNotMatch(output, /\.clone\(\)|\.to_owned\(\)|String::from/u);
   const root = writeGeneratedProject("stable-wrapped-borrow-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use stable_wrapped_borrows::index;
 
 fn handwritten(value: &str) -> f64 { value.parse::<f64>().unwrap() }
@@ -126,7 +126,7 @@ test("retaining a produced String before its native argument view adds no snapsh
   assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("produced-wrapped-borrow-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use produced_wrapped_borrows::index;
 
 fn handwritten(value: String) -> f64 {

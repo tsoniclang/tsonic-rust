@@ -47,7 +47,7 @@ test("an owned lexical future matches handwritten move, allocation and release c
 #[cfg(test)]
 mod retained_lexical_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     fn handwritten(value: String) -> js_abi::JsPromise<'static, String, rt::TsonicError> {
         js_abi::JsPromise::from_infallible_factory(move || async move { value })

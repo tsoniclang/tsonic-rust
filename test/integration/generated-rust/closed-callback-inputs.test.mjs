@@ -18,7 +18,7 @@ test("closed integer callback inputs retain native width without per-call alloca
     "closed integer callback inputs retain native integer storage");
   const directory = writeGeneratedProject("closed-callback-inputs", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport(directory)}
 use closed_callback_inputs::index;
 #[test]
 fn closed_callback_input_cost() {

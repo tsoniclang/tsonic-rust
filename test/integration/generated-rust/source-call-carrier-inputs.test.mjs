@@ -16,7 +16,7 @@ test("source-call inputs retain exact native-width integer carriers", { timeout:
   assert.equal(/usize_to_f64|u64_to_f64|as f64|9007199254740992/u.test(output), false);
   const root = writeGeneratedProject("source-call-carrier-inputs", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests", "carriers.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests", "carriers.rs"), nativeOwnershipCostSupport(root) + `
 use source_call_carriers::index;
 
 #[test]

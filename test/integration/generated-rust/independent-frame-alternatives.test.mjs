@@ -18,7 +18,7 @@ for (const surfaces of [[], ["js"]]) test(`independent frame alternatives preser
 #[cfg(test)]
 mod independent_frame_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn independent_callback_retains_only_its_own_allocation() {

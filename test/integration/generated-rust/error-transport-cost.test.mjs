@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeAllocationSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -7,7 +9,7 @@ import { planRustErrorTransport, planRustSourceErrorTransport } from "../../../d
 import { planRustSourceErrorObservations } from "../../../dist/backend/planner/program/source-error-observations.js";
 import { planRustErrorObservations } from "../../../dist/backend/planner/program/error-observations.js";
 import { rustRuntimeCratePath } from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("native Error-only specialization has handwritten physical size and allocation cost", { timeout: 300_000 }, () => {
   const plan = planRustErrorTransport([{ name: "Huge", type: { kind: "named", path: "Huge" }, source: "thrown" }]);
@@ -17,6 +19,9 @@ test("native Error-only specialization has handwritten physical size and allocat
     ...planRustSourceErrorObservations(plan), ...planRustSourceErrorObservations(plan, true),
     planRustErrorObservations(plan),
   ] });
+  const project = writeGeneratedProject("error-transport-cost", [
+    { path: "Cargo.toml", text: `[package]\nname = "error_transport_cost"\nversion = "0.1.0"\nedition = "2024"\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }\n` },
+  ]);
   const source = `${generated}
 #[derive(Clone)]
 pub struct Huge(pub [u8; 4096]);
@@ -37,7 +42,7 @@ impl From<tsonic_rust_runtime::JsError> for TsonicError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    ${nativeAllocationSupport}
+    ${nativeAllocationSupport(project)}
     use tsonic_rust_runtime::{ErrorObject, JsError, MutableJsError, WritableErrorObject};
 
 
@@ -93,8 +98,13 @@ mod tests {
 `;
   const formatted = spawnSync("rustfmt", ["--emit", "stdout", "--edition", "2024"], { input: source, encoding: "utf8", timeout: 30_000 });
   assert.equal(formatted.status, 0, formatted.stderr);
-  validateGeneratedProject("error-transport-cost", [
-    { path: "Cargo.toml", text: `[package]\nname = "error_transport_cost"\nversion = "0.1.0"\nedition = "2024"\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)} }\n` },
-    { path: "src/lib.rs", text: formatted.stdout },
-  ]);
+  mkdirSync(join(project, "src"), { recursive: true });
+  writeFileSync(join(project, "src/lib.rs"), formatted.stdout);
+  for (const args of [
+    ["generate-lockfile", "--offline"],
+    ["fmt", "--all", "--check"],
+    ["check", "--all-targets", "--locked", "--offline"],
+    ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"],
+    ["test", "--locked", "--offline"],
+  ]) runCargo(project, args);
 });
