@@ -11,7 +11,7 @@ import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { planRustValueRead } from "./typed-locations.js";
 import { planRustSourceIndexRead } from "../objects/indexed-records.js";
@@ -88,12 +88,7 @@ function planElementAccessInner(node: Node, context: RustPlanContext): RustExpr 
   if (fact !== undefined && fact.kind === "tuple-index") {
     const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, node);
     if (indexNode === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.tuple-index-source",
-        "Tuple element fact has no concrete source index expression.",
-      ));
-      return undefined;
+      return failRustPlannerInvariant("Tuple element fact has no concrete source index expression.", node);
     }
     const resultCarrier = effectiveMemberResultCarrier(node, fact.resultCarrier, context);
     if (resultCarrier === undefined ||

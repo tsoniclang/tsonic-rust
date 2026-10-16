@@ -23,7 +23,7 @@ import { rustPropagateLocalError } from "../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, rustOperationFact, selectedOperationMatches } from "./fundamentals.js";
 import { isRustAssignmentOperator, isRustBinaryOperator } from "../../../target-model/syntax/tokens.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { planEmptyStringComparison, planRustRangeContainment, planBooleanLiteralComparison } from "./native-comparisons.js";
 import { foldRustIntegerComparison } from "../../target-ast/syntax/integer-comparisons.js";
@@ -287,10 +287,9 @@ export function planBinaryExpression(node: Node, context: RustPlanContext,
       return undefined;
     }
     const patterns: RustPattern[] = [];
-    const rejectDepths = (): undefined => {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-        "rust.backend.option-check-depths", "Option nullish depths must be ordered, unique and contained in the exact operand carrier."));
-      return undefined;
+    const rejectDepths = (): never => {
+      return failRustPlannerInvariant(
+        "Option nullish depths must be ordered, unique and contained in the exact operand carrier.", node);
     };
     if (!Array.isArray(fact.nullishDepths) || fact.nullishDepths.length === 0) return rejectDepths();
     for (const [index, depth] of fact.nullishDepths.entries()) {
