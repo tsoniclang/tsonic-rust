@@ -4,6 +4,7 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 
 function select(ast, node, operation) {
   return selectRustOperationReadUses(ast, node, { operation, nativeInputs: [], argumentModes: [],
@@ -34,6 +35,65 @@ test("operator ownership consumes selected operand modes instead of rediscoverin
       const uses = select(source.ast, node, selected);
       assert.deepEqual([uses.get(binary.Left)?.mode, uses.get(binary.Right)?.mode], expected);
       if (uses.has(binary.Left)) assert.equal(uses.get(binary.Left).later[0] === binary.Right, true);
+    }
+  }
+});
+
+test("evaluation-only native source inputs have terminal nonconsuming uses for reads, calls and setters", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-evaluation-only-inputs", {
+    "src/index.ts": `
+interface Native { value: Native; call(value: Native): Native; [index: number]: Native; }
+function observed(receiver: Native, value: Native, index: number): void {
+  receiver.value;
+  receiver.call(value);
+  receiver.value = value;
+  receiver[index] = value;
+}
+`,
+  }));
+  const carrier = { kind: "target-named", id: "fixture.Native" };
+  const integer = { kind: "source-primitive", name: "int32" };
+  const nodes = [];
+  const visit = node => {
+    if (source.ast.is.IsCallExpression(node) || source.ast.is.IsBinaryExpression(node) ||
+      source.ast.is.IsPropertyAccessExpression(node) && source.ast.is.IsExpressionStatement(source.ast.parent(node))) nodes.push(node);
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  for (const file of source.sourceFiles) visit(file);
+  assert.equal(nodes.length, 4, "the source covers read, call, property set and indexed set");
+  for (const node of nodes) {
+    const binary = source.ast.is.IsBinaryExpression(node) ? source.ast.as.AsBinaryExpression(node) : undefined;
+    const call = source.ast.is.IsCallExpression(node) ? source.ast.as.AsCallExpression(node) : undefined;
+    const selected = binary?.Left ?? node;
+    const property = call === undefined ? selected : call.Expression;
+    const receiver = source.ast.is.IsPropertyAccessExpression(property)
+      ? source.ast.as.AsPropertyAccessExpression(property).Expression
+      : source.ast.as.AsElementAccessExpression(property).Expression;
+    const indexed = source.ast.is.IsElementAccessExpression(selected) ? source.ast.as.AsElementAccessExpression(selected) : undefined;
+    const argumentsList = binary === undefined ? call === undefined ? [] : source.ast.arguments(node)
+      : indexed === undefined ? [binary.Right] : [indexed.ArgumentExpression, binary.Right];
+    const operationKind = binary !== undefined ? indexed === undefined ? "property-set" : "index-set"
+      : call === undefined ? "property" : "method";
+    const abi = finalizeRustProviderOperationAbi({ operationKind,
+      form: { form: "call", path: "fixture::observe", ...(indexed === undefined ? {} : { argOrder: [1] }) },
+      sourceReceiver: { kind: "runtime", carrier },
+      sourceArgumentCarriers: argumentsList.map((_, index) => indexed !== undefined && index === 0 ? integer : carrier),
+      ...(indexed === undefined ? {} : { evaluationOnlySourceArgumentIndexes: [0] }),
+      resultCarrier: { kind: "tuple", elements: [] }, isAsync: false, isFallible: false });
+    assert.equal(abi !== undefined, true, `${operationKind} has a canonical source-evaluation ABI`);
+    const operation = { kind: binary === undefined ? "provider-operation" : "runtime-set", operationId: "fixture::observe", abi };
+    const uses = selectRustOperationReadUses(source.ast, node, { operation, arguments: argumentsList,
+      nativeInputs: [], argumentModes: [], address: undefined, location: undefined, guard: undefined, callableMode: undefined });
+    const use = uses.get(receiver);
+    assert.equal(use?.mode, "shared", `${operationKind} does not consume its source-only receiver`);
+    assert.equal(use.later.length, 0, `${operationKind} holds no receiver borrow across later arguments`);
+    assert.equal(use.stableAcrossEffects, false, `${operationKind} invents no cross-effect stability proof`);
+    if (indexed !== undefined) {
+      assert.equal(uses.get(indexed.ArgumentExpression)?.mode, "shared", "an evaluation-only index is not consumed");
+      assert.equal(uses.get(indexed.ArgumentExpression)?.later.length, 0, "the discarded index has a terminal use");
+    }
+    for (const argument of argumentsList.slice(indexed === undefined ? 0 : 1)) {
+      assert.equal(uses.has(argument), false, "a value-consumed target argument is not changed to a borrow");
     }
   }
 });

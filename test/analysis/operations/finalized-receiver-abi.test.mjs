@@ -16,12 +16,14 @@ const project = { target: base, path: "fixture::as_base" };
 const derived = rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined, [project]);
 
 test("selected JavaScript API roots remain compile-time qualifiers without native receiver values", () => {
-  const { result, program } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
 export function reported(): void {
   console.log(Math.abs(-2), globalThis.Math.abs(-3));
 }
 ` } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n").slice(0, 2048));
+  const program = result.program;
+  assert.equal(program !== undefined, true, "the checked native program is published");
   let qualifiers = 0;
   const visit = node => {
     const operation = program.records.targetOperation.get(node);
