@@ -15,7 +15,8 @@ import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equ
 import { closedMetadataEquals } from "../../../../dist/target-model/metadata/closed-data.js";
 
 
-import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment, rustTargetOperationText } from "../../../../dist/analysis/operations/target-operation.js";
+import { rustFinalizedCarrierTransitionMatches, rustTargetOperationIsDirectLocation, rustTargetOperationSupportsAssignment } from "../../../../dist/analysis/operations/target-operation.js";
+import { rustTargetOperationText } from "../../../../dist/target-model/operations/text.js";
 
 function createModel() {
   return createRustProgramRecordBuilder();
