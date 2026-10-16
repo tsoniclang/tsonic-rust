@@ -115,7 +115,7 @@ test("outward carrier queries fail closed before finalized native effects and do
   let finalized = false;
   const selected = createRustNativeOutwardResults({
     records: createRustRecordFixture({
-errorEffects: { get: (node) => { return !finalized ? undefined : records.errorEffects.get(node); } }}, records),
+sourceCallEffects: { get: (node) => { return !finalized ? undefined : records.sourceCallEffects.get(node); } }}, records),
     definitions: current.context.typeDefinitions, producers: current.producers,
     returnCarrierFor(node) {
       const result = current.context.callableValues.nativeStorage.returnFor(node);
