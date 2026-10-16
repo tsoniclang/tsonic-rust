@@ -158,9 +158,8 @@ export function createRustRetainedEnvironmentQueries(
         }
         return true;
       };
-      if (!retain(subject.subject, bindings.bindings)) return unresolved();
       for (const producer of producers.producers) {
-        if (!step()) return unresolved();
+        if (!step() || !retain(producer.subject, producer.bindings)) return unresolved();
         const node = producer.subject.node;
         if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 || !ast.is.IsCallExpression(node)) continue;
         const semantics = input.source.semantics.forNode(node);
