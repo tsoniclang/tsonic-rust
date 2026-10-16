@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
@@ -95,4 +95,53 @@ export async function outer<Region extends Life>(value: Ref<int32, Region>, pend
   assert.equal(issues[0].sourceNode === current.named("outer"), true);
   assert.equal(current.context.promiseBodies.plan.objects.has(current.named("read")), false);
   assert.equal(current.calls.some(node => current.context.records.targetOperation.get(node).asyncBody?.declaration === current.named("read")), true);
+});
+
+function lower(text) {
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text } });
+  assert.deepEqual(result.diagnostics.map(value => `${value.code}: ${value.message}`), []);
+  return rustSourceText(result);
+}
+
+test("a borrowed immediate call emits one native body without a task, Promise object or static input bound", () => {
+  const rust = lower(`${header}
+async function read<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  await pending; return load(value);
+}
+async function outer<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  return await read(value, pending);
+}
+export const marker = 0;`);
+  assert.match(rust, /async fn read_native<'Region>/u);
+  assert.match(rust, /read_native\(value, pending\)\.await/u);
+  assert.equal(rust.includes("from_fallible_factory") || rust.includes("from_infallible_factory"), false);
+  assert.equal(rust.includes("fn read("), false);
+  assert.equal(rust.includes("'Region: 'static"), false);
+});
+
+test("mixed call uses emit one body and a distinct demanded object adapter, not a duplicate source body", () => {
+  const rust = lower(`${header}
+async function read(value: int32, pending: Promise<void>): Promise<int32> { await pending; return value; }
+async function outer(pending: Promise<void>): Promise<int32> {
+  const value: int32 = 1;
+  const first = await read(value, pending);
+  const stored = read(value, pending);
+  return first + await stored;
+}
+export const marker = 0;`);
+  assert.equal((rust.match(/async fn read_native\(/gu) ?? []).length, 1);
+  assert.equal((rust.match(/fn read\(/gu) ?? []).length, 1);
+  assert.match(rust, /read_native\(value, pending\)\.await/u);
+  assert.match(rust, /from_fallible_factory/u);
+});
+
+test("a settled direct call uses the same canonical body owner without the superseded settled helper path", () => {
+  const rust = lower(`${header}
+async function read(value: int32): Promise<int32> { return value; }
+async function outer(value: int32): Promise<int32> { return await (read(value)); }
+export const marker = 0;`);
+  assert.match(rust, /fn read_native\(value: i32\) -> i32/u);
+  assert.match(rust, /read_native\(value\)/u);
+  assert.equal(rust.includes("read_settled") || rust.includes("read_native(value).await"), false);
+  assert.equal(rust.includes("JsPromise::resolved"), false);
 });

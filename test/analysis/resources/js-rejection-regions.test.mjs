@@ -19,7 +19,8 @@ function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
     ast: { getSourceFile: () => file, getFileName: () => fileName,
       forEachChild: (node, visit) => { if (node === file) visit(declaration); } },
     sourceFiles: [file],
-    promiseBodies: { declarations: new Map([[declaration, { name: "body" }]]), objects: new Map([[declaration, declaration]]) },
+    promiseBodies: { declarations: new Map(asynchronous ? [[declaration, { name: "body" }]] : []),
+      objects: new Map(asynchronous ? [[declaration, { at: declaration, staticInputs: new Set() }]] : []) },
     records: { errorEffects: { get: node => node === declaration ? effects : undefined },
       asyncFunction: { get: node => asynchronous && node === declaration
         ? { kind: "js-promise", outputCarrier, futureCarrier: rustJsPromiseTargetType(outputCarrier),
