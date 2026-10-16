@@ -7,7 +7,35 @@ import {
   rustStatementsReferencePath,
 } from "./source-usage.js";
 
-export type FirstAccess = "read" | "write" | "exit" | "none" | `break:${string}`;
+export type FirstAccess = "read" | "write" | "exit" | "none" | "break" | "continue" |
+  `break:${string}` | `continue:${string}`;
+
+type RustLoopStatement = Extract<RustStmt, { readonly kind: "loop" | "while" | "while-let-some" | "for" }>;
+
+export function firstAccessesInLoopIteration(statement: RustLoopStatement, path: string): ReadonlySet<FirstAccess> {
+  const head = statement.kind === "while" ? firstAccessesInExpression(statement.condition, path)
+    : statement.kind === "while-let-some" ? firstAccessesInExpression(statement.expression, path)
+    : new Set<FirstAccess>(["none"]);
+  const body = (statement.kind === "for" || statement.kind === "while-let-some") && statement.binding === path
+    ? new Set<FirstAccess>(["none"])
+    : firstAccessesInBlockExpression({ kind: "block", body: statement.body }, path);
+  let iteration: ReadonlySet<FirstAccess> = new Set();
+  for (;;) {
+    const continued = new Set<FirstAccess>();
+    for (const access of body) {
+      if (access === "none" || access === "continue" ||
+        statement.label !== undefined && access === `continue:${statement.label}`) {
+        for (const next of iteration) continued.add(next);
+      } else if (access === "break" || statement.label !== undefined && access === `break:${statement.label}`) {
+        continued.add("none");
+      } else continued.add(access);
+    }
+    if (statement.kind !== "loop") continued.add("none");
+    const selected = replaceNone(head, continued);
+    if (selected.size === iteration.size && [...selected].every(access => iteration.has(access))) return selected;
+    iteration = selected;
+  }
+}
 
 export function statementAlwaysExits(statement: RustStmt): boolean {
   return statement.kind === "return" || statement.kind === "tail" ||
@@ -368,36 +396,16 @@ function firstAccessesInStatement(
         ),
       );
     case "loop":
-      return unionFirstAccesses(
-        firstAccessesInStatements(statement.body.statements, path),
-        new Set<FirstAccess>(["none"]),
-      );
     case "while":
-      return replaceNone(
-        firstAccessesInExpression(statement.condition, path),
-        unionFirstAccesses(
-          firstAccessesInStatements(statement.body.statements, path),
-          new Set<FirstAccess>(["none"]),
-        ),
-      );
     case "while-let-some":
-    case "for": {
-      const input = statement.kind === "for" ? statement.iterable : statement.expression;
-      return replaceNone(
-        firstAccessesInExpression(input, path),
-        unionFirstAccesses(
-          statement.binding === path
-            ? new Set<FirstAccess>(["none"])
-            : firstAccessesInStatements(statement.body.statements, path),
-          new Set<FirstAccess>(["none"]),
-        ),
-      );
-    }
+      return firstAccessesInLoopIteration(statement, path);
+    case "for":
+      return replaceNone(firstAccessesInExpression(statement.iterable, path), firstAccessesInLoopIteration(statement, path));
 
     case "break":
-      return new Set<FirstAccess>([statement.label === undefined ? "exit" : `break:${statement.label}`]);
+      return new Set<FirstAccess>([statement.label === undefined ? "break" : `break:${statement.label}`]);
     case "continue":
-      return new Set(["exit"]);
+      return new Set<FirstAccess>([statement.label === undefined ? "continue" : `continue:${statement.label}`]);
     case "completion-exit":
       return replaceNone(
         statement.expr === undefined
@@ -424,8 +432,10 @@ function firstAccessesInStatement(
         statement.value,
       ], path);
     case "scope":
+      return firstAccessesInBlockExpression({ kind: "block", body: statement.body,
+        ...(statement.label === undefined ? {} : { label: statement.label }) }, path);
     case "unsafe-scope":
-      return firstAccessesInStatements(statement.body.statements, path);
+      return firstAccessesInBlockExpression({ kind: "block", body: statement.body }, path);
     case "throw":
       return replaceNone(
         firstAccessesInExpression(statement.error, path),
@@ -526,7 +536,7 @@ export function firstAccessesInExpression(
     case "break-expression":
       return replaceNone(expression.expr === undefined ? new Set<FirstAccess>(["none"])
         : firstAccessesInExpression(expression.expr, path),
-        new Set<FirstAccess>([expression.label === undefined ? "exit" : `break:${expression.label}`]));
+        new Set<FirstAccess>([`break:${expression.label}`]));
     default:
       return firstAccessesInSequence(rustExpressionChildren(expression), path);
   }
