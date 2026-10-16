@@ -30,6 +30,7 @@ import { snapshotRustNativeErrorSources } from "../../target-model/types/native-
 import { selectRustJsRejectionRegion } from "./js-rejection.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 
 export type RustAnalyzedErrorRegions = Omit<RustErrorRegionRecords, "initialization">;
 
@@ -39,6 +40,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   readonly callables: Pick<RustCallableValuePlan, "native" | "nativeGenericProducers">;
+  readonly promiseBodies: RustPromiseBodies;
 }): TargetStageResult<RustAnalyzedErrorRegions> {
   const regions = new Map<Node, RustErrorRegionSelection>();
   const sourceRegions = new Map<RustSourceErrorEffectEdge, RustSourceErrorRegionSelection>();
@@ -85,7 +87,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     }
     const closure = body ? input.records.targetOperation.get(node) : undefined;
     const callback = closure?.kind === "closure" ? rustCallableProtocol(closure.resultCarrier) : undefined;
-    const promiseBody = body && (input.records.asyncFunction.get(node)?.kind === "js-promise" ||
+    const promiseBody = body && (input.promiseBodies.objects.has(node) ||
       rustTargetTypeRefEquals(callback?.error, rustJsValueTargetType()));
     const jsRejection = promiseBody ? selectRustJsRejectionRegion(owner, selectedSources) : undefined;
     if (promiseBody && jsRejection === undefined) {

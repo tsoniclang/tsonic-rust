@@ -88,10 +88,12 @@ import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/ret
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
+import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/promise-bodies.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
   readonly promiseResultUses: RustPromiseResultUses;
+  readonly promiseBodies: RustPromiseBodySelection;
   readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
   readonly callableOwnership: RustCallableOwnershipRegistry;
   readonly errorStorageDemands: SourceErrorStorageDemandQueries;
@@ -205,6 +207,7 @@ export function createRustAnalysisContext(
     sourceFiles,
     sourcePackages: input.sourcePackages,
     promiseResultUses,
+    promiseBodies: createRustPromiseBodySelection(),
     rootPublishesLibrary,
     records,
     requiredRecords: [],

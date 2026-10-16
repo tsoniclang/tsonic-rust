@@ -68,6 +68,15 @@ export interface RustSettledPromiseBodies {
   readonly calls: ReadonlyMap<Node, RustSettledPromiseCall>;
 }
 
+export interface RustPromiseBodyDeclaration {
+  readonly name: string;
+}
+
+export interface RustPromiseBodies {
+  readonly declarations: ReadonlyMap<Node, RustPromiseBodyDeclaration>;
+  readonly objects: ReadonlyMap<Node, Node>;
+}
+
 export type RustJsPromiseLowering =
   | {
       readonly kind: "settled";
@@ -75,6 +84,7 @@ export type RustJsPromiseLowering =
     }
   | {
       readonly kind: "factory";
+      readonly storage: RustSuspendedCallableStorage;
       readonly capturedParameters: readonly Node[];
       readonly ownedReceiver?: RustSuspendedOwnedReceiver;
     };

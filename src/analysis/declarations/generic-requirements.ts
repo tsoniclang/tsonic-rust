@@ -2,7 +2,6 @@ import {
   requirementContractsEqual,
   requirementUseHasValidStorage,
   stringListsEqual,
-  type RequirementUse,
   type RequirementContractState,
 } from "./generic-requirement-contract.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -42,6 +41,7 @@ import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
@@ -62,15 +62,16 @@ export interface RustDeclarationGenericRequirementContract {
 
 export interface RustDeclarationGenericRequirementIndex {
   projectionImplementationsFor(definition: RustProjectTypeDefinition): readonly RustProjectProjectionImplementation[];
-  contractFor(declaration: Node): RustDeclarationGenericRequirementContract | undefined;
+  contractFor(declaration: Node, body?: true): RustDeclarationGenericRequirementContract | undefined;
   contractForCarrier(carrier: TargetTypeRef): RustShapeGenericRequirementContract | undefined;
   contractForStructuralView(view: RustProjectStructuralView): RustShapeGenericRequirementContract | undefined;
-  supportsClone(declaration: Node, carrier: TargetTypeRef): boolean;
+  supportsClone(declaration: Node, carrier: TargetTypeRef, body?: true): boolean;
   hasUse(
     declaration: Node,
     node: Node,
     carrier: TargetTypeRef,
     requirements: readonly RustGenericRequirement[],
+    body?: true,
   ): boolean;
 }
 
@@ -101,6 +102,7 @@ export function analyzeRustDeclarationGenericRequirements(
   frameCallables: RustFrameCallablePlan,
   nativeCallables: RustNativeCallableInputPlan,
   errorRegions: RustAnalyzedErrorRegions,
+  promiseBodies: RustPromiseBodies,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -125,6 +127,8 @@ export function analyzeRustDeclarationGenericRequirements(
   const declarations = collectRustCallableDeclarations(ast, sourceFiles);
   const declarationById = new Map<string, Node>();
   const idByDeclaration = new WeakMap<Node, string>();
+  const bodyIdByDeclaration = new WeakMap<Node, string>();
+  const objectFacets = new Set<string>();
   for (const declaration of declarations) {
     const id = sourceNodeIdentity(ast, declaration);
     if (id === undefined || declarationById.has(id)) {
@@ -136,13 +140,18 @@ export function analyzeRustDeclarationGenericRequirements(
       continue;
     }
     declarationById.set(id, declaration);
-    idByDeclaration.set(declaration, id);
+    bodyIdByDeclaration.set(declaration, id);
+    if (promiseBodies.declarations.has(declaration) && promiseBodies.objects.has(declaration)) {
+      const objectId = `${id}:promise-object`;
+      declarationById.set(objectId, declaration);
+      objectFacets.add(objectId);
+      idByDeclaration.set(declaration, objectId);
+    } else idByDeclaration.set(declaration, id);
   }
   if (diagnostics.length > 0) {
     return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   }
-  const maximumEvaluations = declarations.length * declarations.length +
-    declarations.length;
+  const maximumEvaluations = declarationById.size * declarationById.size + declarationById.size;
   if (!Number.isSafeInteger(maximumEvaluations)) {
     return {
       kind: "rejected",
@@ -198,9 +207,13 @@ export function analyzeRustDeclarationGenericRequirements(
           return access?.accessMode !== "write" && access?.accessMode !== "delete";
         },
         idByDeclaration,
+        bodyIdByDeclaration,
+        nativePromiseBody: promiseBodies.declarations.has(declaration),
+        ...(objectFacets.has(id) ? { promiseObjectFacet: true as const,
+          inheritedBody: context.get(bodyIdByDeclaration.get(declaration)!) } : {}),
         implementationDeclaration,
-        contractFor(candidate) {
-          const candidateId = idByDeclaration.get(candidate);
+        contractFor(candidate, body?: true) {
+          const candidateId = (body === true ? bodyIdByDeclaration : idByDeclaration).get(candidate);
           return candidateId === undefined ? undefined : context.get(candidateId);
         },
       });
@@ -210,13 +223,13 @@ export function analyzeRustDeclarationGenericRequirements(
             kind: "resolved",
             revision: {
               contract: result.contract,
-              dependencies: result.dependencies,
+              dependencies: objectFacets.has(id) ? [bodyIdByDeclaration.get(declaration)!, ...result.dependencies] : result.dependencies,
             },
           };
     },
     equals: requirementContractsEqual,
-    maximumContracts: Math.max(1, declarations.length),
-    maximumRevisionsPerContract: Math.max(8, declarations.length + 1),
+    maximumContracts: Math.max(1, declarationById.size),
+    maximumRevisionsPerContract: Math.max(8, declarationById.size + 1),
     maximumEvaluations: Math.max(64, maximumEvaluations),
   });
   if (closure.kind === "rejected") {
@@ -232,30 +245,26 @@ export function analyzeRustDeclarationGenericRequirements(
     };
   }
   const contractByDeclaration = new WeakMap<Node, RequirementContractState>();
+  const bodyContractByDeclaration = new WeakMap<Node, RequirementContractState>();
   const projectionRequirements: RustProjectProjectionRequirement[] = [];
-  const usesByNode = new WeakMap<Node, RequirementUse[]>();
   for (const id of closure.program.ids) {
     const contract = closure.program.get(id)!;
     projectionRequirements.push(...contract.projectProjections);
-    contractByDeclaration.set(contract.declaration, contract);
-    for (const use of contract.uses) {
-      const uses = usesByNode.get(use.node) ?? [];
-      uses.push(use);
-      usesByNode.set(use.node, uses);
-    }
+    if (bodyIdByDeclaration.get(contract.declaration) === id) bodyContractByDeclaration.set(contract.declaration, contract);
+    if (idByDeclaration.get(contract.declaration) === id) contractByDeclaration.set(contract.declaration, contract);
   }
   const normalizeFamily = rustTypeFamilyNormalizer(typeFamilies);
   const index: RustDeclarationGenericRequirementIndex = Object.freeze({
     projectionImplementationsFor: createRustProjectProjectionImplementationIndex(projectionRequirements, projectTypes),
-    contractFor(declaration: Node) {
-      return contractByDeclaration.get(declaration);
+    contractFor(declaration: Node, body?: true) {
+      return (body === true ? bodyContractByDeclaration : contractByDeclaration).get(declaration);
     },
     contractForCarrier(carrier: TargetTypeRef) { return shapeContracts.get(closedMetadataKey(carrier)); },
     contractForStructuralView(view: RustProjectStructuralView) {
       return viewContracts.get(closedMetadataKey([view.sourceCarrier, view.targetCarrier]));
     },
-    supportsClone(declaration: Node, carrier: TargetTypeRef) {
-      const contract = contractByDeclaration.get(declaration);
+    supportsClone(declaration: Node, carrier: TargetTypeRef, body?: true) {
+      const contract = (body === true ? bodyContractByDeclaration : contractByDeclaration).get(declaration);
       if (contract === undefined) return false;
       const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters,
         ...contract.optionalStorage.map(entry => ({ identity: entry.carrier.identity, requirements: entry.requirements }))];
@@ -270,10 +279,11 @@ export function analyzeRustDeclarationGenericRequirements(
       node: Node,
       carrier: TargetTypeRef,
       requirements: readonly RustGenericRequirement[],
+      body?: true,
     ) {
       const normalized = normalizeRustGenericRequirements(requirements);
-      return contractByDeclaration.has(declaration) &&
-        (usesByNode.get(node) ?? []).some((use) =>
+      const contract = (body === true ? bodyContractByDeclaration : contractByDeclaration).get(declaration);
+      return contract !== undefined && contract.uses.some((use) => use.node === node &&
           requirementUseHasValidStorage(use) &&
           rustTargetTypeRefEquals(use.carrier, carrier) &&
           stringListsEqual(use.requirements, normalized));

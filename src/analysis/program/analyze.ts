@@ -85,10 +85,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       return;
     }
   }
-  const { externallyExtensibleDeclarations, closedSourceFiles } = collectSourcePackageBoundaries(
+  const { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations } = collectSourcePackageBoundaries(
     context,
     projectSourceFiles,
   );
+  for (const declaration of publishedDeclarations) context.promiseBodies.expose(declaration, declaration);
   const promotedStorageDeclarations = new Set<Node>();
   const moduleBindings = createRustModuleBindingPolicy(context, promotedStorageDeclarations);
   const sourceCallableAbi = createRustSourceCallableAbiResolver({
@@ -560,6 +561,8 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject, ["target.capability=rust.callable-value.exact-implementation"]);
   callableValues.issues.forEach(callableIssue);
   const selectedIssuePosition = context.diagnostics.length;
+  context.promiseBodies.seal(context);
+  if (context.diagnostics.length !== selectedIssuePosition) return undefined;
   recordFallibilityFacts(walk, projectSourceFiles);
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
@@ -581,13 +584,15 @@ function collectSourcePackageBoundaries(
 ): {
   readonly externallyExtensibleDeclarations: ReadonlySet<Node>;
   readonly closedSourceFiles: ReadonlySet<SourceFile>;
+  readonly publishedDeclarations: ReadonlySet<Node>;
 } {
   const externallyExtensibleDeclarations = new Set<Node>();
   const closedSourceFiles = new Set<SourceFile>();
+  const publishedDeclarations = new Set<Node>();
   const rootPackage = context.sourcePackages.packages.find((sourcePackage) =>
     sourcePackage.id === context.sourcePackages.rootPackageId);
   if (rootPackage === undefined) {
-    return { externallyExtensibleDeclarations, closedSourceFiles };
+    return { externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations };
   }
   const sourceFileByName = new Map(sourceFiles.map((sourceFile) =>
     [normalizeSourceFileName(context.ast.getFileName(sourceFile)), sourceFile] as const));
@@ -609,13 +614,18 @@ function collectSourcePackageBoundaries(
         continue;
       }
       for (const exported of context.source.navigation.moduleExports(sourceFile)) {
+        publishedDeclarations.add(exported.declaration);
         if (context.ast.is.IsClassDeclaration(exported.declaration)) {
           externallyExtensibleDeclarations.add(exported.declaration);
+          for (const member of context.ast.members(exported.declaration)) {
+            if (member !== undefined && context.ast.is.IsMethodDeclaration(member) &&
+              !context.ast.hasModifierKind(member, "private")) publishedDeclarations.add(member);
+          }
         }
       }
     }
   }
-  return Object.freeze({ externallyExtensibleDeclarations, closedSourceFiles });
+  return Object.freeze({ externallyExtensibleDeclarations, closedSourceFiles, publishedDeclarations });
 }
 
 function normalizeSourceFileName(value: string): string {

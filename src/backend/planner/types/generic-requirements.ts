@@ -22,7 +22,7 @@ export function rustCarrierHasCloneContract(
 ): boolean {
   return carrier !== undefined && (rustCarrierSupportsClone(carrier, context.input.program.typeDefinitions) ||
     context.callableDeclaration !== undefined &&
-    context.input.program.declarationGenericRequirements.supportsClone(context.callableDeclaration, carrier));
+    context.input.program.declarationGenericRequirements.supportsClone(context.callableDeclaration, carrier, context.promiseBody));
 }
 
 export function requireRustLocationValueCarrier(
@@ -61,6 +61,7 @@ export function requireRustCarrierRequirements(
     node,
     carrier,
     required,
+    context.promiseBody,
   )) {
     return true;
   }

@@ -459,6 +459,12 @@ export type RustTargetOperationFact =
             readonly classReceiver?: Node;
           };
       readonly parameters: readonly RustSourceCallParameterPlan[];
+      readonly asyncBody?: {
+        readonly declaration: Node;
+        readonly targetName: string;
+        readonly logicalResultCarrier: TargetTypeRef;
+        readonly maySuspend: boolean;
+      };
       readonly targetGenericArguments?: readonly RustTargetGenericArgument[];
       readonly resultProjection?: RustFlowReadProjectionFact;
       readonly resultCarrier: TargetTypeRef;

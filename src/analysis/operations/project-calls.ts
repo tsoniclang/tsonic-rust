@@ -50,6 +50,7 @@ import { rustLifetimeKey } from "../../target-model/lifetimes/index.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { recordRustComputedCallEvaluation } from "./computed-members.js";
 import { requireRustRecord } from "../program/records/required-records.js";
+import { rustPromiseBodyInvocationCarrier } from "../callables/promise-bodies.js";
 
 export function applySelectedProjectSourceCall(
   walk: RustFactWalk,
@@ -645,7 +646,10 @@ export function applySelectedProjectSourceCall(
     );
     return undefined;
   }
-  const finalResultCarrier = optionalCall?.resultCarrier ?? resultCarrier;
+  const asyncBody = optionalCall === undefined && sourceResult.projection === undefined
+    ? walk.context.promiseBodies.invocation(walk.context, expression, selectedDeclaration, target, resultCarrier) : undefined;
+  const physicalResultCarrier = asyncBody === undefined ? resultCarrier : rustPromiseBodyInvocationCarrier(asyncBody);
+  const finalResultCarrier = optionalCall?.resultCarrier ?? physicalResultCarrier;
   const computedKey = recordRustComputedCallEvaluation(ast, walk.context.records, walk.context.requiredRecords,
     walk.context.semanticsFor(expression).operations.call(expression), callee,
     target.form !== "function" && target.form !== "static-method" || target.classReceiver !== undefined);
@@ -667,7 +671,8 @@ export function applySelectedProjectSourceCall(
     parameters,
     ...(targetGenericArguments.length === 0 ? {} : { targetGenericArguments }),
     ...(sourceResult.projection === undefined ? {} : { resultProjection: sourceResult.projection }),
-    resultCarrier,
+    ...(asyncBody === undefined ? {} : { asyncBody }),
+    resultCarrier: physicalResultCarrier,
   });
   return setCarrierFact(walk, expression, finalResultCarrier);
 }
