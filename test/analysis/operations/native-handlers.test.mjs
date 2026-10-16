@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import test from "node:test";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
 import { analyzeRustNativeHandlers } from "../../../dist/analysis/operations/native-handlers.js";
@@ -40,7 +41,7 @@ test("the final native owner visits the actual checked domain once, publishes ex
   } } };
   const requirements = [];
   analyzeRustNativeHandlers(nodes, records, { get: context.safetyApplications.operationForExpression }, context.source.sourceFacts, requirements);
-  assert.equal(operations.size, nodes.length, "every exact checked node is visited");
+  assert.equal(operations.size === nodes.length, true, "every exact checked node is visited");
   assert.equal([...operations.values()].every(count => count === 1), true, "one root-selection input read per node");
   assert.equal(requirements.length === calls.size && calls.size > 0, true, "independent obligations cover every publication");
   assert.equal([...calls.values()].every(count => count === 1), true, "one write per selected subject");
@@ -48,25 +49,31 @@ test("the final native owner visits the actual checked domain once, publishes ex
   for (const [node] of calls) {
     const selected = records.nativeHandler.get(node);
     kinds.add(selected.kind);
-    assert.equal(Object.isFrozen(selected), true);
+    assert.equal(Object.isFrozen(selected), true, "the selected descriptor is frozen");
     assert.equal(records.nativeHandler.get(node) === selected, true, "reads retain identity without reselecting");
-    if (selected.kind === "memory-binding") assert.equal(selected.selection === records.memoryBindingPlan.get(node), true);
+    if (selected.kind === "memory-binding") assert.equal(selected.selection === records.memoryBindingPlan.get(node), true,
+      "memory binding retains its admitted analysis payload");
     if (selected.kind === "typed-location") {
-      assert.equal(selected.selection.operation === context.records.targetOperation.get(node), true);
-      assert.equal(selected.selection.plan === records.typedLocationPlan.get(node), true);
+      assert.equal(selected.selection.operation === context.records.targetOperation.get(node), true,
+        "typed location retains its admitted operation");
+      assert.equal(selected.selection.plan === records.typedLocationPlan.get(node), true,
+        "typed location retains its admitted plan");
     }
   }
-  assert.deepEqual([...kinds].sort(), ["explicit-safety", "memory-binding", "native-pointer", "typed-location"]);
+  assert.equal(isDeepStrictEqual([...kinds].sort(), ["explicit-safety", "memory-binding", "native-pointer", "typed-location"]), true,
+    "the complete checked source covers exactly the four native handler kinds");
   const ordinary = nodes.find(node => context.ast.is.IsCallExpression(node) &&
     context.ast.text(context.ast.as.AsCallExpression(node).Expression) === "sizeofShadow");
-  assert.equal(ordinary !== undefined && records.nativeHandler.get(ordinary) === undefined, true);
+  assert.equal(ordinary !== undefined && records.nativeHandler.get(ordinary) === undefined, true,
+    "the checked ordinary source call remains unclaimed");
   const missed = requirements[0];
   const swallowed = createRustProgramRecordBuilder();
   assert.throws(() => swallowed.seal([missed]), error => error.diagnostic?.sourceNode === missed.subject &&
-    error.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" && /nativeHandler/u.test(error.diagnostic.message));
+    error.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" && /nativeHandler/u.test(error.diagnostic.message),
+    "a missing selected handler fails at its exact required source node");
   const published = createRustProgramRecords(context.records.seal(requirements));
-  assert.equal(published.nativeHandler === records.nativeHandler, true);
-  assert.equal(operations.size, nodes.length, "no root input was recomputed after sealing");
+  assert.equal(published.nativeHandler === records.nativeHandler, true, "publication preserves the exact reader identity");
+  assert.equal(operations.size === nodes.length, true, "no root input was recomputed after sealing");
 });
 
 test("the JS string root uses the finalized ABI and shadows remain ordinary in actual source", () => {
@@ -90,8 +97,8 @@ test("the JS string root uses the finalized ABI and shadows remain ordinary in a
   const call = selections.find(([name]) => name === "exactJsString")[1];
   const shadow = selections.find(([name]) => name === "jsstr")[1];
   const selected = program.records.nativeHandler.get(call);
-  assert.equal(selected.kind, "js-string-conversion");
-  assert.equal(selected.selection === program.records.targetOperation.get(call), true);
-  assert.equal(selected.selection.abi.target.path, "js_abi::js_string_from_utf8");
-  assert.equal(program.records.nativeHandler.get(shadow) === undefined, true);
+  assert.equal(selected.kind === "js-string-conversion", true, "the aliased JS-string marker selects its exact handler");
+  assert.equal(selected.selection === program.records.targetOperation.get(call), true, "the selected ABI payload retains identity");
+  assert.equal(selected.selection.abi.target.path === "js_abi::js_string_from_utf8", true, "the existing native JS-string entry is unchanged");
+  assert.equal(program.records.nativeHandler.get(shadow) === undefined, true, "the same-spelled local jsstr remains ordinary");
 });
