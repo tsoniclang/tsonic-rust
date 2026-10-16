@@ -359,4 +359,3 @@ function activateIterationBinding(
     value,
   }];
 }
-
