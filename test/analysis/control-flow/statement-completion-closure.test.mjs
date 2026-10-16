@@ -191,6 +191,8 @@ test("the canonical setter renderer preserves receiver and value effects for a s
     ] }], types: [{ exportId: "Flag", targetCarrier: carrier }], carrierPaths: { "r05.Flag": "String" }, crates: [],
     operations: [
       { exportId: "open", operationKind: "method", target: { form: "call", path: "String::new" }, resultCarrier: carrier },
+      { exportId: "Flag", memberId: "Flag.value", operationKind: "property",
+        target: { form: "method", name: "is_empty" }, resultCarrier: boolCarrier },
       { exportId: "Flag", memberId: "Flag.value", operationKind: "property-set",
         target: { form: "expression-macro", path: "core::assert", delimiter: "parentheses" },
         parameterCarriers: [boolCarrier], resultCarrier: unitCarrier },
