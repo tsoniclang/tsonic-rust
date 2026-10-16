@@ -28,7 +28,7 @@ export function analyzeRustShapeGenericRequirements(
   const parameters = new Map(names.map(name => [name, new Set<RustGenericRequirement>()] as const));
   const classify = (type: TargetTypeRef, requirements: readonly RustGenericRequirement[]): boolean =>
     classifyCarrierRequirements(type, requirements, declared, parameters, associated.require, definitions);
-  const associated = createRustAssociatedRequirementCollector(declared, families, classify);
+  const associated = createRustAssociatedRequirementCollector(declared, families, classify, () => false);
   const activeUnions = new Map<string, string>();
   const visit = (type: TargetTypeRef): boolean => {
     if (!associated.collect(type)) return false;

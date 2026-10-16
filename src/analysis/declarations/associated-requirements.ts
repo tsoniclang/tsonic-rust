@@ -16,6 +16,7 @@ export function createRustAssociatedRequirementCollector(
   declared: ReadonlySet<string>,
   families: RustSourceTypeFamilyRegistry,
   classify: (carrier: TargetTypeRef, requirements: readonly RustGenericRequirement[]) => boolean,
+  nativeProjection: (carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>) => boolean,
 ): {
   require(carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, requirement?: RustGenericRequirement): boolean;
   requireField(carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, access: readonly ("read" | "write")[], output?: TargetTypeRef): boolean;
@@ -24,9 +25,12 @@ export function createRustAssociatedRequirementCollector(
 } {
   const entries: { carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>; requirements: Set<RustGenericRequirement>; fieldAccess: Set<"read" | "write">; output?: TargetTypeRef }[] = [];
   const require = (carrier: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, requirement?: RustGenericRequirement): boolean => {
-    if (carrier.trait === undefined || families.get(carrier.trait.id) === undefined) return false;
+    if (carrier.trait === undefined) return false;
+    const family = families.get(carrier.trait.id);
+    if (family === undefined && (carrier.owner.kind !== "type-parameter" || !nativeProjection(carrier))) return false;
     const references = rustTargetTypeParameterIdentities(carrier);
     if (references.length === 0) {
+      if (family === undefined) return false;
       const implementation = families.implementation(carrier.trait, carrier.owner);
       return implementation !== undefined && (requirement === undefined || classify(implementation.output, [requirement]));
     }
@@ -41,7 +45,7 @@ export function createRustAssociatedRequirementCollector(
   };
   const collect = (carrier: TargetTypeRef): boolean => {
     if (carrier.kind === "associated-type" && carrier.trait !== undefined &&
-      families.get(carrier.trait.id) !== undefined && !require(carrier)) return false;
+      (families.get(carrier.trait.id) !== undefined || nativeProjection(carrier)) && !require(carrier)) return false;
     return rustTargetTypeChildren(carrier).every(collect);
   };
   return {

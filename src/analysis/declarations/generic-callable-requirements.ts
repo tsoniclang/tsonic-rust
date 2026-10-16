@@ -52,6 +52,7 @@ import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
+import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
@@ -127,7 +128,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (!exactNames.includes(selected.identity)) capturedParameters.set(selected.identity, rustTypeParameterFromSourceContract(selected));
     }
   }
-  const nativeInputs = new Map([...input.nativeCallables.inputsFor(declaration), ...input.nativeCallables.capturesFor(declaration)]
+  const nativeBindings = [...input.nativeCallables.inputsFor(declaration), ...input.nativeCallables.capturesFor(declaration)];
+  const nativeInputs = new Map(nativeBindings
     .map(selected => [selected.implementation.identity, selected.implementation]));
   const declared = new Set([...exactNames, ...capturedParameters.keys(), ...nativeInputs.keys()]);
   const projections = createRustProjectProjectionRequirementCollector(declared, input.projectTypes);
@@ -144,7 +146,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   const uses: RequirementUse[] = [...input.inheritedBody?.uses ?? []];
   const dependencies = new Set<string>();
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
-    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require, input.typeDefinitions));
+    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require, input.typeDefinitions),
+    carrier => nativeBindings.some(binding => rustNativeCallableErrorChannel(binding, binding.implementation, carrier) !== undefined));
   for (const parameter of [...input.inheritedBody?.typeParameters ?? [], ...input.inheritedBody?.capturedTypeParameters ?? [],
     ...input.inheritedBody?.nativeInputs ?? []])
     for (const requirement of parameter.requirements) byParameter.get(parameter.identity)?.add(requirement);
