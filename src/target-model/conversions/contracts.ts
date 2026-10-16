@@ -79,7 +79,7 @@ const tsValueCarrier = rustTsValueTargetType();
 const absenceCarrier = rustAbsenceTargetType();
 
 interface RustValueConversionContractBase {
-  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "ownership" | "projection";
+  readonly category: "exact" | "checked-range" | "js-number" | "numeric-promotion" | "native-numeric-cast" | "ownership" | "projection";
   readonly sourceMode: "value" | "ref";
   readonly source: TargetTypeRef;
   readonly target: TargetTypeRef;
@@ -695,6 +695,9 @@ export function rustValueConversionContract(
       rustSourcePrimitiveTargetType(numberBoxingSource), jsValueCarrier, false);
   }
   switch (value.id) {
+    case "native-f64-to-f32":
+      return { category: "native-numeric-cast", sourceMode: "value", source: float64Carrier,
+        target: rustSourcePrimitiveTargetType("float32"), lowering: "numeric-cast", targetType: "f32", fallible: false };
     case "js-numeric-from-number":
       return contract(value.id, "exact", "js_abi::JsNumeric::from_number", "value", float64Carrier, rustJsNumericTargetType(), false);
     case "js-string-number-from-string":

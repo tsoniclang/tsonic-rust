@@ -486,14 +486,14 @@ export function planNumericLiteralWithCarrier(
     if (numeric.kind === "authored") {
       const text = numeric.token.coefficient === 0n ? "0.0" : numeric.token.decimalText;
       const floatText = text.includes(".") || text.includes("e") ? text : `${text}.0`;
-      const value: RustExpr = { kind: "float-literal", text: float32 ? `${floatText}_f32` : floatText };
+      const value: RustExpr = { kind: "float-literal", text: `${floatText}_${float32 ? "f32" : "f64"}` };
       return numeric.token.negative ? { kind: "unary", operator: "-", operand: value } : value;
     }
     const text = String(Math.abs(numeric.value));
     const floatText = text.includes(".") || text.includes("e") || text.includes("E") ? text : `${text}.0`;
-    const value: RustExpr = { kind: "float-literal", text: float32 ? `${floatText}_f64` : floatText };
+    const value: RustExpr = { kind: "float-literal", text: `${floatText}_f64` };
     const signed: RustExpr = numeric.value < 0 || Object.is(numeric.value, -0) ? { kind: "unary", operator: "-", operand: value } : value;
-    return float32 ? { kind: "numeric-cast", expression: signed, target: "f32" } : signed;
+    return signed;
   }
   if (isRustIntegerCarrier(carrier)) {
     const value = literal?.integer;

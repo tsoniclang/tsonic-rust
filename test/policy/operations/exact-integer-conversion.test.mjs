@@ -31,7 +31,7 @@ test("explicit integer assertions select one closed conversion for every native 
   for (const source of integers) {
     for (const target of integers) {
       if (source === target) continue;
-      const selected = selectRustSourceAssertionConversion(primitive(source), primitive(target));
+      const selected = selectRustSourceAssertionConversion(primitive(source), primitive(target), undefined);
       assert.notEqual(selected, undefined, `${source} -> ${target}`);
       const contract = rustValueConversionContract(selected);
       assert.deepEqual(contract.source, primitive(source));
@@ -39,10 +39,10 @@ test("explicit integer assertions select one closed conversion for every native 
     }
   }
   for (const source of ["bool", "char"]) {
-    assert.equal(selectRustSourceAssertionConversion(primitive(source), primitive("native-uint")), undefined);
+    assert.equal(selectRustSourceAssertionConversion(primitive(source), primitive("native-uint"), undefined), undefined);
   }
   for (const source of ["float32", "float64"]) {
-    const conversion = selectRustSourceAssertionConversion(primitive(source), primitive("native-uint"));
+    const conversion = selectRustSourceAssertionConversion(primitive(source), primitive("native-uint"), undefined);
     assert.equal(conversion?.kind, "exact-integer");
     assert.equal(rustValueConversionContract(conversion)?.fallible, true);
     assert.equal(selectRustSourceValueConversion(primitive(source), primitive("native-uint")), undefined);
