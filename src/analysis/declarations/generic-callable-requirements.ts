@@ -35,6 +35,7 @@ import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../operati
 import {
   getRustGeneratorProtocol,
   isRustCopyCarrier,
+  rustOptionElementCarrier,
   rustClosureProtocol,
   rustSourceTypeCarrierValue,
   rustTargetGenericTypeArguments,
