@@ -199,20 +199,21 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   }
   const asynchronous = records.asyncFunction.get(declaration);
   if (asynchronous?.kind === "js-promise") {
+    const lowering = asynchronous.lowering;
     const error = addUse(
       declaration,
       asynchronous.outputCarrier,
-      asynchronous.storage.kind === "static" ? ["clone", "static"] : ["clone"],
+      lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
     );
     if (error !== undefined) {
       return { kind: "rejected", reason: error };
     }
-    if (asynchronous.storage.kind === "static") {
-      if (asynchronous.ownedReceiver !== undefined) {
-        const receiverError = addUse(declaration, asynchronous.ownedReceiver.carrier, ["static"]);
+    if (lowering.kind === "factory") {
+      if (lowering.ownedReceiver !== undefined) {
+        const receiverError = addUse(declaration, lowering.ownedReceiver.carrier, ["static"]);
         if (receiverError !== undefined) return { kind: "rejected", reason: receiverError };
       }
-      for (const parameter of asynchronous.capturedParameters) {
+      for (const parameter of lowering.capturedParameters) {
         const parameterError = addUse(
           parameter,
           records.sourceParameterAbi.get(parameter)?.parameterCarrier,

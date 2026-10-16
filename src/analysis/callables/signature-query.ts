@@ -153,7 +153,8 @@ function admitSuspension(walk: RustFactWalk, declaration: Node, selection: RustC
   if (selection.kind === "async") {
     if (asynchronous === undefined) {
       if (selection.fact.kind === "native-future") records.asyncFunctions.native(declaration, selection.fact.outputCarrier);
-      else records.asyncFunctions.promise(declaration, selection.fact.futureCarrier, selection.fact.outputCarrier, selection.fact);
+      else records.asyncFunctions.promise(declaration, selection.fact.futureCarrier, selection.fact.outputCarrier,
+        selection.fact.lowering);
     }
   } else {
     if (generator === undefined) records.generators.suspend(declaration, selection.fact, selection.fact);

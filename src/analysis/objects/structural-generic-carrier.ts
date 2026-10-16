@@ -4,7 +4,6 @@ import { mapRustTargetTypes } from "../../target-model/types/carriers/substituti
 import { rustTargetGenericReferences, rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
-import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustOwnedStorageChild } from "../../policy/types/storage/owned-storage.js";
 
 export interface RustStructuralGenericCarrierSelection {
@@ -33,10 +32,6 @@ export function rustStructuralGenericCarrier(carrier: TargetTypeRef): RustStruct
     const callable = rustCallableProtocol(type);
     if (callable?.lifetime?.kind === "placeholder") {
       type = rustCallableTargetType(callable.parameters, callable.result, storageLifetime());
-    } else if (type.kind === "target-named" && type.id === rustJsPromiseTargetId &&
-      type.genericArguments?.[0]?.kind === "lifetime" && type.genericArguments[0].lifetime.kind === "placeholder") {
-      type = { ...type, genericArguments: [{ kind: "lifetime", lifetime: storageLifetime() },
-        ...type.genericArguments.slice(1)] };
     }
     if (source !== carrier && rustStructuralObjectCarrierValue(source) !== undefined) {
       nestedCarriers.push(Object.freeze({ source, carrier: type }));

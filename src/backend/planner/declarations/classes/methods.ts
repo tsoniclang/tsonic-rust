@@ -94,10 +94,11 @@ export function planProjectMethod(
   const asyncFact = context.input.program.records.asyncFunction.get(member);
   const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
     ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        asyncFact?.kind === "js-promise" && asyncFact.storage.kind === "static"
+        asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
       ? {
           requiredStaticParameters: generatorFact?.capturedParameters ??
-            (asyncFact?.kind === "js-promise" ? asyncFact.capturedParameters : []),
+            (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+              ? asyncFact.lowering.capturedParameters : []),
         }
       : {}),
   });
@@ -172,7 +173,7 @@ export function planProjectMethod(
   }
   if (returnsJsPromise && !requireRustCarrierRequirements(
     asyncFact.outputCarrier,
-    asyncFact.storage.kind === "static" ? ["clone", "static"] : ["clone"],
+    asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
     member,
     context,
   )) {
@@ -217,7 +218,8 @@ export function planProjectMethod(
     return undefined;
   }
   const receiverPlan = planRustSuspendedReceiver(
-    generatorFact?.ownedReceiver ?? (asyncFact?.kind === "js-promise" ? asyncFact.ownedReceiver : undefined),
+    generatorFact?.ownedReceiver ?? (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+      ? asyncFact.lowering.ownedReceiver : undefined),
     { ...context, syntheticNames },
   );
   const bodyContext: RustPlanContext = {

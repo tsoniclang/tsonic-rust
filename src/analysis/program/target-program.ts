@@ -16,6 +16,7 @@ import type {
   RustTargetProgram,
 } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
+import { analyzeRustSettledPromiseHelpers } from "../callables/async-results.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -327,6 +328,8 @@ export function analyzeRustTargetProgram(
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
     captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
+    settledPromiseHelpers: analyzeRustSettledPromiseHelpers({ ast: context.ast, sourceFiles: context.sourceFiles,
+      records, names: context.names }),
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,

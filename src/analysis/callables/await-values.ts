@@ -15,10 +15,11 @@ import { rustFutureValueMatchesCarrier } from "./future-values.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import type { RustAwaitValueLeafFact, RustAwaitValueFact } from "../../target-model/records/await-values.js";
 
-export function rustAwaitValueRequirements(leaf: RustAwaitValueLeafFact): readonly ("clone" | "static")[] {
-  if (leaf.future === undefined || leaf.carrier.kind !== "target-named" || leaf.carrier.id !== rustJsPromiseTargetId) return [];
-  const lifetime = leaf.carrier.genericArguments?.[0];
-  return lifetime?.kind === "lifetime" && lifetime.lifetime.kind === "static" ? ["clone", "static"] : ["clone"];
+const sharedPromisePayload: readonly "clone"[] = Object.freeze(["clone"]);
+
+export function rustAwaitValueRequirements(leaf: RustAwaitValueLeafFact): readonly "clone"[] {
+  return leaf.future === undefined || leaf.carrier.kind !== "target-named" || leaf.carrier.id !== rustJsPromiseTargetId
+    ? [] : sharedPromisePayload;
 }
 
 function admitsAbsentCompletion(carrier: TargetTypeRef): boolean {

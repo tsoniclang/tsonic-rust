@@ -88,6 +88,8 @@ export function rustNativeFutureValueForSourceCallBranch(
   if (operation?.kind !== "source-call" || effects?.nativeInput === undefined || effects.awaiting !== "fallible") return undefined;
   const completion = rustNativeCallableCompletion(operation.resultCarrier, definitions);
   const future = completion?.futures.find(future => rustTargetTypeRefEquals(future.carrier, branch));
+  const jsFuture = future === undefined ? undefined : rustFutureValueForSourceStorage(future.carrier);
+  if (jsFuture !== undefined) return jsFuture;
   const errorCarrier = future === undefined ? undefined : effects.nativeInput.awaitErrors[future.ordinal];
   const errorSource = future === undefined ? undefined : effects.nativeInput.awaitErrorSources[future.ordinal];
   if (completion === undefined || completion.futures.length !== effects.nativeInput.awaitErrors.length ||
