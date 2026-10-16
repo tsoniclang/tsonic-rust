@@ -134,7 +134,8 @@ export function value(limit: number): number {
     assert.equal(gate.afterSeal, 1, "a lazy source query would be observed and refused");
     assert.throws(() => withoutProducerWrites(() => new Map().set(foreign, foreign)), /mutated after publication/u);
     assert.throws(() => requireStable([], [], "fresh-array negative control"), /changed returned identity/u);
-    assert.throws(() => requireStable([], [], "mutable-array negative control"), /changed returned identity/u);
+    const mutable = [];
+    assert.throws(() => requireStable(mutable, mutable, "mutable-array negative control"), /returned a mutable array/u);
   });
 }
 
@@ -149,6 +150,16 @@ function guardedServices(service, gate, label, cache = new WeakMap()) {
   if (previous !== undefined) return previous;
   const methods = new Map();
   const facade = new Proxy(Object.create(null), {
+    ownKeys() { return Reflect.ownKeys(service); },
+    has(_target, property) { return Reflect.has(service, property); },
+    getOwnPropertyDescriptor(_target, property) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(service, property);
+      return descriptor === undefined ? undefined : {
+        configurable: true,
+        enumerable: descriptor.enumerable,
+        get: () => facade[property],
+      };
+    },
     get(_target, property) {
       const value = Reflect.get(service, property, service);
       if (typeof value === "function") {
