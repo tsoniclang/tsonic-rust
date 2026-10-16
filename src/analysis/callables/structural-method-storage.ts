@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
@@ -31,6 +31,7 @@ import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-environ
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
+import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 
 interface RustStructuralMethodRoot {
   readonly carrier: TargetTypeRef;
@@ -54,16 +55,20 @@ export function createRustStructuralMethodStorage(input: {
 }): {
   prepareConstructors(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
-    producers: Pick<RustNativeCallableProducerConstruction, "selectConstructionErrors">): void;
-  complete(errors: Pick<RustErrorRegionRecords, "producerError">): void;
+    producers: Pick<RustNativeCallableProducerConstruction, "selectConstructionErrors">): readonly RustSourceCallableSpecializationIssue[];
+  complete(errors: Pick<RustErrorRegionRecords, "producerError">): readonly RustSourceCallableSpecializationIssue[];
   validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): void;
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): readonly RustSourceCallableSpecializationIssue[];
 } {
   const { ast, records, sourceStorage, structuralShapes } = input;
   const canonical = new Map(structuralShapes.definitions.map(definition =>
     [`${definition.componentId}\0${definition.targetName}`, definition]));
   const roots: RustStructuralMethodRoot[] = [];
+  const sourceIssues: RustSourceCallableSpecializationIssue[] = [];
+  const admittedProducers = new Map<RustStructuralMethodRoot, readonly SourceStorageProducer[]>();
+  const reject = (subject: Node, message: string): readonly RustSourceCallableSpecializationIssue[] =>
+    Object.freeze([{ subject, message }]);
   const seen = new Map<SourceStorageSubject, Map<TargetTypeRef, Set<number>>>();
   const register = (node: Node, carrier: TargetTypeRef, index: number, subject: SourceStorageSubject): void => {
     const selected = structuralShapes.definitionForCarrier(carrier);
@@ -80,7 +85,10 @@ export function createRustStructuralMethodStorage(input: {
     indexes.add(index);
     const owner = sourceEnclosingCallable(node, ast);
     const bindings = owner === undefined ? sourceStorage.emptyBindings : input.native.bindingsFor(owner);
-    if (bindings === undefined) throw new Error("Structural method storage requires its checked lexical activation.");
+    if (bindings === undefined) {
+      sourceIssues.push({ subject: node, message: "Structural method storage requires its checked lexical activation." });
+      return;
+    }
     roots.push(Object.freeze({ carrier, definition, index, subject, bindings }));
   };
   for (const node of sourceStorage.nodes) {
@@ -97,8 +105,8 @@ export function createRustStructuralMethodStorage(input: {
           declarations.push(...field.contractDeclarations);
         for (const declaration of declarations) {
           const selected = sourceStorage.subject(node, "value", [{ kind: "method-value", declaration }]);
-          if (selected.kind === "unresolved") throw new Error(selected.reason);
-          register(node, operation.resultCarrier, field.storageIndex, selected.subject);
+          if (selected.kind === "unresolved") sourceIssues.push({ subject: declaration, message: selected.reason });
+          else register(node, operation.resultCarrier, field.storageIndex, selected.subject);
         }
       }
     } else if (operation?.kind === "source-call" && operation.target.form === "structural-method") {
@@ -119,6 +127,7 @@ export function createRustStructuralMethodStorage(input: {
     prepareConstructors(components: RustSourcePackageComponentClassifications,
       effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
       producers: Pick<RustNativeCallableProducerConstruction, "selectConstructionErrors">) {
+      if (sourceIssues.length !== 0) return Object.freeze(sourceIssues);
       const parent = new Map<Node, Node>();
       const errorByProducer = new Map<Node, TargetTypeRef>();
       const demands = new Map<Node, TargetTypeRef[]>();
@@ -138,8 +147,9 @@ export function createRustStructuralMethodStorage(input: {
         producers: input.nativeProducers, definitions: input.typeDefinitions };
       for (const root of roots) {
         const selected = sourceStorage.storageProducersFor(root.subject, root.bindings);
-        if (selected.kind !== "complete") throw new Error(selected.kind === "unresolved" ? selected.reason
+        if (selected.kind !== "complete") return reject(root.subject.node, selected.kind === "unresolved" ? selected.reason
           : "Retained constructor selection requires its exact admitted source producer domain.");
+        admittedProducers.set(root, selected.producers);
         const fields = slots.get(root.definition) ?? new Map<number, Node>();
         slots.set(root.definition, fields);
         const field = structuralShapes.field(root.carrier, root.index)!;
@@ -189,6 +199,7 @@ export function createRustStructuralMethodStorage(input: {
         for (const member of members) errors.set(member, selected);
       }
       producers.selectConstructionErrors(errors);
+      return Object.freeze([]);
     },
     complete(errors) {
       if (complete) throw new Error("Structural method physical storage completes exactly once.");
@@ -202,14 +213,13 @@ export function createRustStructuralMethodStorage(input: {
       });
       const candidates = new Map<RustStructuralMethodRoot, readonly TargetTypeRef[]>();
       for (const root of roots) {
-        const selected = sourceStorage.storageProducersFor(root.subject, root.bindings);
-        if (selected.kind !== "complete") throw new Error(selected.kind === "unresolved" ? selected.reason
-          : "Structural method storage requires its complete admitted source producers.");
+        const selected = admittedProducers.get(root);
+        if (selected === undefined) throw new Error("Structural method storage requires its constructor-admitted producer domain.");
         const field = structuralShapes.field(root.carrier, root.index)!;
         const storage = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
         const protocol = rustCallableProtocol(storage)!;
         const signatures: TargetTypeRef[] = [];
-        for (const producer of selected.producers) {
+        for (const producer of selected) {
           const subject = producer.subject;
           const operation = records.targetOperation.get(subject.node);
           if (subject.kind !== "value" || subject.projection.length !== 0 || operation?.kind !== "closure")
@@ -234,7 +244,7 @@ export function createRustStructuralMethodStorage(input: {
           if (retained === undefined || protocol.lifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
             protocol.lifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes))) {
             if (protocol.lifetime.kind !== "static" || !captureCarriers.some(rustHasOpenOwnedStorage))
-              throw new Error("Structural method storage lost its admitted retained-lifetime correspondence.");
+              return reject(subject.node, "Structural method storage requires the actual captured lifetime to outlive its selected destination.");
             retainedRequirements.push(Object.freeze({ declaration: subject.node, captures: Object.freeze(captureCarriers) }));
           }
           let carrier = rustCallableTargetType(source.signature.parameters, source.signature.result,
@@ -318,6 +328,7 @@ export function createRustStructuralMethodStorage(input: {
       }
       structuralShapes.finalizeMethodStorage(selections);
       complete = true;
+      return Object.freeze([]);
     },
     validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">) {
       if (!complete) throw new Error("Structural method error validation requires its complete physical field plan.");
@@ -329,14 +340,17 @@ export function createRustStructuralMethodStorage(input: {
     validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">) {
       if (!complete || retentionValidated) throw new Error("Structural retention validates once against the completed declaration requirements.");
+      const issues: RustSourceCallableSpecializationIssue[] = [];
       for (const requirement of retainedRequirements) {
         const owner = sourceEnclosingCallable(ast.parent(requirement.declaration), ast);
         const contract = owner === undefined ? undefined : requirements.contractFor(owner, true);
         if (contract === undefined || !requirement.captures.every(carrier =>
           rustFinalContractSupportsStatic(contract, carrier, families, input.typeDefinitions)))
-          throw new Error("Structural method retention is not proven by its actual final native generic contract.");
+          issues.push({ subject: requirement.declaration,
+            message: "Structural method retention is not proven by its actual final native generic contract." });
       }
-      retentionValidated = true;
+      retentionValidated = issues.length === 0;
+      return Object.freeze(issues);
     },
   });
 }

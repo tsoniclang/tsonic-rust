@@ -106,13 +106,13 @@ export interface RustCallableValueConstruction {
 export interface RustCallableValuePlanRegistry extends RustCallableValueConstruction {
   initialize(input: RustCallableValuePlanInput): RustCallableValueConstruction;
   preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
-    effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined): void;
+    effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined): readonly RustSourceCallableSpecializationIssue[];
   finalizeSelected(): readonly RustSourceCallableSpecializationIssue[];
   readonly selected: RustCallableValueSelection;
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): void;
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): readonly RustSourceCallableSpecializationIssue[];
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -120,11 +120,11 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
 interface RustCallableValueLifecycle {
   readonly construction: RustCallableValueConstruction;
   preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
-    effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined): void;
+    effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined): readonly RustSourceCallableSpecializationIssue[];
   finalizeSelected(): { readonly plan: RustCallableValueSelection; readonly issues: readonly RustSourceCallableSpecializationIssue[] };
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): void;
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): readonly RustSourceCallableSpecializationIssue[];
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -161,7 +161,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     get selected() { return requireSelected(); },
     preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
       effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined) {
-      requireLifecycle().preparePhysicalStorage(components, effectsFor);
+      return requireLifecycle().preparePhysicalStorage(components, effectsFor);
     },
     initializeCompletions(input: RustGenericCallableCompletionInput): void {
       const current = requireSelected();
@@ -300,17 +300,20 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined) {
       if (structuralMethodStorage !== undefined) throw new Error("Physical callable storage prepares once after its intrinsic source effects.");
       structuralMethodStorage = createRustStructuralMethodStorage({ ...input, native, nativeStorage, nativeProducers });
-      structuralMethodStorage.prepareConstructors(components, effectsFor, nativeProducers);
+      const constructorIssues = structuralMethodStorage.prepareConstructors(components, effectsFor, nativeProducers);
+      if (constructorIssues.length !== 0) return constructorIssues;
       const context = { ast: input.ast, components, producers: nativeProducers, definitions: input.typeDefinitions,
         records: { ...input.records, errorEffects: { get(subject: import("@tsonic/tsts").ExtensionFactSubject | undefined) {
           const node = asSourceNode(subject, input.ast);
           return node === undefined ? undefined : effectsFor(node);
         } } } };
-      structuralMethodStorage.complete({ producerError(reference) {
+      const storageIssues = structuralMethodStorage.complete({ producerError(reference) {
         return normalizeRustErrorType({ kind: "target-specific", target: "rust", name: "producer-error", value: reference }, context);
       } });
+      if (storageIssues.length !== 0) return storageIssues;
       parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
         records: input.records }, nativeStorageQueries);
+      return Object.freeze([]);
     },
     finalizeSelected() {
       if (structuralMethodStorage === undefined) throw new Error("Physical callable families require their completed constructor and field storage selection.");
@@ -347,7 +350,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">) {
       if (structuralMethodStorage === undefined) throw new Error("Structural retention requires completed physical field selection.");
-      structuralMethodStorage.validateRetention(requirements, families);
+      return structuralMethodStorage.validateRetention(requirements, families);
     },
     seal(): RustCallableValuePlan {
       if (publishedPlan !== undefined) return publishedPlan;

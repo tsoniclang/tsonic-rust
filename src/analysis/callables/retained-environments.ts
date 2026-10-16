@@ -111,4 +111,3 @@ export function rustRetainedCallLifetimes(
 export function rustRetainedCallResult(result: TargetTypeRef, lifetimes: ReadonlyMap<string, RustLifetimeRef>): TargetTypeRef {
   return substituteRustTargetGenerics(result, new Map(), lifetimes);
 }
-

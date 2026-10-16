@@ -595,7 +595,15 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
     return;
   }
-  context.callableValues.preparePhysicalStorage(sourcePackageComponents.plan, fallibility.effectsFor);
+  const physicalIssues = context.callableValues.preparePhysicalStorage(sourcePackageComponents.plan, fallibility.effectsFor);
+  const sourceStorageFailure = context.sourceStorage.failureReason();
+  if (sourceStorageFailure !== undefined) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_STORAGE_NOT_PROVEN", sourceStorageFailure, undefined,
+      []);
+    return;
+  }
+  physicalIssues.forEach(callableIssue);
+  if (context.diagnostics.length !== selectedIssuePosition) return;
   recordRustDeferredProducerEffects(walk);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
@@ -68,6 +69,44 @@ const api = {
   async caught(): Promise<void> { try { await fail(); } catch {} },
   async plain(): Promise<void> {},
 };
+
+for (const budgetFailure of [false, true]) {
+  test(`structural source admission rejects unavailable producer evidence before physical publication (${budgetFailure ? "budget" : "domain"})`, () => {
+    let context;
+    let queries = 0;
+    const reason = budgetFailure ? "The source storage work budget was exhausted." : "The actual retained method producer domain is unresolved.";
+    const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": "export function make() { return { value(): number { return 7; } }; }" },
+      compileTarget(request) {
+        context = analyzeRustCheckedContext(request, original => {
+          let preparing = false;
+          const callableValues = Object.create(original.callableValues, { preparePhysicalStorage: { value(...arguments_) {
+            preparing = true;
+            return original.callableValues.preparePhysicalStorage(...arguments_);
+          } } });
+          return { ...original, callableValues, sourceStorage: { ...original.sourceStorage,
+            storageProducersFor(subject, bindings) {
+              if (preparing && subject.projection.some(projection => projection.kind === "method-value")) {
+                queries += 1;
+                return { kind: "unresolved", reason };
+              }
+              return original.sourceStorage.storageProducersFor(subject, bindings);
+            },
+            failureReason: () => preparing && budgetFailure ? reason : original.sourceStorage.failureReason(),
+          } };
+        });
+        return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+      },
+    });
+    assert.equal(queries > 0, true, "the actual structural constructor admission asks for its real method domain");
+    const code = budgetFailure ? "RUST_SOURCE_STORAGE_NOT_PROVEN" : "RUST_CALLABLE_VALUE_NOT_CLOSED";
+    assert.equal(result.diagnostics.length, 1, "one source rejection is reported, not an internal crash");
+    assert.equal(result.diagnostics[0].code, code, "resource exhaustion remains distinct from missing semantic evidence");
+    assert.equal(result.diagnostics[0].message, reason, "the exact owning source failure is retained");
+    const method = context.sourceStorage.nodes.find(node => context.ast.is.IsMethodDeclaration(node));
+    assert.equal(method !== undefined && context.records.errorEffects.get(method) === undefined, true,
+      "no final physical error publication follows failed source admission");
+  });
+}
 export async function run(): Promise<void> { await api.forward(); await api.caught(); await api.plain(); }
 `,
   "two actual implementations of one canonical slot": `
