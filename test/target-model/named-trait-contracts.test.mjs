@@ -10,6 +10,7 @@ import { substituteRustTargetGenerics } from "../../dist/target-model/types/carr
 import { rustTargetGenericReferences } from "../../dist/target-model/types/carriers/generic-references.js";
 import { materializeProviderCarrier } from "../../dist/providers/packages/materialization.js";
 import { rustLifetimeKey } from "../../dist/target-model/lifetimes/index.js";
+import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const typeArgument = type => ({ kind: "type", type });
@@ -87,6 +88,58 @@ test("higher-ranked native trait evidence uses the existing alpha-equivalent bin
   assert.equal(rustNativeTraitRefEquals(bound("left"), bound("right")), true);
   assert.equal(rustCarrierSatisfiesTraitRef(carrier(bound("left")), bound("right")), true);
   assert.equal(rustCarrierSatisfiesTraitRef(carrier(bound("left")), rustNativeTraitRef("foreign::Lending")), false);
+});
+
+test("native trait equality ignores provider evidence but retains exact native arguments and constraints", () => {
+  const lifetime = { kind: "parameter", identity: "checked:region", name: "region" };
+  const leftRow = rustNamedTargetType("provider-one.Row", "common::Row", [typeArgument(integer)]);
+  const rightRow = rustNamedTargetType("provider-two.Row", "common::Row", [typeArgument(integer)], [], {
+    implementations: [implementation(rustNativeTraitRef("core::clone::Clone"))],
+  });
+  const trait = { ...rustNativeTraitRef("foreign::Project", [typeArgument(leftRow),
+    { kind: "lifetime", lifetime }, { kind: "const", value: { kind: "integer", value: "4" } }]),
+    associatedConstraints: [{ kind: "equality", identity: "provider-one.Output", name: "Output",
+      genericArguments: [], type: leftRow }] };
+  const other = { ...trait, id: "provider-two.Project", sourceItem: { fileName: "other.rs", typeName: "Project" },
+    genericArguments: [typeArgument(rightRow), ...trait.genericArguments.slice(1)],
+    associatedConstraints: [{ ...trait.associatedConstraints[0], identity: "provider-two.Output", type: rightRow }] };
+  assert.equal(rustNativeTraitRefEquals(trait, other), true);
+  assert.equal(rustTargetTypeRefEquals(trait, other), false);
+  assert.equal(rustTargetTypeRefEquals(leftRow, rightRow), false);
+  const replaceArgument = (index, argument) => ({ ...other,
+    genericArguments: other.genericArguments.map((value, at) => at === index ? argument : value) });
+  const controls = [
+    { ...other, path: "another::Project" },
+    replaceArgument(0, typeArgument(rustNamedTargetType("provider-one.Row", "another::Row", [typeArgument(integer)]))),
+    replaceArgument(0, typeArgument(rustNamedTargetType("provider-one.Row", "common::Row", [typeArgument({ kind: "source-primitive", name: "number" })]))),
+    { ...other, genericArguments: other.genericArguments.slice(1) },
+    replaceArgument(1, { kind: "lifetime", lifetime: { kind: "static" } }),
+    replaceArgument(1, { kind: "lifetime", lifetime: { ...lifetime, identity: "checked:other" } }),
+    replaceArgument(2, { kind: "const", value: { kind: "integer", value: "5" } }),
+    { ...other, associatedConstraints: [] },
+    { ...other, associatedConstraints: [{ ...other.associatedConstraints[0], name: "Different" }] },
+    { ...other, associatedConstraints: [{ ...other.associatedConstraints[0], type: integer }] },
+    { ...other, associatedConstraints: [{ ...other.associatedConstraints[0],
+      genericArguments: [{ kind: "lifetime", lifetime }] }] },
+  ];
+  controls.forEach((control, index) => assert.equal(rustNativeTraitRefEquals(trait, control), false, `native identity control ${index}`));
+});
+
+test("native trait equality preserves binder arity and outlives constraints", () => {
+  const lifetime = { kind: "bound", binderIdentity: "binder", identity: "binder:value", name: "value" };
+  const trait = { ...rustNativeTraitRef("foreign::Lending", [{ kind: "lifetime", lifetime }]),
+    lifetimeBinder: { identity: "binder", parameters: [{ lifetime, outlives: [] }] } };
+  assert.equal(rustNativeTraitRefEquals(trait, { ...trait, lifetimeBinder: undefined }), false);
+  assert.equal(rustNativeTraitRefEquals(trait, { ...trait,
+    lifetimeBinder: { ...trait.lifetimeBinder, parameters: [] } }), false);
+  assert.equal(rustNativeTraitRefEquals(trait, { ...trait,
+    lifetimeBinder: { ...trait.lifetimeBinder, parameters: [{ lifetime, outlives: [{ kind: "static" }] }] } }), false);
+  const bounds = { ...trait, associatedConstraints: [{ kind: "bounds", identity: "Output", name: "Output",
+    genericArguments: [], traits: [rustNativeTraitRef("core::clone::Clone")], outlives: [] }] };
+  assert.equal(rustNativeTraitRefEquals(bounds, { ...bounds,
+    associatedConstraints: [{ ...bounds.associatedConstraints[0], outlives: [{ kind: "static" }] }] }), false);
+  assert.equal(rustNativeTraitRefEquals(bounds, { ...bounds,
+    associatedConstraints: [{ ...bounds.associatedConstraints[0], traits: [] }] }), false);
 });
 
 test("provider trait aliases materialize exact arguments and self references without recursively adding their contracts", () => {
