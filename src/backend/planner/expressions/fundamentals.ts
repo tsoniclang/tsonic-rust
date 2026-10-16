@@ -485,7 +485,9 @@ export function planNumericLiteralWithCarrier(
       "A floating literal requires its sealed source numeric evidence.", node);
     const float32 = carrier.kind === "source-primitive" && rustPrimitiveTypeName(carrier.name) === "f32";
     if (numeric.kind === "authored") {
-      const value: RustExpr = { kind: "float-literal", text: float32 ? `${numeric.token.decimalText}_f32` : numeric.token.decimalText };
+      const text = numeric.token.coefficient === 0n ? "0.0" : numeric.token.decimalText;
+      const floatText = text.includes(".") || text.includes("e") ? text : `${text}.0`;
+      const value: RustExpr = { kind: "float-literal", text: float32 ? `${floatText}_f32` : floatText };
       return numeric.token.negative ? { kind: "unary", operator: "-", operand: value } : value;
     }
     const text = String(Math.abs(numeric.value));
