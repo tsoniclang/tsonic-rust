@@ -13,12 +13,15 @@ import {
   relative,
   resolve,
 } from "node:path";
-import type {
-  TargetArtifact,
-  TargetCompileOutput,
-  TargetSourceFile,
+import {
+  rejectedTargetStage,
+  resolvedTargetStage,
+  type TargetArtifact,
+  type TargetCompileOutput,
+  type TargetCompileResult,
+  type TargetSourceFile,
 } from "@tsonic/target-api/artifacts";
-import type { RustOutputPlan } from "../artifact-model/output.js";
+import type { RustEdition } from "../target-model/project/model.js";
 
 const rustfmtBatchSize = 128;
 const rustfmtBatchPathBytes = 64 * 1024;
@@ -34,9 +37,35 @@ export class RustFormattingError extends Error {
   }
 }
 
+export function formatRustCompileResult(
+  result: TargetCompileResult,
+  edition: RustEdition,
+): TargetCompileResult {
+  if (result.kind === "rejected") {
+    return result;
+  }
+  try {
+    const formatted = formatRustCompileOutput(result.value, edition);
+    return formatted === result.value
+      ? result
+      : resolvedTargetStage(formatted, result.diagnostics);
+  } catch (error) {
+    if (!(error instanceof RustFormattingError)) {
+      throw error;
+    }
+    return rejectedTargetStage([...result.diagnostics, {
+      code: "RUST_SOURCE_FORMATTING_FAILED",
+      category: "error",
+      source: "tsonic-rust",
+      message: error.message,
+      evidence: ["target.capability=rust.toolchain.rustfmt"],
+    }]);
+  }
+}
+
 export function formatRustCompileOutput(
   output: TargetCompileOutput,
-  edition: RustOutputPlan["edition"],
+  edition: RustEdition,
 ): TargetCompileOutput {
   const sources = output.artifacts.filter(isRustSourceFile);
   if (sources.length === 0) {
@@ -189,7 +218,7 @@ function createRustfmtBatches(
 
 function formatRustfmtBatch(
   stageRoot: string,
-  edition: RustOutputPlan["edition"],
+  edition: RustEdition,
   sources: readonly StagedRustSource[],
 ): void {
   const sourcePaths = sources.map((source) => source.relativePath);
@@ -212,7 +241,7 @@ function formatRustfmtBatch(
 
 function runRustfmt(
   stageRoot: string,
-  edition: RustOutputPlan["edition"],
+  edition: RustEdition,
   sourcePaths: readonly string[],
   timeoutMilliseconds: number,
 ): void {

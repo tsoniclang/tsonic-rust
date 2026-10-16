@@ -1,15 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { compileRustTarget } from "../../../dist/backend/compile.js";
+import { resolve } from "node:path";
+import { compileRustTarget } from "../../dist/backend/compile.js";
 import {
   formatRustCompileOutput,
   RustFormattingError,
-} from "../../../dist/backend/emission/rustfmt.js";
-import { createRustTargetConfiguration } from "../../../dist/options/rust-target-options.js";
-import { composeRustProviderSemantics } from "../../../dist/providers/packages/semantics.js";
-import { fakeCompileInput, fakeSourceFile } from "../../helpers/fake-compile-input.mjs";
+} from "../../dist/toolchain/rustfmt.js";
+import { compileRust } from "../helpers/rust-session.mjs";
 
 test("generated Rust sources are canonically formatted without changing other artifacts", () => {
   const project = Object.freeze({
@@ -126,29 +124,41 @@ test("a missing formatter fails closed", () => {
 });
 
 test("target compilation reports formatter failure as an exact diagnostic", () => {
-  const input = fakeCompileInput({
-    sourceFiles: [fakeSourceFile({ fileName: "src/empty.ts", statements: [] })],
-  });
-  const configuration = createRustTargetConfiguration(
-    input.target,
-    dirname(input.paths.projectFilePath),
-    input.paths.targetOutputRoot,
-  );
   const previous = process.env.RUSTFMT;
   process.env.RUSTFMT = "/definitely/missing/tsonic-rustfmt";
   try {
-    const result = compileRustTarget(Object.freeze({
-      input,
-      configuration,
-      providerSemantics: composeRustProviderSemantics([]),
-      jsEnabled: false,
-      rootPublishesLibrary: true,
-    }));
-    assert.equal(result.kind, "rejected");
+    const { result } = compileRust({ files: { "index.ts": "export function value(): number { return 1; }" } });
     assert.deepEqual(result.diagnostics.map((diagnostic) => diagnostic.code), [
       "RUST_SOURCE_FORMATTING_FAILED",
     ]);
     assert.match(result.diagnostics[0]?.message ?? "", /Unable to execute Rust formatter/u);
+    assert.equal(result.diagnostics[0].source, "tsonic-rust");
+    assert.equal(result.diagnostics[0].category, "error");
+    assert.deepEqual(result.diagnostics[0].evidence, ["target.capability=rust.toolchain.rustfmt"]);
+    assert.equal(result.artifacts.length, 0);
+  } finally {
+    restoreEnvironment("RUSTFMT", previous);
+  }
+});
+
+test("the raw backend resolves without invoking a missing formatter", () => {
+  const previous = process.env.RUSTFMT;
+  process.env.RUSTFMT = "/definitely/missing/tsonic-rustfmt";
+  try {
+    let raw;
+    compileRust({
+      files: { "index.ts": "export function value(): number { return 1; }" },
+      compileTarget(request, observer) {
+        raw = compileRustTarget(request, observer);
+        return raw;
+      },
+    });
+    assert.equal(raw.kind, "resolved");
+    assert.equal(raw.value.artifacts.some(artifact => artifact.kind === "source" && artifact.language === "rust"), true);
+    assert.equal(Object.isFrozen(raw.value), true);
+    assert.equal(Object.isFrozen(raw.value.artifacts), true);
+    assert.equal(raw.value.artifacts.every(Object.isFrozen), true);
+    assert.deepEqual(raw.diagnostics, []);
   } finally {
     restoreEnvironment("RUSTFMT", previous);
   }
