@@ -19,6 +19,7 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext):
   | { readonly kind: "resolved"; readonly invocations: ReadonlyMap<Node, ReadonlyMap<string, ReadonlySet<Node>>> }
   | { readonly kind: "unresolved"; readonly at?: Node; readonly reason: string } {
   const budget = createSourceStorageBudget(defaultSourceStorageLimits);
+  const rows = budget.createRows();
   const vertices = new Map<Node, readonly NativeBodyVertex[]>();
   for (const declaration of context.sourceStorage.nodes) {
     if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
@@ -31,6 +32,8 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext):
         substitutions: new Map(variant.sourceTypeParameterIdentities.map((identity, index) =>
           [identity, variant.targetTypeArguments[index]!] as const)),
       })) : [{ declaration, name, arguments: [], substitutions: new Map<string, TargetTypeRef>() }];
+    for (const variant of variants) if (!budget.step() || !rows.add(4 + variant.arguments.length + variant.substitutions.size))
+      return { kind: "unresolved", reason: budget.failure()! };
     if (variants.some(variant => variant.name === undefined)) return { kind: "unresolved", at: declaration,
       reason: "A recursive native Promise body requires every selected specialization's physical name." };
     vertices.set(declaration, variants.map(variant => ({ ...variant, name: variant.name!, edges: [], pinned: new Set<Node>() })));
@@ -50,11 +53,24 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext):
       const specialized = context.sourceCallableSpecializations.requiresSpecialization(fact.asyncBody.declaration);
       const arguments_ = specialized ? rustTargetGenericTypeArguments(fact.targetGenericArguments ?? [])
         .map(argument => substituteRustTargetTypeParameters(argument, vertex.substitutions)) : [];
-      const targets = callees.filter(candidate => candidate.arguments.length === arguments_.length &&
-        candidate.arguments.every((argument, index) => rustTargetTypeRefEquals(argument, arguments_[index])));
-      if (targets.length !== 1) return { kind: "unresolved", at: call,
+      let target: NativeBodyVertex | undefined;
+      for (const candidate of callees) {
+        if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
+        if (candidate.arguments.length !== arguments_.length) continue;
+        let matches = true;
+        for (const [index, argument] of candidate.arguments.entries()) {
+          if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
+          if (!rustTargetTypeRefEquals(argument, arguments_[index])) { matches = false; break; }
+        }
+        if (!matches) continue;
+        if (target !== undefined) return { kind: "unresolved", at: call,
+          reason: "A native Promise edge cannot have competing physical specializations." };
+        target = candidate;
+      }
+      if (target === undefined) return { kind: "unresolved", at: call,
         reason: "A native Promise edge requires exactly its selected physical specialization." };
-      vertex.edges.push({ call, target: targets[0]! });
+      if (!rows.add(1)) return { kind: "unresolved", reason: budget.failure()! };
+      vertex.edges.push({ call, target });
     }
   }
   const states = new Map<NativeBodyVertex, "active" | "closed">();
