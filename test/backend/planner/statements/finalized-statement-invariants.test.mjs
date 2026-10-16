@@ -222,7 +222,10 @@ test("resource producer facts retain exact identity and backend state ownership"
   assert.equal(declaration !== undefined, true, "the real resource producer analyzed the checked declaration");
   const records = analyzed.records.seal(analyzed.requiredRecords);
   const fact = records.resourceManagement.get(declaration);
-  assert.equal(fact !== undefined && Object.isFrozen(fact), true);
+  assert.equal(fact !== undefined, true, "the real producer published a disposal fact");
+  assert.equal(fact === analyzed.records.resourceManagement.get(declaration), true, "sealing retains producer identity");
+  assert.equal(fact.disposal.kind, "sync");
+  assert.equal(fact.disposal.fallible, false);
   const sourceFile = analyzed.ast.getSourceFile(declaration);
   const context = {
     input: { program: { source: analyzed.source, records } }, sourceFile,
