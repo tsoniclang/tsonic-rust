@@ -196,13 +196,13 @@ test("evaluation-only provider temporaries retain native Drop scope through read
       ] },
       callable("receiver", [], reference), callable("value", [], numeric),
       callable("omit", [parameter("unused", reference), parameter("value", numeric)], numeric),
-      callable("abort", [], { kind: "never" }),
+      callable("abort", [], numeric),
     ] }], types: [{ exportId: "Token", targetCarrier: token }],
     carrierPaths: { [token.id]: "crate::index::drop_probe::Token" }, crates: [], operations: [
       { exportId: "receiver", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::receiver" }, resultCarrier: token },
       { exportId: "value", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::value" }, resultCarrier: number },
       { exportId: "abort", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::abort" },
-        resultCarrier: { kind: "target-specific", target: "rust", name: "never" } },
+        resultCarrier: number },
       { exportId: "omit", operationKind: "method", target: { form: "call", path: "crate::index::drop_probe::consume_owned", argModes: ["value", "value"] },
         parameterCarriers: [token, number], resultCarrier: number },
       { exportId: "Token", memberId: "Token.read", operationKind: "property", target: { form: "call", path: "crate::index::drop_probe::read" }, resultCarrier: number },
@@ -271,7 +271,9 @@ pub(crate) mod drop_probe {
     thread_local! { static ORDER: Cell<u32> = const { Cell::new(0) }; }
 
     fn note(event: u32) { ORDER.set(ORDER.get() * 10 + event); }
+    #[cfg(test)]
     pub fn reset() { ORDER.set(0); }
+    #[cfg(test)]
     pub fn order() -> u32 { ORDER.get() }
 
     pub struct Token;
@@ -288,7 +290,7 @@ pub(crate) mod drop_probe {
         result
     }
     pub fn write(_value: f64) { note(3); }
-    pub fn abort() -> ! { note(2); panic!("R14 native RHS abort") }
+    pub fn abort() -> f64 { note(2); panic!("R14 native RHS abort") }
 }
 
 #[cfg(test)]
