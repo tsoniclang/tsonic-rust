@@ -125,3 +125,17 @@ export function run(): void { using first = new Resource(), second = new Resourc
   assert.equal([...generated.matchAll(/let resource_flow(?:_\d+)?/gu)].length, 2, "each acquisition has its own cleanup boundary");
   validateGeneratedProject("r05-multiple-resource-declarations", result.artifacts);
 });
+
+for (const [name, target, expected] of [
+  ["chain", { form: "receiver-method", name: "as_mut_str", mutatesReceiver: true,
+    chain: [{ kind: "method", name: "make_ascii_uppercase" }] }, /\.as_mut_str\(\)\s*\.make_ascii_uppercase\(\)/u],
+  ["trailing-input", { form: "receiver-method", name: "truncate", mutatesReceiver: true,
+    trailingArguments: [{ kind: "integer", value: 0 }] }, /\.truncate\(0\)/u],
+]) test(`selected provider disposal retains the complete native ${name}`, () => {
+  const { result } = compileRust({ surfaces: [], packages: [provider(target)], files: { "index.ts":
+    'import { open } from "@r05/resource"; export function run(): void { using resource = open(); }' } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  assert.match(artifactText(result, "src/index.rs"), expected, "every selected native operation component is emitted");
+  validateGeneratedProject(`r05-disposal-${name}`, result.artifacts);
+});
