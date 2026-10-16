@@ -59,7 +59,7 @@ export function value(limit: number): number {
     const reader = (symbol, inputs, read, unknown, absent = "undefined") => ({ symbol, inputs, read, unknown, absent });
     const readers = [
       reader("RustCountedLoopRepresentationPlan.representationFor", nodes, node => program.countedLoops.representationFor(node), () => program.countedLoops.representationFor(foreign)),
-      reader("RustEnumMemberConstantIndex.forMember", nodes, node => program.enumMemberConstants.forMember(node), () => program.enumMemberConstants.forMember(foreign)),
+      reader("RustNativeDeclarationForms.get", nodes, node => program.nativeDeclarations.get(node), () => program.nativeDeclarations.get(foreign)),
       reader("RustNumericRepresentations.usesInt32Remainder", nodes, node => program.numericRepresentations.usesInt32Remainder(node), () => program.numericRepresentations.usesInt32Remainder(foreign), "false"),
       reader("RustClassValuePlan.forCarrier", carriers, carrier => program.classValues.forCarrier(carrier), () => program.classValues.forCarrier(int32Carrier)),
       reader("RustClassValuePlan.forDeclaration", nodes, node => program.classValues.forDeclaration(node), () => program.classValues.forDeclaration(foreign)),
