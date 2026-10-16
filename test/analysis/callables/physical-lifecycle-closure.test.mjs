@@ -58,6 +58,11 @@ export async function read(): Promise<number> { return await counter.next(); }
 export function make(value: number) { return { async read(): Promise<number> { return value; } }; }
 export async function read(): Promise<number> { return await make(7).read(); }
 `,
+  "optional absent method keeps its canonical present ABI": `
+export function make(flag: boolean): { value?(): Promise<number> } {
+  return flag ? { async value(): Promise<number> { return 1; } } : {};
+}
+`,
   "generic captured result template": `
 export function make<Value>(value: Value): { read(): Promise<Value> } {
   return { async read(): Promise<Value> { return value; } };
@@ -71,8 +76,18 @@ export async function read(): Promise<number> { await strings.read(); return awa
 for (const [name, source] of Object.entries(structuralSources)) {
   test(`structural method storage publishes the actual invocation facet: ${name}`, () => {
     const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
+    const actualShapes = new Set();
+    for (const node of sourceNodes(program)) {
+      const operation = program.records.targetOperation.get(node);
+      const carrier = operation?.kind === "record-literal" && operation.storage === "structural-object"
+        ? operation.resultCarrier : operation?.kind === "source-call" && operation.target.form === "structural-method"
+          ? operation.target.receiverCarrier : undefined;
+      const definition = program.structuralShapes.definitionForCarrier(carrier);
+      if (definition !== undefined) actualShapes.add(`${definition.componentId}\0${definition.targetName}`);
+    }
     let checked = 0;
     for (const definition of program.structuralShapes.definitions) {
+      if (!actualShapes.has(`${definition.componentId}\0${definition.targetName}`)) continue;
       for (const [index, field] of definition.fields.entries()) {
         const storage = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
         const protocol = rustCallableProtocol(storage);
@@ -112,6 +127,96 @@ function sourceNodes(program) {
   for (const file of program.sourceFiles) visit(file);
   return nodes;
 }
+
+test("generic structural physical returns and concrete receiver values retain one actual layout application", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": structuralSources["generic captured result template"] } });
+  const nodes = sourceNodes(program);
+  const declaration = name => nodes.find(node => program.source.ast.is.IsFunctionDeclaration(node) &&
+    program.source.ast.text(program.source.ast.name(node)) === name);
+  const make = declaration("make");
+  const logical = program.records.sourceCallableReturn.get(make)?.returnCarrier;
+  const returned = program.callableValues.nativeStorage.returnFor(make);
+  assert.equal(returned.kind !== "unresolved", true, "the authored declaration has one physical aggregate layout owner");
+  assert.equal(rustTargetTypeRefEquals(returned.carrier, logical), true, "logical structure identity selects the canonical physical layout");
+  const shape = program.structuralShapes.definitionForCarrier(returned.carrier);
+  for (const selected of [program.callableValues.nativeProducers.outwardReturnFor(make),
+    program.callableValues.nativeProducers.invocationResultFor(make)]) {
+    assert.equal(rustTargetTypeRefEquals(selected, returned.carrier), true, "both emitted return facets use the same shape identity");
+  }
+  const results = [];
+  for (const node of nodes) {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind !== "source-call" || operation.target.form !== "structural-method") continue;
+    const receiver = program.structuralShapes.definitionForCarrier(operation.target.receiverCarrier);
+    assert.equal(receiver.targetName === shape.targetName && receiver.componentId === shape.componentId, true,
+      "each actual invocation instantiates the selected template, not a historical contract-only shape");
+    const field = program.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex);
+    assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(field.methodStorageCarrier)?.result, operation.resultCarrier), true,
+      "each forward application preserves the complete concrete Promise output");
+    results.push(operation.resultCarrier);
+  }
+  assert.equal(results.length, 2, "both concrete receiver applications are exercised");
+  assert.equal(rustTargetTypeRefEquals(results[0], results[1]), false, "Promise string and number outputs are never conflated");
+  for (const name of ["integers", "strings"]) {
+    const variable = nodes.find(node => program.source.ast.is.IsVariableDeclaration(node) &&
+      program.source.ast.text(program.source.ast.name(node)) === name);
+    const selected = program.callableValues.nativeStorage.valueFor(variable);
+    assert.equal(selected.kind !== "unresolved", true, `${name}: actual value storage is prepared`);
+    const receiver = program.structuralShapes.definitionForCarrier(selected.carrier);
+    assert.equal(receiver?.targetName === shape.targetName && receiver?.componentId === shape.componentId, true,
+      `${name}: actual emitted storage uses the template owner`);
+    const field = program.structuralShapes.field(selected.carrier, 0);
+    assert.equal(field === program.structuralShapes.field(selected.carrier, 0), true, `${name}: immutable indexed instance`);
+  }
+});
+
+test("copied borrowed methods retain the actual closure lifetime without a static destination substitution", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function make<Region extends Life>(value: Ref<int32, Region>) {
+  const original = { async read(): Promise<int32> { return load(value); } };
+  return { label: "borrowed", ...original };
+}
+` } });
+  const method = sourceNodes(program).find(node => program.source.ast.is.IsMethodDeclaration(node));
+  const closure = program.records.targetOperation.get(method);
+  assert.equal(closure?.kind === "closure", true, "the actual admitted method producer");
+  const independent = program.records.receiverIndependentMethod.get(method);
+  const retained = rustCallableProtocol(closure.resultCarrier)?.lifetime;
+  const selected = rustCallableProtocol(independent?.carrier)?.lifetime;
+  assert.equal(retained?.kind === "parameter" && retained.name === "Region", true, "the source closure retains the actual borrowed Region");
+  assert.equal(selected?.kind === retained.kind && selected.identity === retained.identity, true,
+    "receiver-free evidence transports the same retained lifetime from its producer");
+  for (const definition of program.structuralShapes.definitions) {
+    for (const field of definition.fields) {
+      if (field.method !== true) continue;
+      const stored = rustCallableProtocol(field.methodStorageCarrier);
+      assert.equal(stored?.lifetime?.kind === "parameter", true, "borrowed method layout is lifetime-parametric, never static");
+      assert.equal(stored?.error?.id === "rust.core.Infallible", true, "borrowed async invocation remains infallible");
+    }
+  }
+});
+
+test("native-dispatch method fields keep their existing native ABI instead of receiving closure storage", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+class Counter { value(): number { return 1; } }
+export function make(): { value(): number } { return new Counter(); }
+export function read(): number { return make().value(); }
+` } });
+  let checked = 0;
+  for (const definition of program.structuralShapes.definitions) {
+    for (const field of definition.fields) {
+      if (field.method !== true) continue;
+      assert.equal(field.nativeMethod === true, true, "native dispatch retains its own field ABI owner");
+      assert.equal(rustCallableProtocol(field.methodStorageCarrier)?.error?.id === "rust.program.TsonicError", true,
+        "the declared native dispatch error contract is unchanged");
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 1, "the actual native structural view is exercised");
+});
 
 test("private native leaf preparation uses the canonical checked subject and preserves complete Future unions", () => {
   const context = analyzeRustErrorEffects(`

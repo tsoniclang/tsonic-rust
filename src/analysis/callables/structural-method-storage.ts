@@ -3,6 +3,7 @@ import type { SourceStorageBindings, SourceStorageQueries, SourceStorageSubject 
 import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
+import { rustLifetimeOutlives, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
@@ -14,6 +15,7 @@ import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-m
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustStructuralGenericCarrier } from "../objects/structural-generic-carrier.js";
+import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 import type { RustStructuralShapeDefinition, RustStructuralShapePlanRegistry } from "../objects/structural-shape-plan.js";
 import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
@@ -37,6 +39,7 @@ export function createRustStructuralMethodStorage(input: {
   readonly nativeStorage: RustNativeStoragePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly typeDefinitions: RustTypeDefinitions;
+  readonly lifetimes: RustLifetimeIndex;
 }): {
   complete(errors: Pick<RustErrorRegionRecords, "producerError">): void;
 } {
@@ -70,7 +73,9 @@ export function createRustStructuralMethodStorage(input: {
           contribution.kind === "structural-method" && contribution.targetStorageIndex === field.storageIndex);
         const declarations = contributions.flatMap(contribution => contribution.kind === "structural-method"
           ? [contribution.expression] : []);
-        if (declarations.length === 0) declarations.push(...field.contractDeclarations);
+        if (declarations.length === 0 && operation.contributions.some(contribution => contribution.kind === "spread" &&
+          contribution.fields.some(selected => selected.targetStorageIndex === field.storageIndex && selected.method === true)))
+          declarations.push(...field.contractDeclarations);
         for (const declaration of declarations) {
           const selected = sourceStorage.subject(node, "value", [{ kind: "method-value", declaration }]);
           if (selected.kind === "unresolved") throw new Error(selected.reason);
@@ -121,6 +126,11 @@ export function createRustStructuralMethodStorage(input: {
           if (bound?.kind === "unresolved") throw new Error(bound.reason);
           if (source === undefined || protocol.lifetime === undefined)
             throw new Error("Structural method storage requires its existing physical callable signature and destination lifetime.");
+          const retained = rustCallableProtocol(bound === undefined ? logical : substituteRustTargetGenerics(logical,
+            bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts))?.lifetime;
+          if (retained === undefined || protocol.lifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
+            protocol.lifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes)))
+            throw new Error("Structural method storage lost its admitted retained-lifetime correspondence.");
           let carrier = rustCallableTargetType(source.signature.parameters, source.signature.result,
             protocol.lifetime, source.signature.error);
           if (bound !== undefined) carrier = substituteRustTargetGenerics(carrier,

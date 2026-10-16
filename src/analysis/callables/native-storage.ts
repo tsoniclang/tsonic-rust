@@ -417,6 +417,22 @@ export function createRustNativeStorageQueries(input: {
         return elements.every((element, index) => element === current.elements[index]) ? current
           : Object.freeze({ ...current, elements: Object.freeze(elements) });
       }
+      const structural = rustStructuralObjectCarrierValue(current);
+      if (structural !== undefined) {
+        for (const [index, sourceField] of structural.fields.entries()) {
+          const field = input.structuralShapes.field(current, index);
+          if (field === undefined) return fail("Native aggregate storage requires its exact structural field layout owner.");
+          if (field.method === true) {
+            if (field.methodStorageCarrier === undefined)
+              return fail("Native aggregate method storage requires its canonical callable field layout.");
+            continue;
+          }
+          const nested = containsCallable(sourceField.type, depth + 1);
+          if (nested !== false) return nested === undefined ? undefined
+            : fail("Native callable storage requires its existing physical aggregate layout owner.");
+        }
+        return current;
+      }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {
         const payloads = variants.map(variant => visit(variant.carrier, selectedSubject, bindings, depth + 1, permitsAbsence, position));
