@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceNodeIdentity } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
@@ -101,7 +101,7 @@ function construction(text, wrapCaptures = captures => captures) {
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
   const implementations = registry.plan.definitions.flatMap(definition => definition.implementations);
-  return { physical, queries, declaration, implementations, captures };
+  return { physical, queries, declaration, implementations, captures, ast: source.ast };
 }
 
 function countedCaptures(state) {
@@ -345,6 +345,30 @@ test("before closure, a required read of a physical shape construction never adm
   assert.equal(current.physical.plan.existingSelectionFor(reordered) === undefined, true, "the failed reads admitted no family");
 });
 
+test("published physical ownership preserves logical origins, signatures, members and source-file boundaries", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
+  const physical = program.callableValues.generic.physical;
+  const joined = physical.definitions().find(definition => definition.members.length === 2);
+  assert.equal(joined !== undefined, true, "the fixture owns a joined physical family");
+  const value = rustGenericCallableValue(joined.carrier);
+  const foreignKeys = [
+    ["logical origin", rustGenericCallableCarrier({ ...value, origin: { ...value.origin, declarationIdentity: "foreign" } })],
+    ["signature", rustGenericCallableCarrier({ ...value, signature: { ...value.signature, result: float64 } })],
+    ["source owner", rustGenericCallableCarrier({ ...value, physical: { ...value.physical, ownerFileName: "/foreign.rs" } })],
+    ["member origin", rustGenericCallableCarrier({ ...value, physical: { ...value.physical,
+      members: value.physical.members.map(member => ({ ...member, origin: { ...member.origin, declarationIdentity: "foreign" } })) } })],
+  ];
+  for (const [label, carrier] of foreignKeys) {
+    for (const [reader, read] of [["definitionFor", () => physical.definitionFor(carrier)],
+      ["argumentsFor", () => physical.argumentsFor(carrier)], ["existingSelectionFor", () => physical.existingSelectionFor(carrier)],
+      ["conversionFor source", () => physical.conversionFor(carrier, joined.carrier)],
+      ["conversionFor target", () => physical.conversionFor(joined.carrier, carrier)]]) {
+      assert.equal(read() === undefined, true, `${label}: ${reader} leaves a foreign or inconsistent key absent`);
+    }
+  }
+  assert.equal(physical.definitionFor(joined.carrier) === joined, true, "foreign queries never change the owned selection");
+});
+
 test("a logical carrier whose family was never admitted stays absent in every reader", () => {
   const current = construction(`export function make(): <Value>(value: Value) => Value { return <Value>(value: Value): Value => value; }`);
   const [implementation] = current.implementations;
@@ -523,6 +547,33 @@ test("an open environment failure is retried, and a later success is retained on
   assert.equal(current.queries.returnFor(make).kind, "selected");
   assert.equal(state.selections === 3 && current.physical.plan.environmentFor(implementation) === environment, true,
     "a completed environment is retained and not selected again");
+});
+
+test("an open physical conversion retries an unfinished environment instead of retaining its provisional absence", () => {
+  const state = { selections: 0, ready: false };
+  const current = construction(`export function make(): <Value>(value: Value) => Value {
+    return <Value>(value: Value): Value => value;
+  }`, countedCaptures(state));
+  const [implementation] = current.implementations;
+  assert.equal(implementation !== undefined && current.implementations.length === 1, true, "one actual source implementation");
+  const value = rustGenericCallableValue(implementation.carrier);
+  const carrier = rustGenericCallableCarrier({ ...value, physical: { ownerFileName: implementation.sourceFileName,
+    members: [{ origin: { fileName: implementation.sourceFileName,
+      declarationIdentity: sourceNodeIdentity(current.ast, implementation.declaration) }, arguments: [] }], arguments: [] } });
+  const early = current.physical.plan;
+  assert.equal(early.conversionFor(carrier, carrier) === undefined, true, "unfinished capture evidence is absent while open");
+  assert.equal(state.selections, 0, "a conversion read does not construct a capture environment");
+  state.ready = true;
+  const completed = current.queries.returnFor(current.declaration("make"));
+  assert.equal(completed.kind, "selected", completed.reason);
+  assert.equal(sameMetadata(completed.carrier, carrier), true, "the completed actual producer selects the identical physical key");
+  const conversion = early.conversionFor(carrier, carrier);
+  assert.equal(conversion?.kind, "identity", "the same open query observes the now-complete producer environment");
+  current.physical.closeAdmission();
+  current.physical.closeKeys();
+  current.physical.publish();
+  assert.equal(early.conversionFor(carrier, carrier) === conversion, true, "the captured reader uses the final prepared conversion");
+  assert.equal(state.selections, 1, "completion does not select the capture again");
 });
 
 test("a required environment refusal settled at closure is final", () => {

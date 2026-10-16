@@ -83,6 +83,7 @@ export function createRustGenericCallablePhysicalPlan(
   const environments = new Map<RustGenericCallableImplementation, RustGenericCallableEnvironment | undefined>();
   const activeEnvironments = new Set<RustGenericCallableImplementation>();
   const definitions = new Map<string, RustGenericCallablePhysicalDefinition>();
+  const ownedDomains = new Map<string, RustGenericCallableDefinition>();
   let inventory: readonly RustGenericCallablePhysicalDefinition[] | undefined;
   let published = false;
   let closedKeys: RustGenericCallablePhysicalPlan | undefined;
@@ -126,6 +127,7 @@ export function createRustGenericCallablePhysicalPlan(
     const value = rustGenericCallableValue(carrier);
     const family = value === undefined ? undefined : familyFor(carrier);
     if (value === undefined || family === undefined) return undefined;
+    ownedDomains.set(closedMetadataKey([value.origin, value.signature]), family);
     const cacheKey = closedMetadataKey(carrier);
     const cached = selectedCarriers.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -193,6 +195,7 @@ export function createRustGenericCallablePhysicalPlan(
     const existing = conversions.get(sourceKey);
     if (existing?.has(targetKey)) return existing.get(targetKey);
     const selected = selectConversion(source, target);
+    if (selected === undefined && inventory === undefined) return undefined;
     const targets = existing ?? new Map<string, RustGenericCallablePhysicalConversion | undefined>();
     targets.set(targetKey, selected);
     conversions.set(sourceKey, targets);
@@ -312,10 +315,14 @@ export function createRustGenericCallablePhysicalPlan(
       const read = (carrier: TargetTypeRef, required: boolean): RustGenericCallablePhysicalSelection | undefined => {
         const selected = selectedCarriers.get(closedMetadataKey(carrier));
         const value = selected === undefined && required ? rustGenericCallableValue(carrier) : undefined;
-        if (value?.physical !== undefined && value.physical.members.every(member => {
+        const family = value === undefined ? undefined : ownedDomains.get(closedMetadataKey([value.origin, value.signature]));
+        if (family !== undefined && value?.physical !== undefined && sourceFiles.has(value.physical.ownerFileName) &&
+          value.physical.members.every(member => {
           const implementation = byOrigin.get(closedMetadataKey(member.origin));
           const environment = implementation === undefined ? undefined : environments.get(implementation);
-          return environment !== undefined && environment.parameters.length === member.arguments.length &&
+          return implementation !== undefined && family.implementations.includes(implementation) && environment !== undefined &&
+            (value.physical!.members.length !== 1 || value.physical!.ownerFileName === implementation.sourceFileName) &&
+            environment.parameters.length === member.arguments.length &&
             environment.parameters.every((parameter, index) =>
               parameter.kind === value.physical!.arguments[member.arguments[index]!]!.kind);
         }))
