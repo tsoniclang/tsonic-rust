@@ -35,6 +35,7 @@ export interface RustNativeCallableProducerPlan {
   deferredErrorFor(declaration: Node, ordinal: number): TargetTypeRef | undefined;
   outwardReturnFor(declaration: Node): TargetTypeRef | undefined;
   invocationResultFor(declaration: Node): TargetTypeRef | undefined;
+  bodyResultFor(declaration: Node): TargetTypeRef | undefined;
   physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined;
 }
 
@@ -110,7 +111,7 @@ export function createRustNativeCallableProducerPlan(input: {
     forDeclaration: declaration => byDeclaration.get(declaration), errorFor, deferredFor,
   } });
   return Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
-    outwardReturnFor: outward.returnFor, invocationResultFor: outward.invocationFor,
+    outwardReturnFor: outward.returnFor, invocationResultFor: outward.invocationFor, bodyResultFor: outward.bodyFor,
     forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
     forIdentity: (identity: string) => byIdentity.get(identity),
     deferredFor,

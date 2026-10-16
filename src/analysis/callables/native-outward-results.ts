@@ -16,6 +16,7 @@ import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 export interface RustNativeOutwardResults {
   returnFor(declaration: Node): TargetTypeRef | undefined;
   invocationFor(declaration: Node): TargetTypeRef | undefined;
+  bodyFor(declaration: Node): TargetTypeRef | undefined;
 }
 
 export function createRustNativeOutwardResults(input: {
@@ -25,7 +26,7 @@ export function createRustNativeOutwardResults(input: {
   readonly returnCarrierFor: (declaration: Node) => TargetTypeRef | undefined;
 }): RustNativeOutwardResults {
   const resolving = new Set<Node>();
-  const select = (declaration: Node, invocation: boolean): TargetTypeRef | undefined => {
+  const select = (declaration: Node, mode: "return" | "invocation" | "body"): TargetTypeRef | undefined => {
     const producer = input.producers.forDeclaration(declaration);
     if (producer === undefined || resolving.has(declaration) || resolving.size >= 128) return undefined;
     resolving.add(declaration);
@@ -35,8 +36,9 @@ export function createRustNativeOutwardResults(input: {
       const physical = input.returnCarrierFor(declaration);
       if (physical === undefined) return undefined;
       const asynchronous = input.records.asyncFunction.get(declaration);
-      if (invocation && asynchronous !== undefined) {
-        if (asynchronous.kind === "js-promise") {
+      if (mode === "body" && asynchronous === undefined) return undefined;
+      if (mode !== "return" && asynchronous !== undefined) {
+        if (mode === "invocation" && asynchronous.kind === "js-promise") {
           const result = rustJsPromiseTargetType(physical);
           const operation = input.records.targetOperation.get(declaration);
           const conversion = operation?.kind === "closure" ? operation.invocationResult : undefined;
@@ -47,7 +49,7 @@ export function createRustNativeOutwardResults(input: {
             future => rustTargetTypeRefEquals(future.carrier, asynchronous.futureCarrier) ? result : undefined,
             input.definitions);
         }
-        const error = input.producers.errorFor(declaration, 0);
+        const error = input.producers.errorFor(declaration, mode === "body" ? "body" : 0);
         const effects = input.records.errorEffects.get(declaration);
         if (error === undefined || effects === undefined) return undefined;
         const output = rustErrorEffectsAreFallible(effects)
@@ -71,7 +73,8 @@ export function createRustNativeOutwardResults(input: {
     } finally { resolving.delete(declaration); }
   };
   return Object.freeze({
-    returnFor: (declaration: Node) => select(declaration, false),
-    invocationFor: (declaration: Node) => select(declaration, true),
+    returnFor: (declaration: Node) => select(declaration, "return"),
+    invocationFor: (declaration: Node) => select(declaration, "invocation"),
+    bodyFor: (declaration: Node) => select(declaration, "body"),
   });
 }
