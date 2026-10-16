@@ -23,7 +23,7 @@ export type {
   RustProviderTypeParameterRequirement,
   RustProviderTypeRequirement,
 } from "../target-model/operations/model.js";
-export type { RustTargetTypeRef } from "../target-model/types/model.js";
+export type { RustTargetTypeRef, RustTargetTraitRef, RustNamedTypeTraitContract } from "../target-model/types/model.js";
 export type {
   RustDispatchContextDefinition,
   RustDispatchContextInput,
