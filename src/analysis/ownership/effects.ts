@@ -7,6 +7,7 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustTargetProgram } from "../program/model.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowValueIsUnprojected } from "../program/borrowed-element-purity.js";
 
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
@@ -31,7 +32,7 @@ export interface RustBorrowEffectsInput {
   readonly ast: AstReader;
   readonly sourceFacts: Pick<ReadonlySourceFactResolver, "getFact">;
   readonly nodes: readonly Node[];
-  readonly records: RustTargetProgram["records"];
+  readonly records: RustProgramRecords;
   readonly projectTypes: RustTargetProgram["projectTypes"];
   readonly objectRepresentations: RustTargetProgram["objectRepresentations"];
   readonly frozenDataWrites: RustTargetProgram["frozenDataWrites"];

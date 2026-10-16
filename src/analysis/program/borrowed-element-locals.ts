@@ -9,7 +9,7 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
 import { rustBorrowedElementRead, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
-import type { RustTargetProgram } from "./model.js";
+import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 export interface RustBorrowedElementLocal extends RustBorrowedElementRead {
   readonly declaration: Node;
@@ -20,7 +20,7 @@ export interface RustBorrowedElementLocal extends RustBorrowedElementRead {
 export function analyzeRustBorrowedElementLocals(
   ast: AstReader,
   files: readonly SourceFile[],
-  records: RustTargetProgram["records"],
+  records: RustProgramRecords,
   navigation: SourceProgramNavigation,
 ) {
   const starts = new WeakMap<Node, RustBorrowedElementLocal>();

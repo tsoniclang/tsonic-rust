@@ -149,7 +149,7 @@ targetOperation: { get: (node) => {
     assert.equal(reads.forExpression(append) === undefined, true, `append mutation ${mutationIndex}`);
     assert.equal(reads.forRead(element) === undefined, true, `read mutation ${mutationIndex}`);
     const counted = analyzeRustCountedLoopRepresentations({ ast: program.source.ast, sourceFiles: program.sourceFiles,
-      navigation: program.sourceNavigation, records, borrowedElementReads: reads }).representationFor(
+      navigation: program.sourceNavigation, records: { ...records, literalValue: program.records.literalValue }, borrowedElementReads: reads }).representationFor(
       selectedNodes(source, program, "combine").loop);
     assert.equal(counted === undefined, true, `counted mutation ${mutationIndex}`);
   }
