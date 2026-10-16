@@ -97,6 +97,7 @@ export function analyzeRustTargetProgram(
       ...(activeProviderHooks.some(hook => hook.phase === "async-entry-execution") ? [] : [rustJsAsyncExecutor])] : providerBinaryHooks,
     runtimeReferences.plan.activeCrates,
   );
+  if (input.source.semantics.enumConstants.issues.length !== 0) return rejectedTargetStage(input.source.semantics.enumConstants.issues);
   const context = createRustAnalysisContext(
     input,
     providerSemantics,
