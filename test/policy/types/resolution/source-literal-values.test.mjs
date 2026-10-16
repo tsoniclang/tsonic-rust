@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import {
   parseSourceBigIntLiteral,
   parseSourceIntegerLiteral,
@@ -12,11 +13,11 @@ import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equ
 import { rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustOptionTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
-test("floating literal selection shares source token parsing without broadening selected source forms", async () => {
+test("floating literal selection consumes sealed numeric facts with transparent numeric signs and parentheses", async () => {
   const cases = [
     ["1_000", true], ["0xFF_FF", true], ["0b1010_0101", true], ["1e3", true],
     ["-1_000", true], ["+0.5", true], ["-0", true], ["1e9999", false],
-    ["(1)", false], ["-(+1)", false], ["1n", false], ["\"1\"", false],
+    ["(1)", true], ["-(+1)", true], ["1n", false], ["\"1\"", false], ["1 + 2", false], ["1 as number", false],
   ];
   const source = await checkedSource("selected-floating-literal-text", { "src/index.ts":
     cases.map(([text], index) => `export const value${index} = ${text};`).join("\n") });
@@ -29,10 +30,11 @@ test("floating literal selection shares source token parsing without broadening 
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   visit(projectSourceFile(source, "src/index.ts"));
+  const literals = analyzeSourceLiteralValues(source.ast, [projectSourceFile(source, "src/index.ts")]);
   assert.equal(initializers.length, cases.length, "each checked source initializer is observed");
   for (const [index, initializer] of initializers.entries()) {
     for (const primitive of ["float32", "float64"]) {
-      assert.equal(selectedSourceLiteralIsRepresentable(initializer, primitive, source.ast), cases[index][1],
+      assert.equal(selectedSourceLiteralIsRepresentable(literals.literalValue.get(initializer), primitive), cases[index][1],
         `${primitive}: ${cases[index][0]}`);
     }
   }
@@ -69,7 +71,8 @@ function literalSelection(text, rows, carrier) {
   const literalAst = { ...ast, is: { ...ast.is, IsPrefixUnaryExpression: () => false },
     authoredRange: () => ({ kind: "authored", start: 0, end: text.length }) };
   const definitions = { programErrorOrigin: () => undefined, sourceUnionVariants: value => [...rows].find(([key]) => rustTargetTypeRefEquals(key, value))?.[1] };
-  return selectedIntegerLiteralUnionJoin(node, carrier, literalAst, definitions);
+  const literals = analyzeSourceLiteralValues(literalAst, [sourceFile]);
+  return selectedIntegerLiteralUnionJoin(literals.literalValue.get(node), carrier, definitions);
 }
 
 test("integer union literal selection preserves one exact native payload and absence", () => {

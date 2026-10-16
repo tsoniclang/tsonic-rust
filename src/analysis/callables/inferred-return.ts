@@ -128,7 +128,7 @@ export function selectRustInferredReturn(
           const left = expressionCarrier(conditional.WhenTrue);
           const right = expressionCarrier(conditional.WhenFalse);
           if (left === undefined || right === undefined) return undefined;
-          return selectRustConditionalNumericCarrier(conditional.WhenTrue, conditional.WhenFalse, left, right, ast) ??
+          return selectRustConditionalNumericCarrier(conditional.WhenTrue, conditional.WhenFalse, left, right, walk.context.literalValues) ??
             (left === undefined || right === undefined ? undefined : resolveRustBranchUnion(expression, [
               { expression: conditional.WhenTrue, carrier: left },
               { expression: conditional.WhenFalse, carrier: right },

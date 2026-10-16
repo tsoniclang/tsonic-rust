@@ -208,7 +208,7 @@ export function resolveRustTargetTypeRef(
     if (expression?.WhenTrue !== undefined && expression.WhenFalse !== undefined) {
       const carrier = selectRustConditionalNumericCarrier(expression.WhenTrue, expression.WhenFalse,
         resolveRustTargetTypeRef(expression.WhenTrue, context, options),
-        resolveRustTargetTypeRef(expression.WhenFalse, context, options), context.ast);
+        resolveRustTargetTypeRef(expression.WhenFalse, context, options), context.literalValues);
       if (carrier !== undefined) return carrier;
     }
   }

@@ -6,6 +6,7 @@ import type {
 } from "@tsonic/tsts";
 import type {
   SourceFileSemantics,
+  SourceLiteralIndex,
   TargetSourceProgram,
 } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -28,6 +29,7 @@ export interface RustSourcePolicyContext {
   readonly pointerReturns: TsonicPointerReturnQueries;
   readonly memoryBindings: TsonicMemoryBindingIndex;
   readonly ast: AstReader;
+  readonly literalValues: SourceLiteralIndex;
   readonly sourceFiles: readonly SourceFile[];
   readonly records: RustProgramRecords;
   readonly names: RustNamePlan;

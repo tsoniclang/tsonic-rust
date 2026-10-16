@@ -1,7 +1,6 @@
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import {
   KindBinaryExpression,
-  sourceIntegerLiteralValue,
   KindElementAccessExpression,
   KindNonNullExpression,
   KindParenthesizedExpression,
@@ -27,6 +26,7 @@ import { isFloatCarrier, rustTypeFromCarrierInContext } from "../types/render.js
 import { rustTypeContainsImplTrait } from "../types/type-observations.js";
 import { isRustBigIntCarrier, isRustIntegerCarrier, isRustStringCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 import { negateRustBooleanExpression, rustStringConcat } from "../../target-ast/syntax/expressions.js";
 import { parseSourceBigIntLiteral } from "../../../target-model/syntax/literals.js";
 import { planExpression } from "./entry.js";
@@ -478,18 +478,29 @@ export function planNumericLiteralWithCarrier(
   carrier: TargetTypeRef,
   context: RustPlanContext,
 ): RustExpr | undefined {
-  const text = context.input.program.source.ast.text(node);
+  const literal = context.input.program.records.literalValue.get(node);
   if (isFloatCarrier(carrier)) {
+    const numeric = literal?.numeric;
+    if (numeric === undefined) return failTargetPlannerInvariant("tsonic-rust",
+      "A floating literal requires its sealed source numeric evidence.", node);
+    const float32 = carrier.kind === "source-primitive" && rustPrimitiveTypeName(carrier.name) === "f32";
+    if (numeric.kind === "authored") {
+      const value: RustExpr = { kind: "float-literal", text: float32 ? `${numeric.token.decimalText}_f32` : numeric.token.decimalText };
+      return numeric.token.negative ? { kind: "unary", operator: "-", operand: value } : value;
+    }
+    const text = String(Math.abs(numeric.value));
     const floatText = text.includes(".") || text.includes("e") || text.includes("E") ? text : `${text}.0`;
-    return { kind: "float-literal", text: carrier.kind === "source-primitive" && rustPrimitiveTypeName(carrier.name) === "f32" ? `${floatText}_f32` : floatText };
+    const value: RustExpr = { kind: "float-literal", text: float32 ? `${floatText}_f64` : floatText };
+    const signed: RustExpr = numeric.value < 0 || Object.is(numeric.value, -0) ? { kind: "unary", operator: "-", operand: value } : value;
+    return float32 ? { kind: "numeric-cast", expression: signed, target: "f32" } : signed;
   }
   if (isRustIntegerCarrier(carrier)) {
-    const value = sourceIntegerLiteralValue(context.input.program.source.ast, node);
+    const value = literal?.integer;
     if (value === undefined) {
       context.diagnostics.push(unsupportedConstructDiagnostic(
         diagnosticInput(context, node),
         "rust.backend.literal-carrier",
-        `Numeric literal '${text}' cannot lower to integer carrier.`,
+        "Numeric literal cannot lower to integer carrier without exact sealed integer evidence.",
       ));
       return undefined;
     }
