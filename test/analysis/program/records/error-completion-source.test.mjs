@@ -144,7 +144,7 @@ for (const surfaces of [[], ["js"]]) test(`resource selection retains checked di
   assert.equal(selected.declarationKind, "using");
   assert.equal(selected.disposal.kind, "sync");
   assert.equal(selected.disposal.fallible, false);
-  assert.equal(selected.disposal.errorBoundary, "none");
+  assert.equal(selected.disposal.target.errorBoundary, "none");
   assert.equal(selected.disposal.target.form, "source-method");
   assert.equal(selected.disposal.target.name, "dispose");
   const uses = current.context.generatedDeclarationUses.seal();

@@ -105,7 +105,7 @@ export function selectRustGeneratorSourceCall(
       parameterCarriers: [errorCarrier],
       isAsync: protocol.kind === "async",
       isFallible: true,
-      errorBoundary: "source-program",
+      errorBoundary: "target-runtime",
     }, [errorCarrier]);
   }
   return rejected(`The exact selected ${request.ownerName}.${request.memberName} signature has no Rust generator operation.`);

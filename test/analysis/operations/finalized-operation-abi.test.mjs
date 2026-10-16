@@ -132,7 +132,7 @@ test("source optional results normalize absence without changing explicit native
 test("native length emptiness correspondence is explicit and rejects inconsistent evidence", () => {
   const options = {
     operationKind: "property", form: { form: "receiver-method", name: "count", emptyTestMethod: "empty" },
-    sourceReceiverCarrier: string, sourceArgumentCarriers: [], resultCarrier: usize,
+    sourceReceiver: { kind: "runtime", carrier: string }, sourceArgumentCarriers: [], resultCarrier: usize,
     isAsync: false, isFallible: false, evaluation: "pure",
   };
   const abi = finalizeRustProviderOperationAbi(options);
@@ -142,7 +142,7 @@ test("native length emptiness correspondence is explicit and rejects inconsisten
   for (const mutation of [
     { isFallible: true, errorBoundary: "target-runtime" }, { isAsync: true },
     { evaluation: "observable" }, { operationKind: "method" }, { resultCarrier: int32 },
-    { resultCarrier: float64 }, { sourceReceiverCarrier: undefined },
+    { resultCarrier: float64 }, { sourceReceiver: undefined },
     { sourceArgumentCarriers: [int32] },
     { form: { ...options.form, emptyTestMethod: "" } },
     { form: { ...options.form, mutatesReceiver: true } },
@@ -268,7 +268,7 @@ test("provider evaluation effects are conservative by default and require an exa
   const nestedMutatingObservable = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: taggedForm,
-    sourceReceiverCarrier: array,
+    sourceReceiver: { kind: "runtime", carrier: array },
     sourceArgumentCarriers: [int32],
     resultCarrier: int32,
     isAsync: false,
@@ -317,7 +317,7 @@ test("provider evaluation effects are conservative by default and require an exa
   assert.equal(finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: taggedForm,
-    sourceReceiverCarrier: array,
+    sourceReceiver: { kind: "runtime", carrier: array },
     sourceArgumentCarriers: [int32],
     resultCarrier: int32,
     isAsync: false,
@@ -483,7 +483,7 @@ test("provider methods finalize receiver, source order, passing modes, conversio
       argModes: ["value"],
       argConversions: [{ kind: "semantic-conversion", id: "checked-i32-to-usize" }],
     },
-    sourceReceiverCarrier: string,
+    sourceReceiver: { kind: "runtime", carrier: string },
     sourceArgumentCarriers: [int32],
     declaredSourceArgumentCarriers: [int32],
     resultCarrier: bool,
@@ -561,23 +561,10 @@ test("exact integer argument conversions survive finalization and reject altered
 });
 
 test("provider receivers distinguish runtime values from compile-time owner identities", () => {
-  const owner = {
-    kind: "target-specific",
-    target: "rust",
-    name: "named-type",
-    value: {
-      id: "rust.test.Environment",
-      path: "acme::Environment",
-      genericArguments: [],
-      genericDefaults: [],
-      upcasts: [],
-      traits: { implementations: [] },
-    },
-  };
   const abi = finalizeRustProviderOperationAbi({
     operationKind: "indexer",
     form: { form: "call", path: "acme::environment_get", argModes: ["ref"] },
-    sourceReceiverCarrier: owner,
+    sourceReceiver: { kind: "compile-time" },
     sourceArgumentCarriers: [string],
     resultCarrier: string,
     isAsync: false,
@@ -585,12 +572,7 @@ test("provider receivers distinguish runtime values from compile-time owner iden
   });
 
   assert.ok(abi);
-  assert.deepEqual(abi.sourceReceiver, {
-    kind: "receiver",
-    carrier: owner,
-    declaredCarrier: owner,
-    disposition: "compile-time",
-  });
+  assert.deepEqual(abi.sourceReceiver, { kind: "compile-time" });
   assert.deepEqual(abi.targetArguments.map((input) => input.source), [
     { kind: "argument", sourceIndex: 0 },
   ]);
@@ -691,7 +673,7 @@ test("receiver string slices preserve the exact receiver and every variadic argu
   const pair = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: string,
+    sourceReceiver: { kind: "runtime", carrier: string },
     sourceArgumentCarriers: [string, string],
     resultCarrier: string,
     isAsync: false,
@@ -700,7 +682,7 @@ test("receiver string slices preserve the exact receiver and every variadic argu
   const empty = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: string,
+    sourceReceiver: { kind: "runtime", carrier: string },
     sourceArgumentCarriers: [],
     resultCarrier: string,
     isAsync: false,
@@ -709,7 +691,7 @@ test("receiver string slices preserve the exact receiver and every variadic argu
   const wrong = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: string,
+    sourceReceiver: { kind: "runtime", carrier: string },
     sourceArgumentCarriers: [int32],
     resultCarrier: string,
     isAsync: false,
@@ -887,7 +869,7 @@ test("receiver value arrays move every variadic source value into one fixed Rust
   const pair = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: receiver,
+    sourceReceiver: { kind: "runtime", carrier: receiver },
     sourceArgumentCarriers: [int32, int32],
     resultCarrier: int32,
     isAsync: false,
@@ -896,7 +878,7 @@ test("receiver value arrays move every variadic source value into one fixed Rust
   const empty = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: receiver,
+    sourceReceiver: { kind: "runtime", carrier: receiver },
     sourceArgumentCarriers: [],
     resultCarrier: int32,
     isAsync: false,
@@ -905,7 +887,7 @@ test("receiver value arrays move every variadic source value into one fixed Rust
   const wrong = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: receiver,
+    sourceReceiver: { kind: "runtime", carrier: receiver },
     sourceArgumentCarriers: [string],
     resultCarrier: int32,
     isAsync: false,
@@ -956,7 +938,7 @@ test("tagged value arrays select one exact constructor for every variadic source
   const selected = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: array,
+    sourceReceiver: { kind: "runtime", carrier: array },
     sourceArgumentCarriers: [int32, array],
     resultCarrier: array,
     isAsync: false,
@@ -965,7 +947,7 @@ test("tagged value arrays select one exact constructor for every variadic source
   const unsupported = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form,
-    sourceReceiverCarrier: array,
+    sourceReceiver: { kind: "runtime", carrier: array },
     sourceArgumentCarriers: [bool],
     resultCarrier: array,
     isAsync: false,
@@ -1021,7 +1003,7 @@ test("runtime index setters finalize mutable receiver, index conversion, and val
       form: "index",
       indexConversion: { kind: "semantic-conversion", id: "checked-i32-to-usize" },
     },
-    sourceReceiverCarrier: vec,
+    sourceReceiver: { kind: "runtime", carrier: vec },
     sourceArgumentCarriers: [int32, int32],
     declaredSourceArgumentCarriers: [int32, int32],
     resultCarrier: unit,
@@ -1054,7 +1036,7 @@ test("runtime method setters preserve the provider-declared receiver mode", () =
   const shared = finalizeRustProviderOperationAbi({
     operationKind: "property-set",
     form: { form: "receiver-method", name: "set_value" },
-    sourceReceiverCarrier: { kind: "target-named", id: "acme.SharedCell" },
+    sourceReceiver: { kind: "runtime", carrier: { kind: "target-named", id: "acme.SharedCell" } },
     sourceArgumentCarriers: [int32],
     declaredSourceArgumentCarriers: [int32],
     resultCarrier: unit,
@@ -1064,7 +1046,7 @@ test("runtime method setters preserve the provider-declared receiver mode", () =
   const exclusive = finalizeRustProviderOperationAbi({
     operationKind: "property-set",
     form: { form: "receiver-method", name: "set_value", mutatesReceiver: true },
-    sourceReceiverCarrier: { kind: "target-named", id: "acme.ExclusiveCell" },
+    sourceReceiver: { kind: "runtime", carrier: { kind: "target-named", id: "acme.ExclusiveCell" } },
     sourceArgumentCarriers: [int32],
     declaredSourceArgumentCarriers: [int32],
     resultCarrier: unit,
@@ -1154,7 +1136,7 @@ test("operation finalization rejects unsafe constants and incomplete permutation
   const rawPointerReceiver = finalizeRustProviderOperationAbi({
     operationKind: "method",
     form: { form: "receiver-method", name: "write", mutatesReceiver: true },
-    sourceReceiverCarrier: rawPointer,
+    sourceReceiver: { kind: "runtime", carrier: rawPointer },
     sourceArgumentCarriers: [],
     resultCarrier: unit,
     isAsync: false,

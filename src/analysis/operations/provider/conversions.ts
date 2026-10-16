@@ -24,6 +24,7 @@ import type { RustOperationsProviderOptions } from "./model.js";
 import type { RustProviderFactOperationKind, RustProviderOperationTemplate } from "../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
+import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
 
 export function selectRustCheckedConversion(
   request: RustCheckedConversionSelectionInput,
@@ -300,6 +301,9 @@ export function finalizeProviderOperationFromSubjects(
   if (providerFormRequiresSourceReceiver(instantiatedTemplate.target) && sourceReceiverCarrier === undefined) {
     return undefined;
   }
-  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], sourceReceiverCarrier,
+  const receiver = sourceReceiver === undefined ? undefined
+    : selectRustProviderSourceReceiver(sourceReceiver, sourceReceiverCarrier, context, options);
+  if (sourceReceiver !== undefined && receiver === undefined) return undefined;
+  return finalizeProviderOperationFact(instantiatedTemplate, sourceArgumentCarriers as TargetTypeRef[], receiver,
     context.typeDefinitions, undefined, options.dispatchContextInputFor);
 }

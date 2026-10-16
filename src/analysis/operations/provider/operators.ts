@@ -47,6 +47,8 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetOperationSupportsAssignment } from "../target-operation.js";
 import { isRustSourceErrorCarrier, isRustRetainedErrorCarrier } from "../../../target-model/types/carriers/source-error.js";
+import { selectRustProviderSourceReceiver } from "./source-qualifiers.js";
+import type { RustProviderSourceReceiver } from "../../../target-model/records/finalized-operation.js";
 
 export function selectRustCheckedOperator(
   request: RustCheckedOperatorSelectionInput,
@@ -291,6 +293,12 @@ function mapSelectedAssignment(
   const receiver = selectedLeft?.provenance?.sourceReceiver;
   const receiverCarrier = rustEffectiveValueCarrier(context.records, receiver) ??
     resolveRustTargetTypeRef(receiver, context, options);
+  const sourceReceiver = receiver === undefined ? undefined
+    : selectRustProviderSourceReceiver(receiver, receiverCarrier, context, options);
+  if (receiver !== undefined && sourceReceiver === undefined) {
+    return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING",
+      "Selected setter has no closed Rust receiver evaluation.");
+  }
   if (providerIdentity !== undefined) {
     const providerSelection = mapSelectedProviderAssignment(
       request,
@@ -300,6 +308,7 @@ function mapSelectedAssignment(
       receiver,
       selectedWriteDeclaration ?? selectedDeclaration,
       receiverCarrier,
+      sourceReceiver,
       context,
       options,
     );
@@ -372,7 +381,7 @@ function mapSelectedAssignment(
   const abi = finalizeRustProviderOperationAbi({
     operationKind,
     form: selection.fact.target,
-    sourceReceiverCarrier: receiverCarrier,
+    ...(sourceReceiver === undefined ? {} : { sourceReceiver }),
     sourceArgumentCarriers,
     declaredSourceArgumentCarriers: selection.parameterCarriers,
     resultCarrier: rustUnitTargetType(),
@@ -403,6 +412,7 @@ function mapSelectedProviderAssignment(
   receiver: ExtensionFactSubject | undefined,
   selectedDeclaration: ExtensionFactSubject | undefined,
   receiverCarrier: TargetTypeRef | undefined,
+  sourceReceiver: RustProviderSourceReceiver | undefined,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): RustPolicySelection<RustCheckedOperationSelectionResult> | undefined {
@@ -497,7 +507,9 @@ function mapSelectedProviderAssignment(
   const abi = finalizeRustProviderOperationAbi({
     operationKind,
     form: template.target,
-    ...(receiverCarrier === undefined ? {} : { sourceReceiverCarrier: receiverCarrier }),
+    ...(sourceReceiver === undefined ? {} : { sourceReceiver: sourceReceiver.kind === "runtime"
+      ? { ...sourceReceiver, ...(template.receiverCarrier === undefined ? {} : { declaredCarrier: template.receiverCarrier }) }
+      : sourceReceiver }),
     sourceArgumentCarriers: finalizedSourceArgumentCarriers,
     declaredSourceArgumentCarriers: template.parameterCarriers,
     resultCarrier: template.resultCarrier,

@@ -58,7 +58,7 @@ test("inherited method and setter ABIs retain exact receiver projections", () =>
     const options = {
       operationKind,
       form: { form: "receiver-method", name: operationKind === "property" ? "byte_length" : "set_number", receiverConversion: conversion },
-      sourceReceiverCarrier: view,
+      sourceReceiver: { kind: "runtime", carrier: view },
       sourceArgumentCarriers: operationKind === "property" ? [] : [number, number],
       resultCarrier: operationKind === "property" ? number : rustUnitTargetType(),
       isAsync: false, isFallible: false,
@@ -68,7 +68,7 @@ test("inherited method and setter ABIs retain exact receiver projections", () =>
     assert.ok(validateRustFinalizedOperationAbi(abi));
     assert.equal(abi.targetReceiver.input.conversion.kind, "semantic");
     assert.ok(rustTargetTypeRefEquals(abi.targetReceiver.input.conversion.targetCarrier, bytes));
-    assert.equal(finalizeRustProviderOperationAbi({ ...options, sourceReceiverCarrier: bytes }), undefined);
+    assert.equal(finalizeRustProviderOperationAbi({ ...options, sourceReceiver: { kind: "runtime", carrier: bytes } }), undefined);
     assert.equal(finalizeRustProviderOperationAbi({ ...options, form: { ...options.form, receiverConversion: { ...conversion, path: "acme::wrong" } } }), undefined);
     const corrupted = structuredClone(abi);
     corrupted.targetReceiver.input.conversion.targetCarrier = view;

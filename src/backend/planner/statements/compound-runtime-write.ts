@@ -36,6 +36,6 @@ export function planRustCompoundRuntimeWrite(
     { kind: "let", name: valueName, mutable: false, init: value },
     { kind: "let", name: nextName, mutable: false, init: next });
   overrides.set(right, { expression: { kind: "path", path: nextName }, carrier: assignment.resultCarrier, valueForm: "value" });
-  const written = planRuntimeSetStatement(expression, write, { ...selected, expressionOverrides: overrides }, { target: left, value: right });
+  const written = planRuntimeSetStatement(expression, write, { ...selected, expressionOverrides: overrides });
   return written === undefined ? undefined : [{ kind: "scope", body: { statements: [...statements, ...written] } }];
 }

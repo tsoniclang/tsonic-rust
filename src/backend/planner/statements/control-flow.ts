@@ -3,16 +3,13 @@ import {
   LabeledStatement_Label,
   LabeledStatement_Statement,
   IterationStatement_Statement,
-  ForStatement_Condition,
   ForStatement_Incrementor,
   ForStatement_Initializer,
-  BinaryExpression_Left,
   IfStatement_ElseStatement,
   IfStatement_ThenStatement,
   KindDoStatement,
   KindForStatement,
   KindForInStatement,
-  KindIdentifier,
   KindNumericLiteral,
   KindStringLiteral,
   KindWhileStatement,
@@ -20,42 +17,30 @@ import {
   Node_Expression,
 } from "@tsonic/target-api/source";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { collectVariableDeclarations, planResourceManagedBody, resourceFactForPlanning } from "./resources.js";
+import { collectVariableDeclarations, planResourceDeclarations } from "./resources.js";
 import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import { isValidRustIdentifier } from "../program/plan-context.js";
 import {
   negateRustPlannedBooleanExpression,
   planExpression,
   planExpressionBeforeValueProjections,
   planNumericLiteralWithCarrier,
 } from "../expressions/index.js";
-import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
-import { isRustBoolCarrier } from "../../../target-model/types/index.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planExpressionAsStatement } from "./expression-statements.js";
 import { planVariableStatement } from "./variable-declarations.js";
 import { planRustDeferredCaptureStorage, planRustCaptureStorageRotation } from "../bindings/capture-storage.js";
 import { planForInStatement, planForOfStatement } from "./iteration.js";
 
-import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { planSelectedRustProjectTypeTest } from "../expressions/binary.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustCountedLoopRepresentation } from "../../../analysis/control-flow/counted-loop-representations.js";
 import type { RustBlock, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustControlTarget, RustLoopTarget, RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
-
-function planCondition(condition: Node, context: RustPlanContext, construct: string) {
-  const carrier: TargetTypeRef | undefined = effectivePlannedExpressionCarrier(condition, context);
-  if (!isRustBoolCarrier(carrier)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, condition),
-      "rust.backend.condition",
-      `${construct} conditions require a finalized bool carrier fact.`,
-    ));
-    return undefined;
-  }
+function planCondition(statement: Node, context: RustPlanContext) {
+  const condition = context.input.program.statementCompletions.conditionFor(statement);
+  if (condition === undefined) failRustPlannerInvariant("Control flow requires its admitted native Boolean condition.", statement);
   return planExpression(condition, context);
 }
 
@@ -74,6 +59,7 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   const thenStatement = IfStatement_ThenStatement(context.input.program.source.ast, node);
   const elseStatement = IfStatement_ElseStatement(context.input.program.source.ast, node);
   const selected = tryPlanSelectedProjectTypeTestIf(
+    node,
     condition,
     thenStatement,
     elseStatement,
@@ -82,7 +68,7 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
   if (selected.handled) {
     return selected.statements;
   }
-  const planned = planCondition(condition, context, "if");
+  const planned = planCondition(node, context);
   if (planned === undefined) {
     return undefined;
   }
@@ -121,36 +107,18 @@ export function planIfStatement(node: Node, context: RustPlanContext): readonly 
 }
 
 function tryPlanSelectedProjectTypeTestIf(
+  statement: Node,
   condition: Node,
   thenStatement: Node | undefined,
   elseStatement: Node | undefined,
   context: RustPlanContext,
 ): { readonly handled: boolean; readonly statements?: readonly RustStmt[] } {
-  const { ast } = context.input.program.source;
+  const narrowedReads = context.input.program.statementCompletions.projectTypeTestReadsFor(statement);
+  if (narrowedReads === undefined) return { handled: false };
   const fact = context.input.program.records.targetOperation.get(condition);
-  const leftNode = fact?.kind === "project-type-test" && fact.lowering.kind === "dispatch"
-    ? BinaryExpression_Left(ast, condition)
-    : undefined;
-  const binding = leftNode === undefined || ast.kindName(leftNode) !== KindIdentifier ||
-      context.expressionOverrides?.has(leftNode) === true
-    ? undefined
-    : context.input.program.records.sourceBinding.get(leftNode);
   if (fact?.kind !== "project-type-test" || fact.lowering.kind !== "dispatch" ||
-    leftNode === undefined || binding === undefined || thenStatement === undefined ||
-    context.syntheticNames === undefined ||
-    context.input.program.records.mutatedBinding.get(binding.sourceDeclaration) !== undefined ||
-    !rustTargetTypeRefEquals(fact.sourceCarrier, fact.dispatchCarrier)) {
-    return { handled: false };
-  }
-  const narrowedReads = context.input.program.projectFlowReadSelections.readsWithin({
-    root: thenStatement,
-    declaration: binding.sourceDeclaration,
-    sourceCarrier: fact.sourceCarrier,
-    dispatchCarrier: fact.dispatchCarrier,
-    selectedCarrier: fact.targetCarrier,
-  });
-  if (narrowedReads.length === 0) {
-    return { handled: false };
+    thenStatement === undefined || context.syntheticNames === undefined) {
+    failRustPlannerInvariant("Project type-test branch requires its admitted native dispatch and read plan.", statement);
   }
   const planned = planSelectedRustProjectTypeTest(condition, context);
   if (planned?.selection === undefined) {
@@ -202,23 +170,22 @@ export function planLabeledStatement(
   const { ast } = context.input.program.source;
   const labelNode = LabeledStatement_Label(ast, node);
   const bodyNode = LabeledStatement_Statement(ast, node);
-  const sourceLabel = labelNode === undefined ? "" : ast.text(labelNode);
-  if (bodyNode === undefined || sourceLabel.length === 0) {
+  if (bodyNode === undefined || labelNode === undefined) {
     failRustPlannerInvariant("Labeled statements require exact label and body nodes.", node);
   }
   switch (ast.kindName(bodyNode)) {
     case KindWhileStatement:
-      return planWhileStatement(bodyNode, context, sourceLabel);
+      return planWhileStatement(bodyNode, context);
     case KindDoStatement:
-      return planDoStatement(bodyNode, context, sourceLabel);
+      return planDoStatement(bodyNode, context);
     case KindForStatement:
-      return planForStatement(bodyNode, context, sourceLabel);
+      return planForStatement(bodyNode, context);
     case KindForInStatement:
-      return planForInStatement(bodyNode, context, sourceLabel);
+      return planForInStatement(bodyNode, context);
     case "KindForOfStatement":
-      return planForOfStatement(bodyNode, context, sourceLabel);
+      return planForOfStatement(bodyNode, context);
     default: {
-      const target = createRustBreakTarget(context, "label", sourceLabel);
+      const target = createRustBreakTarget(context, node, "label");
       if (target === undefined) {
         return undefined;
       }
@@ -233,17 +200,16 @@ export function planLabeledStatement(
 export function planWhileStatement(
   node: Node,
   context: RustPlanContext,
-  sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
   const condition = Node_Expression(context.input.program.source.ast, node);
   if (condition === undefined) {
     return undefined;
   }
-  const planned = planCondition(condition, context, "while");
+  const planned = planCondition(node, context);
   if (planned === undefined) {
     return undefined;
   }
-  const target = createRustLoopTarget(context, [], sourceLabel);
+  const target = createRustLoopTarget(context, node, []);
   if (target === undefined) {
     return undefined;
   }
@@ -272,15 +238,14 @@ export function planWhileStatement(
 export function planDoStatement(
   node: Node,
   context: RustPlanContext,
-  sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
   const condition = Node_Expression(context.input.program.source.ast, node);
   const bodyNode = DoStatement_Statement(context.input.program.source.ast, node);
   if (condition === undefined || bodyNode === undefined) {
     failRustPlannerInvariant("do-while requires concrete body and condition nodes.", node);
   }
-  const plannedCondition = planCondition(condition, context, "do-while");
-  const baseTarget = createRustLoopTarget(context, [], sourceLabel);
+  const plannedCondition = planCondition(node, context);
+  const baseTarget = createRustLoopTarget(context, node, []);
   if (plannedCondition === undefined || baseTarget === undefined) {
     return undefined;
   }
@@ -312,19 +277,18 @@ export function planDoStatement(
 export function planForStatement(
   node: Node,
   context: RustPlanContext,
-  sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
   const counted = context.input.program.countedLoops.representationFor(node);
   if (counted !== undefined) {
-    return planCountedForStatement(node, counted, context, sourceLabel);
+    return planCountedForStatement(node, counted, context);
   }
   const initializer = ForStatement_Initializer(context.input.program.source.ast, node);
-  const condition = ForStatement_Condition(context.input.program.source.ast, node);
+  const condition = context.input.program.statementCompletions.conditionFor(node);
   const incrementor = ForStatement_Incrementor(context.input.program.source.ast, node);
   const planLoop = (loopContext: RustPlanContext): RustBlock | undefined => {
     const conditionExpr = condition === undefined
       ? { kind: "bool-literal" as const, value: true }
-      : planCondition(condition, loopContext, "for");
+      : planCondition(node, loopContext);
     const incrementStatements = incrementor === undefined
       ? []
       : planIncrementor(incrementor, loopContext);
@@ -333,7 +297,7 @@ export function planForStatement(
       return undefined;
     }
     const continuation = [...rotation, ...incrementStatements];
-    const target = createRustLoopTarget(loopContext, continuation, sourceLabel);
+    const target = createRustLoopTarget(loopContext, node, continuation);
     if (target === undefined) {
       return undefined;
     }
@@ -372,12 +336,20 @@ export function planForStatement(
   }
   const declarationInitializer = context.input.program.source.ast.kindName(initializer) === KindVariableDeclarationList;
   const declarations = declarationInitializer ? collectVariableDeclarations(initializer, context) : [];
-  const resourceDeclaration = declarations.length === 1 &&
+  const resourceDeclarations = declarations.length > 0 &&
       (context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "using" ||
         context.input.program.source.ast.variableDeclarationKind(declarations[0]) === "await using")
-    ? declarations[0]
-    : undefined;
+    ? declarations : [];
   const deferred = planRustDeferredCaptureStorage(node, context);
+  if (deferred === undefined) return undefined;
+  if (resourceDeclarations.length > 0) {
+    const scoped = planResourceDeclarations(resourceDeclarations, context, bodyContext => {
+      const rotation = planRustCaptureStorageRotation(node, bodyContext);
+      const loop = rotation === undefined ? undefined : planLoop(bodyContext);
+      return loop === undefined || rotation === undefined ? undefined : { statements: [...rotation, ...loop.statements] };
+    });
+    return scoped === undefined ? undefined : [{ kind: "scope", body: { statements: [...deferred, ...scoped] } }];
+  }
   const initialization = declarationInitializer ? planVariableStatement(initializer, context)
     : planExpressionAsStatement(initializer, context);
   const rotation = planRustCaptureStorageRotation(node, context);
@@ -385,34 +357,14 @@ export function planForStatement(
     return undefined;
   }
   const initStatements = [...deferred, ...initialization, ...rotation];
-  if (resourceDeclaration === undefined) {
-    const loop = planLoop(context);
-    return loop === undefined
-      ? undefined
-      : [{ kind: "scope", body: { statements: [...initStatements, ...loop.statements] } }];
-  }
-  const fact = resourceFactForPlanning(resourceDeclaration, context);
-  const resourceName = context.input.program.names.nameForDeclaration(resourceDeclaration) ?? "";
-  if (fact === undefined || !isValidRustIdentifier(resourceName)) {
-    return undefined;
-  }
-  const scope = planResourceManagedBody(
-    resourceDeclaration,
-    resourceName,
-    fact,
-    context,
-    planLoop,
-  );
-  return scope === undefined
-    ? undefined
-    : [{ kind: "scope", body: { statements: [...initStatements, scope] } }];
+  const loop = planLoop(context);
+  return loop === undefined ? undefined : [{ kind: "scope", body: { statements: [...initStatements, ...loop.statements] } }];
 }
 
 function planCountedForStatement(
   node: Node,
   counted: RustCountedLoopRepresentation,
   context: RustPlanContext,
-  sourceLabel?: string,
 ): readonly RustStmt[] | undefined {
   const binding = context.input.program.names.nameForDeclaration(counted.counterDeclaration) ?? "";
   const start = counted.kind === "native-counter"
@@ -421,7 +373,7 @@ function planCountedForStatement(
   const bound = counted.kind === "native-counter"
     ? planExpression(counted.bound, context)
     : planExpressionBeforeValueProjections(counted.bound, context, "value");
-  const target = createRustLoopTarget(context, [], sourceLabel);
+  const target = createRustLoopTarget(context, node, []);
   if (!isValidRustIdentifier(binding) || start === undefined || bound === undefined ||
     target === undefined) {
     return undefined;
@@ -442,16 +394,8 @@ function planCountedForStatement(
       body,
     }];
   }
-  if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.counted-loop-range-name",
-      "A sealed integer-range number loop requires one finalized hygienic-name scope.",
-    ));
-    return undefined;
-  }
   const rangeBinding = allocateRustSyntheticName(
-    context.syntheticNames,
+    context.syntheticNames!,
     `${binding}_range`,
   );
   return [{
@@ -477,17 +421,19 @@ function planCountedForStatement(
 
 export function createRustLoopTarget(
   context: RustPlanContext,
+  source: Node,
   continuePrelude: readonly RustStmt[],
-  sourceLabel?: string,
 ): RustLoopTarget | undefined {
   if (context.syntheticNames === undefined || context.controlFlow === undefined) {
     failRustPlannerInvariant("Loop lowering requires finalized hygienic names and control-flow state.", context.sourceFile);
   }
+  const sourceTargets = context.input.program.statementCompletions.controlTargetsFor(source);
+  if (sourceTargets === undefined) failRustPlannerInvariant("Loop lowering requires its exact admitted source targets.", source);
   const target: RustLoopTarget = {
     kind: "loop",
     id: context.controlFlow.nextLoopId,
     label: allocateRustSyntheticName(context.syntheticNames, "loop"),
-    ...(sourceLabel === undefined ? {} : { sourceLabel }),
+    sourceTargets,
     ...(context.completionBoundary === undefined
       ? {}
       : { resourceBoundary: context.completionBoundary }),
@@ -501,17 +447,19 @@ export function createRustLoopTarget(
 
 export function createRustBreakTarget(
   context: RustPlanContext,
+  source: Node,
   kind: "switch" | "label",
-  sourceLabel?: string,
 ): RustControlTarget | undefined {
   if (context.syntheticNames === undefined || context.controlFlow === undefined) {
     failRustPlannerInvariant("Labeled control flow requires finalized hygienic names and control-flow state.", context.sourceFile);
   }
+  const sourceTargets = context.input.program.statementCompletions.controlTargetsFor(source);
+  if (sourceTargets === undefined) failRustPlannerInvariant("Labeled control flow requires its exact admitted source targets.", source);
   const target: RustControlTarget = {
     kind,
     id: context.controlFlow.nextLoopId,
     label: allocateRustSyntheticName(context.syntheticNames, kind),
-    ...(sourceLabel === undefined ? {} : { sourceLabel }),
+    sourceTargets,
     ...(context.completionBoundary === undefined
       ? {}
       : { resourceBoundary: context.completionBoundary }),

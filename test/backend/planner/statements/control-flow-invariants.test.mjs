@@ -156,9 +156,9 @@ test("loop and break targets require the backend's own name and counter state", 
   const program = analyzedProgram();
   const doNode = findNode(program, (ast, node) => ast.is.IsDoStatement(node));
   for (const [label, create, message] of [
-    ["CF-04 loop target", context => createRustLoopTarget(context, [], undefined),
+    ["CF-04 loop target", context => createRustLoopTarget(context, doNode, []),
       "Loop lowering requires finalized hygienic names and control-flow state."],
-    ["CF-05 break target", context => createRustBreakTarget(context, "label", "done"),
+    ["CF-05 break target", context => createRustBreakTarget(context, doNode, "label"),
       "Labeled control flow requires finalized hygienic names and control-flow state."],
   ]) {
     const valid = planContext(program, doNode);
