@@ -6,6 +6,7 @@ import { rustJsPromiseTargetType, rustJsValueTargetType, rustProgramErrorTargetT
 import { rustRuntimeErrorTargetType } from "../../../dist/target-model/operations/error-boundary.js";
 import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustInfallibleTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 
 function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
   const file = Object.freeze({ file: true });
@@ -29,7 +30,8 @@ function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
     callables: { native: { inputs: [] }, nativeGenericProducers: { errorAritiesFor: () => [] } },
     producers: { producers: [] },
     definitions: {},
-    components: { componentForFile: () => ({ errorDomain: "runtime" }) },
+    components: { componentForFile: () => ({ errorDomain: "runtime" }),
+      forComponent: componentId => ({ componentId, errorDomain: "project", errorOwnerComponentId: componentId }) },
   });
   assert.equal(result.kind, "resolved");
   const region = result.value.get(declaration);
@@ -41,7 +43,7 @@ test("JS body regions select identity, retained, uninhabited and package convers
   const region = selectRegion([
     { identity: "js-rejection", errorType: rustJsValueTargetType() },
     { identity: "native", errorType: rustRuntimeErrorTargetType() },
-    { identity: "empty", errorType: { kind: "target-named", id: "core::convert::Infallible" } },
+    { identity: "empty", errorType: { kind: "target-named", id: rustInfallibleTargetId } },
   ], true);
   assert.equal(region.jsRejection !== undefined, true);
   assert.equal(region.jsRejection.local.kind, "retained-error");
@@ -55,7 +57,6 @@ test("JS body regions select identity, retained, uninhabited and package convers
 });
 
 test("native error joins retain an explicit conversion per leaf instead of assuming Into for the join", () => {
-  const packageError = rustProgramErrorTargetType({ kind: "physical", domain: "project", componentId: "external" });
   const joined = rustNativeErrorJoinTargetType("/src/external.ts", [
     rustRuntimeErrorTargetType(), rustJsValueTargetType(),
   ]);
@@ -66,7 +67,15 @@ test("native error joins retain an explicit conversion per leaf instead of assum
   assert.deepEqual(conversion.arms.map(arm => arm.kind), ["retained-error", "identity"]);
   assert.equal(region.jsRejection.requiredCarriers.length, 1);
   assert.equal(rustTargetTypeRefEquals(region.jsRejection.requiredCarriers[0], rustRuntimeErrorTargetType()), true);
-  assert.equal(packageError.errorOwner.domain, "project");
+});
+
+test("project package errors select their closed-value route, not an invented retained-error trait", () => {
+  const errorType = rustProgramErrorTargetType({ kind: "physical", domain: "project", componentId: "external" });
+  const region = selectRegion([{ identity: "package", errorType }]);
+  assert.equal(region.jsRejection !== undefined, true);
+  assert.equal(region.jsRejection.sources[0].conversion.kind, "program-error");
+  assert.equal(region.jsRejection.sources[0].conversion.owner.componentId, "external");
+  assert.equal(region.jsRejection.requiredCarriers.length, 0);
 });
 
 test("native body regions keep exact sources without a JS conversion projection", () => {

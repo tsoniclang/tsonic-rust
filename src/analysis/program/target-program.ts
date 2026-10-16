@@ -251,6 +251,11 @@ export function analyzeRustTargetProgram(
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
+  const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
+    names: context.names, callables: context.callableValues.selected,
+    producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
+    components: sourcePackageComponents.plan });
+  if (errorRegions.kind === "rejected") return errorRegions;
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,
@@ -267,6 +272,7 @@ export function analyzeRustTargetProgram(
     classValues.instanceViews,
     context.callableValues.selected.frames,
     context.callableValues.native,
+    errorRegions.value,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
@@ -313,11 +319,6 @@ export function analyzeRustTargetProgram(
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
     effectsFor: declaration => records.sourceCallEffects.get(declaration) });
   if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
-  const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
-    names: context.names, callables: context.callableValues.selected,
-    producers: context.callableValues.nativeProducers, definitions: typeDefinitions,
-    components: sourcePackageComponents.plan });
-  if (errorRegions.kind === "rejected") return errorRegions;
   const initializationErrors = analyzeRustInitializationErrors({ ast: context.ast, sourceFiles: context.sourceFiles,
     navigation: context.source.navigation, moduleInitialization, sourceModules: sourceModuleConstructions.index,
     components: sourcePackageComponents.plan, facades: sourcePackageFacades.plan, regions: errorRegions.value,

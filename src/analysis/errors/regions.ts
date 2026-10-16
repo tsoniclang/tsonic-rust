@@ -27,6 +27,7 @@ import type { RustSourceErrorEffectEdge } from "../../target-model/records/sourc
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources } from "../../target-model/types/native-error-joins.js";
+import { selectRustJsRejectionRegion } from "./js-rejection.js";
 
 export type RustAnalyzedErrorRegions = Omit<RustErrorRegionRecords, "initialization">;
 
@@ -62,7 +63,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
     }
     rustTargetTypeChildren(carrier).forEach(inspectCarrier);
   };
-  const regionFor = (node: Node, effects: RustErrorEffectsFact): RustErrorRegionSelection | undefined => {
+  const regionFor = (node: Node, effects: RustErrorEffectsFact, body = false): RustErrorRegionSelection | undefined => {
     const file = input.ast.getSourceFile(node);
     const owner = effects.localErrors ? selectRustPhysicalProgramErrorOwner(node, input) : undefined;
     const sources = effects.nativeErrors.map((source, index) => {
@@ -80,9 +81,15 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       reject(node, "An error region exceeds its bounded exact native error-source contract.");
       return undefined;
     }
+    const promiseBody = body && input.records.asyncFunction.get(node)?.kind === "js-promise";
+    const jsRejection = promiseBody ? selectRustJsRejectionRegion(owner, selectedSources) : undefined;
+    if (promiseBody && jsRejection === undefined) {
+      reject(node, "A JS Promise rejection region has no bounded exact native conversion selection.");
+      return undefined;
+    }
     return Object.freeze({ kind: effects.nativeErrors.length > 0 ? "native" : effects.localErrors ? "package" : "infallible",
       fileName: input.ast.getFileName(file), localOwner: owner,
-      sources: selectedSources });
+      sources: selectedSources, ...(jsRejection === undefined ? {} : { jsRejection }) });
   };
   const sourceRegionFor = (node: Node, edge: RustSourceErrorEffectEdge): void => {
     const source = input.records.errorEffects.get(edge.declaration);
@@ -146,7 +153,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
         input.names.callableValueNameForDeclaration(node)]) if (name !== undefined) usedNames.add(name);
       const effects = input.records.errorEffects.get(node);
       if (effects !== undefined) {
-        const selected = regionFor(node, effects);
+        const selected = regionFor(node, effects, true);
         if (selected !== undefined) regions.set(node, selected);
         if (effects.nativeErrors.length > 0) {
           const arity = effects.nativeErrors.length + (effects.localErrors ? 1 : 0);

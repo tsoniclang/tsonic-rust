@@ -6,11 +6,23 @@ import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
 
 export type RustPhysicalErrorOwner = Extract<RustProgramErrorOwner, { readonly kind: "physical" }>;
 
+export type RustJsRejectionConversion =
+  | { readonly kind: "identity" | "uninhabited" | "retained-error"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "program-error"; readonly carrier: TargetTypeRef; readonly owner: RustPhysicalErrorOwner }
+  | { readonly kind: "native-join"; readonly carrier: TargetTypeRef; readonly arms: readonly RustJsRejectionConversion[] };
+
+export interface RustJsRejectionRegion {
+  readonly local: RustJsRejectionConversion | undefined;
+  readonly sources: readonly { readonly identity: string; readonly conversion: RustJsRejectionConversion }[];
+  readonly requiredCarriers: readonly TargetTypeRef[];
+}
+
 export interface RustErrorRegionSelection {
   readonly kind: "infallible" | "package" | "native";
   readonly fileName: string;
   readonly localOwner: RustPhysicalErrorOwner | undefined;
   readonly sources: readonly RustNativeErrorSource<TargetTypeRef>[];
+  readonly jsRejection?: RustJsRejectionRegion;
 }
 
 export interface RustSourceErrorRegionSelection {
