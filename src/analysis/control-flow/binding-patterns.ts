@@ -312,7 +312,7 @@ function resolveObjectBindingSource(
   const declaration = context.sourceTypes.declarationForCarrier(sourceCarrier);
   const layout = declaration === undefined
     ? undefined
-    : rustProjectObjectLayout(declaration, context.ast);
+    : rustProjectObjectLayout(declaration, context.ast, context.semanticsFor);
   if (declaration === undefined || layout === undefined ||
     context.ast.extendsHeritageElements(declaration).length !== 0) {
     return undefined;
