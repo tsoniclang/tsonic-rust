@@ -309,11 +309,11 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       structuralMethodStorage.complete({ producerError(reference) {
         return normalizeRustErrorType({ kind: "target-specific", target: "rust", name: "producer-error", value: reference }, context);
       } });
+      parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
+        records: input.records }, nativeStorageQueries);
     },
     finalizeSelected() {
       if (structuralMethodStorage === undefined) throw new Error("Physical callable families require their completed constructor and field storage selection.");
-      parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
-        records: input.records }, nativeStorageQueries);
       const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.lifetimes,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);

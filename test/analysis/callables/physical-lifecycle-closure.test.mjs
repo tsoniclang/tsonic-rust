@@ -11,6 +11,8 @@ import { createRustFrameCallablePlan } from "../../../dist/analysis/callables/fr
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 const joinedSource = `
 type Identity = <Value>(value: Value) => Value;
@@ -72,6 +74,52 @@ const strings = make<string>("text");
 export async function read(): Promise<number> { await strings.read(); return await integers.read(); }
 `,
 };
+
+const mixedErrorSources = {
+  "one canonical slot": `
+export function choose(flag: boolean): { value(): number } {
+  return flag ? { value(): number { return 1; } } : { value(): number { throw new Error("selected"); } };
+}
+`,
+  "connected original, copied and mixed slots": `
+export function choose(flag: boolean) {
+  const original = { value(): number { return 1; } };
+  const copy = { label: "copy", ...original };
+  const mixed = flag ? original : { value(): number { throw new Error("selected"); } };
+  return { original, copy, mixed };
+}
+`,
+};
+
+for (const [name, source] of Object.entries(mixedErrorSources)) {
+  test(`retained construction selects one physical error ABI before captures: ${name}`, () => {
+    const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
+    const methods = sourceNodes(program).filter(node => program.source.ast.is.IsMethodDeclaration(node));
+    const signatures = methods.map(node => {
+      const operation = program.records.targetOperation.get(node);
+      assert.equal(operation?.kind === "closure", true, `${name}: actual closure declaration`);
+      const logical = program.records.receiverIndependentMethod.get(node)?.carrier ?? operation.resultCarrier;
+      const signature = rustCallablePhysicalSignature(program.callableValues.nativeProducers.physicalFor(node, logical));
+      assert.equal(signature !== undefined, true, `${name}: completed physical constructor`);
+      return signature;
+    });
+    assert.equal(signatures.length, 2, `${name}: pure and throwing source implementations`);
+    assert.equal(signatures[0].error?.id === "rust.core.Infallible", false, `${name}: common storage retains the throwing channel`);
+    assert.equal(rustTargetTypeRefEquals(signatures[0].error, signatures[1].error), true, `${name}: producers agree before retention`);
+    const pure = methods.find(node => program.records.errorEffects.get(node)?.localErrors === false);
+    assert.equal(pure !== undefined, true, `${name}: source implementation remains intrinsically pure`);
+    const reference = rustProducerErrorReference(program.callableValues.nativeProducers.errorFor(pure, "invoke"));
+    assert.equal(program.errorRegions.producerError(reference)?.id === "rust.core.Infallible", true, `${name}: intrinsic channel is not widened`);
+    let fields = 0;
+    for (const definition of program.structuralShapes.definitions) for (const field of definition.fields) {
+      if (field.method !== true || field.nativeMethod === true) continue;
+      const protocol = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier);
+      assert.equal(rustTargetTypeRefEquals(protocol?.error, signatures[0].error), true, `${name}: canonical retained field agrees`);
+      fields += 1;
+    }
+    assert.equal(fields > 0, true, `${name}: actual retained fields exercised`);
+  });
+}
 
 for (const [name, source] of Object.entries(structuralSources)) {
   test(`structural method storage publishes the actual invocation facet: ${name}`, () => {
@@ -347,6 +395,8 @@ export function choose(): typeof identity { return identity; }
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   construction.selectConstructionErrors(new Map());
+  const captured = Object.fromEntries(["outwardReturnFor", "invocationResultFor", "bodyResultFor", "errorFor", "physicalFor"]
+    .map(name => [name, construction[name]]));
   const requests = new Map();
   for (const node of sourceNodes(program)) {
     const value = program.records.directCallableReference.get(node);
@@ -367,12 +417,17 @@ export function choose(): typeof identity { return identity; }
     const invocation = published.invocationResultFor(declaration);
     const body = published.bodyResultFor(declaration);
     const error = published.errorFor(declaration, "invoke");
+    assert.equal(captured.outwardReturnFor(declaration) === outward, true, "captured outward reader is terminal");
+    assert.equal(captured.invocationResultFor(declaration) === invocation, true, "captured invocation reader is terminal");
+    assert.equal(captured.bodyResultFor(declaration) === body, true, "captured body reader is terminal");
+    assert.equal(captured.errorFor(declaration, "invoke") === error, true, "captured intrinsic-error reader is terminal");
     assert.equal(published.outwardReturnFor(declaration) === outward, true, "outward result identity");
     assert.equal(published.invocationResultFor(declaration) === invocation, true, "invocation result identity");
     assert.equal(published.bodyResultFor(declaration) === body, true, "body result identity");
     assert.equal(published.errorFor(declaration, "invoke") === error, true, "producer error identity");
     for (const carrier of requests.get(declaration) ?? []) {
       const physical = published.physicalFor(declaration, carrier);
+      assert.equal(captured.physicalFor(declaration, carrier) === physical, true, "captured physical reader is terminal");
       assert.equal(physical !== undefined, true, "required physical request selected before publication");
       assert.equal(published.physicalFor(declaration, carrier) === physical, true, "physical producer identity");
     }

@@ -722,6 +722,7 @@ function collectFallibilityFacts(
       const failure = budget.run(() => {
         const physical = walk.context.callableValues.nativeStorage;
         const completeError = (error: RustErrorEffectsFact["nativeErrors"][number]) => selectSourceErrors.complete(error, physical);
+        const completedEdges = new Map<RustSourceErrorEffectEdge, RustSourceErrorEffectEdge>();
         const completeEffects = (effects: RustErrorEffectsFact): RustErrorEffectsFact => {
           const errors = effects.nativeErrors.map(completeError);
           const selected = errors.some(error => error === undefined) ? undefined : mergeEffects([{ localErrors: effects.localErrors,
@@ -730,11 +731,22 @@ function collectFallibilityFacts(
           return selected;
         };
         const completeEdge = (edge: RustSourceErrorEffectEdge): RustSourceErrorEffectEdge => {
+          const previous = completedEdges.get(edge);
+          if (previous !== undefined) return previous;
           const errors = edge.nativeErrors.map(channel => ({ source: completeError(channel.source), target: completeError(channel.target) }));
           if (errors.some(channel => channel.source === undefined || channel.target === undefined))
             throw new Error("Rust pending source error edge lost its exact physical payload correspondence.");
-          return Object.freeze({ ...edge, effects: completeEffects(edge.effects),
-            nativeErrors: Object.freeze(errors as RustSourceErrorEffectEdge["nativeErrors"]) });
+          const channels = new Map<string, RustSourceErrorEffectEdge["nativeErrors"][number]>();
+          for (const channel of errors as RustSourceErrorEffectEdge["nativeErrors"]) {
+            const previous = channels.get(channel.source.identity);
+            if (previous !== undefined && (!rustTargetTypeRefEquals(previous.source.errorType, channel.source.errorType) ||
+              previous.target.identity !== channel.target.identity || !rustTargetTypeRefEquals(previous.target.errorType, channel.target.errorType)))
+              throw new Error("Rust final source error channels require one exact source-to-target correspondence.");
+            channels.set(channel.source.identity, channel);
+          }
+          const selected = Object.freeze({ ...edge, effects: completeEffects(edge.effects), nativeErrors: Object.freeze([...channels.values()]) });
+          completedEdges.set(edge, selected);
+          return selected;
         };
         for (const [declaration, effects] of effectsByDeclaration) {
           requireRustRecord(walk.context.requiredRecords, "errorEffects", declaration, "source-callable", "recordFallibilityFacts");
@@ -773,12 +785,12 @@ function collectFallibilityFacts(
           }
           requireRustRecord(walk.context.requiredRecords, "sourceErrorEffects", node,
             "source-invocation", "recordFallibilityFacts");
-          walk.context.records.sourceErrorEdges.invocation(node, edges.map(completeEdge));
+          walk.context.records.sourceErrorEdges.invocation(node, Object.freeze(edges.map(completeEdge)));
         }
         for (const [node, branches] of awaitSourceEdges) {
           requireRustRecord(walk.context.requiredRecords, "awaitSourceErrorEffects", node,
             "await", "recordFallibilityFacts");
-          walk.context.records.awaitSourceErrors.selected(node, branches.map(branch => Object.freeze({ ...branch, edge: completeEdge(branch.edge) })));
+          walk.context.records.awaitSourceErrors.selected(node, Object.freeze(branches.map(branch => Object.freeze({ ...branch, edge: completeEdge(branch.edge) }))));
         }
       });
       if (failure !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, undefined,

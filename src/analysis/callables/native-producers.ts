@@ -94,15 +94,26 @@ export function createRustNativeCallableProducerPlan(input: {
     byDeclaration.set(declaration, producer);
     byIdentity.set(producer.identity, producer);
   }
+  let published: RustNativeCallableProducerPlan | undefined;
+  const sourceErrors = new Map<Node, Map<RustProducerErrorReference["channel"], TargetTypeRef>>();
   const errorFor = (declaration: Node, channel: RustProducerErrorReference["channel"]): TargetTypeRef | undefined => {
+    if (published !== undefined) return published.errorFor(declaration, channel);
     const producer = byDeclaration.get(declaration);
-    return producer === undefined ? undefined : rustProducerErrorTargetType({
+    if (producer === undefined) return undefined;
+    const previous = sourceErrors.get(declaration)?.get(channel);
+    if (previous !== undefined) return previous;
+    const selected = rustProducerErrorTargetType({
       identity: producer.identity, fileName: producer.fileName, channel, genericArguments: producer.environment,
     });
+    const channels = sourceErrors.get(declaration) ?? new Map<RustProducerErrorReference["channel"], TargetTypeRef>();
+    channels.set(channel, selected);
+    sourceErrors.set(declaration, channels);
+    return selected;
   };
   const noFuture: RustDeferredProducerChannel = Object.freeze({ awaiting: "infallible",
     errorCarrier: Object.freeze({ kind: "target-named", id: rustInfallibleTargetId }) });
   const deferredFor = (declaration: Node, ordinal: number): RustDeferredProducerChannel | undefined => {
+    if (published !== undefined) return published.deferredFor(declaration, ordinal);
     if (!byDeclaration.has(declaration) || !Number.isSafeInteger(ordinal) || ordinal < 0) return undefined;
     const selected = input.records.deferredProducerEffects.get(declaration);
     if (selected?.kind !== "no-future") return selected?.channels[ordinal];
@@ -117,12 +128,15 @@ export function createRustNativeCallableProducerPlan(input: {
     forDeclaration: declaration => byDeclaration.get(declaration), errorFor, deferredFor,
   } });
   const plan: RustNativeCallableProducerPlan = Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
-    outwardReturnFor: outward.returnFor, invocationResultFor: outward.invocationFor, bodyResultFor: outward.bodyFor,
+    outwardReturnFor: (declaration: Node) => published === undefined ? outward.returnFor(declaration) : published.outwardReturnFor(declaration),
+    invocationResultFor: (declaration: Node) => published === undefined ? outward.invocationFor(declaration) : published.invocationResultFor(declaration),
+    bodyResultFor: (declaration: Node) => published === undefined ? outward.bodyFor(declaration) : published.bodyResultFor(declaration),
     forDeclaration: (declaration: Node) => byDeclaration.get(declaration),
     forIdentity: (identity: string) => byIdentity.get(identity),
     deferredFor,
     deferredErrorFor: (declaration: Node, ordinal: number) => deferredFor(declaration, ordinal)?.errorCarrier,
     physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
+      if (published !== undefined) return published.physicalFor(declaration, carrier);
       const producer = byDeclaration.get(declaration);
       const signature = rustCallableProtocol(carrier);
       const intrinsic = errorFor(declaration, "invoke");
@@ -206,7 +220,7 @@ export function createRustNativeCallableProducerPlan(input: {
         physical.set(declaration, selections);
       }
       sealed = true;
-      return Object.freeze({ producers: plan.producers, forDeclaration: plan.forDeclaration, forIdentity: plan.forIdentity,
+      published = Object.freeze({ producers: plan.producers, forDeclaration: plan.forDeclaration, forIdentity: plan.forIdentity,
         errorFor: (declaration: Node, channel: RustProducerErrorReference["channel"]) => errors.get(declaration)?.get(channel),
         deferredFor: (declaration: Node, ordinal: number) => deferred.get(declaration)?.get(ordinal),
         deferredErrorFor: (declaration: Node, ordinal: number) => deferred.get(declaration)?.get(ordinal)?.errorCarrier,
@@ -215,6 +229,7 @@ export function createRustNativeCallableProducerPlan(input: {
         bodyResultFor: (declaration: Node) => bodyResults.get(declaration),
         physicalFor: (declaration: Node, carrier: TargetTypeRef) => physical.get(declaration)?.get(closedMetadataKey(carrier)),
       });
+      return published;
     },
   });
 }
