@@ -4,6 +4,7 @@ import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions }
 import { resolveRustTargetType } from "./target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
 import { substituteRustTargetTypeParameters } from "../../../target-model/types/carriers/substitution.js";
+import { rustSourceStorageProjectedCarrier } from "../objects/value-domain-carrier.js";
 
 export function resolveRustCallableEnvironment(
   declaration: Node | undefined,
@@ -28,11 +29,24 @@ export function resolveRustCallableEnvironment(
     const type = refinement.kind === "resolved" ? refinement.declaredType : semantics.types.expressionType(reference);
     const selected = context.sourceStorage.subjectFor(reference);
     if (selected.kind === "unresolved") return undefined;
-    const storageCarrier = selected.subject.kind === "value" && selected.subject.projection.length === 0
-      ? context.records.runtimeCarrier.get(selected.subject.node)?.carrier : undefined;
-    const carrier = storageCarrier ?? resolveRustTargetType(type, { ...context, currentSemantics: semantics,
-      sourceStorageSubject: selected.subject,
-      sourceTypeParameterSubstitutions: new Map() }, options, resolving);
+    let carrier: TargetTypeRef | undefined;
+    if (selected.subject.kind === "input") {
+      const owner = context.ast.parent(selected.subject.node);
+      if (owner === undefined || options.callableParameterCarriers(owner) === undefined) return undefined;
+      const abi = context.records.sourceParameterAbi.get(selected.subject.node);
+      if (abi === undefined) return undefined;
+      carrier = rustSourceStorageProjectedCarrier({ sourceStorage: context.sourceStorage,
+        sourceTypes: options.sourceTypes, projectFieldProjection: options.projectFieldProjection,
+        types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier },
+        semantics: context.semantics,
+      }, selected.subject, abi.valueCarrier);
+    } else {
+      const storageCarrier = selected.subject.kind === "value" && selected.subject.projection.length === 0
+        ? context.records.runtimeCarrier.get(selected.subject.node)?.carrier : undefined;
+      carrier = storageCarrier ?? resolveRustTargetType(type, { ...context, currentSemantics: semantics,
+        sourceStorageSubject: selected.subject,
+        sourceTypeParameterSubstitutions: new Map() }, options, resolving);
+    }
     if (carrier === undefined) return undefined;
     carriers.push(carrier);
   }

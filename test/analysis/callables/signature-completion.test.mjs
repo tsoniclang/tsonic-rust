@@ -10,6 +10,37 @@ import * as callableSignatures from "../../../dist/analysis/callables/signature-
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed-data.js";
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
+import { resolveRustCallableEnvironment } from "../../../dist/policy/types/resolution/callable-environments.js";
+
+test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
+  const { context, walk } = analyzeRustOperations(`
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function step<Region extends Life>(value: Ref<int32, Region>): int32 {
+  const read = (): int32 => load(value);
+  return read();
+}`, { surfaces: [] });
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node));
+  const closure = context.sourceStorage.nodes.find(node => context.ast.is.IsArrowFunction(node));
+  assert.equal(declaration !== undefined && closure !== undefined, true, "the actual native capture and owner are checked");
+  const parameter = context.ast.parameters(declaration)[0];
+  const abi = context.records.sourceParameterAbi.get(parameter);
+  assert.equal(abi?.valueCarrier.kind === "reference" && abi.valueCarrier.lifetime?.name === "Region", true,
+    "the source input ABI preserves the authored native reference");
+  const resolution = rustResolutionContext(walk, closure);
+  const environment = resolveRustCallableEnvironment(closure, resolution, walk.operationOptions, new Set());
+  assert.equal(environment?.length === 1 && environment[0] === abi.valueCarrier, true,
+    "source retention consumes the exact completed body value, not the checked numeric alias");
+  const missing = { ...resolution, records: createRustRecordFixture({ sourceParameterAbi: {
+    get: node => node === parameter ? undefined : context.records.sourceParameterAbi.get(node),
+  } }, context.records) };
+  assert.equal(resolveRustCallableEnvironment(closure, missing, { ...walk.operationOptions,
+    callableParameterCarriers: () => undefined }, new Set()) === undefined, true,
+  "an unfinished input stage is unresolved rather than a static primitive capture");
+  assert.equal(resolveRustCallableEnvironment(closure, missing, walk.operationOptions, new Set()) === undefined, true,
+    "even a purported ready stage cannot substitute a missing canonical input record");
+});
 
 function inputFixture(source, select = (ast, node) => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "step") {
   assert.equal(typeof callableSignatures.finalizeRustCallableParameterAbis, "function", "the actual signature lifecycle exposes its input stage");
