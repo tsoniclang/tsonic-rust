@@ -168,8 +168,8 @@ export function acmeVectorsPackage() {
     carrierTraits: {
       "acme.vectors.Vector": {
         implementations: [
-          { traitPath: "core::clone::Clone", requirements: [] },
-          { traitPath: "core::marker::Copy", requirements: [] },
+          { trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] },
+          { trait: { kind: "trait-ref", id: "core::marker::Copy", path: "core::marker::Copy", genericArguments: [], associatedConstraints: [] }, requirements: [] },
         ],
       },
     },

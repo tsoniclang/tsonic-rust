@@ -193,7 +193,7 @@ for (const [memberName, memberKind, targetForm] of [
     assert.equal(projection.carrierPaths.get(compilerTargetTypeId(dependency, member.traitDispatch.identity.canonicalPath)),
       "widget_alias::PublicReader");
     assert.deepEqual(projection.carrierTraits.get(compilerTargetTypeId(dependency, record.canonicalPath)), {
-      implementations: [{ traitPath: "widget_alias::PublicReader", requirements: [] }],
+      implementations: [{ trait: { kind: "trait-ref", id: compilerTargetTypeId(dependency, member.traitDispatch.identity.canonicalPath), path: "widget_alias::PublicReader", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
     });
     assert.equal([...projection.carrierPaths.values()].some((path) => path.includes("implementation::")), false);
     assert.equal((projection.declarationModel.imports ?? []).some(({ moduleSpecifier }) =>

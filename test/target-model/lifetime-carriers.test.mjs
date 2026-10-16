@@ -233,7 +233,7 @@ test("native trait-object coercion requires exact target-path trait evidence", (
     [],
     {
       implementations: [{
-        traitPath: "widget_alias::View",
+        trait: { kind: "trait-ref", id: "widget_alias::View", path: "widget_alias::View", genericArguments: [], associatedConstraints: [] },
         requirements: [],
       }],
     },
@@ -266,7 +266,7 @@ test("native trait-object coercion requires exact target-path trait evidence", (
       [],
       {
         implementations: [{
-          traitPath: "acme_widget::View",
+          trait: { kind: "trait-ref", id: "acme_widget::View", path: "acme_widget::View", genericArguments: [], associatedConstraints: [] },
           requirements: [],
         }],
       },

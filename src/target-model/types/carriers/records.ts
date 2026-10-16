@@ -1,6 +1,6 @@
 import type { TargetTypeRef } from "../model.js";
 import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
-import { isRustAbsenceCarrier, rustNamedTargetType, rustNamedTypeCarrierValue } from "./native.js";
+import { isRustAbsenceCarrier, rustNamedTargetType, rustNamedTypeCarrierValue, rustNativeTraitRef } from "./native.js";
 import { rustOptionElementCarrier } from "./optional.js";
 import { rustOptionalStorageValue } from "../projections.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
@@ -8,7 +8,7 @@ import { rustTargetTypeRefEquals } from "../equality.js";
 export function rustRecordTargetType(key: TargetTypeRef, value: TargetTypeRef): TargetTypeRef {
   return rustNamedTargetType("tsonic.rust.Record", "rt::Record", rustTypeGenericArguments([key, value]), [], {
     implementations: ["core::clone::Clone", "core::cmp::Eq", "core::cmp::PartialEq", "core::default::Default", "core::fmt::Debug"]
-      .map(traitPath => ({ traitPath, requirements: [] })),
+      .map(path => ({ trait: rustNativeTraitRef(path), requirements: [] })),
   });
 }
 

@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createRustCompilerWorkerClient } from "../../../../dist/providers/native/acquisition/worker-client.js";
+import { compilerTargetTypeId } from "../../../../dist/providers/native/projection/operations.js";
 import {
   compilerProviderModuleId,
   projectRustCompilerModule,
@@ -338,7 +339,7 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     assert.deepEqual(
       rustNamedTypeCarrierValue(lifetimeViewConstructor?.resultCarrier)?.traits,
       {
-        implementations: [{ traitPath: "widget_alias::View", requirements: [] }],
+        implementations: [{ trait: { kind: "trait-ref", id: compilerTargetTypeId(dependency, inspectView.parameters[0].type.target.principal.identity.canonicalPath), path: "widget_alias::View", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
       },
       "compiler trait evidence uses the exact Cargo target alias",
     );

@@ -62,14 +62,14 @@ test("native runtime trait contracts match their existing Rust implementations w
   const value = { kind: "type-parameter", identity: "checked:T", name: "T" };
   const error = { kind: "type-parameter", identity: "checked:E", name: "E" };
   assert.deepEqual(rustNamedTypeCarrierValue(rustRuntimeRecordFieldTargetType(value, error)).traits.implementations, [
-    { traitPath: "core::clone::Clone", requirements: [{ typeArgumentIndex: 0, traitPath: "core::clone::Clone" }] },
-    { traitPath: "core::default::Default", requirements: [{ typeArgumentIndex: 0, traitPath: "core::default::Default" }] },
+    { trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [{ typeArgumentIndex: 0, trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] } }] },
+    { trait: { kind: "trait-ref", id: "core::default::Default", path: "core::default::Default", genericArguments: [], associatedConstraints: [] }, requirements: [{ typeArgumentIndex: 0, trait: { kind: "trait-ref", id: "core::default::Default", path: "core::default::Default", genericArguments: [], associatedConstraints: [] } }] },
   ]);
   assert.deepEqual(rustNamedTypeCarrierValue(rustRuntimeNativeLayoutTargetType(value)).traits.implementations, [
-    { traitPath: "core::clone::Clone", requirements: [] }, { traitPath: "core::marker::Copy", requirements: [] },
+    { trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }, { trait: { kind: "trait-ref", id: "core::marker::Copy", path: "core::marker::Copy", genericArguments: [], associatedConstraints: [] }, requirements: [] },
   ]);
   assert.deepEqual(rustNamedTypeCarrierValue(rustRuntimeNativeArrayTargetType(value)).traits.implementations,
-    [{ traitPath: "core::clone::Clone", requirements: [] }]);
+    [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }]);
 });
 
 test("native memory free-function qualification emits the exact existing Rust call AST", () => {

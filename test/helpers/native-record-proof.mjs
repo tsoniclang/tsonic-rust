@@ -67,7 +67,7 @@ export function nativeRecordProvider(cratePath, { missingField = false, wrongFie
       ...(missingContract ? {} : { nativeMemoryFieldIds: fields.filter(([field]) => !missingField || field !== "count").map(([field]) => fieldId(name, field)) }) })),
     carrierPaths: { [header.id]: "native_memory_proof::Header", [envelope.id]: "native_memory_proof::Envelope" },
     carrierTraits: Object.fromEntries(records.map(([, carrier]) => [carrier.id, { implementations: [
-      { traitPath: "core::clone::Clone", requirements: [] }, { traitPath: "core::marker::Copy", requirements: [] },
+      { trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }, { trait: { kind: "trait-ref", id: "core::marker::Copy", path: "core::marker::Copy", genericArguments: [], associatedConstraints: [] }, requirements: [] },
     ] }])),
     operations: [
       { exportId: "source.create", signatureId: "source.create.signature", operationKind: "method",

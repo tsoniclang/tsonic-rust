@@ -27,12 +27,12 @@ test("native trait contracts preserve exact conditional Copy and Clone semantics
   const traits = {
     implementations: [
       {
-        traitPath: "core::clone::Clone",
-        requirements: [{ typeArgumentIndex: 0, traitPath: "core::clone::Clone" }],
+        trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] },
+        requirements: [{ typeArgumentIndex: 0, trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] } }],
       },
       {
-        traitPath: "core::marker::Copy",
-        requirements: [{ typeArgumentIndex: 0, traitPath: "core::marker::Copy" }],
+        trait: { kind: "trait-ref", id: "core::marker::Copy", path: "core::marker::Copy", genericArguments: [], associatedConstraints: [] },
+        requirements: [{ typeArgumentIndex: 0, trait: { kind: "trait-ref", id: "core::marker::Copy", path: "core::marker::Copy", genericArguments: [], associatedConstraints: [] } }],
       },
     ],
   };

@@ -1,4 +1,4 @@
-import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue } from "./native.js";
+import { rustFixedArrayCarrierValue, rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue, rustNamedTypeTraitContract } from "./native.js";
 import { rustSourceTypeCarrier, rustSourceTypeCarrierValue, rustSourceUnionCarrierValue, rustSourceUnionTargetType, rustStructuralObjectCarrierValue, rustStructuralObjectTargetType } from "./source-types.js";
 import { rustClassConstructorContract, rustClassConstructorTargetType } from "./class-constructors.js";
 import type {
@@ -484,7 +484,14 @@ function substituteCarrierParts(
             normalize,
             substituteChild,
           ),
-          namedType.traits,
+          rustNamedTypeTraitContract(namedType.traits.implementations.map(implementation => ({
+            trait: substituteRustTargetTraitRef(implementation.trait, substitutions, lifetimeSubstitutions,
+              constSubstitutions, normalize, substituteChild),
+            requirements: implementation.requirements.map(requirement => ({ ...requirement,
+              trait: substituteRustTargetTraitRef(requirement.trait, substitutions, lifetimeSubstitutions,
+                constSubstitutions, normalize, substituteChild),
+            })),
+          }))),
           namedType.upcasts.map((upcast) => ({
             ...upcast,
             target: substituteChild(upcast.target, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),

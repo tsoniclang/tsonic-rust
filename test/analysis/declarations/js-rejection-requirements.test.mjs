@@ -6,6 +6,7 @@ import { rustJsErrorTargetType, rustProgramErrorTargetType, rustSourcePrimitiveT
 import { rustCarrierSatisfiesTraitRef } from "../../../dist/target-model/types/carriers/traits.js";
 import { rustMutableJsErrorTargetType, rustRetainedErrorTargetType, rustSourceErrorTargetType, rustWritableRetainedErrorTargetType, rustWritableSourceErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
 
 const retained = rustRetainedErrorTargetType();
 const obligation = { kind: "trait-ref", id: "core::convert::Into", path: "core::convert::Into",
@@ -45,6 +46,15 @@ test("a JS rejection requirement never guesses from an error name or package tra
     { ...obligation, genericArguments: [...obligation.genericArguments, ...obligation.genericArguments] },
     { ...obligation, genericArguments: [{ kind: "type", type: rustSourcePrimitiveTargetType("int32") }] },
   ]) assert.equal(rustCarrierSatisfiesTraitRef(rustJsErrorTargetType(), trait), false);
+});
+
+test("generic native provider evidence supplies the same exact rejection conversion obligation", () => {
+  const native = trait => rustNamedTargetType("example.UnrelatedName", "example::UnrelatedName", [], [], {
+    implementations: [{ trait, requirements: [] }],
+  });
+  assert.equal(accepts(native(obligation)), true);
+  assert.equal(accepts(native({ ...obligation, genericArguments: [{ kind: "type", type: rustJsErrorTargetType() }] })), false);
+  assert.equal(accepts(native({ ...obligation, path: "foreign::Into" })), false);
 });
 
 test("generic JS rejection obligations stay on their exact type and associated binders", () => {

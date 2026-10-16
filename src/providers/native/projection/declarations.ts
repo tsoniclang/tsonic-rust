@@ -388,9 +388,16 @@ function projectNominalExport(
     genericContext,
   );
   const genericDefaults = trailingProviderGenericDefaults(providerGenericBindings);
+  const traitContext: ProjectionContext = { ...genericContext, currentType: {
+    exportId, name: exported.name,
+    carrier: rustNamedTargetType(targetTypeId, selectedTargetPath.join("::"), targetArguments, genericDefaults),
+    sourceType, genericParameters: sourceGenerics,
+    canonicalPath: exported.canonicalPath, targetPath: selectedTargetPath,
+  } };
   const namedTraits = exported.kind === "trait"
     ? undefined
-    : projectCompilerTraitContract(exported.traits, genericContext);
+    : projectCompilerTraitContract(exported.traits, traitContext,
+      trait => targetTraitFor(trait, traitContext, "parameter", "target-default"));
   const declaredCarrier: TargetTypeRef = exported.kind === "trait"
     ? targetTraitFor(
         traitDispatchFor(exported),

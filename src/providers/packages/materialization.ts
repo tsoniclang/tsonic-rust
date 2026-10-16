@@ -24,6 +24,7 @@ import type {
 } from "../../target-model/operations/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { mapRustProgramErrorRoute } from "../../target-model/conversions/program-error.js";
+import { rustNamedTypeTraitContract } from "../../target-model/types/carriers/native.js";
 import type { RustDispatchContextDefinition } from "../../target-model/operations/dispatch-contexts.js";
 
 export function materializeProviderDispatchContextRow(
@@ -343,7 +344,7 @@ export function materializeProviderCarrier(
         carrierPaths,
         carrierTraits,
       ),
-      traits ?? named.traits,
+      materializeProviderTraitContract(traits ?? named.traits, carrierPaths),
       named.upcasts.map((upcast) => ({
         ...upcast,
         target: materializeProviderCarrier(upcast.target, carrierPaths, carrierTraits),
@@ -365,7 +366,7 @@ export function materializeProviderCarrier(
           path,
           genericArguments,
           [],
-          traits ?? rustMoveOnlyNamedTypeTraits,
+          materializeProviderTraitContract(traits ?? rustMoveOnlyNamedTypeTraits, carrierPaths),
         );
   }
   if (carrier.kind === "array") {
@@ -471,6 +472,18 @@ export function materializeProviderCarrier(
   return fixedArray === undefined
     ? carrier
     : rustFixedArrayTargetType(materializeProviderCarrier(fixedArray.element, carrierPaths, carrierTraits), fixedArray.length);
+}
+
+function materializeProviderTraitContract(
+  contract: RustNamedTypeTraitContract,
+  carrierPaths: Readonly<Record<string, string>>,
+): RustNamedTypeTraitContract {
+  return rustNamedTypeTraitContract(contract.implementations.map(implementation => ({
+    trait: materializeProviderTraitRef(implementation.trait, carrierPaths, {}),
+    requirements: implementation.requirements.map(requirement => ({ ...requirement,
+      trait: materializeProviderTraitRef(requirement.trait, carrierPaths, {}),
+    })),
+  })));
 }
 
 function materializeProviderTraitRef(

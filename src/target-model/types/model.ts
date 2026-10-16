@@ -127,11 +127,11 @@ export type TargetTypeRef = RustTargetTypeRef;
 
 export interface RustNamedTypeTraitRequirement {
   readonly typeArgumentIndex: number;
-  readonly traitPath: string;
+  readonly trait: RustTargetTraitRef;
 }
 
 export interface RustNamedTypeTraitImplementation {
-  readonly traitPath: string;
+  readonly trait: RustTargetTraitRef;
   readonly requirements: readonly RustNamedTypeTraitRequirement[];
 }
 

@@ -682,7 +682,7 @@ test("provider carrier metadata canonicalizes after cross-provider composition",
   const carrierPaths = { "acme.Box": "alloc::boxed::Box" };
   const carrierTraits = {
     "acme.Box": {
-      implementations: [{ traitPath: "core::clone::Clone", requirements: [] }],
+      implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
     },
   };
   const owner = definition({
