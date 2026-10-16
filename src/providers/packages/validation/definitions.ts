@@ -1,3 +1,4 @@
+import { isProviderWellKnownSymbolName } from "@tsonic/tsts";
 import { asRecord, requireExactKeys, requireNonEmpty, requireRustIdentifier, requireRustPath, rustSourcePrimitiveHasCarrier, validateCarrier } from "./carriers.js";
 import { isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
@@ -470,8 +471,7 @@ function validateProviderPropertyName(name: ProviderMemberDeclaration["name"], w
   }
   if (name.kind === "well-known-symbol") {
     requireExactKeys(record, ["kind", "name"], where, fail);
-    const names = new Set(["asyncIterator", "hasInstance", "isConcatSpreadable", "iterator", "match", "matchAll", "replace", "search", "species", "split", "toPrimitive", "toStringTag", "unscopables"]);
-    if (!names.has(name.name)) {
+    if (!isProviderWellKnownSymbolName(name.name)) {
       fail(`${where}.name has unsupported well-known symbol '${String(name.name)}'`);
     }
     return;

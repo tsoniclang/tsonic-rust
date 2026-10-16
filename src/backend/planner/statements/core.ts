@@ -73,6 +73,8 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
 
 function planStatementInner(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   if (context.input.program.records.nativeUnreachable.get(node) === true) return [];
+  if (!context.input.program.statementCompletions.admitted(node))
+    failRustPlannerInvariant("Statement dispatch requires its admitted native source construct.", node);
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {

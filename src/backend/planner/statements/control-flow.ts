@@ -343,7 +343,11 @@ export function planForStatement(
   const deferred = planRustDeferredCaptureStorage(node, context);
   if (deferred === undefined) return undefined;
   if (resourceDeclarations.length > 0) {
-    const scoped = planResourceDeclarations(resourceDeclarations, context, planLoop);
+    const scoped = planResourceDeclarations(resourceDeclarations, context, bodyContext => {
+      const rotation = planRustCaptureStorageRotation(node, bodyContext);
+      const loop = rotation === undefined ? undefined : planLoop(bodyContext);
+      return loop === undefined || rotation === undefined ? undefined : { statements: [...rotation, ...loop.statements] };
+    });
     return scoped === undefined ? undefined : [{ kind: "scope", body: { statements: [...deferred, ...scoped] } }];
   }
   const initialization = declarationInitializer ? planVariableStatement(initializer, context)

@@ -40,7 +40,7 @@ test("selected provider disposal transports all native receiver modes without a 
   }
 });
 
-function provider() {
+function provider(disposalTarget = { form: "free-call", path: "core::mem::drop", receiverMode: "value" }) {
   const carrier = { kind: "target-named", id: "r05.Resource" };
   return createRustProviderPackage({ id: "r05-resource", displayName: "Native consuming resource", version: "1.0.0",
     modules: [{ moduleSpecifier: "@r05/resource", providerModuleId: "r05.resource", exports: [
@@ -49,14 +49,23 @@ function provider() {
       { id: "open", name: "open", kind: "function", signatures: [{ id: "open()", parameters: [],
         returnType: { kind: "provider-ref", moduleSpecifier: "@r05/resource", exportName: "Resource" } }] },
     ] }], types: [{ exportId: "Resource", targetCarrier: carrier }],
-    carrierPaths: { "r05.Resource": "String" },
+    carrierPaths: { "r05.Resource": "String" }, crates: [],
     operations: [
       { exportId: "open", operationKind: "method", target: { form: "call", path: "String::new" }, resultCarrier: carrier },
       { exportId: "Resource", memberId: "Resource.dispose", operationKind: "method",
-        target: { form: "free-call", path: "core::mem::drop", receiverMode: "value" }, resultCarrier: unitCarrier },
+        target: disposalTarget, resultCarrier: unitCarrier },
     ],
   });
 }
+
+test("a provider disposer without a native receiver rejects at its selection owner", () => {
+  const { result } = compileRust({ surfaces: [], packages: [provider({ form: "call", path: "fixture::dispose" })],
+    files: { "index.ts": 'import { open } from "@r05/resource"; export function run(): void { using active = open(); }' } });
+  assert.equal(result.diagnostics.some(diagnostic => diagnostic.message.includes(
+    "The selected provider resource disposer has no exact zero-argument Rust receiver operation.")), true,
+  "the existing canonical selector rejects the same receiverless disposer");
+  assert.equal(result.artifacts.length, 0, "invalid disposal cannot publish target artifacts");
+});
 
 for (const nullable of [false, true]) test(`real provider consuming disposal moves ${nullable ? "an optional payload" : "the exact resource"} once`, () => {
   const source = nullable ? `import type { Resource } from "@r05/resource";
@@ -80,8 +89,8 @@ export function run(): void { using first = new Resource(), second = new Resourc
   const generated = artifactText(result, "src/index.rs");
   const first = generated.indexOf("let first:");
   const second = generated.indexOf("let second:");
-  const firstCleanup = generated.indexOf("= &first;");
-  const secondCleanup = generated.indexOf("= &second;");
+  const firstCleanup = generated.indexOf("first.dispose();");
+  const secondCleanup = generated.indexOf("second.dispose();");
   assert.equal(first >= 0 && second > first, true, "acquisitions keep authored order");
   assert.equal(secondCleanup > second && firstCleanup > secondCleanup, true, "cleanup executes in reverse acquisition order");
   assert.equal([...generated.matchAll(/let resource_flow(?:_\d+)?/gu)].length, 2, "each acquisition has its own cleanup boundary");

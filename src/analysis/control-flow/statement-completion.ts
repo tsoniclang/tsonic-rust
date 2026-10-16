@@ -4,6 +4,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import {
   Node_Expression, Node_Operand, BinaryExpression_Left, BinaryExpression_Right,
   sourceControlTransferTarget, sourceEnclosingCallable, sourceTransparentExpressionOperand,
+  IterationStatement_Statement, LabeledStatement_Statement,
   type TargetSourceProgram,
 } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -68,6 +69,15 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   const publish = <Value>(map: Map<Node, Value>, node: Node, value: Value): void => {
     if (map.has(node)) failTargetAnalysisInvariant("tsonic-rust", "One statement-completion owner must publish each exact source subject once.", node);
     map.set(node, value);
+  };
+  const admit = (node: Node | undefined, owner: Node): void => {
+    if (node === undefined) {
+      reject(owner, "RUST_STATEMENT_SEQUENCE_NOT_PROVEN", "A runtime control body requires its exact checked source statement.");
+      return;
+    }
+    if (supportedStatements.has(ast.kindName(node))) admitted.add(node);
+    else if (records.nativeUnreachable.get(node) !== true && records.compileTimeSource.get(node) === undefined &&
+      records.nativeParticipation.get(node) !== "erased") reject(node, "RUST_STATEMENT_NOT_SUPPORTED", "The Rust target does not support this runtime statement.");
   };
   const frame = (node: Node) => {
     const owner = sourceEnclosingCallable(node, ast) ?? ast.getSourceFile(node);
@@ -185,6 +195,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
         reject(clause ?? node, "RUST_SWITCH_CLAUSE_NOT_PROVEN", "Switch clause requires its exact admitted native comparison and source correspondence.");
       }
       for (const statement of statements ?? []) {
+        admit(statement, clause ?? node);
         if (statement === undefined || !ast.is.IsVariableStatement(statement)) continue;
         const declarationList = ast.as.AsVariableStatement(statement)?.DeclarationList;
         const declaration = declarationList === undefined ? undefined : ast.as.AsVariableDeclarationList(declarationList)?.Declarations?.Nodes[0];
@@ -257,16 +268,22 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     const node = pending.pop()!;
     if (visited.has(node)) continue;
     visited.add(node);
-    if (records.nativeUnreachable.get(node) === true || records.compileTimeSource.get(node) !== undefined || records.nativeParticipation.get(node) === "erased") continue;
     const kind = ast.kindName(node);
     if (supportedStatements.has(kind)) admitted.add(node);
+    if (records.nativeUnreachable.get(node) === true || records.compileTimeSource.get(node) !== undefined || records.nativeParticipation.get(node) === "erased") continue;
     if (ast.is.IsBlock(node)) {
-      for (const statement of ast.statements(node)) {
-        if (statement === undefined) reject(node, "RUST_STATEMENT_SEQUENCE_NOT_PROVEN", "A runtime block requires one dense checked statement sequence.");
-        else if (!supportedStatements.has(ast.kindName(statement)) && records.nativeUnreachable.get(statement) !== true &&
-          records.compileTimeSource.get(statement) === undefined) reject(statement, "RUST_STATEMENT_NOT_SUPPORTED", "The Rust target does not support this runtime statement.");
-      }
+      for (const statement of ast.statements(node)) admit(statement, node);
     }
+    if (ast.is.IsIfStatement(node)) {
+      const statement = ast.as.AsIfStatement(node);
+      admit(statement?.ThenStatement, node);
+      if (statement?.ElseStatement !== undefined) admit(statement.ElseStatement, node);
+    }
+    if (ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node) || ast.is.IsForStatement(node) ||
+      ast.is.IsForInStatement(node) || ast.is.IsForOfStatement(node)) {
+      admit(IterationStatement_Statement(ast, node), node);
+    }
+    if (ast.is.IsLabeledStatement(node)) admit(LabeledStatement_Statement(ast, node), node);
     if (ast.is.IsIfStatement(node)) { condition(node, ast.as.AsIfStatement(node)?.Expression); projectTypeTest(node); }
     else if (ast.is.IsWhileStatement(node)) condition(node, ast.as.AsWhileStatement(node)?.Expression);
     else if (ast.is.IsDoStatement(node)) condition(node, ast.as.AsDoStatement(node)?.Expression);

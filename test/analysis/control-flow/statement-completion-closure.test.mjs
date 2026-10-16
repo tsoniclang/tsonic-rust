@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust, compileRust, artifactText } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, artifactText, acmePlatformPackage, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { analyzeRustStatementCompletions } from "../../../dist/analysis/control-flow/statement-completion.js";
+import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const source = `
 export function run(flag: boolean): number {
@@ -116,4 +118,35 @@ export function run(values: number[]): number {
   assert.equal(completions[1]?.binding.mutable, true, "mutability comes from the existing mutation owner");
   assert.equal(completions[2]?.binding.kind, "pattern", "binding patterns retain their existing owner");
   for (const completion of completions) assert.equal(Object.isFrozen(completion), true, "iteration completion is immutable data");
+});
+
+test("finalized native field setters use the one ABI renderer for direct, compound and update writes", () => {
+  const definition = acmePlatformPackage({ includeSetters: true }).createTargetContributions()[0].definition;
+  const provider = createRustProviderPackage({ ...definition, operations: definition.operations.map(operation =>
+    operation.operationKind === "property-set" ? { ...operation, target: { form: "field", name: "count" } } : operation) });
+  const source = `
+import { Store } from "@acme/platform";
+import { check } from "@acme/testing";
+export function main(): void {
+  const store = new Store("seed");
+  store.count = 7;
+  check(store.count === 7);
+  store.count += 2;
+  check(store.count === 9);
+  store.count++;
+  check(store.count === 10);
+  store[0] = 3;
+  check(store[0] === 3);
+}
+main();
+`;
+  const { result } = compileRust({ surfaces: [], packages: [provider, acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_native_field_setter" } },
+    files: { "index.ts": source } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  const generated = artifactText(result, "src/index.rs");
+  assert.match(generated, /\.count = /u, "selected direct storage assignment is emitted");
+  assert.doesNotMatch(generated, /\.set_count\(/u, "the renderer does not substitute another provider operation");
+  validateGeneratedProject("r05-native-field-setter", result.artifacts, { run: true });
 });
