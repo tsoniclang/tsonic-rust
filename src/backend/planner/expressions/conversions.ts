@@ -11,7 +11,6 @@ import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } fro
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
-import { rustBinaryOperatorTraitPath } from "../../../target-model/syntax/tokens.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustValueCarrierTransitionTarget } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/operations/target-operation.js";
@@ -401,14 +400,6 @@ export function planProviderOperationExpression(
     case "binary-operator": {
       const [left, right] = args;
       if (left === undefined || right === undefined || args.length !== 2) {
-        return undefined;
-      }
-      if (rustBinaryOperatorTraitPath(form.operator) !== form.trait) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, receiverNode ?? argumentNodes[0] ?? context.sourceFile),
-          "rust.backend.provider-operator-trait",
-          "Provider binary operation does not carry the exact finalized Rust trait identity for its operator.",
-        ));
         return undefined;
       }
       return scoped({ kind: "binary", operator: form.operator, left, right });
