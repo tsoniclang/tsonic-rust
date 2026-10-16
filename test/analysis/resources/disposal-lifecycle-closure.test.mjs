@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust, artifactText, compileRust, unitCarrier } from "../../helpers/rust-session.mjs";
+import { analyzeRust, artifactText, compileRust, unitCarrier, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateRustDisposalLifecycle } from "../../../dist/analysis/resources/disposal-lifecycle.js";
 import { resourceDisposalReceiverMode } from "../../../dist/backend/planner/statements/resources.js";
@@ -38,6 +38,35 @@ test("selected provider disposal transports all native receiver modes without a 
     const fact = { disposal: { target: { form: "provider", target: { form: "free-call", path: "core::mem::drop", receiverMode } } } };
     assert.equal(resourceDisposalReceiverMode(fact), receiverMode, `${receiverMode}: exact selected mode is authoritative`);
   }
+});
+
+test("caught fallible disposal uses its nearest protected error region without changing the callable ABI", () => {
+  const source = `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+let disposed: int32 = 0;
+class Resource { constructor() {} [Symbol.dispose](): void { disposed += 1; throw new Error("cleanup"); } }
+export function run(): void { try { using resource = new Resource(); } catch {} }
+export function main(): void { run(); check(disposed === 1); }
+main();
+`;
+  const packages = [acmeTestingPackage()];
+  const { program } = analyzeRust({ surfaces: [], packages, files: { "index.ts": source } });
+  const nodes = [];
+  const visit = node => { nodes.push(node); program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  const callable = nodes.find(node => program.source.ast.is.IsFunctionDeclaration(node) &&
+    program.source.ast.text(program.source.ast.name(node)) === "run");
+  const protectedBody = nodes.find(node => program.source.ast.is.IsTryStatement(node));
+  const body = program.source.ast.as.AsTryStatement(protectedBody)?.TryBlock;
+  assert.equal(program.errorRegions.get(callable)?.kind, "infallible", "caught cleanup does not make the outward callable fallible");
+  assert.equal(program.errorRegions.get(body)?.kind, "package", "the actual protected body owns the cleanup error");
+  const { result } = compileRust({ surfaces: [], packages,
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_caught_cleanup" } },
+    files: { "index.ts": source } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  validateGeneratedProject("r05-caught-fallible-cleanup", result.artifacts, { run: true });
 });
 
 function provider(disposalTarget = { form: "free-call", path: "core::mem::drop", receiverMode: "value" }) {

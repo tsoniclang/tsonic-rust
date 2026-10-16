@@ -5,6 +5,7 @@ import {
   Node_Expression, Node_Operand, BinaryExpression_Left, BinaryExpression_Right,
   sourceControlTransferTarget, sourceEnclosingCallable, sourceTransparentExpressionOperand,
   IterationStatement_Statement, LabeledStatement_Statement,
+  TryStatement_TryBlock, TryStatement_CatchClause, CatchClause_Block,
   type TargetSourceProgram,
 } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
@@ -81,16 +82,30 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   const frame = (node: Node) => {
     const owner = sourceEnclosingCallable(node, ast) ?? ast.getSourceFile(node);
     if (owner === undefined) failTargetAnalysisInvariant("tsonic-rust", "A checked runtime statement requires its execution owner.", node);
-    const existing = frames.get(owner);
+    let errorOwner = owner;
+    for (let current = node; current !== owner;) {
+      const parent = ast.parent(current);
+      if (parent === undefined) break;
+      if (ast.is.IsTryStatement(parent) && TryStatement_TryBlock(ast, parent) === current &&
+        CatchClause_Block(ast, TryStatement_CatchClause(ast, parent)) !== undefined) {
+        errorOwner = current;
+        break;
+      }
+      current = parent;
+    }
+    const existing = frames.get(errorOwner);
     if (existing !== undefined) return existing;
     const sourceFile = ast.is.IsSourceFile(owner) ? ast.getSourceFile(owner) : undefined;
     const generator = records.generator.get(owner);
     const initializer = sourceFile === undefined ? undefined : input.errorRegions.initialization.moduleFor(sourceFile);
-    const region = initializer?.region ?? (owner === undefined ? undefined : input.errorRegions.get(owner));
+    const region = errorOwner === owner ? initializer?.region ?? input.errorRegions.get(owner)
+      : input.errorRegions.get(errorOwner);
+    if (errorOwner !== owner && region === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A protected try body requires its completed local error-region evidence.", errorOwner);
     const selected = Object.freeze({ asynchronous: records.asyncFunction.get(owner) !== undefined || generator?.kind === "async" ||
       initializer?.asynchronous === true,
     fallible: region !== undefined && region.kind !== "infallible" });
-    frames.set(owner, selected);
+    frames.set(errorOwner, selected);
     return selected;
   };
   const selectTargets = (node: Node): void => {
