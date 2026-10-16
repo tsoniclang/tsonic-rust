@@ -20,6 +20,7 @@ function planNames(sourceText) {
   assert.ok(file);
   const plan = createRustNamePlan({
     ast: source.ast,
+    semanticsFor: source.semantics.forNode,
     sourceFiles: [file],
     runtimeValueUses: { hasFirstClassUse: () => true },
   });

@@ -410,7 +410,6 @@ export function analyzeRustTargetProgram(
     safetyApplications: context.safetyApplications,
     moduleInitialization,
     names: context.names,
-    enumMemberConstants,
     sourcePackageFacades: sourcePackageFacades.plan,
     sourcePackageComponents: sourcePackageComponents.plan,
     countedLoops: analyzeRustCountedLoopRepresentations({

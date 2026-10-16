@@ -26,9 +26,6 @@ import type { RustTargetConfiguration } from "../../target-model/configuration/m
 import type { RustRuntimeReferencePlan } from "../project/index.js";
 import type { RustBinaryHookPlan } from "../project/index.js";
 import type {
-  RustEnumMemberConstantIndex,
-} from "../declarations/enum-member-constants.js";
-import type {
   RustSourcePackageFacadeClassifications,
 } from "./source-package-facades.js";
 import type {
@@ -114,7 +111,6 @@ export interface RustTargetProgram {
   readonly safetyApplications: RustSafetyApplicationFactIndex;
   readonly moduleInitialization: RustModuleInitializationPlan;
   readonly names: RustNamePlan;
-  readonly enumMemberConstants: RustEnumMemberConstantIndex;
   readonly sourcePackageFacades: RustSourcePackageFacadeClassifications;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
   readonly errorTransport: import("./error-transport.js").RustErrorTransportQueries;

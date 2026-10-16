@@ -174,6 +174,7 @@ export function createRustAnalysisContext(
   const records = createRustProgramRecordBuilder(typeDefinitions);
   const names = createRustNamePlan({
     ast,
+    semanticsFor: input.source.semantics.forNode,
     runtimeValueUses,
     sourceFiles,
   });

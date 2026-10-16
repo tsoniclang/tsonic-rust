@@ -1,3 +1,7 @@
+import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
+import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -116,4 +120,36 @@ test("source-output identities are published once with the analyzed program", ()
     "consumers receive the identical selected identity without running a selector");
   assert.equal(Object.isFrozen(identity) && Object.isFrozen(identity.moduleSegments), true,
     "published identity and path data are immutable");
+});
+
+test("computed member names consume the shared checked key and existing collision inventory", () => {
+  const checked = createCompilerSessionFromFiles({ currentDirectory: "/project", compilerOptions: {
+    strict: true, target: "es2022", module: "esnext",
+  }, files: { "/project/index.ts": `
+const key = "some-key" as const;
+class Entry {
+  some_key = 3;
+  [key](): number { return 1; }
+  static [key](): number { return 2; }
+  [7] = 4;
+  [""] = 5;
+}
+` } }).checkSource();
+  assert.equal(checked.diagnostics.length, 0, formatDiagnostics(checked.diagnostics));
+  const source = createTargetSourceProgram(checked);
+  const file = checked.getSourceFile("/project/index.ts");
+  const names = createRustNamePlan({ ast: source.ast, sourceFiles: [file],
+    semanticsFor: source.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
+  assert.equal(names.diagnostics.length, 0, "checked constant keys do not become authored identifier rejections");
+  const declaration = source.ast.statements(file).find(node => source.ast.is.IsClassDeclaration(node));
+  const members = source.ast.members(declaration);
+  const [ordinary, instance, staticMethod, numeric, empty] = members;
+  assert.equal(names.nameForDeclaration(ordinary), "some_key", "authored spelling reserves the direct native name");
+  assert.equal(names.nameForDeclaration(instance), "some_key_2", "constant key uses the existing encoded-key collision rule");
+  assert.equal(names.nameForDeclaration(numeric), "value_7", "numeric keys use the existing native property encoding");
+  assert.equal(names.nameForDeclaration(empty), "value", "a static empty key is represented, not silently omitted");
+  const context = { ast: source.ast, names, semanticsFor: source.semantics.forNode };
+  assert.equal(rustProjectCallableTargetName(instance, context), "some_key_2", "instance method reads the selected name");
+  assert.equal(rustProjectCallableTargetName(staticMethod, context), "some_key_2_static",
+    "computed static methods retain the accepted static/instance collision rule");
 });
