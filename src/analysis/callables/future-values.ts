@@ -62,6 +62,8 @@ export function rustFutureValueForOperation(
   if (outputCarrier === undefined) {
     return undefined;
   }
+  const jsFuture = rustFutureValueForSourceStorage(carrier);
+  if (jsFuture !== undefined) return jsFuture;
   if (sourceCallEffects.nativeInput !== undefined) return rustNativeFutureValueForSourceCallBranch(
     operation, sourceCallEffects, carrier, definitions);
   return {
