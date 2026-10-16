@@ -9,7 +9,7 @@ const warning = Object.freeze({ code: "FORMAT_OWNER_WARNING", category: "warning
 const source = Object.freeze({ kind: "source", language: "rust", path: "src/lib.rs", text: "pub fn value()->i32{1}\n" });
 const project = Object.freeze({ kind: "project", path: "Cargo.toml", text: "[workspace]\n" });
 
-test("the session hands the exact raw result and configured edition to its formatter once", () => {
+test("the Rust session hands the exact raw result and configured edition to its formatter once", () => {
   for (const edition of ["2021", "2024"]) {
     const raw = resolvedTargetStage(Object.freeze({ artifacts: Object.freeze([project, source]) }), [warning]);
     let backendCalls = 0;
