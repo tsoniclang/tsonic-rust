@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/dispatch-contexts.js";
 import { rustBuiltInSourceTypeSemantics } from "../../../dist/providers/builtins/source-types.js";
-import { rustJsAsyncExecutor, rustJsEventLoopEpilogue, rustJsTimerDispatchContextId } from "../../../dist/providers/model/js-dispatch.js";
+import { rustJsAsyncExecutor, rustJsEntryOwner, rustJsTimerDispatchContextId } from "../../../dist/providers/model/js-dispatch.js";
 
 test("JS dispatch roots remain immutable, root-only and inactive without their exact native crate", () => {
   const semantics = rustBuiltInSourceTypeSemantics();
@@ -17,10 +17,10 @@ test("JS dispatch roots remain immutable, root-only and inactive without their e
   assert.equal(Object.isFrozen(declaration.rootCarrier), true);
   assert.deepEqual(selected.plan.compose([]).plan.rootContextIds, []);
   assert.deepEqual(selected.plan.compose([rustJsTimerDispatchContextId]).plan.rootContextIds, [rustJsTimerDispatchContextId]);
-  for (const hook of [rustJsAsyncExecutor, rustJsEventLoopEpilogue]) {
+  for (const hook of [rustJsAsyncExecutor, rustJsEntryOwner]) {
     assert.equal(hook.errorBoundary, "source-program");
     assert.deepEqual(hook.dispatchGroups[0].contextIds, [rustJsTimerDispatchContextId]);
-    assert.equal(hook.dispatchGroups[0].targetArgumentIndex, hook.phase === "async-execution" ? 1 : 0);
+    assert.equal(hook.dispatchGroups[0].targetArgumentIndex, 1);
     assert.equal(Object.isFrozen(hook.dispatchGroups[0]), true);
   }
 });

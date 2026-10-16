@@ -161,7 +161,7 @@ export interface RustProviderModuleAliasDefinition {
 
 interface RustProviderBinaryHookDefinitionBase {
   readonly id: string;
-  readonly phase: "before-initialization" | "async-execution" | "after-entry";
+  readonly phase: import("../../target-model/operations/binary-hooks.js").RustBinaryHookPhase;
   readonly path: string;
   readonly requiredCrate: string;
   readonly dispatchGroups?: readonly RustDispatchContextGroupInput[];

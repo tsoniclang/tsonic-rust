@@ -11,6 +11,8 @@ import { isRustProgramErrorCarrier, rustNamedTargetType } from "../../../target-
 import { rustTypeFromCarrier } from "../types/render.js";
 import type { RustDispatchContextGroupInput } from "../../../target-model/operations/dispatch-contexts.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState, type RustSyntheticNameState } from "../names/synthetic.js";
+import { rustBinaryHookInputCount } from "../../../target-model/operations/binary-hooks.js";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
 
 export interface RustBinaryHookCallPlan {
   call(args: readonly RustExpr[]): RustExpr;
@@ -75,8 +77,8 @@ export function planRustBinaryHookCallPlan(
     groupArgs.set(group.input.targetArgumentIndex, value);
   }
   return { call(args) {
-    if (args.length !== (hook.phase === "async-execution" ? 1 : 0)) {
-      throw new Error("Binary hook inputs disagree with its sealed native lifecycle ABI.");
+    if (args.length !== rustBinaryHookInputCount(hook.phase)) {
+      failTargetPlannerInvariant("tsonic-rust", "Binary hook inputs disagree with its sealed native lifecycle ABI.");
     }
     const argumentNames = args.map(() => allocateRustSyntheticName(names, "hook_argument"));
     const evaluated: RustStmt[] = args.map((argument, index) => ({

@@ -31,6 +31,7 @@ import type { RustProviderPackageDefinition } from "../index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { isRustFoundation } from "../../../target-model/foundation/model.js";
 import { validateDispatchContexts, validateDispatchContextGroups } from "./dispatch-contexts.js";
+import { isRustBinaryHookPhase } from "../../../target-model/operations/binary-hooks.js";
 
 export function validateProviderPackageDefinition(definition: RustProviderPackageDefinition): void {
   const fail: Fail = (message) => {
@@ -585,7 +586,7 @@ function validateBinaryHooks(definition: RustProviderPackageDefinition, fail: Fa
       fail,
     );
     requireNonEmpty(epilogue.id, "binary hook id", fail);
-    if (epilogue.phase !== "before-initialization" && epilogue.phase !== "async-execution" && epilogue.phase !== "after-entry") {
+    if (!isRustBinaryHookPhase(epilogue.phase)) {
       fail(`binary hook '${epilogue.id}' requires an exact lifecycle phase`);
     }
     requireRustPath(epilogue.path, `path for binary hook '${epilogue.id}'`, fail);

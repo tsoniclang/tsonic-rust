@@ -5,6 +5,7 @@ import type { Fail } from "./model.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import type { RustDispatchContextProjection, RustDispatchContextGroupInput } from "../../../target-model/operations/dispatch-contexts.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
+import { rustBinaryHookInputCount, type RustBinaryHookPhase } from "../../../target-model/operations/binary-hooks.js";
 
 export function validateDispatchContexts(definition: RustProviderPackageDefinition, fail: Fail): void {
   if (definition.dispatchContexts !== undefined && !isDenseDataArray(definition.dispatchContexts)) {
@@ -54,7 +55,7 @@ export function validateDispatchContexts(definition: RustProviderPackageDefiniti
 
 export function validateDispatchContextGroups(
   groups: readonly RustDispatchContextGroupInput[] | undefined,
-  phase: "before-initialization" | "async-execution" | "after-entry",
+  phase: RustBinaryHookPhase,
   definition: RustProviderPackageDefinition,
   label: string,
   fail: Fail,
@@ -63,7 +64,7 @@ export function validateDispatchContextGroups(
   if (!isDenseDataArray(groups)) fail(`${label} dispatch groups must be a dense metadata array`);
   const positions = new Set<number>();
   const contexts = new Set<string>();
-  const argumentCount = groups.length + (phase === "async-execution" ? 1 : 0);
+  const argumentCount = groups.length + rustBinaryHookInputCount(phase);
   for (const group of groups) {
     requireExactKeys(group, ["contextIds", "targetArgumentIndex", "empty", "prepend"], `${label} dispatch group`, fail);
     if (!isDenseDataArray(group.contextIds) || group.contextIds.length === 0) {
