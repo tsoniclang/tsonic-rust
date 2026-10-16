@@ -368,7 +368,7 @@ export function planProjectMethod(
     body: returnsJsPromise
       ? { statements: [...receiverPlan.prelude, ...wrapRustJsPromiseBody({
           statements: [...overridePrelude, ...finalizedBody.statements],
-        }, fallible).statements] }
+        }, fallible, asyncFact.lowering).statements] }
       : { statements: [...overridePrelude, ...finalizedBody.statements] },
   };
 }
