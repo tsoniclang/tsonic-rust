@@ -336,9 +336,11 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
       }
     });
   };
+  const promotedStorageDiagnosticCount = context.diagnostics.length;
   for (const sourceFile of projectSourceFiles) {
     collectPromotedStorage(sourceFile);
   }
+  if (context.diagnostics.length !== promotedStorageDiagnosticCount) return;
   const mutableStorageDeclarations = collectRustMutableProjectStorageRequirements(
     context,
     projectTypes,

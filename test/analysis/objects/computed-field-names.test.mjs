@@ -2,6 +2,46 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
+for (const failure of ["source", "resource"]) {
+  test(`Rust native struct admission keeps one exact ${failure} key refusal without publishing a carrier`, () => {
+    const declaration = {}, initializer = {}, shape = {}, property = {}, name = {};
+    const selected = Object.freeze({ kind: "rejected", failure, reason: `Selected native struct ${failure} key refusal.` });
+    const diagnostics = [];
+    const ast = {
+      is: { IsVariableDeclaration: node => node === declaration, IsComputedPropertyName: node => node === name },
+      as: {
+        AsVariableDeclaration: node => node === declaration ? { Initializer: initializer } : undefined,
+        AsCallExpression: node => node === initializer ? { Arguments: { Nodes: [shape] } } : undefined,
+        AsObjectLiteralExpression: node => node === shape ? { Properties: { Nodes: [property] } } : undefined,
+      },
+      name: node => node === property ? name : undefined,
+    };
+    const walk = {
+      context: { ast, diagnostics, records: { compileTimeSources: { erase: () => assert.fail("rejected struct metadata is not published") } },
+        source: { sourceFacts: { getFact: (node, key) => {
+          assert.equal(node === declaration && key === structFactKey, true, "native admission reads the identical selected struct declaration");
+          return { valueType: true, fields: [] };
+        } } },
+        semanticsFor: node => {
+          assert.equal(node === property, true, "the actual struct field selects its completed source semantics");
+          return { propertyNames: { get: key => {
+            assert.equal(key === name, true, "the identical computed key is queried");
+            return selected;
+          } } };
+        },
+      },
+      sourceTypes: { registerRepresentationAlias: () => assert.fail("a rejected key cannot acquire a native carrier") },
+      rejectedExpressions: new Set(), resolving: new Set(),
+    };
+    assert.equal(recordRustValueStructDeclaration(walk, declaration), true, "the actual native struct owner handles the rejected declaration");
+    assert.equal(diagnostics.length, 1, "one selected key failure does not become carrier or parameter errors");
+    assert.equal(diagnostics[0]?.sourceNode === name, true, "the source node is the identical computed key");
+    assert.equal(diagnostics[0]?.message, selected.reason, "the shared reason is forwarded unchanged");
+    assert.equal(diagnostics[0]?.code, failure === "resource" ? "RUST_ENUM_CONSTANT_RESOURCE_LIMIT" : "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN",
+      "the selected issue category is preserved");
+  });
+}
+
 for (const nested of [false, true]) for (const failure of ["source", "resource"]) {
   test(`Rust binding admission preserves the exact ${failure} key refusal${nested ? " through recursion" : ""}`, () => {
     const objectPattern = {}, propertyBinding = {}, propertyName = {}, valueName = {};
@@ -83,6 +123,7 @@ export type Shape = typeof Shape;
 export function accept(value: Shape): void {}
 ` } });
     const issues = compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN");
+    assert.equal(compiled.result.diagnostics.length, 1, "native field admission stops before dependent carrier or parameter errors");
     assert.equal(issues.length, 1, "the actual native field refuses the shared effectful-key evidence once");
     assert.equal(issues[0]?.message,
       "A computed property key call must retain its effects and cannot be replaced with a static native field name.",
@@ -325,3 +366,5 @@ export function make(): number {
 import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { rustSourcePrimitiveTargetType, rustTupleTargetType } from "../../../dist/target-model/types/index.js";
+import { recordRustValueStructDeclaration } from "../../../dist/analysis/declarations/value-structs.js";
+import { structFactKey } from "@tsonic/tsts";
