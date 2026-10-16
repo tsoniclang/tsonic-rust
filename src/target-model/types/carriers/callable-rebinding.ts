@@ -41,6 +41,7 @@ export function rebindRustCallableCarrier(
   return rustCallableProtocol(carrier) === undefined || options.environment !== undefined ||
     options.typeParameters !== undefined && options.typeParameters.length !== 0 ? undefined
     : snapshotClosedMetadata(rustCallableInputProtocol(carrier) === undefined
-      ? rustCallableTargetType(parameters, result, rustCallableProtocol(carrier)?.lifetime) : rustCallableInputTargetType(parameters, result,
+      ? rustCallableTargetType(parameters, result, rustCallableProtocol(carrier)?.lifetime,
+        rustCallableProtocol(carrier)?.error) : rustCallableInputTargetType(parameters, result,
         carrier.kind === "reference" ? carrier.lifetime : undefined));
 }

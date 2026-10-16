@@ -6,6 +6,10 @@ import {
   rustJsValueTargetType, rustOptionTargetType, rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
 import { rustInferCarrier } from "./rows.js";
+import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
+
+const callbackCarrier = (parameters: readonly TargetTypeRef[], result: TargetTypeRef): TargetTypeRef =>
+  rustCallableTargetType(parameters, result, rustStaticLifetime, rustJsValueTargetType());
 
 export function selectRustJsPromiseConstructor(
   typeArguments: readonly (TargetTypeRef | undefined)[],
@@ -13,9 +17,9 @@ export function selectRustJsPromiseConstructor(
 ): JsOperationSelection | undefined {
   const output = typeArguments.length === 1 ? typeArguments[0] : undefined;
   if (output === undefined || arguments_.length !== 1) return undefined;
-  const resolve = rustCallableTargetType([rustJsPromiseResolutionTargetType(output)], rustUnitTargetType());
-  const reject = rustCallableTargetType([rustJsValueTargetType()], rustUnitTargetType());
-  const parameters = [rustCallableTargetType([resolve, reject], rustUnitTargetType())];
+  const resolve = callbackCarrier([rustJsPromiseResolutionTargetType(output)], rustUnitTargetType());
+  const reject = callbackCarrier([rustJsValueTargetType()], rustUnitTargetType());
+  const parameters = [callbackCarrier([resolve, reject], rustUnitTargetType())];
   const result = rustJsPromiseTargetType(output);
   return {
     resultCarrier: result, parameterCarriers: parameters,
@@ -38,9 +42,9 @@ export function selectRustJsPromiseContinuation(request: JsOperationRequest): Js
   const output = request.memberName === "catch" ? input : request.authoredMethodTypeArgumentCarriers?.[0] ?? rustInferCarrier;
   const result = rustJsPromiseTargetType(output);
   const callbackResult = asynchronous && output !== rustInferCarrier ? result : output;
-  const rejected = rustCallableTargetType([rustJsValueTargetType()], callbackResult);
+  const rejected = callbackCarrier([rustJsValueTargetType()], callbackResult);
   const parameters = request.memberName === "catch" ? [rejected] : [
-    rustCallableTargetType([input], callbackResult), rustOptionTargetType(rejected),
+    callbackCarrier([input], callbackResult), rustOptionTargetType(rejected),
   ];
   return {
     resultCarrier: result, parameterCarriers: parameters,

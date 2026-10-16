@@ -28,6 +28,8 @@ import type { RustErrorEffectsFact } from "../../target-model/records/error-effe
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { snapshotRustNativeErrorSources } from "../../target-model/types/native-error-joins.js";
 import { selectRustJsRejectionRegion } from "./js-rejection.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 
 export type RustAnalyzedErrorRegions = Omit<RustErrorRegionRecords, "initialization">;
 
@@ -81,7 +83,10 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       reject(node, "An error region exceeds its bounded exact native error-source contract.");
       return undefined;
     }
-    const promiseBody = body && input.records.asyncFunction.get(node)?.kind === "js-promise";
+    const closure = body ? input.records.targetOperation.get(node) : undefined;
+    const callback = closure?.kind === "closure" ? rustCallableProtocol(closure.resultCarrier) : undefined;
+    const promiseBody = body && (input.records.asyncFunction.get(node)?.kind === "js-promise" ||
+      rustTargetTypeRefEquals(callback?.error, rustJsValueTargetType()));
     const jsRejection = promiseBody ? selectRustJsRejectionRegion(owner, selectedSources) : undefined;
     if (promiseBody && jsRejection === undefined) {
       reject(node, "A JS Promise rejection region has no bounded exact native conversion selection.");

@@ -274,9 +274,9 @@ export function rustStructuralObjectCarrierValue(
   const construction = candidateValue.construction;
   if ("construction" in value && (construction === undefined || !isRustTargetTypeRef(construction) ||
     construction.kind !== "target-named" || construction.id !== rustCallableTargetId ||
-    construction.genericArguments?.length !== 3 || construction.genericArguments[0]?.kind !== "lifetime" ||
+    construction.genericArguments?.length !== 4 || construction.genericArguments[0]?.kind !== "lifetime" ||
     construction.genericArguments[1]?.kind !== "type" || construction.genericArguments[1].type.kind !== "tuple" ||
-    construction.genericArguments[2]?.kind !== "type")) return undefined;
+    construction.genericArguments[2]?.kind !== "type" || construction.genericArguments[3]?.kind !== "type")) return undefined;
   if (typeof candidateValue.ownerFileName !== "string" ||
     candidateValue.ownerFileName.length === 0 ||
     (candidateValue.representation !== "reference" && candidateValue.representation !== "value") ||

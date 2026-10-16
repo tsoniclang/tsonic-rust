@@ -118,8 +118,8 @@ export function rustTypeFromCarrier(
     const lifetime = carrier.id === rustCallableTargetId ? carrier.genericArguments?.[0] : undefined;
     if (carrier.id === rustCallableTargetId && lifetime?.kind !== "lifetime") return undefined;
     const callableTypeArguments = rustOnlyTypeGenericArguments(lifetime === undefined ? carrier.genericArguments : carrier.genericArguments?.slice(1));
-    const [argumentsCarrier, resultCarrier] = callableTypeArguments ?? [];
-    if (callableTypeArguments?.length !== 2 || argumentsCarrier?.kind !== "tuple" ||
+    const [argumentsCarrier, resultCarrier, errorCarrier] = callableTypeArguments ?? [];
+    if (callableTypeArguments?.length !== (lifetime === undefined ? 2 : 3) || argumentsCarrier?.kind !== "tuple" ||
       resultCarrier === undefined) {
       return undefined;
     }
@@ -129,6 +129,9 @@ export function rustTypeFromCarrier(
     const argumentsType = rustTypeFromCarrier(signature === undefined ? argumentsCarrier :
       { kind: "tuple", elements: signature.parameters }, resolveSourceTypePath, resolveStructuralShape);
     const resultType = rustTypeFromCarrier(signature?.result ?? resultCarrier, resolveSourceTypePath, resolveStructuralShape);
+    const packageResult = rustProgramErrorOwner(errorCarrier)?.kind === "logical";
+    const errorType = errorCarrier === undefined || packageResult ? undefined
+      : rustTypeFromCarrier(errorCarrier, resolveSourceTypePath, resolveStructuralShape);
     if (carrier.id === rustCallableInputTargetId) {
       return argumentsType === undefined || resultType === undefined ? undefined : {
         kind: "impl-trait",
@@ -143,7 +146,7 @@ export function rustTypeFromCarrier(
         outlives: [],
       };
     }
-    return argumentsType === undefined || resultType === undefined || lifetime?.kind !== "lifetime"
+    return argumentsType === undefined || resultType === undefined || !packageResult && errorType === undefined || lifetime?.kind !== "lifetime"
       ? undefined
       : {
           kind: "named",
@@ -152,8 +155,8 @@ export function rustTypeFromCarrier(
             argumentsType,
             {
               kind: "named",
-              path: "rt::TsonicResult",
-              genericArguments: typeGenericArguments([resultType]),
+              path: packageResult ? "rt::TsonicResult" : "Result",
+              genericArguments: typeGenericArguments(packageResult ? [resultType] : [resultType, errorType!]),
             },
           ])],
         };

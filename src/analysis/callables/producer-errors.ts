@@ -10,6 +10,8 @@ import { bindRustGenericArguments } from "../../target-model/types/carriers/gene
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
+import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 
@@ -41,6 +43,10 @@ export function selectRustProducerError(
   const suspended = asynchronous !== undefined || input.records.generator.get(producer.declaration) !== undefined;
   if (reference.channel === "invoke" && suspended) return Object.freeze({ kind: "carrier",
     carrier: Object.freeze({ kind: "target-named", id: rustInfallibleTargetId }) });
+  const closure = input.records.targetOperation.get(producer.declaration);
+  if (reference.channel === "invoke" && closure?.kind === "closure" &&
+    rustTargetTypeRefEquals(rustCallableProtocol(closure.resultCarrier)?.error, rustJsValueTargetType()))
+    return Object.freeze({ kind: "carrier", carrier: rustJsValueTargetType() });
   if (reference.channel !== "invoke") {
     const result = asynchronous?.futureCarrier ??
       input.records.sourceCallableReturn.get(producer.declaration)?.returnCarrier;

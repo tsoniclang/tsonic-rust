@@ -63,6 +63,7 @@ export function rustCallableConversionMatches(
   const targetCallable = callableConversionTarget(target);
   return rustTargetTypeRefEquals(conversion.source, source) && rustTargetTypeRefEquals(conversion.target, target) &&
     sourceCallable !== undefined && targetCallable !== undefined &&
+    (!("error" in targetCallable) || rustTargetTypeRefEquals(sourceCallable.error, targetCallable.error)) &&
     sourceCallable.parameters.length <= targetCallable.parameters.length &&
     conversion.parameters.length === sourceCallable.parameters.length &&
     conversion.parameters.every((parameter, index) =>
@@ -84,6 +85,7 @@ export function selectRustCallableConversion(
   const sourceCallable = rustCallableProtocol(source);
   const targetCallable = callableConversionTarget(target);
   if (sourceCallable === undefined || targetCallable === undefined ||
+    "error" in targetCallable && !rustTargetTypeRefEquals(sourceCallable.error, targetCallable.error) ||
     sourceCallable.parameters.length > targetCallable.parameters.length) return undefined;
   const select = (sourceValue: TargetTypeRef, targetValue: TargetTypeRef): RustCallableValueConversion | undefined => {
     if (rustTargetTypeRefEquals(sourceValue, targetValue)) return { kind: "identity" };

@@ -50,6 +50,7 @@ import { rustJsIntlGroupingTargetId } from "../../../../target-model/types/carri
 import type { JsCarrierRef } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
+import { rustStaticLifetime } from "../../../../target-model/lifetimes/index.js";
 
 export interface JsLaneBindings {
   readonly element?: TargetTypeRef;
@@ -355,7 +356,7 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
             rustJsPromiseSettledResultTargetType(bindings.promiseInputOutput),
           ));
     case "promise-finally-callback":
-      return rustCallableTargetType([], rustUnitTargetType());
+      return rustCallableTargetType([], rustUnitTargetType(), rustStaticLifetime, rustJsValueTargetType());
     case "json-replacer-callback":
       return rustClosureTargetType(
         [rustStringTargetType(), rustJsValueTargetType()],

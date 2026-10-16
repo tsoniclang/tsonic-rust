@@ -200,13 +200,13 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
   }
   const asynchronous = records.asyncFunction.get(declaration);
+  const rejection = input.errorRegions.get(declaration)?.jsRejection;
+  for (const carrier of rejection?.requiredCarriers ?? []) {
+    const error = addUse(declaration, carrier, ["js-rejection"]);
+    if (error !== undefined) return { kind: "rejected", reason: error };
+  }
   if (asynchronous?.kind === "js-promise") {
-    const rejection = input.errorRegions.get(declaration)?.jsRejection;
     if (rejection === undefined) return { kind: "rejected", reason: "A JS Promise body has no selected rejection region." };
-    for (const carrier of rejection.requiredCarriers) {
-      const error = addUse(declaration, carrier, ["js-rejection"]);
-      if (error !== undefined) return { kind: "rejected", reason: error };
-    }
     const lowering = asynchronous.lowering;
     const error = addUse(
       declaration,

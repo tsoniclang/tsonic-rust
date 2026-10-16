@@ -10,6 +10,7 @@ export function rustCallableInvocationSignaturesMatch(source: TargetTypeRef, tar
   const actual = rustCallableProtocol(source);
   const expected = rustCallableProtocol(target);
   return actual !== undefined && expected !== undefined &&
+    rustTargetTypeRefEquals(actual.error, expected.error) &&
     actual.parameters.length === expected.parameters.length &&
     actual.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, expected.parameters[index])) &&
     rustTargetTypeRefEquals(actual.result, expected.result);
