@@ -3,6 +3,8 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
+import { rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
+import { rustCarrierSatisfiesTraitRef } from "../../target-model/types/carriers/traits.js";
 import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments,
   rustTargetLifetimeArguments, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
@@ -23,11 +25,15 @@ export function classifyCarrierRequirements(
       if (!associatedSupports(carrier, requirement)) return false;
       continue;
     }
-    if (requirement === "source-numeric" || requirement === "number-predicate") {
+    if (requirement === "source-numeric" || requirement === "number-predicate" || requirement === "js-rejection") {
       if (carrier.kind === "type-parameter") {
         if (!declared.has(carrier.identity)) return false;
         byParameter.get(carrier.identity)!.add(requirement);
       } else if (!(requirement === "number-predicate" ? rustCarrierSupportsNumberPredicate(carrier)
+        : requirement === "js-rejection" ? rustCarrierSatisfiesTraitRef(carrier, {
+          path: "core::convert::Into", genericArguments: [{ kind: "type", type: rustRetainedErrorTargetType() }],
+          associatedConstraints: [],
+        }, undefined, definitions)
         : rustCarrierSupportsSourceNumeric(carrier))) return false;
       continue;
     }
@@ -48,7 +54,6 @@ export function classifyCarrierRequirements(
   }
   return true;
 }
-
 
 function classifyStaticCarrier(
   carrier: TargetTypeRef,

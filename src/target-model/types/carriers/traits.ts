@@ -48,6 +48,8 @@ import type { RustTargetTraitRef } from "../model.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
 import { rustCarrierSupportsAsRef } from "./as-ref.js";
 import { rustOptionElementCarrier } from "./optional.js";
+import { rustRuntimeErrorTargetType } from "../../operations/error-boundary.js";
+import { rustProgramErrorOwner } from "./program-errors.js";
 import {
   rustOnlyTypeGenericArguments,
   rustTargetGenericTypeArguments,
@@ -346,6 +348,17 @@ export function rustCarrierSatisfiesTraitRef(
     return rustCarrierSupportsTrait(carrier, trait.path, typeParameterSupports, undefined, definitions);
   }
   const [argument] = trait.genericArguments;
+  if (carrier !== undefined && trait.path === "core::convert::Into" &&
+    trait.genericArguments.length === 1 && argument?.kind === "type" &&
+    argument.type.kind === "target-named" && argument.type.id === rustRetainedErrorTargetId &&
+    (argument.type.genericArguments?.length ?? 0) === 0) {
+    const owner = rustProgramErrorOwner(carrier);
+    return rustTargetTypeRefEquals(carrier, rustRuntimeErrorTargetType()) ||
+      owner?.kind === "physical" && owner.domain === "runtime" ||
+      carrier.kind === "target-named" && carrier.id === rustJsErrorTargetId &&
+        (carrier.genericArguments?.length ?? 0) === 0 ||
+      isRustMutableJsErrorCarrier(carrier) || isRustSourceErrorCarrier(carrier) || isRustRetainedErrorCarrier(carrier);
+  }
   if (carrier !== undefined && trait.path === "core::convert::AsRef" &&
     trait.genericArguments.length === 1 && argument?.kind === "type") {
     return rustCarrierSupportsAsRef(carrier, argument.type);

@@ -42,7 +42,7 @@ import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 
-export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate";
+export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
 export interface RustDeclarationTypeParameterRequirements {
   readonly identity: string;
