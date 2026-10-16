@@ -43,6 +43,63 @@ test("suspended retention uses checked nested-function capture evidence and excl
   assert.equal(Object.isFrozen(selected.environment.parameters), true);
 });
 
+for (const [name, body] of [
+  ["async method", "return { async read(): Promise<Value> { return value; } };"],
+  ["native method", "return { read(): Value { return value; } };"],
+  ["stored callback", "return { read: (): Value => value };"],
+  ["copied method", "const original = { read(): Value { return value; } }; return { label: 'copy', ...original };"],
+  ["nested method", "return { nested: { read(): Value { return value; } } };"],
+  ["optional method", "return selected ? { read(): Value { return value; } } : {};"],
+  ["tuple callback", "return [(): Value => value] as const;"],
+  ["array callback", "return [(): Value => value];"],
+]) {
+  test(`returned ${name} retains its actual source capture before signature selection`, () => {
+    const { source, queries, declarations } = fixture(`
+export function make<Value>(value: Value, unused: Value, selected: boolean) { ${body} }
+`);
+    const owner = declarations.get("make");
+    const parameters = source.ast.parameters(owner);
+    const selection = queries.environmentFor(owner);
+    assert.equal(selection.kind, "selected", `${name}: a returned stored capture requires its environment`);
+    assert.equal(selection.environment.parameters.length, 1, `${name}: no unrelated or control-only input is retained`);
+    assert.equal(selection.environment.parameters[0] === parameters[0], true, `${name}: the original captured input owns the lifetime`);
+    assert.equal(selection.environment.lifetime.kind, "parameter", `${name}: no static lifetime is invented`);
+    assert.equal(queries.environmentFor(owner) === selection, true, `${name}: one immutable selection is reused`);
+  });
+}
+
+test("returned method captures preserve the producer activation through a source factory", () => {
+  const { source, queries, declarations } = fixture(`
+function wrap<Value>(captured: Value) { return { read(): Value { return captured; } }; }
+export function make<Value>(value: Value, unused: Value) { return wrap(value); }
+`);
+  for (const name of ["wrap", "make"]) {
+    const owner = declarations.get(name);
+    const selection = queries.environmentFor(owner);
+    assert.equal(selection.kind, "selected", `${name}: the exact returned source construction remains retained`);
+    assert.equal(selection.environment.parameters.length, 1, `${name}: one actual activation-owned input`);
+    assert.equal(selection.environment.parameters[0] === source.ast.parameters(owner)[0], true,
+      `${name}: the factory's formal is rebound to the caller's actual input`);
+  }
+});
+
+test("returned source method traversal stays bounded and never invokes an accessor", () => {
+  const source = `export function make<Value>(value: Value) { return { read(): Value { return value; } }; }`;
+  const bounded = fixture(source, undefined, 2);
+  assert.equal(bounded.queries.environmentFor(bounded.declarations.get("make")).kind, "unresolved",
+    "a missing finite component proof never becomes static");
+  const accessor = fixture(`export function make(unused: number) { return { get value(): number { return 1; } }; }`, input => ({
+    ...input, sourceStorage: { ...input.sourceStorage, subject(node, kind, projection) {
+      assert.equal(projection?.some(component => component.declaration !== undefined &&
+        input.source.ast.is.IsGetAccessorDeclaration(component.declaration)) === true, false,
+      "source retention never manufactures an accessor invocation");
+      return input.sourceStorage.subject(node, kind, projection);
+    } },
+  }));
+  assert.equal(accessor.queries.environmentFor(accessor.declarations.get("make")).kind, "none",
+    "an unused input is not retained by evaluating a getter");
+});
+
 test("retention distinguishes type-only parameter uses from evaluated default and body uses", () => {
   const { source, queries, declarations } = fixture(`
 export async function outer(typeOnly: () => number, callback: () => number, value = callback()): Promise<number> {

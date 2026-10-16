@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 
 
@@ -16,6 +17,10 @@ import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
 
 function fixture(text, options = {}) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": text }, ...options });
+  return analyzedFixture(program);
+}
+
+function analyzedFixture(program) {
   const ast = program.source.ast;
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
@@ -232,12 +237,11 @@ test("call edges rebind two same-signature formals to physical caller inputs wit
 });
 
 test("source error rebinding rejects unknown identities, mutated carriers and unselected inputs", () => {
-  const current = fixture(`
+  const current = analyzedFixture(analyzeRustErrorEffects(`
     export function invoke(callback: () => number): number { return callback(); }
     export function forward(callback: () => number): number { const output = invoke(callback); return output; }
-  `);
-  const selection = createRustSourceErrorEffectSelection({ context: { ast: current.ast, records: current.program.records,
-    callableValues: current.program.callableValues } });
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
   const select = (node, declaration, kind, effects) => selection.edgeFor(declaration, kind, effects,
     selection.bindingsFor(node, declaration, effects.nativeErrors.map(error => error.errorType)));
   const effects = current.callable("invoke");
