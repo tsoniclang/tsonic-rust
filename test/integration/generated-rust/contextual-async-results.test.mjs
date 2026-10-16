@@ -60,7 +60,7 @@ test("contextual async output construction costs exactly one native promise with
 #[cfg(test)]
 mod contextual_async_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     type CompletionPromise = js_abi::JsPromise<'static, Option<i32>, rt::TsonicError>;
     type CompletionHandler = rt::Callable<'static, (), Result<CompletionPromise, rt::TsonicError>>;

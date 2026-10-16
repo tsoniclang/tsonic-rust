@@ -42,7 +42,7 @@ for (const profile of ["native", "js"]) {
 #[cfg(test)]
 mod input_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(project)}
     #[test]
     fn borrowed_invocations_do_not_allocate_an_adapter_or_clone_a_frame() {
         let left = first(7.0);

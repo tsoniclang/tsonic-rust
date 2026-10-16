@@ -127,7 +127,7 @@ test("unique mutable capture allocation matches an independent native owning Fn"
   const root = writeGeneratedProject("native-capture-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/cost.rs"), `
-${nativeAllocationSupport}
+${nativeAllocationSupport(root)}
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 

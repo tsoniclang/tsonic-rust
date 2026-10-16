@@ -17,7 +17,7 @@ for (const surfaces of [[], ["js"]]) {
     const directory = writeGeneratedProject(`discarded-lambda-definitions-${lane}`, result.artifacts);
     runCargo(directory, ["generate-lockfile", "--offline"]);
     runCargo(directory, ["fmt", "--all", "--check"]);
-    appendFileSync(join(directory, "src/index.rs"), `\n#[cfg(test)]\nmod discarded_definition_cost {\nuse super::*;\n${nativeOwnershipCostSupport}
+    appendFileSync(join(directory, "src/index.rs"), `\n#[cfg(test)]\nmod discarded_definition_cost {\nuse super::*;\n${nativeOwnershipCostSupport(directory)}
       #[test]
       fn uninvoked_definitions_do_not_allocate() {
           let (sum, cost) = measure(|| (0..10000).map(|value| discarded(f64::from(value))).sum::<f64>());

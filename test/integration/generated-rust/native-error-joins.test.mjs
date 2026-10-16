@@ -1,3 +1,5 @@
+import { join as joinPath } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { nativeAllocationSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -173,9 +175,13 @@ test("native joined errors preserve associated borrows, moves, distinct sources 
     items: packageRegionFunctions() }));
   assert.match(packageEmitted, /local\s*\.map_err\(LocalFailure::from\)\s*\.map_err\(\s*PackageErrors::<\s*LocalFailure,\s*<LeftCallback as Invocation>::Error,\s*<RightCallback as Invocation>::Error,?\s*>::Local,?\s*\)\?/u);
   assert.doesNotMatch(packageEmitted, /TsonicError|TsonicResult|PackageErrors[^\n]*::from|\.clone\(|Default|Box|dyn |'static/u);
+  const project = writeGeneratedProject("native-error-joins", [
+    { path: "Cargo.toml", text: `[package]\nname = "native_error_joins"\nversion = "0.0.0"\nedition = "2024"\n
+[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)}, default-features = false }\n` },
+  ]);
   const source = `use tsonic_rust_runtime as rt;
 use core::cell::Cell;
-${nativeAllocationSupport}
+${nativeAllocationSupport(project)}
 trait Invocation {
     type Error;
     fn invoke(&mut self) -> Result<u32, Self::Error>;
@@ -307,11 +313,8 @@ fn main() {
     assert_eq!(allocation_counts::allocation_requests_all_threads(), before);
 }
 `;
-  const project = writeGeneratedProject("native-error-joins", [
-    { path: "Cargo.toml", text: `[package]\nname = "native_error_joins"\nversion = "0.0.0"\nedition = "2024"\n
-[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(rustRuntimeCratePath)}, default-features = false }\n` },
-    { path: "src/main.rs", text: source },
-  ]);
+  mkdirSync(joinPath(project, "src"), { recursive: true });
+  writeFileSync(joinPath(project, "src/main.rs"), source);
   runCargo(project, ["generate-lockfile", "--offline"]);
   runCargo(project, ["fmt", "--all"]);
   runCargo(project, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);

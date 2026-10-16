@@ -11,11 +11,11 @@ const measuredCases = recursiveCallbackProtocolCases.filter(current =>
   current.name === "captured-class-field" || current.name === "shared-class-frame" ||
   current.name === "shared-class-construction-writes" || current.name === "shared-class-string-field");
 
-const proof = current => `
+const proof = (current, projectRoot) => `
 #[cfg(test)]
 mod recursive_class_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(projectRoot)}
 
     #[test]
     fn one_owner_retains_captured_fields_without_repeated_allocation() {
@@ -58,7 +58,7 @@ for (const current of measuredCases) for (const surfaces of [[], ["js"]]) {
     const directory = writeGeneratedProject(`recursive-class-cost-${current.name}-${profile}`, result.artifacts);
     runCargo(directory, ["generate-lockfile", "--offline"]);
     runCargo(directory, ["fmt", "--all", "--check"]);
-    appendFileSync(join(directory, "src/index.rs"), proof(current));
+    appendFileSync(join(directory, "src/index.rs"), proof(current, directory));
     runCargo(directory, ["fmt", "--all"]);
     runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
     runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);

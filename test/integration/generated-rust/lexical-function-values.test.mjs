@@ -26,7 +26,7 @@ test("retained lexical counter has handwritten native allocation cost and alloca
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));
   const root = writeGeneratedProject("lexical-function-value-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/cost.rs"), `${nativeAllocationSupport}
+  writeFileSync(join(root, "tests/cost.rs"), `${nativeAllocationSupport(root)}
 use std::cell::Cell;
 use std::rc::Rc;
 

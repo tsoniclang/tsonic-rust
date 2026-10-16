@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { realpathSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { realpathSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -36,10 +36,12 @@ test("checked adapters retain all error sources and match handwritten native all
 [dependencies]
 tsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }
 ` },
-    { path: "src/main.rs", text: `
+  ]);
+  mkdirSync(join(project, "src"), { recursive: true });
+  writeFileSync(join(project, "src/main.rs"), `
 use tsonic_rust_runtime as rt;
 use std::sync::atomic::{AtomicUsize, Ordering};
-${nativeOwnershipCostSupport}
+${nativeOwnershipCostSupport(project)}
 mod index { ${declarations} }
 #[derive(Debug)]
 struct ProducerFailure(i32);
@@ -80,8 +82,7 @@ fn main() {
     }
     println!("PASS: checked adapters preserve three exact error channels with native cost parity");
 }
-` },
-  ]);
+`);
   runCargo(project, ["generate-lockfile", "--offline"]);
   runCargo(project, ["rustc", "--locked", "--offline", "--", "-D", "warnings"]);
   assert.match(runCargo(project, ["run", "--locked", "--offline", "--quiet"]).stdout, /PASS: checked adapters/u);
@@ -144,10 +145,12 @@ test("physical callable adaptation retains exact E with one owning frame or zero
 [dependencies]
 tsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }
 ` },
-    { path: "src/main.rs", text: `
+  ]);
+  mkdirSync(join(project, "src"), { recursive: true });
+  writeFileSync(join(project, "src/main.rs"), `
 use tsonic_rust_runtime as rt;
 use core::convert::Infallible;
-${nativeOwnershipCostSupport}
+${nativeOwnershipCostSupport(project)}
 #[derive(Debug, PartialEq, Eq)]
 struct ProducerFailure;
 fn fail() -> Result<i32, ProducerFailure> { Err(ProducerFailure) }
@@ -155,8 +158,7 @@ fn main() {
 ${cases}
     println!("PASS: physical callback adapter error identity and zero extra allocations");
 }
-` },
-  ]);
+`);
   runCargo(project, ["generate-lockfile", "--offline"]);
   runCargo(project, ["rustc", "--offline", "--locked", "--", "-D", "warnings"]);
   assert.match(runCargo(project, ["run", "--offline", "--locked", "--quiet"]).stdout, /PASS: physical callback adapter/u);

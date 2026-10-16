@@ -40,7 +40,7 @@ export function admit(): unknown {
 mod program_error_cost {
     use super::*;
     use tsonic_rust_runtime::ErrorObject;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn transport_admission_has_native_error_cost() {

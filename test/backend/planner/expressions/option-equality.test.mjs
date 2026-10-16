@@ -68,7 +68,8 @@ test("nested native non-Copy optional payload views compare without moves or clo
   const view = planRustOptionPayloadView({ kind: "path", path: "owned" }, carrier, "shared", context);
   const expression = printRustExpr(view);
   assert.doesNotMatch(expression, /\.clone\(|\.to_owned\(|String::from/u);
-  const source = `${nativeOwnershipCostSupport}
+  const root = createTestWorkspace(fileURLToPath(new URL("../../../../.temp/", import.meta.url)), "native-option-borrow-");
+  const source = `${nativeOwnershipCostSupport(root)}
 fn equal(owned: &Option<Option<Option<Vec<String>>>>, borrowed: Option<Option<Option<&Vec<String>>>>) -> bool {
     ${expression} == borrowed
 }
@@ -92,7 +93,6 @@ fn nested_non_copy_presence_and_native_borrow_cost() {
     assert_eq!(values[0], "native");
 }
 `;
-  const root = createTestWorkspace(fileURLToPath(new URL("../../../../.temp/", import.meta.url)), "native-option-borrow-");
   const path = join(root, "native.rs");
   const executable = join(root, "native");
   writeFileSync(path, source);
@@ -124,7 +124,8 @@ test("nested native String optional comparison views retain every presence level
   const view = planRustStringComparisonView(read, { kind: "path", path: "owned" }, carrier, undefined, context);
   assert.equal(view !== undefined, true);
   assert.equal(context.diagnostics.length, 0);
-  const source = `${nativeOwnershipCostSupport}
+  const root = createTestWorkspace(fileURLToPath(new URL("../../../../.temp/", import.meta.url)), "nested-option-cost-");
+  const source = `${nativeOwnershipCostSupport(root)}
 fn equal(owned: &Option<Option<Option<String>>>, borrowed: Option<Option<Option<&str>>>) -> bool {
     ${printRustExpr(view)} == borrowed
 }
@@ -148,7 +149,6 @@ fn nested_presence_and_native_borrow_cost() {
     assert_eq!(owned.as_ref().unwrap().as_ref().unwrap().as_deref(), Some("native"));
 }
 `;
-  const root = createTestWorkspace(fileURLToPath(new URL("../../../../.temp/", import.meta.url)), "nested-option-cost-");
   const path = join(root, "native.rs");
   const executable = join(root, "native");
   writeFileSync(path, source);

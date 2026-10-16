@@ -101,7 +101,7 @@ function verifyNativeCaptureOwnership(edition) {
   assert.doesNotMatch(output, /let_and_return/u);
   const root = writeGeneratedProject(`capture-owned-inputs-${edition}`, result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use capture_owned_inputs::index;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

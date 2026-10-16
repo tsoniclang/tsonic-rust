@@ -62,7 +62,7 @@ test("native identity checks heterogeneous captures without error bounds or addi
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n"));
   const directory = writeGeneratedProject("native-identity-heterogeneous-cost", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/identity.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(directory, "tests/identity.rs"), `${nativeOwnershipCostSupport(directory)}
 #[derive(Debug)]
 struct NoCloneError;
 struct OwnedError;
@@ -143,7 +143,7 @@ test("joined stored-family Eq preserves cross-variant aliases and rejects distin
     "the native proof names come from exact owned physical definitions");
   const directory = writeGeneratedProject("native-joined-identity-cost", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/identity.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(directory, "tests/identity.rs"), `${nativeOwnershipCostSupport(directory)}
 struct Callback;
 impl tsonic_rust_runtime::CallableImplementation<()> for Callback {
     type Output = Result<f64, core::convert::Infallible>;

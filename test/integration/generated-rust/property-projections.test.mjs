@@ -36,7 +36,7 @@ test("selected native property reads add no allocation beyond handwritten requir
   assertNoTargetDiagnostics(result.diagnostics);
   const root = writeGeneratedProject("property-projection-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/cost.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/cost.rs"), nativeOwnershipCostSupport(root) + `
 use property_projection_cost::index;
 use tsonic_rust_js::abi as js;
 

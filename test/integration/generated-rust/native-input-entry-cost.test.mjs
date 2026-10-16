@@ -14,7 +14,7 @@ test("exact native Error entry conversion adds no allocation or copied payload",
   assert.equal(result.diagnostics.length, 0, result.diagnostics.slice(0, 5).map(row => row.message.slice(0, 256)).join("\n"));
   const directory = writeGeneratedProject("native-input-entry-cost", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport}
+  writeFileSync(join(directory, "tests/cost.rs"), `${nativeOwnershipCostSupport(directory)}
 use native_input_entry_cost::program::SourceError;
 use tsonic_rust_runtime::{JsError, RetainedError};
 

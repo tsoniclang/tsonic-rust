@@ -51,7 +51,7 @@ main();
 #[cfg(test)]
 mod union_upcast_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
     #[test]
     fn widening_moves_the_existing_native_identity_without_allocating() {
         for _ in 0..128 {

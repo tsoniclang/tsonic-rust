@@ -106,7 +106,7 @@ mod capture_costs {
     use super::*;
     use std::rc::Rc;
     use std::cell::{Cell, RefCell};
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(root)}
 
     struct NativeReadOnlyState {
         value: Rc<Cell<f64>>,

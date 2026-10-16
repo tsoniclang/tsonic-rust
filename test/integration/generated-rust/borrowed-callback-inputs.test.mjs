@@ -15,7 +15,7 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n").slice(0, 6000));
     const root = writeGeneratedProject(`borrowed-callback-inputs-${profile}`, result.artifacts);
     mkdirSync(join(root, "tests"), { recursive: true });
-    writeFileSync(join(root, "tests", "inputs.rs"), profile === "native" ? nativeOwnershipCostSupport + `
+    writeFileSync(join(root, "tests", "inputs.rs"), profile === "native" ? nativeOwnershipCostSupport(root) + `
 use borrowed_callback_inputs::index;
 
 #[test]
