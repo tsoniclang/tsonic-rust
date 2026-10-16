@@ -1,4 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
+import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   BindingElement_IsRest,
@@ -60,33 +62,49 @@ export interface RustBindingPatternFactContext {
   readonly setCarrier: (subject: Node, carrier: TargetTypeRef) => void;
 }
 
+type RustBindingPatternRejection = {
+  readonly kind: "rejected";
+  readonly node: Node;
+  readonly code: string;
+  readonly reason: string;
+};
+
+export type RustBindingPatternAdmission =
+  | { readonly kind: "recorded" }
+  | { readonly kind: "unresolved" }
+  | RustBindingPatternRejection;
+
+const recordedBindingPattern: RustBindingPatternAdmission = Object.freeze({ kind: "recorded" });
+const unresolvedBindingPattern: RustBindingPatternAdmission = Object.freeze({ kind: "unresolved" });
+
 export function recordRustBindingPatternFacts(
   pattern: Node,
   sourceCarrier: TargetTypeRef,
   context: RustBindingPatternFactContext,
-): boolean {
+): RustBindingPatternAdmission {
   const kind = context.ast.kindName(pattern);
   if (kind !== KindArrayBindingPattern && kind !== KindObjectBindingPattern) {
-    return false;
+    return unresolvedBindingPattern;
   }
   context.setCarrier(pattern, sourceCarrier);
   const elements = context.ast.elements(pattern);
   const objectExtractedNames = kind === KindObjectBindingPattern
     ? collectObjectExtractedNames(elements, context.ast, context.semanticsFor)
     : undefined;
+  if (objectExtractedNames !== undefined && "kind" in objectExtractedNames) return objectExtractedNames;
   if (kind === KindObjectBindingPattern && objectExtractedNames === undefined) {
-    return false;
+    return unresolvedBindingPattern;
   }
   for (const [index, element] of elements.entries()) {
     if (element === undefined || context.ast.kindName(element) === KindOmittedExpression) {
       continue;
     }
     if (context.ast.kindName(element) !== KindBindingElement || !context.ast.is.IsBindingElement(element)) {
-      return false;
+      return unresolvedBindingPattern;
     }
     const name = Node_Name(context.ast, element);
     if (name === undefined) {
-      return false;
+      return unresolvedBindingPattern;
     }
     const initializer = Node_Initializer(context.ast, element);
     const selected = kind === KindArrayBindingPattern
@@ -99,26 +117,27 @@ export function recordRustBindingPatternFacts(
           context,
         );
     if (selected === undefined) {
-      return false;
+      return unresolvedBindingPattern;
     }
+    if ("kind" in selected) return selected;
     const defaultExpected = rustOptionElementCarrier(selected.projectedCarrier) ??
       rustOptionalStorageValue(selected.projectedCarrier) ?? selected.projectedCarrier;
     const defaultCarrier = initializer === undefined ? undefined
       : context.resolveExpressionCarrier(initializer, isRustAbsenceCarrier(defaultExpected) ? undefined : defaultExpected);
-    if (initializer !== undefined && defaultCarrier === undefined) return false;
+    if (initializer !== undefined && defaultCarrier === undefined) return unresolvedBindingPattern;
     const projected = context.records.bindingProjections.resolve(context.requiredRecords, element, sourceCarrier,
       selected.projectedCarrier, selected.projection, defaultCarrier, selected.checkedArrayElement);
-    if (projected === undefined) return false;
+    if (projected === undefined) return unresolvedBindingPattern;
     const { bindingCarrier } = projected;
     context.setCarrier(element, bindingCarrier);
     context.setCarrier(name, bindingCarrier);
     const nameKind = context.ast.kindName(name);
-    if ((nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
-      !recordRustBindingPatternFacts(name, bindingCarrier, context)) {
-      return false;
+    if (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) {
+      const nested = recordRustBindingPatternFacts(name, bindingCarrier, context);
+      if (nested.kind !== "recorded") return nested;
     }
   }
-  return true;
+  return recordedBindingPattern;
 }
 
 interface SelectedBindingProjection {
@@ -189,7 +208,7 @@ function selectObjectProjection(
   hasDefault: boolean,
   extractedSourceNames: ReadonlySet<string>,
   context: RustBindingPatternFactContext,
-): SelectedBindingProjection | undefined {
+): SelectedBindingProjection | RustBindingPatternRejection | undefined {
   const sourceShape = resolveObjectBindingSource(sourceCarrier, context);
   if (sourceShape === undefined) {
     return undefined;
@@ -252,6 +271,7 @@ function selectObjectProjection(
   if (sourceName === undefined) {
     return undefined;
   }
+  if (typeof sourceName !== "string") return sourceName;
   const field = sourceShape.fields.find((candidate) =>
     candidate.sourceName === sourceName);
   if (field?.method === true) {
@@ -422,7 +442,7 @@ function collectObjectExtractedNames(
   elements: readonly (Node | undefined)[],
   ast: AstReader,
   semanticsFor: RustBindingPatternFactContext["semanticsFor"],
-): ReadonlySet<string> | undefined {
+): ReadonlySet<string> | RustBindingPatternRejection | undefined {
   const names = new Set<string>();
   for (const element of elements) {
     if (element === undefined || ast.kindName(element) === KindOmittedExpression ||
@@ -441,6 +461,7 @@ function collectObjectExtractedNames(
     if (sourceName === undefined) {
       return undefined;
     }
+    if (typeof sourceName !== "string") return sourceName;
     names.add(sourceName);
   }
   return names;
@@ -450,10 +471,15 @@ function bindingPropertySourceName(
   propertyName: Node | undefined,
   ast: AstReader,
   semanticsFor: RustBindingPatternFactContext["semanticsFor"],
-): string | undefined {
+): string | RustBindingPatternRejection | undefined {
   if (propertyName !== undefined && (ast.is.IsComputedPropertyName(propertyName) || ast.is.IsNumericLiteral(propertyName))) {
     const selected = semanticsFor(propertyName).propertyNames.get(propertyName);
-    return selected?.kind === "resolved" ? selected.name : undefined;
+    if (selected === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "A native binding property requires its completed checked property-name selection.", propertyName);
+    if (selected.kind === "resolved") return selected.name;
+    const issue = rustNativePropertyNameIssue(propertyName, selected);
+    return issue === undefined ? undefined : Object.freeze({ kind: "rejected", node: propertyName,
+      code: issue.code, reason: issue.message });
   }
   const kind = propertyName === undefined ? "" : ast.kindName(propertyName);
   return propertyName === undefined ||

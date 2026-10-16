@@ -1,7 +1,8 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
-import { Node_Type } from "@tsonic/target-api/source";
+import { Node_Type, type SourceFileSemantics } from "@tsonic/target-api/source";
+import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
@@ -23,6 +24,7 @@ import {
 
 export interface RustNativeValueDeclarationInput {
   readonly ast: AstReader;
+  readonly semanticsFor: (node: Node) => SourceFileSemantics;
   readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   readonly projectTypes: RustProjectTypePolicy;
@@ -70,6 +72,19 @@ function admitInterface(
   input: RustNativeValueDeclarationInput,
 ): RustNativeDeclarationAdmission {
   const { ast, records, projectTypes } = input;
+  for (const member of ast.members(declaration)) {
+    if (member === undefined) continue;
+    const name = ast.name(member);
+    if (name === undefined) continue;
+    const selectedName = input.semanticsFor(member).propertyNames.get(name);
+    if (selectedName === undefined) {
+      if (ast.is.IsComputedPropertyName(name)) failTargetAnalysisInvariant("tsonic-rust",
+        "A native computed field requires its completed checked property-name selection.", name);
+      continue;
+    }
+    const issue = rustNativePropertyNameIssue(name, selectedName);
+    if (issue !== undefined) return { kind: "rejected", diagnostics: Object.freeze([issue]) };
+  }
   const definition = projectTypes.definitionForDeclaration(declaration);
   const layout = definition === undefined ? undefined : projectTypes.objectLayoutForDefinition(definition);
   if (definition?.kind !== "interface" || layout?.kind !== "interface") {

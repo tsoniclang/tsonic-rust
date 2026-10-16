@@ -2,6 +2,53 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
+for (const nested of [false, true]) for (const failure of ["source", "resource"]) {
+  test(`Rust binding admission preserves the exact ${failure} key refusal${nested ? " through recursion" : ""}`, () => {
+    const objectPattern = {}, propertyBinding = {}, propertyName = {}, valueName = {};
+    const arrayPattern = {}, outerBinding = {};
+    const selected = Object.freeze({ kind: "rejected", failure, reason: `Selected ${failure} property-name refusal.` });
+    const ast = {
+      kindName: node => node === objectPattern ? "KindObjectBindingPattern"
+        : node === arrayPattern ? "KindArrayBindingPattern"
+          : node === propertyBinding || node === outerBinding ? "KindBindingElement"
+            : node === propertyName ? "KindComputedPropertyName" : "KindIdentifier",
+      elements: node => node === objectPattern ? [propertyBinding] : node === arrayPattern ? [outerBinding] : [],
+      name: node => node === propertyBinding ? valueName : node === outerBinding ? objectPattern : undefined,
+      is: {
+        IsBindingElement: node => node === propertyBinding || node === outerBinding,
+        IsComputedPropertyName: node => node === propertyName,
+        IsNumericLiteral: () => false,
+        IsVariableDeclaration: () => false,
+        IsParameterDeclaration: () => false,
+        IsPropertyDeclaration: () => false,
+      },
+      as: { AsBindingElement: node => node === propertyBinding ? { PropertyName: propertyName } : {} },
+    };
+    const records = createRustProgramRecordBuilder();
+    const valueCarrier = rustSourcePrimitiveTargetType("int32");
+    const result = recordRustBindingPatternFacts(nested ? arrayPattern : objectPattern,
+      nested ? rustTupleTargetType([valueCarrier]) : valueCarrier, {
+        ast, records, requiredRecords: [], setCarrier: () => {},
+        semanticsFor: node => {
+          assert.equal(node === propertyName, true, "the identical checked key selects its sealed evidence");
+          return { propertyNames: { get: key => {
+            assert.equal(key === propertyName, true, "no replacement key or syntax guess is queried");
+            return selected;
+          } } };
+        },
+        resolveCarrier: () => assert.fail("a rejected key cannot require physical property selection"),
+        resolveExpressionCarrier: () => assert.fail("a rejected key cannot evaluate a default or erase its effects"),
+      });
+    assert.equal(result.kind, "rejected", "an expected key refusal is not unresolved internal evidence");
+    assert.equal(result.node === propertyName, true, "the identical offending key survives recursion");
+    assert.equal(result.reason, selected.reason, "the exact shared reason is preserved");
+    assert.equal(result.code, failure === "resource" ? "RUST_ENUM_CONSTANT_RESOURCE_LIMIT" : "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN",
+      "the existing issue category is preserved");
+    assert.equal(Object.isFrozen(result), true, "expected-failure evidence is immutable");
+    assert.equal(records.bindingProjection.get(propertyBinding) === undefined, true, "no invalid field projection is published");
+  });
+}
+
 const staticKeys = [
   { name: "string literal", prelude: "", key: '"value"', ordinary: "value" },
   { name: "numeric literal", prelude: "", key: "0x10", ordinary: "16" },
@@ -27,6 +74,21 @@ const staticKeys = [
 ];
 
 for (const surfaces of [[], ["js"]]) {
+  test(`Rust ${surfaces[0] ?? "native"} rejects an effectful native struct key without dropping its evaluation`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+import { field, struct } from "@tsonic/core/lang.js";
+function key(): "value" { return "value"; }
+export const Shape = struct({ [key()]: field<number>() });
+export type Shape = typeof Shape;
+export function accept(value: Shape): void {}
+` } });
+    const issues = compiled.result.diagnostics.filter(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN");
+    assert.equal(issues.length === 1 && issues[0].message.includes("effectful"), true,
+      "the actual native field refuses the shared effectful-key evidence once");
+    assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, "the builder cannot erase a required key effect");
+    assert.equal(compiled.result.artifacts.length, 0, "no native field is invented from the call's singleton return type");
+  });
+
   test(`Rust ${surfaces[0] ?? "native"} erases checked symbolic type-family metadata without a native field obligation`, () => {
     const compiled = compileRust({ surfaces, files: { "index.ts": `
 declare const storage: unique symbol;
@@ -258,3 +320,6 @@ export function make(): number {
     });
   }
 }
+import { recordRustBindingPatternFacts } from "../../../dist/analysis/control-flow/binding-patterns.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
+import { rustSourcePrimitiveTargetType, rustTupleTargetType } from "../../../dist/target-model/types/index.js";

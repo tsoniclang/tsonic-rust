@@ -85,7 +85,6 @@ import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceProfileStorageEffects } from "../../policy/operations/source-profiles/source-storage-effects.js";
 import { createRustCallableOwnershipRegistry, type RustCallableOwnershipRegistry } from "../callables/ownership-plan.js";
 import { createRustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
-import { analyzeRustComputedFieldNames } from "../objects/computed-field-names.js";
 import { createRustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission.js";
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
@@ -238,7 +237,7 @@ export function createRustAnalysisContext(
     runtimeValueUses,
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
-    diagnostics: [...analyzeRustComputedFieldNames(input.source), ...numericLiteralAdmission, ...names.diagnostics, ...lifetimes.diagnostics,
+    diagnostics: [...numericLiteralAdmission, ...names.diagnostics, ...lifetimes.diagnostics,
       ...(sourcePackageComponentIdentities.kind === "rejected" ? sourcePackageComponentIdentities.diagnostics : []),
       ...(receiverOccurrences.kind === "unresolved" ? [{ code: "RUST_RECEIVER_OCCURRENCES_UNRESOLVED",
         category: "error" as const, source: "tsonic-rust", message: receiverOccurrences.reason,

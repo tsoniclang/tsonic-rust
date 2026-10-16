@@ -8,6 +8,7 @@ function interfaceFixture(sourceText) {
   const declaration = source.ast.statements(source.getSourceFile("/src/index.ts"))
     .find(node => source.ast.kindName(node) === "KindInterfaceDeclaration");
   return { declaration, source, program, input: { ast: source.ast, records: program.records,
+    semanticsFor: source.semantics.forNode,
     names: program.names, projectTypes: program.projectTypes, typeDefinitions: program.typeDefinitions,
     sourceLifetimes: program.sourceLifetimes, objectRepresentations: program.objectRepresentations,
     typeFamilies: program.typeFamilies } };

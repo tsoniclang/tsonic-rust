@@ -418,6 +418,7 @@ export function analyzeRustTargetProgram(
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
+    semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
     objectRepresentations, typeFamilies: program.typeFamilies,
     genericRequirements: declarationGenericRequirements.index });
