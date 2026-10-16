@@ -4,7 +4,8 @@ import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 
 import { rustBorrowedElementRead, rustBorrowPureProviderInputs } from "../../../dist/analysis/program/borrowed-element-purity.js";
-import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
+import { createRustProviderPackage } from "../../../dist/public/provider.js";
+import { Node_Expression } from "@tsonic/target-api/source";
 
 test("borrowed indexed reads require their own exact pure operation, not owned Clone purity", () => {
   const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
@@ -46,36 +47,42 @@ targetOperation: { get: (subject) => {
   }
 });
 
-test("provider purity includes an evaluation-only receiver even when the target takes only its index", () => {
-  const { source, program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
-    function selected(): string[] { return ["value"]; }
-    export function observed(): number { return selected()[0]!.length; }
+test("provider purity includes the evaluation-only receiver of an actual pure native read", () => {
+  const carrier = { kind: "target-named", id: "r14.PureReceiver" };
+  const nativeBool = { kind: "source-primitive", name: "bool" };
+  const reference = { kind: "provider-ref", moduleSpecifier: "@r14/pure-receiver", exportName: "Receiver" };
+  const provider = createRustProviderPackage({ id: "r14-pure-receiver", displayName: "Pure receiver", version: "1.0.0",
+    modules: [{ moduleSpecifier: "@r14/pure-receiver", providerModuleId: "r14.pure-receiver", exports: [
+      { id: "Receiver", name: "Receiver", kind: "interface", members: [
+        { id: "Receiver.empty", name: "empty", kind: "property", readonly: true, type: { kind: "boolean" } },
+      ] },
+      { id: "open", name: "open", kind: "function", signatures: [{ id: "open()", parameters: [], returnType: reference }] },
+    ] }], types: [{ exportId: "Receiver", targetCarrier: carrier }], carrierPaths: { "r14.PureReceiver": "String" }, crates: [],
+    operations: [
+      { exportId: "open", operationKind: "method", target: { form: "call", path: "String::new" }, resultCarrier: carrier },
+      { exportId: "Receiver", memberId: "Receiver.empty", operationKind: "property",
+        target: { form: "call", path: "bool::default" }, resultCarrier: nativeBool, evaluation: "pure" },
+    ] });
+  const { source, program } = analyzeRust({ surfaces: [], packages: [provider], files: { "index.ts": `
+    import { open, type Receiver } from "@r14/pure-receiver";
+    function selected(): Receiver { return open(); }
+    export function observed(): boolean { return selected().empty; }
   ` } });
-  let element;
+  let property;
   const visit = node => {
-    if (source.ast.is.IsElementAccessExpression(node)) element = node;
+    if (source.ast.is.IsPropertyAccessExpression(node)) property = node;
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
-  assert.equal(element !== undefined, true, "the checked source contains its selected indexed read");
-  const operation = program.records.targetOperation.get(element);
+  assert.equal(property !== undefined, true, "the checked source contains its selected native read");
+  const operation = program.records.targetOperation.get(property);
   assert.equal(operation?.kind, "provider-operation");
-  const receiver = source.ast.as.AsElementAccessExpression(element).Expression;
-  const index = source.ast.as.AsElementAccessExpression(element).ArgumentExpression;
-  const abi = finalizeRustProviderOperationAbi({ operationKind: "indexer",
-    form: { form: "call", path: "fixture::selected_index", argModes: ["value"] },
-    sourceReceiver: { kind: "runtime", carrier: operation.abi.sourceReceiver.carrier },
-    sourceArgumentCarriers: operation.abi.sourceArguments.map(argument => argument.carrier),
-    resultCarrier: operation.abi.result.carrier, isAsync: false, isFallible: false, evaluation: "pure" },
-  program.typeDefinitions);
-  assert.equal(abi !== undefined, true, "the source-only receiver ABI is canonical");
-  const records = createRustRecordFixture({ targetOperation: { get: subject => subject === element
-    ? { ...operation, abi } : program.records.targetOperation.get(subject) } }, program.records);
-  const inputs = rustBorrowPureProviderInputs(element, source.ast, records);
+  assert.equal(operation.abi.sourceReceiver.disposition, "evaluation-only", "the real ABI retains the source-only receiver");
+  const receiver = Node_Expression(source.ast, property);
+  const inputs = rustBorrowPureProviderInputs(property, source.ast, program.records);
   assert.equal(inputs !== undefined, true, "the exact pure-provider input proof is available");
-  assert.equal(inputs.length, 2, "both source receiver and index participate in purity");
+  assert.equal(inputs.length, 1, "the source-only receiver participates in purity");
   assert.equal(inputs[0] === receiver, true, "the effectful checked receiver identity is retained");
-  assert.equal(inputs[1] === index, true, "the selected source index identity is retained");
   assert.equal(program.sourceNavigation.expressionEffects(receiver).invokes, true,
     "the retained receiver carries the source invocation effect");
 });
