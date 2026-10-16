@@ -12,6 +12,7 @@ import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js
 import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys } from "./provider-source-inputs.js";
 import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
 import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
+import { planRustDiscardedValue } from "../expressions/discarded-values.js";
 import { rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
 import { rustValueCarrierBeforeContextualConversion } from "../../../analysis/conversions/value-carrier-queries.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
@@ -111,7 +112,7 @@ export function planRustProviderEvaluationScope(
   );
   const hasManagedInput = [...mutableInputs.values()].some((input) =>
     input.kind !== "owned");
-  if (!hasManagedInput && stabilizationKeys.size === 0) {
+  if (!hasManagedInput && stabilizationKeys.size === 0 && !sourceSlots.some(slot => slot.evaluationOnly !== undefined)) {
     return { kind: "none" };
   }
   const steps: RustProviderEvaluationStep[] = [];
@@ -220,6 +221,12 @@ export function planRustProviderEvaluationScope(
       sourceValues.set(slot.node, storage);
       continue;
     }
+    if (slot.evaluationOnly !== undefined) {
+      const discarded = planRustDiscardedValue(slot.node, context);
+      if (discarded === undefined) return { kind: "failed" };
+      steps.push({ kind: "effect", value: discarded.expression, discard: discarded.discard });
+      continue;
+    }
     if (!stabilizationKeys.has(slot.key)) {
       continue;
     }
@@ -227,7 +234,7 @@ export function planRustProviderEvaluationScope(
     const contract = contextual === undefined ? undefined : rustContextualRuntimeConversionContract(
       contextual.conversion, context.input.program.typeDefinitions);
     let valueContext = context;
-    if (slot.evaluationOnly === undefined && contract?.category === "ownership" &&
+    if (contract?.category === "ownership" &&
       contract.sourceMode === "ref" && !contract.fallible &&
       contract.target.kind === "reference" && !contract.target.mutable) {
       const carrier = rustValueCarrierBeforeContextualConversion(context.input.program.records, slot.node);
@@ -252,10 +259,6 @@ export function planRustProviderEvaluationScope(
     const value = planExpression(slot.node, valueContext);
     if (value === undefined) {
       return { kind: "failed" };
-    }
-    if (slot.evaluationOnly !== undefined) {
-      steps.push({ kind: "effect", value, discard: slot.evaluationOnly });
-      continue;
     }
     const name = allocateRustSyntheticName(syntheticNames, `operation_input_${index}`);
     steps.push({

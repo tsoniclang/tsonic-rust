@@ -79,7 +79,7 @@ export function rustBorrowPureProviderInputs(
   const operand = Node_Expression(ast, node);
   const receiver = ast.is.IsCallExpression(node)
     ? operand === undefined ? undefined : Node_Expression(ast, operand) : operand;
-  const hasReceiver = provider.abi.sourceReceiver.kind === "receiver" && provider.abi.sourceReceiver.disposition === "runtime";
+  const hasReceiver = provider.abi.sourceReceiver.kind === "receiver";
   if (hasReceiver && receiver === undefined) return undefined;
   const inputs = provider.abi.targetReceiver.kind === "input"
     ? [provider.abi.targetReceiver.input, ...provider.abi.targetArguments] : provider.abi.targetArguments;

@@ -7,6 +7,7 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { rustNamedTargetType, rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
 import { rustBorrowedStrTargetType } from "../../../dist/target-model/types/index.js";
+import { compileRust } from "../../helpers/rust-session.mjs";
 
 const bool = { kind: "source-primitive", name: "bool" };
 const integer = { kind: "source-primitive", name: "int32" };
@@ -14,13 +15,67 @@ const base = rustNamedTargetType("fixture.Base", "fixture::Base");
 const project = { target: base, path: "fixture::as_base" };
 const derived = rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined, [project]);
 
+test("selected JavaScript API roots remain compile-time qualifiers without native receiver values", () => {
+  const { result, program } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+export function reported(): void {
+  console.log(Math.abs(-2), globalThis.Math.abs(-3));
+}
+` } });
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(row => row.message).join("\n").slice(0, 2048));
+  let qualifiers = 0;
+  const visit = node => {
+    const operation = program.records.targetOperation.get(node);
+    if (operation?.kind === "provider-operation" && operation.abi.sourceReceiver.kind === "compile-time") qualifiers += 1;
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(qualifiers, 3, "console and both selected Math qualifiers carry no runtime receiver");
+});
+
+test("receiver evaluation and target consumption are independent closed ABI decisions", () => {
+  const options = { operationKind: "method", form: { form: "call", path: "fixture::read" },
+    sourceReceiver: { kind: "runtime", carrier: derived }, sourceArgumentCarriers: [],
+    resultCarrier: bool, isAsync: false, isFallible: false };
+  const abi = finalizeRustProviderOperationAbi(options);
+  assert.equal(abi !== undefined, true, "a target-unused runtime receiver is admitted");
+  assert.deepEqual(abi.sourceReceiver, { kind: "receiver", carrier: derived,
+    declaredCarrier: derived, disposition: "evaluation-only" });
+  assert.deepEqual(abi.targetReceiver, { kind: "none" });
+  assert.equal(abi.targetArguments.length, 0, "no fabricated receiver argument");
+  assert.equal(Object.isFrozen(abi.sourceReceiver), true, "published receiver evidence is immutable");
+  for (const [label, sourceReceiver] of [
+    ["consumed disposition without a target use", { ...abi.sourceReceiver, disposition: "runtime" }],
+    ["old compile-time receiver shape", { ...abi.sourceReceiver, disposition: "compile-time" }],
+    ["unknown disposition", { ...abi.sourceReceiver, disposition: "discard-if-pure" }],
+    ["missing carrier", { kind: "receiver", disposition: "evaluation-only" }],
+  ]) assert.equal(validateRustFinalizedOperationAbi({ ...abi, sourceReceiver }), false, label);
+  const qualifier = finalizeRustProviderOperationAbi({ ...options, sourceReceiver: { kind: "compile-time" } });
+  assert.equal(qualifier !== undefined, true, "a checked qualifier needs no runtime carrier");
+  assert.deepEqual(qualifier.sourceReceiver, { kind: "compile-time" });
+  assert.equal(finalizeRustProviderOperationAbi({ ...options, sourceReceiver: { kind: "compile-time" },
+    form: { form: "receiver-method", name: "read" } }) === undefined, true, "a qualifier cannot supply a native receiver value");
+  for (const [label, sourceReceiver] of [
+    ["bare carrier", derived], ["missing carrier", { kind: "runtime" }],
+    ["unknown receiver kind", { kind: "guessed", carrier: derived }],
+    ["qualifier with a runtime payload", { kind: "compile-time", carrier: derived }],
+    ["runtime with extra fields", { kind: "runtime", carrier: derived, extra: true }],
+  ]) assert.equal(finalizeRustProviderOperationAbi({ ...options, sourceReceiver }) === undefined, true, label);
+  assert.equal(finalizeRustProviderOperationAbi({ ...options, sourceReceiver: undefined,
+    sourceReceiverCarrier: derived }) === undefined, true, "the removed carrier-only input is rejected");
+  const template = { kind: "provider-operation", operationId: "fixture.read", operationKind: "method",
+    target: options.form, parameterCarriers: [], resultCarrier: bool, isAsync: false, isFallible: false,
+    errorBoundary: "none" };
+  assert.equal(finalizeProviderOperationFact(template, [], derived, emptyRustTypeDefinitions) === undefined,
+    true, "the removed carrier-only fact finalizer signature is rejected");
+});
+
 test("free-call receiver conversion retains the exact native borrowed-str ABI and rejects mutations", () => {
   const string = rustStringTargetType();
   const borrowed = rustBorrowedStrTargetType();
   for (const form of ["free-call", "free-call-str-slice"]) {
     const selected = { operationKind: "method", form: { form, path: "fixture::read",
       receiverMode: "value", receiverConversion: rustStringToBorrowedStrValueConversion },
-      sourceReceiverCarrier: string, sourceArgumentCarriers: [], resultCarrier: bool,
+      sourceReceiver: { kind: "runtime", carrier: string }, sourceArgumentCarriers: [], resultCarrier: bool,
       isAsync: false, isFallible: false };
     const abi = finalizeRustProviderOperationAbi(selected);
     assert.equal(abi !== undefined, true, form);
@@ -31,7 +86,7 @@ test("free-call receiver conversion retains the exact native borrowed-str ABI an
     assert.deepEqual(input.sourceCarrier, string);
     assert.equal(input.mode, "value");
     for (const [label, mutation] of [
-      ["wrong source", { sourceReceiverCarrier: integer }],
+      ["wrong source", { sourceReceiver: { kind: "runtime", carrier: integer } }],
       ["malformed conversion", { form: { ...selected.form, receiverConversion: { kind: "guessed" } } }],
       ["unknown conversion key", { form: { ...selected.form, receiverConversion: {
         ...rustStringToBorrowedStrValueConversion, extra: true } } }],
@@ -49,8 +104,8 @@ test("free-call receiver conversion retains the exact native borrowed-str ABI an
 });
 
 function options(form, sourceArgumentCarriers = []) {
-  return { operationKind: "method", form, sourceReceiverCarrier: derived,
-    declaredSourceReceiverCarrier: base, sourceArgumentCarriers, resultCarrier: bool,
+  return { operationKind: "method", form, sourceReceiver: { kind: "runtime", carrier: derived,
+    declaredCarrier: base }, sourceArgumentCarriers, resultCarrier: bool,
     isAsync: false, isFallible: false };
 }
 
@@ -75,7 +130,7 @@ test("provider receiver carriers finalize once through the exact declared native
   const template = { kind: "provider-operation", operationId: "fixture.Base.read", operationKind: "method",
     target: { form: "receiver-method", name: "read" }, receiverCarrier: base, parameterCarriers: [],
     resultCarrier: bool, isAsync: false, isFallible: false, errorBoundary: "none" };
-  const fact = finalizeProviderOperationFact(template, [], derived, emptyRustTypeDefinitions);
+  const fact = finalizeProviderOperationFact(template, [], { kind: "runtime", carrier: derived }, emptyRustTypeDefinitions);
   assert.equal(fact !== undefined, true);
   assert.deepEqual(fact.abi.sourceReceiver.declaredCarrier, base);
   assert.equal(fact.abi.targetReceiver.input.conversion.conversion.path, project.path);
@@ -84,11 +139,11 @@ test("provider receiver carriers finalize once through the exact declared native
 test("missing, ambiguous and forged receiver owner evidence rejects before planning", () => {
   const original = options({ form: "receiver-method", name: "read" });
   for (const [label, mutation] of [
-    ["missing projection", { sourceReceiverCarrier: rustNamedTargetType("fixture.Other", "fixture::Other") }],
-    ["ambiguous projection", { sourceReceiverCarrier: rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined,
-      [project, { ...project, path: "fixture::other_base" }]) }],
-    ["missing receiver", { sourceReceiverCarrier: undefined }],
-    ["malformed owner", { declaredSourceReceiverCarrier: {} }],
+    ["missing projection", { sourceReceiver: { ...original.sourceReceiver, carrier: rustNamedTargetType("fixture.Other", "fixture::Other") } }],
+    ["ambiguous projection", { sourceReceiver: { ...original.sourceReceiver, carrier: rustNamedTargetType("fixture.Derived", "fixture::Derived", [], [], undefined,
+      [project, { ...project, path: "fixture::other_base" }]) } }],
+    ["missing receiver", { sourceReceiver: undefined }],
+    ["malformed owner", { sourceReceiver: { ...original.sourceReceiver, declaredCarrier: {} } }],
     ["wrong conversion source", { form: { ...original.form, receiverConversion: {
       kind: "native-upcast", source: derived, target: base, path: project.path } } }],
   ]) assert.equal(finalizeRustProviderOperationAbi({ ...original, ...mutation }) === undefined, true, label);
@@ -111,7 +166,7 @@ test("declared receiver projection composes with its physical borrowed input wit
     [{ target: string, path: "fixture::as_string" }]);
   const abi = finalizeRustProviderOperationAbi({ ...options({ form: "receiver-method", name: "len",
     receiverConversion: rustStringToBorrowedStrValueConversion }),
-    sourceReceiverCarrier: source, declaredSourceReceiverCarrier: string });
+    sourceReceiver: { kind: "runtime", carrier: source, declaredCarrier: string } });
   assert.equal(abi !== undefined, true);
   assert.equal(validateRustFinalizedOperationAbi(abi), true);
   const input = abi.targetReceiver.input;
