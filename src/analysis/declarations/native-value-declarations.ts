@@ -1,5 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { Node_Type } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
@@ -10,7 +11,6 @@ import type { RustLifetimeIndex } from "../../target-model/lifetimes/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
-import type { RustEnumMemberConstantIndex } from "./enum-member-constants.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
@@ -28,7 +28,6 @@ export interface RustNativeValueDeclarationInput {
   readonly projectTypes: RustProjectTypePolicy;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly sourceLifetimes: RustLifetimeIndex;
-  readonly enumMemberConstants: RustEnumMemberConstantIndex;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly typeFamilies: RustSourceTypeFamilyPlan;
 }
@@ -43,6 +42,13 @@ export function admitRustNativeValueDeclaration(
   input: RustNativeValueDeclarationInput,
 ): RustNativeDeclarationAdmission {
   const kind = input.ast.kindName(declaration);
+  if (kind === "KindEnumDeclaration") {
+    const carrier = input.records.runtimeCarrier.get(declaration)?.carrier;
+    const form = carrier === undefined ? undefined : input.typeDefinitions.sourceEnumDefinition(carrier);
+    if (form === undefined) failTargetAnalysisInvariant("tsonic-rust",
+      "An emitted source enum requires its completed early native type definition.", declaration);
+    return { kind: "accepted", form };
+  }
   if (kind === "KindInterfaceDeclaration" && input.records.typeOnlyDeclaration.get(declaration) !== undefined) {
     return { kind: "erased" };
   }
@@ -54,39 +60,8 @@ export function admitRustNativeValueDeclaration(
     return reject(declaration, "RUST_DECLARATION_NAME_NOT_CLOSED",
       "An emitted native declaration requires its exact preserved Rust identifier.");
   }
-  if (kind === "KindEnumDeclaration") return admitEnum(declaration, name, input);
   if (kind === "KindInterfaceDeclaration") return admitInterface(declaration, name, input);
   return admitAlias(declaration, name, input);
-}
-
-function admitEnum(
-  declaration: Node,
-  name: string,
-  input: RustNativeValueDeclarationInput,
-): RustNativeDeclarationAdmission {
-  const members = input.ast.members(declaration);
-  if (!isDenseDataArray(members) || members.some(member => member === undefined)) {
-    return reject(declaration, "RUST_SOURCE_AST_INCOMPLETE", "Enum declaration contains an undefined member slot.");
-  }
-  const variants: { readonly declaration: Node; readonly name: string; readonly discriminant: string }[] = [];
-  const discriminants = new Set<number>();
-  let duplicate = false;
-  for (const member of members as readonly Node[]) {
-    const memberName = input.names.nameForDeclaration(member);
-    if (memberName === undefined || !isValidRustIdentifier(memberName)) {
-      return reject(member, "RUST_ENUM_MEMBER_NAME_NOT_CLOSED", "Enum member names must be valid Rust identifiers.");
-    }
-    const value = input.enumMemberConstants.forMember(member)?.value;
-    if (typeof value !== "number" || !Number.isInteger(value)) {
-      return reject(member, "RUST_ENUM_CONSTANT_NOT_SUPPORTED",
-        "Enum members require integer constants evaluated by TSTS.");
-    }
-    if (discriminants.has(value)) duplicate = true;
-    discriminants.add(value);
-    variants.push(Object.freeze({ declaration: member, name: memberName, discriminant: String(value) }));
-  }
-  return { kind: "accepted", form: Object.freeze({ kind: "enum", name,
-    representation: duplicate ? "constants" : "enum", variants: Object.freeze(variants) }) };
 }
 
 function admitInterface(

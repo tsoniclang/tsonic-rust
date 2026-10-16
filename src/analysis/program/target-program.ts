@@ -37,9 +37,6 @@ import {
   analyzeRustRuntimeReferences,
 } from "../project/index.js";
 import {
-  analyzeRustEnumMemberConstants,
-} from "../declarations/enum-member-constants.js";
-import {
   analyzeRustSourcePackageFacades,
 } from "./source-package-facades.js";
 import {
@@ -419,10 +416,9 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
-  const enumMemberConstants = analyzeRustEnumMemberConstants(context.source, context.sourceFiles);
   const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
-    objectRepresentations, enumMemberConstants, typeFamilies: program.typeFamilies,
+    objectRepresentations, typeFamilies: program.typeFamilies,
     genericRequirements: declarationGenericRequirements.index });
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const reachability = analyzeRustReachability(program);

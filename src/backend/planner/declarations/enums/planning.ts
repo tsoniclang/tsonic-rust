@@ -15,6 +15,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     "Enum emission requires its sealed native declaration admission.", node);
   const enumName = admitted.name;
   const variants = admitted.variants;
+  const integerType = admitted.integerWidth === 32 ? "i32" : "i64";
   const visibility = ast.hasModifierKind(node, "export") ||
       rustProjectTypeHasPublicImplementationAbi(context, enumName)
     ? "public" as const
@@ -35,7 +36,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       generics: emptyRustGenerics,
       fields: [{
         name: "value",
-        type: { kind: "primitive", name: "i64" },
+        type: { kind: "primitive", name: integerType },
         visibility: "private",
         ...(discriminantDeadCode === undefined
           ? {}
@@ -79,7 +80,8 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     name: enumName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
-    attrs: [...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"])],
+    attrs: [rustListAttribute("repr", [rustWordAttribute(integerType)]),
+      ...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"])],
     variants: variants.map((variant) => {
       const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
         context,

@@ -10,7 +10,7 @@ function interfaceFixture(sourceText) {
   return { declaration, source, program, input: { ast: source.ast, records: program.records,
     names: program.names, projectTypes: program.projectTypes, typeDefinitions: program.typeDefinitions,
     sourceLifetimes: program.sourceLifetimes, objectRepresentations: program.objectRepresentations,
-    enumMemberConstants: { forMember: () => undefined }, typeFamilies: program.typeFamilies } };
+    typeFamilies: program.typeFamilies } };
 }
 
 test("a native record admits its exact closed field correspondence", () => {

@@ -82,6 +82,8 @@ test("a repeated enum literal validates the native variant, not just its result 
   const first = current.select(undefined, integer);
   const native = current.builder.targetOperation.get(current.node);
   assert.equal(native.kind, "source-enum-member");
+  assert.equal(native.enumRepresentation.kind, "literal-union", "a literal alias is not a numeric source enum");
+  assert.equal(Object.hasOwn(native.enumRepresentation, "integerWidth"), false, "no fake numeric width is recorded");
   assert.equal(current.select(first, { ...integer }) === first, true);
   assert.deepEqual(current.admissions, { runtime: 1, target: 1, selected: 0 });
   name = "Other";

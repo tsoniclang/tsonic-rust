@@ -3,7 +3,8 @@ import type { RustTargetOperationFact } from "../../target-model/records/operati
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 export function rustEnumLiteralFact(name: string, resultCarrier: TargetTypeRef): RustTargetOperationFact {
-  return { kind: "source-enum-member", operationId: `tsonic.rust.union.variant:${name}`, name, resultCarrier };
+  return { kind: "source-enum-member", operationId: `tsonic.rust.union.variant:${name}`, name,
+    enumRepresentation: { kind: "literal-union" }, resultCarrier };
 }
 
 export function rustUnaryMinusLiteralFact(resultCarrier: TargetTypeRef): RustTargetOperationFact {

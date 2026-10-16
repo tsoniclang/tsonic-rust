@@ -127,7 +127,8 @@ test("literal constructors retain the exact finalized native forms rather than r
   const enumSubject = {};
   builder.targetOperations.enumLiteral(enumSubject, "One", integer);
   assert.deepEqual(builder.targetOperation.get(enumSubject), { kind: "source-enum-member",
-    operationId: "tsonic.rust.union.variant:One", name: "One", resultCarrier: integer });
+    operationId: "tsonic.rust.union.variant:One", name: "One",
+    enumRepresentation: { kind: "literal-union" }, resultCarrier: integer });
   for (const [operationId, kind, construct] of [[rustPostCheckUnaryMinusOperationId, "operator-token", builder.targetOperations.unaryMinusLiteral],
     [rustPostCheckUnaryPlusOperationId, "source-conversion", builder.targetOperations.unaryPlusLiteral]]) {
     const subject = {};

@@ -223,7 +223,7 @@ test("sealed family implementations have completed contracts and missing contrac
   assert.throws(() => analyzeRustNativeDeclarationForms({ ast: source.ast, sourceFiles: program.sourceFiles,
     records: program.records, names: program.names, projectTypes: program.projectTypes,
     typeDefinitions: program.typeDefinitions, sourceLifetimes: program.sourceLifetimes,
-    enumMemberConstants: { forMember: () => undefined }, objectRepresentations: program.objectRepresentations,
+    objectRepresentations: program.objectRepresentations,
     typeFamilies: program.typeFamilies,
     genericRequirements: { ...program.declarationGenericRequirements, contractForCarrier: () => undefined },
   }), error => error instanceof Error && error.message.includes(
