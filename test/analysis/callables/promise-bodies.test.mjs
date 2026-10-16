@@ -4,6 +4,7 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
+import { Node_Expression } from "@tsonic/target-api/source";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
@@ -58,7 +59,7 @@ export const marker = 0;`);
   assert.deepEqual(current.result.diagnostics.map(value => `${value.code}: ${value.message}`), []);
   const declaration = current.named("read");
   assert.equal(current.context.promiseBodies.plan.objects.has(declaration), true);
-  const calls = current.calls.filter(node => current.context.ast.text(node).startsWith("read("));
+  const calls = current.calls.filter(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === "read");
   assert.equal(calls.length, 2);
   assert.equal(calls.filter(node => current.context.records.targetOperation.get(node).asyncBody !== undefined).length, 1);
   assert.equal(calls.filter(node => rustJsPromiseOutputTargetType(current.context.records.targetOperation.get(node).resultCarrier) !== undefined).length, 1);
@@ -76,7 +77,8 @@ async function outer<Region extends Life>(value: Ref<int32, Region>, pending: Pr
 export const marker = 0;`);
   const issues = current.result.diagnostics.filter(value => value.code === "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN");
   assert.equal(issues.length, 1);
-  assert.equal(current.context.ast.text(issues[0].sourceNode), "read(value, pending)");
+  const call = current.calls.find(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === "read");
+  assert.equal(issues[0].sourceNode === call, true);
   assert.equal(current.context.promiseBodies.plan.objects.get(current.named("read")).at === issues[0].sourceNode, true);
 });
 

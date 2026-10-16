@@ -2,6 +2,8 @@ import type { Node } from "@tsonic/tsts";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustErrorEffectsFact, RustNativeErrorEffect } from "../../target-model/records/error-effects.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { mergeRustErrorEffects } from "../errors/error-effects.js";
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 
@@ -60,6 +62,8 @@ export function createRustSourceErrorEffectSelection(walk: RustFactWalk): RustSo
       ...call.awaitErrors.map((errorType, index) => ({ identity: call.awaitErrorSources[index]!, errorType }))]))
       throw new Error("Native input error channels require one exact identity and carrier.");
   }
+  if (!register([{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }]))
+    throw new Error("JS object rejection requires its one canonical identity and carrier.");
   const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, storageBindings) => {
     const signature = walk.context.records.selectedCall.get(node);
     const operation = walk.context.records.targetOperation.get(node);
