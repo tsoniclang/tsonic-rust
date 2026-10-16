@@ -37,7 +37,7 @@ export function snapshots(count: nativeUint, seed: string): Vec<string> {
   const root = writeGeneratedProject("native-capture-ownership", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/captures.rs"), `
-${nativeAllocationSupport}
+${nativeAllocationSupport(root)}
 
 fn handwritten(count: usize, mut seed: usize) -> Vec<usize> {
     (0..count).map(move |value| { seed += value; seed }).collect()

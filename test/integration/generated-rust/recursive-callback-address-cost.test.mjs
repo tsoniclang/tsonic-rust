@@ -105,7 +105,7 @@ for (const [name, selectedProof] of [["addressed-lexical-frame", () => lexicalPr
       const proof = selectedProof(profile);
       runCargo(directory, ["generate-lockfile", "--offline"]);
       runCargo(directory, ["fmt", "--all", "--check"]);
-      appendFileSync(join(directory, "src/index.rs"), `\n#[cfg(test)]\nmod address_cost {\nuse super::*;\n${nativeOwnershipCostSupport}\n${proof}\n}\n`);
+      appendFileSync(join(directory, "src/index.rs"), `\n#[cfg(test)]\nmod address_cost {\nuse super::*;\n${nativeOwnershipCostSupport(directory)}\n${proof}\n}\n`);
       runCargo(directory, ["fmt", "--all"]);
       runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
       runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);

@@ -49,7 +49,7 @@ for (const surfaces of [[], ["js"]]) {
 #[cfg(test)]
 mod handle_costs {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     struct Payload;
 

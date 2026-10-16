@@ -43,7 +43,7 @@ for (const surfaces of [[], ["js"]]) {
     const fallbackValues = surfaces.length === 0 ? 'vec!["fallback".to_owned()]' : 'JsArray::from_dense(vec!["fallback".to_owned()])';
     const mixedValues = surfaces.length === 0 ? 'assert_eq!(mixed, ["before", "fallback", "after"]);'
       : 'assert_eq!(mixed.get(0), Some("before".to_owned())); assert_eq!(mixed.get(1), Some("fallback".to_owned())); assert_eq!(mixed.get(2), Some("after".to_owned()));';
-    writeFileSync(join(root, "tests/selection.rs"), `${nativeOwnershipCostSupport}
+    writeFileSync(join(root, "tests/selection.rs"), `${nativeOwnershipCostSupport(root)}
 use borrowed_nullish_sequences as index;
 ${surfaces.length === 0 ? "" : "use tsonic_rust_js::JsArray;"}
 

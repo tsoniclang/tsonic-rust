@@ -51,7 +51,7 @@ test("retained generic method reads and invocation add no per-operation allocati
   assert.deepEqual(result.diagnostics.map(({ code, message }) => ({ code, message })), []);
   const root = writeGeneratedProject("retained-generic-method-cost", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/cost.rs"), `${nativeAllocationSupport}
+  writeFileSync(join(root, "tests/cost.rs"), `${nativeAllocationSupport(root)}
 fn retained_read_cost(count: f64) -> (usize, usize) {
     let (result, observed) = allocation_counts::measure(|| {
         std::hint::black_box(retained_methods::index::retainedReads(std::hint::black_box(count))).unwrap()

@@ -87,7 +87,7 @@ export function run(): boolean {
     mkdirSync(join(root, "tests"), { recursive: true });
     const carrier = js ? "js_abi::JsValue" : "rt::TsValue";
     const storage = js ? "js_abi::JsArray::from_dense(values)" : "values";
-    writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+    writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use ${crateName}::index;
 use tsonic_rust_runtime as rt;
 ${js ? "use tsonic_rust_js::abi as js_abi;" : ""}

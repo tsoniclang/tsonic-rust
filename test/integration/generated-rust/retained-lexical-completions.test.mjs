@@ -49,7 +49,7 @@ test("an owned lexical future matches handwritten move, allocation and release c
 #[cfg(test)]
 mod retained_lexical_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     fn handwritten(value: String) -> js_abi::JsPromise<String> {
         js_abi::JsPromise::resolved(value)

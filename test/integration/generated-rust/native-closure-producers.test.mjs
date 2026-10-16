@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { realpathSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nativeClosureProducerFixture, printNativeClosureProducer, nativeClosureProducerFailurePackage }
   from "../../helpers/native-closure-producers.mjs";
@@ -22,7 +22,7 @@ const javascript = resolve(workspace, "rust-js/crates/tsonic_rust_js");
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
 const promiseFailure = rustNamedTargetType("fixture:PromiseFailure", "PromiseFailure", []);
 
-function fixtureSource() {
+function fixtureSource(projectRoot) {
   const pureFixture = nativeClosureProducerFixture();
   const pure = printNativeClosureProducer(pureFixture);
   const throws = printNativeClosureProducer(nativeClosureProducerFixture({
@@ -83,7 +83,7 @@ use tsonic_rust_runtime as rt;
 use tsonic_rust_js::abi as js_abi;
 use core::convert::Infallible;
 
-${nativeOwnershipCostSupport}
+${nativeOwnershipCostSupport(projectRoot)}
 
 #[derive(Debug, PartialEq, Eq)]
 struct ProducerFailure(core::marker::PhantomPinned);
@@ -173,8 +173,9 @@ tsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }
 [lints.rust]
 unexpected_cfgs = { level = "deny", check-cfg = [${controls.map(control => JSON.stringify(`cfg(${control})`)).join(", ")}] }
 ` },
-    { path: "src/main.rs", text: fixtureSource() },
   ]);
+  mkdirSync(join(project, "src"), { recursive: true });
+  writeFileSync(join(project, "src/main.rs"), fixtureSource(project));
   runCargo(project, ["generate-lockfile", "--offline"]);
   runCargo(project, ["rustc", "--offline", "--locked", "--", "-D", "warnings"]);
   assert.match(runCargo(project, ["run", "--offline", "--locked", "--quiet"]).stdout, /PASS: producer-owned closure errors/u);

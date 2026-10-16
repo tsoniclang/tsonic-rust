@@ -22,7 +22,7 @@ for (const surfaces of [[], ["js"]]) test(`escaped fixed field self releases the
 #[cfg(test)]
 mod fixed_field_owner_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn distinct_escaped_entries_have_only_their_own_allocation_and_release_it() {

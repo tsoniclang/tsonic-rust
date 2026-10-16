@@ -60,7 +60,7 @@ export function looped<Value>(status: Result<int32, int32>, count: nativeUint, s
   assert.doesNotMatch(output, /Location::|Cell::|Callable::/u);
   const root = writeGeneratedProject("once-owned-inputs", result.artifacts);
   mkdirSync(join(root, "tests"), { recursive: true });
-  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
+  writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport(root) + `
 use once_owned_inputs::index;
 use std::cell::Cell;
 

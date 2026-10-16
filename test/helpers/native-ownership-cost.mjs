@@ -1,14 +1,21 @@
+import { copyFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const allocationSupport = fileURLToPath(new URL("../../../rust-runtime/tests/helpers/allocation_counts.rs", import.meta.url));
 
-export const nativeAllocationSupport = `
-#[path = ${JSON.stringify(allocationSupport)}]
+export function nativeAllocationSupport(projectRoot) {
+  const projectSupport = join(projectRoot, "allocation_counts.rs");
+  copyFileSync(allocationSupport, projectSupport);
+  return `
+#[path = ${JSON.stringify(projectSupport)}]
 pub mod allocation_counts;
 `;
+}
 
-export const nativeOwnershipCostSupport = `
-${nativeAllocationSupport}
+export function nativeOwnershipCostSupport(projectRoot) {
+  return `
+${nativeAllocationSupport(projectRoot)}
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Cost {
     allocations: usize,
@@ -29,3 +36,4 @@ fn measure<Value>(operation: impl FnOnce() -> Value) -> (Value, Cost) {
     })
 }
 `;
+}

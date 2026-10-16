@@ -42,7 +42,7 @@ test("an open callback input borrows its exact producer with handwritten stack-a
 #[cfg(test)]
 mod input_domain_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     #[test]
     fn borrowed_callback_has_no_extra_allocation_or_string_copy() {
