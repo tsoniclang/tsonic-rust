@@ -714,8 +714,9 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (rustFrameCallableValue(callableCarrier) !== undefined && frameEntry === undefined) {
         return "A frame call has no exact sealed implementation entry for its generic obligations.";
       }
-      const genericPhysicalDefinition = genericDefinition === undefined || callableCarrier === undefined ? undefined
-        : input.genericCallables.physical.definitionFor(callableCarrier);
+      const genericInvocation = genericDefinition === undefined ? undefined : records.genericCallableInvocation.get(node);
+      const genericPhysicalDefinition = genericInvocation === undefined ? undefined
+        : input.genericCallables.physical.definitionFor(genericInvocation.carrier);
       if (genericDefinition !== undefined && genericPhysicalDefinition === undefined) {
         return "A quantified call has no exact physical implementation family for its generic obligations.";
       }
@@ -759,8 +760,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.identity, targetTypeArguments[index]!] as const));
-            const memberBindings = "implementation" in selectedCallee && genericPhysicalDefinition !== undefined && callableCarrier !== undefined
-              ? rustGenericCallableMemberInvocationBindings(genericPhysicalDefinition, selectedCallee, callableCarrier,
+            const memberBindings = "implementation" in selectedCallee && genericPhysicalDefinition !== undefined && genericInvocation !== undefined
+              ? rustGenericCallableMemberInvocationBindings(genericPhysicalDefinition, selectedCallee, genericInvocation.carrier,
                 operation.targetGenericArguments ?? [], { ast, sourceLifetimes: input.sourceLifetimes,
                   physical: input.genericCallables.physical }) : undefined;
             if ("implementation" in selectedCallee && memberBindings === undefined) {
