@@ -13,10 +13,8 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import { rustTargetOperationText } from "../../../analysis/operations/target-operation.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
-import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustAssignmentWrite } from "../statements/expression-statements.js";
 import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
@@ -111,17 +109,10 @@ export function planNullishAssignment(
     writes = planRustAssignmentWrite(node, left, right, fact.assignment, selectedContext);
   }
   if (writes === undefined) return undefined;
-  let assigned: RustExpr = resultUse === "value" ? valuePath : unit;
-  for (const statement of [...writes].reverse()) {
-    const effect = statement.kind === "expr" ? statement.expr
-      : statement.kind === "assign" ? { ...statement, kind: "assignment" as const } : undefined;
-    if (effect === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-        "rust.backend.nullish-assignment-write", "Nullish assignment requires an exact store in its conditional evaluation region."));
-      return undefined;
-    }
-    assigned = { kind: "evaluate-then", effect, discard: "unit", value: assigned };
-  }
+  const assigned: RustExpr = {
+    kind: "block",
+    body: { statements: [...writes, { kind: "tail", expr: resultUse === "value" ? valuePath : unit }] },
+  };
   const presentName = allocateRustSyntheticName(names, "present_value");
   const present: RustExpr = { kind: "path", path: presentName };
   return rustValueBlock(bindings, planRustOptionBranch(
