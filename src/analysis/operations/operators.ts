@@ -314,7 +314,7 @@ function contextualLiteralOperandCarrier(
   if (kind === KindNumericLiteral && isRustBigIntCarrier(counterpart) ||
     kind === KindBigIntLiteral && isRustNumericCarrier(counterpart) &&
       (counterpart.name === "float64" || counterpart.name === "float32")) return undefined;
-  if (kind === KindNumericLiteral && isRustIntegerCarrier(counterpart) &&
+  if (kind === KindNumericLiteral && isRustNumericCarrier(counterpart) &&
     !selectedSourceLiteralIsRepresentable(expression, counterpart.name, ast)) return undefined;
   return counterpart;
 }
