@@ -13,11 +13,11 @@ import { selectRustParameterEntryConversion } from "../../policy/ownership/param
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
 function checkedCallableInputs(walk: RustFactWalk, expression: Node): readonly {
-  readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef;
+  readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly carrier: TargetTypeRef;
 }[] | undefined {
   const arguments_ = sourceClosedCallableArguments(expression, walk.context.source);
   if (arguments_ === undefined) return undefined;
-  const contexts: { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef }[] = [];
+  const contexts: { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
   for (const argument of arguments_) {
     const semantics = walk.context.semanticsFor(argument.call);
     const checked = semantics.operations.call(argument.call);
@@ -27,10 +27,11 @@ function checkedCallableInputs(walk: RustFactWalk, expression: Node): readonly {
       argument.argumentIndex, rustOperationContext(walk, argument.call), walk.operationOptions,
     );
     const optional = rustOptionElementCarrier(selected);
-    const callable = rustCallableProtocol(selected) ?? rustClosureProtocol(selected) ??
-      rustCallableProtocol(optional) ?? rustClosureProtocol(optional);
-    if (callable === undefined) return undefined;
-    contexts.push(callable);
+    const selectedCallable = rustCallableProtocol(selected) ?? rustClosureProtocol(selected);
+    const callableCarrier = selectedCallable === undefined ? optional : selected;
+    const callable = selectedCallable ?? rustCallableProtocol(optional) ?? rustClosureProtocol(optional);
+    if (callable === undefined || callableCarrier === undefined) return undefined;
+    contexts.push({ ...callable, carrier: callableCarrier });
   }
   return contexts;
 }
@@ -73,8 +74,12 @@ export function selectRustClosedCallableContext(
     if (broad[index]) return input;
     return selectRustParameterEntryConversion(input, type, walk.context.typeDefinitions) === undefined ? undefined : input;
   });
+  const nativeContext = contexts[0]?.carrier;
+  const nativeProtocol = rustCallableProtocol(nativeContext);
+  const matchingContext = nativeProtocol?.error !== undefined && contexts.every(context =>
+    rustTargetTypeRefEquals(rustCallableProtocol(context.carrier)?.error, nativeProtocol.error));
   return selected.some(type => type === undefined) ? carrier
-    : rebindRustCallableCarrier(carrier, selected as readonly TargetTypeRef[], contextualResult);
+    : rebindRustCallableCarrier(matchingContext ? nativeContext! : carrier, selected as readonly TargetTypeRef[], contextualResult);
 }
 
 function concrete(type: TargetTypeRef): boolean {
