@@ -230,6 +230,7 @@ function nativeProof(caseInput) {
 #[cfg(test)]
 mod recursive_callback_lifetime_cost {
     use super::*;
+    use std::cell::Cell;
     ${nativeOwnershipCostSupport}
     ${frameRootReference}
     ${caseInput.reference}

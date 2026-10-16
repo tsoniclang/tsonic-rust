@@ -62,6 +62,7 @@ export function looped<Value>(status: Result<int32, int32>, count: nativeUint, s
   mkdirSync(join(root, "tests"), { recursive: true });
   writeFileSync(join(root, "tests/ownership.rs"), nativeOwnershipCostSupport + `
 use once_owned_inputs::index;
+use std::cell::Cell;
 
 #[derive(Default)]
 struct Observations {
