@@ -18,7 +18,7 @@ import {
   rustActiveErrorType,
 } from "../program/plan-context.js";
 import { rustPackageFallibleBoundary, rustLocalErrorOwner, rustInjectLocalError } from "../program/fallible-boundaries.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planBlockLike } from "./core.js";
 import { planExpression } from "../expressions/index.js";
 import { effectivePlannedExpressionCarrier } from "../expressions/fundamentals.js";
@@ -58,12 +58,10 @@ export function planThrowStatement(node: Node, context: RustPlanContext): readon
   }
   const expression = Node_Expression(context.input.program.source.ast, node);
   if (expression === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.throw-shape",
+    failRustPlannerInvariant(
       "Finalized throw fact has no exact source expression.",
-    ));
-    return undefined;
+      node,
+    );
   }
   const carrier = fact.error.kind === "conversion" ? fact.error.conversion.source : fact.error.carrier;
   if (fact.error.expression !== expression ||
@@ -111,20 +109,16 @@ export function planTryStatement(node: Node, context: RustPlanContext): readonly
   const catchBlock = CatchClause_Block(context.input.program.source.ast, catchClause);
   const finallyBlock = TryStatement_FinallyBlock(context.input.program.source.ast, node);
   if (tryBlock === undefined || (catchBlock === undefined && finallyBlock === undefined)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.error.try",
+    failRustPlannerInvariant(
       "try statements require a finalized body and either catch or finally clause.",
-    ));
-    return undefined;
+      node,
+    );
   }
   if (context.syntheticNames === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.try-names",
+    failRustPlannerInvariant(
       "Try statement lowering requires a finalized hygienic-name scope.",
-    ));
-    return undefined;
+      node,
+    );
   }
 
   const outwardFallible = context.fallibleBoundary !== undefined;

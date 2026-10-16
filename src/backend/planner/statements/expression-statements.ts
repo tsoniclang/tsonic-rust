@@ -36,7 +36,7 @@ import {
   rustStringPushStrMethod,
 } from "../../../target-model/syntax/tokens.js";
 import { isRustStringCarrier } from "../../../target-model/types/index.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression, sourceFieldSelectedOperationMatches, sourceUnionFieldSelectedOperationMatches } from "../expressions/index.js";
 import { planRuntimeSetStatement, selectedOperatorMatches } from "./iteration.js";
 import { planRustCompoundAssignmentValue, planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment, planRustSourceIndexAssignment, planRustSourceMethodPropertyAssignment, planRustSourceStaticFieldAssignment } from "./assignments.js";
@@ -500,12 +500,10 @@ export function planRustAssignmentWrite(
       return undefined;
     }
     if (context.syntheticNames === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, left),
-        "rust.backend.project-field-temporary",
+      failRustPlannerInvariant(
         "Project-source field assignment requires a finalized hygienic-name scope.",
-      ));
-      return undefined;
+        left,
+      );
     }
     const dispatchPlan = sourceField.dispatch === undefined
       ? undefined
@@ -738,12 +736,10 @@ export function planRustAssignmentWrite(
       );
     }
     if (context.syntheticNames === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, expression),
-        "rust.backend.string-append-temporary",
+      failRustPlannerInvariant(
         "String compound assignment requires one finalized hygienic-name scope.",
-      ));
-      return undefined;
+        expression,
+      );
     }
     const currentName = allocateRustSyntheticName(context.syntheticNames, "current");
     const concatenated = rustStringConcat([

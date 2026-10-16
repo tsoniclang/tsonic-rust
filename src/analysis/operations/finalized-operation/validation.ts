@@ -9,7 +9,7 @@ import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEqua
 import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
 import type { RustFinalizedOperationAbi, RustFinalizedOperationResult, RustFinalizedSourceArgument, RustFinalizedSourceArgumentRole, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
-import type { RustProviderConstantArgument } from "../../../target-model/operations/model.js";
+import type { RustProviderChainStep, RustProviderConstantArgument, RustProviderOperationForm } from "../../../target-model/operations/model.js";
 import { rustLengthEmptinessContractIsValid } from "../../../target-model/operations/length-emptiness.js";
 import { isFinalizedConversion } from "./conversion-shape.js";
 import { hasExactKeys, isRecord } from "./validation-records.js";
@@ -17,7 +17,15 @@ import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustResolvedDispatchContextInput } from "../../../policy/operations/dispatch-contexts.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
 
-export function validateRustFinalizedOperationAbi(candidate: unknown, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): candidate is RustFinalizedOperationAbi {
+export function validateRustFinalizedOperationAbi(
+  candidate: unknown,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+): candidate is RustFinalizedOperationAbi & {
+  readonly target: Exclude<RustProviderOperationForm, { readonly form: "call" }> |
+    (Omit<Extract<RustProviderOperationForm, { readonly form: "call" }>, "chain"> & {
+      readonly chain?: readonly Extract<RustProviderChainStep, { readonly kind: "method" }>[];
+    });
+} {
   if (!isClosedMetadata(candidate) || !isRustFinalizedOperationAbiShape(candidate)) {
     return false;
   }
