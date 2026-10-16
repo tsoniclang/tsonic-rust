@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
+import * as backendNames from "../../../dist/backend/planner/names/source-output-identities.js";
 
 function declarationNamed(source, name) {
   const file = source.getSourceFile("/src/index.ts");
@@ -30,6 +31,8 @@ export enum Aliased { firstValue = 1, secondValue = 1 }
   assert.equal(program.nativeDeclarations.get(ordinaryNode) === ordinary, true, "reader returns the identical sealed form");
   assert.equal(Object.isFrozen(ordinary) && Object.isFrozen(ordinary.variants), true, "admitted declaration data is immutable");
   assert.equal(Object.isFrozen(program.nativeDeclarations), true, "published declaration reader is frozen");
+  assert.equal(Object.hasOwn(program, "enumMemberConstants"), false,
+    "the superseded backend constant-reader route is not published alongside declaration admission");
 });
 
 test("unsupported enum constant domains reject before backend planning", () => {
@@ -120,6 +123,8 @@ test("source-output identities are published once with the analyzed program", ()
     "consumers receive the identical selected identity without running a selector");
   assert.equal(Object.isFrozen(identity) && Object.isFrozen(identity.moduleSegments), true,
     "published identity and path data are immutable");
+  assert.equal(Object.hasOwn(backendNames, "planRustSourceOutputIdentities"), false,
+    "the superseded backend source-identity selector is removed, not retained as an alias");
 });
 
 test("computed member names consume the shared checked key and existing collision inventory", () => {
