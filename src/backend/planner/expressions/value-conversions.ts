@@ -12,6 +12,7 @@ import {
   diagnosticInput,
   registerAliasFromPath,
   rustActiveErrorType,
+  rustCurrentErrorBoundary,
 } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
@@ -127,7 +128,7 @@ export function lowerRustValueConversion(
 ): RustExpr | undefined {
   switch (contract.lowering) {
     case "program-error-closed-value":
-      return planRustProgramErrorClosedValue(source, contract.target, node, context);
+      return planRustProgramErrorClosedValue(source, contract.target, node, context, rustCurrentErrorBoundary(context));
     case "program-error":
       return planRustProgramErrorConstruction({ kind: "program-error", source: contract.source,
         target: contract.target, route: contract.route }, source, node ?? context.sourceFile, context);
