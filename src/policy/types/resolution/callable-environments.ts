@@ -27,7 +27,7 @@ export function resolveRustCallableEnvironment(
     const refinement = context.source.semantics.selectValueTypeRefinement(reference);
     if (refinement.kind === "unresolved") return undefined;
     const type = refinement.kind === "resolved" ? refinement.declaredType : semantics.types.expressionType(reference);
-    const selected = context.sourceStorage.subjectFor(reference);
+    const selected = context.sourceStorage.storageSubjectFor(reference);
     if (selected.kind === "unresolved") return undefined;
     let carrier: TargetTypeRef | undefined;
     if (selected.subject.kind === "input") {

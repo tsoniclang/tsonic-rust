@@ -414,7 +414,7 @@ export function createRustNativeStorageQueries(input: {
           if (field === undefined) return fail("Native aggregate storage requires its exact structural field layout owner.");
           if (sourceField.method === true) {
             if (field.methodStorageCarrier === undefined)
-              return fail("Native aggregate method storage requires its canonical callable field layout.");
+              return fail("Native aggregate method storage requires its canonical callable field layout owner.");
             continue;
           }
           const nested = containsCallable(sourceField.type, depth + 1);
