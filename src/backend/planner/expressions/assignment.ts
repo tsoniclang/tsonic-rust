@@ -55,20 +55,8 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
   });
   const statements = planExpressionAsStatement(node, { ...context, expressionOverrides: overrides });
   if (statements === undefined) return undefined;
-  let expression: RustExpr = result;
-  for (const statement of [...statements].reverse()) {
-    const effect: RustExpr | undefined = statement.kind === "expr" ? statement.expr
-      : statement.kind === "assign" ? { ...statement, kind: "assignment" }
-      : undefined;
-    if (effect === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.assignment-value-write",
-        "An assignment value requires a finalized write expression in the current evaluation region.",
-      ));
-      return undefined;
-    }
-    expression = { kind: "evaluate-then", effect, discard: "unit", value: expression };
-  }
-  return rustValueBlock([{ name: resultName, type }], expression);
+  return rustValueBlock([{ name: resultName, type }], {
+    kind: "block",
+    body: { statements: [...statements, { kind: "tail", expr: result }] },
+  });
 }

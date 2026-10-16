@@ -12,10 +12,8 @@ import type { Node } from "@tsonic/tsts";
 import { rustTargetOperationIsDirectLocation } from "../../../analysis/operations/target-operation.js";
 import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
-import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
 import type { RustAssignmentOperationFact } from "../statements/core.js";
@@ -108,19 +106,8 @@ export function planCompoundAssignmentExpression(
       resultCarrier: fact.resultCarrier, operandModes: ["mut-ref", "value"] }, selected)
     : locationWrite === undefined ? undefined : [{ kind: "expr" as const, expr: locationWrite }];
   if (writes === undefined) return undefined;
-  let expression: RustExpr = result;
-  for (const statement of [...writes].reverse()) {
-    const effect: RustExpr | undefined = statement.kind === "expr" ? statement.expr
-      : statement.kind === "assign" ? { ...statement, kind: "assignment" }
-      : statement.kind === "index-assign" ? { kind: "assignment", operator: "=",
-          target: { kind: "index", receiver: statement.receiver, index: statement.index }, value: statement.value }
-      : undefined;
-    if (effect === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-        "rust.backend.compound-assignment-write", "A compound assignment result requires its exact store in the same evaluation region."));
-      return undefined;
-    }
-    expression = { kind: "evaluate-then", effect, discard: "unit", value: expression };
-  }
-  return rustValueBlock(bindings, expression);
+  return rustValueBlock(bindings, {
+    kind: "block",
+    body: { statements: [...writes, { kind: "tail", expr: result }] },
+  });
 }
