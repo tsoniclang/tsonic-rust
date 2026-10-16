@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { analyzeRust, acmeVectorsPackage } from "../../helpers/rust-session.mjs";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 import { createInputFactory, finalizeSourceArguments } from "../../../dist/analysis/operations/finalized-operation/inputs.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
@@ -32,6 +33,33 @@ const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
+
+test("a real closed Vector.add ABI owns exact binary-trait admission", () => {
+  const { program } = analyzeRust({ packages: [acmeVectorsPackage()], files: { "index.ts": `
+import { Vector } from "@acme/vectors";
+export function add(left: Vector, right: Vector): Vector { return Vector.add(left, right); }
+` } });
+  const operations = [];
+  const visit = node => {
+    const fact = program.records.targetOperation.get(node);
+    if (fact?.kind === "provider-operation" && fact.abi.target.form === "binary-operator") operations.push(fact.abi);
+    for (const child of program.source.ast.children(node)) visit(child);
+  };
+  for (const file of program.sourceFiles) visit(file);
+  assert.equal(operations.length, 1, "one real selected binary operation");
+  const abi = operations[0];
+  assert.equal(abi.target.operator, "+");
+  assert.equal(abi.target.trait, "core::ops::Add");
+  assert.equal(abi.sourceArguments.length, 2);
+  assert.equal(isClosedMetadata(abi), true, "the real producer published valid closed metadata");
+  assert.equal(validateRustFinalizedOperationAbi(abi, program.typeDefinitions), true);
+  const wrongTrait = snapshotClosedMetadata({ ...abi, target: { ...abi.target, trait: "core::ops::Sub" } });
+  assert.equal(isClosedMetadata(wrongTrait), true, "the negative differs in the trait, not metadata validity");
+  assert.equal(wrongTrait.target.operator, abi.target.operator);
+  assert.equal(wrongTrait.sourceArguments.length, abi.sourceArguments.length);
+  assert.equal(validateRustFinalizedOperationAbi(wrongTrait, program.typeDefinitions), false,
+    "the canonical earlier ABI validator rejects the closed wrong-trait operation");
+});
 
 test("native target-input fanout has one source row and rejects mixed source modes", () => {
   const factory = createInputFactory(undefined, [int32]);
