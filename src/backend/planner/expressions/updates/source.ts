@@ -32,6 +32,7 @@ import { planRustComputedMemberExpression } from "../computed-members.js";
 import { planRustSourceAccessorReceiver } from "../../objects/accessor-receivers.js";
 
 import { planRustRuntimeIndexUpdate } from "./runtime.js";
+import { rustTargetOperationText } from "../../../../analysis/operations/target-operation.js";
 
 export function planUnaryExpression(
   node: Node,
@@ -49,7 +50,7 @@ export function planUnaryExpression(
       fact.operationId,
       "operator",
       fact.resultCarrier,
-      fact.operationId,
+      rustTargetOperationText(fact),
     )) {
       context.diagnostics.push(missingFactDiagnostic(
         diagnosticInput(context, node),
