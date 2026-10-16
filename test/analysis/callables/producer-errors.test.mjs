@@ -6,14 +6,15 @@ import { selectRustProducerError } from "../../../dist/analysis/callables/produc
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 
-function fixture() {
+function fixture(surfaces = []) {
   const context = analyzeRustErrorEffects(`
     export async function pure(): Promise<string> { return "value"; }
     export async function failed(): Promise<string> { throw "failure"; }
     export function forward(): Promise<string> { return failed(); }
     export function invoke(callback: () => string): string { return callback(); }
-  `);
+  `, { surfaces });
   const producers = context.callableValues.nativeProducers;
   const producer = name => producers.producers.find(candidate => {
     const selected = context.ast.name(candidate.declaration);
@@ -42,6 +43,17 @@ test("producer error selection uses the actual declaration and distinct invocati
   assert.equal(rustTargetTypeRefEquals(forwarded.carrier,
     current.input.producers.deferredErrorFor(current.producer("forward").declaration, 0)), true,
   "synchronous forwarding reuses the exact deferred channel owner");
+});
+
+test("JS Promise producer completions expose one rejection value independent of body errors", () => {
+  const current = fixture(["js"]);
+  for (const name of ["pure", "failed", "forward"]) {
+    const completion = selectRustProducerError(current.reference(name, 0), current.input);
+    assert.equal(completion?.kind, "carrier", name);
+    assert.equal(rustTargetTypeRefEquals(completion.carrier, rustJsValueTargetType()), true, name);
+    const invocation = selectRustProducerError(current.reference(name, "invoke"), current.input);
+    if (name !== "forward") assert.equal(invocation.carrier.id, "rust.core.Infallible", name);
+  }
 });
 
 test("producer error selection substitutes the exact captured native implementation rather than its signature", () => {

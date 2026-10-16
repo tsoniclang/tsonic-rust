@@ -1,5 +1,6 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
-import { Node_Expression } from "@tsonic/target-api/source";
+import { Node_Expression, isSourceCallableBodyBoundary, TryStatement_CatchClause,
+  TryStatement_TryBlock } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -13,6 +14,9 @@ import type { RustProgramErrorRoute } from "../../target-model/conversions/progr
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
 import { rustFlowReadProjectionMatches } from "../control-flow/flow-read-projections.js";
+import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 
 export interface RustClosedErrorTransportDemand {
   readonly thrownCarriers: readonly TargetTypeRef[];
@@ -87,6 +91,24 @@ export function rustClosedErrorTransportDemand(
       retained = true;
     }
     const operation = records.targetOperation.get(node);
+    if (ast.kindName(node) === "KindAwaitExpression") {
+      const operand = Node_Expression(ast, node);
+      const topology = operand === undefined ? undefined
+        : rustAwaitSelection(records.runtimeCarrier.get(operand)?.carrier, definitions);
+      if (topology !== undefined && rustAwaitSelectionLeaves(topology).some(leaf =>
+        leaf.future !== undefined && rustJsPromiseOutputTargetType(leaf.carrier) !== undefined)) {
+        let child = node;
+        let depth = 0;
+        for (let parent = ast.parent(child); parent !== undefined; child = parent, parent = ast.parent(parent)) {
+          if (++depth > 2048) return undefined;
+          if (isSourceCallableBodyBoundary(ast, parent)) break;
+          if (TryStatement_TryBlock(ast, parent) === child && TryStatement_CatchClause(ast, parent) !== undefined) {
+            collect(rustJsValueTargetType(), { kind: "closed" });
+            break;
+          }
+        }
+      }
+    }
     if (ast.kindName(node) === "KindThrowStatement" && operation?.kind === "throw-op" &&
       operation.error.kind === "conversion" && operation.error.expression === Node_Expression(ast, node)) {
       const conversion = operation.error.conversion;
