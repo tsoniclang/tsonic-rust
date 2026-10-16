@@ -251,14 +251,19 @@ function loadRustAsyncCompletion(
 }
 
 function expressionSuspension(walk: RustFactWalk, expression: Node): "ready" | "suspending" | "pending" {
-  const selection = expressionAwaitSelection(walk, expression);
+  const carrier = expressionCarrier(walk, expression);
+  if (carrier?.kind === "type-parameter") return "ready";
+  const selection = rustAwaitSelection(carrier, walk.context.typeDefinitions);
   return selection === undefined ? "pending" : rustAwaitSelectionLeaves(selection).some(leaf => leaf.future !== undefined)
     ? "suspending" : "ready";
 }
 
 function expressionAwaitSelection(walk: RustFactWalk, expression: Node): RustAwaitSelection | undefined {
+  return rustAwaitSelection(expressionCarrier(walk, expression), walk.context.typeDefinitions);
+}
+
+function expressionCarrier(walk: RustFactWalk, expression: Node): TargetTypeRef | undefined {
   const type = walk.context.semanticsFor(expression).types.expressionType(expression);
-  const carrier = type === undefined ? undefined
+  return type === undefined ? undefined
     : resolveRustTargetTypeRef(type, rustResolutionContext(walk, expression), walk.operationOptions);
-  return carrier === undefined ? undefined : rustAwaitSelection(carrier, walk.context.typeDefinitions);
 }
