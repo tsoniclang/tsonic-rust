@@ -35,7 +35,7 @@ for (const [name, statement, driver] of [
 ]) {
   test(`${name} JS binary enters one owner and returns its orderly exit status`, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
-      files: { "index.ts": statement } });
+      files: { "index.ts": `export {}; ${statement}` } });
     assert.deepEqual(result.diagnostics.map(({ code, message }) => `${code}: ${message}`), []);
     const main = artifactText(result, "src/main.rs");
     assert.equal(result.program.binaryExecution.kind, "owned");
