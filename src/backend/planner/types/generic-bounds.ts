@@ -28,7 +28,8 @@ export function rustGenericRequirementBounds(requirements: readonly RustGenericR
   return Object.freeze(requirements.map((requirement): RustTypeBound => requirement === "static"
     ? { kind: "lifetime", lifetime: { kind: "static" } }
     : { kind: "trait", path: requirement === "clone" ? "Clone" : requirement === "default" ? "Default"
-      : requirement === "number-predicate" ? "js_abi::NativeNumberPredicate" : "js_abi::SourceNumeric" }));
+      : requirement === "number-predicate" ? "js_abi::NativeNumberPredicate"
+      : requirement === "js-rejection" ? "Into<tsonic_rust_runtime::RetainedError>" : "js_abi::SourceNumeric" }));
 }
 
 export function rustTypeParameterBounds(
