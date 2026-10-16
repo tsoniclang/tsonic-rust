@@ -4,7 +4,7 @@ import {
   isClosedMetadata,
   closedMetadataKey,
 } from "../../metadata/closed-data.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals, rustNativeTraitTypeRefEquals } from "../equality.js";
 import { rustBigIntTargetId, rustNamedTypeCarrierName, rustNeverCarrierName, rustAbsenceTargetId, rustStringTargetId, rustStrTargetId, rustTsValueTargetId} from "./source-types.js";
 import { rustEmptyObjectTargetId, rustObjectIdentityTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId } from "./source-types.js";
 import type { SourcePrimitiveKind } from "@tsonic/tsts";
@@ -19,7 +19,6 @@ import type {
 } from "../model.js";
 import { rustTargetGenericTypeArguments } from "../generic-arguments.js";
 import { isRustLifetimeRef } from "../../lifetimes/index.js";
-import { mapRustTargetTypes } from "./substitution.js";
 
 export function rustSourcePrimitiveTargetType(kind: SourcePrimitiveKind): TargetTypeRef {
   return { kind: "source-primitive", name: kind };
@@ -307,13 +306,7 @@ export function rustNativeTraitRef(
 }
 
 export function rustNativeTraitRefEquals(actual: RustTargetTraitRef, required: RustTargetTraitRef): boolean {
-  if (actual.path !== required.path || !isRustTargetTypeRef(actual) || !isRustTargetTypeRef(required)) return false;
-  const nativeIdentity = (type: TargetTypeRef): TargetTypeRef => {
-    if (type.kind === "trait-ref") return { ...type, id: type.path };
-    const named = rustNamedTypeCarrierValue(type);
-    return named === undefined ? type : rustNamedTargetType(named.id, named.path, named.genericArguments, named.genericDefaults);
-  };
-  return rustTargetTypeRefEquals(mapRustTargetTypes(actual, nativeIdentity), mapRustTargetTypes(required, nativeIdentity));
+  return rustNativeTraitTypeRefEquals(actual, required);
 }
 
 export function rustNamedTraitRequirementKey(requirement: RustNamedTypeTraitRequirement): string {

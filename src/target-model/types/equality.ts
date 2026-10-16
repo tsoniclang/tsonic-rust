@@ -7,6 +7,7 @@ import type {
   RustSelectedTargetOperation,
   RustTargetConstArgument,
   RustTargetGenericArgument,
+  RustTargetTraitRef,
   RustTargetTypeRef,
 } from "../../target-model/types/model.js";
 import {
@@ -49,6 +50,11 @@ export function rustTargetTypeRefEqualsWithinLifetimeBinders(
     emptyLifetimeEqualityContext,
   );
   return context !== undefined && rustTargetTypeRefEqualsValidated(left, right, context);
+}
+
+export function rustNativeTraitTypeRefEquals(left: RustTargetTraitRef, right: RustTargetTraitRef): boolean {
+  return isRustTargetTypeRef(left) && isRustTargetTypeRef(right) &&
+    rustTargetTypeRefEqualsValidated(left, right, { ...emptyLifetimeEqualityContext, nativeTraitIdentity: true });
 }
 
 export function isRustTargetTypeRef(value: unknown): value is RustTargetTypeRef {
@@ -169,9 +175,10 @@ function rustTargetTypeRefEqualsValidated(
         rustTargetTypeRefEqualsValidated(left.result, right.result, nested);
     }
     case "trait-ref": {
-      if (right.kind !== left.kind || left.id !== right.id || left.path !== right.path ||
-        left.sourceItem?.fileName !== right.sourceItem?.fileName ||
-        left.sourceItem?.typeName !== right.sourceItem?.typeName) {
+      if (right.kind !== left.kind || left.path !== right.path ||
+        lifetimeContext.nativeTraitIdentity !== true && (left.id !== right.id ||
+          left.sourceItem?.fileName !== right.sourceItem?.fileName ||
+          left.sourceItem?.typeName !== right.sourceItem?.typeName)) {
         return false;
       }
       const nested = matchLifetimeBinders(
@@ -220,12 +227,14 @@ function rustTargetTypeRefEqualsValidated(
       const rightNamed = rustNamedTypeCarrierValue(right);
       if (leftNamed !== undefined || rightNamed !== undefined) {
         return leftNamed !== undefined && rightNamed !== undefined &&
-          leftNamed.id === rightNamed.id && leftNamed.path === rightNamed.path &&
+          (lifetimeContext.nativeTraitIdentity === true || leftNamed.id === rightNamed.id) &&
+          leftNamed.path === rightNamed.path &&
           genericArgumentListsEqual(leftNamed.genericArguments, rightNamed.genericArguments, lifetimeContext) &&
-          closedMetadataEquals(leftNamed.traits, rightNamed.traits) &&
-          leftNamed.upcasts.length === rightNamed.upcasts.length &&
-          leftNamed.upcasts.every((upcast, index) => upcast.path === rightNamed.upcasts[index]?.path &&
-            rustTargetTypeRefEqualsValidated(upcast.target, rightNamed.upcasts[index]!.target, lifetimeContext));
+          (lifetimeContext.nativeTraitIdentity === true ||
+            closedMetadataEquals(leftNamed.traits, rightNamed.traits) &&
+            leftNamed.upcasts.length === rightNamed.upcasts.length &&
+            leftNamed.upcasts.every((upcast, index) => upcast.path === rightNamed.upcasts[index]?.path &&
+              rustTargetTypeRefEqualsValidated(upcast.target, rightNamed.upcasts[index]!.target, lifetimeContext)));
       }
       return right.kind === left.kind && left.target === right.target && left.name === right.name &&
         closedMetadataEquals(left.value, right.value);
@@ -591,7 +600,8 @@ function associatedConstraintListsEqual(
   return left.length === right.length && left.every((constraint, index) => {
     const other = right[index];
     if (other === undefined || constraint.kind !== other.kind ||
-      constraint.identity !== other.identity || constraint.name !== other.name ||
+      context.nativeTraitIdentity !== true && constraint.identity !== other.identity ||
+      constraint.name !== other.name ||
       !genericArgumentListsEqual(
         constraint.genericArguments,
         other.genericArguments,
@@ -646,6 +656,7 @@ function lifetimeListsEqual(
 }
 
 interface LifetimeEqualityContext {
+  readonly nativeTraitIdentity?: true;
   readonly leftToRight: ReadonlyMap<string, string>;
   readonly rightToLeft: ReadonlyMap<string, string>;
 }
@@ -693,7 +704,7 @@ function matchLifetimeBinders(
     leftToRight.set(leftKey, rightKey);
     rightToLeft.set(rightKey, leftKey);
   }
-  const nested = Object.freeze({ leftToRight, rightToLeft });
+  const nested = Object.freeze({ ...parent, leftToRight, rightToLeft });
   return left.parameters.every((parameter, index) =>
     lifetimeListsEqual(
       parameter.outlives,
