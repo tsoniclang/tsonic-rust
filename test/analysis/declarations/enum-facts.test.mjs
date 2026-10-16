@@ -79,6 +79,16 @@ export function identity(value: Amount): Amount { return value; }
       const constants = initial.source.semantics.enumConstants;
       const declarations = enumDeclarations(initial.source);
       const initialize = initial.projectTypes.initialize;
+      const projectTypes = Object.create(initial.projectTypes, { initialize: { value(input) {
+        for (const declaration of declarations) {
+          const carrier = initial.records.runtimeCarrier.get(declaration)?.carrier;
+          assert.equal(carrier !== undefined, true, "nominal enum evidence precedes class and interface layout");
+          assert.equal(initial.typeDefinitions.sourceEnumDefinition(carrier)?.integerWidth, 64,
+            "the actual early type registry already knows the native width");
+        }
+        initialized = true;
+        return initialize(input);
+      } } });
       return { ...initial,
         source: { ...initial.source, semantics: { ...initial.source.semantics, enumConstants: {
           ...constants,
@@ -93,16 +103,7 @@ export function identity(value: Amount): Amount { return value; }
             return constants.get(member);
           },
         } } },
-        projectTypes: { ...initial.projectTypes, initialize(input) {
-          for (const declaration of declarations) {
-            const carrier = initial.records.runtimeCarrier.get(declaration)?.carrier;
-            assert.equal(carrier !== undefined, true, "nominal enum evidence precedes class and interface layout");
-            assert.equal(initial.typeDefinitions.sourceEnumDefinition(carrier)?.integerWidth, 64,
-              "the actual early type registry already knows the native width");
-          }
-          initialized = true;
-          return initialize(input);
-        } },
+        projectTypes,
       };
     });
     return context.diagnostics.length === 0 ? { kind: "resolved", value: { artifacts: [] }, diagnostics: [] }
