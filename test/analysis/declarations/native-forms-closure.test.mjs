@@ -97,7 +97,7 @@ export interface Derived extends Named { write(value: number): void; }
 test("literal and runtime unions retain their selected native alias forms", () => {
   const { source, program } = analyzeRust({ files: { "index.ts": `
 export type State = "ready" | "done";
-export type Value = number | string;
+export type Value = { value: number } | { next: Value };
 ` } });
   const state = program.nativeDeclarations.get(declarationNamed(source, "State"));
   const value = program.nativeDeclarations.get(declarationNamed(source, "Value"));
