@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustJsPromiseTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 
 const payload = rustSourcePrimitiveTargetType("uint64");
@@ -24,7 +25,7 @@ test("Promise rejection protocol survives actual operation finalization and vali
   assert.equal(abi.effects.errorBoundary, "js-rejection");
   assert.equal(Object.hasOwn(abi.effects, "errorCarrier"), false);
   assert.equal(abi.result.carrier.genericArguments.length, 1);
-  assert.equal(abi.result.carrier.genericArguments[0].type === payload, true);
+  assert.equal(rustTargetTypeRefEquals(abi.result.carrier.genericArguments[0].type, payload), true);
 });
 
 test("awaited JS rejection never broadens synchronous native invocation errors", () => {
