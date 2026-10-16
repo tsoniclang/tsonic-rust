@@ -1,48 +1,40 @@
 import {
-  isRustCopyCarrier,
   isRustNeverCarrier,
-  rustPrimitiveTypeName,
   rustOptionTargetType,
 } from "../../../target-model/types/index.js";
-import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "../../../analysis/operations/finalized-operation/conversions.js";
+import { isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput } from "../../../analysis/operations/finalized-operation/conversions.js";
 import { validateRustFinalizedOperationAbi } from "../../../analysis/operations/finalized-operation/validation.js";
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { applyRustProviderEvaluationScope, planRustProviderEvaluationScope } from "../project/provider-evaluation-scope.js";
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
 import { rustBottomExpression } from "../types/fallible-shape.js";
 import { rustValueCarrierTransitionTarget } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustFinalizedCarrierTransitionMatches } from "../../../analysis/operations/target-operation.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import {
-  rustTargetCallGenericArgumentToAstInContext,
-  rustCallTypeFromCarrierInContext,
-  rustTargetGenericArgumentToAstInContext,
   rustTypeFromCarrierInContext,
 } from "../types/render.js";
-import type { RustProviderConstantArgument, RustProviderChainStep } from "../../../target-model/operations/model.js";
+import type { RustProviderConstantArgument } from "../../../target-model/operations/model.js";
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import type { Node } from "@tsonic/tsts";
 import type {
-  RustCallGenericArgument,
   RustExpr,
-  RustGenericArgument,
 } from "../../target-ast/syntax/nodes.js";
 import type { RustFinalizedInputPlanOverrides } from "../project/provider-evaluation-scope.js";
-import type { RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
+import type { RustFinalizedOperationAbi, RustFinalizedSourceInput, RustFinalizedTargetInput } from "../../../target-model/records/finalized-operation.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import {
   applyFinalizedRustArgumentMode,
 } from "./input-shaping.js";
-import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { canBorrowRustSingletonSlice, planRustBorrowedSingletonSlice, planRustRestAssembly } from "./calls/rest-assembly.js";
-import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
+import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { planRustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 import type { RustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
+import { planRustFinalizedOperationForm } from "./finalized-operation-form.js";
 
 function providerConstantExpression(argument: RustProviderConstantArgument, context: RustPlanContext): RustExpr | undefined {
   switch (argument.kind) {
@@ -158,333 +150,13 @@ export function planProviderOperationExpression(
     }
     args.push(planned);
   }
-  const form = fact.abi.target;
-  const receiverMode = fact.abi.targetReceiver.kind === "input"
-    ? fact.abi.targetReceiver.input.mode
-    : undefined;
-  const targetGenericArguments = fact.abi.targetGenericArguments.flatMap((argument) => {
-    if (argument.kind === "lifetime") return [];
-    const planned = rustTargetCallGenericArgumentToAstInContext(argument, context);
-    return planned === undefined ? [undefined] : [planned];
+  const expression = planRustFinalizedOperationForm(context, fact.abi, receiver, args, operationNode, {
+    resultUse: options.resultUse, assignment: fact.kind === "runtime-set",
   });
-  if (targetGenericArguments.some((argument) => argument === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, operationNode),
-      "rust.backend.provider-target-generic-arguments",
-      "Provider operation target generic arguments do not have exact Rust target forms.",
-    ));
-    return undefined;
-  }
-  const concreteTargetGenericArguments = targetGenericArguments.length === 0
-    ? undefined
-    : targetGenericArguments as readonly RustCallGenericArgument[];
-  const scoped = (expression: RustExpr | undefined): RustExpr | undefined => {
-    if (expression === undefined) return undefined;
-    const dispatched = dispatchScope.apply(expression);
-    return evaluationScope.kind !== "selected" ? dispatched
-      : applyRustProviderEvaluationScope(dispatched, evaluationScope);
-  };
-  switch (form.form) {
-    case "numeric-cast":
-      return scoped(args[0]);
-    case "marker":
-      return undefined;
-    case "arg-method": {
-      if (receiver === undefined || fact.abi.targetReceiver.kind !== "input") {
-        return undefined;
-      }
-      const typedReceiver = typeNumericMethodReceiverLiteral(
-        receiver,
-        fact.abi.targetReceiver.input.parameterCarrier,
-      );
-      if (typedReceiver === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, operationNode),
-          "rust.backend.arg-method-receiver-type",
-          "Argument-method literal receiver requires an explicit finalized Rust numeric receiver carrier.",
-        ));
-        return undefined;
-      }
-      return scoped({
-        kind: "method-call",
-        receiver: typedReceiver,
-        method: form.name,
-        args,
-        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-      });
-    }
-    case "call": {
-      registerAliasFromPath(context, form.path);
-      return scoped(applyProviderOperationChain({
-        kind: "call",
-        path: form.path,
-        args,
-        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-      }, form.chain));
-    }
-    case "source-module-construction": {
-      const construction = context.input.program.sourceModuleConstructions.construction(
-        operationNode,
-      );
-      if (construction === undefined ||
-        construction.sourceArgumentIndex !== form.sourceArgumentIndex ||
-        construction.targetArgumentIndex !== form.targetArgumentIndex) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, operationNode),
-          "rust.backend.source-module-construction",
-          "Selected source-module constructor has no matching sealed source-module construction.",
-        ));
-        return undefined;
-      }
-      const targetFileName = context.input.program.source.ast.getFileName(
-        construction.targetSourceFile,
-      );
-      const entryIdentity = context.workerEntryIdentityByFileName.get(targetFileName);
-      const moduleArgumentIndex = fact.abi.targetArguments.findIndex(input =>
-        isRustFinalizedSourceInput(input) && input.source.kind === "argument" &&
-        input.source.sourceIndex === form.sourceArgumentIndex);
-      const moduleInput = fact.abi.targetArguments[moduleArgumentIndex];
-      const moduleIdentity = moduleInput !== undefined && isRustFinalizedSourceInput(moduleInput) &&
-          moduleInput.source.kind === "argument" &&
-          moduleInput.source.sourceIndex === form.sourceArgumentIndex
-        ? moduleInput.mode === "ref"
-          ? { kind: "str-literal" as const, value: entryIdentity ?? "" }
-          : moduleInput.mode === "value"
-            ? { kind: "string-literal" as const, value: entryIdentity ?? "" }
-            : undefined
-        : undefined;
-      if (entryIdentity === undefined || args[moduleArgumentIndex] === undefined ||
-        moduleIdentity === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, operationNode),
-          "rust.backend.source-module-entry-identity",
-          "Selected source-module constructor has no exact generated worker-entry identity and immutable target argument mode.",
-        ));
-        return undefined;
-      }
-      registerAliasFromPath(context, form.path);
-      return scoped({
-        kind: "call",
-        path: form.path,
-        args: args.map((argument, index) =>
-          index === moduleArgumentIndex
-            ? moduleIdentity
-            : argument),
-        ...(concreteTargetGenericArguments === undefined
-          ? {}
-          : { genericArguments: concreteTargetGenericArguments }),
-      });
-    }
-    case "struct-variant":
-      registerAliasFromPath(context, form.path);
-      return scoped(form.fields.length === args.length
-        ? {
-            kind: "struct-literal",
-            path: form.path,
-            fields: form.fields.map((name, index) => ({ name, value: args[index]! })),
-          }
-        : undefined);
-    case "expression-macro":
-      registerAliasFromPath(context, form.path);
-      return scoped({
-        kind: "macro-invocation",
-        path: form.path,
-        delimiter: form.delimiter,
-        args,
-      });
-    case "call-c-variadic":
-      registerAliasFromPath(context, form.path);
-      return scoped({
-        kind: "call",
-        path: form.path,
-        args,
-        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-      });
-    case "call-value-slice":
-    case "call-value-array":
-    case "call-str-slice":
-    case "free-call-str-slice":
-    case "free-call": {
-      registerAliasFromPath(context, form.path);
-      return scoped({
-        kind: "call",
-        path: form.path,
-        args,
-        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-      });
-    }
-    case "path": {
-      registerAliasFromPath(context, form.path);
-      return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
-    }
-    case "reference-path": {
-      registerAliasFromPath(context, form.path);
-      return scoped(args.length === 0
-        ? {
-            kind: "reference",
-            expr: { kind: "path", path: form.path },
-            mutable: form.mutable,
-          }
-        : undefined);
-    }
-    case "static": {
-      registerAliasFromPath(context, form.path);
-      if (fact.kind === "runtime-set") {
-        const value = args[0];
-        if (value === undefined || args.length !== 1) failRustPlannerInvariant("Admitted static setter requires its finalized native value.", operationNode);
-        return scoped({ kind: "assignment", operator: "=", target: { kind: "path", path: form.path }, value });
-      }
-      return scoped(args.length === 0 ? { kind: "path", path: form.path } : undefined);
-    }
-    case "method":
-    case "arg-receiver-method":
-    case "receiver-value-array":
-    case "receiver-tagged-array":
-      return scoped(receiver === undefined
-        ? undefined
-        : {
-            kind: "method-call",
-            receiver,
-            method: form.name,
-            args,
-            ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-            ...(receiverMode === undefined ? {} : { receiverMode }),
-          });
-    case "arg-structural-method": {
-      if (receiver === undefined || fact.abi.targetReceiver.kind !== "input") {
-        return undefined;
-      }
-      return scoped(invokeRustStructuralObjectMethod(
-        fact.abi.targetReceiver.input.parameterCarrier,
-        receiver,
-        form.storageIndex,
-        args,
-        abiResultCarrier,
-        context,
-      ));
-    }
-    case "receiver-method":
-      return receiver === undefined
-        ? undefined
-        : scoped(applyProviderOperationChain(
-            {
-              kind: "method-call",
-              receiver,
-              method: form.name,
-              args,
-              ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-              ...(receiverMode === undefined ? {} : { receiverMode }),
-            },
-            form.chain,
-          ));
-    case "field":
-    case "index": {
-      if (fact.kind === "runtime-set") {
-        const value = args[form.form === "field" ? 0 : 1];
-        const index = form.form === "index" ? args[0] : undefined;
-        if (receiver === undefined || value === undefined || args.length !== (form.form === "field" ? 1 : 2) ||
-          form.form === "index" && index === undefined) failRustPlannerInvariant("Admitted storage setter requires its finalized native receiver and inputs.", operationNode);
-        const target: RustExpr = form.form === "field" ? { kind: "field", receiver, name: form.name }
-          : { kind: "index", receiver, index: index! };
-        return scoped({ kind: "assignment", operator: "=", target, value });
-      }
-      if (receiver === undefined || args.length !== (form.form === "field" ? 0 : 1)) {
-        return undefined;
-      }
-      const place: RustExpr | undefined = form.form === "field"
-        ? { kind: "field", receiver, name: form.name }
-        : args[0] === undefined ? undefined : { kind: "index", receiver, index: args[0] };
-      if (place === undefined) return undefined;
-      if (options.resultUse === "storage") {
-        return scoped(place);
-      }
-      if (isRustCopyCarrier(abiResultCarrier)) {
-        return scoped(place);
-      }
-      if (!rustCarrierHasCloneContract(abiResultCarrier, context)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, operationNode),
-          `rust.backend.provider-${form.form}-read-ownership`,
-          `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract.`,
-        ));
-        return undefined;
-      }
-      return scoped({ kind: "method-call", receiver: place, method: "clone", args: [] });
-    }
-    case "binary-operator": {
-      const [left, right] = args;
-      if (left === undefined || right === undefined || args.length !== 2) {
-        return undefined;
-      }
-      return scoped({ kind: "binary", operator: form.operator, left, right });
-    }
-    case "associated-call": {
-      const owner = rustCallTypeFromCarrierInContext(form.owner, context);
-      return owner === undefined ? undefined : scoped({
-        kind: "associated-call", owner, method: form.method, args,
-        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-      });
-    }
-    case "trait-call": {
-      const owner = rustCallTypeFromCarrierInContext(form.owner, context);
-      const traitGenericArguments = form.traitGenericArguments.map((argument) =>
-        rustTargetGenericArgumentToAstInContext(argument, context));
-      if (owner === undefined || traitGenericArguments.some((argument) => argument === undefined)) {
-        return undefined;
-      }
-      registerAliasFromPath(context, form.traitPath);
-      return scoped({
-        kind: "associated-call",
-        owner,
-        trait: {
-          kind: "named",
-          path: form.traitPath,
-          ...(traitGenericArguments.length === 0
-            ? {}
-            : {
-                genericArguments: traitGenericArguments as readonly RustGenericArgument[],
-              }),
-        },
-        method: form.method,
-        args,
-        ...(concreteTargetGenericArguments === undefined ? {} : { genericArguments: concreteTargetGenericArguments }),
-      });
-    }
-    case "trait-associated-value": {
-      const owner = rustTypeFromCarrierInContext(form.owner, context);
-      const traitGenericArguments = form.traitGenericArguments.map((argument) =>
-        rustTargetGenericArgumentToAstInContext(argument, context));
-      if (owner === undefined || traitGenericArguments.some((argument) => argument === undefined) || args.length !== 0) {
-        return undefined;
-      }
-      registerAliasFromPath(context, form.traitPath);
-      return scoped({
-        kind: "associated-value",
-        owner,
-        trait: {
-          kind: "named",
-          path: form.traitPath,
-          ...(traitGenericArguments.length === 0
-            ? {}
-            : {
-                genericArguments: traitGenericArguments as readonly RustGenericArgument[],
-              }),
-        },
-        name: form.name,
-      });
-    }
-    case "associated-value": {
-      const owner = rustTypeFromCarrierInContext(form.owner, context);
-      if (owner === undefined || args.length !== 0) {
-        return undefined;
-      }
-      return scoped({
-        kind: "associated-value",
-        owner,
-        name: form.name,
-      });
-    }
-  }
+  if (expression === undefined) return undefined;
+  const dispatched = dispatchScope.apply(expression);
+  return evaluationScope.kind !== "selected" ? dispatched
+    : applyRustProviderEvaluationScope(dispatched, evaluationScope);
 }
 
 function mergeRustFinalizedInputOverrides(
@@ -519,43 +191,9 @@ function mergeRustFinalizedInputOverrides(
   return { sourceValues, inputs };
 }
 
-function typeNumericMethodReceiverLiteral(
-  expression: RustExpr,
-  carrier: TargetTypeRef,
-): RustExpr | undefined {
-  if (expression.kind === "unary" && expression.operator === "-") {
-    const operand = typeNumericMethodReceiverLiteral(expression.operand, carrier);
-    return operand === undefined ? undefined : { ...expression, operand };
-  }
-  if (expression.kind !== "float-literal" && expression.kind !== "int-literal") {
-    return expression;
-  }
-  if (carrier.kind !== "source-primitive") {
-    return undefined;
-  }
-  const suffix = rustPrimitiveTypeName(carrier.name);
-  return suffix === undefined
-    ? undefined
-    : { ...expression, text: `${expression.text}${suffix}` };
-}
-
-function applyProviderOperationChain(
-  expression: RustExpr,
-  chain: readonly RustProviderChainStep[] | undefined,
-): RustExpr | undefined {
-  let result = expression;
-  for (const step of chain ?? []) {
-    if (step.kind !== "method") {
-      return undefined;
-    }
-    result = { kind: "method-call", receiver: result, method: step.name, args: [] };
-  }
-  return result;
-}
-
 export function finishProviderOperationExpression(
   context: RustPlanContext,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
+  fact: { readonly abi: RustFinalizedOperationAbi },
   expression: RustExpr,
   node: Node,
 ): RustExpr | undefined {
@@ -578,11 +216,18 @@ export function finishProviderOperationExpression(
       ));
       return undefined;
     }
+    const providerErrorType = fact.abi.effects.errorBoundary === "provider-native"
+      ? rustTypeFromCarrierInContext(fact.abi.effects.errorCarrier, context) : undefined;
+    if (fact.abi.effects.errorBoundary === "provider-native" && providerErrorType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
+        "rust.backend.provider-error-type", "Fallible provider operation requires its exact rendered native error type."));
+      return undefined;
+    }
     const propagated = applyRustLocalErrorBoundary(
       raw,
       fact.abi.effects.errorBoundary,
       region,
-      rustTypeFromCarrierInContext(fact.abi.effects.errorCarrier, context),
+      providerErrorType,
     );
     if (propagated === undefined) return undefined;
     raw = propagated;

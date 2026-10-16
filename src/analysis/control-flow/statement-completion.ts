@@ -119,7 +119,8 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       if (!ast.is.IsForStatement(node)) reject(node, "RUST_CONDITION_NOT_PROVEN", "Control flow requires its exact checked condition.");
       return;
     }
-    if (records.nativeGuardResult.get(expression) === undefined && !isRustBoolCarrier(rustEffectiveValueCarrier(records, expression))) {
+    if ((!ast.is.IsIfStatement(node) || records.nativeGuardResult.get(expression) === undefined) &&
+      !isRustBoolCarrier(rustEffectiveValueCarrier(records, expression))) {
       reject(expression, "RUST_CONDITION_NOT_BOOLEAN", "Control-flow conditions require the finalized native Boolean carrier.");
       return;
     }
@@ -162,6 +163,9 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
     const selected = records.selectedOperation.get(node);
     if (operation?.kind !== "iteration" || selected?.operationKind !== "iteration" || selected.operationId !== operation.operationId ||
       !rustTargetTypeRefEquals(selected.resultType, operation.elementCarrier) ||
+      operation.iterationKind === "for-in" && operation.lowering.kind !== "dense-index-keys" &&
+        operation.lowering.kind !== "js-array-index-keys" && operation.lowering.kind !== "static-keys" &&
+        operation.lowering.kind !== "record-keys" ||
       operation.iterationKind === "for-in" && operation.lowering.kind === "record-keys" &&
         !rustTargetTypeRefEquals(rustRecordCarrierValue(operation.iterableCarrier)?.key, operation.elementCarrier)) {
       reject(node, "RUST_ITERATION_SELECTION_NOT_PROVEN", "Iteration requires its identical checked native operation and element selection.");

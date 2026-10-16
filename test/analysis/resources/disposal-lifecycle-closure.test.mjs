@@ -4,6 +4,7 @@ import { analyzeRust, artifactText, compileRust, unitCarrier, acmeTestingPackage
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateRustDisposalLifecycle } from "../../../dist/analysis/resources/disposal-lifecycle.js";
 import { resourceDisposalReceiverMode } from "../../../dist/backend/planner/statements/resources.js";
+import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const resourceSource = `class Resource { constructor() {} [Symbol.dispose](): void {} }
@@ -35,7 +36,13 @@ test("disposal lifecycle consumes the one selected fact and rejects missing evid
 
 test("selected provider disposal transports all native receiver modes without a duplicate DTO", () => {
   for (const receiverMode of ["value", "ref", "mut-ref"]) {
-    const fact = { disposal: { target: { form: "provider", target: { form: "free-call", path: "core::mem::drop", receiverMode } } } };
+    const carrier = { kind: "target-named", id: "r05.Resource" };
+    const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
+      form: { form: "free-call", path: "core::mem::drop", receiverMode },
+      sourceReceiverCarrier: carrier, sourceArgumentCarriers: [], resultCarrier: unitCarrier,
+      isAsync: false, isFallible: false });
+    assert.equal(abi !== undefined, true, `${receiverMode}: the canonical owner completes the selected disposal ABI`);
+    const fact = { disposal: { target: { form: "provider", abi, receiverMode } } };
     assert.equal(resourceDisposalReceiverMode(fact), receiverMode, `${receiverMode}: exact selected mode is authoritative`);
   }
 });
@@ -124,6 +131,31 @@ export function run(): void { using first = new Resource(), second = new Resourc
   assert.equal(secondCleanup > second && firstCleanup > secondCleanup, true, "cleanup executes in reverse acquisition order");
   assert.equal([...generated.matchAll(/let resource_flow(?:_\d+)?/gu)].length, 2, "each acquisition has its own cleanup boundary");
   validateGeneratedProject("r05-multiple-resource-declarations", result.artifacts);
+});
+
+test("multiple for-initializer resources surround the whole loop and dispose in reverse order", () => {
+  const source = `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+let order: int32 = 0;
+class Resource {
+  private id: int32;
+  constructor(id: int32) { this.id = id; }
+  [Symbol.dispose](): void { order = order * 10 + this.id; }
+}
+export function run(limit: int32): void {
+  let iteration: int32 = 0;
+  for (using first = new Resource(1), second = new Resource(2); iteration < limit;) { iteration++; }
+}
+export function main(): void { run(2); check(order === 21); }
+main();
+`;
+  const { result } = compileRust({ surfaces: [], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_multi_for_resources" } },
+    files: { "index.ts": source } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  validateGeneratedProject("r05-multiple-for-initializer-resources", result.artifacts, { run: true });
 });
 
 for (const [name, target, expected] of [

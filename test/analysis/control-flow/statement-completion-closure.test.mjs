@@ -72,6 +72,49 @@ test("admitted conditions and assignment identities are pure stable lookups", ()
   assert.equal(index.admitted(foreign), false, "foreign statements are not admitted");
 });
 
+test("loop guards use native Boolean carriers rather than if-only static folding", () => {
+  const text = `export function run(value: number): void {
+    while (typeof value === "number") { value += 1; if (value > 2) break; }
+    do { value += 1; } while (typeof value !== "number");
+    for (; typeof value === "number"; value++) { if (value > 2) break; }
+  }`;
+  const { program, nodes, ast } = checked(text);
+  const loops = nodes.filter(node => ast.is.IsWhileStatement(node) || ast.is.IsDoStatement(node) || ast.is.IsForStatement(node));
+  assert.equal(loops.length, 3, "while, do and for conditions are all checked");
+  for (const loop of loops) assert.equal(program.statementCompletions.conditionFor(loop) !== undefined, true,
+    "each loop has its native Boolean condition even when a guard is statically known");
+});
+
+test("program-wide admission preserves chained and expression-position assignments", () => {
+  const text = `function step(): number { return 2; }
+    function take(value: number): number { return value; }
+    export function run(): number {
+      let first = 0, second = 0, value = 0;
+      first = second = 3;
+      if ((value = step()) !== 0) first += take(second = 4);
+      return first + second + value;
+    }`;
+  const { program, nodes } = checked(text);
+  const assignments = nodes.filter(node => program.statementCompletions.assignmentFor(node) !== undefined);
+  assert.equal(assignments.length >= 5, true, "nested, conditional and argument assignments retain their exact operation evidence");
+  const { result } = compileRust({ surfaces: [], files: { "index.ts": text } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  assert.equal(result.artifacts.length > 0, true, "expression positions introduce no new source rejection");
+});
+
+test("for-in lowering correspondence is closed at statement admission", () => {
+  const { program, nodes, ast } = checked("export function keys(values: number[]): void { for (const key in values) {} }");
+  const loop = nodes.find(ast.is.IsForInStatement);
+  const original = program.records.targetOperation.get(loop);
+  const result = select(program, { ...program.records, targetOperation: { get: node => node === loop
+    ? { ...original, lowering: { kind: "owned" } } : program.records.targetOperation.get(node) } });
+  assert.equal(result.kind, "rejected", "an incompatible for-of protocol cannot reach for-in planning");
+  assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_ITERATION_SELECTION_NOT_PROVEN" &&
+    diagnostic.sourceNode === loop), true, "the negative keeps the exact source subject at admission");
+  assert.equal(result.plan === undefined, true, "no invalid lowering is published");
+});
+
 test("native-valid nested outer-label continue no longer depends on a label spelling stack", () => {
   const { result } = compileRust({ surfaces: [], files: { "index.ts": source } });
   assert.equal(result.diagnostics.length, 0,

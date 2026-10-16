@@ -23,6 +23,9 @@ import {
 import { selectRustProviderOperation } from "../../policy/operations/provider-selection.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustProjectCallableTargetName } from "../names/source-member-name.js";
+import { finalizeRustProviderOperationAbi } from "../operations/finalized-operation/finalize.js";
+import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
+import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 
 export interface RustProjectDisposerEffects {
   readonly selfMode: { readonly mode: "ref" | "mut-ref" };
@@ -229,7 +232,32 @@ function selectDisposalAlternative(
   if (!isRustUnitCarrier(row.resultCarrier)) {
     return rejected("The selected provider resource disposer must have an exact void result.");
   }
-  const target = { form: "provider" as const, target: row.target };
+  const dispatchInputs = (row.dispatchInputs ?? []).map(input => options.dispatchContextInputFor(input));
+  if (dispatchInputs.some(input => input === undefined)) return rejected("The selected provider disposer requires its exact native dispatch context inputs.");
+  const abi = finalizeRustProviderOperationAbi({
+    operationKind: "method", form: row.target, sourceReceiverCarrier: resourceCarrier,
+    declaredSourceReceiverCarrier: row.receiverCarrier,
+    sourceArgumentCarriers: [], declaredSourceArgumentCarriers: row.parameterCarriers,
+    resultCarrier: row.resultCarrier, resultConversion: row.resultConversion,
+    targetGenericArguments: row.targetGenericArguments, dispatchInputs: dispatchInputs.filter(input => input !== undefined),
+    isAsync: row.isAsync === true, isFallible: row.isFallible === true,
+    errorBoundary: row.isFallible === true ? row.errorBoundary : undefined,
+    errorCarrier: row.isFallible === true && row.errorBoundary === "provider-native" ? row.errorCarrier : undefined,
+    ...(Object.prototype.hasOwnProperty.call(row, "nativeErrorCarriers") ? { nativeErrorCarriers: row.nativeErrorCarriers } : {}), isUnsafe: row.isUnsafe,
+    evaluation: row.evaluation,
+  }, context.typeDefinitions);
+  if (abi === undefined) return rejected("The selected provider resource disposer has no complete finalized Rust operation ABI.");
+  const receiverInput = abi.targetReceiver.kind === "input" ? abi.targetReceiver.input
+    : abi.targetArguments.find(input => isRustFinalizedSourceInput(input) && input.source.kind === "receiver");
+  if (receiverInput === undefined || !isRustFinalizedSourceInput(receiverInput)) {
+    return rejected("The selected provider resource disposer has no exact native resource input.");
+  }
+  const conversion = receiverInput.conversion.kind === "sequence" ? receiverInput.conversion.steps[0] : receiverInput.conversion;
+  const receiverMode = conversion?.kind === "semantic"
+    ? rustValueConversionContract(conversion.conversion, context.typeDefinitions)?.sourceMode
+    : conversion?.kind === "identity" ? receiverInput.mode : undefined;
+  if (receiverMode === undefined) return rejected("The selected provider disposer has no exact pre-conversion resource mode.");
+  const target = { form: "provider" as const, abi, receiverMode };
   const disposal: RustResourceManagementFact["disposal"] = row.isFallible !== true
     ? {
         kind: alternative.kind,
@@ -269,7 +297,7 @@ function optionalCarrierEquals(
 
 function providerDisposalTargetIsSupported(
   target: import("../../target-model/operations/model.js").RustProviderOperationForm,
-): target is Extract<RustResourceDisposalTarget, { readonly form: "provider" }>["target"] {
+): boolean {
   return target.form === "method" ||
     target.form === "receiver-method" ||
     target.form === "free-call";
@@ -289,7 +317,7 @@ function resourceDisposalTargetsEqual(
           rustTargetTypeRefEquals(left.dispatch.ownerCarrier, right.dispatch.ownerCarrier));
   }
   return left.form === "provider" && right.form === "provider" &&
-    closedMetadataEquals(left.target, right.target);
+    left.receiverMode === right.receiverMode && closedMetadataEquals(left.abi, right.abi);
 }
 
 function rejected(reason: string): Extract<RustResourceManagementSelection, { readonly kind: "rejected" }> {

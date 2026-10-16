@@ -1,5 +1,6 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustArgumentMode, RustProviderOperationForm } from "../operations/model.js";
+import type { RustArgumentMode } from "../operations/model.js";
+import type { RustFinalizedOperationAbiFor } from "./finalized-operation.js";
 import type { RustFallibleErrorBoundary } from "../operations/error-boundary.js";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustLifetimeRef } from "../lifetimes/index.js";
@@ -111,9 +112,8 @@ export type RustResourceDisposalTarget =
     }
   | {
       readonly form: "provider";
-      readonly target: Extract<RustProviderOperationForm, {
-        readonly form: "method" | "receiver-method" | "free-call";
-      }>;
+      readonly abi: RustFinalizedOperationAbiFor<"method">;
+      readonly receiverMode: RustArgumentMode;
     };
 
 export interface RustResourceManagementFact {

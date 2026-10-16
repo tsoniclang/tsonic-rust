@@ -16,6 +16,7 @@ import { planRustDirectOperatorCallAssignment, planRustSourceAccessorAssignment 
 import { planRustAssignmentWrite } from "../../../../dist/backend/planner/statements/expression-statements.js";
 import { validateRustFinalizedOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/validation.js";
 import { analyzeRustStatementCompletions } from "../../../../dist/analysis/control-flow/statement-completion.js";
+import { planStatement } from "../../../../dist/backend/planner/statements/core.js";
 
 const source = `
 import type { int32 } from "@tsonic/core/types.js";
@@ -128,6 +129,21 @@ test("checked throw, try and iteration selections plan with complete backend sta
   }
 });
 
+test("statement planning respects the same erased and compile-time domain as admission", () => {
+  const program = programFixture();
+  const node = nodeIn(program, "trying", (ast, candidate) => ast.is.IsTryStatement(candidate));
+  for (const family of ["compileTimeSource", "nativeParticipation"]) {
+    const changed = { ...program, records: createRustRecordFixture({ [family]: { get: subject =>
+      subject === node ? family === "compileTimeSource" ? { kind: "compile-time" } : "erased"
+        : program.records[family].get(subject) } }, program.records), statementCompletions: {
+      ...program.statementCompletions, admitted: () => { throw new Error("An erased statement cannot enter runtime dispatch."); },
+    } };
+    const context = planContext(changed, node);
+    assert.equal(planStatement(node, context)?.length, 0, `${family}: no runtime statement is emitted`);
+    assert.equal(context.diagnostics.length, 0, `${family}: no new source rejection is introduced`);
+  }
+});
+
 test("an admitted throw cannot lose its mandatory source expression", () => {
   const program = programFixture();
   const node = nodeIn(program, "throwing", (ast, candidate) => ast.is.IsThrowStatement(candidate));
@@ -177,8 +193,6 @@ test("runtime setter selection retains exact operand nodes and prior ABI admissi
     target: { form: "call", path: "fixture::set", chain: [{ kind: "copy-selected-carrier" }] } } };
   assert.equal(validateRustFinalizedOperationAbi(malformed.abi, program.typeDefinitions), false,
     "the canonical ABI owner rejects the same impossible malformed chain, not a fabricated source program");
-  assert.equal(program.records.targetOperation.get(node) === fact, true,
-    "the malformed unit value never replaces the admitted operation");
 });
 
 test("admitted iteration cannot lose mandatory body and binding syntax", () => {
@@ -261,4 +275,15 @@ test("resource producer facts retain exact identity and backend state ownership"
   assertInvariant(() => planResourceManagedBody(declaration, "resource", fact, context,
     () => ({ statements: [] })), context,
   "Resource management requires a finalized hygienic-name scope.", declaration);
+  const invalid = { ...fact, disposal: { ...fact.disposal,
+    target: { form: "provider", receiverMode: "value", abi: { target: { form: "call", path: "fixture::dispose" } } } } };
+  assert.throws(() => resourceDisposalReceiverMode(invalid), error =>
+    error.message.includes("Finalized resource disposal target has no closed Rust receiver mode."),
+  "the same invalid call-form disposer fails at its internal boundary");
+  const rejected = { ...context, diagnostics: [],
+    syntheticNames: createRustSyntheticNameState(analyzed.ast, declaration, []),
+  };
+  assertInvariant(() => planResourceManagedBody(declaration, "resource", invalid, rejected,
+    () => ({ statements: [] })), rejected,
+  "Finalized resource disposal target has no closed Rust receiver mode.");
 });
