@@ -70,8 +70,8 @@ const accepted = [
   ["float64 local 1.7976931348623157e308", "number", "1.7976931348623157e308", "let y: f64 = 1.7976931348623157e+308;"],
   ["float64 local -0", "number", "-0", "let y: f64 = -0.0;"],
   ["float64 local 5e-324", "number", "5e-324", "let y: f64 = 5e-324;"],
-  ["float64 local 1e-400", "number", "1e-400", "let y: f64 = 0.0;"],
-  ["float64 local 1e3", "number", "1e3", "let y: f64 = 1000.0;"],
+  ["float64 local 1e-400", "number", "1e-400", "let y: f64 = 1e-400;"],
+  ["float64 local 1e3", "number", "1e3", "let y: f64 = 1e+3;"],
   ["float64 local 1e21", "number", "1e21", "let y: f64 = 1e+21;"],
   ["float64 local -(2.5)", "number", "-(2.5)", "let y: f64 = -2.5;"],
   ["float32 local -0", "float32", "-0", "let y: f32 = -0.0_f32;"],
@@ -88,12 +88,15 @@ function surfaceOptions(selected) {
   return selected === undefined ? {} : { surfaces: selected };
 }
 
-function buildNatively(name, artifacts) {
-  const projectRoot = writeGeneratedProject(name, artifacts.map(artifact =>
-    ({ path: String(artifact.path), text: String(artifact.text) })));
+function buildNatively(name, artifacts, nativeTest) {
+  const projectRoot = writeGeneratedProject(name, [
+    ...artifacts.map(artifact => ({ path: String(artifact.path), text: String(artifact.text) })),
+    ...(nativeTest === undefined ? [] : [{ path: "tests/literal_values.rs", text: nativeTest }]),
+  ]);
   runCargo(projectRoot, ["generate-lockfile", "--offline"]);
   runCargo(projectRoot, ["fmt", "--all", "--check"]);
   runCargo(projectRoot, ["build", "--all-targets", "--locked", "--offline"]);
+  if (nativeTest !== undefined) runCargo(projectRoot, ["test", "--locked", "--offline", "--test", "literal_values"]);
 }
 
 function analyzeOnly(source, selected) {
@@ -170,7 +173,21 @@ for (const [surface, selected] of surfaces) {
       assert.equal(lines.includes(line), true, `${name}: emits ${line}`);
     }
     assert.equal(lines.some(line => /Infinity\.0|Infinity_f32|f64::INFINITY/u.test(line)), false, `${surface}: no non-finite float literal in generated Rust`);
-    buildNatively(`numeric-literal-admission-${surface}`, result.artifacts);
+    buildNatively(`numeric-literal-admission-${surface}`, result.artifacts, `#[test]
+fn native_literal_values() {
+    use tsonic_generated::index;
+    assert_eq!(index::f0(), f64::MAX);
+    assert_eq!(index::f1().to_bits(), (-0.0_f64).to_bits());
+    assert_eq!(index::f2().to_bits(), 1);
+    assert_eq!(index::f3().to_bits(), 0);
+    assert_eq!(index::f4(), 1000.0_f64);
+    assert_eq!(index::f5(), 1e21_f64);
+    assert_eq!(index::f6(), -2.5_f64);
+    assert_eq!(index::f7().to_bits(), (-0.0_f32).to_bits());
+    assert_eq!(index::f8().to_bits(), 0);
+    assert_eq!(index::f9(), 1.5_f32);
+}
+`);
   });
   typeSyntax.forEach(([name, body], index) => {
     test(`${surface}: ${name} is type syntax and compiles natively without a refusal`, () => {

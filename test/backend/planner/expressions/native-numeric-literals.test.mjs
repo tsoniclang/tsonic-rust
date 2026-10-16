@@ -7,7 +7,7 @@ import { planNumericLiteralWithCarrier, planBigIntLiteral } from "../../../../di
 import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/types/index.js";
 import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
 
-function contextFor(text, kindName, carrier) {
+function contextFor(text, kindName, carrier, provenance = "authored") {
   const node = { ...fakeStatement({ kindName: `Kind${kindName}`, pos: 0, end: text.length }), text };
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text, statements: [node] });
   const ast = fakeAstReader([sourceFile]);
@@ -16,7 +16,7 @@ function contextFor(text, kindName, carrier) {
     IsNumericLiteral: candidate => candidate === node && kindName === "NumericLiteral",
     IsBigIntLiteral: candidate => candidate === node && kindName === "BigIntLiteral" },
     forEachChild: (candidate, visit) => { if (candidate === sourceFile) visit(node); },
-    authoredRange: () => ({ kind: "authored", start: 0, end: text.length }) };
+    authoredRange: () => provenance === "synthetic" ? { kind: "synthetic" } : { kind: "authored", start: 0, end: text.length } };
   const literalValues = analyzeSourceLiteralValues(literals, [sourceFile]);
   return { node, context: { input: { program: { source: { ast: literals },
     records: { ...createRustRecordFixture({conversion: { get: () => undefined },
@@ -38,6 +38,22 @@ test("numeric literal producers preserve each exact native width independently o
     const { node, context } = contextFor("7", "NumericLiteral", carrier);
     assert.deepEqual(planNumericLiteralWithCarrier(node, carrier, context), { kind: "float-literal", text });
   }
+});
+
+test("authored float32 rounding and actual checked float64 conversion remain distinct sealed inputs", () => {
+  const carrier = rustSourcePrimitiveTargetType("float32");
+  const authored = contextFor("1.00000005960464477539062500000001", "NumericLiteral", carrier);
+  assert.deepEqual(planNumericLiteralWithCarrier(authored.node, carrier, authored.context),
+    { kind: "float-literal", text: "1.00000005960464477539062500000001_f32" });
+  const actual = contextFor("1.0000000596046448", "NumericLiteral", carrier, "synthetic");
+  assert.deepEqual(planNumericLiteralWithCarrier(actual.node, carrier, actual.context),
+    { kind: "numeric-cast", expression: { kind: "float-literal", text: "1.0000000596046448_f64" }, target: "f32" });
+  const negativeZero = contextFor("-0", "NumericLiteral", carrier, "synthetic");
+  assert.deepEqual(planNumericLiteralWithCarrier(negativeZero.node, carrier, negativeZero.context),
+    { kind: "numeric-cast", expression: { kind: "unary", operator: "-", operand: { kind: "float-literal", text: "0.0_f64" } }, target: "f32" });
+  assertNoTargetDiagnostics(authored.context.diagnostics);
+  assertNoTargetDiagnostics(actual.context.diagnostics);
+  assertNoTargetDiagnostics(negativeZero.context.diagnostics);
 });
 
 test("wide bigint literals retain their checked native signedness without rounding", () => {
