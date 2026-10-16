@@ -8,7 +8,7 @@ import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
-import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
+import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -117,6 +117,9 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     sourceTypes,
     callableSignatureCarrier(declaration) {
       return walk.callableSignatureCarrierFor(walk, declaration);
+    },
+    callableParameterCarriers(declaration) {
+      return finalizeRustCallableParameterAbis(walk, declaration)?.map(parameter => parameter.parameterCarrier);
     },
     callableStorageCarrier(subject, logicalCarrier, environmentFor, instanceFor) {
       const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
