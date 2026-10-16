@@ -48,7 +48,7 @@ export function value(limit: number): number {
     };
     program.sourceFiles.forEach(visit);
     const definitions = program.projectTypes.definitions;
-    const item = definitions.find(definition => definition.name === "Item");
+    const item = definitions.find(definition => definition.sourceName === "Item");
     assert.equal(item !== undefined, true, "the checked constructor fixture has a real definition");
     const carriers = definitions.map(definition => program.projectTypes.openCarrier(definition));
     const itemCarrier = program.projectTypes.openCarrier(item);
