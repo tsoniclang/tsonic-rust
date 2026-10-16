@@ -24,7 +24,7 @@ function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
         ? { kind: "js-promise", outputCarrier, futureCarrier: rustJsPromiseTargetType(outputCarrier),
           lowering: { kind: "settled", settledAwaits: [] } } : undefined },
       sourceCallableReturn: empty, sourceErrorEffects: empty, contextualValueConversion: empty,
-      projectCallableAdapters: empty },
+      projectCallableAdapters: empty, targetOperation: empty },
     names: { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined,
       callableValueNameForDeclaration: () => undefined },
     callables: { native: { inputs: [] }, nativeGenericProducers: { errorAritiesFor: () => [] } },

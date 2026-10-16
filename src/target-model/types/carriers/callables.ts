@@ -46,12 +46,13 @@ export function rustCallableTargetType(
   parameters: readonly TargetTypeRef[],
   result: TargetTypeRef,
   lifetime: RustLifetimeRef = rustPlaceholderLifetime,
+  error: TargetTypeRef = rustProgramErrorTargetType(),
 ): TargetTypeRef {
   return Object.freeze({
     kind: "target-named",
     id: rustCallableTargetId,
     genericArguments: Object.freeze([rustLifetimeGenericArgument(lifetime),
-      ...rustTypeGenericArguments([Object.freeze({ kind: "tuple", elements: Object.freeze([...parameters]) }), result])]),
+      ...rustTypeGenericArguments([Object.freeze({ kind: "tuple", elements: Object.freeze([...parameters]) }), result, error])]),
   });
 }
 
@@ -83,7 +84,7 @@ export function rustCallableInputTargetType(
 }
 
 export function rustCallableInputProtocol(carrier: TargetTypeRef | undefined):
-  { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef } | undefined {
+  { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly error?: TargetTypeRef } | undefined {
   return carrier?.kind === "reference" && !carrier.mutable &&
     carrier.referent.kind === "target-named" && carrier.referent.id === rustCallableInputTargetId
     ? rustCallableProtocol(carrier.referent) : undefined;
@@ -91,7 +92,8 @@ export function rustCallableInputProtocol(carrier: TargetTypeRef | undefined):
 
 export function rustCallableProtocol(
   carrier: TargetTypeRef | undefined,
-): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly lifetime?: RustLifetimeRef } | undefined {
+): { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly lifetime?: RustLifetimeRef;
+  readonly error?: TargetTypeRef } | undefined {
   const frame = rustFrameCallableProtocol(carrier);
   if (frame !== undefined) return frame;
   if (carrier?.kind === "reference") return rustCallableInputProtocol(carrier);
@@ -102,10 +104,11 @@ export function rustCallableProtocol(
   const lifetime = carrier.id === rustCallableTargetId ? carrier.genericArguments?.[0] : undefined;
   if (carrier.id === rustCallableTargetId && lifetime?.kind !== "lifetime") return undefined;
   const arguments_ = rustOnlyTypeGenericArguments(lifetime === undefined ? carrier.genericArguments : carrier.genericArguments?.slice(1));
-  if (arguments_?.length !== 2) return undefined;
-  const [argumentsCarrier, result] = arguments_;
+  if (arguments_?.length !== (lifetime === undefined ? 2 : 3)) return undefined;
+  const [argumentsCarrier, result, error] = arguments_;
   return argumentsCarrier?.kind === "tuple" && result !== undefined
-    ? { parameters: argumentsCarrier.elements, result, ...(lifetime?.kind === "lifetime" ? { lifetime: lifetime.lifetime } : {}) }
+    ? { parameters: argumentsCarrier.elements, result, error: error ?? rustProgramErrorTargetType(),
+      ...(lifetime?.kind === "lifetime" ? { lifetime: lifetime.lifetime } : {}) }
     : undefined;
 }
 
@@ -142,6 +145,7 @@ export function rustStructuralMethodStorageCarrier(
     [receiverCarrier, ...callable.parameters],
     callable.result,
     callable.lifetime,
+    callable.error,
   );
   return presence === "optional" ? rustOptionTargetType(storageCarrier) : storageCarrier;
 }

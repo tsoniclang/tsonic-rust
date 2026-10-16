@@ -340,7 +340,8 @@ export function resolveFunctionExpressionCarrier(
     return undefined;
   }
   let constructionCarrier = rustCallableInputProtocol(selectedExpected) === undefined
-    ? selectedExpected : rustCallableTargetType(selectedParameters, selectedResult);
+    ? selectedExpected : rustCallableTargetType(selectedParameters, selectedResult, undefined,
+      rustCallableProtocol(selectedExpected)?.error);
   if (rustCallableProtocol(constructionCarrier)?.lifetime !== undefined) {
     const lifetime = rustRetainedValueLifetime(expression,
       [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier), walk);
