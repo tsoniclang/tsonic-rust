@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust, compileRust, artifactText, acmePlatformPackage, acmeTestingPackage } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, artifactText, acmePlatformPackage, acmeTestingPackage, boolCarrier, unitCarrier } from "../../helpers/rust-session.mjs";
 import { analyzeRustStatementCompletions } from "../../../dist/analysis/control-flow/statement-completion.js";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -79,7 +79,26 @@ test("native-valid nested outer-label continue no longer depends on a label spel
   const generated = artifactText(result, "src/index.rs");
   assert.match(generated, /continue 'loop(?:_\d+)?/u, "continue targets the native loop");
   assert.doesNotMatch(generated, /continue 'label/u, "a labelled block is never mistaken for the continue destination");
-  validateGeneratedProject("r05-nested-outer-label-continue", result.artifacts);
+  const nativeSource = `
+import { check } from "@acme/testing";
+function run(flag: boolean): number {
+  let total = 0;
+  outer: inner: for (let index = 0; index < 3; index++) {
+    if (flag) continue outer;
+    total += index;
+    if (total > 2) break outer;
+  }
+  return total;
+}
+export function main(): void { check(run(true) === 0); check(run(false) === 3); }
+main();
+`;
+  const native = compileRust({ surfaces: [], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_native_label_destinations" } },
+    files: { "index.ts": nativeSource } }).result;
+  assert.equal(native.diagnostics.length, 0,
+    native.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  validateGeneratedProject("r05-nested-outer-label-continue", native.artifacts, { run: true });
 });
 
 test("conflicting finalized operator identity is rejected at the analysis owner", () => {
@@ -160,4 +179,37 @@ main();
   assert.match(generated, /\.count = /u, "selected direct storage assignment is emitted");
   assert.doesNotMatch(generated, /\.set_count\(/u, "the renderer does not substitute another provider operation");
   validateGeneratedProject("r05-native-field-setter", result.artifacts, { run: true });
+});
+
+test("the canonical setter renderer preserves receiver and value effects for a selected native macro", () => {
+  const carrier = { kind: "target-named", id: "r05.Flag" };
+  const provider = createRustProviderPackage({ id: "r05-flag", displayName: "Native flag", version: "1.0.0",
+    modules: [{ moduleSpecifier: "@r05/flag", providerModuleId: "r05.flag", exports: [
+      { id: "Flag", name: "Flag", kind: "interface", members: [{ id: "Flag.value", name: "value", kind: "property", type: { kind: "boolean" } }] },
+      { id: "open", name: "open", kind: "function", signatures: [{ id: "open()", parameters: [],
+        returnType: { kind: "provider-ref", moduleSpecifier: "@r05/flag", exportName: "Flag" } }] },
+    ] }], types: [{ exportId: "Flag", targetCarrier: carrier }], carrierPaths: { "r05.Flag": "String" }, crates: [],
+    operations: [
+      { exportId: "open", operationKind: "method", target: { form: "call", path: "String::new" }, resultCarrier: carrier },
+      { exportId: "Flag", memberId: "Flag.value", operationKind: "property-set",
+        target: { form: "expression-macro", path: "core::assert", delimiter: "parentheses" },
+        parameterCarriers: [boolCarrier], resultCarrier: unitCarrier },
+    ] });
+  const nativeSource = `
+import type { int32 } from "@tsonic/core/types.js";
+import { open, type Flag } from "@r05/flag";
+import { check } from "@acme/testing";
+let order: int32 = 0;
+function receiver(): Flag { order = order * 10 + 1; return open(); }
+function value(): boolean { order = order * 10 + 2; return true; }
+export function main(): void { receiver().value = value(); check(order === 12); }
+main();
+`;
+  const { result } = compileRust({ surfaces: [], packages: [provider, acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_native_macro_setter" } },
+    files: { "index.ts": nativeSource } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  assert.match(artifactText(result, "src/index.rs"), /core::assert!\(/u, "the actual selected native macro is rendered");
+  validateGeneratedProject("r05-native-macro-setter", result.artifacts, { run: true });
 });
