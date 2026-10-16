@@ -7,33 +7,7 @@ import {
   rustStatementsReferencePath,
 } from "./source-usage.js";
 
-type FirstAccess = "read" | "write" | "exit" | "none" | `break:${string}`;
-
-export function firstDirectPathAccessInStatements(
-  statements: readonly RustStmt[],
-  path: string,
-): "read" | "write" | "none" {
-  for (const statement of statements) {
-    if (statement.kind === "let" && statement.name === path) {
-      return statement.init !== undefined && rustExpressionReferencesPath(statement.init, path)
-        ? "read"
-        : "none";
-    }
-    if (statement.kind === "assign" && statement.target.kind === "path" &&
-      statement.target.path === path) {
-      return statement.operator === "=" && !rustExpressionReferencesPath(statement.value, path)
-        ? "write"
-        : "read";
-    }
-    if (rustStatementReferencesPath(statement, path)) {
-      return "read";
-    }
-    if (statementAlwaysExits(statement)) {
-      return "none";
-    }
-  }
-  return "none";
-}
+export type FirstAccess = "read" | "write" | "exit" | "none" | `break:${string}`;
 
 export function statementAlwaysExits(statement: RustStmt): boolean {
   return statement.kind === "return" || statement.kind === "tail" ||
@@ -478,7 +452,7 @@ function firstAccessesInAssignment(
   );
 }
 
-function firstAccessesInExpression(
+export function firstAccessesInExpression(
   expression: RustExpr,
   path: string,
 ): ReadonlySet<FirstAccess> {
@@ -558,7 +532,7 @@ function firstAccessesInExpression(
   }
 }
 
-function firstAccessesInBlockExpression(
+export function firstAccessesInBlockExpression(
   expression: Extract<RustExpr, { readonly kind: "block" }>,
   path: string,
 ): ReadonlySet<FirstAccess> {
@@ -593,7 +567,7 @@ function firstAccessesInSequence(
   return outcomes;
 }
 
-function replaceNone(
+export function replaceNone(
   current: ReadonlySet<FirstAccess>,
   replacement: ReadonlySet<FirstAccess>,
 ): Set<FirstAccess> {
@@ -610,7 +584,7 @@ function replaceNone(
   return result;
 }
 
-function unionFirstAccesses(
+export function unionFirstAccesses(
   ...values: readonly ReadonlySet<FirstAccess>[]
 ): Set<FirstAccess> {
   return new Set(values.flatMap((value) => [...value]));

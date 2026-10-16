@@ -5,13 +5,18 @@ import { mapRustExpressionChildren } from "../syntax/expression-children.js";
 import { rustLintAttributes } from "../normalization/lint-policy.js";
 import {
   firstAccessesInStatements,
-  firstDirectPathAccessInStatements,
+  firstAccessesInExpression,
+  firstAccessesInBlockExpression,
   maxWritesInStatements,
+  replaceNone,
   statementAlwaysExits,
+  unionFirstAccesses,
+  type FirstAccess,
 } from "./source-dataflow.js";
 import {
   rustExpressionReferencesPath,
   rustExpressionChildren,
+  rustPatternBindsPath,
   rustStatementReferencesPath,
   rustStatementsReferencePath,
 } from "./source-usage.js";
@@ -21,20 +26,52 @@ export function finalizeRustBlockLiveness(
   continuation: readonly RustStmt[] = [],
   inheritedLocals: ReadonlySet<string> = new Set(),
 ): RustBlock {
+  return finalizeRustBlock(block, continuation, inheritedLocals,
+    path => firstAccessesInStatements(continuation, path));
+}
+
+type NextAccess = (path: string) => ReadonlySet<FirstAccess>;
+const noAccess: ReadonlySet<FirstAccess> = new Set(["none"]);
+const exitingAccess: NextAccess = () => new Set(["exit"]);
+
+function afterExpressions(expressions: readonly RustExpr[], after: NextAccess): NextAccess {
+  return path => {
+    let access = noAccess;
+    for (const expression of expressions) access = replaceNone(access, firstAccessesInExpression(expression, path));
+    return replaceNone(access, after(path));
+  };
+}
+
+function afterBlock(block: RustBlock, after: NextAccess): NextAccess {
+  return path => replaceNone(firstAccessesInBlockExpression({ kind: "block", body: block }, path), after(path));
+}
+
+function finalizeRustBlock(
+  block: RustBlock,
+  continuation: readonly RustStmt[],
+  inheritedLocals: ReadonlySet<string>,
+  after: NextAccess,
+): RustBlock {
   const statements = foldTrivialTerminalBinding(
     combineDirectLateInitializers(block.statements),
   );
   const locals = new Set(inheritedLocals);
+  const declared = new Set<string>();
   return {
     ...block,
     statements: statements.map((statement, index) => {
       const following = [...statements.slice(index + 1), ...continuation];
+      const suffix = { statements: statements.slice(index + 1) };
+      const ownBinding = statement.kind === "let" ? statement.name : undefined;
+      const next: NextAccess = path => afterBlock(suffix,
+        selected => declared.has(selected) || selected === ownBinding ? noAccess : after(selected))(path);
       const result = finalizeRustStatementLiveness(
-        finalizeRustNestedStatementLiveness(statement, following, locals),
+        finalizeRustNestedStatementLiveness(statement, following, locals, next),
         following,
         locals,
+        next,
       );
-      if (statement.kind === "let") locals.add(statement.name);
+      if (statement.kind === "let") { locals.add(statement.name); declared.add(statement.name); }
       return result;
     }),
   };
@@ -111,51 +148,89 @@ function finalizeRustNestedStatementLiveness(
   statement: RustStmt,
   following: readonly RustStmt[],
   locals: ReadonlySet<string>,
+  next: NextAccess,
 ): RustStmt {
-  const expression = (value: RustExpr, after: readonly RustStmt[] = following): RustExpr => {
+  const expression = (value: RustExpr, after: NextAccess = next,
+    suffix: readonly RustStmt[] = following): RustExpr => {
     if (value.kind === "closure" || value.kind === "closure-block" || value.kind === "async-block") return value;
-    if (value.kind === "block") return { ...value, body: finalizeRustBlockLiveness(value.body, after, locals) };
+    if (value.kind === "block") return { ...value, body: finalizeRustBlock(value.body, suffix, locals, after) };
+    if (value.kind === "conditional") {
+      const branches: NextAccess = path => unionFirstAccesses(
+        afterExpressions([value.whenTrue], after)(path), afterExpressions([value.whenFalse], after)(path));
+      return { ...value, condition: expression(value.condition, branches, suffix),
+        whenTrue: expression(value.whenTrue, after, suffix), whenFalse: expression(value.whenFalse, after, suffix) };
+    }
+    if (value.kind === "match") {
+      const branches: NextAccess = path => unionFirstAccesses(...value.arms.map(arm =>
+        rustPatternBindsPath(arm.pattern, path) ? after(path) : afterExpressions([arm.expression], after)(path)));
+      return { ...value, expression: expression(value.expression, branches, suffix),
+        arms: value.arms.map(arm => ({ ...arm, expression: expression(arm.expression,
+        path => rustPatternBindsPath(arm.pattern, path) ? noAccess : after(path), suffix) })) };
+    }
+    if (value.kind === "if-let") {
+      const branches: NextAccess = path => unionFirstAccesses(
+        rustPatternBindsPath(value.pattern, path) ? after(path) : afterExpressions([value.whenTrue], after)(path),
+        value.whenFalse === undefined ? after(path) : afterExpressions([value.whenFalse], after)(path));
+      return { ...value, expression: expression(value.expression, branches),
+        whenTrue: expression(value.whenTrue, path => rustPatternBindsPath(value.pattern, path) ? noAccess : after(path), suffix),
+        ...(value.whenFalse === undefined ? {} : { whenFalse: expression(value.whenFalse, after, suffix) }) };
+    }
+    if (value.kind === "return-expression" || value.kind === "break-expression") {
+      return value.expr === undefined ? value : { ...value, expr: expression(value.expr, exitingAccess, []) };
+    }
+    if (value.kind === "binary" && (value.operator === "&&" || value.operator === "||")) {
+      return { ...value, left: expression(value.left,
+        path => unionFirstAccesses(afterExpressions([value.right], after)(path), after(path)),
+        [{ kind: "expr", expr: value.right }, ...suffix]), right: expression(value.right, after, suffix) };
+    }
     const children = rustExpressionChildren(value);
-    return mapRustExpressionChildren(value, child => expression(child, [
-      ...children.filter(sibling => sibling !== child).map((expr): RustStmt => ({ kind: "expr", expr })), ...after,
-    ]), body => finalizeRustBlockLiveness(body, after, locals));
+    let childIndex = 0;
+    return mapRustExpressionChildren(value, child => {
+      const later = children.slice(++childIndex);
+      return expression(child, afterExpressions(later, after), [
+        ...later.map((expr): RustStmt => ({ kind: "expr", expr })), ...suffix,
+      ]);
+    }, body => finalizeRustBlock(body, suffix, locals, after));
   };
   switch (statement.kind) {
     case "if":
       return {
         ...statement,
-        condition: expression(statement.condition),
-        then: finalizeRustBlockLiveness(statement.then, following, locals),
+        condition: expression(statement.condition, path => unionFirstAccesses(
+          afterBlock(statement.then, next)(path), statement.else === undefined ? next(path)
+            : afterBlock(statement.else, next)(path))),
+        then: finalizeRustBlock(statement.then, following, locals, next),
         ...(statement.else === undefined
           ? {}
-          : { else: finalizeRustBlockLiveness(statement.else, following, locals) }),
+          : { else: finalizeRustBlock(statement.else, following, locals, next) }),
       };
 
     case "scope":
     case "unsafe-scope":
       if (statement.body.innerAttrs?.includes(rustLintAttributes.unusedAssignmentsInner)) return statement;
-      return { ...statement, body: finalizeRustBlockLiveness(statement.body, following, locals) };
+      return { ...statement, body: finalizeRustBlock(statement.body, following, locals, next) };
     case "loop":
     case "while":
     case "while-let-some":
     case "for":
-      return { ...statement, body: finalizeRustBlockLiveness(statement.body, [statement, ...following], locals) };
+      return { ...statement, body: finalizeRustBlock(statement.body, [statement, ...following], locals,
+        path => replaceNone(firstAccessesInStatements([statement], path), next(path))) };
     case "resource-scope":
       return {
         ...statement,
-        body: finalizeRustBlockLiveness(statement.body),
-        cleanup: finalizeRustBlockLiveness(statement.cleanup),
+        body: finalizeRustBlock(statement.body, [], new Set(), () => noAccess),
+        cleanup: finalizeRustBlock(statement.cleanup, [], new Set(), () => noAccess),
       };
     case "try-scope":
       return {
         ...statement,
-        body: finalizeRustBlockLiveness(statement.body),
+        body: finalizeRustBlock(statement.body, [], new Set(), () => noAccess),
         ...(statement.catchClause === undefined
           ? {}
           : {
               catchClause: {
                 ...statement.catchClause,
-                body: finalizeRustBlockLiveness(statement.catchClause.body),
+                body: finalizeRustBlock(statement.catchClause.body, [], new Set(), () => noAccess),
               },
             }),
         ...(statement.finallyClause === undefined
@@ -163,15 +238,16 @@ function finalizeRustNestedStatementLiveness(
           : {
               finallyClause: {
                 ...statement.finallyClause,
-                body: finalizeRustBlockLiveness(statement.finallyClause.body),
+                body: finalizeRustBlock(statement.finallyClause.body, [], new Set(), () => noAccess),
               },
             }),
       };
-    case "let": return statement.init === undefined ? statement : { ...statement, init: expression(statement.init) };
+    case "let": return statement.init === undefined ? statement : { ...statement, init: expression(statement.init,
+      path => statement.name === path ? noAccess : next(path)) };
     case "expr":
     case "tail": return { ...statement, expr: expression(statement.expr) };
     case "assign": return { ...statement, target: expression(statement.target), value: expression(statement.value) };
-    case "return": return statement.expr === undefined ? statement : { ...statement, expr: expression(statement.expr) };
+    case "return": return statement.expr === undefined ? statement : { ...statement, expr: expression(statement.expr, exitingAccess, []) };
     case "break":
     case "continue":
     case "completion-exit":
@@ -186,6 +262,7 @@ function finalizeRustStatementLiveness(
   statement: RustStmt,
   following: readonly RustStmt[],
   locals: ReadonlySet<string>,
+  next: NextAccess,
 ): RustStmt {
   if (statement.kind === "let") {
     const writes = maxWritesInStatements(following, statement.name);
@@ -210,8 +287,9 @@ function finalizeRustStatementLiveness(
   }
   if (statement.kind === "assign" && statement.operator === "=" &&
     statement.target.kind === "path") {
-    if (firstDirectPathAccessInStatements(following, statement.target.path) !== "write" &&
-      !(locals.has(statement.target.path) && !rustStatementsReferencePath(following, statement.target.path))) {
+    const access = next(statement.target.path);
+    if (access.has("read") || !locals.has(statement.target.path) &&
+      !(access.size === 1 && access.has("write"))) {
       return statement;
     }
     return {
