@@ -4,7 +4,7 @@ import { carrierAfterMode, finalizedConversionIsValid, isRustFinalizedArrayInput
 import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
 import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
-import { isRustErrorBoundary } from "../../../target-model/operations/error-boundary.js";
+import { isRustFallibleErrorBoundary, isRustOperationErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { isRustTargetGenericArgument, isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustFutureOutputCarrier, rustFutureTargetType, rustSliceRefTargetType } from "../../../target-model/types/index.js";
 import { rustProviderOperationFormAcceptsTargetGenericArguments, rustProviderOperationFormContractViolation } from "../../../policy/operations/forms.js";
@@ -48,7 +48,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     (abi.effects.evaluation !== "observable" && abi.effects.evaluation !== "pure") ||
     (abi.effects.invocation !== "infallible" && abi.effects.invocation !== "fallible") ||
     (abi.effects.awaiting !== "not-applicable" && abi.effects.awaiting !== "infallible" && abi.effects.awaiting !== "fallible") ||
-    !isRustErrorBoundary(abi.effects.errorBoundary) ||
+    !isRustOperationErrorBoundary(abi.effects.errorBoundary) ||
     (abi.effects.errorBoundary === "provider-native"
       ? !isRustTargetTypeRef(abi.effects.errorCarrier)
       : abi.effects.errorCarrier !== undefined) ||
@@ -179,7 +179,7 @@ export function validateRustFinalizedOperationAbi(candidate: unknown, definition
     const returnedFutureOutput = rustFutureOutputCarrier(abi.result.carrier);
     const effectsValid = abi.effects.awaiting === "not-applicable"
       ? (abi.effects.invocation === "infallible" && abi.effects.errorBoundary === "none") ||
-        (abi.effects.invocation === "fallible" && abi.effects.errorBoundary !== "none")
+        (abi.effects.invocation === "fallible" && isRustFallibleErrorBoundary(abi.effects.errorBoundary))
       : abi.effects.invocation === "infallible" && returnedFutureOutput !== undefined &&
         ((abi.effects.awaiting === "infallible" && abi.effects.errorBoundary === "none") ||
           (abi.effects.awaiting === "fallible" && abi.effects.errorBoundary !== "none"));
@@ -361,7 +361,7 @@ function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"
     (value.evaluation === "observable" || value.evaluation === "pure") &&
     (value.invocation === "infallible" || value.invocation === "fallible") &&
     (value.awaiting === "not-applicable" || value.awaiting === "infallible" || value.awaiting === "fallible") &&
-    isRustErrorBoundary(value.errorBoundary) &&
+    isRustOperationErrorBoundary(value.errorBoundary) &&
     (value.errorCarrier === undefined || isRustTargetTypeRef(value.errorCarrier)) &&
     (!Object.prototype.hasOwnProperty.call(value, "nativeErrorCarriers") ||
       value.errorBoundary === "source-program" &&

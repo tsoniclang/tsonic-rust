@@ -2,7 +2,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model
 import { emptyRustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustFutureOutputCarrier, rustAwaitCarrier, rustJsPromiseTargetId, isRustProgramErrorCarrier } from "../../target-model/types/index.js";
+import { rustFutureOutputCarrier, rustAwaitCarrier, rustJsPromiseOutputTargetType, rustJsPromiseTargetId } from "../../target-model/types/index.js";
 import { validateRustFinalizedOperationAbi } from "../operations/finalized-operation/validation.js";
 import { finalizedConversionIsValid, finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
@@ -99,14 +99,13 @@ export function rustNativeFutureValueForSourceCallBranch(
 export function rustFutureValueForSourceStorage(carrier: TargetTypeRef | undefined): RustFutureValueFact | undefined {
   const selected = rustAwaitCarrier(carrier);
   const future = selected?.futureCarrier;
-  const error = future?.kind === "target-named" ? future.genericArguments?.[2] : undefined;
   if (selected === undefined || future?.kind !== "target-named" || future.id !== rustJsPromiseTargetId ||
-    error?.kind !== "type" || !isRustProgramErrorCarrier(error.type)) return undefined;
+    rustJsPromiseOutputTargetType(future) === undefined) return undefined;
   return {
     outputCarrier: selected.outputCarrier,
     awaitedConversion: { kind: "identity", sourceCarrier: selected.outputCarrier,
       targetCarrier: selected.outputCarrier, fallible: false },
-    awaiting: "fallible", errorBoundary: "source-program",
+    awaiting: "fallible", errorBoundary: "js-rejection",
   };
 }
 
@@ -132,7 +131,7 @@ export function rustFutureValueMatchesCarrier(
       : ["outputCarrier", "awaitedConversion", "awaiting", "errorBoundary", "errorCarrier"]) &&
     finalizedConversionIsValid(fact.awaitedConversion, definitions) &&
     ((fact.awaiting === "infallible" && fact.errorBoundary === "none") ||
-      (fact.awaiting === "fallible" && (fact.errorBoundary === "source-program" ||
+      (fact.awaiting === "fallible" && (fact.errorBoundary === "source-program" || fact.errorBoundary === "js-rejection" ||
         fact.errorBoundary === "target-runtime" || fact.errorBoundary === "provider-native" || fact.errorBoundary === "source-native"))) &&
     (fact.errorBoundary === "provider-native" || fact.errorBoundary === "source-native"
       ? isRustTargetTypeRef(fact.errorCarrier)

@@ -12,7 +12,6 @@ import { rustProviderOperationFormDeclaresWritableInput } from "../../forms.js";
 import type { RustDispatchContextInput } from "../../../../target-model/operations/dispatch-contexts.js";
 import { isRustDispatchContextInput } from "../../dispatch-contexts.js";
 import { isClosedMetadata, isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
-import type { RustSourceGenericContract } from "../../../../target-model/lifetimes/index.js";
 
 export interface JsValueProjection {
   readonly sourceIndex: number;
@@ -35,7 +34,6 @@ export function jsValueProjectionsAreValid(
 
 export interface JsOperationRequest {
   readonly propertyProjection?: (argumentIndex: number) => RustValueConversion | undefined;
-  readonly storageContract?: RustSourceGenericContract;
   readonly ownerName: string;
   readonly memberName: string;
   readonly operationKind: "call" | "property" | "indexer" | "constructor" | "property-set" | "index-set" | "delete";
@@ -200,9 +198,10 @@ export type JsCarrierRef =
   | { readonly ref: "date" }
   | { readonly ref: "future-output" }
   | { readonly ref: "promise-output" }
-  | { readonly ref: "program-error" }
   | { readonly ref: "promise-input-output" }
   | { readonly ref: "promise-of-input-output" }
+  | { readonly ref: "promise-of-input-output-array" }
+  | { readonly ref: "promise-source-result" }
   | { readonly ref: "promise-resolved-value" }
   | { readonly ref: "promise-of-resolved-value" }
   | { readonly ref: "resolved-promise" }
@@ -239,7 +238,7 @@ export interface JsOperationRowData {
   readonly asynchronous?: true;
   readonly returnedFuture?: {
     readonly awaiting: "infallible" | "fallible";
-    readonly errorBoundary: "none" | "source-program";
+    readonly errorBoundary: "none" | "js-rejection";
   };
   readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly valueProjections?: readonly JsValueProjection[];

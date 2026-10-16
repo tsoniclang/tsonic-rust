@@ -1,6 +1,6 @@
 import type { Node, SourcePrimitiveKind } from "@tsonic/tsts";
 import type { RustBinaryOperator } from "../syntax/tokens.js";
-import type { RustErrorBoundary, RustFallibleErrorBoundary } from "./error-boundary.js";
+import type { RustErrorBoundary, RustFallibleErrorBoundary, RustOperationErrorBoundary } from "./error-boundary.js";
 import type {
   RustTargetAssociatedConstraint,
   RustTargetGenericArgument,
@@ -494,7 +494,7 @@ export interface RustProviderOperationTemplate<
   readonly isFallible: boolean;
   readonly returnedFuture?: {
     readonly awaiting: "infallible" | "fallible";
-    readonly errorBoundary: RustErrorBoundary;
+    readonly errorBoundary: RustOperationErrorBoundary;
     readonly errorCarrier?: TargetTypeRef;
   };
   readonly evaluation?: "pure";

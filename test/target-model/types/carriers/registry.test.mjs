@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { carrierDeclarationId, loadCarrierRegistry, validateCarrierRegistry } from "../../../../../tsonic/test/helpers/carrier-registry.mjs";
 import { rustFixedArrayTargetType, rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/carriers/native.js";
 import { rustFutureTargetType } from "../../../../dist/target-model/types/carriers/primitives.js";
-import { rustJsPromiseTargetTypeWithLifetime, rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
+import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
+import { rustJsPromiseTargetType } from "../../../../dist/target-model/types/carriers/promises.js";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/projections.js";
 import { rustNativeFutureOutputType } from "../../../../dist/target-model/types/callable-completions.js";
 import { rustCallableInputTargetType } from "../../../../dist/target-model/types/carriers/callables.js";
@@ -39,9 +40,12 @@ test("Rust registry is metadata only and preserves exact native arguments, quali
   ];
   const imported = rustNamedTargetType("checked:native:type", "user::Carrier", arguments_);
   assert.deepEqual(rustNamedTypeCarrierValue(imported).genericArguments, arguments_);
-  const pending = rustJsPromiseTargetTypeWithLifetime(value, lifetime);
-  assert.equal(pending.genericArguments[0].lifetime === lifetime, true);
-  assert.equal(pending.genericArguments[1].type === value, true);
+  const pending = rustJsPromiseTargetType(value);
+  assert.equal(pending.genericArguments.length, 1);
+  assert.equal(pending.genericArguments[0].type === value, true);
+  const borrowedPayload = { kind: "reference", referent: value, mutable: false, lifetime };
+  assert.equal(rustJsPromiseTargetType(borrowedPayload).genericArguments[0].type.lifetime === lifetime, true,
+    "a borrow inside the payload keeps its exact lifetime");
   assert.equal(rustFutureTargetType(value).genericArguments[0].type === value, true);
   const input = rustCallableInputTargetType([], value, lifetime);
   assert.equal(input.kind, "reference");

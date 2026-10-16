@@ -7,9 +7,7 @@ import { rustSourcePrimitiveTargetType, rustSourceOptionalTargetType, rustSource
   rustUnitTargetType, rustFutureTargetType } from "../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { emptyRustTypeDefinitions } from "../../dist/target-model/types/source-union-definitions.js";
-import { rustJsPromiseTargetTypeWithLifetime } from "../../dist/target-model/types/carriers/js.js";
-import { rustJsPromiseResolutionTargetId } from "../../dist/target-model/types/carriers/source-types.js";
-import { rustStaticLifetime } from "../../dist/target-model/lifetimes/index.js";
+import { rustJsPromiseResolutionTargetType, rustJsPromiseTargetType } from "../../dist/target-model/types/carriers/promises.js";
 
 const integer = rustSourcePrimitiveTargetType("int32");
 const unit = rustUnitTargetType();
@@ -95,16 +93,15 @@ test("authored completion payloads preserve nominal and source generic identity"
   assert.equal(instantiateRustNativeCompletion(completion, () => future, emptyRustTypeDefinitions) === undefined, true);
 });
 
-test("runtime completion unions retain their owned Promise layout and selected error", () => {
-  const sourceError = { kind: "type-parameter", identity: "source-error", name: "SourceError" };
-  const carrier = { kind: "target-named", id: rustJsPromiseResolutionTargetId,
-    genericArguments: [{ kind: "type", type: integer }, { kind: "type", type: sourceError }] };
+test("runtime completion unions retain their one-argument Promise layout", () => {
+  const carrier = rustJsPromiseResolutionTargetType(integer);
   const completion = rustNativeCallableCompletion(carrier);
   assert.equal(completion !== undefined, true);
-  const promise = rustJsPromiseTargetTypeWithLifetime(integer, rustStaticLifetime, nativeError);
+  const promise = rustJsPromiseTargetType(integer);
   const selected = instantiateRustNativeCompletion(completion, () => promise, emptyRustTypeDefinitions);
+  assert.equal(selected.genericArguments.length, 1);
   assert.equal(rustTargetTypeRefEquals(selected.genericArguments[0].type, integer), true);
-  assert.equal(rustTargetTypeRefEquals(selected.genericArguments[1].type, nativeError), true);
-  for (const incompatible of [rustFutureTargetType(integer), rustJsPromiseTargetTypeWithLifetime(unit, rustStaticLifetime, nativeError)])
+  for (const incompatible of [rustFutureTargetType(integer), rustJsPromiseTargetType(unit),
+    { ...promise, genericArguments: [...promise.genericArguments, { kind: "type", type: nativeError }] }])
     assert.equal(instantiateRustNativeCompletion(completion, () => incompatible, emptyRustTypeDefinitions) === undefined, true);
 });

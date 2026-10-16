@@ -8,7 +8,7 @@ import { visitConversionContract } from "../../../dist/analysis/reachability/gen
 import { rustUnionPayloadAdmission } from "../../../dist/target-model/conversions/union-injection.js";
 import { rustUnionInjectionPath } from "../../../dist/target-model/types/union-relations.js";
 import {
-  rustAbsenceTargetType, rustJsErrorTargetType, rustJsPromiseTargetTypeWithLifetime,
+  rustAbsenceTargetType, rustJsErrorTargetType, rustJsPromiseTargetType,
   rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType,
   rustJsValueTargetType, rustTsValueTargetType,
 } from "../../../dist/target-model/types/index.js";
@@ -146,8 +146,8 @@ function unionDefinitions(rows) {
 }
 
 function promiseFixture() {
-  const source = rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "static" });
-  const payloadCarrier = rustJsPromiseTargetTypeWithLifetime(rustUnitTargetType(), { kind: "placeholder" });
+  const source = rustJsPromiseTargetType(rustAbsenceTargetType());
+  const payloadCarrier = rustJsPromiseTargetType(rustUnitTargetType());
   const target = rustSourceUnionTargetType("/src/index.ts", "Completion");
   const definitions = unionDefinitions([[target, [
     { name: "Future", carrier: payloadCarrier }, { name: "Text", carrier: rustStringTargetType() },
@@ -207,12 +207,13 @@ test("exact union payload admission is generic and constructs nested native vari
   assert.doesNotMatch(JSON.stringify(planned), /clone|map|Box|Rc|RefCell|as_mut|cast|Promise/u);
 });
 
-test("union payload admission rejects ambiguous, width-changing, error-changing and escaping lifetime choices", () => {
+test("union payload admission rejects ambiguous, width-changing and arity-changing promise choices", () => {
   const { source, payloadCarrier, target, definitions } = promiseFixture();
   for (const candidate of [
-    rustJsPromiseTargetTypeWithLifetime(rustSourcePrimitiveTargetType("uint64"), { kind: "static" }),
-    rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "static" }, rustJsErrorTargetType()),
-    rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "bound", binderIdentity: "binder", identity: "scope", name: "scope" }),
+    rustJsPromiseTargetType(rustSourcePrimitiveTargetType("uint64")),
+    { ...source, genericArguments: [...source.genericArguments, { kind: "type", type: rustJsErrorTargetType() }] },
+    { ...source, genericArguments: [{ kind: "lifetime", lifetime: { kind: "bound", binderIdentity: "binder",
+      identity: "scope", name: "scope" } }, ...source.genericArguments] },
     { ...source, id: "unrelated.Promise" },
   ]) assert.equal(selectRustSourceValueConversion(candidate, target, definitions), undefined);
   const staticTarget = rustSourceUnionTargetType("/src/index.ts", "StaticOnly");

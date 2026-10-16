@@ -3,11 +3,11 @@ import test from "node:test";
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { createRustGeneratedUnionPlan } from "../../../dist/analysis/objects/generated-union-plan.js";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
-import { rustSourceUnionTargetType, rustJsPromiseTargetTypeWithLifetime, rustStringTargetType } from "../../../dist/target-model/types/index.js";
+import { rustSourceUnionTargetType, rustJsPromiseTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
-const error = name => ({ kind: "type-parameter", identity: name, name });
-const pending = name => rustJsPromiseTargetTypeWithLifetime(integer, { kind: "static" }, error(name));
+const output = name => ({ kind: "type-parameter", identity: name, name });
+const pending = name => rustJsPromiseTargetType(output(name));
 const union = (fileName, payloads) => ({
   carrier: rustSourceUnionTargetType(fileName, `Union${payloads.length}`, [], "generated", { kind: "physical", types: payloads }),
   variants: payloads.map((carrier, index) => ({ name: `Variant${index}`, carrier })),

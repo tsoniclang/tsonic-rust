@@ -1,4 +1,4 @@
-import type { RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
+import type { RustAwaitedErrorBoundary, RustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../target-model/operations/error-boundary.js";
 import { rustErrorType, rustLocalErrorOwner, rustPropagateLocalError,
@@ -8,6 +8,11 @@ export const rustTargetRuntimeErrorType: RustType = Object.freeze({
   kind: "named",
   path: "tsonic_rust_runtime::TsonicError",
   identity: rustRuntimeErrorTypeIdentity,
+});
+
+export const rustJsRejectionErrorType: RustType = Object.freeze({
+  kind: "named",
+  path: "js_abi::JsValue",
 });
 
 export function applyRustErrorBoundary(
@@ -26,7 +31,7 @@ export function applyRustErrorBoundary(
 
 export function applyRustLocalErrorBoundary(
   expression: RustExpr,
-  boundary: RustFallibleErrorBoundary,
+  boundary: RustAwaitedErrorBoundary,
   region: RustFallibleBoundary,
   providerErrorType?: RustType,
 ): RustExpr | undefined {
@@ -36,7 +41,7 @@ export function applyRustLocalErrorBoundary(
 }
 
 export function rustErrorBoundaryOperandType(
-  boundary: RustFallibleErrorBoundary,
+  boundary: RustAwaitedErrorBoundary,
   currentErrorType: RustType,
   providerErrorType?: RustType,
 ): RustType {
@@ -44,5 +49,6 @@ export function rustErrorBoundaryOperandType(
     throw new Error("A provider-native Rust error boundary requires one exact provider error type.");
   }
   return boundary === "provider-native" ? providerErrorType!
-    : boundary === "target-runtime" ? rustTargetRuntimeErrorType : currentErrorType;
+    : boundary === "target-runtime" ? rustTargetRuntimeErrorType
+    : boundary === "js-rejection" ? rustJsRejectionErrorType : currentErrorType;
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sourceCallEffectsMatch } from "../../../../dist/backend/planner/expressions/calls/source.js";
-import { rustJsPromiseTargetType } from "../../../../dist/target-model/types/carriers/js.js";
+import { rustJsPromiseTargetType } from "../../../../dist/target-model/types/carriers/promises.js";
 import { int32Carrier } from "../../../helpers/rust-session.mjs";
 import { rustSourceOptionalTargetType } from "../../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";

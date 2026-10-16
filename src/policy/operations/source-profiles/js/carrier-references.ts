@@ -18,10 +18,9 @@ import {
   rustJsSymbolTargetType,
   rustJsTypedArrayTargetType,
   rustFutureOutputCarrier,
+  rustJsPromiseOutputTargetType,
   rustJsPromiseSettledResultTargetType,
   rustJsPromiseTargetType,
-  rustProgramErrorTargetType,
-  rustJsPromiseTargetTypeWithLifetime,
   rustJsRegExpExecArrayTargetType,
   rustJsRegExpIndicesTargetType,
   rustJsRegExpMatchArrayTargetType,
@@ -47,15 +46,12 @@ import {
   rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
 import { rustInferCarrier } from "./rows.js";
-import type { RustSourceGenericContract } from "../../../../target-model/lifetimes/index.js";
-import { selectRustSuspendedStorageLifetime } from "../../../ownership/suspended-storage.js";
 import { rustJsIntlGroupingTargetId } from "../../../../target-model/types/carriers/source-types.js";
 import type { JsCarrierRef } from "./model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 
 export interface JsLaneBindings {
-  readonly storageContract?: RustSourceGenericContract;
   readonly element?: TargetTypeRef;
   readonly mapKey?: TargetTypeRef;
   readonly mapValue?: TargetTypeRef;
@@ -327,20 +323,23 @@ export function resolveCarrierRef(reference: JsCarrierRef, bindings: JsLaneBindi
       return rustFutureOutputCarrier(bindings.sourceResult);
     case "promise-output":
       return bindings.promiseOutput;
-    case "program-error":
-      return rustProgramErrorTargetType();
     case "promise-input-output":
       return bindings.promiseInputOutput;
     case "promise-of-input-output":
       return bindings.promiseInputOutput === undefined
         ? undefined
         : rustJsPromiseTargetType(bindings.promiseInputOutput);
+    case "promise-of-input-output-array":
+      return bindings.promiseInputOutput === undefined
+        ? undefined
+        : rustJsPromiseTargetType(rustJsArrayTargetType(bindings.promiseInputOutput));
+    case "promise-source-result":
+      return rustJsPromiseOutputTargetType(bindings.sourceResult) === undefined ? undefined : bindings.sourceResult;
     case "promise-resolved-value":
       return bindings.authoredMethodTypeArguments?.[0] ?? bindings.arguments?.[0];
     case "promise-of-resolved-value": {
       const value = resolveCarrierRef({ ref: "promise-resolved-value" }, bindings);
-      const lifetime = value === undefined ? undefined : selectRustSuspendedStorageLifetime([value], bindings.storageContract);
-      return value === undefined || lifetime === undefined ? undefined : rustJsPromiseTargetTypeWithLifetime(value, lifetime);
+      return value === undefined ? undefined : rustJsPromiseTargetType(value);
     }
     case "resolved-promise": {
       const promise = bindings.arguments?.[0];

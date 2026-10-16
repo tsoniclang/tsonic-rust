@@ -3,7 +3,7 @@ import test from "node:test";
 import { planRustNativeProducerBridge } from "../../../../dist/backend/planner/declarations/callables/native-producer-bridges.js";
 import { createRustNativeCallableProtocolRegistry } from "../../../../dist/analysis/callables/native-protocols.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
-import { rustSourcePrimitiveTargetType, rustFutureTargetType, rustJsPromiseTargetTypeWithLifetime,
+import { rustSourcePrimitiveTargetType, rustFutureTargetType, rustJsPromiseTargetType,
   rustSourceOptionalTargetType, rustCallableTargetType, rustStrTargetType }
   from "../../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType } from "../../../../dist/target-model/types/carriers/generic-callables.js";
@@ -66,7 +66,7 @@ test("borrowed inputs add only the reserved lifetime-bound producer helper", () 
 
 test("JS completion remains the concrete Promise carrier with its selected error type", () => {
   const fixture = nativeProducerFixture({ parameters: [integer], result: rustSourceOptionalTargetType(
-    rustJsPromiseTargetTypeWithLifetime(integer, { kind: "static" })),
+    rustJsPromiseTargetType(integer)),
   });
   const items = nativeProducerItems(fixture);
   assert.equal(items.length, 2);
@@ -101,7 +101,7 @@ test("borrowed generic environments share exact GAT bounds without imposing a st
 
 test("borrowed JS completion uses its input lifetime without manufacturing a native future", () => {
   const fixture = nativeProducerFixture({ parameters: [borrowed], result:
-    rustJsPromiseTargetTypeWithLifetime(borrowed, { kind: "placeholder" }),
+    rustJsPromiseTargetType(borrowed),
   });
   const items = nativeProducerItems(fixture);
   const printed = printNativeProducerItems(items);

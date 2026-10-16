@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceTypeCarrier, rustSourceUnionTargetType, rustStringTargetType, rustSourcePrimitiveTargetType,
-  rustOptionTargetType, rustJsPromiseTargetTypeWithLifetime } from "../../../../dist/target-model/types/index.js";
+  rustOptionTargetType, rustJsPromiseTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 import { composeRustUnionArmMappings, selectRustUnionArmMapping } from "../../../../dist/target-model/types/union-relations.js";
 import { selectRustProjectUnionMapConversion, isRustProjectUnionMapConversion, rustProjectUnionMapConversionMatches } from "../../../../dist/target-model/conversions/project-union.js";
@@ -115,7 +115,7 @@ test("project union admission rejects nonproject source families, widths, borrow
     { kind: "target-named", id: "native.Derived" },
     rustSourceTypeCarrier(original.fileName, "Derived", "enum"),
     { kind: "reference", referent: derived, mutable: false, lifetime: { kind: "static" } },
-    rustOptionTargetType(derived), rustJsPromiseTargetTypeWithLifetime(derived, { kind: "static" }),
+    rustOptionTargetType(derived), rustJsPromiseTargetType(derived),
   ];
   for (const candidate of cases) {
     const changed = { ...definitions, programErrorOrigin: () => undefined, sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, source)

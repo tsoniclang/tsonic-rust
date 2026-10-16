@@ -1,7 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustSourcePolicyContext } from "../../model/context.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustJsPromiseTargetId } from "../../../target-model/types/carriers/source-types.js";
 import { rustOwnedStorageChildren } from "../storage/owned-storage.js";
 import { rustRetainedEnvironment } from "../../ownership/retained-environments.js";
 import type { RustRetainedEnvironment } from "../../../target-model/records/retained-environments.js";
@@ -27,6 +26,5 @@ export function closeRustRetainedResult(
 }
 
 function containsStorage(carrier: TargetTypeRef): boolean {
-  return carrier.kind === "target-named" && carrier.id === rustJsPromiseTargetId ||
-    rustCallableProtocol(carrier)?.lifetime !== undefined || rustOwnedStorageChildren(carrier).some(containsStorage);
+  return rustCallableProtocol(carrier)?.lifetime !== undefined || rustOwnedStorageChildren(carrier).some(containsStorage);
 }

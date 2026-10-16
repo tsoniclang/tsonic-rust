@@ -9,7 +9,6 @@ import { selectedCallReceiverValueCarrier } from "./instantiation.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
 import { canRequireSourceClone } from "../clone-requirements.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
-import { rustEnclosingStorageContract } from "../../../../policy/ownership/suspended-storage.js";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { JsOperationRequest } from "../../../../policy/operations/source-profiles/js/model.js";
@@ -45,7 +44,6 @@ export function createRustJsCallRequest(
     : resolveRustTargetTypeRef(request.source.sourceResultType, context, options);
   return {
     propertyProjection: createRustPropertyProjectionSelector(request, context, options, argumentCarriers),
-    storageContract: rustEnclosingStorageContract(request.source.call, context.ast, context.sourceLifetimes),
     ownerName: selectedSourceMember.ownerName,
     memberName: selectedSourceMember.memberName,
     operationKind: "call",

@@ -1,5 +1,5 @@
 import type { RustArgumentMode, RustFinalizedOperationKind, RustOperationEvaluationEffect, RustProviderConstantArgument, RustProviderOperationForm, RustValueConversion } from "../operations/model.js";
-import type { RustErrorBoundary, RustFallibleErrorBoundary } from "../operations/error-boundary.js";
+import type { RustFallibleErrorBoundary, RustOperationErrorBoundary } from "../operations/error-boundary.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 import type { RustResolvedDispatchContextInput } from "../operations/dispatch-contexts.js";
 
@@ -117,7 +117,7 @@ export interface RustFinalizedOperationAbi {
     readonly evaluation: RustOperationEvaluationEffect;
     readonly invocation: "infallible" | "fallible";
     readonly awaiting: "not-applicable" | "infallible" | "fallible";
-    readonly errorBoundary: RustErrorBoundary;
+    readonly errorBoundary: RustOperationErrorBoundary;
     readonly errorCarrier?: TargetTypeRef;
     readonly safety: "safe" | "requires-unsafe";
     readonly nativeErrorCarriers?: readonly TargetTypeRef[];
@@ -150,7 +150,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly isFallible: boolean;
   readonly returnedFuture?: {
     readonly awaiting: "infallible" | "fallible";
-    readonly errorBoundary: RustErrorBoundary;
+    readonly errorBoundary: RustOperationErrorBoundary;
     readonly errorCarrier?: TargetTypeRef;
   };
   readonly evaluation?: "pure";

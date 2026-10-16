@@ -1,4 +1,4 @@
-import { rustBigIntTargetId, rustJsArrayBufferTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDataViewTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsFloat32ArrayTargetId, rustJsFloat64ArrayTargetId, rustJsInt16ArrayTargetId, rustJsInt32ArrayTargetId, rustJsInt8ArrayTargetId, rustJsIntlCollatorTargetId, rustJsIntlDateTimeFormatPartTargetId, rustJsIntlDateTimeFormatTargetId, rustJsIntlNumberFormatPartTargetId, rustJsIntlNumberFormatTargetId, rustJsIntlResolvedCollatorOptionsTargetId, rustJsIntlResolvedDateTimeFormatOptionsTargetId, rustJsIntlResolvedNumberFormatOptionsTargetId, rustJsMapTargetId, rustJsPromiseFulfilledResultTargetId, rustJsPromiseRejectedResultTargetId, rustJsPromiseSettledResultTargetId, rustJsPromiseTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsSymbolTargetId, rustJsUint16ArrayTargetId, rustJsUint32ArrayTargetId, rustJsUint8ArrayTargetId, rustJsUint8ClampedArrayTargetId, rustJsValueTargetId, rustJsWeakMapTargetId, rustJsWeakSetTargetId, rustNeverCarrierName, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId} from "./source-types.js";
+import { rustBigIntTargetId, rustJsArrayBufferTargetId, rustJsArrayConcatItemTargetId, rustJsArrayTargetId, rustJsDataViewTargetId, rustJsDateTargetId, rustJsErrorTargetId, rustJsFloat32ArrayTargetId, rustJsFloat64ArrayTargetId, rustJsInt16ArrayTargetId, rustJsInt32ArrayTargetId, rustJsInt8ArrayTargetId, rustJsIntlCollatorTargetId, rustJsIntlDateTimeFormatPartTargetId, rustJsIntlDateTimeFormatTargetId, rustJsIntlNumberFormatPartTargetId, rustJsIntlNumberFormatTargetId, rustJsIntlResolvedCollatorOptionsTargetId, rustJsIntlResolvedDateTimeFormatOptionsTargetId, rustJsIntlResolvedNumberFormatOptionsTargetId, rustJsMapTargetId, rustJsRegExpExecArrayTargetId, rustJsRegExpIndicesTargetId, rustJsRegExpMatchArrayTargetId, rustJsRegExpNamedGroupsTargetId, rustJsRegExpNamedIndicesTargetId, rustJsRegExpStringIteratorTargetId, rustJsRegExpTargetId, rustJsSetTargetId, rustJsStringTargetId, rustJsSymbolTargetId, rustJsUint16ArrayTargetId, rustJsUint32ArrayTargetId, rustJsUint8ArrayTargetId, rustJsUint8ClampedArrayTargetId, rustJsValueTargetId, rustJsWeakMapTargetId, rustJsWeakSetTargetId, rustNeverCarrierName, rustProgramErrorTargetId, rustRegExpExecArrayTargetId, rustRegExpIndicesTargetId, rustRegExpMatchArrayTargetId, rustRegExpNamedGroupsTargetId, rustRegExpNamedIndicesTargetId, rustRegExpStringIteratorTargetId, rustStringTargetId} from "./source-types.js";
 import { rustSourceOptionalTargetType } from "../projections.js";
 import { isRustAbsenceCarrier } from "./native.js";
 import { isRustClosedValueCarrier } from "./closed-value-kind.js";
@@ -6,14 +6,7 @@ import type { RustProgramErrorOwner, TargetTypeRef } from "../model.js";
 import { isRustProgramErrorOwner, rustProgramErrorOwner } from "./program-errors.js";
 import { snapshotClosedMetadata } from "../../metadata/closed-data.js";
 import { isRustJsArrayValueCarrier } from "./array-values.js";
-import type { RustLifetimeRef } from "../../lifetimes/index.js";
-import {
-  rustLifetimeGenericArgument,
-  rustOnlyTypeGenericArguments,
-  rustTypeGenericArgument,
-  rustTypeGenericArguments,
-} from "../generic-arguments.js";
-import { rustPlaceholderLifetime } from "../../lifetimes/index.js";
+import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
 
 export function rustJsValueTargetType(): TargetTypeRef {
   return { kind: "target-named", id: rustJsValueTargetId };
@@ -86,46 +79,6 @@ export function rustJsWeakMapTargetType(key: TargetTypeRef, value: TargetTypeRef
 
 export function rustJsWeakSetTargetType(value: TargetTypeRef): TargetTypeRef {
   return { kind: "target-named", id: rustJsWeakSetTargetId, genericArguments: rustTypeGenericArguments([value]) };
-}
-
-export function rustJsPromiseTargetType(output: TargetTypeRef): TargetTypeRef {
-  return rustJsPromiseTargetTypeWithLifetime(output, rustPlaceholderLifetime);
-}
-
-export function rustJsPromiseTargetTypeWithLifetime(
-  output: TargetTypeRef,
-  lifetime: RustLifetimeRef,
-  error: TargetTypeRef = rustProgramErrorTargetType(),
-): TargetTypeRef {
-  return {
-    kind: "target-named",
-    id: rustJsPromiseTargetId,
-    genericArguments: [
-      rustLifetimeGenericArgument(lifetime),
-      rustTypeGenericArgument(output),
-      rustTypeGenericArgument(error),
-    ],
-  };
-}
-
-export function rustJsPromiseOutputTargetType(carrier: TargetTypeRef | undefined): TargetTypeRef | undefined {
-  if (carrier?.kind !== "target-named" || carrier.id !== rustJsPromiseTargetId) return undefined;
-  const [lifetime, output, error] = carrier.genericArguments ?? [];
-  return carrier.genericArguments?.length === 3 && lifetime?.kind === "lifetime" && output?.kind === "type" && error?.kind === "type"
-    ? output.type
-    : undefined;
-}
-
-export function rustJsPromiseFulfilledResultTargetType(value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsPromiseFulfilledResultTargetId, genericArguments: rustTypeGenericArguments([value]) };
-}
-
-export function rustJsPromiseRejectedResultTargetType(): TargetTypeRef {
-  return { kind: "target-named", id: rustJsPromiseRejectedResultTargetId, genericArguments: rustTypeGenericArguments([rustProgramErrorTargetType()]) };
-}
-
-export function rustJsPromiseSettledResultTargetType(value: TargetTypeRef): TargetTypeRef {
-  return { kind: "target-named", id: rustJsPromiseSettledResultTargetId, genericArguments: rustTypeGenericArguments([value, rustProgramErrorTargetType()]) };
 }
 
 export function getRustJsWeakMapTargetTypes(

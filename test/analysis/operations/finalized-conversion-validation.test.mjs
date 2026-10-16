@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { finalizedConversionIsValid, finalizeValueConversion } from "../../../dist/analysis/operations/finalized-operation/conversions.js";
 import { isFinalizedConversion } from "../../../dist/analysis/operations/finalized-operation/conversion-shape.js";
-import { rustJsPromiseTargetTypeWithLifetime, rustSourcePrimitiveTargetType,
-  rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
-import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
+import { rustAbsenceTargetType, rustJsPromiseTargetType, rustSourcePrimitiveTargetType,
+  rustSourceUnionTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
 const integer = rustSourcePrimitiveTargetType("uint64");
 const signed = rustSourcePrimitiveTargetType("int32");
@@ -16,8 +15,8 @@ test("one finalized conversion decoder retains native identity, semantic width a
   assert.ok(checked);
   assert.equal(checked.fallible, true);
   assert.equal(finalizedConversionIsValid(checked), true);
-  const source = rustJsPromiseTargetTypeWithLifetime(integer, rustStaticLifetime);
-  const target = rustJsPromiseTargetTypeWithLifetime(integer, { kind: "placeholder" });
+  const source = rustJsPromiseTargetType(rustAbsenceTargetType());
+  const target = rustJsPromiseTargetType(rustUnitTargetType());
   const representation = finalizeValueConversion({ kind: "native-representation", source, target }, source, target);
   assert.ok(representation);
   assert.equal(representation.fallible, false);

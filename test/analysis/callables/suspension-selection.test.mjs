@@ -6,7 +6,8 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
 import { resolveRustSuspendedCallableStorage } from "../../../dist/analysis/callables/suspension-storage.js";
 import { finalizeRustCallableSignature } from "../../../dist/analysis/callables/signature-query.js";
-import { rustJsPromiseTargetTypeWithLifetime } from "../../../dist/target-model/types/carriers/js.js";
+import { rustJsPromiseTargetType } from "../../../dist/target-model/types/carriers/promises.js";
+import { rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 function fixture(text) {
   const { context, walk } = analyzeRustOperations(text);
@@ -47,13 +48,11 @@ test("an incompatible contextual Promise cannot publish an environment and a lat
   const input = fixture("export const source = async (callback:()=>Promise<number>) => await callback();");
   assert.equal(input.asynchronous.kind, "js-promise");
   const future = input.asynchronous.futureCarrier;
-  const rejection = future.genericArguments[2];
-  assert.equal(rejection.kind, "type");
-  const incompatible = rustJsPromiseTargetTypeWithLifetime(input.asynchronous.outputCarrier,
-    { kind: "parameter", identity: "foreign-native-region", name: "foreign" }, rejection.type);
+  assert.equal(future.genericArguments.length, 1, "the JS Promise carrier has one output argument");
+  const incompatible = rustJsPromiseTargetType(rustStringTargetType());
   assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: incompatible }) === undefined, true);
   assert.equal(input.current.context.diagnostics.length, 1);
-  assert.equal(input.current.context.diagnostics[0].code, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN");
+  assert.equal(input.current.context.diagnostics[0].code, "RUST_ASYNC_CONTEXTUAL_PROMISE_NOT_CLOSED");
   assert.equal(input.current.context.records.retainedEnvironment.get(input.declaration) === undefined, true);
   assert.equal(input.current.context.records.asyncFunction.get(input.declaration) === undefined, true);
   assert.equal(finalizeRustCallableSignature(input.current, input.declaration, { contextualResult: future }) !== undefined, true);

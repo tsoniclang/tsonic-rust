@@ -4,14 +4,13 @@ import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { recordRustComputedCallEvaluation } from "../../../../dist/analysis/operations/computed-members.js";
 import { finalizeRustProviderOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/finalize.js";
-import { rustFutureTargetType, rustJsPromiseTargetTypeWithLifetime, rustUnitTargetType } from "../../../../dist/target-model/types/index.js";
+import { rustFutureTargetType, rustJsPromiseTargetType, rustUnitTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
-const owned = { kind: "static" };
 const region = { kind: "parameter", identity: "scope::borrow", name: "borrow" };
-const promise = (output = integer, lifetime = owned) => rustJsPromiseTargetTypeWithLifetime(output, lifetime);
+const promise = (output = integer) => rustJsPromiseTargetType(output);
 const storage = (parameters = [], lifetime = { kind: "static" }, ownedReceiver) => ({
   capturedParameters: parameters, storage: lifetime,
   ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
@@ -77,7 +76,7 @@ for (const [name, lifetime, capture] of [
   const declaration = {};
   const parameters = [{}, {}];
   const selected = storage(parameters, lifetime, capture);
-  const future = promise(integer, lifetime.kind === "lifetime" ? region : owned);
+  const future = promise(integer);
   builder.asyncFunctions.promise(declaration, future, integer, selected);
   const fact = builder.asyncFunction.get(declaration);
   assert.equal(fact.kind, "js-promise");
@@ -101,11 +100,11 @@ test("promise equality detects output, parameter identity/order, storage region 
   const parameters = [{}, {}];
   const receiver = { carrier: integer, occurrences: [{}, {}] };
   const selected = storage(parameters, { kind: "lifetime", lifetime: region }, receiver);
-  const future = promise(integer, region);
+  const future = promise(integer);
   builder.asyncFunctions.promise(declaration, future, integer, selected);
   const original = builder.asyncFunction.get(declaration);
   const changes = [
-    [promise(wide, region), integer, selected],
+    [promise(wide), integer, selected],
     [future, wide, selected],
     [future, integer, { ...selected, capturedParameters: [parameters[1], parameters[0]] }],
     [future, integer, { ...selected, capturedParameters: [{}, parameters[1]] }],

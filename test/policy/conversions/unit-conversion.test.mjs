@@ -3,7 +3,7 @@ import test from "node:test";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustValueConversionContract, rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
 import { rustAbsenceTargetType, rustUnitTargetType, rustOptionTargetType, rustFutureTargetType,
-  rustJsPromiseTargetTypeWithLifetime, rustSourcePrimitiveTargetType, rustJsErrorTargetType,
+  rustJsPromiseTargetType, rustSourcePrimitiveTargetType, rustJsErrorTargetType,
   rustJsValueTargetType, rustJsArrayTargetType, rustStringTargetType,
   rustStrTargetType,
 } from "../../../dist/target-model/types/index.js";
@@ -63,9 +63,8 @@ test("optional injection preserves a non-Clone native value and exact result evi
 });
 
 test("optional injection reuses exact native representation without promise mapping", () => {
-  const lifetime = { kind: "static" };
-  const source = rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), lifetime);
-  const element = rustJsPromiseTargetTypeWithLifetime(rustUnitTargetType(), lifetime);
+  const source = rustJsPromiseTargetType(rustAbsenceTargetType());
+  const element = rustJsPromiseTargetType(rustUnitTargetType());
   const target = rustOptionTargetType(element);
   const conversion = selectRustSourceValueConversion(source, target);
   assert.deepEqual(conversion, { kind: "option-some", source, element, elementConversion: null });
@@ -78,9 +77,11 @@ test("optional injection reuses exact native representation without promise mapp
     { kind: "option-some", element },
     { kind: "option-some", source, element },
     { ...conversion, source: null },
-    { ...conversion, source: rustJsPromiseTargetTypeWithLifetime(rustSourcePrimitiveTargetType("int32"), lifetime) },
-    { ...conversion, source: rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), lifetime, rustJsErrorTargetType()) },
-    { ...conversion, source: rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "placeholder" }) },
+    { ...conversion, source: rustJsPromiseTargetType(rustSourcePrimitiveTargetType("int32")) },
+    { ...conversion, source: { ...source, genericArguments: [...source.genericArguments,
+      { kind: "type", type: rustJsErrorTargetType() }] } },
+    { ...conversion, source: { ...source, genericArguments: [{ kind: "lifetime", lifetime: { kind: "static" } },
+      ...source.genericArguments] } },
     { ...conversion, element: rustSourcePrimitiveTargetType("int32") },
   ]) {
     assert.equal(rustValueConversionContract(malformed), undefined);

@@ -6,11 +6,11 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
 import { rustValueConversionIdentity } from "../../../dist/target-model/conversions/contracts.js";
-import { rustAbsenceTargetType, rustJsPromiseTargetTypeWithLifetime, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
+import { rustAbsenceTargetType, rustJsPromiseTargetType, rustOptionTargetType, rustSourceUnionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
 function fixture() {
-  const source = rustJsPromiseTargetTypeWithLifetime(rustAbsenceTargetType(), { kind: "static" });
-  const payloadCarrier = rustJsPromiseTargetTypeWithLifetime(rustUnitTargetType(), { kind: "placeholder" });
+  const source = rustJsPromiseTargetType(rustAbsenceTargetType());
+  const payloadCarrier = rustJsPromiseTargetType(rustUnitTargetType());
   const target = rustSourceUnionTargetType("/src/index.ts", "Completion");
   const registry = createRustTypeDefinitionRegistry();
   assert.equal(registry.registerSourceUnion({ carrier: target, variants: [
@@ -46,12 +46,12 @@ test("finalized provider unions retain their exact composed payload evidence", (
 test("generic union payload substitution updates both the payload and its nested conversion", () => {
   const parameter = { kind: "type-parameter", identity: "T", name: "T" };
   const target = rustSourceUnionTargetType("/src/index.ts", "Completion");
-  const source = rustJsPromiseTargetTypeWithLifetime(parameter, { kind: "static" });
-  const payloadCarrier = rustJsPromiseTargetTypeWithLifetime(parameter, { kind: "placeholder" });
+  const source = rustJsPromiseTargetType(rustOptionTargetType(parameter));
+  const payloadCarrier = rustJsPromiseTargetType(rustOptionTargetType(parameter));
   const conversion = { kind: "source-union-variant", source, target, variantName: "Future", payloadCarrier,
     payloadConversion: { kind: "native-representation", source, target: payloadCarrier } };
   const actual = substituteRustValueConversion(conversion, new Map([["T", rustStringTargetType()]]));
-  assert.deepEqual(actual.payloadCarrier, rustJsPromiseTargetTypeWithLifetime(rustStringTargetType(), { kind: "placeholder" }));
+  assert.deepEqual(actual.payloadCarrier, rustJsPromiseTargetType(rustOptionTargetType(rustStringTargetType())));
   assert.deepEqual(actual.payloadConversion.source, actual.source);
   assert.deepEqual(actual.payloadConversion.target, actual.payloadCarrier);
   assert.deepEqual(conversion.payloadCarrier, payloadCarrier);

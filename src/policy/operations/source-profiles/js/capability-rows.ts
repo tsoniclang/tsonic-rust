@@ -257,11 +257,20 @@ const promiseRows: readonly JsOperationRowData[] = [
   {
     owner: "PromiseConstructor", member: "resolve", operationKind: "call", lane: "promise", variant: "promise",
     firstArgCarrierId: rustJsPromiseTargetId,
-    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation", operationKind: "method",
       target: { form: "call", path: "std::convert::identity" },
       result: { ref: "resolved-promise" }, params: [{ ref: "resolved-promise" }],
+    },
+  },
+  {
+    owner: "PromiseConstructor", member: "reject", operationKind: "call", lane: "promise",
+    returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
+    shape: {
+      op: "operation", operationKind: "method",
+      target: { form: "associated-call", owner: { ref: "promise-source-result" }, method: "rejected" },
+      result: { ref: "promise-source-result" }, params: [{ ref: "jsvalue" }],
     },
   },
   ...(["race", "any"] as const).map((member): JsOperationRowData => ({
@@ -270,7 +279,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     operationKind: "call",
     lane: "promise",
     requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
-    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
       operationKind: "method",
@@ -283,6 +292,21 @@ const promiseRows: readonly JsOperationRowData[] = [
       params: [{ ref: "argument", index: 0 }],
     },
   })),
+  {
+    owner: "PromiseConstructor",
+    member: "all",
+    operationKind: "call",
+    lane: "promise",
+    requirements: [{ carrier: { ref: "promise-input-output" }, capability: "clone" }],
+    returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
+    shape: {
+      op: "operation",
+      operationKind: "method",
+      target: { form: "call", path: "js_abi::promise_all", argModes: ["ref"] },
+      result: { ref: "promise-of-input-output-array" },
+      params: [{ ref: "argument", index: 0 }],
+    },
+  },
   {
     owner: "PromiseConstructor",
     member: "allSettled",
@@ -305,7 +329,7 @@ const promiseRows: readonly JsOperationRowData[] = [
     lane: "promise",
     variant: "default",
     requirements: [{ carrier: { ref: "promise-output" }, capability: "clone" }],
-    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
       operationKind: "method",
@@ -325,7 +349,7 @@ const promiseRows: readonly JsOperationRowData[] = [
       sourceArgumentIndex: 0,
       failure: { kind: "returned-future" },
     },
-    returnedFuture: { awaiting: "fallible", errorBoundary: "source-program" },
+    returnedFuture: { awaiting: "fallible", errorBoundary: "js-rejection" },
     shape: {
       op: "operation",
       operationKind: "method",
@@ -371,7 +395,7 @@ const promiseRows: readonly JsOperationRowData[] = [
       op: "operation",
       operationKind: "property",
       target: { form: "field", name: "reason" },
-      result: { ref: "program-error" },
+      result: { ref: "jsvalue" },
       evaluation: "pure",
     },
   },

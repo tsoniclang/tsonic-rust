@@ -308,7 +308,6 @@ function selectJsSurfaceOperationForDemand(
   const { lane } = laneMatch;
   const bindings: JsLaneBindings = {
     ...laneMatch.bindings,
-    storageContract: request.storageContract,
     sourceResult: request.sourceResultCarrier,
     selectedMethodTypeArguments: request.selectedMethodTypeArgumentCarriers,
     authoredMethodTypeArguments: request.authoredMethodTypeArgumentCarriers,

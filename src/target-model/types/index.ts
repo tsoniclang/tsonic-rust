@@ -74,12 +74,6 @@ export {
   rustJsDateTargetType,
   rustJsErrorTargetType,
   rustJsMapTargetType,
-  rustJsPromiseFulfilledResultTargetType,
-  rustJsPromiseOutputTargetType,
-  rustJsPromiseRejectedResultTargetType,
-  rustJsPromiseSettledResultTargetType,
-  rustJsPromiseTargetType,
-  rustJsPromiseTargetTypeWithLifetime,
   rustJsIntlCollatorTargetType,
   rustJsIntlDateTimeFormatPartTargetType,
   rustJsIntlDateTimeFormatTargetType,
@@ -114,6 +108,14 @@ export {
   rustRegExpStringIteratorTargetType,
 } from "./carriers/js.js";
 export type { RustJsTypedArrayName } from "./carriers/js.js";
+export {
+  rustJsPromiseFulfilledResultTargetType,
+  rustJsPromiseOutputTargetType,
+  rustJsPromiseRejectedResultTargetType,
+  rustJsPromiseResolutionTargetType,
+  rustJsPromiseSettledResultTargetType,
+  rustJsPromiseTargetType,
+} from "./carriers/promises.js";
 export {
   isRustOptionCarrier,
   rustOptionElementCarrier,
