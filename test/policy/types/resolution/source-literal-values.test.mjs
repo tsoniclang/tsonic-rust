@@ -68,7 +68,11 @@ function literalSelection(text, rows, carrier) {
     end: text.length }), text };
   const sourceFile = fakeSourceFile({ text, statements: [node] });
   const ast = fakeAstReader([sourceFile]);
-  const literalAst = { ...ast, is: { ...ast.is, IsPrefixUnaryExpression: () => false },
+  const literalAst = { ...ast, is: { ...ast.is, IsPrefixUnaryExpression: () => false,
+    IsStringLiteral: () => false, IsNoSubstitutionTemplateLiteral: () => false,
+    IsNumericLiteral: candidate => candidate === node && !text.endsWith("n"),
+    IsBigIntLiteral: candidate => candidate === node && text.endsWith("n") },
+    forEachChild: (candidate, visit) => { if (candidate === sourceFile) visit(node); },
     authoredRange: () => ({ kind: "authored", start: 0, end: text.length }) };
   const definitions = { programErrorOrigin: () => undefined, sourceUnionVariants: value => [...rows].find(([key]) => rustTargetTypeRefEquals(key, value))?.[1] };
   const literals = analyzeSourceLiteralValues(literalAst, [sourceFile]);
