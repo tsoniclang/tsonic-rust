@@ -568,7 +568,10 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
-    typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes });
+    typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
+    carrierHost: { sourceStorage: context.sourceStorage, sourceTypes: walk.sourceTypes,
+      projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: context.semantics,
+      types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier } } });
   const callableIssue = (issue: RustSourceCallableSpecializationIssue): void => appendRustDiagnostic(walk,
     "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject, ["target.capability=rust.callable-value.exact-implementation"]);
   callableValues.issues.forEach(callableIssue);

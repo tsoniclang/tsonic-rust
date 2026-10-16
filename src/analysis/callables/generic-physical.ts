@@ -68,7 +68,7 @@ export interface RustGenericCallablePhysicalInput {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
   readonly captures: RustNativeCaptureConstruction;
-  readonly native: RustNativeCallableInputPlan;
+  readonly native: Pick<RustNativeCallableInputPlan, "inputs">;
   readonly boundSubjectFor: (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings) => RustNativeStorageSelection;
 }
 

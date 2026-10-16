@@ -45,6 +45,19 @@ const original = { async value(): Promise<number> { return 1; } };
 const copy = { ...original };
 export async function read(): Promise<number> { return await copy.value(); }
 `,
+  "copied receiver-independent method in a distinct shape": `
+const original = { async value(): Promise<number> { return 1; } };
+const copy = { label: "copy", ...original };
+export async function read(): Promise<number> { return await copy.value(); }
+`,
+  "receiver-dependent async method": `
+const counter = { count: 0, async next(): Promise<number> { this.count++; return this.count; } };
+export async function read(): Promise<number> { return await counter.next(); }
+`,
+  "captured scalar async method": `
+export function make(value: number) { return { async read(): Promise<number> { return value; } }; }
+export async function read(): Promise<number> { return await make(7).read(); }
+`,
   "generic captured result template": `
 export function make<Value>(value: Value): { read(): Promise<Value> } {
   return { async read(): Promise<Value> { return value; } };
@@ -100,11 +113,54 @@ function sourceNodes(program) {
   return nodes;
 }
 
+test("private native leaf preparation uses the canonical checked subject and preserves complete Future unions", () => {
+  const context = analyzeRustErrorEffects(`
+export function inspect(input: { count: number; callbacks: (() => number)[]; pair: [number, () => number] },
+  pending: Promise<number> | string | undefined): Promise<number> | string | undefined {
+  const count = input.count;
+  const first = input.callbacks[0];
+  const second = input.pair[1];
+  return pending;
+}
+`, { surfaces: [] });
+  const owner = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node));
+  const bindings = context.callableValues.native.bindingsFor(owner);
+  assert.equal(bindings !== undefined, true, "exact source owner bindings");
+  const storage = context.callableValues.nativeStorage;
+  let projected = 0;
+  for (const node of context.sourceStorage.nodes) {
+    if (!context.ast.is.IsVariableDeclaration(node)) continue;
+    const initializer = context.ast.initializer(node);
+    const subject = initializer === undefined ? undefined : context.sourceStorage.subjectFor(initializer);
+    if (subject?.kind !== "resolved") continue;
+    const origin = context.sourceStorage.boundOriginsFor(subject.subject, bindings);
+    assert.equal(origin.kind === "resolved", true, "the source storage owner resolves actual projected origins");
+    for (const selected of origin.subjects) {
+      const carrier = storage.logicalCarrierFor(selected, bindings);
+      const expected = context.records.runtimeCarrier.get(initializer)?.carrier;
+      assert.equal(rustTargetTypeRefEquals(carrier, expected), true, "the complete projected leaf, not its containing input");
+      assert.equal(storage.logicalCarrierFor(selected, bindings) === carrier, true, "one prepared subject and activation");
+      assert.equal(Object.isFrozen(carrier), true, "immutable logical leaf metadata");
+      projected += 1;
+    }
+  }
+  assert.equal(projected >= 3, true, "member, array and tuple projection controls ran");
+  const parameter = context.ast.parameters(owner)[1];
+  const subject = context.sourceStorage.subject(parameter, "input");
+  assert.equal(subject.kind === "resolved", true, "the exact Future-union parameter");
+  const selected = storage.logicalCarrierFor(subject.subject, bindings);
+  assert.equal(rustTargetTypeRefEquals(selected, context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), true,
+    "Future, string and absence alternatives are not replaced by a selected Future leaf");
+  assert.equal(selected === storage.logicalCarrierFor(subject.subject, bindings), true, "complete union metadata is prepared once");
+});
+
 test("published callable storage contains only finite read ports and keeps every selected answer stable", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedSource } });
   const storage = program.callableValues.nativeStorage;
-  for (const name of ["subjectFor", "boundSubjectFor", "genericBindingsFor", "invocationReturnFor", "invocationInputFor",
+  for (const name of ["subjectFor", "boundSubjectFor", "logicalCarrierFor", "genericBindingsFor", "invocationReturnFor", "invocationInputFor",
     "invocationOriginsFor", "implementationOriginsFor"]) assert.equal(name in storage, false, `private construction port ${name}`);
+  for (const name of ["bindingsFor", "originsFor", "originsForValue"])
+    assert.equal(name in program.callableValues.native, false, `private native input port ${name}`);
   let selected = 0;
   for (const node of sourceNodes(program)) {
     const value = storage.valueFor(node);

@@ -47,6 +47,7 @@ import { rustGenericCallableMemberInvocationBindings } from "./generic-bindings.
 import { Node_Expression } from "@tsonic/target-api/source";
 import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
 import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
+import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
 
 export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef }
@@ -55,6 +56,7 @@ export type RustNativeStorageSelection =
 
 export interface RustNativeStoragePlan {
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
+  logicalCarrierFor(subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | undefined;
   genericBindingsFor(declaration: Node, bindings: SourceStorageBindings): RustNativeStorageGenericSelection;
   futureEnvironmentFor(declaration: Node): RustNativeFutureEnvironmentSelection;
   readonly parameterFor: (parameter: Node) => RustNativeStorageSelection;
@@ -86,6 +88,7 @@ export function createRustNativeStorageQueries(input: {
   readonly lifetimes: RustLifetimeIndex;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralStorageLookup;
+  readonly carrierHost: RustValueDomainCarrierHost;
 }): RustNativeStorageQueries {
   const nodes = new Set(input.storage.nodes);
   const inputs = new Map(input.native.inputs.map(value => [value.subject, value]));
@@ -107,6 +110,30 @@ export function createRustNativeStorageQueries(input: {
     ? input.storage.emptyBindings : nodes.has(owner) ? input.native.bindingsFor(owner) : undefined;
   const ownerFor = (node: Node): Node | undefined => sourceEnclosingCallable(node, input.ast);
   const futures = createRustNativeFutureInputPlan({ ...input, bindingsFor });
+  const logicalCarriers = new Map<SourceStorageSubject, Map<SourceStorageBindings, TargetTypeRef | undefined>>();
+  const logicalCarrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | undefined => {
+    const previous = logicalCarriers.get(subject);
+    if (previous?.has(bindings) === true) return previous.get(bindings);
+    if (input.storage.typeFor(subject).kind === "unresolved" ||
+      input.storage.boundOriginsFor(subject, bindings).kind === "unresolved") return undefined;
+    const root = subject.kind === "input" ? input.records.sourceParameterAbi.get(subject.node)?.parameterCarrier
+      : subject.kind === "return" ? input.records.sourceCallableReturn.get(subject.node)?.returnCarrier
+      : input.records.runtimeCarrier.get(subject.node)?.carrier;
+    const method = subject.projection.some(component => component.kind === "method-value");
+    const carrier = subject.projection.length === 0 ? root : method ? inputs.get(subject)?.carrier
+      : rustSourceStorageProjectedCarrier(input.carrierHost, subject, root);
+    const owner = subject.kind === "return" ? subject.node : subject.kind === "input" ? input.ast.parent(subject.node)
+      : sourceEnclosingCallable(input.ast.body(subject.node) === undefined ? subject.node : input.ast.parent(subject.node), input.ast);
+    const generic = owner === undefined ? undefined : selectRustNativeStorageGenericBindings({ ...input,
+      genericInvocationBindingsFor }, owner, bindings);
+    const bound = carrier === undefined || generic?.kind === "unresolved" ? undefined : generic === undefined ? carrier
+      : substituteRustTargetGenerics(carrier, generic.bindings.types, generic.bindings.lifetimes, generic.bindings.consts);
+    const selected = bound === undefined ? undefined : snapshotClosedMetadata(bound);
+    const entries = previous ?? new Map<SourceStorageBindings, TargetTypeRef | undefined>();
+    entries.set(bindings, selected);
+    logicalCarriers.set(subject, entries);
+    return selected;
+  };
   const genericInvocationBindingsFor = (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
     arguments_: readonly RustTargetGenericArgument[]): RustNativeStorageGenericSelection | undefined => {
     const operation = input.records.targetOperation.get(invocation);
@@ -311,7 +338,8 @@ export function createRustNativeStorageQueries(input: {
             if (candidate !== undefined) candidatePhysical = formalCarrier(candidate, current);
             else {
               const originCarrier = origin.projection.length === 0
-                ? input.records.runtimeCarrier.get(origin.node)?.carrier : undefined;
+                ? input.records.receiverIndependentMethod.get(origin.node)?.carrier ?? input.records.runtimeCarrier.get(origin.node)?.carrier
+                : undefined;
               if (permitsAbsence && isRustAbsenceCarrier(originCarrier)) continue;
               const generics = genericsFor(sourceEnclosingCallable(input.ast.parent(origin.node), input.ast), frontier.bindings, depth + 1);
               if (generics.kind === "unresolved") return fail(generics.reason);
@@ -459,6 +487,7 @@ export function createRustNativeStorageQueries(input: {
     }
   } });
   return Object.freeze({
+    logicalCarrierFor,
     issues: Object.freeze(witnessFailure === undefined || witnessSubject === undefined ? [] : [{
       subject: witnessSubject, message: witnessFailure.message,
     }]),

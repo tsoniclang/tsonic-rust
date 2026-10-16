@@ -205,7 +205,13 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       for (const node of valueRoots) value(node);
       for (const node of operandRoots) operand(node);
       for (const node of invocationRoots) {
-        if (!invocations.has(node)) invocations.set(node, queries.invocationCallableFor(node));
+        if (invocations.has(node)) continue;
+        const operation = records.targetOperation.get(node);
+        const storage = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
+        invocations.set(node, operation?.kind === "source-call" && operation.target.form === "structural-method" &&
+          input.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.nativeMethod !== true &&
+          rustCallableProtocol(storage) !== undefined && storage !== undefined
+          ? Object.freeze({ kind: "identity", carrier: storage }) : queries.invocationCallableFor(node));
       }
       for (const flow of flows) inheritedDestination(flow.node);
       for (const node of values.keys()) inheritedDestination(node);

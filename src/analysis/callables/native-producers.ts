@@ -47,7 +47,7 @@ export function createRustNativeCallableProducerPlan(input: {
   readonly ast: AstReader;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
-  readonly native: RustNativeCallableInputPlan;
+  readonly native: Pick<RustNativeCallableInputPlan, "inputsFor" | "capturesFor">;
   readonly definitions: RustTypeDefinitions;
   readonly returnCarrierFor: (declaration: Node) => TargetTypeRef | undefined;
 }): RustNativeCallableProducerConstruction {
@@ -126,7 +126,8 @@ export function createRustNativeCallableProducerPlan(input: {
       const error = errorFor(declaration, "invoke");
       if (producer === undefined || signature === undefined || error === undefined) return undefined;
       const operation = input.records.targetOperation.get(declaration);
-      const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(operation.resultCarrier) : undefined;
+      const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(
+        input.records.receiverIndependentMethod.get(declaration)?.carrier ?? operation.resultCarrier) : undefined;
       const asynchronous = input.records.asyncFunction.get(declaration);
       const expectedParameters = sourceSignature?.parameters ?? input.ast.parameters(declaration).map(parameter =>
         input.records.sourceParameterAbi.get(parameter)?.parameterCarrier);

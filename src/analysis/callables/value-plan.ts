@@ -45,12 +45,13 @@ import { createRustPhysicalCallableLifecycle, type RustPhysicalCallableLifecycle
 import type { RustPhysicalCallableFlowApplications } from "../../target-model/records/physical-callables.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { createRustStructuralMethodStorage } from "./structural-method-storage.js";
+import type { RustValueDomainCarrierHost } from "../../policy/types/objects/value-domain-carrier.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
   readonly frames: RustFrameCallablePlan;
-  readonly native: RustNativeCallableInputPlan;
+  readonly native: Omit<RustNativeCallableInputPlan, "bindingsFor" | "originsFor" | "originsForValue">;
   readonly nativeStorage: RustPhysicalCallableStorage;
   readonly nativeCaptures: RustNativeCapturePlan;
   readonly nativeProducers: RustNativeCallableProducerPlan;
@@ -63,7 +64,8 @@ export interface RustCallableValuePlan {
   readonly flowApplications: RustPhysicalCallableFlowApplications;
 }
 
-export type RustCallableValueSelection = Omit<RustCallableValuePlan, "nativeStorage" | "flowApplications"> & {
+export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications"> & {
+  readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
 };
 
@@ -84,6 +86,7 @@ export interface RustCallableValuePlanInput {
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
+  readonly carrierHost: RustValueDomainCarrierHost;
 }
 
 export interface RustCallableValueConstruction {
@@ -246,6 +249,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
+    carrierHost: input.carrierHost,
     physicalCarrierFor: (carrier, ownerFileName, producers) => {
       if (physicalCarrierFor === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
       return physicalCarrierFor(carrier, ownerFileName, producers);
@@ -320,7 +324,10 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const publication = physicalLifecycle.complete(physical);
       const finalPhysical = physical.closeKeys();
       genericRegistry.publishPhysical(finalPhysical);
-      publishedPlan = Object.freeze({ ...selectedPlan, ...publication });
+      const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
+        protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
+        capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
+      publishedPlan = Object.freeze({ ...selectedPlan, ...publication, native: nativeInputs });
       return publishedPlan;
     },
     publish(): void {
