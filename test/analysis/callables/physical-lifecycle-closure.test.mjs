@@ -170,7 +170,7 @@ test("generic structural physical returns and concrete receiver values retain on
   }
 });
 
-test("copied borrowed methods retain the actual closure lifetime without a static destination substitution", () => {
+test("returned borrowed methods retain the actual closure lifetime without a static destination substitution", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
@@ -198,6 +198,35 @@ export function make<Region extends Life>(value: Ref<int32, Region>): { label: s
       assert.equal(stored?.error?.id === "rust.core.Infallible", true, "borrowed async invocation remains infallible");
     }
   }
+});
+
+test("locally invoked copied borrowed methods preserve their exact producer retention", () => {
+  const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export async function inspect<Region extends Life>(value: Ref<int32, Region>): Promise<int32> {
+  const original = { async read(): Promise<int32> { return load(value); } };
+  const copy = { label: "borrowed", ...original };
+  return await copy.read();
+}
+` } });
+  const method = sourceNodes(program).find(node => program.source.ast.is.IsMethodDeclaration(node));
+  const closure = program.records.targetOperation.get(method);
+  const independent = program.records.receiverIndependentMethod.get(method);
+  assert.equal(closure?.kind === "closure", true, "the actual admitted captured method");
+  const retained = rustCallableProtocol(closure.resultCarrier)?.lifetime;
+  const selected = rustCallableProtocol(independent?.carrier)?.lifetime;
+  assert.equal(retained?.kind === "parameter" && retained.name === "Region", true, "the capture retains its authored Region");
+  assert.equal(selected?.kind === retained.kind && selected.identity === retained.identity, true,
+    "copying retains the producer's identical lifetime, never a placeholder or static guess");
+  const calls = sourceNodes(program).filter(node => {
+    const operation = program.records.targetOperation.get(node);
+    return operation?.kind === "source-call" && operation.target.form === "structural-method";
+  });
+  assert.equal(calls.length, 1, "the copied receiver is actually invoked");
+  assert.equal(program.callableValues.nativeStorage.invocationCallableFor(calls[0]).kind !== "unresolved", true,
+    "the final native invocation reads its completed storage");
 });
 
 test("native-dispatch method fields keep their existing native ABI instead of receiving closure storage", () => {
