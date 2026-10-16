@@ -21,14 +21,12 @@ export function rustProjectCallableTargetName(
   if (name === undefined) {
     return undefined;
   }
-  if (ast.is.IsComputedPropertyName(name)) {
+  if (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)) {
     const selected = context.semanticsFor(declaration)
-      .operations.wellKnownSymbol(name);
-    return selected?.kind === "dispose"
-      ? "dispose"
-      : selected?.kind === "async-dispose"
-        ? "dispose_async"
-        : undefined;
+      .propertyNames.get(name);
+    if (selected?.kind === "well-known-symbol") return selected.symbol === "dispose"
+      ? "dispose" : selected.symbol === "async-dispose" ? "dispose_async" : undefined;
+    if (selected?.kind !== "resolved") return undefined;
   }
   const selected = context.names.nameForDeclaration(declaration);
   const owner = ast.parent(declaration);

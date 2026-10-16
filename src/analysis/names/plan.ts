@@ -9,6 +9,7 @@ import {
   isValidRustAuthoredIdentifier,
 } from "../../target-model/names/identifiers.js";
 import { ObjectLiteralProperty_SourceName } from "@tsonic/target-api/source";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import { rustSourceDeclarationTypeName } from "../../policy/types/model/source-declarations.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
@@ -26,6 +27,7 @@ interface RustNameCandidate {
   readonly scope: Node;
   readonly sourceName: string;
   readonly role: RustNameRole;
+  readonly literalKey: boolean;
   readonly start: number;
   readonly end: number;
 }
@@ -34,6 +36,7 @@ export function createRustNamePlan(input: {
   readonly ast: AstReader;
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
   readonly sourceFiles: readonly SourceFile[];
+  semanticsFor(node: Node): SourceFileSemantics;
 }): RustNamePlan {
   const candidates: RustNameCandidate[] = [];
   for (const sourceFile of input.sourceFiles) {
@@ -41,6 +44,7 @@ export function createRustNamePlan(input: {
       sourceFile,
       sourceFile,
       input.ast,
+      input.semanticsFor,
       candidates,
     );
   }
@@ -69,9 +73,7 @@ export function createRustNamePlan(input: {
   }
   for (const candidate of candidates) {
     const privateName = input.ast.kindName(input.ast.name(candidate.declaration)) === "KindPrivateIdentifier";
-    const sourceNameNode = input.ast.name(candidate.declaration);
-    const literalKey = sourceNameNode !== undefined &&
-      (input.ast.is.IsStringLiteral(sourceNameNode) || input.ast.is.IsNumericLiteral(sourceNameNode));
+    const literalKey = candidate.literalKey;
     let name = rustTargetIdentifier(candidate.sourceName);
     if (literalKey) {
       name = propertyNames.get(candidate.scope)!.get(candidate.sourceName)!;
@@ -207,6 +209,7 @@ function collectNameCandidates(
   node: Node,
   sourceFile: SourceFile,
   ast: AstReader,
+  semanticsFor: (node: Node) => SourceFileSemantics,
   candidates: RustNameCandidate[],
 ): void {
   const scope = declarationScope(node, sourceFile, ast);
@@ -216,7 +219,11 @@ function collectNameCandidates(
   if (role !== undefined && scope !== undefined) {
     const name = ast.name(node);
     const nameKind = name === undefined ? undefined : ast.kindName(name);
-    const propertyName = ObjectLiteralProperty_SourceName(ast, node);
+    const checkedKey = name !== undefined &&
+      (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name));
+    const propertyName = checkedKey
+      ? semanticsFor(node).propertyNames.get(name)
+      : ObjectLiteralProperty_SourceName(ast, node);
     const sourceName = ast.kindName(node) === "KindExportAssignment" &&
         ast.as.AsExportAssignment(node)?.IsExportEquals !== true
       ? "default"
@@ -224,13 +231,16 @@ function collectNameCandidates(
         ? "Anonymous"
       : nameKind === "KindPrivateIdentifier"
         ? ast.text(name)
-        : propertyName.kind === "resolved" ? propertyName.name : "";
-    if (sourceName.length > 0) {
+        : propertyName?.kind === "resolved" ? propertyName.name : "";
+    const literalKey = checkedKey && propertyName?.kind === "resolved" ||
+      name !== undefined && ast.is.IsStringLiteral(name);
+    if (sourceName.length > 0 || literalKey) {
       candidates.push({
         declaration: node,
         scope,
         sourceName,
         role,
+        literalKey,
         start: ast.pos(node),
         end: ast.end(node),
       });
@@ -238,7 +248,7 @@ function collectNameCandidates(
   }
   ast.forEachChild(node, (child) => {
     if (child !== undefined) {
-      collectNameCandidates(child, sourceFile, ast, candidates);
+      collectNameCandidates(child, sourceFile, ast, semanticsFor, candidates);
     }
   });
 }
