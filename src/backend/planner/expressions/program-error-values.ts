@@ -8,7 +8,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, registerAliasFromPath,
   type RustPlanContext } from "../program/plan-context.js";
-import { planRustErrorVariants } from "../program/error-variants.js";
+import { planRustBoundaryErrorVariants } from "../program/error-variants.js";
 import type { RustErrorPayloadVariant } from "../../../analysis/program/error-transport.js";
 import { resolveRustSourcePackageErrorBoundary,
   type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
@@ -52,15 +52,10 @@ export function planRustProgramErrorClosedValue(
       return reject("Program-error value admission exceeds its bounded acyclic component graph.");
     }
     if (selected.errorDomain === "runtime") return error(expression);
-    const selectedDomain = context.sourcePackageErrors.domainsByComponentId.get(selected.componentId);
-    const domain = selectedDomain?.forwardModulePath === undefined ? selectedDomain
-      : selectedDomain.errorOwnerComponentId === undefined ? undefined
-        : context.sourcePackageErrors.domainsByComponentId.get(selectedDomain.errorOwnerComponentId);
-    const variants = domain === undefined ? undefined
-      : planRustErrorVariants(context.input.program, domain);
-    if (domain === undefined || variants === undefined || selectedDomain?.errorTypeIdentity !== selected.errorTypeIdentity ||
-      domain.errorTypeIdentity !== selected.errorTypeIdentity) return reject(
+    const inventory = planRustBoundaryErrorVariants(context.input.program, context.sourcePackageErrors, selected);
+    if (inventory === undefined) return reject(
       "Program-error value admission has no exact sealed transport variant inventory.");
+    const { domain, variants } = inventory;
     if (active.has(domain.componentId)) return reject(
       "Program-error value admission exceeds its bounded acyclic component graph.");
     registerAliasFromPath(context, selected.errorTypePath);

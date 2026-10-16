@@ -17,6 +17,7 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../name
 import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { planRustSourceErrorPropagation } from "./calls/source-errors.js";
+import { planRustJsRejectionPropagation } from "./js-rejection.js";
 
 export function planRustAwaitBranches(
   node: Node,
@@ -59,6 +60,7 @@ export function planRustAwaitBranches(
           : future.errorBoundary === "source-native"
           ? operandError === undefined || future.errorSource === undefined ? undefined
             : rustPropagateNativeError(region, { identity: future.errorSource, errorType: operandError }, output)
+          : future.errorBoundary === "js-rejection" ? planRustJsRejectionPropagation(node, output, context)
           : applyRustLocalErrorBoundary(output, future.errorBoundary, region, operandError);
         if (propagated === undefined) {
           context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
