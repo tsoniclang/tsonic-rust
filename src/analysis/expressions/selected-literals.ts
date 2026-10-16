@@ -15,6 +15,7 @@ import { rustSelectedOperatorOperation } from "../operations/target-operation.js
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import { rustTargetOperationFactEquals } from "../../target-model/records/operation-equality.js";
 import { rustSelectedTargetOperationEquals } from "../../target-model/types/equality.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 
 export function sourceLiteralIsRepresentableAsPrimitive(
   node: Node,
@@ -45,6 +46,9 @@ export function normalizeSelectedLiteralCarrier(
   }
   if (expected.kind !== "source-primitive" || !isRustNumericCarrier(expected)) {
     return actual;
+  }
+  if (context.literalValues.literalValue.get(node)?.numeric?.kind === "checked-float64") {
+    return rustEffectiveValueCarrier(context.records, node) ?? actual;
   }
   if (!sourceLiteralIsRepresentableAsPrimitive(node, expected.name, context)) {
     return actual;

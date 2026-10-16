@@ -206,7 +206,7 @@ test("native-sized integers select checked narrowing without a floating intermed
     const source = { kind: "source-primitive", name };
     const target = { kind: "source-primitive", name: "int32" };
     assert.equal(selectRustSourceValueConversion(source, target), undefined);
-    const conversion = selectRustSourceAssertionConversion(source, target);
+    const conversion = selectRustSourceAssertionConversion(source, target, undefined);
     const contract = rustValueConversionContract(conversion);
     assert.deepEqual(contract.source, source);
     assert.deepEqual(contract.target, target);

@@ -50,7 +50,7 @@ test("union mappings require complete exact coverage and reject forged or numeri
   assert.deepEqual(read, [[narrow, "Variant0"], [narrow, "Variant1"]]);
   assert.deepEqual(constructed, [[wide, "Variant2"], [wide, "Variant0"]]);
   assert.deepEqual(substituteRustValueConversion(conversion, new Map()), conversion);
-  const explicit = selectRustSourceAssertionConversion(wide, narrow, definitions);
+  const explicit = selectRustSourceAssertionConversion(wide, narrow, undefined, definitions);
   assert.equal(explicit.coverage, "target");
   assert.equal(rustValueConversionContract(explicit, definitions).coverage, "target");
   assert.equal(selectRustSourceValueConversion(wide, narrow, definitions), undefined);
@@ -73,7 +73,7 @@ test("union mappings require complete exact coverage and reject forged or numeri
   for (const source of [wide, rustOptionTargetType(wide)]) {
     for (const target of [string, rustOptionTargetType(string)]) {
       const selected = rustUnionProjectionContract(source, target, definitions);
-      const projection = selectRustSourceAssertionConversion(source, target, definitions);
+      const projection = selectRustSourceAssertionConversion(source, target, undefined, definitions);
       if (source === wide && target !== string) {
         assert.equal(selected, undefined);
         assert.equal(projection, undefined);

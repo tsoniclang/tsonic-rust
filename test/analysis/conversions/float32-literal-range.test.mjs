@@ -190,7 +190,7 @@ for (const [surface, selected] of surfaces) {
       .map(artifact => String(artifact.text)).join("\n");
     assert.equal(generated.includes("3.4028235677973366e+38_f32"), true, "keeps native rounded boundary token");
     assert.equal(generated.includes("5e-324_f32"), true, "keeps permitted native underflow token");
-    assert.equal(generated.includes("let value: f64 = 3.5e+38;"), true, "does not narrow an f64 literal");
+    assert.equal(generated.includes("let value: f64 = 3.5e+38_f64;"), true, "does not narrow an f64 literal");
     assert.equal(generated.includes("340282356779733661637539395458142568447.0_f32"), true,
       "authored integer immediately below the overflow midpoint is not rounded through float64");
     assert.equal(generated.includes("3.40282356779733661637539395458142568447e+38_f32"), true,

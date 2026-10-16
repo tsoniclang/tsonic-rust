@@ -97,6 +97,9 @@ export function resolveExpressionCarrierUncached(
         ? rustOptionElementCarrier(expected)
         : expected;
       const defaultCarrier = rustSourcePrimitiveTargetType("float64");
+      if (walk.context.literalValues.literalValue.get(expression)?.numeric?.kind === "checked-float64") {
+        return setCarrierFact(walk, expression, defaultCarrier);
+      }
       const effectiveExpected = contextualExpected === undefined ||
           rustRuntimeUnionProjection(contextualExpected, defaultCarrier) !== undefined ||
           !isRustNumericCarrier(contextualExpected) &&
