@@ -79,6 +79,7 @@ test("native-valid nested outer-label continue no longer depends on a label spel
   const generated = artifactText(result, "src/index.rs");
   assert.match(generated, /continue 'loop(?:_\d+)?/u, "continue targets the native loop");
   assert.doesNotMatch(generated, /continue 'label/u, "a labelled block is never mistaken for the continue destination");
+  validateGeneratedProject("r05-nested-outer-label-continue", result.artifacts);
 });
 
 test("conflicting finalized operator identity is rejected at the analysis owner", () => {
@@ -101,7 +102,7 @@ test("non-Boolean native conditions are rejected before planning without truthin
 });
 
 test("for-of declarations, identifier assignments and patterns have one admitted binding owner", () => {
-  const { program, nodes, ast } = checked(`
+  const bindingSource = `
 export function run(values: number[]): number {
   let selected = 0;
   for (selected of values) {}
@@ -109,7 +110,8 @@ export function run(values: number[]): number {
   const pairs: [number, number][] = [[1, 2]];
   for (const [left, right] of pairs) { selected += left + right; }
   return selected;
-}`);
+}`;
+  const { program, nodes, ast } = checked(bindingSource);
   const loops = nodes.filter(ast.is.IsForOfStatement);
   assert.equal(loops.length, 3, "the three native-valid binding forms are checked");
   const completions = loops.map(node => program.statementCompletions.iterationFor(node));
@@ -118,6 +120,15 @@ export function run(values: number[]): number {
   assert.equal(completions[1]?.binding.mutable, true, "mutability comes from the existing mutation owner");
   assert.equal(completions[2]?.binding.kind, "pattern", "binding patterns retain their existing owner");
   for (const completion of completions) assert.equal(Object.isFrozen(completion), true, "iteration completion is immutable data");
+  const { result } = compileRust({ surfaces: [], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_native_iteration_bindings" } },
+    files: { "index.ts": `import { check } from "@acme/testing";
+${bindingSource}
+export function main(): void { check(run([1, 2]) === 6); }
+main();` } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  validateGeneratedProject("r05-native-iteration-bindings", result.artifacts, { run: true });
 });
 
 test("finalized native field setters use the one ABI renderer for direct, compound and update writes", () => {
