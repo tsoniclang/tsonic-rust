@@ -61,6 +61,8 @@ import { rustStructuralViewRequirementUses } from "./structural-view-requirement
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
 import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
+import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 
 interface ClassifyCallableInput {
   readonly ownershipFlow: RustOwnershipFlow;
@@ -77,6 +79,8 @@ interface ClassifyCallableInput {
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly genericCallables: RustGenericCallablePlan;
   readonly nativeCallables: RustNativeCallableInputPlan;
+  readonly nativeStorage: RustNativeStoragePlan;
+  readonly promiseBodies: RustPromiseBodies;
   readonly frameCallables: RustFrameCallablePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
@@ -123,7 +127,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (!exactNames.includes(selected.identity)) capturedParameters.set(selected.identity, rustTypeParameterFromSourceContract(selected));
     }
   }
-  const declared = new Set([...exactNames, ...capturedParameters.keys()]);
+  const staticInputs = input.promiseObjectFacet === true ? input.promiseBodies.objects.get(declaration)?.staticInputs : undefined;
+  const declared = new Set([...exactNames, ...capturedParameters.keys(), ...staticInputs ?? []]);
   const projections = createRustProjectProjectionRequirementCollector(declared, input.projectTypes);
   const byParameter = new Map([...declared].map((name) =>
     [name, new Set<RustGenericRequirement>()] as const));
@@ -238,9 +243,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         if (receiverError !== undefined) return { kind: "rejected", reason: receiverError };
       }
       for (const parameter of lowering.capturedParameters) {
+        const physical = input.nativeCallables.inputsFor(declaration).some(value => value.subject.node === parameter)
+          ? input.nativeStorage.parameterFor(parameter) : undefined;
         const parameterError = addUse(
           parameter,
-          records.sourceParameterAbi.get(parameter)?.parameterCarrier,
+          physical?.kind === "unresolved" ? undefined : physical?.carrier ?? records.sourceParameterAbi.get(parameter)?.parameterCarrier,
           ["static"],
         );
         if (parameterError !== undefined) {

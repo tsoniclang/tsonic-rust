@@ -77,7 +77,7 @@ export const marker = 0;`);
   const issues = current.result.diagnostics.filter(value => value.code === "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN");
   assert.equal(issues.length, 1);
   assert.equal(current.context.ast.text(issues[0].sourceNode), "read(value, pending)");
-  assert.equal(current.context.promiseBodies.plan.objects.get(current.named("read")) === issues[0].sourceNode, true);
+  assert.equal(current.context.promiseBodies.plan.objects.get(current.named("read")).at === issues[0].sourceNode, true);
 });
 
 test("a real library export demands an object without changing an internal immediate body's selection", () => {

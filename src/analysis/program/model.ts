@@ -69,7 +69,7 @@ export interface RustTargetProgram {
   readonly errorStorageDemands: import("@tsonic/target-api/analysis").SourceErrorStorageDemandQueries;
   readonly localStorageAliases: RustLocalStorageAliasPlan;
   readonly captureStorage: import("../storage/capture-storage.js").RustCaptureStoragePlan;
-  readonly settledPromiseBodies: import("../../target-model/records/callables-and-resources.js").RustSettledPromiseBodies;
+  readonly promiseBodies: import("../../target-model/records/callables-and-resources.js").RustPromiseBodies;
   readonly promiseResults: import("../../target-model/records/promise-results.js").RustPromiseResults;
   readonly numericRepresentations: RustNumericRepresentations;
   readonly typeDefinitions: import("../../target-model/types/source-union-definitions.js").RustTypeDefinitions;

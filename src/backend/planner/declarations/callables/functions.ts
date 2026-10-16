@@ -45,6 +45,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { planRustLexicalFunctionEnvironment } from "./lexical-functions.js";
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustErrorRegion } from "../../program/error-regions.js";
+import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "./promise-body-adapters.js";
 
 interface RustFunctionItemPlan {
   readonly item: RustItem;
@@ -62,7 +63,6 @@ export function planFunctionDeclarations(
       nameDeclaration: node,
       name: outerContext.input.program.names.functionNameForDeclaration(node),
       exported: outerContext.input.program.source.ast.hasModifierKind(node, "export"),
-      includeSettledHelper: true,
     }, outerContext);
     return item === undefined ? undefined : Object.freeze(item.helper === undefined ? [item.item] : [item.item, item.helper]);
   }
@@ -78,7 +78,6 @@ export function planFunctionDeclarations(
       name: variant.targetName,
       exported: false,
       specialization: variant,
-      includeSettledHelper: true,
     }, outerContext);
     if (item === undefined) {
       return undefined;
@@ -111,7 +110,6 @@ function planRustFunctionItem(
     readonly name?: string;
     readonly exported: boolean;
     readonly specialization?: RustSourceCallableSpecializationVariant;
-    readonly includeSettledHelper?: boolean;
   },
   outerContext: RustPlanContext,
 ): RustFunctionItemPlan | undefined {
@@ -131,6 +129,7 @@ function planRustFunctionItem(
   );
   const asyncFact = outerContext.input.program.records.asyncFunction.get(node);
   const returnsJsPromise = asyncFact?.kind === "js-promise";
+  const nativeBody = outerContext.input.program.promiseBodies.declarations.get(node);
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(outerContext, node),
@@ -151,7 +150,7 @@ function planRustFunctionItem(
     source.nameDeclaration,
   );
   const declarationAttributes = [...safetyAttributes];
-  let context: RustPlanContext = outerContext;
+  let context: RustPlanContext = nativeBody === undefined ? outerContext : { ...outerContext, promiseBody: true };
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -193,7 +192,7 @@ function planRustFunctionItem(
   context = environment.context;
   const parameterPlan = planRustCallableParameters(node, context, syntheticNames, {
     ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+        nativeBody === undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
       ? {
           requiredStaticParameters: generatorFact?.capturedParameters ??
             (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
@@ -246,10 +245,10 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const emittedReturnType = returnsJsPromise
+  const emittedReturnType = returnsJsPromise && nativeBody === undefined
     ? resolveRustJsPromiseReturnType(node, context)
     : returnType;
-  if (returnsJsPromise && emittedReturnType === undefined) {
+  if (returnsJsPromise && nativeBody === undefined && emittedReturnType === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, returnTypeNode ?? node),
       "rust.backend.js-promise-return",
@@ -257,7 +256,7 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  if (returnsJsPromise && !requireRustCarrierRequirements(
+  if (returnsJsPromise && nativeBody === undefined && !requireRustCarrierRequirements(
     asyncFact.outputCarrier,
     asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
     node,
@@ -411,39 +410,49 @@ function planRustFunctionItem(
         }
       : { fallible: false, hasReturnValue: returnType !== undefined },
   );
-  const helperName = source.includeSettledHelper === true
-    ? context.input.program.settledPromiseBodies.helpers.get(node) : undefined;
-  const helperCall = helperName === undefined ? undefined : {
-    kind: "call" as const, path: helperName,
-    args: params.map(parameter => ({ kind: "path" as const, path: parameter.name })),
-  };
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
-    name,
+    name: nativeBody?.name ?? name,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
     ...(declarationAttributes.length === 0
       ? {}
       : { attrs: declarationAttributes }),
-    ...(isAsync && !returnsJsPromise ? { isAsync: true } : {}),
+    ...(isAsync && (!returnsJsPromise || nativeBody !== undefined && asyncFact.lowering.kind === "factory") ? { isAsync: true } : {}),
     ...(isUnsafe ? { isUnsafe: true } : {}),
-    ...(callableErrorBoundary === undefined || returnsJsPromise
+    ...(callableErrorBoundary === undefined || returnsJsPromise && nativeBody === undefined
       ? {}
       : { errorType: callableErrorBoundary.errorType }),
     generics,
     params,
     ...(emittedReturnType === undefined ? {} : { returnType: emittedReturnType }),
-    body: returnsJsPromise
-      ? helperCall === undefined ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering)
-        : { statements: [{ kind: "tail", expr: { kind: "call",
-          path: fallible ? "js_abi::JsPromise::from_result" : "js_abi::JsPromise::resolved", args: [helperCall] } }] }
+    body: returnsJsPromise && nativeBody === undefined
+      ? wrapRustJsPromiseBody(finalizedBody, fallible, asyncFact.lowering)
       : finalizedBody,
   };
-  const helper: RustItem | undefined = helperName === undefined ? undefined : {
-    ...item, name: helperName, visibility: "crate", returnType,
-    ...(callableErrorBoundary === undefined ? {} : { errorType: callableErrorBoundary.errorType }),
-    body: finalizedBody,
-  };
+  if (nativeBody === undefined || !context.input.program.promiseBodies.objects.has(node))
+    return Object.freeze({ item, helper: undefined });
+  const adapterGenerics = planRustCallableGenerics(node, outerContext, specialization, lexical?.genericParameters);
+  if (adapterGenerics === undefined) return undefined;
+  const adapterContext: RustPlanContext = { ...adapterGenerics.context, syntheticNames: createRustSyntheticNameState(ast, node, []) };
+  const adapterParameters = planRustCallableParameters(node, adapterContext, adapterContext.syntheticNames!, {
+    requiredStaticParameters: asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
+      ? asyncFact.lowering.capturedParameters : [],
+  });
+  if (adapterParameters === undefined || asyncFact?.kind !== "js-promise" ||
+    !requireRustCarrierRequirements(asyncFact.outputCarrier,
+      asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], node, adapterContext)) return undefined;
+  const adapterReturn = resolveRustJsPromiseReturnType(node, adapterContext);
+  const adapterBody = planRustPromiseBodyObjectAdapter(node, { kind: "call", path: nativeBody.name,
+    genericArguments: rustPromiseBodyGenericArguments(generics),
+    args: params.map(parameter => ({ kind: "path", path: parameter.name })),
+  }, callableErrorBoundary, adapterContext);
+  if (adapterReturn === undefined || adapterBody === undefined) return undefined;
+  const helper: RustItem = { kind: "function", name, visibility,
+    ...(deadCode === undefined ? {} : { deadCode }),
+    ...(declarationAttributes.length === 0 ? {} : { attrs: declarationAttributes }),
+    ...(isUnsafe ? { isUnsafe: true } : {}),
+    generics: adapterGenerics.finalizeGenerics(), params, returnType: adapterReturn, body: adapterBody };
   return Object.freeze({ item, helper });
 }
 import { planRustReturnValueExpression } from "../../expressions/value-destinations.js";

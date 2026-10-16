@@ -52,6 +52,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../../../../
 import { rustSourceCallResultProjectionMatches } from "../../../../analysis/callables/source-call-results.js";
 import { rustRetainedCallSubstitutions } from "../../../../analysis/callables/retained-call-lifetimes.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
+import { rustPromiseBodyInvocationCarrier } from "../../../../analysis/callables/promise-bodies.js";
 
 export function shapeRustSourceCallParameters(
   argumentNodes: readonly Node[],
@@ -505,6 +506,9 @@ export function sourceCallSelectedMemberMatches(
     : instantiateResult(declaredResultCarrier);
   const sourceProjection = selected.sourceResultProjection;
   const resultProjection = fact.resultProjection;
+  if (fact.asyncBody !== undefined && (fact.asyncBody.declaration !== selected.sourceDeclaration ||
+    resultProjection !== undefined || !rustTargetTypeRefEquals(fact.resultCarrier,
+      rustPromiseBodyInvocationCarrier(fact.asyncBody)))) return false;
   if ((sourceProjection === undefined) !== (resultProjection === undefined)) return false;
   if (sourceProjection !== undefined && resultProjection !== undefined) {
     if (projectTypes === undefined || !rustTargetTypeRefEquals(resultProjection.selectedCarrier, fact.resultCarrier) ||
@@ -515,7 +519,7 @@ export function sourceCallSelectedMemberMatches(
     member.kind === expectedKind &&
     member.targetName === expectedTargetName &&
     selectedReturn !== undefined && rustTargetTypeRefEquals(selectedReturn,
-      mapRustTargetTypes(resultProjection?.sourceCarrier ?? fact.resultCarrier, normalize));
+      mapRustTargetTypes(fact.asyncBody?.logicalResultCarrier ?? resultProjection?.sourceCarrier ?? fact.resultCarrier, normalize));
   if (!identityMatches) {
     return false;
   }
