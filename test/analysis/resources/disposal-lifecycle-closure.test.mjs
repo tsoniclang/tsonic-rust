@@ -259,3 +259,45 @@ test("fallible disposer input conversion participates before the seal without in
     result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
   validateGeneratedProject("r05-native-fallible-disposal-input", result.artifacts, { run: true });
 });
+
+test("native cleanup observes failed acquisition, continue, break and return in exact source order", () => {
+  const source = `
+import type { int32 } from "@tsonic/core/types.js";
+import { check } from "@acme/testing";
+let attempts: int32 = 0;
+let disposed: int32 = 0;
+let body: int32 = 0;
+class Resource {
+  private id: int32;
+  constructor(id: int32) { this.id = id; }
+  [Symbol.dispose](): void { disposed = disposed * 10 + this.id; }
+}
+function acquire(id: int32): Resource {
+  attempts = attempts * 10 + id;
+  if (id === 2) throw new Error("acquisition");
+  return new Resource(id);
+}
+function returnValue(): int32 { using active = new Resource(5); return 7; }
+export function main(): void {
+  try { using first = acquire(1), second = acquire(2); body += 1; } catch {}
+  check(attempts === 12);
+  check(disposed === 1);
+  check(body === 0);
+  for (let index: int32 = 0; index < 3; index++) {
+    using active = new Resource(index + 3);
+    if (index === 0) continue;
+    break;
+  }
+  check(disposed === 134);
+  check(returnValue() === 7);
+  check(disposed === 1345);
+}
+main();
+`;
+  const { result } = compileRust({ surfaces: [], packages: [acmeTestingPackage()],
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_cleanup_completion_order" } },
+    files: { "index.ts": source } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  validateGeneratedProject("r05-native-cleanup-completion-order", result.artifacts, { run: true });
+});
