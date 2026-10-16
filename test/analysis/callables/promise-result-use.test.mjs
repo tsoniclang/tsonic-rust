@@ -9,6 +9,7 @@ for (const [name, statement, observations] of [
   ["conditional discard", "flag ? leaf() : leaf();", 2],
   ["stored completion", "const pending = leaf(); return await pending;", 0],
   ["direct await", "return await leaf();", 0],
+  ["discarded reaction", "leaf().then(value => value + 1);", 1],
 ]) {
   test(`Promise result use is selected before planning: ${name}`, () => {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
@@ -47,3 +48,23 @@ test("stored native futures remain admitted and do not gain JS observers", () =>
   assert.equal([...program.promiseResults.values()].some(row => row.discard !== undefined), false);
   assert.equal([...program.promiseResults.values()].some(row => row.disposition.kind === "stored"), true);
 });
+
+for (const [name, result, branch, shape] of [
+  ["optional", "Promise<number> | undefined", "undefined", "optional"],
+  ["union", "Promise<number> | number", "3", "union"],
+]) {
+  test(`discarded ${name} completion renders its preselected branch topology`, () => {
+    const { result: compiled } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+      async function leaf(): Promise<number> { return 1; }
+      function choose(flag: boolean): ${result} { return flag ? leaf() : ${branch}; }
+      export function run(flag: boolean): void { choose(flag); }
+    ` } });
+    assert.deepEqual(compiled.diagnostics.map(({ code, message }) => `${code}: ${message}`), []);
+    const rows = [...compiled.program.promiseResults.values()].filter(row => row.discard !== undefined);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].discard.kind, shape);
+    const emitted = rustSourceText(compiled);
+    assert.equal((emitted.match(/\.observe_discarded\(\)/gu) ?? []).length, 1, emitted);
+    assert.equal((emitted.match(/choose\(flag\)/gu) ?? []).length, 1, emitted);
+  });
+}
