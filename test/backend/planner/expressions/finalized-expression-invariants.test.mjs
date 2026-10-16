@@ -169,7 +169,8 @@ export function update(): int32 {
 ` } });
   const { ast } = program.source;
   const node = selectedNode(program, "targetOperation", (_fact, candidate) =>
-    ast.is.IsBinaryExpression(candidate) && ast.text(BinaryExpression_Left(ast, candidate)) === "local");
+    ast.is.IsBinaryExpression(candidate) && ast.is.IsIdentifier(BinaryExpression_Left(ast, candidate)) &&
+    ast.text(BinaryExpression_Left(ast, candidate)) === "local");
   const left = BinaryExpression_Left(ast, node);
   const right = BinaryExpression_Right(ast, node);
   const declaration = program.records.sourceBinding.get(left)?.sourceDeclaration;
@@ -205,7 +206,8 @@ test("actual source argument lists preserve empty, undefined and spread nodes", 
   const { ast } = program.source;
   for (const [label, predicate, expectedCount] of [
     ["empty", node => ast.arguments(node).length === 0, 0],
-    ["undefined", node => ast.arguments(node).length === 1 && ast.text(ast.arguments(node)[0]) === "undefined", 1],
+    ["undefined", node => ast.arguments(node).length === 1 && ast.is.IsIdentifier(ast.arguments(node)[0]) &&
+      ast.text(ast.arguments(node)[0]) === "undefined", 1],
     ["spread", node => ast.arguments(node).length === 1 && ast.kindName(ast.arguments(node)[0]) === "KindSpreadElement", 1],
   ]) {
     const node = selectedNode(program, "targetOperation", (fact, candidate) => fact.kind === "source-call" && predicate(candidate));
@@ -227,7 +229,8 @@ test("a checked source call cannot contain an undefined actual AST argument", ()
   const program = checkedCalls();
   const { ast } = program.source;
   const node = selectedNode(program, "targetOperation", (fact, candidate) => fact.kind === "source-call" &&
-    ast.arguments(candidate).length === 1 && ast.text(ast.arguments(candidate)[0]) === "undefined");
+    ast.arguments(candidate).length === 1 && ast.is.IsIdentifier(ast.arguments(candidate)[0]) &&
+    ast.text(ast.arguments(candidate)[0]) === "undefined");
   const changed = { ...program, source: { ...program.source, ast: { ...ast,
     arguments: subject => subject === node ? [undefined] : ast.arguments(subject),
   } } };
@@ -242,7 +245,8 @@ test("an ordinary argument rendering failure remains an ordinary absent plan", (
   const program = checkedCalls();
   const { ast } = program.source;
   const node = selectedNode(program, "targetOperation", (fact, candidate) => fact.kind === "source-call" &&
-    ast.arguments(candidate).length === 1 && ast.text(ast.arguments(candidate)[0]) === "undefined");
+    ast.arguments(candidate).length === 1 && ast.is.IsIdentifier(ast.arguments(candidate)[0]) &&
+    ast.text(ast.arguments(candidate)[0]) === "undefined");
   const context = planContext(program, node);
   let rendered = 0;
   assert.equal(planRustCallArguments(node, context, () => { rendered++; }) === undefined, true);
