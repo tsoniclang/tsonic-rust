@@ -1,7 +1,7 @@
 import type {
   TargetDiagnostic,
 } from "@tsonic/target-api/artifacts";
-import type { AstReader, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetCompileInput } from "@tsonic/target-api";
 import type {
   RustErrorDomain,
@@ -16,6 +16,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustClosedErrorTransportDemand } from "../errors/closed-errors.js";
 import type { RustClosedErrorTransportDemand } from "../errors/closed-errors.js";
 import type { RustNativeStorageSelection } from "../callables/native-storage.js";
+import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
 
 export interface RustSourcePackageComponentSemantics {
@@ -167,6 +168,7 @@ export function selectRustSourcePackageComponentIdentities(
 export function analyzeRustSourcePackageComponents(
   context: RustAnalysisContext,
   outputType: "bin" | "lib",
+  effectsFor: (node: Node) => RustErrorEffectsFact | undefined,
 ): AnalyzeRustSourcePackageComponentsResult {
   const selected = context.sourcePackageComponentIdentities;
   if (selected.kind === "rejected") return selected;
@@ -192,7 +194,7 @@ export function analyzeRustSourcePackageComponents(
   const errorComponents = new Set<string>();
   const closedErrorsByComponent = new Map<string, { thrownCarriers: TargetTypeRef[]; retained: boolean; sourceView: boolean }>();
   for (const sourceFile of context.sourceFiles) {
-    const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.records, context.typeDefinitions, context.projectTypes);
+    const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.records, context.typeDefinitions, context.projectTypes, effectsFor);
     const componentId = identities.componentIdForFile(context.ast.getFileName(sourceFile));
     if (demand === undefined) return rejected("RUST_CLOSED_ERROR_DEMAND_UNRESOLVED",
       "Closed Error demand exceeds its bounded exact source-tree contract.");

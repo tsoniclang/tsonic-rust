@@ -436,7 +436,7 @@ test("the planner phase label starts at publication, after the callable seal and
   const value = rustGenericCallableValue(joined.carrier);
   const reordered = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: [...value.physical.members].reverse() } });
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "closed, not sealed");
-  const components = analyzeRustSourcePackageComponents(context, "lib");
+  const components = analyzeRustSourcePackageComponents(context, "lib", subject => context.records.errorEffects.get(subject));
   assert.equal(components.kind, "resolved", "the existing component owner completes before publication");
   context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     records: context.records, physical, producers: context.callableValues.nativeProducers,

@@ -590,7 +590,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
-  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType);
+  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
   if (sourcePackageComponents.kind === "rejected") {
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
     return;
