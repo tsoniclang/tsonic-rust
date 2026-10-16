@@ -9,6 +9,7 @@ import { rustFinalizedSourceInputs } from "../../../analysis/operations/finalize
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import { sourceRuntimeSlots, providerTargetRuntimeSlotKeys } from "./provider-source-inputs.js";
 import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
 import { planExpressionBeforeContextualConversion } from "../expressions/entry.js";
@@ -224,7 +225,18 @@ export function planRustProviderEvaluationScope(
     if (slot.evaluationOnly !== undefined) {
       const discarded = planRustDiscardedValue(slot.node, context);
       if (discarded === undefined) return { kind: "failed" };
-      steps.push({ kind: "effect", value: discarded.expression, discard: discarded.discard });
+      const ownership = context.input.program.ownership.reads.get(slot.node);
+      const carrier = context.expressionOverrides?.get(slot.node)?.carrier ?? ownership?.carrier;
+      const lifetimes = carrier === undefined ? undefined : rustTargetGenericReferences(carrier);
+      const borrowed = ownership?.readsStorage === true || ownership?.sharedReference === true ||
+        lifetimes !== undefined && (lifetimes.lifetimes.length > 0 || lifetimes.callScopedElisions.length > 0 ||
+          lifetimes.hasUnnameableLifetime || lifetimes.elisionInputs.some(lifetime => lifetime.kind !== "static"));
+      if (slot.evaluationOnly === "value" && discarded.discard === "value" && !borrowed) {
+        const name = allocateRustSyntheticName(syntheticNames, `_operation_evaluation_${index}`);
+        steps.push({ kind: "binding", name, value: discarded.expression });
+      } else {
+        steps.push({ kind: "effect", value: discarded.expression, discard: discarded.discard });
+      }
       continue;
     }
     if (!stabilizationKeys.has(slot.key)) {
