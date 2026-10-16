@@ -173,9 +173,9 @@ test("runtime setter selection retains exact operand nodes and prior ABI admissi
 test("admitted iteration cannot lose mandatory body and binding syntax", () => {
   const program = programFixture();
   for (const [owner, kind, view, field, plan, message] of [
-    ["forOf", "IsForOfStatement", "AsForOfStatement", "Statement", planForOfStatement,
+    ["forOf", "IsForOfStatement", "AsForInOrOfStatement", "Statement", planForOfStatement,
       "for-of statements require a concrete source body."],
-    ["forIn", "IsForInStatement", "AsForInStatement", "Initializer", planForInStatement,
+    ["forIn", "IsForInStatement", "AsForInOrOfStatement", "Initializer", planForInStatement,
       "for-in requires one exact binding initializer."],
   ]) {
     const node = nodeIn(program, owner, (ast, candidate) => ast.is[kind](candidate));
