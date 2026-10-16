@@ -21,7 +21,7 @@ import { rustNativeCallablePhysicalSource } from "./native-conversions.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeCallableProducerPlan, RustNativeCallableProducerConstruction } from "./native-producers.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
-import { rustRetainedValueLifetime } from "./retained-environments.js";
+import { rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
 import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";

@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import { resolveRustTargetType } from "./target.js";
 import { rustSourceTypeParameter } from "../../../target-model/names/type-parameters.js";
@@ -17,7 +16,7 @@ export function resolveRustCallableEnvironment(
   if (declaration === undefined || body === undefined) return [];
   const lexical = context.retainedEnvironments.lexicalFor(declaration);
   if (lexical.kind === "unresolved") return undefined;
-  const parameters = new Map<string, Extract<TargetTypeRef, { readonly kind: "type-parameter" }>>();
+  const carriers: TargetTypeRef[] = [];
   for (const reference of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration) &&
     context.records.compileTimeSource.get(capture.declaration) !== true)
     .flatMap(capture => capture.references.slice(0, 1)),
@@ -35,9 +34,9 @@ export function resolveRustCallableEnvironment(
       sourceStorageSubject: selected.subject,
       sourceTypeParameterSubstitutions: new Map() }, options, resolving);
     if (carrier === undefined) return undefined;
-    for (const parameter of rustTargetGenericReferences(carrier).typeParameters) parameters.set(parameter.identity, parameter);
+    carriers.push(carrier);
   }
-  return Object.freeze([...parameters.values()]);
+  return Object.freeze(carriers);
 }
 
 export function bindRustCallableEnvironment(
