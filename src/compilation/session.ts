@@ -31,6 +31,7 @@ import {
   createRustTargetConfiguration,
 } from "../options/rust-target-options.js";
 import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
+import type { RustEdition } from "../target-model/project/model.js";
 
 type RustCompilationSessionState =
   | "created"
@@ -42,6 +43,7 @@ type RustCompilationSessionState =
 
 export function createRustCompilationSession(
   context: TargetCompilationSessionContext,
+  formatResult: (result: TargetCompileResult, edition: RustEdition) => TargetCompileResult,
   compileRequest: typeof compileRustTarget = compileRustTarget,
 ): TargetCompilationSession {
   const configuration = createRustTargetConfiguration(
@@ -97,7 +99,7 @@ export function createRustCompilationSession(
     compile(input: TargetCompileInput): TargetCompileResult {
       requireState(state, "runtime-contributed", "compile");
       state = "compiled";
-      return compileRequest(Object.freeze({
+      return formatResult(compileRequest(Object.freeze({
         input,
         configuration,
         providerSemantics: mergeRustProviderSemantics(
@@ -106,7 +108,7 @@ export function createRustCompilationSession(
         ),
         jsEnabled,
         rootPublishesLibrary: configuration.outputType === "lib",
-      }));
+      })), configuration.edition);
     },
     close(): void {
       if (state === "closed") {

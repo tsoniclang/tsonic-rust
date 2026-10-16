@@ -24,6 +24,7 @@ import {
 import { createRustTargetPack } from "../../../dist/index.js";
 import { createRustCompilationSession } from "../../../dist/compilation/session.js";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
+import { formatRustCompileResult } from "../../../dist/toolchain/rustfmt.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { analyzeRustCheckedContext } from "./analysis-context.mjs";
 
@@ -75,7 +76,7 @@ export function createRustSession({
     selectedSurfaces,
   });
   const createSession = compileTarget === undefined ? pack.createCompilationSession
-    : context => createRustCompilationSession(context, compileTarget);
+    : context => createRustCompilationSession(context, formatRustCompileResult, compileTarget);
   const targetSession = createSession(Object.freeze({
     project,
     projectDirectory: "/src",
