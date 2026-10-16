@@ -45,7 +45,6 @@ import {
   isRustUnitCarrier,
   isRustNeverCarrier,
   isRustNumericCarrier,
-  isRustIntegerCarrier,
   isRustOptionCarrier,
   isRustStringCarrier,
   rustOptionElementCarrier,
