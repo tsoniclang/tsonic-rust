@@ -79,7 +79,7 @@ export function observed(): number { return target(first(), second()); }
   const number = { kind: "source-primitive", name: "float64" };
   for (const [label, carrier, expression, expectedDiscard] of [
     ["unit", { kind: "tuple", elements: [] }, { kind: "call", path: "fixture::unit", args: [] }, "unit"],
-    ["absence", { kind: "target-named", id: "rust.native.absence" }, { kind: "call", path: "fixture::absence", args: [] }, "value"],
+    ["absence", { kind: "target-named", id: "rust.native.absence" }, { kind: "call", path: "fixture::absence", args: [] }, "unit"],
     ["future", rustFutureTargetType(number), { kind: "call", path: "fixture::future", args: [] }, "unit"],
     ["borrow-holding", { kind: "target-named", id: "fixture.Guard", genericArguments: [
       { kind: "lifetime", lifetime: { kind: "placeholder" } },
