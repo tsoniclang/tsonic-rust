@@ -135,6 +135,7 @@ export function createRustSourceTypeRegistry(
   return {
     typeFamilies,
     closedValueCarrier: typeDefinitions.closedValueCarrier,
+    sourceEnumDefinition: typeDefinitions.sourceEnumDefinition,
     sourceUnionVariants: typeDefinitions.sourceUnionVariants,
     sourceUnionPayloadTemplate: typeDefinitions.sourceUnionPayloadTemplate,
     programErrorOrigin: typeDefinitions.programErrorOrigin,

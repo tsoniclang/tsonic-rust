@@ -9,6 +9,7 @@ import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "./equality.js";
 import { rustTargetTypeChildren } from "./carriers/children.js";
 import { rustLifetimeKey } from "../lifetimes/index.js";
 import { allocateRustGeneratedName } from "../names/generated.js";
+import type { RustNativeEnumDeclaration } from "../records/native-value-declarations.js";
 
 export interface RustSourceUnionDefinition {
   readonly carrier: TargetTypeRef;
@@ -25,6 +26,7 @@ export interface RustSourceUnionPayloadTemplate extends RustSourceUnionDefinitio
 
 export interface RustTypeDefinitions {
   readonly closedValueCarrier: TargetTypeRef;
+  sourceEnumDefinition(carrier: TargetTypeRef): RustNativeEnumDeclaration | undefined;
   sourceUnionVariants(carrier: TargetTypeRef): readonly RustSourceUnionVariantCarrierValue[] | undefined;
   sourceUnionPayloadTemplate(carrier: TargetTypeRef): RustSourceUnionPayloadTemplate | undefined;
   programErrorOrigin(carrier: TargetTypeRef): RustProgramErrorOrigin | undefined;
@@ -36,6 +38,7 @@ export type RustProgramErrorOrigin =
 
 export const emptyRustTypeDefinitions: RustTypeDefinitions = Object.freeze({
   closedValueCarrier: Object.freeze(rustTsValueTargetType()),
+  sourceEnumDefinition: () => undefined,
   sourceUnionVariants: () => undefined,
   sourceUnionPayloadTemplate: () => undefined,
   programErrorOrigin: () => undefined,

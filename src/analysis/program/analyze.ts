@@ -19,7 +19,8 @@ import {
   KindFunctionDeclaration,
   KindVariableStatement,
 } from "@tsonic/target-api/source";
-import { recordEnumFacts, reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
+import { reserveTypeAliasUnion } from "../declarations/types-and-bindings.js";
+import { recordEnumFacts } from "../declarations/enum-facts.js";
 import { recordExportAssignmentFacts, recordFunctionBodyFacts, recordStatementFacts, recordVariableStatementFacts } from "../control-flow/statements.js";
 import { recordFallibilityFacts } from "../resources/fallibility.js";
 import { recordNestedCallableTypeSignatureFacts, recordPredeclaredNativeFunctionBindingFacts, recordTopLevelCallableValueSignatureFacts } from "../callables/signatures.js";
@@ -195,6 +196,13 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   for (const sourceFile of projectSourceFiles) {
     sourceTypes.registerSourceFile(sourceFile, ast);
   }
+  const enumDiagnosticCount = context.diagnostics.length;
+  for (const sourceFile of projectSourceFiles) {
+    for (const declaration of ast.statements(sourceFile) as readonly Node[]) {
+      if (ast.kindName(declaration) === "KindEnumDeclaration") recordEnumFacts(walk, declaration);
+    }
+  }
+  if (context.diagnostics.length !== enumDiagnosticCount) return;
   recordRustInterfaceRepresentationAliases(walk, projectSourceFiles);
   const projectTypes = context.projectTypes.initialize({
     collectImplicitInterfaces: () => collectRustImplicitInterfaceContracts(walk),
@@ -390,8 +398,6 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
         finalizeRustCallableSignature(walk, statement);
       } else if (kind === "KindClassDeclaration" || kind === "KindClassExpression") {
         recordClassSignatureFacts(walk, statement);
-      } else if (kind === "KindEnumDeclaration") {
-        recordEnumFacts(walk, statement, sourceFile);
       }
     }
     recordNestedCallableTypeSignatureFacts(walk, sourceFile);

@@ -297,13 +297,6 @@ export function selectRustTypeAliasDeclaration(
   };
 }
 
-export function recordEnumFacts(walk: RustFactWalk, declaration: Node, _sourceFile: SourceFile): void {
-  const carrier = sourceTypeCarrierForDeclaration(walk, declaration);
-  if (carrier !== undefined) {
-    setCarrierFact(walk, declaration, carrier);
-  }
-}
-
 export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
   return walk.sourceCallableAbi.resolveParameterAbi(
     parameter,

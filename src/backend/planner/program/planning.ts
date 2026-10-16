@@ -19,7 +19,6 @@ import {
 } from "./module-initialization.js";
 import {
   allocateRustComponentSupportModuleName,
-  planRustSourceOutputIdentities,
 } from "../names/source-output-identities.js";
 import { rustErrorBoundaryOperandType, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.js";
@@ -56,26 +55,18 @@ import { planRustOwnedBinaryEntry, rustBinaryExitCodeType } from "./owned-entry.
 
 export function planRustOutput(input: RustPlanningContext): TargetStageResult<RustOutputPlan> {
   const diagnostics: TargetDiagnostic[] = [];
-  const identityPlan = planRustSourceOutputIdentities({
-    ast: input.program.source.ast,
-    sourceFiles: input.program.sourceFiles,
-    paths: input.host.paths,
-    sourcePackages: input.host.sourcePackages,
-  });
-  if (identityPlan.kind === "rejected") {
-    return rejectedTargetStage([...diagnostics, ...identityPlan.diagnostics]);
-  }
+  const identities = input.program.sourceOutputIdentities;
   const moduleNameByFileName = new Map(
-    [...identityPlan.identities].map(([fileName, identity]) => [fileName, identity.moduleName] as const),
+    [...identities].map(([fileName, identity]) => [fileName, identity.moduleName] as const),
   );
   const externalCrateNameByFileName = new Map(
-    [...identityPlan.identities]
+    [...identities]
       .filter(([, identity]) => identity.externalCrateName !== undefined)
       .map(([fileName, identity]) => [fileName, identity.externalCrateName!] as const),
   );
   const facadeResult = materializeRustSourcePackageFacades(
     input,
-    identityPlan.identities,
+    identities,
   );
   diagnostics.push(...facadeResult.diagnostics);
   if (facadeResult.plan === undefined || diagnostics.length > 0) {
@@ -84,7 +75,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const facadePlan = facadeResult.plan;
   const componentResult = planRustSourcePackageComponents(
     input,
-    identityPlan.identities,
+    identities,
     facadePlan,
   );
   if (componentResult.kind === "rejected") {
@@ -101,7 +92,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
         evidence: ["target.capability=rust.backend.source-package-components"],
       }]);
   }
-  const initializerResult = planRustSourcePackageInitializers(input, identityPlan.identities);
+  const initializerResult = planRustSourcePackageInitializers(input, identities);
   diagnostics.push(...initializerResult.diagnostics);
   if (initializerResult.plan === undefined || diagnostics.length > 0) {
     return rejectedTargetStage(diagnostics);
@@ -120,7 +111,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const componentPlanById = new Map(componentPlans.map((component) =>
     [component.componentId, component] as const));
   const externalStructuralShapeModuleByFileName = new Map(
-    [...identityPlan.identities].flatMap(([fileName, identity]) => {
+    [...identities].flatMap(([fileName, identity]) => {
       if (identity.externalCrateName === undefined) {
         return [];
       }
@@ -134,7 +125,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const workerEntryIdentityByFileName = new Map<string, string>();
   for (const sourceFile of input.program.sourceModuleConstructions.targets()) {
     const fileName = input.program.source.ast.getFileName(sourceFile);
-    const identity = identityPlan.identities.get(fileName);
+    const identity = identities.get(fileName);
     if (identity === undefined) {
       diagnostics.push({
         code: "RUST_WORKER_ENTRY_OUTPUT_IDENTITY_MISSING",
@@ -169,7 +160,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     return rejectedTargetStage(diagnostics);
   }
   const crateInitializerFunctionBase = allocateRustComponentSupportModuleName(
-    identityPlan.identities,
+    identities,
     facadePlan.rootComponentId,
     "initialize",
     [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
@@ -201,7 +192,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   }
   const reconstructedSources = reconstructRustSourceFiles(
     input,
-    identityPlan.identities,
+    identities,
     facadePlan.externalItemPathByIdentity,
     externalStructuralShapeModuleByFileName,
     workerEntryIdentityByFileName,
@@ -220,7 +211,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const crateContentByComponentId = new Map(componentPlans.flatMap((component) => {
     const content = planRustSourcePackageCrateContent(
       input,
-      identityPlan.identities,
+      identities,
       component,
       reconstructedSources.sourcesByComponentId.get(component.componentId) ?? [],
       facadePlan,
@@ -294,7 +285,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   };
   const workerEntries = planRustWorkerEntries({
     planning: input,
-    identities: identityPlan.identities,
+    identities: identities,
     components: componentPlans,
     contentByComponentId: crateContentByComponentId,
     packageInitializers,
@@ -332,7 +323,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
   const rootArtifacts = materializeRustSourcePackageCrateArtifacts(
     input,
     rootCrateContent,
-    identityPlan.identities,
+    identities,
     facadePlan,
     diagnostics,
     {
@@ -369,7 +360,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
       const externalArtifacts = materializeRustSourcePackageCrateArtifacts(
         input,
         content,
-        identityPlan.identities,
+        identities,
         facadePlan,
         diagnostics,
         {

@@ -1,4 +1,5 @@
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustNativeEnumDeclaration } from "../../target-model/records/native-value-declarations.js";
 import { rustTsValueTargetType } from "../../target-model/types/carriers/native.js";
 import { isRustClosedValueCarrier } from "../../target-model/types/carriers/closed-value-kind.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -10,6 +11,7 @@ import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, 
   type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
+  registerSourceEnum(carrier: TargetTypeRef, definition: RustNativeEnumDeclaration): boolean;
   registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean): boolean;
   registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin): boolean;
   definitionCarriers(): readonly TargetTypeRef[];
@@ -25,10 +27,13 @@ export function createRustTypeDefinitionRegistry(
   }
   const closedValueCarrier = snapshotClosedMetadata(selectedClosedValueCarrier);
   const definitions = new Map<string, RustSourceUnionDefinition>();
+  const enums = new Map<string, RustNativeEnumDeclaration>();
   const templates = new Map<string, RustSourceUnionDefinition>();
   const payloadTemplates = new Map<string, RustSourceUnionPayloadTemplate>();
   const errorOrigins = new Map<string, RustProgramErrorOrigin>();
   let sealed = false;
+  const sourceEnumDefinition: RustTypeDefinitions["sourceEnumDefinition"] = carrier =>
+    enums.get(closedMetadataKey(carrier));
   const sourceVariants: RustTypeDefinitions["sourceUnionVariants"] = carrier => {
     if (!isRustTargetTypeRef(carrier)) return undefined;
     const value = rustSourceUnionCarrierValue(carrier);
@@ -64,9 +69,23 @@ export function createRustTypeDefinitionRegistry(
   };
   return Object.freeze({
     closedValueCarrier,
+    sourceEnumDefinition,
     sourceUnionVariants,
     sourceUnionPayloadTemplate,
     programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined,
+    registerSourceEnum(carrier: TargetTypeRef, definition: RustNativeEnumDeclaration) {
+      if (sealed) throw new Error("Rust type definitions are sealed.");
+      const source = rustSourceTypeCarrierValue(carrier);
+      if (source?.shape !== "enum" || source.genericArguments.length !== 0 ||
+        definition.kind !== "enum" || !Object.isFrozen(definition) || !Object.isFrozen(definition.variants) ||
+        definition.integerWidth !== 32 && definition.integerWidth !== 64 ||
+        definition.representation !== "enum" && definition.representation !== "constants" ||
+        definition.variants.some(variant => !Object.isFrozen(variant))) return false;
+      const identity = closedMetadataKey(carrier);
+      if (enums.has(identity)) return false;
+      enums.set(identity, definition);
+      return true;
+    },
     registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin) {
       if (sealed) throw new Error("Rust type definitions are sealed.");
       if (!isRustTargetTypeRef(carrier) || !isClosedMetadata(origin) || origin === null || typeof origin !== "object" ||
@@ -123,7 +142,7 @@ export function createRustTypeDefinitionRegistry(
       };
       for (const definition of definitions.values()) for (const variant of definition.variants) visit(variant.carrier);
       sealed = true;
-      return Object.freeze({closedValueCarrier, sourceUnionVariants, sourceUnionPayloadTemplate,
+      return Object.freeze({closedValueCarrier, sourceEnumDefinition, sourceUnionVariants, sourceUnionPayloadTemplate,
         programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined});
     },
   });
