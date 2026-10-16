@@ -8,6 +8,8 @@ import {
   RustFormattingError,
 } from "../../dist/toolchain/rustfmt.js";
 import { compileRust } from "../helpers/rust-session.mjs";
+import { printRustSourceFile } from "../helpers/printed-rust-source.mjs";
+import { emptyRustGenerics } from "../../dist/backend/target-ast/syntax/nodes.js";
 
 test("generated Rust sources are canonically formatted without changing other artifacts", () => {
   const project = Object.freeze({
@@ -158,7 +160,7 @@ test("the raw backend resolves without invoking a missing formatter", () => {
     assert.equal(Object.isFrozen(raw.value), true);
     assert.equal(Object.isFrozen(raw.value.artifacts), true);
     assert.equal(raw.value.artifacts.every(Object.isFrozen), true);
-    assert.deepEqual(raw.diagnostics, []);
+    assert.equal(raw.diagnostics.length, 0, "the raw backend reports no diagnostics");
   } finally {
     restoreEnvironment("RUSTFMT", previous);
   }
@@ -217,6 +219,33 @@ test("outputs without Rust source bypass the formatter unchanged", () => {
   } finally {
     restoreEnvironment("RUSTFMT", previous);
   }
+});
+
+test("the source-printing test helper composes canonical toolchain formatting", () => {
+  const model = { items: [{ kind: "function", name: "value", generics: emptyRustGenerics,
+    visibility: "public", params: [], returnType: { kind: "primitive", name: "i32" },
+    body: { statements: [{ kind: "tail", expr: { kind: "int-literal", text: "1" } }] },
+  }] };
+  for (const edition of ["2021", "2024"]) {
+    assert.match(printRustSourceFile(model, edition), /pub fn value\(\) -> i32 \{\n    1\n\}/u);
+  }
+  const previous = process.env.RUSTFMT;
+  process.env.RUSTFMT = "/definitely/missing/tsonic-printer-helper-formatter";
+  try {
+    assert.throws(() => printRustSourceFile(model),
+      error => error instanceof RustFormattingError && /Unable to execute Rust formatter/u.test(error.message));
+  } finally {
+    restoreEnvironment("RUSTFMT", previous);
+  }
+});
+
+test("the source-printing test helper retains its configured native edition", () => {
+  const model = { items: [{ kind: "function", name: "gen", generics: emptyRustGenerics,
+    visibility: "public", params: [], body: { statements: [] },
+  }] };
+  assert.match(printRustSourceFile(model, "2021"), /pub fn gen\(\)/u);
+  assert.throws(() => printRustSourceFile(model, "2024"),
+    error => error instanceof RustFormattingError && /exited with status/u.test(error.message));
 });
 
 function rustSource(path, text) {
