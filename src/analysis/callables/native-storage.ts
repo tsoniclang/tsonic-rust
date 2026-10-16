@@ -422,7 +422,7 @@ export function createRustNativeStorageQueries(input: {
         for (const [index, sourceField] of structural.fields.entries()) {
           const field = input.structuralShapes.field(current, index);
           if (field === undefined) return fail("Native aggregate storage requires its exact structural field layout owner.");
-          if (field.method === true) {
+          if (sourceField.method === true) {
             if (field.methodStorageCarrier === undefined)
               return fail("Native aggregate method storage requires its canonical callable field layout.");
             continue;
