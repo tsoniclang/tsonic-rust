@@ -166,7 +166,7 @@ export async function main(): Promise<void> {
   if (await invoke(read, value) !== value) throw new Error("invoke");
 }`);
   assert.match(rust, /async fn invoke_native</u);
-  assert.match(rust, /-> Result<i64,/u);
+  assert.match(rust, /-> Result<\s*i64,/u);
   assert.match(rust, /invoke_native\(/u);
 });
 
