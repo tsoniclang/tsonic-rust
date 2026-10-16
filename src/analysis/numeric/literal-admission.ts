@@ -2,7 +2,8 @@ import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import {
   KindNumericLiteral,
-  parseFiniteNumberLiteral,
+  type SourceLiteralIndex,
+  type SourceLiteralValue,
 } from "@tsonic/target-api/source";
 
 const rustTypeSyntaxRootKinds: ReadonlySet<string> = new Set([
@@ -32,13 +33,14 @@ const rustTypeSyntaxRootKinds: ReadonlySet<string> = new Set([
   "KindTypePredicate",
 ]);
 
-export function rustNumericLiteralIsFinite(ast: AstReader, literal: Node): boolean {
-  return parseFiniteNumberLiteral(ast.text(literal)) !== undefined;
+export function rustNumericLiteralIsFinite(literal: SourceLiteralValue | undefined): boolean {
+  return literal?.form === "numeric" && literal.number !== undefined;
 }
 
 export function analyzeRustNumericLiteralAdmission(
   ast: AstReader,
   sourceFiles: readonly SourceFile[],
+  literalValues: SourceLiteralIndex,
 ): readonly TargetDiagnostic[] {
   const diagnostics: TargetDiagnostic[] = [];
   const pending: Node[] = [];
@@ -51,7 +53,7 @@ export function analyzeRustNumericLiteralAdmission(
       const node = pending.pop()!;
       const kind = ast.kindName(node);
       if (kind === KindNumericLiteral) {
-        if (!rustNumericLiteralIsFinite(ast, node)) {
+        if (!rustNumericLiteralIsFinite(literalValues.literalValue.get(node))) {
           diagnostics.push({
             code: "RUST_NUMERIC_LITERAL_NOT_FINITE",
             category: "error",

@@ -7,6 +7,7 @@ import {
   sourceNodesEqual,
   type SourceDeclarationUse,
   type SourceProgramNavigation,
+  type SourceLiteralIndex,
 } from "@tsonic/target-api/source";
 
 import { rustEffectiveValueCarrier, rustValueCarrierBeforeContextualConversion } from "../conversions/value-carrier-queries.js";
@@ -48,7 +49,7 @@ export interface RustCountedLoopRepresentationPlan {
 interface RustCountedLoopAnalysisContext {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
-  readonly records: RustProgramRecords;
+  readonly records: RustProgramRecords & SourceLiteralIndex;
   readonly borrowedElementReads: RustBorrowedElementReads;
   readonly expressionStability: WeakMap<Node, boolean>;
   readonly bodyStability: WeakMap<Node, boolean>;
@@ -58,7 +59,7 @@ export function analyzeRustCountedLoopRepresentations(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
   readonly navigation: SourceProgramNavigation;
-  readonly records: RustProgramRecords;
+  readonly records: RustProgramRecords & SourceLiteralIndex;
   readonly borrowedElementReads: RustBorrowedElementReads;
 }): RustCountedLoopRepresentationPlan {
   const byStatement = new WeakMap<Node, RustCountedLoopRepresentation>();
@@ -164,9 +165,8 @@ function classifyCountedLoop(
     input.records.projectDowncast.get(counted.bound) !== undefined ||
     input.records.optionProjection.get(counted.bound) !== undefined ||
     !selectedSourceLiteralIsRepresentable(
-      counted.start,
+      input.records.literalValue.get(counted.start),
       rangeCarrier.name,
-      input.ast,
     )) {
     return undefined;
   }
