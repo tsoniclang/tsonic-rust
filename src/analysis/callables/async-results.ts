@@ -237,18 +237,22 @@ function directAsyncCallee(walk: RustFactWalk, operand: Node): Node | undefined 
   const { ast } = walk.context;
   const call = rustUnparenthesizedExpression(ast, operand);
   if (!ast.is.IsCallExpression(call) || ast.as.AsCallExpression(call)?.QuestionDotToken !== undefined) return undefined;
-  const callee = Node_Expression(ast, call);
-  if (callee === undefined || !ast.is.IsIdentifier(rustUnparenthesizedExpression(ast, callee))) return undefined;
+  const expression = Node_Expression(ast, call);
+  const callee = expression === undefined ? undefined : rustUnparenthesizedExpression(ast, expression);
+  if (callee === undefined) return undefined;
   const semantics = walk.context.semanticsFor(call);
   const resolved = semantics.operations.call(call);
   const signature = resolved === undefined ? undefined : semantics.declarations.signatureDeclaration(resolved.selectedSignature);
   const implementation = signature === undefined ? undefined : walk.context.source.navigation.callableImplementation(signature);
   const target = implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
-  return target !== undefined && ast.is.IsFunctionDeclaration(target) && ast.body(target) !== undefined &&
-    ast.hasModifierKind(target, "async") && walk.context.source.navigation.isProjectDeclaration(target) &&
-    sourceDeclarationIsModuleScoped(target, ast) &&
-    !walk.context.source.navigation.declarationUseSummary(target).bindingWritten
-    ? target : undefined;
+  if (target === undefined || ast.body(target) === undefined || !ast.hasModifierKind(target, "async") ||
+    !walk.context.source.navigation.isProjectDeclaration(target) ||
+    walk.context.source.navigation.declarationUseSummary(target).bindingWritten) return undefined;
+  if (ast.is.IsFunctionDeclaration(target)) return ast.is.IsIdentifier(callee) &&
+    sourceDeclarationIsModuleScoped(target, ast) ? target : undefined;
+  if (!ast.is.IsMethodDeclaration(target) || !ast.is.IsPropertyAccessExpression(callee)) return undefined;
+  const owner = walk.context.projectTypes.definitionContainingDeclaration(target);
+  return owner !== undefined && !walk.context.projectTypes.isPolymorphic(owner) ? target : undefined;
 }
 
 function expressionSuspension(walk: RustFactWalk, expression: Node): "ready" | "suspending" | "pending" {

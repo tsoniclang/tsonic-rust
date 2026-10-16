@@ -27,7 +27,7 @@ export function planRustRetainedGenerics(declaration: Node, source: RustCallable
   const generator = records.generator.get(declaration);
   if (asynchronous?.kind === "js-promise") {
     const output = callableValues.nativeStorage.returnFor(declaration);
-    const error = callableValues.nativeProducers.errorFor(declaration, 0);
+    const error = callableValues.nativeProducers.errorFor(declaration, context.promiseBody === true ? "body" : 0);
     if (output.kind === "unresolved" || error === undefined) return undefined;
     carriers.push(output.carrier, error);
   } else if (generator !== undefined) carriers.push(generator.yieldType, generator.returnType, generator.nextType);

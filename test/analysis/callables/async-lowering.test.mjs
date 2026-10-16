@@ -46,7 +46,7 @@ export async function read<Region extends Life>(value: Ref<int32, Region>): Prom
     "read_native", "the settled declaration has its one canonical native body name");
 });
 
-test("an await of a non-future operand cannot suspend, so the method is settled while its awaiting caller is a factory", () => {
+test("a non-future await and its immutable nonvirtual method caller both have settled native bodies", () => {
   const current = fixture(`${header}
 class Counter {
   calls: int32 = 0;
@@ -62,8 +62,8 @@ export async function main(): Promise<void> {
   assert.equal(verify?.kind === "js-promise" && verify.lowering.kind === "settled", true, "Counter.verify is settled");
   assert.equal(verify.lowering.settledAwaits.length, 0, "a non-future await calls no helper");
   const main = current.fact("main");
-  assert.equal(main?.kind === "js-promise" && main.lowering.kind === "factory", true,
-    "an awaited method call may dispatch, so it may suspend");
+  assert.equal(main?.kind === "js-promise" && main.lowering.kind === "settled", true,
+    "the checked nonvirtual immutable method body cannot suspend");
 });
 
 test("an await of a directly called settled function is settled through the callee's canonical native body", () => {

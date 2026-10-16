@@ -5,6 +5,7 @@ import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-c
 import { isRustNativeFutureCarrier } from "../../../dist/target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { Node_Expression } from "@tsonic/target-api/source";
+import { suspendedCallbackInputsSource } from "../../../../tsonic/test/fixtures/suspended-callback-inputs.mjs";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
@@ -144,4 +145,61 @@ export const marker = 0;`);
   assert.match(rust, /read_native\(value\)/u);
   assert.equal(rust.includes("read_settled") || rust.includes("read_native(value).await"), false);
   assert.equal(rust.includes("JsPromise::resolved"), false);
+});
+
+test("sum and Reader.sum keep borrowed callback implementations on the direct native body edge", () => {
+  const rust = lower(suspendedCallbackInputsSource);
+  assert.match(rust, /async fn sum_native</u);
+  assert.match(rust, /sum_native\(/u);
+  assert.match(rust, /\.sum_native\(/u);
+  assert.equal((rust.match(/async fn sum_native</gu) ?? []).length, 2);
+});
+
+test("invoke preserves the exact int64 callback completion on its native body", () => {
+  const rust = lower(`import type { int64 } from "@tsonic/core/types.js";
+async function read(value: int64): Promise<int64> { return value; }
+async function invoke(callback: (value: int64) => Promise<int64>, value: int64): Promise<int64> {
+  return await callback(value);
+}
+export async function main(): Promise<void> {
+  const value: int64 = 1n;
+  if (await invoke(read, value) !== value) throw new Error("invoke");
+}`);
+  assert.match(rust, /async fn invoke_native</u);
+  assert.match(rust, /-> Result<i64,/u);
+  assert.match(rust, /invoke_native\(/u);
+});
+
+test("call retains the existing optional callback absence witness on its native body", () => {
+  const rust = lower(`function fail(): never { throw new Error("absent"); }
+async function read(): Promise<number> { return 7; }
+async function call(callback: (() => Promise<number>) | undefined): Promise<number> {
+  return await (callback ?? fail())();
+}
+export async function main(): Promise<void> { if (await call(read) !== 7) throw new Error("call"); }`);
+  assert.match(rust, /async fn call_native</u);
+  assert.match(rust, /call_native\(/u);
+  assert.match(rust, /Option<Implementation0>/u);
+});
+
+test("Work.wait selects its method body rather than constructing an unobserved JS task", () => {
+  const rust = lower(`class Work {
+  completion: Promise<void> = Promise.resolve(undefined);
+  async wait(): Promise<void> { await this.completion; }
+}
+export async function main(): Promise<void> { const work = new Work(); await work.wait(); }`);
+  assert.match(rust, /async fn wait_native\(/u);
+  assert.match(rust, /\.wait_native\(\)\.await/u);
+});
+
+test("source<Value> and consumer<Actual> keep native generic bodies beside their real public Promise ABI", () => {
+  const rust = lower(`export async function source<Value>(callback: () => Promise<Value>) { return await callback(); }
+export function retain<Other>(callback: () => Promise<Other>) { return source(callback); }
+export async function consumer<Actual>(callback: () => Promise<Actual>) { return await retain(callback); }`);
+  assert.match(rust, /async fn source_native</u);
+  assert.match(rust, /async fn consumer_native</u);
+  assert.match(rust, /pub fn source</u);
+  assert.match(rust, /pub fn consumer</u);
+  assert.match(rust, /JsPromise<Value>/u);
+  assert.match(rust, /JsPromise<Actual>/u);
 });
