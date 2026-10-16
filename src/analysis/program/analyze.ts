@@ -245,6 +245,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   if (projectTypes.issues.length > 0) {
     return;
   }
+  context.promiseBodies.initializeNames(context);
   const methodProperties = context.projectMethodProperties.initialize({
     ast,
     navigation: context.source.navigation,
@@ -460,6 +461,7 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     records: context.records,
     closedSourceFiles,
     names: context.names,
+    promiseBodyNames: context.promiseBodies,
     projectTypes,
     sourceLifetimes: context.sourceLifetimes,
   });

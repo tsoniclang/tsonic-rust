@@ -116,6 +116,7 @@ export interface RustPlanContext {
   // analysis before this syntax-planning context was created.
   readonly callableDeclaration?: Node;
   readonly promiseBody?: true;
+  readonly promiseBodyName?: string;
   readonly generator?: {
     readonly declaration: Node;
     readonly controllerName: string;

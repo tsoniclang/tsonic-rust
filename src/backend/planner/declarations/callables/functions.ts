@@ -3,7 +3,7 @@ import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { Node_Type } from "@tsonic/target-api/source";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
 import type { RustBlock, RustItem } from "../../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planBlockLike } from "../../statements/index.js";
 import {
   diagnosticInput,
@@ -145,7 +145,7 @@ function planRustFunctionItem(
   outerContext: RustPlanContext,
 ): RustFunctionItemPlan | undefined {
   const node = source.callableDeclaration;
-  const { promiseBody: _enclosingPromiseBody, ...functionContext } = outerContext;
+  const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...functionContext } = outerContext;
   const { ast } = outerContext.input.program.source;
   const isAsync = ast.hasModifierKind(node, "async");
   const generatorFact = outerContext.input.program.records.generator.get(node);
@@ -162,6 +162,10 @@ function planRustFunctionItem(
   const asyncFact = outerContext.input.program.records.asyncFunction.get(node);
   const returnsJsPromise = asyncFact?.kind === "js-promise";
   const nativeBody = outerContext.input.program.promiseBodies.declarations.get(node);
+  const nativeBodyName = nativeBody === undefined ? undefined
+    : source.specialization === undefined ? nativeBody.name : source.specialization.nativeBodyName;
+  if (nativeBody !== undefined && nativeBodyName === undefined) failRustPlannerInvariant(
+    "A specialized native Promise body requires its selected physical name.", node);
   if (isAsync && generatorFact === undefined && asyncFact === undefined) {
     outerContext.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(outerContext, node),
@@ -182,7 +186,8 @@ function planRustFunctionItem(
     source.nameDeclaration,
   );
   const declarationAttributes = [...safetyAttributes];
-  let context: RustPlanContext = nativeBody === undefined ? functionContext : { ...functionContext, promiseBody: true };
+  let context: RustPlanContext = nativeBody === undefined ? functionContext
+    : { ...functionContext, promiseBody: true, promiseBodyName: nativeBodyName! };
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -424,7 +429,7 @@ function planRustFunctionItem(
   );
   const item: Extract<RustItem, { readonly kind: "function" }> = {
     kind: "function",
-    name: nativeBody?.name ?? name,
+    name: nativeBody === undefined ? name : nativeBodyName!,
     visibility: nativeBody === undefined ? visibility : nativeBody.visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
     ...(declarationAttributes.length === 0
@@ -455,7 +460,7 @@ function planRustFunctionItem(
     !requireRustCarrierRequirements(asyncFact.outputCarrier,
       asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], node, adapterContext)) return undefined;
   const adapterReturn = resolveRustJsPromiseReturnType(node, adapterContext);
-  const adapterBody = planRustPromiseBodyObjectAdapter(node, { kind: "call", path: nativeBody.name,
+  const adapterBody = planRustPromiseBodyObjectAdapter(node, { kind: "call", path: nativeBodyName!,
     genericArguments: rustPromiseBodyGenericArguments(generics),
     args: adapterParameters.params.map(parameter => ({ kind: "path", path: parameter.name })),
   }, callableErrorBoundary, adapterContext);

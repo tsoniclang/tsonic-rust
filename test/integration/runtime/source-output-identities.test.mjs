@@ -17,6 +17,7 @@ import {
   fakeSourcePackageGraph,
   fakeSourceFile,
 } from "../../helpers/fake-compile-input.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 test("source module identities encode the complete project-relative path", () => {
   assert.equal(rustModuleNameForSourcePath("models.ts"), "models");
@@ -27,6 +28,28 @@ test("source module identities encode the complete project-relative path", () =>
   assert.equal(rustModuleNameForSourcePath("main.ts"), "main_module");
   assert.equal(rustModuleNameForSourcePath("lib.ts"), "lib_module");
   assert.equal(rustModuleNameForSourcePath("missing-extension"), undefined);
+});
+
+test("only library roots publish the authored Promise adapter facade", { timeout: 300_000 }, () => {
+  for (const outputType of ["bin", "lib"]) {
+    const { result } = compileRust({
+      surfaces: ["js"],
+      target: { id: "rust", options: { outputType, crateName: "promise_facade" } },
+      files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export async function value(): Promise<int32> { return 7; }
+if (await value() !== 7) throw new Error("native body result");
+` },
+    });
+    assert.equal(result.diagnostics.length, 0, `${outputType}: admitted exported async declaration`);
+    const root = artifactText(result, "src/lib.rs");
+    assert.equal(root.includes("pub use crate::index::value;"), outputType === "lib",
+      `${outputType}: exactly the selected outward library contract`);
+    const execution = validateGeneratedProject(`promise-facade-${outputType}`, result.artifacts,
+      { run: outputType === "bin" });
+    assert.equal(outputType === "bin" ? execution.status : execution, outputType === "bin" ? 0 : undefined,
+      `${outputType}: complete native facade and initialization build`);
+  }
 });
 
 test("same basenames in distinct source directories emit distinct linked modules", () => {
@@ -209,6 +232,7 @@ test("facade planning ignores valid package exports outside the checked closure"
   };
   const ast = fakeAstReader([root]);
   const result = analyzeRustSourcePackageFacades({
+    rootPublishesLibrary: true,
     sourcePackages,
     sourceFiles: [root],
     ast,

@@ -18,6 +18,7 @@ export interface RustSourceCallableSpecializationVariant {
   readonly sourceTypeParameterIdentities: readonly string[];
   readonly targetTypeArguments: readonly TargetTypeRef[];
   readonly targetName: string;
+  readonly nativeBodyName?: string;
 }
 
 export interface RustProjectMethodSpecializationRequest {
@@ -71,6 +72,7 @@ export interface RustSourceCallableSpecializationPlanRegistry
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
+    readonly promiseBodyNames: Pick<import("./promise-bodies.js").RustPromiseBodySelection, "nativeNameForDeclaration" | "namesForScope">;
     readonly projectTypes: RustProjectTypePolicy;
     readonly sourceLifetimes: RustLifetimeIndex;
   }): RustSourceCallableSpecializationPlan;
@@ -89,6 +91,7 @@ interface MutableSpecializationVariant {
   readonly sourceTypeParameterIdentities: readonly string[];
   readonly targetTypeArguments: readonly TargetTypeRef[];
   targetName?: string;
+  nativeBodyName?: string;
 }
 
 interface ProjectMethodEdge {
@@ -193,6 +196,7 @@ function createRustSourceCallableSpecializationPlan(
     readonly ast: AstReader;
     readonly closedSourceFiles: ReadonlySet<SourceFile>;
     readonly names: RustNamePlan;
+    readonly promiseBodyNames: Pick<import("./promise-bodies.js").RustPromiseBodySelection, "nativeNameForDeclaration" | "namesForScope">;
     readonly projectTypes: RustProjectTypePolicy;
     readonly sourceLifetimes: RustLifetimeIndex;
   },
@@ -350,7 +354,7 @@ function createRustSourceCallableSpecializationPlan(
     }
   }
 
-  assignCallableVariantNames(variants, input.ast, input.names, input.projectTypes);
+  assignCallableVariantNames(variants, input.ast, input.names, input.projectTypes, input.promiseBodyNames);
   for (const declarationVariants of variants.values()) {
     declarationVariants.sort((left, right) => variantKey(left).localeCompare(variantKey(right), "en"));
     declarationVariants.forEach((variant) => {
@@ -433,6 +437,7 @@ function assignCallableVariantNames(
   ast: AstReader,
   names: RustNamePlan,
   projectTypes: RustProjectTypePolicy,
+  promiseBodyNames: Pick<import("./promise-bodies.js").RustPromiseBodySelection, "nativeNameForDeclaration" | "namesForScope">,
 ): void {
   const usedByScope = new WeakMap<object, Set<string>>();
   const usedNames = (scope: Node | SourceFile): Set<string> => {
@@ -440,7 +445,7 @@ function assignCallableVariantNames(
     if (existing !== undefined) {
       return existing;
     }
-    const used = new Set<string>();
+    const used = new Set(promiseBodyNames.namesForScope(scope));
     const visit = (node: Node): void => {
       const name = names.nameForDeclaration(node);
       const functionName = names.functionNameForDeclaration(node);
@@ -492,6 +497,8 @@ function assignCallableVariantNames(
           `${base}_specialization_${index + 1}`,
         );
         entry.targetName = targetName;
+        if (promiseBodyNames.nativeNameForDeclaration(declaration) !== undefined)
+          entry.nativeBodyName = allocateRustGeneratedName(used, `${targetName}_native`);
       });
   }
 }

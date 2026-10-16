@@ -6,7 +6,7 @@ export interface RustNamePlan {
   nameForDeclaration(declaration: Node | undefined): string | undefined;
   functionNameForDeclaration(declaration: Node | undefined): string | undefined;
   callableValueNameForDeclaration(declaration: Node | undefined): string | undefined;
-  nativeBodyNameForDeclaration(declaration: Node | undefined): string | undefined;
+  sourceScopeForDeclaration(declaration: Node | undefined): Node | undefined;
   scopeForDeclaration(declaration: Node | undefined): string | undefined;
   nameForSourceType(fileName: string, sourceName: string): string | undefined;
 }

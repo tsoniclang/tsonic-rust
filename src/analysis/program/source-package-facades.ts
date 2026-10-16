@@ -76,6 +76,8 @@ export function analyzeRustSourcePackageFacades(
   const facadeOwners = new Map<string, RustSourcePackageFacadeExportContract>();
 
   for (const sourcePackage of sourcePackages.packages) {
+    if (sourcePackage.componentId === rootPackage.componentId &&
+      !context.rootPublishesLibrary) continue;
     for (const sourceExport of sourcePackage.exports) {
       const exportedSourceFile = sourceFileByName.get(
         normalizePath(sourceExport.sourceFile),

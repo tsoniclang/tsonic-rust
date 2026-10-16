@@ -24,7 +24,7 @@ import type { RustSourcePackageInitializerPlan } from "./source-package-initiali
 import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
-import { rustRuntimeAliasUseItems } from "./plan-context.js";
+import { rustRuntimeAliasImports, rustRuntimeAliasUseItems } from "./plan-context.js";
 
 export interface RustSourcePackageCrateContentPlan {
   readonly component: RustSourcePackageComponentPlan;
@@ -233,8 +233,9 @@ export function materializeRustSourcePackageCrateArtifacts(
     prefixedPath(options.prefix, "src/lib.rs"),
     createRustCrateRootSourceFile(input.program.configuration.foundation, [
       ...plan.libraryItems,
-      ...rustRuntimeAliasUseItems(new Set(rustItemsReferenceModuleAlias(options.additionalLibraryItems ?? [], "rt")
-        ? ["rt"] : []), plan.component.errorDomain === "project" ? plan.component.programModuleName : undefined),
+      ...rustRuntimeAliasUseItems(new Set([...rustRuntimeAliasImports.keys()].filter(alias =>
+        rustItemsReferenceModuleAlias(options.additionalLibraryItems ?? [], alias))),
+      plan.component.errorDomain === "project" ? plan.component.programModuleName : undefined),
       ...(options.additionalLibraryItems ?? []),
     ]),
   ));

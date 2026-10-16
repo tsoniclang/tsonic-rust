@@ -9,7 +9,6 @@ import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import { planRustAwaitBranches } from "./await-branches.js";
-import { rustUnparenthesizedExpression } from "../../../target-model/syntax/expressions.js";
 
 export function planRustAwaitExpression(
   node: Node,
@@ -27,10 +26,6 @@ export function planRustAwaitExpression(
     return undefined;
   }
   if (!requireExpressionCarrier(node, operation.resultCarrier, context, "rust.backend.await-carrier")) return undefined;
-  const sourceOperand = operand === undefined ? undefined : rustUnparenthesizedExpression(context.input.program.source.ast, operand);
-  const call = sourceOperand === undefined ? undefined : context.input.program.source.ast.is.IsCallExpression(sourceOperand)
-    ? context.input.program.records.targetOperation.get(sourceOperand) : undefined;
-  const body = call?.kind === "source-call" ? call.asyncBody : undefined;
   const planned = operand === undefined ? undefined : planExpression(operand, context);
-  return planned === undefined ? undefined : planRustAwaitBranches(node, planned, fact, context, body?.maySuspend === false);
+  return planned === undefined ? undefined : planRustAwaitBranches(node, planned, fact, context);
 }

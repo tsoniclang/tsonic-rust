@@ -64,6 +64,7 @@ export interface RustPromiseBodyDeclaration {
 export interface RustPromiseBodies {
   readonly declarations: ReadonlyMap<Node, RustPromiseBodyDeclaration>;
   readonly objects: ReadonlyMap<Node, Node>;
+  readonly pinnedInvocations: ReadonlyMap<Node, ReadonlyMap<string, ReadonlySet<Node>>>;
 }
 
 export type RustJsPromiseLowering =

@@ -38,6 +38,7 @@ import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
+import type { RustSourceCallableSpecializationVariant } from "../../../../analysis/callables/specializations.js";
 
 export function planProjectMethod(
   member: Node,
@@ -48,12 +49,15 @@ export function planProjectMethod(
     readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
     readonly promiseBody?: true;
+    readonly specialization?: RustSourceCallableSpecializationVariant;
   },
 ): RustImplFunction | undefined {
-  let context = rustClassMemberEnvironmentContext(member, outerContext);
+  const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...methodContext } = outerContext;
+  let context = rustClassMemberEnvironmentContext(member, methodContext);
   if (options?.promiseBody !== true && context.input.program.promiseBodies.declarations.has(member))
     return planProjectPromiseObjectMethod(member, context, options);
-  if (options?.promiseBody === true) context = { ...context, promiseBody: true };
+  if (options?.promiseBody === true) context = { ...context, promiseBody: true,
+    promiseBodyName: options.targetName ?? context.input.program.promiseBodies.declarations.get(member)?.name };
   const { ast } = context.input.program.source;
   const sourceMethodName = options?.targetName ??
     context.input.program.projectTypes.callableTargetName(member);
@@ -391,6 +395,9 @@ function planProjectPromiseObjectMethod(
   const body = outerContext.input.program.promiseBodies.declarations.get(member);
   const asynchronous = outerContext.input.program.records.asyncFunction.get(member);
   if (body === undefined || asynchronous?.kind !== "js-promise") return undefined;
+  const nativeName = options?.specialization === undefined ? body.name : options.specialization.nativeBodyName;
+  if (nativeName === undefined) failRustPlannerInvariant(
+    "A specialized Promise method adapter requires its exact native-body name.", member);
   const genericPlan = planRustCallableGenerics(member, outerContext, options?.typeArgumentSubstitutions);
   const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, options?.typeArgumentSubstitutions);
   if (genericPlan === undefined || nativeGenerics === undefined) return undefined;
@@ -416,8 +423,10 @@ function planProjectPromiseObjectMethod(
     ? receiverPlan.context.expressionOverrides?.get(asynchronous.lowering.ownedReceiver.occurrences[0]!)?.expression ?? { kind: "path", path: "self" }
     : { kind: "path", path: "self" };
   const genericArguments = rustPromiseBodyGenericArguments(nativeGenerics.finalizeGenerics());
-  const call: RustExpr = isStatic ? { kind: "call", path: `Self::${body.name}`, args: arguments_, genericArguments }
-    : { kind: "method-call", receiver, method: body.name, args: arguments_, genericArguments };
+  const moduleSlot = context.input.program.projectTypes.memberSlotName(member, "static");
+  const call: RustExpr = isStatic ? { kind: "call", path: moduleSlot === undefined ? `Self::${nativeName}` : nativeName,
+      args: arguments_, genericArguments }
+    : { kind: "method-call", receiver, method: nativeName, args: arguments_, genericArguments };
   const nativeRegion = planRustErrorRegion(member, nativeGenerics.context);
   const returnType = resolveRustJsPromiseReturnType(member, context);
   const adapter = nativeRegion === undefined ? undefined
@@ -521,9 +530,19 @@ export function planProjectMethodVariants(
     if (specialization === undefined) {
       return undefined;
     }
+    if (context.input.program.promiseBodies.declarations.has(member)) {
+      if (variant.nativeBodyName === undefined) failRustPlannerInvariant(
+        "A selected native Promise method specialization requires its physical name.", member);
+      const native = planProjectMethod(member, context, { targetName: variant.nativeBodyName,
+        typeArgumentSubstitutions: specialization, promiseBody: true, specialization: variant });
+      if (native === undefined) return undefined;
+      methods.push(native);
+      if (!context.input.program.promiseBodies.objects.has(member)) continue;
+    }
     const method = planProjectMethod(member, context, {
       targetName: variant.targetName,
       typeArgumentSubstitutions: specialization,
+      specialization: variant,
     });
     if (method === undefined) {
       return undefined;

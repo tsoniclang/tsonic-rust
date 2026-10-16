@@ -193,6 +193,7 @@ function collectFallibilityFacts(
     );
     if (declaration === undefined || !selectedDeclarationIsProjectSource(walk, declaration)) return undefined;
     if (ast.is.IsClassDeclaration(declaration) && isDeclaration(declaration)) return declaration;
+    if (projectImplementations.has(declaration)) return declaration;
     const selectedImplementation = walk.context.source.navigation.callableImplementation(declaration);
     return selectedImplementation.kind === "resolved" ? selectedImplementation.implementation.declaration : undefined;
   };
@@ -476,7 +477,8 @@ function collectFallibilityFacts(
           ? operation.target.variants.map(variant => variant.declaration)
           : generic !== undefined || target === undefined ? [] : [target];
         for (const declaration of declarations) {
-          if (walk.context.records.asyncFunction.get(declaration) === undefined &&
+          if ((operation?.kind === "source-call" && operation.asyncBody?.maySuspend === false ||
+            walk.context.records.asyncFunction.get(declaration) === undefined) &&
             walk.context.records.generator.get(declaration) === undefined && !appendDeclaration(declaration)) return undefined;
         }
       }
@@ -675,7 +677,8 @@ function collectFallibilityFacts(
             walk.context.records.sourceCallEffectPlans.selected(node,
               invocation !== undefined ? invocation.effects.invocation
                 : runtimeCallable || (unionBranches === undefined
-                  ? declaration !== undefined && genericInvocationIsFallible(declaration)
+                  ? declaration !== undefined && (operation.asyncBody?.maySuspend === false
+                    ? isFallible(declaration) : genericInvocationIsFallible(declaration))
                   : unionBranches.some(branch => branch.invocation === "fallible"))
                 ? "fallible"
                 : "infallible",

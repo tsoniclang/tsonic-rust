@@ -30,7 +30,7 @@ export function run(): void {
   assert.match(source, /rt::Completion<\(\), \(\)>/u);
   assert.match(
     source,
-    /let dispatch_receiver(?:_\d+)? = resource;[\s\S]*dispatch_receiver(?:_\d+)?\s*\.dispatch\s*\.clone\(\)\s*\.dispatch_resource_dispose\(\)/u,
+    /let dispatch_receiver(?:_\d+)? = &resource;[\s\S]*dispatch_receiver(?:_\d+)?\s*\.dispatch\s*\.clone\(\)\s*\.dispatch_resource_dispose\(\)/u,
   );
   validateGeneratedProject("resource-management-normal", result.artifacts);
 });
@@ -155,7 +155,7 @@ export function run(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.deepEqual(
-    [...source.matchAll(/let dispatch_receiver(?:_\d+)? = (second|first);/gu)]
+    [...source.matchAll(/let dispatch_receiver(?:_\d+)? = &(second|first);/gu)]
       .map((match) => match[1]),
     ["second", "first"],
   );
@@ -234,7 +234,7 @@ export async function run(fail: boolean): Promise<void> {
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal([...source.matchAll(/let resource: (?:Resource|AsyncResource) =/gu)].length, 2);
-  assert.match(source, /let dispatch_receiver(?:_\d+)? = resource;[\s\S]*dispatch_resource_dispose\(\)/u);
+  assert.match(source, /let dispatch_receiver(?:_\d+)? = &resource;[\s\S]*dispatch_resource_dispose\(\)/u);
   assert.match(source, /resource\.dispose_async\(\)\.await/u);
   assert.equal(/let resource_flow(?:_\d+)?: core::result::Result<rt::Completion<\(\), \(\)>, rt::TsonicError> =\s+async \{ Ok\(rt::Completion::Normal\(\(\)\)\) \}\.await;/u.test(source), true,
     "empty asynchronous body must retain its normal completion before cleanup");
@@ -256,7 +256,7 @@ export function run(resource: Resource | null): void {
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /if let Some\(resource_2\) = active\.as_ref\(\)/u);
-  assert.match(source, /let dispatch_receiver(?:_\d+)? = resource_2;[\s\S]*dispatch_resource_dispose\(\)/u);
+  assert.match(source, /let dispatch_receiver(?:_\d+)? = &resource_2;[\s\S]*dispatch_resource_dispose\(\)/u);
   validateGeneratedProject("resource-management-null", result.artifacts);
 });
 
@@ -329,7 +329,7 @@ export function run(): void {
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.match(source, /for resource in rt::iter_cloned\(&resources\)/u);
-  assert.match(source, /let dispatch_receiver(?:_\d+)? = resource;[\s\S]*dispatch_resource_dispose\(\)/u);
+  assert.match(source, /let dispatch_receiver(?:_\d+)? = &resource;[\s\S]*dispatch_resource_dispose\(\)/u);
   validateGeneratedProject("resource-management-for-of", result.artifacts);
 });
 

@@ -47,6 +47,7 @@ export function createRustNamePlan(input: {
   const names = new WeakMap<Node, string>();
   const functionNames = new WeakMap<Node, string>();
   const callableValueNames = new WeakMap<Node, string>();
+  const sourceScopes = new WeakMap(candidates.map(candidate => [candidate.declaration, candidate.scope] as const));
   const declarationScopes = new WeakMap<Node, string>();
   const sourceTypeNames = new Map<string, string>();
   const diagnostics: TargetDiagnostic[] = [];
@@ -175,18 +176,6 @@ export function createRustNamePlan(input: {
     if (moduleScoped) moduleValueNames.set(candidate.scope, used);
     callableValueNames.set(candidate.declaration, valueName);
   }
-  const nativeBodyNames = new WeakMap<Node, string>();
-  for (const candidate of candidates) {
-    const functionName = functionNames.get(candidate.declaration) ?? names.get(candidate.declaration);
-    if (functionName === undefined || !input.ast.hasModifierKind(candidate.declaration, "async") ||
-      input.ast.body(candidate.declaration) === undefined) continue;
-    const moduleScoped = input.ast.is.IsSourceFile(candidate.scope);
-    const used = moduleScoped ? moduleValueNames.get(candidate.scope) ?? new Set<string>()
-      : reservedNames.get(candidate.scope)!;
-    const base = functionName.startsWith("r#") ? functionName.slice(2) : functionName;
-    nativeBodyNames.set(candidate.declaration, allocateRustGeneratedName(used, `${base}_native`));
-    if (moduleScoped) moduleValueNames.set(candidate.scope, used);
-  }
   return Object.freeze({
     diagnostics: Object.freeze(diagnostics),
     nameForDeclaration(declaration: Node | undefined) {
@@ -198,8 +187,8 @@ export function createRustNamePlan(input: {
     callableValueNameForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : callableValueNames.get(declaration);
     },
-    nativeBodyNameForDeclaration(declaration: Node | undefined) {
-      return declaration === undefined ? undefined : nativeBodyNames.get(declaration);
+    sourceScopeForDeclaration(declaration: Node | undefined) {
+      return declaration === undefined ? undefined : sourceScopes.get(declaration);
     },
     scopeForDeclaration(declaration: Node | undefined) {
       return declaration === undefined ? undefined : declarationScopes.get(declaration);

@@ -20,7 +20,7 @@ function fixture(text) {
   const fact = (name, owner) => records.asyncFunction.get(owner === undefined
     ? named(node => ast.is.IsFunctionDeclaration(node), name)
     : named(node => ast.is.IsMethodDeclaration(node), name, owner));
-  const nativeName = declaration => context.names.nativeBodyNameForDeclaration(declaration);
+  const nativeName = declaration => context.promiseBodies.nativeNameForDeclaration(declaration);
   return { context, walk, ast, records, nodes, named, fact, nativeName };
 }
 

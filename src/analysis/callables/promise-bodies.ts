@@ -8,11 +8,17 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustFutureTargetType } from "../../target-model/types/carriers/primitives.js";
 import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustUnparenthesizedExpression } from "../../target-model/syntax/expressions.js";
+import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import { selectRustPromiseBodyRecursion } from "./promise-recursion.js";
 
 type SourceCall = Extract<RustTargetOperationFact, { readonly kind: "source-call" }>;
 
 export interface RustPromiseBodySelection {
   readonly plan: RustPromiseBodies;
+  readonly namesReady: boolean;
+  initializeNames(context: RustAnalysisContext): void;
+  nativeNameForDeclaration(declaration: Node | undefined): string | undefined;
+  namesForScope(scope: Node): ReadonlySet<string>;
   expose(declaration: Node, demand: Node): void;
   invocation(context: RustAnalysisContext, call: Node, declaration: Node, target: SourceCall["target"],
     resultCarrier: TargetTypeRef): SourceCall["asyncBody"] | undefined;
@@ -23,12 +29,59 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   const declarations = new Map<Node, RustPromiseBodyDeclaration>();
   const demands = new Map<Node, Node>();
   const objects = new Map<Node, Node>();
+  const pinnedInvocations = new Map<Node, ReadonlyMap<string, ReadonlySet<Node>>>();
+  const nativeNames = new Map<Node, string>();
+  const scopeNames = new Map<Node, Set<string>>();
+  let namesReady = false;
   let closed = false;
   const assertOpen = (): void => {
     if (closed) failTargetAnalysisInvariant("tsonic-rust", "Promise body selection is closed.");
   };
   return Object.freeze({
-    plan: Object.freeze({ declarations, objects }),
+    plan: Object.freeze({ declarations, objects, pinnedInvocations }),
+    get namesReady() { return namesReady; },
+    initializeNames(context: RustAnalysisContext): void {
+      assertOpen();
+      if (namesReady) failTargetAnalysisInvariant("tsonic-rust", "Native Promise names have one physical-scope producer.");
+      const usedIn = (scope: Node): Set<string> => {
+        const existing = scopeNames.get(scope);
+        if (existing !== undefined) return existing;
+        const names = new Set<string>();
+        scopeNames.set(scope, names);
+        return names;
+      };
+      for (const declaration of context.sourceStorage.nodes) {
+        const scope = context.names.sourceScopeForDeclaration(declaration);
+        if (scope !== undefined) {
+          for (const name of [context.names.nameForDeclaration(declaration),
+            context.names.functionNameForDeclaration(declaration), context.names.callableValueNameForDeclaration(declaration)]) {
+            if (name !== undefined) usedIn(scope).add(name);
+          }
+        }
+        const staticSlot = context.projectTypes.memberSlotName(declaration, "static");
+        const sourceFile = context.ast.getSourceFile(declaration);
+        if (staticSlot !== undefined && sourceFile !== undefined) usedIn(sourceFile).add(staticSlot);
+      }
+      if (context.jsEnabled) for (const declaration of context.sourceStorage.nodes) {
+        if ((!context.ast.is.IsFunctionDeclaration(declaration) && !context.ast.is.IsMethodDeclaration(declaration)) ||
+          !context.ast.hasModifierKind(declaration, "async") || context.ast.body(declaration) === undefined) continue;
+        if (context.ast.is.IsMethodDeclaration(declaration) && !context.ast.hasModifierKind(declaration, "static")) {
+          const owner = context.projectTypes.definitionContainingDeclaration(declaration);
+          if (owner !== undefined && context.projectTypes.isPolymorphic(owner)) continue;
+        }
+        const staticSlot = context.projectTypes.memberSlotName(declaration, "static");
+        const scope = staticSlot === undefined ? context.names.sourceScopeForDeclaration(declaration)
+          : context.ast.getSourceFile(declaration);
+        const name = staticSlot !== undefined ? staticSlot : context.ast.is.IsFunctionDeclaration(declaration)
+          ? context.names.functionNameForDeclaration(declaration) : context.names.nameForDeclaration(declaration);
+        if (scope === undefined || name === undefined) continue;
+        const base = name.startsWith("r#") ? name.slice(2) : name;
+        nativeNames.set(declaration, allocateRustGeneratedName(usedIn(scope), `${base}_native`));
+      }
+      namesReady = true;
+    },
+    nativeNameForDeclaration: (declaration: Node | undefined) => declaration === undefined ? undefined : nativeNames.get(declaration),
+    namesForScope: (scope: Node) => scopeNames.get(scope) ?? emptyScopeNames,
     expose(declaration: Node, demand: Node): void {
       assertOpen();
       if (!demands.has(declaration)) demands.set(declaration, demand);
@@ -38,27 +91,12 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
       assertOpen();
       const asynchronous = context.records.asyncFunction.get(declaration);
       if (asynchronous?.kind !== "js-promise") return undefined;
-      const use = context.promiseResultUses.get(call);
-      if (use === undefined) failTargetAnalysisInvariant("tsonic-rust", "A source async invocation requires its original result-use selection.", call);
-      const operand = use.kind === "awaited-in-scope" ? Node_Expression(context.ast, use.use) : undefined;
-      const immediate = operand !== undefined && rustUnparenthesizedExpression(context.ast, operand) === call;
-      const name = context.names.nativeBodyNameForDeclaration(declaration);
-      const stable = !context.source.navigation.declarationUseSummary(declaration).bindingWritten &&
-        (!context.ast.is.IsMethodDeclaration(declaration) || context.projectMethodProperties.usageFor(declaration)?.writable !== true);
-      const selectedIdentities = context.sourcePackageComponentIdentities;
-      if (selectedIdentities.kind === "rejected") failTargetAnalysisInvariant("tsonic-rust",
-        "Promise body selection requires validated source-package component identities.", call);
-      const callerFile = context.ast.getSourceFile(call);
-      const calleeFile = context.ast.getSourceFile(declaration);
-      const callerComponent = callerFile === undefined ? undefined
-        : selectedIdentities.identities.componentIdForFile(context.ast.getFileName(callerFile));
-      const calleeComponent = calleeFile === undefined ? undefined
-        : selectedIdentities.identities.componentIdForFile(context.ast.getFileName(calleeFile));
-      if (callerComponent === undefined || calleeComponent === undefined) failTargetAnalysisInvariant("tsonic-rust",
-        "A source Promise invocation requires exact caller and declaration component identities.", call);
-      if (immediate && stable && name !== undefined && (target.form === "function" || target.form === "static-method" ||
-        target.form === "method" && target.dispatch === undefined) && callerComponent === calleeComponent &&
+      const name = rustPromiseBodyNativeName(context, declaration);
+      if (rustDirectPromiseBodyCallee(context, call) === declaration && name !== undefined &&
         rustJsPromiseOutputTargetType(resultCarrier) !== undefined) {
+        if (target.form !== "function" && target.form !== "static-method" &&
+          (target.form !== "method" || target.dispatch !== undefined)) failTargetAnalysisInvariant("tsonic-rust",
+          "The selected native Promise edge conflicts with its physical invocation form.", call);
         return Object.freeze({ declaration, targetName: name, logicalResultCarrier: resultCarrier,
           maySuspend: asynchronous.lowering.kind === "factory" });
       }
@@ -67,10 +105,18 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
     },
     seal(context: RustAnalysisContext): void {
       assertOpen();
+      const recursion = selectRustPromiseBodyRecursion(context);
+      if (recursion.kind === "unresolved") {
+        context.diagnostics.push(Object.freeze({ code: "RUST_ASYNC_BODY_RECURSION_NOT_CLOSED", category: "error",
+          source: "tsonic-rust", sourceNode: recursion.at, message: recursion.reason,
+          evidence: ["target.capability=rust.async.native-body-layout"] }));
+        return;
+      }
+      for (const [declaration, entries] of recursion.invocations) pinnedInvocations.set(declaration, entries);
       for (const declaration of context.sourceStorage.nodes) {
         const asynchronous = context.records.asyncFunction.get(declaration);
         if (asynchronous?.kind !== "js-promise") continue;
-        const name = context.names.nativeBodyNameForDeclaration(declaration);
+        const name = rustPromiseBodyNativeName(context, declaration);
         const demand = demands.get(declaration) ??
           (name === undefined || context.runtimeValueUses.hasFirstClassUse(declaration) ? declaration : undefined);
         if (demand !== undefined) objects.set(declaration, demand);
@@ -84,8 +130,54 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
   });
 }
 
+const emptyScopeNames: ReadonlySet<string> = new Set();
+
+export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operand: Node): Node | undefined {
+  const { ast } = context;
+  const call = rustUnparenthesizedExpression(ast, operand);
+  if (!ast.is.IsCallExpression(call) || ast.as.AsCallExpression(call)?.QuestionDotToken !== undefined) return undefined;
+  const use = context.promiseResultUses.get(call);
+  const awaited = use?.kind === "awaited-in-scope" ? Node_Expression(ast, use.use) : undefined;
+  if (awaited === undefined || rustUnparenthesizedExpression(ast, awaited) !== call) return undefined;
+  const expression = Node_Expression(ast, call);
+  const callee = expression === undefined ? undefined : rustUnparenthesizedExpression(ast, expression);
+  if (callee === undefined) return undefined;
+  const semantics = context.semanticsFor(call);
+  const checked = semantics.operations.call(call);
+  const signature = checked === undefined ? undefined : semantics.declarations.signatureDeclaration(checked.selectedSignature);
+  const implementation = signature === undefined ? undefined : context.source.navigation.callableImplementation(signature);
+  const declaration = implementation?.kind === "resolved" ? implementation.implementation.declaration : undefined;
+  if (declaration === undefined || ast.body(declaration) === undefined || !ast.hasModifierKind(declaration, "async") ||
+    !context.source.navigation.isProjectDeclaration(declaration) ||
+    context.source.navigation.declarationUseSummary(declaration).bindingWritten ||
+    rustPromiseBodyNativeName(context, declaration) === undefined) return undefined;
+  if (ast.is.IsFunctionDeclaration(declaration)) {
+    const reference = context.source.navigation.sourceReferenceFor(callee)?.declaration;
+    const referencedBody = reference === undefined ? undefined : context.source.navigation.callableImplementation(reference);
+    const binding = reference === undefined ? undefined : context.records.moduleBinding.get(reference);
+    const lexical = context.sourceCallables.directLexicalBinding(declaration);
+    if (reference !== declaration &&
+      !(referencedBody?.kind === "resolved" && referencedBody.implementation.declaration === declaration) &&
+      !(lexical !== undefined && lexical === reference) &&
+      !(binding?.storage === "native-callable" && binding.callableDeclaration === declaration)) return undefined;
+  } else if (ast.is.IsMethodDeclaration(declaration) && ast.is.IsPropertyAccessExpression(callee)) {
+    if (context.projectMethodProperties.usageFor(declaration)?.writable === true) return undefined;
+  } else return undefined;
+  const identities = context.sourcePackageComponentIdentities;
+  if (identities.kind === "rejected") return undefined;
+  const callerFile = ast.getSourceFile(call);
+  const calleeFile = ast.getSourceFile(declaration);
+  const callerComponent = callerFile === undefined ? undefined : identities.identities.componentIdForFile(ast.getFileName(callerFile));
+  const calleeComponent = calleeFile === undefined ? undefined : identities.identities.componentIdForFile(ast.getFileName(calleeFile));
+  return callerComponent !== undefined && callerComponent === calleeComponent ? declaration : undefined;
+}
+
 export function rustPromiseBodyInvocationCarrier(body: NonNullable<SourceCall["asyncBody"]>): TargetTypeRef {
   const output = rustJsPromiseOutputTargetType(body.logicalResultCarrier);
   if (output === undefined) failTargetAnalysisInvariant("tsonic-rust", "A selected Promise body requires its exact completion payload.", body.declaration);
-  return rustFutureTargetType(output);
+  return body.maySuspend ? rustFutureTargetType(output) : output;
+}
+
+function rustPromiseBodyNativeName(context: RustAnalysisContext, declaration: Node): string | undefined {
+  return context.promiseBodies.nativeNameForDeclaration(declaration);
 }

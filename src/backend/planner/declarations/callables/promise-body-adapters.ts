@@ -5,7 +5,7 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustInjectNativeError, rustErrorType, type RustFallibleBoundary } from "../../program/fallible-boundaries.js";
 import { planRustJsRejectionRegion } from "../../program/js-rejection-regions.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { wrapRustJsPromiseBody } from "./async-promise.js";
+import { wrapRustJsPromiseBody, wrapRustJsPromiseCompletion } from "./async-promise.js";
 
 export function rustPromiseBodyGenericArguments(generics: RustGenerics): readonly RustCallGenericArgument[] {
   return generics.parameters.flatMap((parameter): RustCallGenericArgument[] => parameter.kind === "lifetime" ? []
@@ -39,6 +39,8 @@ export function planRustPromiseBodyObjectAdapter(
         args: [{ kind: "closure", params: [{ name: errorName }], body: converted }] };
     }
   }
-  return wrapRustJsPromiseBody({ statements: [{ kind: "tail", expr: completion }] },
-    nativeBoundary !== undefined, asynchronous.lowering);
+  return asynchronous.lowering.kind === "settled"
+    ? wrapRustJsPromiseCompletion(completion, nativeBoundary !== undefined)
+    : wrapRustJsPromiseBody({ statements: [{ kind: "tail", expr: completion }] },
+        nativeBoundary !== undefined, asynchronous.lowering);
 }

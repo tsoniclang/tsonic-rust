@@ -25,7 +25,7 @@ import {
 } from "../../program/plan-context.js";
 import { invokeRustStructuralObjectMethod } from "../../objects/project-storage.js";
 import { isDenseDataArray } from "../../../../target-model/metadata/closed-data.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import {
   planPromotedSourceMethodCall,
@@ -205,6 +205,10 @@ export function planSelectedSourceCall(
         targetTypeArguments,
       )
     : undefined;
+  const nativeBodyTargetName = fact.asyncBody === undefined ? undefined
+    : callableSpecialization === undefined ? fact.asyncBody.targetName : callableSpecialization.nativeBodyName;
+  if (fact.asyncBody !== undefined && nativeBodyTargetName === undefined) failRustPlannerInvariant(
+    "A selected native Promise call requires its exact specialization body name.", node);
   if (requiresCallableSpecialization && callableSpecialization === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -275,7 +279,7 @@ export function planSelectedSourceCall(
       break;
     }
     case "function": {
-      const targetName = fact.asyncBody !== undefined ? fact.asyncBody.targetName
+      const targetName = fact.asyncBody !== undefined ? nativeBodyTargetName!
         : callableSpecialization?.targetName ?? fact.target.name;
       const declaration = selected.sourceDeclaration;
       const lexical = declaration === undefined ? undefined : context.input.program.lexicalFunctions.forDeclaration(declaration);
@@ -296,7 +300,7 @@ export function planSelectedSourceCall(
       break;
     }
     case "method": {
-      const targetName = fact.asyncBody?.targetName ?? (fact.target.dispatch === undefined
+      const targetName = fact.asyncBody !== undefined ? nativeBodyTargetName! : (fact.target.dispatch === undefined
         ? callableSpecialization?.targetName ?? fact.target.name
         : fact.target.name);
       if (!isValidRustIdentifier(targetName)) {
@@ -391,7 +395,8 @@ export function planSelectedSourceCall(
     case "static-method": {
       const value = rustSourceTypeCarrierValue(fact.target.typeCarrier);
       const typePath = value === undefined ? undefined : sourceTypePath(context, value);
-      const targetName = fact.asyncBody?.targetName ?? callableSpecialization?.targetName ?? fact.target.name;
+      const targetName = fact.asyncBody !== undefined ? nativeBodyTargetName!
+        : callableSpecialization?.targetName ?? fact.target.name;
       if (typePath !== undefined && isValidRustIdentifier(targetName)) {
         const environment = rustClassStaticEnvironmentForCall(selected.sourceDeclaration, context, retainedClass);
         planned = {
@@ -497,6 +502,11 @@ export function planSelectedSourceCall(
   }
   if (classBindings.length > 0) planned = rustValueBlock(classBindings.map(binding =>
     rustExpressionReferencesPath(planned!, binding.name) ? binding : { ...binding, name: `_${binding.name}` }), planned);
+  if (fact.asyncBody?.maySuspend === true && context.callableDeclaration !== undefined &&
+    context.promiseBodyName !== undefined && context.input.program.promiseBodies.pinnedInvocations
+      .get(context.callableDeclaration)?.get(context.promiseBodyName)?.has(node) === true) {
+    planned = { kind: "call", path: "std::boxed::Box::pin", args: [planned] };
+  }
   const effects = context.input.program.records.sourceCallEffects.get(node);
   if (effects === undefined) {
     context.diagnostics.push(missingFactDiagnostic(

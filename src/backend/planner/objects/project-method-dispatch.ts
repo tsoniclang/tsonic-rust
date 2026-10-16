@@ -31,7 +31,7 @@ export function planRustVirtualProjectMethodCall(
     context.syntheticNames,
     "dispatch_receiver",
   );
-  return rustValueBlock([{ name: receiverName, value: receiver }], {
+  return rustValueBlock([{ name: receiverName, value: { kind: "reference", expr: receiver } }], {
       kind: "method-call",
       receiver: cloneRustExpression({
           kind: "field",

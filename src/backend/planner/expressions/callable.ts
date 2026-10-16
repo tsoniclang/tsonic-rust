@@ -71,9 +71,10 @@ export function planCallableExpression(
 
 export function planRustCallableExpressionBody(
   node: Node,
-  context: RustPlanContext,
+  outerContext: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
+  const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...context } = outerContext;
   const { ast } = context.input.program.source;
   const closureFact = rustOperationFact(node, context);
   if (closureFact === undefined || closureFact.kind !== "closure") {
