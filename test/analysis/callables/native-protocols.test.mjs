@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustNativeCallableProtocolRegistry, rustNativeCallableErrorType, rustNativeCallableProtocolResult }
   from "../../../dist/analysis/callables/native-protocols.js";
-import { rustCallableTargetType, rustFutureTargetType, rustSourcePrimitiveTargetType }
+import { rustCallableTargetType, rustFutureTargetType, rustJsPromiseTargetType, rustJsValueTargetType, rustSourcePrimitiveTargetType }
   from "../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -82,6 +82,19 @@ test("native protocol identity retains unequal types, lifetime binders and compo
     { kind: "reference", referent: integer, mutable: false },
   ], { kind: "reference", referent: integer, mutable: false }));
   assert.equal(repeat.protocol === borrowed.protocol, true);
+});
+
+test("JS Promise input completions use the same rejection carrier across distinct implementations", () => {
+  const registry = create();
+  const selected = registry.bind("/source.ts", rustCallableTargetType([integer], rustJsPromiseTargetType(integer)));
+  const other = { kind: "type-parameter", identity: "other:implementation", name: "Other" };
+  for (const producer of [implementation, other]) {
+    const error = rustNativeCallableErrorType(selected, producer, 0, []);
+    assert.equal(rustTargetTypeRefEquals(error, rustJsValueTargetType()), true);
+  }
+  const result = rustNativeCallableProtocolResult(selected.protocol, emptyRustTypeDefinitions);
+  assert.equal(rustTargetTypeRefEquals(result.value.genericArguments[0].type, rustJsPromiseTargetType(integer)), true);
+  assert.equal(rustNativeCallableErrorType(selected, implementation, 1, []) === undefined, true);
 });
 
 test("native protocol registry rejects invalid carriers and ambiguous borrowed result relationships", () => {

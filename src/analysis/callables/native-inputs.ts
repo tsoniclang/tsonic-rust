@@ -17,6 +17,8 @@ import { rustNativeCallableErrorType } from "./native-protocols.js";
 import { rustNativeCallableCompletion, type RustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustNativeCallableInvocationArguments } from "./native-invocations.js";
+import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
+import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 
 export interface RustNativeCallableInput extends RustNativeCallableProtocolBinding {
   readonly owner: Node;
@@ -184,7 +186,9 @@ export function createRustNativeCallableInputPlan(input: {
     calls.set(node, Object.freeze({ node, input: parameter, invocationError,
       invocationErrorSource: `${source}:invocation`,
       ...(completion === undefined ? {} : { completion }), awaitErrors: Object.freeze(awaitErrors),
-      awaitErrorSources: Object.freeze(awaitErrors.map((_error, index) => `${source}:await:${index}`)) }));
+      awaitErrorSources: Object.freeze(awaitErrors.map((_error, index) =>
+        rustJsPromiseOutputTargetType(completion!.futures[index]!.carrier) === undefined
+          ? `${source}:await:${index}` : rustJsRejectionErrorIdentity)) }));
   }
   const declarationInputs = new Map([...inputs].map(([owner, members]) => [owner, Object.freeze([...members.values()])]));
   const declarationCaptures = new Map([...captures].map(([owner, members]) => [owner, Object.freeze([...members])]));
