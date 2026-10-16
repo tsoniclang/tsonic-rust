@@ -146,9 +146,7 @@ test("no source-name target guessing in the backend", () => {
       continue;
     }
     const productText = nativeSyntax.get(path).replace(/from "node:[a-z_/-]+"/gu, "");
-    const tokens = path.endsWith("/backend/emission/rustfmt.ts")
-      ? bannedTokens
-      : [...bannedTokens, "readFileSync"];
+    const tokens = [...bannedTokens, "readFileSync"];
     for (const token of tokens) {
       assert.ok(!productText.includes(token), `${path} contains banned source-name token ${token}`);
     }
@@ -299,9 +297,14 @@ test("target diagnostics remain outside the complete Rust output plan", () => {
 
 test("Rust emission delegates canonical layout exclusively to bounded rustfmt", () => {
   const materializer = readFileSync(join(sourceRoot, "backend/emission/materialize.ts"), "utf8");
-  const formatter = readFileSync(join(sourceRoot, "backend/emission/rustfmt.ts"), "utf8");
+  const formatter = readFileSync(join(sourceRoot, "toolchain/rustfmt.ts"), "utf8");
   const compiler = readFileSync(join(sourceRoot, "backend/compile.ts"), "utf8");
-  assert.match(materializer, /formatRustCompileOutput\(output, plan\.edition\)/u);
+  const session = readFileSync(join(sourceRoot, "compilation/session.ts"), "utf8");
+  const pack = readFileSync(join(sourceRoot, "descriptor/rust-target-pack.ts"), "utf8");
+  assert.doesNotMatch(materializer, /rustfmt|formatRust/u);
+  assert.doesNotMatch(compiler, /rustfmt|RustFormattingError|RUST_SOURCE_FORMATTING_FAILED/u);
+  assert.match(session, /return formatResult\(compileRequest\(/u);
+  assert.match(pack, /createRustCompilationSession\(context, formatRustCompileResult\)/u);
   assert.match(formatter, /spawnSync/u);
   assert.match(formatter, /rustfmtBatchSize/u);
   assert.match(formatter, /"--edition"/u);
@@ -309,7 +312,7 @@ test("Rust emission delegates canonical layout exclusively to bounded rustfmt", 
   assert.match(formatter, /skip_children=true/u);
   assert.match(formatter, /rustfmtTimeoutMilliseconds/u);
   assert.match(formatter, /"--",\n\s+\.\.\.sourcePaths/u);
-  assert.match(compiler, /RUST_SOURCE_FORMATTING_FAILED/u);
+  assert.match(formatter, /RUST_SOURCE_FORMATTING_FAILED/u);
   assert.doesNotMatch(formatter, /fallback|best.?effort/iu);
 
   const layoutOnlyFiles = [

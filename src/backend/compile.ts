@@ -1,7 +1,4 @@
-import {
-  rejectedTargetStage,
-  runTargetCompilationStages,
-} from "@tsonic/target-api/artifacts";
+import { runTargetCompilationStages } from "@tsonic/target-api/artifacts";
 import type {
   TargetCompilationObserver,
   TargetCompileResult,
@@ -14,7 +11,6 @@ import type {
   RustTargetProgram,
 } from "../analysis/program/index.js";
 import { materializeRustOutputPlan } from "./emission/materialize.js";
-import { RustFormattingError } from "./emission/rustfmt.js";
 
 export function compileRustTarget(
   request: RustTargetAnalysisRequest,
@@ -23,22 +19,9 @@ export function compileRustTarget(
     Extract<ReturnType<typeof planRustOutput>, { readonly kind: "resolved" }>["value"]
   >,
 ): TargetCompileResult {
-  try {
-    return runTargetCompilationStages({
-      analyze: () => analyzeRustTargetProgram(request),
-      plan: (program) => planRustOutput(createRustPlanningContext(program)),
-      materialize: materializeRustOutputPlan,
-    }, observer);
-  } catch (error) {
-    if (!(error instanceof RustFormattingError)) {
-      throw error;
-    }
-    return rejectedTargetStage([{
-      code: "RUST_SOURCE_FORMATTING_FAILED",
-      category: "error",
-      source: "tsonic-rust",
-      message: error.message,
-      evidence: ["target.capability=rust.toolchain.rustfmt"],
-    }]);
-  }
+  return runTargetCompilationStages({
+    analyze: () => analyzeRustTargetProgram(request),
+    plan: (program) => planRustOutput(createRustPlanningContext(program)),
+    materialize: materializeRustOutputPlan,
+  }, observer);
 }
