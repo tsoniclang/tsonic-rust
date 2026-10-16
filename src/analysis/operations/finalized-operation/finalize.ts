@@ -3,7 +3,7 @@ import type { RustTypeDefinitions } from "../../../target-model/types/source-uni
 import { createInputFactory, finalizeSourceArguments, finalizeTargetInputs } from "./inputs.js";
 import { declaredCarriersMatch, finalizeValueConversion, isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "./conversions.js";
 import { isDenseDataArray, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
-import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
+import { isRustAwaitedErrorBoundary, isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
 import { isRustTargetGenericArgument, isRustTargetTypeRef } from "../../../target-model/types/equality.js";
 import { operationKinds, validateRustFinalizedOperationAbi } from "./validation.js";
@@ -48,7 +48,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       (options.returnedFuture.awaiting === "infallible"
         ? options.returnedFuture.errorBoundary !== "none" ||
           options.returnedFuture.errorCarrier !== undefined
-        : !isRustFallibleErrorBoundary(options.returnedFuture.errorBoundary) ||
+        : !isRustAwaitedErrorBoundary(options.returnedFuture.errorBoundary) ||
           (options.returnedFuture.errorBoundary === "provider-native"
             ? !isRustTargetTypeRef(options.returnedFuture.errorCarrier)
             : options.returnedFuture.errorCarrier !== undefined)))) ||

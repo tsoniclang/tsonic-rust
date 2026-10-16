@@ -2,18 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { finalizeRustCallbackOperation } from "../../../dist/analysis/operations/provider/callbacks.js";
 import {
-  rustCallableTargetType, rustJsArrayTargetType, rustJsPromiseTargetTypeWithLifetime,
+  rustCallableTargetType, rustJsArrayTargetType, rustJsPromiseTargetType,
   rustJsValueTargetType, rustOptionTargetType, rustProgramErrorTargetType, rustSourcePrimitiveTargetType,
   rustUnitTargetType,
 } from "../../../dist/target-model/types/index.js";
-import { rustStaticLifetime } from "../../../dist/target-model/lifetimes/index.js";
 import { selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 
 const inferred = { kind: "opaque", id: "tsonic.rust.infer" };
 const integer = rustSourcePrimitiveTargetType("uint64");
 const number = rustSourcePrimitiveTargetType("float64");
-const promise = output => rustJsPromiseTargetTypeWithLifetime(output, rustStaticLifetime);
+const promise = output => rustJsPromiseTargetType(output);
 
 function selection(result, parameters, projection) {
   return {
@@ -46,13 +45,16 @@ test("awaited callback results project the exact payload without replacing the e
 
 test("later optional handler signatures receive the inferred result and reject conflicting carriers", () => {
   const selected = selection(promise(inferred), [rustCallableTargetType([integer], inferred),
-    rustOptionTargetType(rustCallableTargetType([rustProgramErrorTargetType()], inferred))]);
+    rustOptionTargetType(rustCallableTargetType([rustJsValueTargetType()], inferred))]);
   const callback = rustCallableTargetType([integer], integer);
-  const rejection = rustOptionTargetType(rustCallableTargetType([rustProgramErrorTargetType()], integer));
+  const rejection = rustOptionTargetType(rustCallableTargetType([rustJsValueTargetType()], integer));
   assert.deepEqual(finalizeRustCallbackOperation(selected, [callback]).parameterCarriers, [callback, rejection]);
   assert.deepEqual(finalizeRustCallbackOperation(selected, [callback, rejection]).parameterCarriers, [callback, rejection]);
   assert.equal(finalizeRustCallbackOperation(selected, [callback,
-    rustOptionTargetType(rustCallableTargetType([rustProgramErrorTargetType()], number))]), undefined);
+    rustOptionTargetType(rustCallableTargetType([rustJsValueTargetType()], number))]), undefined);
+  assert.equal(finalizeRustCallbackOperation(selected, [callback,
+    rustOptionTargetType(rustCallableTargetType([rustProgramErrorTargetType()], integer))]), undefined,
+  "a rejected handler receives the JsValue reason, not the program error");
   assert.equal(finalizeRustCallbackOperation(selected, [rustCallableTargetType([number], integer)]), undefined);
 });
 

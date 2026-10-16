@@ -7,8 +7,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { rustCallableInputProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustNativeRepresentationMatches } from "../../../dist/target-model/conversions/native-representation.js";
-import { rustJsPromiseTargetTypeWithLifetime } from "../../../dist/target-model/types/carriers/js.js";
+import { rustJsPromiseTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { Node_Expression } from "@tsonic/target-api/source";
 
 function fixture(text, surfaces) {
@@ -78,9 +77,8 @@ for (const surfaces of [[], ["js"]]) {
     if (surfaces.length !== 0) {
       assert.equal(asynchronous.storage.kind, "lifetime");
       assert.equal(asynchronous.storage.lifetime.identity, value.parameterCarrier.lifetime.identity);
-      const shortened = rustJsPromiseTargetTypeWithLifetime(asynchronous.outputCarrier, { kind: "static" });
-      assert.equal(rustNativeRepresentationMatches(asynchronous.futureCarrier, shortened), false,
-        "owning C never permits an authored external borrow to become static");
+      assert.equal(rustTargetTypeRefEquals(asynchronous.futureCarrier, rustJsPromiseTargetType(asynchronous.outputCarrier)), true,
+        "the JS Promise carrier names its output only, with no storage lifetime argument");
     }
   });
 }

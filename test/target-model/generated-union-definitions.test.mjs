@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustStringTargetType,
-  rustJsPromiseTargetTypeWithLifetime } from "../../dist/target-model/types/index.js";
+  rustJsPromiseTargetType } from "../../dist/target-model/types/index.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
 import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
 import { createRustGeneratedUnionPlan } from "../../dist/analysis/objects/generated-union-plan.js";
 
-const error = { kind: "target-named", id: "rust.program.TsonicError", errorOwner: { kind: "logical" } };
 const text = rustStringTargetType();
 const integer = rustSourcePrimitiveTargetType("int64");
 const union = (members, fileName = "/src/index.ts", origin = "generated") => rustSourceUnionTargetType(
@@ -15,14 +14,15 @@ const union = (members, fileName = "/src/index.ts", origin = "generated") => rus
 const definition = carrier => ({ carrier,
   variants: carrier.value.payloads.types.map((type, index) => ({ name: `Variant${index}`, carrier: type })) });
 
-test("generated native union definitions retain generic payload applications after promise lifetime closure", () => {
+test("generated native union definitions retain one-argument promise payload applications", () => {
   const registry = createRustTypeDefinitionRegistry();
-  const pending = [text, integer].map(output => rustJsPromiseTargetTypeWithLifetime(output, { kind: "placeholder" }, error));
+  const pending = [text, integer].map(output => rustJsPromiseTargetType(output));
   const original = union(pending);
   const record = definition(original);
   const plan = createRustGeneratedUnionPlan([record], () => "root", new Map());
   assert.equal(registry.registerSourceUnion(definition(original), false), true);
-  const closed = union([text, integer].map(output => rustJsPromiseTargetTypeWithLifetime(output, { kind: "static" }, error)));
+  const closed = union([text, integer].map(output => rustJsPromiseTargetType(output)));
+  assert.equal(closed.value.payloads.types.every(promise => promise.genericArguments.length === 1), true);
   assert.equal(plan.unionForCarrier(closed), plan.unionForCarrier(original));
   const selected = registry.sourceUnionVariants(closed);
   assert.equal(selected?.length, 2);

@@ -14,6 +14,10 @@ export type RustFallibleErrorBoundary =
 
 export type RustErrorBoundary = "none" | RustFallibleErrorBoundary;
 
+export type RustAwaitedErrorBoundary = RustFallibleErrorBoundary | "js-rejection";
+
+export type RustOperationErrorBoundary = "none" | RustAwaitedErrorBoundary;
+
 export type RustErrorDomain = "runtime" | "project";
 
 export function isRustFallibleErrorBoundary(
@@ -22,8 +26,16 @@ export function isRustFallibleErrorBoundary(
   return value === "provider-native" || value === "target-runtime" || value === "source-program";
 }
 
+export function isRustAwaitedErrorBoundary(value: unknown): value is RustAwaitedErrorBoundary {
+  return value === "js-rejection" || isRustFallibleErrorBoundary(value);
+}
+
 export function isRustErrorBoundary(value: unknown): value is RustErrorBoundary {
   return value === "none" || isRustFallibleErrorBoundary(value);
+}
+
+export function isRustOperationErrorBoundary(value: unknown): value is RustOperationErrorBoundary {
+  return value === "none" || isRustAwaitedErrorBoundary(value);
 }
 
 export function rustErrorBoundaryDomain(

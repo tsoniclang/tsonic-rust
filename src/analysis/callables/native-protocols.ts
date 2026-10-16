@@ -15,6 +15,7 @@ import { allocateRustGeneratedName } from "../../target-model/names/generated.js
 import { bindRustCallableInputLifetimes } from "../../target-model/types/carriers/callable-input-lifetimes.js";
 import type { RustLifetimeBinder } from "../../target-model/lifetimes/index.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustJsPromiseOutputTargetType } from "../../target-model/types/carriers/promises.js";
 
 export interface RustNativeCallableProtocol {
   readonly identity: string;
@@ -118,16 +119,11 @@ export function rustNativeCallableProtocolResult(
       ...protocol.signature.typeParameters])];
   const error = (name: string): TargetTypeRef => ({ kind: "associated-type", owner: self, name, genericArguments: arguments_ });
   const completion = protocol.completion === undefined ? protocol.method.result :
-    instantiateRustNativeCompletion(protocol.completion, future => {
-      const selectedError = error(`AwaitError${future.ordinal}`);
-      if (future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId) {
-        const arguments_ = future.carrier.genericArguments;
-        return arguments_?.length !== 3 ? undefined : { ...future.carrier,
-          genericArguments: [arguments_[0]!, arguments_[1]!, { kind: "type", type: selectedError }] };
-      }
-      return rustNativeCompletionFutureType({ identity: `${protocol.identity}:future:${future.ordinal}`,
-        output: future.output, error: selectedError, captures });
-    }, definitions);
+    instantiateRustNativeCompletion(protocol.completion, future =>
+      future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId
+        ? rustJsPromiseOutputTargetType(future.carrier) === undefined ? undefined : future.carrier
+        : rustNativeCompletionFutureType({ identity: `${protocol.identity}:future:${future.ordinal}`,
+          output: future.output, error: error(`AwaitError${future.ordinal}`), captures }), definitions);
   return completion === undefined ? undefined : rustNamedTargetType(`${protocol.identity}:result`, "Result",
     rustTypeGenericArguments([completion, error("InvocationError")]));
 }

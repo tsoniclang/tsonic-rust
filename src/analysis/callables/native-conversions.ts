@@ -17,7 +17,7 @@ import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native
 import { rustNativeCallableProtocolResult } from "./native-protocols.js";
 import { rustCallableSignatureAbsenceWitness } from "../../target-model/types/carriers/callable-input-witness.js";
 import { instantiateRustNativeCompletion } from "../../target-model/types/callable-completions.js";
-import { rustJsPromiseTargetTypeWithLifetime } from "../../target-model/types/carriers/js.js";
+import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustInfallibleTargetId, rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 
 export function rustNativeCallableAbsenceWitness(
@@ -28,8 +28,7 @@ export function rustNativeCallableAbsenceWitness(
   const infallible: TargetTypeRef = { kind: "target-named", id: rustInfallibleTargetId };
   const result = protocol.completion === undefined ? protocol.method.result : instantiateRustNativeCompletion(protocol.completion, future => {
     if (future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId) {
-      const lifetime = future.carrier.genericArguments?.[0];
-      return lifetime?.kind !== "lifetime" ? undefined : rustJsPromiseTargetTypeWithLifetime(future.output, lifetime.lifetime, infallible);
+      return rustJsPromiseTargetType(future.output);
     }
     return rustNamedTargetType("rust.core.future.Ready", "core::future::Ready", rustTypeGenericArguments([
       rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, infallible])),

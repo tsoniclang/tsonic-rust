@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustErrorBoundary } from "../operations/error-boundary.js";
+import type { RustOperationErrorBoundary } from "../operations/error-boundary.js";
 import type { RustFinalizedValueConversion } from "./finalized-operation.js";
 import type { TargetTypeRef } from "../types/model.js";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableValueAdapter } from "./callable-adapters.js";
@@ -44,7 +44,7 @@ export interface RustFutureValueFact {
   readonly outputCarrier: TargetTypeRef;
   readonly awaitedConversion: RustFinalizedValueConversion;
   readonly awaiting: "infallible" | "fallible";
-  readonly errorBoundary: RustErrorBoundary | "source-native";
+  readonly errorBoundary: RustOperationErrorBoundary | "source-native";
   readonly errorCarrier?: TargetTypeRef;
   readonly errorSource?: string;
 }

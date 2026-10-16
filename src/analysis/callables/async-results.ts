@@ -3,15 +3,14 @@ import type { Node } from "@tsonic/tsts";
 import { rustCallableValueConversionMatches } from "../../target-model/conversions/callable.js";
 import { rustNativeRepresentationMatches } from "../../target-model/conversions/native-representation.js";
 import { isClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { rustPlaceholderLifetime, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
-import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { isRustTargetTypeRef } from "../../target-model/types/equality.js";
 import {
   isRustNeverCarrier,
   rustFutureOutputCarrier,
   rustJsPromiseOutputTargetType,
   rustJsPromiseTargetId,
-  rustJsPromiseTargetTypeWithLifetime,
+  rustJsPromiseTargetType,
   rustOptionElementCarrier,
 } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -31,7 +30,6 @@ export type RustAsyncBodyPromiseSelection =
   | {
       readonly kind: "selected";
       readonly outputCarrier: TargetTypeRef;
-      readonly errorCarrier: TargetTypeRef;
       readonly contextualPromise?: TargetTypeRef;
     }
   | { readonly kind: "rejected"; readonly reason: string };
@@ -45,15 +43,9 @@ export function selectRustAsyncBodyPromise(
   if (!isClosedMetadata(sourcePromise) || !isRustTargetTypeRef(sourcePromise) ||
     rustJsPromiseOutputTargetType(sourcePromise) === undefined ||
     inferredOutput === undefined || !isClosedMetadata(inferredOutput) || !isRustTargetTypeRef(inferredOutput)) {
-    return { kind: "rejected", reason: "An authored async body requires an exact JS promise output and error protocol." };
+    return { kind: "rejected", reason: "An authored async body requires an exact JS promise output." };
   }
-  const error = sourcePromise.kind === "target-named" ? sourcePromise.genericArguments?.[2] : undefined;
-  if (error?.kind !== "type") {
-    return { kind: "rejected", reason: "An authored async body has no exact JS promise error carrier." };
-  }
-  const inferred: RustAsyncBodyPromiseSelection = Object.freeze({
-    kind: "selected", outputCarrier: inferredOutput, errorCarrier: error.type,
-  });
+  const inferred: RustAsyncBodyPromiseSelection = Object.freeze({ kind: "selected", outputCarrier: inferredOutput });
   if (contextualResult === undefined) return inferred;
   const awaited = rustAwaitSelection(contextualResult, definitions);
   if (awaited === undefined) {
@@ -65,9 +57,7 @@ export function selectRustAsyncBodyPromise(
   if (promises.length === 0) return inferred;
   const admitted = promises.flatMap(contextualPromise => {
     const output = rustJsPromiseOutputTargetType(contextualPromise);
-    const contextualError = contextualPromise.genericArguments?.[2];
-    if (output === undefined || contextualError?.kind !== "type" ||
-      !rustTargetTypeRefEquals(error.type, contextualError.type)) return [];
+    if (output === undefined) return [];
     if (rustNativeRepresentationMatches(inferredOutput, output) ||
       rustCallableValueConversionMatches({ kind: "absence" }, inferredOutput, output, definitions)) {
       return [{ outputCarrier: output, contextualPromise }];
@@ -78,9 +68,9 @@ export function selectRustAsyncBodyPromise(
       ? [{ outputCarrier: output, contextualPromise }] : [];
   });
   if (admitted.length !== 1) {
-    return { kind: "rejected", reason: "An authored async body requires one unambiguous contextual JS promise alternative admitting its output and exact rejection carrier." };
+    return { kind: "rejected", reason: "An authored async body requires one unambiguous contextual JS promise alternative admitting its output." };
   }
-  return Object.freeze({ kind: "selected", ...admitted[0]!, errorCarrier: error.type });
+  return Object.freeze({ kind: "selected", ...admitted[0]! });
 }
 
 export function selectRustAsyncBodyFacts(
@@ -119,26 +109,13 @@ export function selectRustAsyncBodyFacts(
       declaration, ["target.capability=rust.async.contextual-promise-output"]);
     return;
   }
-  const declaredSelection = closedContext === undefined ? undefined : rustAwaitSelection(closedContext, walk.context.typeDefinitions);
-  const declaredPromises = declaredSelection === undefined ? [] : rustAwaitSelectionLeaves(declaredSelection)
-    .flatMap(leaf => {
-      const promise = leaf.future?.futureCarrier;
-      const lifetime = promise?.kind === "target-named" ? promise.genericArguments?.[0] : undefined;
-      return promise?.kind === "target-named" && promise.id === rustJsPromiseTargetId && lifetime?.kind === "lifetime" &&
-        rustTargetTypeRefEquals(rustJsPromiseOutputTargetType(promise), selected.outputCarrier) ? [lifetime.lifetime] : [];
-    });
-  const requiredLifetime = declaredPromises.length === 1 && declaredPromises[0]?.kind === "static" ? declaredPromises[0] : undefined;
-  const storage = resolveRustSuspendedCallableStorage(walk, declaration,
-    [selected.outputCarrier, selected.errorCarrier], ownedReceiver, requiredLifetime);
+  const storage = resolveRustSuspendedCallableStorage(walk, declaration, [selected.outputCarrier], ownedReceiver);
   if (storage.kind === "rejected") {
     appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", storage.reason,
       declaration, ["target.capability=rust.async.js-promise-storage-lifetime"]);
     return;
   }
-  const closedFutureCarrier = rustJsPromiseTargetTypeWithLifetime(selected.outputCarrier,
-    storage.storage.kind === "static" ? rustStaticLifetime
-      : storage.storage.kind === "receiver" ? rustPlaceholderLifetime : storage.storage.lifetime,
-    selected.errorCarrier);
+  const closedFutureCarrier = rustJsPromiseTargetType(selected.outputCarrier);
   if (selected.contextualPromise !== undefined &&
     !rustNativeRepresentationMatches(closedFutureCarrier, selected.contextualPromise)) {
     appendRustDiagnostic(walk, "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",

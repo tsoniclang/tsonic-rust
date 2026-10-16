@@ -10,6 +10,7 @@ import { rustNativeCallableCompletion } from "../../target-model/types/callable-
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustRuntimeErrorTargetType } from "../../target-model/operations/error-boundary.js";
+import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -92,6 +93,7 @@ function errorForStoredFuture(walk: RustFactWalk, selected: RustStoredFutureValu
   if (value.awaiting === "infallible") return infallible;
   if (value.errorBoundary === "provider-native" || value.errorBoundary === "source-native") return value.errorCarrier;
   if (value.errorBoundary === "target-runtime") return rustRuntimeErrorTargetType();
+  if (value.errorBoundary === "js-rejection") return rustJsValueTargetType();
   if (value.errorBoundary !== "source-program") return undefined;
   const { records, ast, source, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
   const node = selected.producer.subject.node;

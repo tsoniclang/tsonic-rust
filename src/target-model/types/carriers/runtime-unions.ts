@@ -2,9 +2,8 @@ import type { TargetTypeRef } from "../model.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { rustJsIntlGroupingTargetId, rustJsNumericTargetId, rustJsStringNumberTargetId, rustJsPromiseResolutionTargetId } from "./source-types.js";
 import { rustBigIntTargetType, rustSourcePrimitiveTargetType, rustStringTargetType } from "./native.js";
-import { rustOnlyTypeGenericArguments } from "../generic-arguments.js";
-import { rustJsPromiseTargetTypeWithLifetime } from "./js.js";
-import { rustStaticLifetime } from "../../lifetimes/index.js";
+import { rustOnlyTypeGenericArguments, rustTypeGenericArguments } from "../generic-arguments.js";
+import { rustJsPromiseTargetType } from "./promises.js";
 import { isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
 
 export type RustRuntimeUnionVariant =
@@ -47,10 +46,9 @@ const contracts: ReadonlyMap<string, RustRuntimeUnionContract> = new Map<string,
 export function rustRuntimeUnionContract(carrier: TargetTypeRef | undefined): RustRuntimeUnionContract | undefined {
   if (carrier?.kind === "target-named" && carrier.id === rustJsPromiseResolutionTargetId) {
     const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
-    const output = arguments_?.length === 2 ? arguments_[0] : undefined;
-    const error = arguments_?.[1];
-    const promise = output === undefined || error === undefined ? undefined : rustJsPromiseTargetTypeWithLifetime(output, rustStaticLifetime, error);
-    return output === undefined || error === undefined || promise?.kind !== "target-named" ? undefined : Object.freeze({ alternatives: Object.freeze([
+    const output = arguments_?.length === 1 ? arguments_[0] : undefined;
+    const promise = output === undefined ? undefined : rustJsPromiseTargetType(output);
+    return output === undefined || promise === undefined ? undefined : Object.freeze({ alternatives: Object.freeze([
       Object.freeze({ carrier: output, variant: Object.freeze({ kind: "payload" as const, name: "Value" }) }),
       Object.freeze({ carrier: promise,
         variant: Object.freeze({ kind: "payload" as const, name: "Promise" }) }),
@@ -75,10 +73,7 @@ export function instantiateRustRuntimeUnionPayloads(
     payloads.some(payload => !isRustTargetTypeRef(payload))) return undefined;
   let selected = carrier;
   if (carrier.kind === "target-named" && carrier.id === rustJsPromiseResolutionTargetId) {
-    const promise = payloads[1];
-    const error = promise?.kind === "target-named" ? promise.genericArguments?.[2] : undefined;
-    if (error?.kind !== "type") return undefined;
-    selected = { ...carrier, genericArguments: [{ kind: "type", type: payloads[0]! }, error] };
+    selected = { ...carrier, genericArguments: rustTypeGenericArguments([payloads[0]!]) };
   }
   const result = rustRuntimeUnionContract(selected);
   return result === undefined || result.alternatives.some((alternative, index) =>

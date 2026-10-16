@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourcePrimitiveTargetType, rustStrTargetType, rustFutureTargetType,
-  rustSourceOptionalTargetType, rustSourceUnionTargetType, rustJsPromiseTargetTypeWithLifetime }
+  rustSourceOptionalTargetType, rustSourceUnionTargetType, rustJsPromiseTargetType }
   from "../../../dist/target-model/types/index.js";
 import { nativeProducerFixture, nativeProducerItems, printNativeProducerItems }
   from "../../helpers/native-producer-bridges.mjs";
@@ -33,9 +33,9 @@ function fixtureSource() {
   const asynchronous = nativeProducerFixture({ identity: "asynchronous", parameters: [integer], result: rustFutureTargetType(integer) });
   const borrowing = nativeProducerFixture({ identity: "borrowing", parameters: [borrowed, byte], result: rustFutureTargetType(borrowed) });
   const js = nativeProducerFixture({ identity: "javascript", parameters: [integer, boolean],
-    result: rustJsPromiseTargetTypeWithLifetime(integer, { kind: "static" }) });
+    result: rustJsPromiseTargetType(integer) });
   const borrowedJs = nativeProducerFixture({ identity: "borrowed-javascript", parameters: [borrowed],
-    result: rustJsPromiseTargetTypeWithLifetime(borrowed, { kind: "placeholder" }) });
+    result: rustJsPromiseTargetType(borrowed) });
   const definitions = createRustTypeDefinitionRegistry();
   const payloads = [borrowed, rustFutureTargetType(borrowed), rustFutureTargetType(integer)];
   const union = rustSourceUnionTargetType("/index.ts", "Union3", [], "generated", { kind: "physical", types: payloads });

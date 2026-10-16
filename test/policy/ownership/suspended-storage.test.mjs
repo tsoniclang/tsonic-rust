@@ -5,8 +5,8 @@ import { bindRustElidedCallableInput, instantiateRustElidedCallResult, rustSingl
 import { requirementUseHasValidStorage } from "../../../dist/analysis/declarations/generic-requirement-contract.js";
 import { rustNativeRepresentationMatches } from "../../../dist/target-model/conversions/native-representation.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
-import { rustJsPromiseTargetTypeWithLifetime, rustUnitTargetType, rustAbsenceTargetType,
-  rustSourcePrimitiveTargetType, rustJsErrorTargetType } from "../../../dist/target-model/types/index.js";
+import { rustUnitTargetType, rustAbsenceTargetType,
+  rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
 import { rustSourceCallResultWithInputLifetimes } from "../../../dist/analysis/callables/source-call-lifetimes.js";
 import { rustCallableInputTargetType, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
@@ -14,7 +14,7 @@ import { rustCallableInputTargetType, rustCallableTargetType } from "../../../di
 const inferred = { kind: "placeholder" };
 const owned = { kind: "static" };
 const borrowed = { kind: "parameter", identity: "scope::borrow", name: "borrow" };
-const promise = (lifetime, payload = rustUnitTargetType()) => rustJsPromiseTargetTypeWithLifetime(payload, lifetime);
+const promise = (lifetime, payload = rustUnitTargetType()) => rustCallableTargetType([], payload, lifetime);
 
 test("suspended input elision follows native signature scopes, never field or ambiguous inference", () => {
   const input = promise(inferred);
@@ -69,7 +69,7 @@ test("call result lifetimes follow the selected argument without changing payloa
   assert.deepEqual(instantiate(input), input);
   assert.deepEqual(instantiate(promise(owned), [input, input]), input);
   assert.deepEqual(instantiate(promise(owned, rustSourcePrimitiveTargetType("int64"))), input);
-  assert.deepEqual(instantiate(rustJsPromiseTargetTypeWithLifetime(rustUnitTargetType(), owned, rustJsErrorTargetType())), input);
+  assert.deepEqual(instantiate(rustCallableTargetType([rustUnitTargetType()], rustUnitTargetType(), owned)), input);
   assert.deepEqual(instantiate(promise({ kind: "call-scoped-elision", callIdentity: "call", parameterIdentity: "parameter" })), input);
   const callback = { kind: "function-pointer", args: [{ kind: "reference", referent: rustUnitTargetType(), mutable: false }],
     result: rustUnitTargetType() };

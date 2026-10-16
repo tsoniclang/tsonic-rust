@@ -3,7 +3,7 @@ import test from "node:test";
 import { rustAwaitSelection, rustAwaitSelectionLeaves, rustAwaitSelectionResultCarrier } from "../../dist/target-model/types/await.js";
 import { rustAbsenceTargetType, rustFutureTargetType, rustJsPromiseTargetType,
   rustOptionTargetType, rustSourceOptionalTargetType, rustSourcePrimitiveTargetType,
-  rustSourceUnionTargetType, rustUnitTargetType, rustJsPromiseTargetTypeWithLifetime } from "../../dist/target-model/types/index.js";
+  rustSourceUnionTargetType, rustUnitTargetType } from "../../dist/target-model/types/index.js";
 import { finalizeRustAwaitValueFact, rustAwaitValueMatchesCarrier, rustAwaitValueRequirements } from "../../dist/analysis/callables/await-values.js";
 import { rustFutureValueForSourceStorage, rustFutureValuesForSourceStorage } from "../../dist/analysis/callables/future-values.js";
 import { selectRustSourceValueConversion } from "../../dist/policy/conversions/selection.js";
@@ -21,12 +21,12 @@ const factFor = (carrier, result, resolve = rustFutureValueForSourceStorage, own
   finalizeRustAwaitValueFact(carrier, result, resolve,
     (source, target) => selectRustSourceValueConversion(source, target, owner), owner);
 
-test("await requirements retain the exact promise lifetime without constraining native futures or values", () => {
-  const staticPromise = rustJsPromiseTargetTypeWithLifetime(integer, { kind: "static" });
-  const namedPromise = rustJsPromiseTargetTypeWithLifetime(integer, { kind: "parameter", identity: "await/input", name: "input" });
-  for (const [carrier, expected] of [[staticPromise, ["clone", "static"]], [namedPromise, ["clone"]],
-    [promise, ["clone"]], [integer, []]]) {
-    const fact = factFor(carrier, integer);
+test("await requirements share the promise payload without a body lifetime or constraining native futures or values", () => {
+  const borrowed = { kind: "reference", mutable: false, referent: integer,
+    lifetime: { kind: "parameter", identity: "await/input", name: "input" } };
+  for (const [carrier, result, expected] of [[rustJsPromiseTargetType(borrowed), borrowed, ["clone"]],
+    [promise, integer, ["clone"]], [integer, integer, []]]) {
+    const fact = factFor(carrier, result);
     assert.equal(fact !== undefined, true, "validated await fact");
     assert.deepEqual(rustAwaitValueRequirements(fact.selection.value), expected);
   }

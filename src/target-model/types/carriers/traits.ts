@@ -151,7 +151,7 @@ function supportsCloneWithContracts(
     }
     if (carrier.id === rustJsPromiseRejectedResultTargetId || carrier.id === rustJsPromiseSettledResultTargetId) {
       const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
-      return arguments_?.length === (carrier.id === rustJsPromiseRejectedResultTargetId ? 1 : 2) && arguments_.every(supports);
+      return arguments_?.length === (carrier.id === rustJsPromiseRejectedResultTargetId ? 0 : 1) && arguments_.every(supports);
     }
     if (carrier.id === rustJsPromiseResolutionTargetId ||
       carrier.id === rustJsPromiseFulfilledResultTargetId) {

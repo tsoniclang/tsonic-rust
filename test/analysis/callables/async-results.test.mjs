@@ -8,7 +8,7 @@ import {
   rustAbsenceTargetType,
   rustFutureTargetType,
   rustJsErrorTargetType,
-  rustJsPromiseTargetTypeWithLifetime,
+  rustJsPromiseTargetType,
   rustNeverTargetType,
   rustSourceOptionalTargetType,
   rustSourcePrimitiveTargetType,
@@ -18,13 +18,14 @@ import {
 } from "../../../dist/target-model/types/index.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
-const owned = { kind: "static" };
 const borrowed = { kind: "parameter", identity: "scope::borrow", name: "borrow" };
 const unit = rustUnitTargetType();
 const integer = rustSourcePrimitiveTargetType("int64");
 const string = rustStringTargetType();
 const optional = rustSourceOptionalTargetType(integer);
-const promise = (output, lifetime = owned, error) => rustJsPromiseTargetTypeWithLifetime(output, lifetime, error);
+const promise = output => rustJsPromiseTargetType(output);
+const withError = carrier => ({ ...carrier,
+  genericArguments: [...carrier.genericArguments, { kind: "type", type: rustJsErrorTargetType() }] });
 const result = rustSourceUnionTargetType("/src/result.ts", "Completion");
 const definitionsFor = alternatives => ({
   programErrorOrigin: () => undefined,
@@ -41,7 +42,7 @@ test("async body selection constructs the unique contextual output rather than m
       assert.equal(selected.kind, "selected");
       assert.equal(rustTargetTypeRefEquals(selected.outputCarrier, optional), true);
       assert.equal(rustTargetTypeRefEquals(selected.contextualPromise, promise(optional)), true);
-      assert.equal(rustTargetTypeRefEquals(selected.errorCarrier, promise(unit).genericArguments[2].type), true);
+      assert.equal(Object.hasOwn(selected, "errorCarrier"), false, "the JS Promise carries no rejection type");
       assert.equal(Object.isFrozen(selected), true);
     }
   }
@@ -69,25 +70,25 @@ test("async selection proves compatible outputs, not names, ordering or unrelate
   assert.equal(rustTargetTypeRefEquals(selected.outputCarrier, optional), true);
 });
 
-test("multiple admissible async outputs and rejection-carrier changes fail closed", () => {
+test("multiple admissible async outputs and malformed Promise arities fail closed", () => {
   for (const [output, alternatives] of [
     [unit, [promise(optional), promise(rustSourceOptionalTargetType(string))]],
     [integer, [promise(integer), promise(optional)]],
-    [unit, [promise(optional), promise(optional, borrowed)]],
   ]) assert.equal(select(output, result, definitionsFor(alternatives)).kind, "rejected");
   assert.equal(select(unit, promise(integer)).kind, "rejected", "required output cannot manufacture a value");
   assert.equal(select(integer, promise(string)).kind, "rejected", "unrelated native outputs remain unrelated");
-  assert.equal(select(unit, promise(optional, owned, rustJsErrorTargetType())).kind, "rejected");
+  assert.equal(select(unit, withError(promise(optional))).kind, "rejected", "a Promise with a rejection argument is not the JS Promise");
 });
 
-test("contextual selection retains exact borrowed lifetimes for the existing storage owner to prove", () => {
-  const expected = promise(optional, borrowed);
+test("contextual selection keeps a borrow inside the selected Promise payload exactly", () => {
+  const reference = rustSourceOptionalTargetType({ kind: "reference", referent: integer, mutable: false, lifetime: borrowed });
+  const expected = promise(reference);
   const selected = select(unit, expected);
   assert.equal(selected.kind, "selected");
   assert.equal(rustTargetTypeRefEquals(selected.contextualPromise, expected), true);
+  assert.equal(rustTargetTypeRefEquals(selected.outputCarrier, reference), true);
   assert.equal(rustNativeRepresentationMatches(promise(optional), selected.contextualPromise), false,
-    "selecting an output does not authorize a static/borrowed lifetime conversion");
-  assert.equal(rustNativeRepresentationMatches(promise(optional, borrowed), selected.contextualPromise), true);
+    "selecting an output does not convert a borrowed payload into an owned one");
 });
 
 test("non-promise contexts preserve inferred output and opaque native Future stays a separate protocol", () => {

@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { instantiateRustNativeCompletion, rustNativeCallableCompletion, rustNativeFutureOutputType }
   from "../../target-model/types/callable-completions.js";
-import { rustJsPromiseTargetTypeWithLifetime } from "../../target-model/types/carriers/js.js";
+import { rustJsPromiseTargetType } from "../../target-model/types/carriers/promises.js";
 import { rustJsPromiseTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustNamedTargetType } from "../../target-model/types/carriers/native.js";
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
@@ -36,13 +36,8 @@ export function createRustNativeOutwardResults(input: {
       if (physical === undefined) return undefined;
       const asynchronous = input.records.asyncFunction.get(declaration);
       if (invocation && asynchronous !== undefined) {
-        const error = input.producers.errorFor(declaration, 0);
-        if (error === undefined) return undefined;
         if (asynchronous.kind === "js-promise") {
-          const lifetime = asynchronous.futureCarrier.kind === "target-named"
-            ? asynchronous.futureCarrier.genericArguments?.[0] : undefined;
-          if (lifetime?.kind !== "lifetime") return undefined;
-          const result = rustJsPromiseTargetTypeWithLifetime(physical, lifetime.lifetime, error);
+          const result = rustJsPromiseTargetType(physical);
           const operation = input.records.targetOperation.get(declaration);
           const conversion = operation?.kind === "closure" ? operation.invocationResult : undefined;
           if (conversion === undefined) return result;
@@ -52,8 +47,9 @@ export function createRustNativeOutwardResults(input: {
             future => rustTargetTypeRefEquals(future.carrier, asynchronous.futureCarrier) ? result : undefined,
             input.definitions);
         }
+        const error = input.producers.errorFor(declaration, 0);
         const effects = input.records.errorEffects.get(declaration);
-        if (effects === undefined) return undefined;
+        if (error === undefined || effects === undefined) return undefined;
         const output = rustErrorEffectsAreFallible(effects)
           ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([physical, error])) : physical;
         return rustNativeFutureOutputType({ identity: `${producer.identity}:return:0`, output, captures: producer.environment });
@@ -62,10 +58,7 @@ export function createRustNativeOutwardResults(input: {
       if (completion === undefined) return physical;
       return instantiateRustNativeCompletion(completion, future => {
         if (future.carrier.kind === "target-named" && future.carrier.id === rustJsPromiseTargetId) {
-          const lifetime = future.carrier.genericArguments?.[0];
-          const error = input.producers.errorFor(declaration, future.ordinal);
-          return lifetime?.kind !== "lifetime" || error === undefined ? undefined
-            : rustJsPromiseTargetTypeWithLifetime(future.output, lifetime.lifetime, error);
+          return rustJsPromiseTargetType(future.output);
         }
         const channel = input.producers.deferredFor(declaration, future.ordinal);
         if (channel === undefined) return undefined;
