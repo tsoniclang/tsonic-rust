@@ -715,7 +715,7 @@ main();
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
   assert.match(text, /pub fn bump\(xs: js_abi::JsArray<i32>\)/u);
-  assert.match(text, /xs\.set_number\(0\.0, 42\);/u);
+  assert.match(text, /xs\.set_number\(0\.0_f64, 42\);/u);
   assert.match(text, /bump\(values\.clone\(\)\);/u);
   validateGeneratedProject("js-array-assignment-values", result.artifacts, { run: true });
 });
