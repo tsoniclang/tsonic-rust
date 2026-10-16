@@ -18,16 +18,17 @@ export function resolveRustCallableEnvironment(
   const lexical = context.retainedEnvironments.lexicalFor(declaration);
   if (lexical.kind === "unresolved") return undefined;
   const carriers: TargetTypeRef[] = [];
-  for (const reference of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration) &&
+  for (const { reference, declaration: capturedDeclaration } of [...lexical.captures.filter(capture => !excludedCaptures.has(capture.declaration) &&
     context.records.compileTimeSource.get(capture.declaration) !== true)
-    .flatMap(capture => capture.references.slice(0, 1)),
+    .flatMap(capture => capture.references.slice(0, 1).map(reference => ({ reference, declaration: capture.declaration }))),
     ...lexical.receivers.filter(receiver => !excludedCaptures.has(receiver.owner))
-      .flatMap(receiver => receiver.references.slice(0, 1))]) {
+      .flatMap(receiver => receiver.references.slice(0, 1).map(reference => ({ reference, declaration: receiver.owner })))]) {
     const semantics = context.semanticsFor(reference);
     const refinement = context.source.semantics.selectValueTypeRefinement(reference);
     if (refinement.kind === "unresolved") return undefined;
     const type = refinement.kind === "resolved" ? refinement.declaredType : semantics.types.expressionType(reference);
-    const selected = context.sourceStorage.storageSubjectFor(reference);
+    const selected = context.ast.is.IsParameterDeclaration(capturedDeclaration)
+      ? context.sourceStorage.subject(capturedDeclaration, "input") : context.sourceStorage.subjectFor(reference);
     if (selected.kind === "unresolved") return undefined;
     let carrier: TargetTypeRef | undefined;
     if (selected.subject.kind === "input") {
