@@ -26,6 +26,8 @@ export function planRustAwaitExpression(
     return undefined;
   }
   if (!requireExpressionCarrier(node, operation.resultCarrier, context, "rust.backend.await-carrier")) return undefined;
-  const planned = operand === undefined ? undefined : planExpression(operand, context);
-  return planned === undefined ? undefined : planRustAwaitBranches(node, planned, fact, context);
+  const settled = context.input.program.settledPromiseBodies.calls.get(node);
+  const planned = operand === undefined ? undefined : planExpression(operand,
+    settled === undefined ? context : { ...context, settledPromiseCall: settled });
+  return planned === undefined ? undefined : planRustAwaitBranches(node, planned, fact, context, settled);
 }

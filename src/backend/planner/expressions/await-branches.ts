@@ -18,12 +18,14 @@ import { applyFinalizedValueConversion } from "./value-conversions.js";
 import { planRustAbsentValue } from "./optional-storage.js";
 import { planRustSourceErrorPropagation } from "./calls/source-errors.js";
 import { planRustJsRejectionPropagation } from "./js-rejection.js";
+import type { RustSettledPromiseCall } from "../../../target-model/records/callables-and-resources.js";
 
 export function planRustAwaitBranches(
   node: Node,
   expression: RustExpr,
   fact: RustAwaitValueFact,
   context: RustPlanContext,
+  settled: RustSettledPromiseCall | undefined,
 ): RustExpr | undefined {
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []);
   const absent = (): RustExpr => isRustUnitCarrier(fact.resultCarrier)
@@ -35,10 +37,10 @@ export function planRustAwaitBranches(
       const promise = selected.carrier.kind === "target-named" && selected.carrier.id === rustJsPromiseTargetId;
       const requirements = rustAwaitValueRequirements(selected);
       if (requirements.length > 0 && !requireRustCarrierRequirements(future.outputCarrier, requirements, node, context)) return undefined;
-      output = { kind: "await", expr: promise
+      output = settled !== undefined ? value : { kind: "await", expr: promise
         ? { kind: "method-call", receiver: value, method: future.awaiting === "fallible" ? "into_result" : "into_value", args: [] }
         : value };
-      if (future.awaiting === "fallible") {
+      if (settled?.fallible === true || settled === undefined && future.awaiting === "fallible") {
         const region = context.fallibleBoundary;
         if (region === undefined) {
           context.diagnostics.push(unsupportedConstructDiagnostic(diagnosticInput(context, node),

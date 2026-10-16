@@ -3,7 +3,7 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
-import { analyzeRustSettledPromiseHelpers, selectRustAsyncBodyLowering } from "../../../dist/analysis/callables/async-results.js";
+import { analyzeRustSettledPromiseBodies, selectRustAsyncBodyLowering } from "../../../dist/analysis/callables/async-results.js";
 
 function fixture(text) {
   const { context, walk } = analyzeRustOperations(text);
@@ -20,7 +20,7 @@ function fixture(text) {
   const fact = (name, owner) => records.asyncFunction.get(owner === undefined
     ? named(node => ast.is.IsFunctionDeclaration(node), name)
     : named(node => ast.is.IsMethodDeclaration(node), name, owner));
-  const helpers = () => analyzeRustSettledPromiseHelpers({ ast, sourceFiles: context.sourceFiles, records, names: context.names });
+  const helpers = () => analyzeRustSettledPromiseBodies({ ast, sourceFiles: context.sourceFiles, records, names: context.names }).helpers;
   return { context, walk, ast, records, nodes, named, fact, helpers };
 }
 
