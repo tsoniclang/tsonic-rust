@@ -77,6 +77,29 @@ export function make(): number { return new Holder()[readKey](); }
     assert.equal(compiled.result.artifacts.length > 0, true, "imported computed field emits native artifacts");
   });
 
+  test(`Rust ${surfaces[0] ?? "native"} computed method overloads keep their checked implementation`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+const key = "read";
+class Holder {
+  [key](value: number): number;
+  [key](value: number): number { return value; }
+}
+export function make(): number { return new Holder()[key](7); }
+` } });
+    assert.equal(compiled.result.diagnostics.length, 0, "computed overloads resolve to the exact checked implementation: " +
+      compiled.result.diagnostics.slice(0, 8).map(issue => `${issue.code}: ${issue.message.slice(0, 512)}`).join("; "));
+  });
+
+  test(`Rust ${surfaces[0] ?? "native"} constructor-spelled computed methods remain ordinary methods`, () => {
+    const compiled = compileRust({ surfaces, files: { "index.ts": `
+const key = "constructor";
+class Holder { [key](): number { return 7; } }
+export function make(): number { return new Holder()[key](); }
+` } });
+    assert.equal(compiled.result.diagnostics.length, 0, "constructor-spelled source method is not a constructor declaration: " +
+      compiled.result.diagnostics.slice(0, 8).map(issue => `${issue.code}: ${issue.message.slice(0, 512)}`).join("; "));
+  });
+
   test(`Rust ${surfaces[0] ?? "native"} inferred objects retain exact large computed keys`, () => {
     const compiled = compileRust({ surfaces, files: { "index.ts": `
 export function make(): number {
