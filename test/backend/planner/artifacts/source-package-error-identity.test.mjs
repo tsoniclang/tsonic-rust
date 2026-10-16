@@ -25,7 +25,7 @@ function classify(dependencies, errors, views = []) {
     sourceFiles: names.map(name => ({ fileName: `/${name}/index.ts` })),
     ast: { ...fakeAstReader(), kindName: () => "KindSourceFile" },
     callableValues: { generic: { definitions: [], definitionFor: () => undefined,
-      physical: { definitions: () => [], definitionFor: () => undefined } } },
+      physical: { definitions: () => [], existingSelectionFor: () => undefined } } },
     errorStorageDemands: { nativeConstructors: [], retainedBoundaries: [], storageFor: () => ({ kind: "readonly" }) },
     records: createRustRecordFixture({runtimeCarrier: { get: (node) => views.includes(node.fileName.split("/")[1])
     ? { carrier: rustSourceErrorTargetType() } : undefined }}),
