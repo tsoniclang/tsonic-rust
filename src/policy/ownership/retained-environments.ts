@@ -51,7 +51,7 @@ export function closeRustRetainedParameter(
     if (original.kind === "reference" || original.kind === "function-pointer" || original.kind === "closure") return original;
     const protocol = rustCallableProtocol(original);
     return protocol === undefined ? current : protocol.lifetime?.kind === "placeholder"
-      ? rustCallableTargetType(protocol.parameters, protocol.result, selected.environment.lifetime) : original;
+      ? rustCallableTargetType(protocol.parameters, protocol.result, selected.environment.lifetime, protocol.error) : original;
   }, rustOwnedStorageChild);
 }
 
