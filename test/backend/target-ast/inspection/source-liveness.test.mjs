@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import { finalizeRustBlockLiveness } from "../../../../dist/backend/target-ast/inspection/source-liveness.js";
 import { rustLintAttributes } from "../../../../dist/backend/target-ast/normalization/lint-policy.js";
 
@@ -103,12 +104,12 @@ function checkConditionStore(source, selectStore, dead, label) {
   const write = dead ? selected.body.statements[0] : selected;
   assert.equal(write.kind === "assign" && write.operator === "=" && write.target.path === "marker", true,
     `${label}: the same native destination and store remain`);
-  assert.equal(JSON.stringify(write.value) === JSON.stringify(conditionStore.value), true,
+  assert.equal(write.value.kind === "call" && write.value.path === "step" && write.value.args.length === 0, true,
     `${label}: the effectful RHS is unchanged`);
   if (dead) assert.equal(selected.body.innerAttrs.length === 1 &&
     selected.body.innerAttrs[0] === rustLintAttributes.unusedAssignmentsInner, true,
   `${label}: only the established exact unused-write expectation is applied`);
-  assert.equal(JSON.stringify(finalizeRustBlockLiveness(normalized)) === JSON.stringify(normalized), true,
+  assert.equal(isDeepStrictEqual(finalizeRustBlockLiveness(normalized), normalized), true,
     `${label}: normalization is idempotent`);
 }
 
@@ -175,4 +176,85 @@ test("condition assignment liveness distinguishes a block-value tail from a func
   ] } }, right: scalar(0) };
   checkConditionStore(conditionProgram(returned, [readMarker, exit], [readMarker, exit]), comparisonStore, true,
     "a real return prevents later branch observation");
+});
+
+function markedStores(root) {
+  const selected = [];
+  const visit = (node, expected) => {
+    if (node === undefined || node === null || typeof node !== "object") return;
+    const scope = node.kind === "scope" && node.body.innerAttrs?.includes(rustLintAttributes.unusedAssignmentsInner) === true;
+    if (node.kind === "assign" && node.target === marker && node.value.kind === "call" && node.value.path === "step") {
+      selected.push({ expected, arguments: node.value.args.length });
+    }
+    for (const child of Object.values(node)) {
+      if (Array.isArray(child)) child.forEach(value => visit(value, expected));
+      else visit(child, expected || scope);
+    }
+  };
+  visit(root, false);
+  return selected;
+}
+
+const abruptRegions = [
+  ["unlabeled loop break", { kind: "loop", body: { statements: [conditionStore, { kind: "break" }] } }],
+  ["labeled loop break", { kind: "loop", label: "scan", body: {
+    statements: [conditionStore, { kind: "break", label: "scan" }],
+  } }],
+  ["for break", { kind: "for", binding: "element", iterable: { kind: "path", path: "items" }, body: {
+    statements: [conditionStore, { kind: "break" }],
+  } }],
+  ["switch break", { kind: "scope", label: "switch", body: {
+    statements: [conditionStore, { kind: "break", label: "switch" }],
+  } }],
+  ["nested labeled break", { kind: "scope", label: "outer", body: { statements: [
+    { kind: "loop", body: { statements: [conditionStore, { kind: "break", label: "outer" }] } },
+  ] } }],
+  ["value-block break", { kind: "expr", expr: { kind: "block", label: "value", body: {
+    statements: [conditionStore, { kind: "expr", expr: { kind: "break-expression", label: "value", expr: scalar(1) } }],
+  } } }],
+];
+
+for (const [name, region] of abruptRegions) {
+  for (const dead of [false, true]) {
+    test(`abrupt continuation: ${name}, ${dead ? "overwritten" : "read"} after region`, () => {
+      const normalized = finalizeRustBlockLiveness({ statements: [
+        { kind: "let", name: "marker", mutable: true, init: scalar(0) },
+        readMarker, region, ...(dead ? [overwriteMarker] : []), readMarker, exit,
+      ] });
+      const stores = markedStores(normalized);
+      assert.equal(stores.length, 1, `${name}: retain the exact effectful store once`);
+      assert.equal(stores[0].expected, dead, `${name}: actual exit successor selects the incoming version`);
+      assert.equal(stores[0].arguments, 0, `${name}: RHS evaluation is unchanged`);
+      assert.equal(isDeepStrictEqual(finalizeRustBlockLiveness(normalized), normalized), true,
+        `${name}: the correction is idempotent`);
+    });
+  }
+}
+
+for (const label of [undefined, "scan"]) {
+  for (const dead of [false, true]) {
+    test(`continue successor: ${label ?? "unlabeled"}, ${dead ? "overwrite" : "read"} at loop head`, () => {
+      const condition = dead ? { kind: "bool-literal", value: true } : marker;
+      const statements = [conditionStore, { kind: "continue", ...(label === undefined ? {} : { label }) }];
+      const normalized = finalizeRustBlockLiveness({ statements: [
+        { kind: "let", name: "marker", mutable: true, init: scalar(0) }, readMarker,
+        { kind: "while", ...(label === undefined ? {} : { label }), condition,
+          body: { statements: [...(dead ? [overwriteMarker] : []), ...statements] } }, exit,
+      ] });
+      const stores = markedStores(normalized);
+      assert.equal(stores.length, 1, "retain the store at the continue site");
+      assert.equal(stores[0].expected, dead, "continue reaches its real head, not function exit or the initial iterable");
+    });
+  }
+}
+
+test("a parameter store overwritten on every non-returning path remains dead", () => {
+  const normalized = finalizeRustBlockLiveness({ statements: [
+    readMarker, conditionStore,
+    { kind: "if", condition: present, then: { statements: [exit] } },
+    overwriteMarker, readMarker, exit,
+  ] });
+  const stores = markedStores(normalized);
+  assert.equal(stores.length, 1, "retain the effectful parameter write");
+  assert.equal(stores[0].expected, true, "function exit and subsequent overwrite both leave the value unobserved");
 });
