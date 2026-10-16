@@ -225,6 +225,7 @@ function planResourceCleanup(
     disposal = { kind: "await", expr: disposal };
   }
   if (fact.disposal.target.form === "source-method" && fact.disposal.fallible) {
+    if (fact.disposal.errorBoundary === "none") failRustPlannerInvariant("A fallible source-method disposer requires its existing source error boundary.", declaration);
     const resultErrorType = rustActiveErrorType(context);
     const providerErrorType = fact.disposal.errorBoundary === "provider-native"
       ? rustTypeFromCarrierInContext(fact.disposal.errorCarrier, context)

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust, artifactText, compileRust, unitCarrier, acmeTestingPackage } from "../../helpers/rust-session.mjs";
+import { resolve } from "node:path";
+import { analyzeRust, artifactText, compileRust, unitCarrier, stringCarrier, int32Carrier, fixtureCratesRoot, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateRustDisposalLifecycle } from "../../../dist/analysis/resources/disposal-lifecycle.js";
 import { resourceDisposalReceiverMode } from "../../../dist/backend/planner/statements/resources.js";
@@ -76,18 +77,29 @@ main();
   validateGeneratedProject("r05-caught-fallible-cleanup", result.artifacts, { run: true });
 });
 
-function provider(disposalTarget = { form: "free-call", path: "core::mem::drop", receiverMode: "value" }) {
-  const carrier = { kind: "target-named", id: "r05.Resource" };
+function provider(disposalTarget = { form: "free-call", path: "core::mem::drop", receiverMode: "value" }, options = {}) {
+  const carrier = options.carrier ?? { kind: "target-named", id: "r05.Resource" };
+  const numeric = carrier.kind === "source-primitive";
+  const native = options.nativeFixture === true;
+  const openPath = !native ? "String::new" : numeric ? "r05_resources::open_number"
+    : carrier.id === stringCarrier.id ? "r05_resources::open_resource" : "r05_resources::open_custom_resource";
   return createRustProviderPackage({ id: "r05-resource", displayName: "Native consuming resource", version: "1.0.0",
     modules: [{ moduleSpecifier: "@r05/resource", providerModuleId: "r05.resource", exports: [
       { id: "Resource", name: "Resource", kind: "interface", members: [{ id: "Resource.dispose", kind: "method",
         name: { kind: "well-known-symbol", name: "dispose" }, signatures: [{ id: "Resource.dispose()", parameters: [], returnType: { kind: "void" } }] }] },
-      { id: "open", name: "open", kind: "function", signatures: [{ id: "open()", parameters: [],
+      { id: "open", name: "open", kind: "function", signatures: [{ id: "open()", parameters: numeric
+        ? [{ name: "value", type: { kind: "source-primitive", name: "int32" } }] : [],
         returnType: { kind: "provider-ref", moduleSpecifier: "@r05/resource", exportName: "Resource" } }] },
+      ...(native ? [{ id: "count", name: "count", kind: "function", signatures: [{ id: "count()", parameters: [],
+        returnType: { kind: "source-primitive", name: "int32" } }] }] : []),
     ] }], types: [{ exportId: "Resource", targetCarrier: carrier }],
-    carrierPaths: { "r05.Resource": "String" }, crates: [],
+    carrierPaths: carrier.id === "r05.Resource" ? { "r05.Resource": native ? "r05_resources::Resource" : "String" } : {},
+    crates: native ? [{ crateName: "r05_resources", cargoPath: resolve(fixtureCratesRoot, "r05_resources") }] : [],
     operations: [
-      { exportId: "open", operationKind: "method", target: { form: "call", path: "String::new" }, resultCarrier: carrier },
+      { exportId: "open", operationKind: "method", target: { form: "call", path: openPath },
+        parameterCarriers: numeric ? [int32Carrier] : [], resultCarrier: carrier },
+      ...(native ? [{ exportId: "count", operationKind: "method", target: { form: "call", path: "r05_resources::global_count" },
+        resultCarrier: int32Carrier }] : []),
       { exportId: "Resource", memberId: "Resource.dispose", operationKind: "method",
         target: disposalTarget, resultCarrier: unitCarrier },
     ],
@@ -164,10 +176,83 @@ for (const [name, target, expected] of [
   ["trailing-input", { form: "receiver-method", name: "truncate", mutatesReceiver: true,
     trailingArguments: [{ kind: "integer", value: 0 }] }, /\.truncate\(0\)/u],
 ]) test(`selected provider disposal retains the complete native ${name}`, () => {
-  const { result } = compileRust({ surfaces: [], packages: [provider(target)], files: { "index.ts":
-    'import { open } from "@r05/resource"; export function run(): void { using resource = open(); }' } });
+  const native = name === "trailing-input";
+  const source = native ? `import { open, count } from "@r05/resource";
+    import { check } from "@acme/testing";
+    export function run(): void { using resource = open(); }
+    export function main(): void { run(); check(count() === 1); }
+    main();` : 'import { open } from "@r05/resource"; export function run(): void { using resource = open(); }';
+  const { result } = compileRust({ surfaces: [], packages: [provider(target, { nativeFixture: native }), acmeTestingPackage()],
+    ...(native ? { target: { id: "rust", options: { outputType: "bin", crateName: "r05_native_trailing_input" } } } : {}),
+    files: { "index.ts": source } });
   assert.equal(result.diagnostics.length, 0,
     result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
   assert.match(artifactText(result, "src/index.rs"), expected, "every selected native operation component is emitted");
-  validateGeneratedProject(`r05-disposal-${name}`, result.artifacts);
+  validateGeneratedProject(`r05-disposal-${name}`, result.artifacts, { run: native });
+});
+
+test("provider disposal retains source borrowing before its converted native argument mode", () => {
+  const selected = provider({ form: "free-call", path: "r05_resources::dispose_borrowed", receiverMode: "value",
+    receiverConversion: { kind: "semantic-conversion", id: "borrowed-str-from-owned-string" } },
+  { carrier: stringCarrier, nativeFixture: true });
+  const source = `import { open, count } from "@r05/resource";
+    import type { Resource } from "@r05/resource";
+    import { check } from "@acme/testing";
+    function run(value: Resource | null): void { using active = value; }
+    export function main(): void { run(open()); run(null); check(count() === 1); }
+    main();`;
+  const options = { surfaces: [], packages: [selected, acmeTestingPackage()], files: { "index.ts": source },
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_native_disposal_borrow" } } };
+  const { program } = analyzeRust(options);
+  const declarations = [];
+  const visit = node => { if (program.source.ast.is.IsVariableDeclaration(node) &&
+    program.source.ast.variableDeclarationKind(node) === "using") declarations.push(node);
+  program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  assert.equal(declarations.length, 1, "the one checked optional resource is retained");
+  const fact = program.records.resourceManagement.get(declarations[0]);
+  assert.equal(fact.disposal.target.receiverMode, "ref", "the source String is borrowed before conversion");
+  assert.equal(fact.disposal.target.abi.targetArguments[0].mode, "value", "the converted borrowed str is passed by value");
+  const { result } = compileRust(options);
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  assert.doesNotMatch(artifactText(result, "src/index.rs"), /\.clone\(/u, "conversion retains the original source without copying");
+  validateGeneratedProject("r05-native-disposal-borrow", result.artifacts, { run: true });
+});
+
+test("fallible disposer input conversion participates before the seal without inventing a call error channel", () => {
+  const selected = provider({ form: "free-call", path: "r05_resources::dispose_number", receiverMode: "value",
+    receiverConversion: { kind: "semantic-conversion", id: "checked-i32-to-usize" } },
+  { carrier: int32Carrier, nativeFixture: true });
+  const source = `import { open, count } from "@r05/resource";
+    import { check } from "@acme/testing";
+    export function main(): void {
+      try { using active = open(-1); } catch {}
+      check(count() === 0);
+      { using active = open(3); }
+      check(count() === 3);
+    }
+    main();`;
+  const options = { surfaces: [], packages: [selected, acmeTestingPackage()], files: { "index.ts": source },
+    target: { id: "rust", options: { outputType: "bin", crateName: "r05_native_disposal_conversion" } } };
+  const { program } = analyzeRust(options);
+  const declarations = [];
+  const visit = node => { if (program.source.ast.is.IsVariableDeclaration(node) &&
+    program.source.ast.variableDeclarationKind(node) === "using") declarations.push(node);
+  program.source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  program.sourceFiles.forEach(visit);
+  assert.equal(declarations.length, 2, "both checked conversions have their actual resource declaration");
+  for (const declaration of declarations) {
+    const fact = program.records.resourceManagement.get(declaration);
+    assert.equal(fact.disposal.fallible, true, "the conversion participates in the pre-seal error summary");
+    assert.equal(fact.disposal.errorBoundary, "none", "the infallible native invocation has no fabricated error channel");
+    assert.equal(fact.disposal.errorCarrier === undefined, true, "no guessed native error carrier is added");
+    assert.equal(fact.disposal.target.abi.effects.invocation, "infallible", "the original native call channel is preserved");
+    assert.equal(fact.disposal.target.abi.targetArguments[0].conversion.fallible, true,
+      "the actual canonical checked conversion owns its own failure");
+  }
+  const { result } = compileRust(options);
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n").slice(0, 2048));
+  validateGeneratedProject("r05-native-fallible-disposal-input", result.artifacts, { run: true });
 });

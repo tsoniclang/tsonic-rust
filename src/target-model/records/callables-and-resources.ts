@@ -136,6 +136,12 @@ export interface RustResourceManagementFact {
         readonly errorCarrier?: never;
       }
     | {
+        readonly fallible: true;
+        readonly errorBoundary: "none";
+        readonly errorCarrier?: never;
+        readonly target: Extract<RustResourceDisposalTarget, { readonly form: "provider" }>;
+      }
+    | {
         readonly fallible: false;
         readonly errorBoundary: "none";
         readonly errorCarrier?: never;

@@ -26,6 +26,7 @@ import { rustProjectCallableTargetName } from "../names/source-member-name.js";
 import { finalizeRustProviderOperationAbi } from "../operations/finalized-operation/finalize.js";
 import { isRustFinalizedSourceInput } from "../operations/finalized-operation/conversions.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
+import { rustOperationAbiInvocationIsFallible, rustOperationAbiAwaitIsFallible } from "../operations/target-operation.js";
 
 export interface RustProjectDisposerEffects {
   readonly selfMode: { readonly mode: "ref" | "mut-ref" };
@@ -258,10 +259,11 @@ function selectDisposalAlternative(
     : conversion?.kind === "identity" ? receiverInput.mode : undefined;
   if (receiverMode === undefined) return rejected("The selected provider disposer has no exact pre-conversion resource mode.");
   const target = { form: "provider" as const, abi, receiverMode };
+  const fallible = rustOperationAbiInvocationIsFallible(abi) || rustOperationAbiAwaitIsFallible(abi);
   const disposal: RustResourceManagementFact["disposal"] = row.isFallible !== true
     ? {
         kind: alternative.kind,
-        fallible: false,
+        fallible,
         errorBoundary: "none",
         target,
       }
