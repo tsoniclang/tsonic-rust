@@ -26,7 +26,6 @@ import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import {
   failRustPlannerInvariant,
-  missingFactDiagnostic,
   unsupportedConstructDiagnostic,
 } from "../diagnostics.js";
 import {
