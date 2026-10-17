@@ -76,7 +76,7 @@ export function selectRustInferredReturn(
     const records = probe.context.records;
     const expressions = directReturns(walk, declaration);
     const active = new Set<Node>();
-    const carriers = expressions.map(expression => expressionCarrier(expression));
+    const carriers = expressions.map(expression => expressionCarrier(expression, inferEnvironment ? baseline : undefined));
     if (carriers.some(carrier => carrier === undefined)) return { kind: "pending", hint: baseline };
     let selected: TargetTypeRef | undefined;
     for (const carrier of carriers) {
@@ -94,27 +94,7 @@ export function selectRustInferredReturn(
       : rustOptionElementCarrier(baseline) === undefined ? selected
         : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(selected)
           : rustSourceOptionalTargetType(selected);
-    if (inferEnvironment && callable !== undefined) {
-      const protocols = carriers.map(carrier => rustCallableProtocol(rustOptionElementCarrier(carrier) ?? carrier));
-      const exact = protocols.length !== 0 && protocols.every(protocol => protocol?.lifetime !== undefined &&
-        protocol.lifetime.kind !== "placeholder" && protocol.parameters.length === callable.parameters.length &&
-        protocol.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, callable.parameters[index])) &&
-        rustTargetTypeRefEquals(protocol.result, callable.result) && rustTargetTypeRefEquals(protocol.error, callable.error));
-      result = baseline;
-      if (exact) {
-        const lifetimes = new Map(protocols.flatMap(protocol => protocol?.lifetime === undefined
-          ? [] : [[rustLifetimeKey(protocol.lifetime), protocol.lifetime] as const]));
-        const contract = rustEnclosingStorageContract(declaration, ast, walk.context.sourceLifetimes);
-        const selectedLifetimes = [...lifetimes.values()].filter(candidate =>
-          [...lifetimes.values()].every(source => rustLifetimeOutlives(source, candidate, contract)));
-        if (selectedLifetimes.length === 1) {
-          const refined = rustCallableTargetType(callable.parameters, callable.result, selectedLifetimes[0], callable.error);
-          result = rustOptionElementCarrier(baseline) === undefined ? refined
-            : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(refined)
-              : rustSourceOptionalTargetType(refined);
-        }
-      }
-    }
+    if (inferEnvironment) result = inferredCallableEnvironment(carriers, baseline) ?? baseline;
     if (result === undefined) return { kind: "pending", hint: baseline };
     let local = memo;
     if (local === undefined) walk.inferredReturns.set(walk.context.records, local = new WeakMap());
@@ -124,7 +104,31 @@ export function selectRustInferredReturn(
     })]));
     return { kind: "complete", carrier: result };
 
-    function expressionCarrier(expression: Node): TargetTypeRef | undefined {
+    function inferredCallableEnvironment(values: readonly (TargetTypeRef | undefined)[], target: TargetTypeRef): TargetTypeRef | undefined {
+      const payload = rustOptionElementCarrier(target) ?? target;
+      const requested = rustCallableProtocol(payload);
+      if (payload.kind !== "target-named" || payload.id !== rustCallableTargetId ||
+        requested?.lifetime?.kind !== "placeholder") return undefined;
+      const protocols = values.filter(value => rustOptionElementCarrier(target) === undefined ||
+        value === undefined || !isRustAbsenceCarrier(value))
+        .map(value => rustCallableProtocol(rustOptionElementCarrier(value) ?? value));
+      if (protocols.length === 0 || protocols.some(protocol => protocol?.lifetime === undefined ||
+        protocol.lifetime.kind === "placeholder" || protocol.parameters.length !== requested.parameters.length ||
+        protocol.parameters.some((parameter, index) => !rustTargetTypeRefEquals(parameter, requested.parameters[index])) ||
+        !rustTargetTypeRefEquals(protocol.result, requested.result) || !rustTargetTypeRefEquals(protocol.error, requested.error))) return undefined;
+      const lifetimes = new Map(protocols.flatMap(protocol => protocol?.lifetime === undefined
+        ? [] : [[rustLifetimeKey(protocol.lifetime), protocol.lifetime] as const]));
+      const contract = rustEnclosingStorageContract(declaration, ast, walk.context.sourceLifetimes);
+      const selected = [...lifetimes.values()].filter(candidate =>
+        [...lifetimes.values()].every(source => rustLifetimeOutlives(source, candidate, contract)));
+      if (selected.length !== 1) return undefined;
+      const refined = rustCallableTargetType(requested.parameters, requested.result, selected[0], requested.error);
+      return rustOptionElementCarrier(target) === undefined ? refined
+        : rustSourceOptionalElementCarrier(target) === undefined ? rustOptionTargetType(refined)
+          : rustSourceOptionalTargetType(refined);
+    }
+
+    function expressionCarrier(expression: Node, expected?: TargetTypeRef): TargetTypeRef | undefined {
       if (active.has(expression)) return undefined;
       active.add(expression);
       try {
@@ -132,7 +136,7 @@ export function selectRustInferredReturn(
         const kind = ast.kindName(expression);
         if (kind === "KindParenthesizedExpression" || kind === "KindSatisfiesExpression") {
           const inner = Node_Expression(ast, expression);
-          return inner === undefined ? undefined : expressionCarrier(inner);
+          return inner === undefined ? undefined : expressionCarrier(inner, expected);
         }
         if (kind === "KindIdentifier") {
           const selection = walk.context.source.navigation.sourceReferenceFor(expression);
@@ -144,17 +148,23 @@ export function selectRustInferredReturn(
           const referenceFile = reference === undefined ? undefined : ast.getSourceFile(reference);
           const unwritten = referenceFile !== undefined && selection?.symbol !== undefined &&
             walk.context.source.navigation.bindingWritesWithin(selection.symbol, referenceFile).length === 0;
-          if (reference !== undefined && Node_Type(ast, reference) === undefined &&
+          const annotation = reference === undefined ? undefined : Node_Type(ast, reference);
+          if (reference !== undefined && (annotation === undefined || expected !== undefined) &&
             (ast.variableDeclarationKind(reference) === "const" || unwritten) && initializer !== undefined) {
-            return expressionCarrier(initializer);
+            const contextual = annotation === undefined ? expected
+              : resolveRustTargetTypeRef(annotation, rustResolutionContext(probe, reference), probe.operationOptions);
+            if (annotation !== undefined && contextual === undefined) return undefined;
+            return expressionCarrier(initializer, contextual);
           }
         }
         if (ast.is.IsConditionalExpression(expression)) {
           const conditional = ast.as.AsConditionalExpression(expression);
           if (conditional?.WhenTrue === undefined || conditional.WhenFalse === undefined) return undefined;
-          const left = expressionCarrier(conditional.WhenTrue);
-          const right = expressionCarrier(conditional.WhenFalse);
+          const left = expressionCarrier(conditional.WhenTrue, expected);
+          const right = expressionCarrier(conditional.WhenFalse, expected);
           if (left === undefined || right === undefined) return undefined;
+          const retained = expected === undefined ? undefined : inferredCallableEnvironment([left, right], expected);
+          if (retained !== undefined) return retained;
           return selectRustConditionalNumericCarrier(conditional.WhenTrue, conditional.WhenFalse, left, right, walk.context.literalValues) ??
             (left === undefined || right === undefined ? undefined : resolveRustBranchUnion(expression, [
               { expression: conditional.WhenTrue, carrier: left },
@@ -171,7 +181,7 @@ export function selectRustInferredReturn(
             if (finalizeRustCallableSignature(probe, target) === undefined) return undefined;
             const sourceFile = ast.getSourceFile(expression);
             if (sourceFile === undefined) return undefined;
-            return resolveExpressionCarrier(probe, expression, sourceFile, undefined);
+            return resolveExpressionCarrier(probe, expression, sourceFile, expected);
           }
         }
         if (kind === "KindPropertyAccessExpression") {
@@ -199,7 +209,7 @@ export function selectRustInferredReturn(
         }
         const sourceFile = ast.getSourceFile(expression);
         return sourceFile !== undefined && kind !== "KindIdentifier"
-          ? resolveExpressionCarrier(probe, expression, sourceFile, undefined)
+          ? resolveExpressionCarrier(probe, expression, sourceFile, expected)
           : resolveRustTargetTypeRef(expression, context, probe.operationOptions);
       } finally {
         active.delete(expression);

@@ -176,6 +176,21 @@ export function copied<Region extends Life>(value: Ref<int32, Region>): () => in
 export function borrowed<Region extends Life>(value: Ref<int32, Region>): () => int32 {
   return (): int32 => load(value);
 }
+export function aliased<Region extends Life>(value: Ref<int32, Region>): () => int32 {
+  const owned = load(value);
+  const callback: () => int32 = (): int32 => owned;
+  const result = callback;
+  return ((result satisfies (() => int32)));
+}
+export function branches<Region extends Life>(left: Ref<int32, Region>, right: Ref<int32, Region>, selected: boolean): () => int32 {
+  const first = load(left);
+  const second = load(right);
+  return selected ? (): int32 => first : (): int32 => second;
+}
+export function mixed<Region extends Life>(value: Ref<int32, Region>, selected: boolean): () => int32 {
+  const owned = load(value);
+  return selected ? (): int32 => owned : (): int32 => load(value);
+}
 ` } });
   assert.equal(result.diagnostics.length, 0,
     result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
@@ -204,6 +219,30 @@ fn a_real_borrow_retains_the_input_region() {
     assert_eq!(callback.call(()), Ok(23));
     assert_eq!(callback.call(()), Ok(23));
 }
+
+#[test]
+fn immutable_aliases_wrappers_and_result_branches_keep_the_real_copied_environment() {
+    let alias;
+    let left;
+    let right;
+    {
+        let first = 29;
+        let second = 31;
+        alias = index::aliased(&first);
+        left = index::branches(&first, &second, true);
+        right = index::branches(&first, &second, false);
+    }
+    assert_eq!(alias.call(()), Ok(29));
+    assert_eq!(left.call(()), Ok(29));
+    assert_eq!(right.call(()), Ok(31));
+}
+
+#[test]
+fn an_actual_borrow_in_either_result_branch_keeps_its_region() {
+    let value = 37;
+    assert_eq!(index::mixed(&value, true).call(()), Ok(37));
+    assert_eq!(index::mixed(&value, false).call(()), Ok(37));
+}
 `;
   writeFileSync(path, controls);
   execFileSync("rustfmt", ["--edition", "2024", path], { cwd: root, timeout: 30_000 });
@@ -216,6 +255,10 @@ fn a_real_borrow_retains_the_input_region() {
 fn illegal_escape<'region>(value: &'region i32)
     -> tsonic_rust_runtime::Callable<'static, (), Result<i32, core::convert::Infallible>> {
     index::borrowed(value)
+}
+fn illegal_mixed_escape<'region>(value: &'region i32)
+    -> tsonic_rust_runtime::Callable<'static, (), Result<i32, core::convert::Infallible>> {
+    index::mixed(value, true)
 }
 `);
   assert.throws(() => runCargo(root, ["check", "--all-targets", "--locked", "--offline"]),
