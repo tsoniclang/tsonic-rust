@@ -1,7 +1,7 @@
 import type { SourceFile } from "@tsonic/tsts";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import type { RustInitializationErrorRecords, RustModuleErrorInitializer } from "../../target-model/records/error-regions.js";
+import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../target-model/records/error-regions.js";
 import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
 import type { Node } from "@tsonic/tsts";
 import { prepareRustCallableEmissionContexts, prepareRustEmissionContextRequests, rustEmissionIdentityBindings,
@@ -19,11 +19,19 @@ export function prepareRustPhysicalEmissionContexts(
   if (callable.kind === "rejected") return callable;
   const bindings = rustEmissionIdentityBindings([])!;
   const requests: RustEmissionContextRequest[] = [];
-  const modules = new Map<SourceFile, RustModuleErrorInitializer>();
-  for (const module of [...input.initialization.root.modules,
-    ...input.initialization.workers.flatMap(worker => worker.initializer.modules)]) modules.set(module.sourceFile, module);
-  for (const [sourceFile, module] of modules) {
+  const modules = new Map<SourceFile, { readonly module: RustModuleErrorInitializer;
+    readonly initializers: readonly RustInitializerSelection[] }>();
+  for (const initializer of [input.initialization.root, ...input.initialization.workers.map(worker => worker.initializer)])
+    for (const module of initializer.modules) {
+      const selected = modules.get(module.sourceFile);
+      if (selected !== undefined && selected.module !== module) return rejectedTargetStage([{
+        code: "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED", category: "error", source: "tsonic-rust", sourceNode: module.sourceFile,
+        message: "One source module requires its original selected initializer descriptor." }]);
+      modules.set(module.sourceFile, { module, initializers: Object.freeze([...selected?.initializers ?? [], initializer]) });
+    }
+  for (const [sourceFile, { module, initializers }] of modules) {
     requests.push({ use: targetUseSiteRef(sourceFile, "module-initializer", module.identity), declaration: sourceFile,
+      source: { kind: "module", module, initializers },
       bindings, returnDestination: Object.freeze({ kind: "none" }),
       error: Object.freeze({ kind: "region", owner: sourceFile, region: module.region }), sourceCarriers: [],
       physicalCarriers: module.region.sources.map(source => source.errorType),
@@ -31,6 +39,7 @@ export function prepareRustPhysicalEmissionContexts(
   }
   for (const worker of input.initialization.workers) {
     requests.push({ use: targetUseSiteRef(worker.sourceFile, "worker-initializer", input.ast.getFileName(worker.sourceFile)),
+      source: { kind: "worker", initializer: worker.initializer },
       declaration: worker.sourceFile, bindings, returnDestination: Object.freeze({ kind: "none" }), demands: [],
       error: Object.freeze({ kind: "initializer", owner: worker.sourceFile, initializer: worker.initializer }), sourceCarriers: [],
       physicalCarriers: worker.initializer.modules.flatMap(module => module.region.sources.map(source => source.errorType)) });
@@ -63,6 +72,8 @@ export function prepareRustPhysicalEmissionContexts(
       operandFor: (use: TargetUseSiteRef) => operandIndex.get(use),
       carrierFor: (use: TargetUseSiteRef, carrier: Parameters<RustCallableEmissionPreparation["contexts"]["carrierFor"]>[1]) =>
         owners.get(use)?.contexts.carrierFor(use, carrier),
+      sourceOriginFor: (use: TargetUseSiteRef, occurrence: Parameters<RustCallableEmissionPreparation["contexts"]["sourceOriginFor"]>[1]) =>
+        owners.get(use)?.contexts.sourceOriginFor(use, occurrence),
       sourceFor: (node: Node, operation: RustEmissionProviderOperation) => callable.value.contexts.sourceFor(node, operation) }),
   }));
 }
