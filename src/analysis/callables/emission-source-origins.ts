@@ -45,6 +45,10 @@ type Origins =
       readonly boundaries: readonly SourceStorageDomainBoundary[] }
   | { readonly kind: "unavailable"; readonly reason: string;
       readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[]; readonly boundaries: readonly SourceStorageDomainBoundary[] };
+type SourceCaller =
+  | { readonly kind: "selected"; readonly origin: RustPhysicalEmissionSourceOrigin }
+  | { readonly kind: "unavailable"; readonly bindings: SourceStorageBindings; readonly reason: string };
+type CallerSelection = { readonly origins: Origins; readonly callers: readonly SourceCaller[] };
 
 type Construction = Extract<SourceStorageConstructionSelection, { readonly kind: "resolved" }>["alternatives"][number];
 type Bindings = Extract<SourceStorageBindingsSelection, { readonly kind: "resolved" }>;
@@ -74,6 +78,8 @@ const unavailable = (reason: string, alternatives: readonly RustPhysicalEmission
   Object.freeze({ kind: "unavailable", reason, alternatives: Object.freeze(alternatives), boundaries: Object.freeze(boundaries) });
 const sourceBindings = (origin: RustPhysicalEmissionSourceOrigin): SourceStorageBindings =>
   origin.kind === "module" || origin.kind === "construction" ? origin.selection.bindings : origin.activation.bindings;
+const callerSelection = (origins: Origins, callers: readonly SourceCaller[]): CallerSelection =>
+  Object.freeze({ origins, callers: Object.freeze(callers) });
 
 export function createRustEmissionSourceOriginPreparation(input: RustEmissionSourceInput,
   requests: readonly RustEmissionSourceRequest[]):
@@ -130,30 +136,40 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
     const selected = input.genericBindingsFor(declaration, bindings);
     return selected.kind === "unresolved" ? selected : selected.sourceActivations;
   };
-  const declarationOrigins = (request: RustEmissionSourceRequest): Origins => {
+  const declarationOrigins = (request: RustEmissionSourceRequest): CallerSelection => {
     const bindings = storage.bindingsForDeclaration(request.declaration);
-    if (bindings.kind === "unresolved") return unavailable(bindings.reason);
+    if (bindings.kind === "unresolved") return callerSelection(unavailable(bindings.reason), []);
     const selected = nativeRows(request.declaration, bindings.bindings);
-    if (selected.kind === "unresolved") return unavailable(selected.reason);
+    if (selected.kind === "unresolved") return callerSelection(unavailable(selected.reason), [
+      { kind: "unavailable", bindings: bindings.bindings, reason: selected.reason }]);
     const alternatives: RustPhysicalEmissionSourceOrigin[] = [];
+    const callers: SourceCaller[] = [];
     let failure: string | undefined;
     for (const row of selected.rows) {
       if (row.activation.declaration !== request.declaration || row.activation.kind !== "declaration") {
-        failure ??= "A native declaration source requires its identical selected declaration activation.";
+        const reason = "A native declaration source requires its identical selected declaration activation.";
+        failure ??= reason;
+        callers.push({ kind: "unavailable", bindings: bindings.bindings, reason });
         continue;
       }
-      alternatives.push(Object.freeze({ kind: "declaration", activation: row.activation, targetBindings: row.targetBindings }));
+      const origin = Object.freeze({ kind: "declaration" as const, activation: row.activation, targetBindings: row.targetBindings });
+      alternatives.push(origin);
+      callers.push({ kind: "selected", origin });
     }
-    if (failure !== undefined) return unavailable(failure, alternatives);
-    return alternatives.length === 0 ? unavailable("A native declaration source has no owning activation.")
-      : Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) });
+    if (selected.rows.length === 0) {
+      failure = "A native declaration source has no owning activation.";
+      callers.push({ kind: "unavailable", bindings: bindings.bindings, reason: failure });
+    }
+    return callerSelection(failure === undefined
+      ? Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) }) : unavailable(failure, alternatives), callers);
   };
-  const callableOrigins = (request: RustEmissionSourceRequest, subject: SourceStorageSubject): Origins => {
-    if (request.source.kind !== "callable") return unavailable("A callable source requires its original selected implementation.");
+  const callableOrigins = (request: RustEmissionSourceRequest, subject: SourceStorageSubject): CallerSelection => {
+    if (request.source.kind !== "callable") return callerSelection(unavailable("A callable source requires its original selected implementation."), []);
     const selected = (producers.get(request.source.implementation) ?? [])
       .filter(entry => request.source.kind === "callable" && (request.source.member === undefined || entry.row.member === request.source.member));
-    if (selected.length === 0) return unavailable("A callable source has no original producer-to-admitted-member correspondence.");
+    if (selected.length === 0) return callerSelection(unavailable("A callable source has no original producer-to-admitted-member correspondence."), []);
     const alternatives: RustPhysicalEmissionSourceOrigin[] = [];
+    const callers: SourceCaller[] = [];
     const boundaries: SourceStorageDomainBoundary[] = [];
     let failure: string | undefined;
     for (const entry of selected) {
@@ -163,20 +179,35 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
       if (executions.kind === "open") boundaries.push(...executions.boundaries);
       for (const execution of executions.producers) {
         const activations = nativeRows(request.declaration, execution.bindings);
-        if (activations.kind === "unresolved") { failure ??= activations.reason; continue; }
+        if (activations.kind === "unresolved") {
+          failure ??= activations.reason;
+          callers.push({ kind: "unavailable", bindings: execution.bindings, reason: activations.reason });
+          continue;
+        }
+        if (activations.rows.length === 0) {
+          const reason = "A callable source execution has no owning activation and native binding row.";
+          failure ??= reason;
+          callers.push({ kind: "unavailable", bindings: execution.bindings, reason });
+        }
         for (const row of activations.rows) {
           if (row.activation.declaration !== request.declaration) {
-            failure ??= "A callable source activation belongs to a different original body owner.";
+            const reason = "A callable source activation belongs to a different original body owner.";
+            failure ??= reason;
+            callers.push({ kind: "unavailable", bindings: execution.bindings, reason });
             continue;
           }
-          alternatives.push(Object.freeze({ kind: "callable", producer: entry.row.producer, member: entry.row.member,
-            execution, activation: row.activation, targetBindings: row.targetBindings }));
+          const origin = Object.freeze({ kind: "callable" as const, producer: entry.row.producer, member: entry.row.member,
+            execution, activation: row.activation, targetBindings: row.targetBindings });
+          alternatives.push(origin);
+          callers.push({ kind: "selected", origin });
         }
       }
     }
-    if (failure !== undefined) return unavailable(failure, alternatives, boundaries);
-    return boundaries.length === 0 ? Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) })
-      : Object.freeze({ kind: "open", alternatives: Object.freeze(alternatives), boundaries: Object.freeze(boundaries) });
+    if (failure === undefined && alternatives.length === 0 && boundaries.length === 0)
+      failure = "A callable source has no original checked execution and owning activation.";
+    return callerSelection(failure !== undefined ? unavailable(failure, alternatives, boundaries)
+      : boundaries.length === 0 ? Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) })
+        : Object.freeze({ kind: "open", alternatives: Object.freeze(alternatives), boundaries: Object.freeze(boundaries) }), callers);
   };
   const moduleOrigins = (module: Module, subject: SourceStorageSubject, targetBindings: RustTargetGenericBindings): Origins => {
     if (storage.source.ast.getSourceFile(subject.node) !== module.module.sourceFile ||
@@ -190,40 +221,46 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
       kind: "module" as const, sourceFile: module.module.sourceFile, initializer, module: module.module,
       region, selection, targetBindings }))) });
   };
-  const callerOrigins = (demand: RustPhysicalCallableEmissionRequest, subject: SourceStorageSubject): Origins => {
+  const callerOrigins = (demand: RustPhysicalCallableEmissionRequest, subject: SourceStorageSubject): CallerSelection => {
     const module = modules.get(demand.owner);
-    if (module !== undefined) return moduleOrigins(module, subject, demand.bindings);
+    if (module !== undefined) {
+      const origins = moduleOrigins(module, subject, demand.bindings);
+      return callerSelection(origins, origins.alternatives.map(origin => ({ kind: "selected" as const, origin })));
+    }
     const alternatives: RustPhysicalEmissionSourceOrigin[] = [];
+    const callers: SourceCaller[] = [];
     const boundaries: SourceStorageDomainBoundary[] = [];
     let failure: string | undefined;
     for (const request of declarations.get(demand.owner) ?? []) {
       if (!request.demands.includes(demand)) continue;
       const selected = request.source.kind === "declaration" ? declarationOrigins(request) : callableOrigins(request, subject);
-      alternatives.push(...selected.alternatives);
-      if (selected.kind !== "resolved") boundaries.push(...selected.boundaries);
-      if (selected.kind === "unavailable") failure ??= selected.reason;
+      alternatives.push(...selected.origins.alternatives);
+      callers.push(...selected.callers);
+      if (selected.origins.kind !== "resolved") boundaries.push(...selected.origins.boundaries);
+      if (selected.origins.kind === "unavailable") failure ??= selected.origins.reason;
     }
-    if (failure !== undefined) return unavailable(failure, alternatives, boundaries);
-    return boundaries.length === 0 ? Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) })
-      : Object.freeze({ kind: "open", alternatives: Object.freeze(alternatives), boundaries: Object.freeze(boundaries) });
+    if (failure === undefined && callers.length === 0 && boundaries.length === 0)
+      failure = "A source construction call has no original checked calling execution.";
+    return callerSelection(failure !== undefined ? unavailable(failure, alternatives, boundaries)
+      : boundaries.length === 0 ? Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) })
+        : Object.freeze({ kind: "open", alternatives: Object.freeze(alternatives), boundaries: Object.freeze(boundaries) }), callers);
   };
   let constructions: readonly ConstructionOrigin[] | undefined;
   const constructionStatuses: ConstructionStatus[] = [];
   const constructionRoots = new Set(requests.flatMap(request => request.source.kind === "construction"
     ? [request.source.plan.definition.declaration] : []));
-  const invocationRoots = (demand: RustPhysicalCallableEmissionRequest, caller: RustPhysicalEmissionSourceOrigin | undefined,
+  const invocationRoots = (demand: RustPhysicalCallableEmissionRequest, callerBindings: SourceStorageBindings | undefined,
     root: Construction | undefined): ConstructionRootSelection => {
     if (root !== undefined && !storage.source.ast.is.IsNewExpression(demand.subject))
       return { kind: "complete", roots: [root.root] };
     const checked = storage.source.semantics.forNode(demand.subject).operations.call(demand.subject);
     if (checked === undefined) return { kind: "unavailable", roots: [], boundaries: [],
       reason: "A source construction requires its original checked invocation." };
-    const bindings = caller === undefined ? storage.bindingsForLexicalOwner(demand.subject)
-      : { kind: "resolved" as const, bindings: sourceBindings(caller) };
-    if (bindings.kind === "unresolved") return { kind: "unavailable", roots: [], boundaries: [], reason: bindings.reason };
+    if (callerBindings === undefined) return { kind: "unavailable", roots: [], boundaries: [],
+      reason: "A source construction invocation has no original selected caller bindings." };
     const subject = storage.subjectFor(checked.sourceCallee.expression);
     if (subject.kind === "unresolved") return { kind: "unavailable", roots: [], boundaries: [], reason: subject.reason };
-    const selected = storage.storageProducersFor(subject.subject, bindings.bindings);
+    const selected = storage.storageProducersFor(subject.subject, callerBindings);
     if (selected.kind === "unresolved") return { kind: "unavailable", roots: [], boundaries: [], reason: selected.reason };
     const roots: Node[] = [];
     let unavailableRoot = selected.producers.length === 0;
@@ -240,9 +277,9 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
       reason: "A source construction domain contains no emitted original root for at least one actual producer." };
     return selected.kind === "open" ? { kind: "open", roots, boundaries } : { kind: "complete", roots };
   };
-  const invocationStatus = (demand: RustPhysicalCallableEmissionRequest, caller: RustPhysicalEmissionSourceOrigin | undefined,
+  const invocationStatus = (demand: RustPhysicalCallableEmissionRequest, callerBindings: SourceStorageBindings | undefined,
     root: Construction | undefined, state: ConstructionState): void => {
-    const selected = invocationRoots(demand, caller, root);
+    const selected = invocationRoots(demand, callerBindings, root);
     const boundaries = selected.kind === "complete" ? [] : selected.boundaries;
     for (const root of selected.roots) {
       constructionStatuses.push({ ...state, invocation: demand.subject, root, owner: undefined, region: undefined });
@@ -269,7 +306,7 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
         selected.push(demand);
         byOwner.set(demand.owner, selected);
       }
-      const pending: { readonly demand: RustPhysicalCallableEmissionRequest; readonly caller: RustPhysicalEmissionSourceOrigin;
+      const pending: { readonly demand: RustPhysicalCallableEmissionRequest; readonly caller: SourceCaller;
         readonly root: Construction | undefined; readonly state: ConstructionTraceState }[] = [];
       for (const demand of calls.values()) {
         const selected = storage.subjectFor(demand.subject);
@@ -277,21 +314,26 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
           invocationStatus(demand, undefined, undefined, { kind: "unavailable", reason: selected.reason });
           continue;
         }
-        const origins = callerOrigins(demand, selected.subject);
-        if (origins.kind === "unavailable") invocationStatus(demand, undefined, undefined, { kind: "unavailable", reason: origins.reason });
+        const selectedCallers = callerOrigins(demand, selected.subject);
+        const origins = selectedCallers.origins;
+        if (origins.kind === "unavailable" && selectedCallers.callers.length === 0)
+          invocationStatus(demand, undefined, undefined, { kind: "unavailable", reason: origins.reason });
         const boundaries = origins.kind === "resolved" ? [] : origins.boundaries;
-        if (boundaries.length !== 0) invocationStatus(demand, undefined, undefined, { kind: "open", boundaries });
+        if (boundaries.length !== 0 && selectedCallers.callers.length === 0)
+          invocationStatus(demand, undefined, undefined, { kind: "open", boundaries });
         const state = Object.freeze({ boundaries, failure: origins.kind === "unavailable" ? origins.reason : undefined });
-        for (const caller of origins.alternatives) pending.push({ demand, caller, root: undefined, state });
+        for (const caller of selectedCallers.callers) pending.push({ demand, caller, root: undefined,
+          state: caller.kind === "unavailable" && state.failure === undefined
+            ? Object.freeze({ boundaries, failure: caller.reason }) : state });
       }
       const rows: ConstructionOrigin[] = [];
       const routed = new Map<Node, Map<SourceStorageBindings, Map<Construction, Set<ConstructionTraceState>>>>();
       for (let index = 0; index < pending.length; index += 1) {
         const entry = pending[index]!;
-        const callerBindings = sourceBindings(entry.caller);
+        const callerBindings = entry.caller.kind === "selected" ? sourceBindings(entry.caller.origin) : entry.caller.bindings;
         const selected = storage.constructionFor(entry.demand.subject, callerBindings);
         if (selected.kind === "unresolved") {
-          invocationStatus(entry.demand, entry.caller, entry.root, { kind: "unavailable", reason: selected.reason });
+          invocationStatus(entry.demand, callerBindings, entry.root, { kind: "unavailable", reason: selected.reason });
           continue;
         }
         for (const construction of selected.alternatives) {
@@ -306,31 +348,40 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
           bindingsByCall.set(callerBindings, roots);
           routed.set(entry.demand.subject, bindingsByCall);
           const region = (owner: Node, node: Node, selection: Bindings): void => {
+            const forward = (caller: SourceCaller, state: ConstructionTraceState): void => {
+              if (descend) for (const demand of byOwner.get(owner) ?? [])
+                if (storage.enclosingRegionFor(demand.subject) === node) pending.push({ demand, caller, root, state });
+            };
+            const missing = (reason: string): void => {
+              constructionStatuses.push({ kind: "unavailable", invocation: entry.demand.subject,
+                root: root.root, owner, region: node, reason });
+              forward({ kind: "unavailable", bindings: selection.bindings, reason }, entry.state.failure === undefined
+                ? Object.freeze({ boundaries: entry.state.boundaries, failure: reason }) : entry.state);
+            };
             if (entry.state.failure !== undefined) constructionStatuses.push({ kind: "unavailable", invocation: entry.demand.subject,
               root: root.root, owner, region: node, reason: entry.state.failure });
             if (entry.state.boundaries.length !== 0) constructionStatuses.push({ kind: "open", invocation: entry.demand.subject,
               root: root.root, owner, region: node, boundaries: entry.state.boundaries });
             const activations = nativeRows(owner, selection.bindings);
             if (activations.kind === "unresolved") {
-              constructionStatuses.push({ kind: "unavailable", invocation: entry.demand.subject, root: root.root, owner,
-                region: node, reason: activations.reason });
+              missing(activations.reason);
               return;
             }
-            if (activations.rows.length === 0) constructionStatuses.push({ kind: "unavailable", invocation: entry.demand.subject,
-              root: root.root, owner, region: node, reason: "A constructor region lost its exact owning activation and native binding row." });
+            if (activations.rows.length === 0) missing("A constructor region lost its exact owning activation and native binding row.");
             for (const target of activations.rows) {
               if (target.activation.declaration !== owner) {
-                constructionStatuses.push({ kind: "unavailable", invocation: entry.demand.subject, root: root.root, owner,
-                  region: node, reason: "A constructor region lost its exact owning activation and native binding row." });
+                missing("A constructor region lost its exact owning activation and native binding row.");
+                continue;
+              }
+              if (entry.caller.kind === "unavailable") {
+                forward({ kind: "unavailable", bindings: selection.bindings, reason: entry.caller.reason }, entry.state);
                 continue;
               }
               const origin: ConstructionOrigin = Object.freeze({ kind: "construction", invocation: entry.demand.subject,
-                construction, root, callerBindings, caller: entry.caller, owner, region: node, selection,
+                construction, root, callerBindings, caller: entry.caller.origin, owner, region: node, selection,
                 activation: target.activation, targetBindings: target.targetBindings });
               rows.push(origin);
-              if (descend) for (const demand of byOwner.get(owner) ?? [])
-                if (storage.enclosingRegionFor(demand.subject) === node) pending.push({ demand, caller: origin, root,
-                  state: entry.state });
+              forward({ kind: "selected", origin }, entry.state);
             }
           };
           const implementation = construction.implementation;
@@ -366,8 +417,8 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
     if (selected.kind === "unresolved") return Object.freeze({ ...unavailable(selected.reason), use: request.use, occurrence });
     const subject = selected.subject;
     const source = request.source;
-    const origins = source.kind === "declaration" ? declarationOrigins(request)
-      : source.kind === "callable" ? callableOrigins(request, subject)
+    const origins = source.kind === "declaration" ? declarationOrigins(request).origins
+      : source.kind === "callable" ? callableOrigins(request, subject).origins
       : source.kind === "construction" ? constructionOrigins(request, subject)
       : source.kind === "module" ? moduleOrigins(source, subject, request.bindings)
       : unavailable("A generated worker wrapper has no authored source execution occurrence.");

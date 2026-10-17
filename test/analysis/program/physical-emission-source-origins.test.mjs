@@ -48,8 +48,9 @@ function create(): Identity {
 export function independentValue(text: string): boolean {
   const first = new Other(text);
   const second = new Item(text);
+  const standalone = new Leaf();
   const invoke = create();
-  return invoke(first.field && second.field);
+  return invoke(first.field && second.field && standalone.ready);
 }
 `;
 
@@ -183,6 +184,13 @@ function verifyCallableOrigins(program, observations, create) {
     const original = observations.factories.find(factory => factory.requests.some(request => request.use === context.use));
     assert.equal(original !== undefined, true, "the actual late source association inputs are retained by observation");
     const request = original.requests.find(request => request.use === context.use);
+    const emptyNative = create({...original.input, genericBindingsFor(declaration, bindings) {
+      const selected = original.input.genericBindingsFor(declaration, bindings);
+      return declaration !== context.declaration || selected.kind === "unresolved" ? selected : Object.freeze({...selected,
+        sourceActivations: Object.freeze({kind: "resolved", rows: Object.freeze([])})});
+    }}, original.requests)(request, origins.occurrence);
+    assert.equal(emptyNative.kind, "unavailable", "an emitted callable cannot publish a complete empty native-activation domain");
+    assert.equal(emptyNative.alternatives.length, 0, "no native activation is invented for a missing actual row");
     const foreignMember = {...request, source: {...request.source, member: Object.freeze({})}};
     const prepare = create(original.input, [foreignMember]);
     const missing = prepare(foreignMember, origins.occurrence);
@@ -487,6 +495,78 @@ function verifyConstructorStatuses(program, observations, create) {
   assert.equal(reversedForeignRows.kind, foreignRows.kind, "wholly foreign status does not depend on request enumeration");
   assert.equal(reversedForeignRows.alternatives.length, foreignRows.alternatives.length,
     "reverse enumeration preserves only the actual independently closed construction rows");
+  const standalone = rows.find(row => row.origin.root.root === nested.origin.root.root && row.origin.caller.kind === "declaration");
+  assert.equal(standalone !== undefined, true, "the real nested allocation also has an independently closed standalone construction");
+  const parentOwner = nested.origin.caller.owner;
+  const foreignNative = original.input.genericBindingsFor(independent.origin.owner, independent.origin.selection.bindings);
+  assert.equal(foreignNative.kind === "resolved" && foreignNative.sourceActivations.kind === "resolved" &&
+    foreignNative.sourceActivations.rows.length > 0 && foreignNative.sourceActivations.rows.every(row => row.activation.declaration !== parentOwner), true,
+    "the foreign-activation inverse uses a different real selected owner and its identical actual native rows");
+  for (const failureKind of ["unresolved", "empty", "foreign"]) {
+    const reason = failureKind === "unresolved" ? "the actual parent constructor native activation is unavailable"
+      : "A constructor region lost its exact owning activation and native binding row.";
+    const genericBindingsFor = (declaration, bindings) => {
+      const selected = original.input.genericBindingsFor(declaration, bindings);
+      if (declaration !== parentOwner) return selected;
+      if (failureKind === "unresolved") return Object.freeze({kind: "unresolved", reason});
+      assert.equal(selected.kind === "resolved", true, "the native-row mutant starts with the parent's original admitted source bindings");
+      return Object.freeze({...selected, sourceActivations: Object.freeze({kind: "resolved",
+        rows: failureKind === "empty" ? Object.freeze([]) : foreignNative.sourceActivations.rows})});
+    };
+    const partial = create({...original.input, genericBindingsFor}, original.requests);
+    const leaf = partial(nestedRequest, nested.origins.occurrence);
+    assert.equal(leaf.kind, "unavailable", failureKind + ": a missing parent native row cannot hide its actual nested construction path");
+    assert.equal(leaf.reason, reason, failureKind + ": nested propagation retains the original failure rather than inventing another selector");
+    assert.equal(leaf.alternatives.some(origin => origin.kind === "construction" && origin.invocation === standalone.origin.invocation &&
+      origin.construction === standalone.origin.construction && origin.selection === standalone.origin.selection &&
+      origin.activation === standalone.origin.activation && origin.targetBindings === standalone.origin.targetBindings), true,
+    failureKind + ": independently closed source, activation and target-binding identities remain exact");
+    assert.equal(leaf.alternatives.some(origin => origin.kind === "construction" && origin.invocation === nested.origin.invocation), false,
+      failureKind + ": unavailable caller activation is never forged into a construction origin");
+    assert.equal(partial(independentRequest, independent.origins.occurrence).kind, "resolved",
+      failureKind + ": the actual unrelated root remains closed");
+    const reversePartial = create({...original.input, genericBindingsFor,
+      emissionRequests: Object.freeze([...original.input.emissionRequests].reverse())}, Object.freeze([...original.requests].reverse()));
+    const reversedLeaf = reversePartial(nestedRequest, nested.origins.occurrence);
+    assert.equal(reversedLeaf.kind, leaf.kind, failureKind + ": native-row failure propagation is not visitation-order dependent");
+    assert.equal(reversedLeaf.alternatives.length, leaf.alternatives.length, failureKind + ": reverse enumeration retains every actual complete alternative");
+    assert.equal(reversePartial(independentRequest, independent.origins.occurrence).kind, "resolved",
+      failureKind + ": reverse enumeration never poisons another root");
+  }
+  const missingCallable = create({...original.input, genericBindingsFor(declaration, bindings) {
+    return declaration === callable.origin.caller.activation.declaration
+      ? Object.freeze({kind: "unresolved", reason: "the actual lexical caller native activation is unavailable"})
+      : original.input.genericBindingsFor(declaration, bindings);
+  }}, original.requests);
+  const missingCallableLeaf = missingCallable(nestedRequest, nested.origins.occurrence);
+  assert.equal(missingCallableLeaf.kind, "unavailable",
+    "original source executions continue through nested construction when their native caller row is unavailable");
+  assert.equal(missingCallableLeaf.reason, "the actual lexical caller native activation is unavailable",
+    "the original execution's failure survives without substituting an activation or lexical-binding token");
+  assert.equal(missingCallableLeaf.alternatives.some(origin => origin.kind === "construction" &&
+    origin.invocation === standalone.origin.invocation && origin.selection === standalone.origin.selection), true,
+    "the same root retains its independently closed original source selections");
+  assert.equal(missingCallable(independentRequest, independent.origins.occurrence).kind, "resolved",
+    "the source-only caller trace is scoped to its actual original executions");
+  const declaration = rows.find(row => row.origin.caller.kind === "declaration" &&
+    ast.text(ast.name(row.origin.caller.activation.declaration)) === "value");
+  assert.equal(declaration !== undefined, true, "the native declaration control has its original constructor invocation and calling declaration");
+  const declarationRequest = original.requests.find(request => request.use === declaration.context.use);
+  const missingDeclaration = create({...original.input, genericBindingsFor(owner, bindings) {
+    return owner === declaration.origin.caller.activation.declaration
+      ? Object.freeze({kind: "unresolved", reason: "the actual native declaration caller activation is unavailable"})
+      : original.input.genericBindingsFor(owner, bindings);
+  }}, original.requests);
+  const declarationOrigins = missingDeclaration(declarationRequest, declaration.origins.occurrence);
+  assert.equal(declarationOrigins.kind, "unavailable",
+    "original declaration source bindings still propagate an unavailable calling activation into the actual constructor root");
+  assert.equal(declarationOrigins.reason, "the actual native declaration caller activation is unavailable",
+    "the original declaration row's failure is not lost before source construction selection");
+  assert.equal(declarationOrigins.alternatives.some(origin => origin.kind === "construction" &&
+    origin.root.root === declaration.origin.root.root && origin.invocation !== declaration.origin.invocation), true,
+    "a different actual caller's complete construction is preserved but cannot mask the unavailable path");
+  assert.equal(missingDeclaration(nestedRequest, nested.origins.occurrence).kind, "resolved",
+    "an unrelated native declaration never becomes a global constructor failure");
 }
 
 test("constructor, super and instance-initializer origins use actual construction and per-activation binding rows", () => {
