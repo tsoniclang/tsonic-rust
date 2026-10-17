@@ -10,11 +10,12 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustNamedTargetType, rustNamedTypeCarrierValue, rustNativeTraitRef,
-  rustMoveOnlyNamedTypeTraits } from "../../../dist/target-model/types/carriers/native.js";
+  rustMoveOnlyNamedTypeTraits, rustNamedTypeRequirementsForArguments } from "../../../dist/target-model/types/carriers/native.js";
 import { selectRustCloneRequirements } from "../../../dist/target-model/types/carriers/traits.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProviderTypeRequirementTrait } from "../../../dist/target-model/operations/type-requirements.js";
 import { instantiateProviderTargetType } from "../../../dist/policy/types/resolution/providers.js";
+import { materializeProviderCarrier } from "../../../dist/providers/packages/materialization.js";
 import { classifyCarrierRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 
 const integer = Object.freeze({ kind: "source-primitive", name: "int32" });
@@ -71,9 +72,9 @@ test("native TYPE well-formedness requirements keep exact semantic TYPE indexes 
   const right = { kind: "type-parameter", identity: "native:Right", name: "Right" };
   const lifetime = { kind: "lifetime", lifetime: { kind: "parameter", name: "env", identity: "native:env" } };
   const length = { kind: "const", value: { kind: "parameter", identity: "native:Length", name: "Length" } };
-  const pattern = rustNamedTargetType("native.Ordered", "native::Ordered", [lifetime, { kind: "type", type: right },
-    length, { kind: "type", type: left }], [], rustMoveOnlyNamedTypeTraits, [], undefined, []);
-  const relation = { targetCarrier: pattern, genericParameters: [
+  const pattern = { kind: "target-named", id: "native.Ordered", genericArguments: [lifetime, { kind: "type", type: right },
+    length, { kind: "type", type: left }] };
+  const declaration = { exportId: "native.Ordered", targetCarrier: pattern, genericParameters: [
     { kind: "lifetime", sourceName: "env", targetIdentity: "native:env" },
     { kind: "type", sourceName: "Left", targetIdentity: left.identity },
     { kind: "const", sourceName: "Length", targetIdentity: "native:Length" },
@@ -82,6 +83,8 @@ test("native TYPE well-formedness requirements keep exact semantic TYPE indexes 
     { identity: left.identity, name: "Left", requirements: ["clone"] },
     { identity: right.identity, name: "Right", requirements: ["copy"] },
   ] };
+  const materialized = materializeProviderCarrier(pattern, { "native.Ordered": "native::Ordered" }, {}, [declaration]);
+  const relation = { ...declaration, targetCarrier: materialized };
   const noClone = rustNamedTargetType("native.NoClone", "native::NoClone", [], [], rustMoveOnlyNamedTypeTraits, [], undefined, []);
   const arguments_ = value => [{ kind: "lifetime", lifetime: { kind: "static" } }, { kind: "type", type: instance(value) },
     { kind: "const", value: { kind: "integer", value: "3" } }, { kind: "type", type: integer }];
@@ -102,16 +105,18 @@ test("native TYPE well-formedness requirements keep exact semantic TYPE indexes 
     const result = classifyCarrierRequirements(payload, ["clone"], new Set(), new Map(), () => false, registry, undefined);
     assert.equal(result.kind, expected, `${label}: the final sole classifier discharges the exact native type obligation`);
   }
-  assert.equal(instantiateProviderTargetType({ ...relation, typeRequirements: [
-    { identity: "foreign", name: "Foreign", requirements: ["clone"] },
-  ] }, arguments_(integer), registry) === undefined, true, "an unmapped native requirement never becomes a guessed argument index");
+  assert.equal(rustNamedTypeRequirementsForArguments(pattern.genericArguments, [{ identity: "foreign",
+    traits: [rustProviderTypeRequirementTrait("clone")] }]) === undefined, true,
+  "the sole native geometry refuses an unmapped requirement instead of guessing an argument index");
 
   const defaulted = rustNamedTargetType("native.Defaulted", "native::Defaulted", [lifetime, { kind: "type", type: left }],
-    [{ kind: "type", type: integer }], rustMoveOnlyNamedTypeTraits, [], undefined, []);
-  const defaultRelation = { targetCarrier: defaulted, genericParameters: [relation.genericParameters[0],
+    [{ kind: "type", type: integer }], rustMoveOnlyNamedTypeTraits, [], undefined,
+    [{ typeArgumentIndex: 0, trait: rustProviderTypeRequirementTrait("clone") }]);
+  const defaultRelation = { exportId: "native.Defaulted", targetCarrier: defaulted, genericParameters: [relation.genericParameters[0],
     { ...relation.genericParameters[1], defaultArgument: { kind: "type", type: integer } }],
     typeRequirements: [relation.typeRequirements[0]] };
-  const selectedDefault = rustNamedTypeCarrierValue(instantiateProviderTargetType(defaultRelation,
+  const selectedDefault = rustNamedTypeCarrierValue(instantiateProviderTargetType({ ...defaultRelation,
+    targetCarrier: materializeProviderCarrier(defaulted, {}, {}, [defaultRelation]) },
     [{ kind: "lifetime", lifetime: { kind: "static" } }], registry));
   assert.equal(selectedDefault !== undefined, true, "the actual native generic default is fully instantiated");
   assert.equal(selectedDefault.typeRequirements[0].typeArgumentIndex, 0, "default omission never shifts the semantic TYPE requirement");
