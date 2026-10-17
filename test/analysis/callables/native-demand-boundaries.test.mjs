@@ -12,7 +12,7 @@ import { rustSourceTypeCarrierValue } from "../../../dist/target-model/types/car
 import { planCallableExpression, planRustCallableExpressionBody } from "../../../dist/backend/planner/expressions/callable.js";
 import { selectRustRuntimeCallableGenerics } from "../../../dist/policy/types/callables/runtime-callable-generics.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
-import { rustFunctionValueLifetimeBinding } from "../../../dist/target-model/lifetimes/identity.js";
+import * as lifetimeIdentity from "../../../dist/target-model/lifetimes/identity.js";
 import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
 import { rustSourceCallArgumentCarriers } from "../../../dist/analysis/callables/source-call-lifetimes.js";
 import { rustRetainedCallSubstitutions } from "../../../dist/analysis/callables/retained-call-lifetimes.js";
@@ -73,6 +73,7 @@ export async function run(value: int32): Promise<int32> { return await read(valu
 }
 
 test("source function lifetime binding preserves every exact formal and substituted outlives edge", () => {
+  const { rustFunctionValueLifetimeBinding } = lifetimeIdentity;
   const first = { kind: "lifetime", declaration: {}, sourceName: "First",
     lifetime: { kind: "parameter", identity: "first", name: "First" }, outlives: [{ kind: "static" }] };
   const second = { kind: "lifetime", declaration: {}, sourceName: "Second",
