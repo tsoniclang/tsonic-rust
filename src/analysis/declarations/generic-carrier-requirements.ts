@@ -293,7 +293,7 @@ function classifyStaticCarrier(
         case "target-named": {
           if (value.id === rustFutureTargetId)
             return unresolved("A logical Future result does not prove its physical stored environment.");
-          if (!Object.hasOwn(rustBuiltInCarrierDefinitions, value.id))
+          if (!Object.prototype.hasOwnProperty.call(rustBuiltInCarrierDefinitions, value.id))
             return unresolved("Native static retention requires a known physical named carrier, not an unregistered native identity.");
           const definition = rustBuiltInCarrierDefinitions[value.id]!;
           const arguments_ = value.genericArguments ?? [];
