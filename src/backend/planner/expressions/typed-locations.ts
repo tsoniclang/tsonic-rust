@@ -12,8 +12,8 @@ import {
   ElementAccessExpression_ArgumentExpression,
   Node_Expression,
 } from "@tsonic/target-api/source";
-import { rustIndexedLocationContract } from "../../../analysis/operations/indexed-location.js";
-import { planFinalizedTargetInput } from "./conversions.js";
+import { rustFinalizedIndexInput, rustIndexedLocationContract } from "../../../analysis/operations/indexed-location.js";
+import { planRustIndexedInput } from "./borrowed-element-reads.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import {
@@ -602,7 +602,7 @@ export function planRustLocationStorage(
       return rejectLocationStorage(expression, context, "The selected index location has no exact finalized receiver, value and index input contract.");
     }
     const receiver = planExpression(receiverNode, context);
-    const index = planFinalizedTargetInput(context, contract.index, receiverNode, [indexNode], expression);
+    const index = planRustIndexedInput(contract.index, receiverNode, indexNode, expression, context);
     return receiver === undefined || index === undefined ? undefined : {
       kind: "method-call", receiver, method: contract.method, args: [index],
     };
@@ -711,8 +711,7 @@ export function planRustLocationStorage(
   if (kind === "KindElementAccessExpression") {
     const indexNode = ElementAccessExpression_ArgumentExpression(context.input.program.source.ast, expression);
     const indexInput = operation?.kind === "provider-operation" &&
-      operation.abi.operationKind === "indexer" && operation.abi.target.form === "index" &&
-      operation.abi.targetArguments.length === 1 ? operation.abi.targetArguments[0] : undefined;
+      operation.abi.target.form === "index" ? rustFinalizedIndexInput(operation.abi) : undefined;
     if (indexInput === undefined || indexNode === undefined) {
       return rejectLocationStorage(
         expression,
@@ -720,7 +719,7 @@ export function planRustLocationStorage(
         "The finalized Rust element storage is not one exact built-in index operation.",
       );
     }
-    const index = planFinalizedTargetInput(context, indexInput, receiverNode, [indexNode], expression);
+    const index = planRustIndexedInput(indexInput, receiverNode, indexNode, expression, context);
     if (index === undefined) return undefined;
     return {
       kind: "method-call",

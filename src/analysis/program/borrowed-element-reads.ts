@@ -6,12 +6,14 @@ import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperat
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 import { analyzeRustBorrowedIterationBindings, type RustBorrowedIterationBinding } from "./borrowed-iteration-bindings.js";
 import type { RustBorrowUseAnalysis } from "../ownership/effects.js";
+import type { RustFinalizedSourceInput, RustFinalizedConstantInput } from "../../target-model/records/finalized-operation.js";
 
 export interface RustBorrowedElementRead {
   readonly receiver: Node;
   readonly element: Node;
   readonly array: Node;
   readonly index: Node;
+  readonly targetIndex: RustFinalizedSourceInput | RustFinalizedConstantInput;
   readonly method: string;
 }
 

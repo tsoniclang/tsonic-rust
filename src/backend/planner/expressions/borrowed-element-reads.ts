@@ -8,6 +8,23 @@ import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustStringTargetType } from "../../../target-model/types/index.js";
 import type { RustBorrowedElementLocal } from "../../../analysis/program/borrowed-element-locals.js";
+import type { RustFinalizedSourceInput, RustFinalizedConstantInput } from "../../../target-model/records/finalized-operation.js";
+import { planFinalizedTargetInput } from "./conversions.js";
+import { planRustDiscardedValue } from "./discarded-values.js";
+
+export function planRustIndexedInput(
+  input: RustFinalizedSourceInput | RustFinalizedConstantInput,
+  receiver: Node,
+  index: Node,
+  operation: Node,
+  context: RustPlanContext,
+): RustExpr | undefined {
+  const value = planFinalizedTargetInput(context, input, receiver, [index], operation);
+  if (value === undefined || input.source.kind !== "constant") return value;
+  const evaluated = planRustDiscardedValue(index, context);
+  return evaluated === undefined ? undefined
+    : { kind: "evaluate-then", effect: evaluated.expression, discard: evaluated.discard, value };
+}
 
 export function planRustBorrowedElementRead(
   node: Node,
@@ -55,7 +72,7 @@ function borrowedElementBindings(
 ): readonly { readonly name: string; readonly value: RustExpr }[] | undefined {
   if (context.syntheticNames === undefined) return undefined;
   const array = planExpression(read.array, context);
-  const index = planExpression(read.index, context);
+  const index = planRustIndexedInput(read.targetIndex, read.array, read.index, read.element, context);
   if (array === undefined || index === undefined) return undefined;
   const arrayName = allocateRustSyntheticName(context.syntheticNames, "array_receiver");
   const indexName = allocateRustSyntheticName(context.syntheticNames, "array_index");
