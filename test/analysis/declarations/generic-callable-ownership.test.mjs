@@ -1,6 +1,7 @@
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
 import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
 
@@ -22,7 +23,6 @@ import { createRustObjectRepresentationPlan } from "../../../dist/analysis/proje
 import { createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { createRustRetainedEnvironmentQueries } from "../../../dist/policy/ownership/retained-environment-queries.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 
 
 
@@ -180,85 +180,119 @@ closureCapture: { get: (node) => {
       currentSource.navigation, materialize().isNativeNode, [], closed).plan };
 }
 
-function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
-  let registry;
-  let input;
-  let construction;
-  let components;
-  let preparationIssues;
-  let selectionIssues;
-  const { result } = compileRust({ files: { "index.ts": "export function value(value: number): number { return value; }" },
-    compileTarget(request) {
-      const context = analyzeRustCheckedContext(request, current => {
-        const original = current.callableValues;
-        registry = original;
-        beforeInitialize(original);
-        const callableValues = Object.create(original, {
-          initialize: { value(selected) {
-            input = selected;
-            construction = original.initialize(selected);
-            afterInitialize(original, construction);
-            return construction;
-          } },
-          preparePhysicalStorage: { value(selected, effects) {
-            components = selected;
-            preparationIssues = original.preparePhysicalStorage(selected, effects);
-            return preparationIssues;
-          } },
-          finalizeSelected: { value() {
-            selectionIssues = original.finalizeSelected();
-            return selectionIssues;
-          } },
-        });
-        return { ...current, callableValues };
-      });
-      return context.diagnostics.length === 0 ? { kind: "resolved", value: { artifacts: [] }, diagnostics: [] }
-        : { kind: "rejected", diagnostics: context.diagnostics };
-    },
-  });
-  assert.equal(result.diagnostics.length, 0, "the complete checked lifecycle supplies its actual private construction inputs");
-  assert.equal(registry !== undefined && input !== undefined && construction !== undefined && components !== undefined, true,
-    "source effects and the one component classification precede physical storage preparation");
-  assert.equal(preparationIssues?.length, 0, "all actual physical storage is prepared without issues");
-  assert.equal(selectionIssues?.kind, "resolved", "source-selected families reach their complete admission result");
-  assert.equal(selectionIssues.value.length, 0, "source-selected families finalize without issues");
-  return { registry, input, construction, components };
-}
-
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {
-  const { registry, input: planInput, construction, components } = physicalLifecycleInputs({
-    beforeInitialize(current) {
+  const source = "export function value(value: number): number { return value; }";
+  const ordinary = compileRust({ files: { "index.ts": source } });
+  assert.equal(ordinary.result.diagnostics.length, 0, "the ordinary complete checked pipeline admits the unchanged source");
+  const factoryURL = new URL("../../../dist/analysis/callables/value-plan.js", import.meta.url).href;
+  const sessionURL = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
+  const script = `
+    import assert from "node:assert/strict";
+    import { registerHooks } from "node:module";
+    const key = Symbol.for("R14.actual.callable.lifecycle");
+    let registry, planInput, construction, components, preparationIssues, selectionIssues, selected, plan;
+    let factories = 0, completionCalls = 0, sealCalls = 0, publishCalls = 0;
+    globalThis[key] = current => {
+      registry = current;
       assert.throws(() => current.generic, /finalized after their selected adapters/u);
       assert.throws(() => current.issues, /finalized after their selected adapters/u);
       assert.throws(() => current.finalizeSelected(), /finalized after their selected adapters/u);
       assert.throws(() => current.selected, /selected physical families after effect analysis/u);
       assert.throws(() => current.seal(), /finalized after their selected adapters/u);
-    },
-    afterInitialize(current, selectedConstruction) {
-      assert.equal(current.generic === selectedConstruction.generic, true, "construction has one identical generic family owner");
-      assert.equal(current.issues.length, 0, "the actual complete construction has no issues");
-      assert.equal(Object.isFrozen(selectedConstruction), true);
-      assert.equal("suspended" in selectedConstruction || "frames" in selectedConstruction || "initializePhysical" in selectedConstruction.generic, false,
-        "construction exposes neither retained inventories nor the physical initializer");
-      assert.throws(() => current.seal(), /Physical callable publication requires completed source-selected families and effects/u);
-      assert.throws(() => current.publish(), /selected physical families after effect analysis/u);
-      assert.throws(() => current.finalizeSelected(), /Physical callable families require their completed constructor and field storage selection/u);
-    },
+      return Object.create(current, {
+        initialize: { value(input) {
+          planInput = input;
+          construction = current.initialize(input);
+          assert.equal(current.generic === construction.generic, true, "construction has one identical generic family owner");
+          assert.equal(current.issues.length, 0, "the actual complete construction has no issues");
+          assert.equal(Object.isFrozen(construction), true);
+          assert.equal("suspended" in construction || "frames" in construction || "initializePhysical" in construction.generic, false,
+            "construction exposes neither retained inventories nor the physical initializer");
+          assert.throws(() => current.seal(), /Physical callable publication requires completed source-selected families and effects/u);
+          assert.throws(() => current.publish(), /selected physical families after effect analysis/u);
+          assert.throws(() => current.finalizeSelected(), /Physical callable families require their completed constructor and field storage selection/u);
+          return construction;
+        } },
+        preparePhysicalStorage: { value(input, effects) {
+          components = input;
+          preparationIssues = current.preparePhysicalStorage(input, effects);
+          return preparationIssues;
+        } },
+        finalizeSelected: { value() {
+          selectionIssues = current.finalizeSelected();
+          return selectionIssues;
+        } },
+        initializeCompletions: { value(input) {
+          completionCalls += 1;
+          selected = current.selected;
+          assert.throws(() => selected.genericCompletions, /Generic callable completions require sealed producer effects and component owners/u);
+          assert.equal(input.physical === current.generic.physical && input.producers === current.nativeProducers &&
+            input.components === components, true, "completion uses the original physical family, producer and component owners");
+          return current.initializeCompletions(input);
+        } },
+        seal: { value(input) {
+          sealCalls += 1;
+          for (const field of ["sourceCallableSpecializations", "projectMethodDispatch", "lexicalFunctions",
+            "declarationGenericRequirements", "genericErrors", "errorRegions", "initialization", "constructions"])
+            assert.equal(input[field] !== undefined, true, field + ": supplied by the real late pipeline");
+          const stage = current.seal(input);
+          assert.equal(stage.kind, "resolved", "the actual completed pipeline supplies the required late publication DTO");
+          plan = stage.value;
+          return stage;
+        } },
+        publish: { value() {
+          publishCalls += 1;
+          return current.publish();
+        } },
+      });
+    };
+    const hook = registerHooks({ load(url, context, nextLoad) {
+      const loaded = nextLoad(url, context);
+      if (url !== ${JSON.stringify(factoryURL)}) return loaded;
+      const text = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+      const start = "export function createRustCallableValuePlanRegistry() {";
+      const end = "\\nfunction createRustCallableValueLifecycle(";
+      assert.equal(text.split(start).length, 2, "exact original registry factory anchor");
+      assert.equal(text.split(end).length, 2, "exact original lifecycle boundary anchor");
+      const begin = text.indexOf(start), finish = text.indexOf(end);
+      const factory = text.slice(begin, finish);
+      const open = "return Object.freeze({", close = "    });\\n}";
+      assert.equal(factory.split(open).length, 2, "one original registry publication");
+      assert.equal(factory.split(close).length, 2, "one exact original registry publication boundary");
+      factories += 1;
+      const observed = factory.replace(open, "return globalThis[Symbol.for(\\"R14.actual.callable.lifecycle\\")](Object.freeze({")
+        .replace(close, "    }));\\n}");
+      return { ...loaded, source: text.slice(0, begin) + observed + text.slice(finish) };
+    } });
+    const { compileRust } = await import(${JSON.stringify(sessionURL)});
+    const { result } = compileRust({ files: { "index.ts": ${JSON.stringify(source)} } });
+    hook.deregister();
+    delete globalThis[key];
+    assert.equal(result.diagnostics.length, 0, "the complete checked lifecycle supplies its actual private construction inputs");
+    assert.equal(registry !== undefined && planInput !== undefined && construction !== undefined && components !== undefined, true,
+      "source effects and the one component classification precede physical storage preparation");
+    assert.equal(preparationIssues?.length, 0, "all actual physical storage is prepared without issues");
+    assert.equal(selectionIssues?.kind, "resolved", "source-selected families reach their complete admission result");
+    assert.equal(selectionIssues.value.length, 0, "source-selected families finalize without issues");
+    assert.equal(factories === 1 && completionCalls === 1 && sealCalls === 1 && publishCalls === 1, true,
+      "the instrumented ordinary pipeline observes each actual lifecycle publication once");
+    assert.equal(registry.selected === selected, true, "the finalized analysis selection cannot be replaced by publication");
+    assert.equal(plan !== selected, true, "publication exposes the sealed data plan, not the private analysis selection");
+    assert.equal(plan.generic === construction.generic, true, "sealed data retains the original family owner");
+    assert.equal(plan.frames.definitions.length, 0);
+    assert.equal(Object.isFrozen(plan), true);
+    assert.throws(() => registry.finalizeSelected(), /exactly once/u);
+    assert.throws(() => registry.initialize(planInput), /only once/u);
+    console.log("R14_INSTRUMENTED_LIFECYCLE " + JSON.stringify(result.artifacts));
+  `;
+  const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
+    encoding: "utf8", maxBuffer: 2 * 1024 * 1024,
   });
-  const selected = registry.selected;
-  assert.throws(() => selected.genericCompletions, /Generic callable completions require sealed producer effects and component owners/u);
-  registry.initializeCompletions({ ast: planInput.ast, sourceLifetimes: planInput.lifetimes,
-    records: planInput.records, physical: registry.generic.physical, producers: registry.nativeProducers,
-    definitions: planInput.typeDefinitions, components });
-  const plan = registry.seal();
-  registry.publish();
-  assert.equal(registry.selected === selected, true, "the finalized analysis selection cannot be replaced by publication");
-  assert.equal(plan !== selected, true, "publication exposes the sealed data plan, not the private analysis selection");
-  assert.equal(plan.generic === construction.generic, true, "sealed data retains the original family owner");
-  assert.equal(plan.frames.definitions.length, 0);
-  assert.equal(Object.isFrozen(plan), true);
-  assert.throws(() => registry.finalizeSelected(), /exactly once/u);
-  assert.throws(() => registry.initialize(planInput), /only once/u);
+  assert.equal(observed.status, 0, (observed.stderr || observed.error?.message || "instrumented lifecycle failed").slice(0, 2048));
+  const line = observed.stdout.split("\n").find(value => value.startsWith("R14_INSTRUMENTED_LIFECYCLE "));
+  assert.equal(line !== undefined, true, "the instrumented proof reports the complete ordinary publication");
+  assert.equal(line.slice("R14_INSTRUMENTED_LIFECYCLE ".length), JSON.stringify(ordinary.result.artifacts),
+    "observing the actual lifecycle preserves every ordinary emitted artifact");
 });
 
 for (const owner of ["class", "object", "project"]) {

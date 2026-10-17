@@ -3,6 +3,8 @@ import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustPlanningContext } from "../context.js";
 import type { RustGeneratorFact } from "../../../target-model/records/callables-and-resources.js";
 import type { RustSourceBindingFact } from "../../../target-model/records/value-projections.js";
+import type { RustPhysicalEmissionContext, RustPhysicalEmissionRole } from "../../../target-model/records/physical-emission-contexts.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSyntheticNameState } from "../names/synthetic.js";
@@ -82,6 +84,7 @@ export interface RustConstructionPreparation {
 }
 
 export interface RustPlanContext {
+  readonly emissionContext: RustPhysicalEmissionContext | undefined;
   readonly input: RustPlanningContext;
   readonly sourceFile: SourceFile;
   readonly sourcePackageComponentId: string;
@@ -144,6 +147,27 @@ export interface RustPlanContext {
     string,
     import("../../../target-model/lifetimes/model.js").RustLifetimeRef
   >;
+}
+
+export function requireRustEmissionContext(
+  context: RustPlanContext, subject: object, role: RustPhysicalEmissionRole, node: Node,
+): RustPhysicalEmissionContext {
+  const selected = context.input.program.physicalEmissionContexts.contextForOwner(subject, role);
+  if (selected === undefined) failRustPlannerInvariant("An emitted source body requires its original sealed physical context.", node);
+  return selected;
+}
+
+export function rustContextForEmission(context: RustPlanContext, emissionContext: RustPhysicalEmissionContext): RustPlanContext {
+  return { ...context, emissionContext, typeParameterSubstitutions: emissionContext.bindings.types,
+    lifetimeSubstitutions: emissionContext.bindings.lifetimes };
+}
+
+export function requireRustCallableBodyContext(context: RustPlanContext, declaration: Node): RustPhysicalEmissionContext {
+  const enclosing = context.emissionContext;
+  if (enclosing === undefined) failRustPlannerInvariant("A callable creation requires its original sealed enclosing use.", declaration);
+  const selected = context.input.program.physicalEmissionContexts.bodyContextFor(enclosing.use, declaration);
+  if (selected === undefined) failRustPlannerInvariant("A callable body requires its original selected creation context.", declaration);
+  return selected;
 }
 
 export function rustErrorBoundaryForDeclaration(

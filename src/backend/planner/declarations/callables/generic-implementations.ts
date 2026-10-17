@@ -7,7 +7,7 @@ import { closedMetadataKey } from "../../../../target-model/metadata/closed-data
 
 import type { RustExpr, RustFunctionParam, RustItem, RustPattern, RustType, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput } from "../../program/plan-context.js";
+import { diagnosticInput, requireRustEmissionContext, rustContextForEmission } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { rustTypeFromCarrierInContext, rustTargetGenericArgumentToAstInContext, rustTargetCallGenericArgumentToAstInContext } from "../../types/render.js";
 import type { RustTypeRenderingContext } from "../../types/render.js";
@@ -79,7 +79,7 @@ function planImplementation(
   const helperContext = rustGeneratedTypeParameterContext(arguments_.flatMap(argument =>
     argument.kind === "type" && argument.type.kind === "type-parameter" ? [argument.type] : []),
     rustAuthoredTypeParameterNames(implementation.declaration, context.input.program.source.ast),
-    { ...context, typeParameterSubstitutions: selected.substitutions.types, lifetimeSubstitutions: selected.substitutions.lifetimes });
+    rustContextForEmission(context, requireRustEmissionContext(context, implementation, "helper", implementation.declaration)));
   const captures = rustCallablePayloadTypes(selected, helperContext);
   if (captures === undefined) return undefined;
   const names = createRustSyntheticNameState(context.input.program.source.ast, implementation.declaration, []);
@@ -91,7 +91,8 @@ function planImplementation(
   const bodyContext = rustCallablePayloadContext(selected, { kind: "path", path: owner }, helperContext);
   const helper = implementation.creation === "declaration" ? undefined
     : planNativeModuleFunction(implementation.declaration, implementation.declaration,
-        implementation.functionName, true, bodyContext);
+        implementation.functionName, true, bodyContext,
+        requireRustEmissionContext(context, implementation, "body", implementation.declaration));
   if (implementation.creation !== "declaration" && helper?.kind !== "function") return undefined;
   const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
   if (contract === undefined) return undefined;
@@ -175,20 +176,21 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     const implementation = member.implementation;
     const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
     const path = rustGenericCallableImplementationPath(implementation, implementation.functionName, context);
-    const bindings = member.bindings;
+    const memberContext = rustContextForEmission(context, requireRustEmissionContext(context, member, "member", implementation.declaration));
+    const bindings = memberContext.emissionContext!.bindings;
     if (contract === undefined || path === undefined || bindings === undefined) return undefined;
     const substitutions = bindings.types;
     for (const parameter of [...contract.typeParameters, ...contract.capturedTypeParameters]) {
       const type = substitutions.get(parameter.identity);
       if (type === undefined) continue;
-      const rendered = rustTypeFromCarrierInContext(type, context);
+      const rendered = rustTypeFromCarrierInContext(type, memberContext);
       if (rendered === undefined) return undefined;
       const predicate: RustWherePredicate = { kind: "type", type: rendered, bounds: rustGenericRequirementBounds(parameter.requirements) };
       if (predicate.bounds.length > 0) predicates.set(closedMetadataKey(predicate), predicate);
     }
-    for (const predicate of rustAssociatedPredicates(contract.associatedTypes, { ...context, typeParameterSubstitutions: substitutions }))
+    for (const predicate of rustAssociatedPredicates(contract.associatedTypes, memberContext))
       predicates.set(closedMetadataKey(predicate), predicate);
-    for (const predicate of rustProjectProjectionPredicates(contract.projectProjections, { ...context, typeParameterSubstitutions: substitutions }))
+    for (const predicate of rustProjectProjectionPredicates(contract.projectProjections, memberContext))
       predicates.set(closedMetadataKey(predicate), predicate);
     const asyncFact = context.input.program.records.asyncFunction.get(implementation.declaration);
     const suspended = asyncFact !== undefined ||

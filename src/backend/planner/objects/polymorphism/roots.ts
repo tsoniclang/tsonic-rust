@@ -28,6 +28,7 @@ import {
   rustErrorBoundaryForProjectMember,
   rustErrorType,
 } from "../../program/plan-context.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { applyRustFallibleResultExpression } from "../../types/fallible-shape.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -42,7 +43,7 @@ import { checkedProjectProjectionTypes, planCheckedProjectProjectionImplementati
 import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import { rustArrayFieldMutationName, rustArrayFieldMutationType } from "./array-fields.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
-import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
+import type { RustProjectMethodBodySelection } from "../../../../analysis/project-types/method-dispatch.js";
 import { planRustProjectErrorRoot } from "./project-errors.js";
 import { planRustReceiverAlias } from "./receiver-aliases.js";
 
@@ -74,26 +75,16 @@ export function planProjectRootImplementations(
   const methodImplementations = new Map<Node, RustImplFunction[]>();
   const accessorImplementations = new Map<Node, RustImplFunction>();
   const implementationFor = (
-    implementation: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    body: RustProjectMethodBodySelection,
   ): RustImplFunction | undefined => {
-    const variant = context.input.program.projectMethodDispatch.variantForMember(
-      implementation,
-      targetTypeArguments,
-      concreteCarrier,
-    );
-    if (variant === undefined) {
-      return undefined;
-    }
+    const implementation = body.declaration;
     const existing = (methodImplementations.get(implementation) ?? []).find((candidate) =>
-      candidate.name === variant.exactSlot);
+      candidate.name === body.targetName);
     if (existing !== undefined) {
       return existing;
     }
     const planned = planRootMethodImplementation(
-      concreteCarrier,
-      implementation,
-      variant,
+      body,
       context,
     );
     if (planned !== undefined) {
@@ -111,9 +102,10 @@ export function planProjectRootImplementations(
     if (existing !== undefined) {
       return existing;
     }
+    const body = context.input.program.projectMethodDispatch.bodyFor(concrete, accessor, undefined);
+    if (body === undefined) failRustPlannerInvariant("An emitted accessor requires its original selected concrete body.", accessor);
     const planned = planRootAccessorImplementation(
-      concreteCarrier,
-      accessor,
+      body,
       role,
       context,
     );
@@ -175,8 +167,7 @@ function planRootContractFunctions(
   layers: readonly ProjectClassStateLayer[],
   representation: RustObjectRepresentation,
   implementationFor: (
-    implementation: Node,
-    targetTypeArguments: readonly TargetTypeRef[],
+    body: RustProjectMethodBodySelection,
   ) => RustImplFunction | undefined,
   accessorImplementationFor: (
     accessor: Node,
@@ -440,13 +431,15 @@ function planRootContractFunctions(
       accessor.role,
       context,
     );
-    const forwarder = implementation === undefined || helper === undefined ||
+    const selectedBody = implementation === undefined ? undefined
+      : context.input.program.projectMethodDispatch.bodyFor(concrete, implementation, undefined);
+    const forwarder = implementation === undefined || selectedBody === undefined || helper === undefined ||
         slot === undefined || contractShape === undefined
       ? undefined
       : planRootAccessorForwarder(
           concreteCarrier,
           accessor.declaration,
-          implementation,
+          selectedBody,
           accessor.role,
           slot,
           rootType,
@@ -464,25 +457,18 @@ function planRootContractFunctions(
       continue;
     }
     for (const variant of context.input.program.projectMethodDispatch.variantsForMember(member)) {
-      const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
-        member, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
-      );
-      if (targetTypeArguments === undefined) return undefined;
-      const virtualImplementation = projectMemberImplementation(concrete, member, context);
-      if (virtualImplementation === undefined) {
+      const virtualBody = context.input.program.projectMethodDispatch.implementationFor(concrete, variant, "virtual");
+      if (virtualBody === undefined) {
         return undefined;
       }
-      const virtualImplementationMethod = implementationFor(
-        virtualImplementation,
-        targetTypeArguments,
-      );
+      const virtualImplementation = virtualBody.declaration;
+      const virtualImplementationMethod = implementationFor(virtualBody);
       const virtualMethod = virtualImplementationMethod === undefined
         ? undefined
         : planRootMethodForwarder(
             concreteCarrier,
             member,
-            virtualImplementation,
-            variant,
+            virtualBody,
             variant.virtualSlot,
             rootType,
             virtualImplementationMethod,
@@ -501,20 +487,14 @@ function planRootContractFunctions(
       }
       functions.push(virtualMethod);
       if (contract.kind === "class" && !context.input.program.source.ast.hasModifierKind(member, "abstract")) {
-        const inherited = context.input.program.projectTypes.classLineage(concrete)?.includes(contract) === true;
-        const exactImplementation = inherited
-          ? projectMemberImplementation(contract, member, context)
-          : virtualImplementation;
-        const exactImplementationMethod = exactImplementation === undefined
-          ? undefined
-          : implementationFor(exactImplementation, targetTypeArguments);
-        const exactMethod = exactImplementation === undefined || exactImplementationMethod === undefined
+        const exactBody = context.input.program.projectMethodDispatch.implementationFor(concrete, variant, "exact");
+        const exactImplementationMethod = exactBody === undefined ? undefined : implementationFor(exactBody);
+        const exactMethod = exactBody === undefined || exactImplementationMethod === undefined
           ? undefined
           : planRootMethodForwarder(
               concreteCarrier,
               member,
-              exactImplementation,
-              variant,
+              exactBody,
               variant.exactSlot,
               rootType,
               exactImplementationMethod,

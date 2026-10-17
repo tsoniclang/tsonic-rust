@@ -5,7 +5,7 @@ import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality
 import type { RustBlock, RustGenericParameter, RustItem, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput } from "../../program/plan-context.js";
+import { diagnosticInput, requireRustEmissionContext, rustContextForEmission } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { createRustSyntheticNameState } from "../../names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../expressions/callable.js";
@@ -33,6 +33,7 @@ export function planRustSuspendedCallableItems(context: RustPlanContext): readon
 
 function planImplementation(implementation: RustSuspendedCallableImplementation, context: RustPlanContext): readonly RustItem[] | undefined {
   const { declaration } = implementation;
+  context = rustContextForEmission(context, requireRustEmissionContext(context, declaration, "native-body", declaration));
   const captures = context.input.program.callableValues.nativeCaptures.forDeclaration(declaration);
   if (captures.kind !== "resolved" ||
     implementation.storage.length !== implementation.captures.length + implementation.receiverFields.length + implementation.receivers.length ||
@@ -45,7 +46,7 @@ function planImplementation(implementation: RustSuspendedCallableImplementation,
     !implementation.receivers.every((_capture, index) => rustTargetTypeRefEquals(
       implementation.storage[implementation.captures.length + implementation.receiverFields.length + index],
       substituteElidedLifetime(captures.receivers[index]!, rustStaticLifetime)))) return undefined;
-  const genericPlan = planRustCallableGenerics(declaration, context, undefined, implementation.parameters);
+  const genericPlan = planRustCallableGenerics(declaration, context, implementation.parameters);
   if (genericPlan === undefined) return undefined;
   const scoped: RustPlanContext = { ...genericPlan.context,
     callableDeclaration: declaration,

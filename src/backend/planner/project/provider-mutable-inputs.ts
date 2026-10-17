@@ -7,7 +7,7 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import { rustTargetOperationIsDirectLocation } from "../../../analysis/operations/target-operation.js";
 import { rustNativeStorageRoot } from "../../../analysis/storage/native-paths.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath, type RustPlanContext } from "../program/plan-context.js";
 import { planRustPromotedStorageLocation, type RustExpressionPlanner } from "../expressions/typed-locations.js";
 import { rustDirectProjectFieldStoragePath, rustProjectObjectRepresentation } from "../objects/project-storage.js";
@@ -145,8 +145,11 @@ export function mutableRootsAreDisjoint(
   context: RustPlanContext,
 ): boolean {
   if (mutableInputs.size === 0) return true;
-  const proof = context.input.program.providerMutableInputs.forOperation(node);
-  if (proof?.kind === "proved" && proof.operation === fact && proof.inputs.length === mutableInputs.size &&
+  const emission = context.emissionContext;
+  if (emission === undefined) failRustPlannerInvariant("A mutable native source operation requires its original sealed emission context.", node);
+  const proof = context.input.program.providerMutableInputs.forOperation(node, fact, emission.use);
+  if (proof?.kind === "proved" && proof.operation === fact && proof.context === emission && proof.contextUse === emission.use &&
+    proof.inputs.length === mutableInputs.size &&
     proof.inputs.every(value => {
       const selected = mutableInputs.get(value.key);
       return selected?.node === value.node && selected.inputs.length === 1 && selected.inputs[0] === value.input;
