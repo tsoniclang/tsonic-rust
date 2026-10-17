@@ -390,17 +390,6 @@ export function analyzeRustTargetProgram(
     isNativeNode: context.isNativeNode,
     records, names: context.names, typeDefinitions, errorRegions: preparedErrorRegions, projectFlowReadSelections });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
-  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
-    navigation: context.source.navigation, nodes: context.nativeNodes, statementCompletions: statementCompletions.plan });
-  const mutableInputDiagnostics: TargetDiagnostic[] = [];
-  for (const node of context.nativeNodes) {
-    const selection = providerMutableInputs.forOperation(node);
-    if (selection?.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
-      category: "error", source: "tsonic-rust", message: selection.reason,
-      sourceNode: selection.node,
-      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
-  }
-  if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const identities = sourceOutputIdentities.identities;
   const moduleNameByFileName = new Map([...identities].map(([fileName, identity]) => [fileName, identity.moduleName]));
   const externalCrateNameByFileName = new Map([...identities].flatMap(([fileName, identity]) =>

@@ -415,7 +415,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     },
     seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
       if (sealResult !== undefined) return sealResult;
-      if (physicalLifecycle === undefined || selectedPlan === undefined || emissionRequests === undefined || sourceOccurrences === undefined)
+      const completedSelection = selectedPlan;
+      if (physicalLifecycle === undefined || completedSelection === undefined || emissionRequests === undefined || sourceOccurrences === undefined)
         throw new Error("Physical callable publication requires completed source-selected families and effects.");
       const publication = physicalLifecycle.complete(physical);
       if (publication.kind === "rejected") {
@@ -426,7 +427,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
         sourceStorage: input.sourceStorage, genericBindingsFor: nativeStorage.genericBindingsFor,
         projectTypes: input.projectTypes,
-        generic, frames: selectedPlan.frames, suspended: selectedPlan.suspended, native,
+        generic, frames: completedSelection.frames, suspended: completedSelection.suspended, native,
         nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
         genericCompletions: completions(), sourceOccurrences, emissionRequests });
       if (emission.kind === "rejected") {
@@ -440,13 +441,13 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
       const nativeEmission = publishRustPhysicalEmissionContexts(emission.value, fileName => late.nativeTypeInputFor(fileName, {
-        generic, frames: selectedPlan.frames,
+        generic, frames: completedSelection.frames,
       }));
       if (nativeEmission.kind === "rejected") {
         sealResult = nativeEmission;
         return sealResult;
       }
-      publishedPlan = Object.freeze({ ...selectedPlan, ...publication.value, native: nativeInputs,
+      publishedPlan = Object.freeze({ ...completedSelection, ...publication.value, native: nativeInputs,
         emissionContexts: nativeEmission.value });
       sealResult = resolvedTargetStage(publishedPlan);
       return sealResult;
