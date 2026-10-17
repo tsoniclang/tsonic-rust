@@ -321,6 +321,39 @@ export function alias(): NativeValues { const aliasValues = [1, 2]; return alias
     assertArray(program, initializers, "aliasValues", "float32");
   });
 
+  test(`C130 ${lane}: inferred generic contexts never manufacture a floating array destination`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
+function inferred<T>(values: T[]): void { }
+function selected<T>(values: T[]): void { }
+function callback<T>(read: () => T[]): void { read(); }
+interface Receiver<T> { accept(values: T[]): void; }
+export function inspect(signed: int32, unsigned: uint32, receiver: Receiver<float32>): void {
+  const inferredValues = [signed, unsigned]; inferred(inferredValues);
+  const explicitValues = [signed, unsigned]; selected<number>(explicitValues);
+  const explicitNarrow = [16777217]; selected<float32>(explicitNarrow);
+  const receiverValues = [16777217]; receiver.accept(receiverValues);
+  callback(() => { const inferredCallbackValues = [signed, unsigned]; return inferredCallbackValues; });
+  callback<float32>(() => { const explicitCallbackValues = [16777217]; return explicitCallbackValues; });
+  const typedCallback: () => float32[] = () => { const typedCallbackValues = [16777217]; return typedCallbackValues; };
+  typedCallback();
+}
+` } });
+    const initializers = bindings(program);
+    for (const name of ["inferredValues", "inferredCallbackValues"]) {
+      const fact = program.records.targetOperation.get(initializers.get(name));
+      assert.equal(fact?.kind === "array-literal", true, `${name}: the complete native aggregate remains admitted`);
+      const leaves = rustUnionLeaves(fact.elementCarrier, program.typeDefinitions);
+      assert.equal(leaves?.length, 2, `${name}: an inferred checked number cannot erase the two native integer arms`);
+      for (const primitive of ["int32", "uint32"]) assert.equal(leaves.some(leaf =>
+        rustTargetTypeRefEquals(leaf.carrier, rustSourcePrimitiveTargetType(primitive))), true,
+      `${name}: retain the actual ${primitive} payload`);
+    }
+    assertArray(program, initializers, "explicitValues", "float64");
+    for (const name of ["explicitNarrow", "receiverValues", "explicitCallbackValues", "typedCallbackValues"]) {
+      assertArray(program, initializers, name, "float32");
+    }
+  });
+
   test(`C130 ${lane}: nonnumeric subtype reduction preserves final native admission`, () => {
     for (const declarations of [
       "class Base { value: number = 1; } class Derived extends Base { extra: number = 2; }",

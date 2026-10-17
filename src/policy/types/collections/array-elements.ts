@@ -52,10 +52,14 @@ export function selectRustInferredNumericArrayElement(
     ? { kind: "rejected", reason: "An inferred numeric union requires an exact canonical carrier for every authored integer literal." }
     : unavailable;
   if (!isRustNumericCarrier(sourceElement)) return unresolved;
-  const fixedIntegers = peers.filter(peer => isRustIntegerCarrier(peer.carrier));
+  const integerCarriers = new Map<string, TargetTypeRef>();
+  for (const { carrier } of peers) {
+    if (isRustIntegerCarrier(carrier)) integerCarriers.set(carrier.name, carrier);
+  }
+  const fixedIntegers = [...integerCarriers.values()];
   const incompatibleIntegers = fixedIntegers.some(left => fixedIntegers.some(right =>
-    !numericConversion(left.carrier, right.carrier, "inferred-storage") &&
-    !numericConversion(right.carrier, left.carrier, "inferred-storage")));
+    !numericConversion(left, right, "inferred-storage") &&
+    !numericConversion(right, left, "inferred-storage")));
   const actualFloating = constraints.some(({ carrier, literal }) => isRustNumericCarrier(carrier) &&
     (carrier.name === "float32" || carrier.name === "float64") && !flexibleInteger(literal));
   const candidates: TargetTypeRef[] = [];

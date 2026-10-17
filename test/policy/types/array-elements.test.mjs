@@ -150,3 +150,19 @@ test("C130 genuine float32 width unions stay with their existing checked union o
     }
   }
 });
+
+test("C130 repeated native peers retain bounded native-domain selection and complete literal constraints", () => {
+  const compatible = Array.from({ length: 4096 }, (_, index) => fixed(index % 2 === 0 ? "int16" : "int32"));
+  const selected = selectRustInferredNumericArrayElement(primitive("float64"),
+    [...compatible, authored(4294967296n, 0n, 4294967296n)], []);
+  assert.equal(selected.kind === "resolved" && selected.carrier.name === "float64", true,
+    "repeated compatible widths retain the exact outlying literal without quadratic peer comparison");
+  const incompatible = Array.from({ length: 4096 }, (_, index) => fixed(index % 2 === 0 ? "int32" : "uint32"));
+  assert.equal(selectRustInferredNumericArrayElement(primitive("float64"),
+    [...incompatible, authored(1n, 0n, 1n)], []).kind, "unavailable",
+  "repetition cannot erase incompatible physical integer arms");
+  const fractional = selectRustInferredNumericArrayElement(primitive("float64"),
+    [...incompatible, authored(5n, -1n)], []);
+  assert.equal(fractional.kind === "resolved" && fractional.carrier.name === "float64", true,
+    "a real fractional contribution still selects the existing native float carrier");
+});
