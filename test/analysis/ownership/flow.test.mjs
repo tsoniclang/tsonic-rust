@@ -4,15 +4,22 @@ import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustOwnershipFlow } from "../../../dist/analysis/ownership/flow.js";
+import { createRustBorrowUseAnalysis } from "../../../dist/analysis/ownership/effects.js";
 import { rustNativeArgumentBorrowsRead } from "../../../dist/analysis/ownership/uses.js";
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 
 let sequence = 0;
+function analyzeFlow(input) {
+  const nativeNodes = new Set(input.nativeNodes);
+  return analyzeRustOwnershipFlow({ ...input, borrowUses: createRustBorrowUseAnalysis({
+    ast: input.source.ast, navigation: input.source.navigation, isNativeNode: node => nativeNodes.has(node),
+  }) });
+}
 async function fixture(text, options = {}) {
   const source = createTargetSourceProgram(await checkedSource(`rust-ownership-flow-${sequence++}`, { "src/index.ts": text }));
   const storage = createSourceStorageQuery(source, source.sourceFiles);
-  const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
+  const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
     isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false, ...options });
   return { source, storage, selected };
 }
@@ -22,6 +29,48 @@ function references(source, storage, name) {
     source.navigation.sourceReferenceFor(node) !== undefined &&
     source.navigation.sourceReferenceFor(node)?.declaration !== source.ast.parent(node));
 }
+
+test("ownership rejects a missing or exhausted native-use owner without publishing partial moves", async () => {
+  const { source, storage } = await fixture("export function run(value: string): string { return value; }");
+  const input = { source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
+    isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false };
+  const superseded = analyzeRustOwnershipFlow(input);
+  assert.equal(superseded.kind, "rejected", "the retired independently computed source-use path is rejected");
+  assert.equal(superseded.diagnostics[0].code, "RUST_OWNERSHIP_FLOW_UNRESOLVED", "a missing original use owner is explicit");
+  const borrowUses = createRustBorrowUseAnalysis({ ast: source.ast, navigation: source.navigation,
+    isNativeNode: node => storage.nodes.includes(node) }, 1);
+  const exhausted = analyzeRustOwnershipFlow({ ...input, borrowUses });
+  assert.equal(exhausted.kind, "rejected", "partial ownership cannot escape an exhausted shared source-use budget");
+  assert.equal(exhausted.diagnostics[0].code, "RUST_BORROW_STABILITY_BUDGET_INVALID", "the shared finite bound owns rejection");
+  assert.equal("flow" in exhausted, false, "an incomplete native summary publishes no partial transfer decisions");
+});
+
+test("parameter-property transfers use the identical native use domain as borrow effects", async () => {
+  for (const required of [false, true]) {
+    const { source, storage } = await fixture(`class Holder {
+      constructor(public value: string) {
+        function rebind(): void { value = value; }
+        ${required ? "rebind();" : ""}
+      }
+    }`);
+    const parameter = storage.nodes.find(node => source.ast.is.IsParameterDeclaration(node) &&
+      source.ast.text(source.ast.name(node)) === "value");
+    assert.equal(parameter !== undefined, true, "the original authored parameter property is checked");
+    assert.equal(source.navigation.declarationUseSummary(parameter).bindingWritten, true,
+      "whole source storage retains the real nested write regardless of native participation");
+    const builder = createRustProgramRecordBuilder();
+    const participation = analyzeRustNativeParticipation({ ast: source.ast, storage,
+      navigation: source.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
+    assert.equal(participation.kind, "resolved", "the one canonical participation owner decides required bodies");
+    const selected = analyzeFlow({ source, storage, nativeNodes: participation.nodes,
+      capturesFor: () => undefined, isOnceCallable: () => false,
+      canMoveStoredField: () => false, isOwnedOperationResult: () => false });
+    assert.equal(selected.kind, "resolved", "the original shared CFG supplies transfer liveness");
+    assert.equal(selected.flow.movingReads.has(source.ast.name(parameter)), !required,
+      required ? "a real nested write prevents the initial payload transfer" :
+        "an erased nested write cannot require a hidden payload snapshot");
+  }
+});
 
 test("ownership creates graphs only for the canonical required native body domain", async () => {
   for (const required of [false, true]) {
@@ -36,7 +85,7 @@ test("ownership creates graphs only for the canonical required native body domai
     const participation = analyzeRustNativeParticipation({ ast: source.ast, storage,
       navigation: source.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
     assert.equal(participation.kind, "resolved", "checked native participation closes before graph admission");
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: participation.nodes,
+    const selected = analyzeFlow({ source, storage, nativeNodes: participation.nodes,
       capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
       isOwnedOperationResult: () => false, limits: { maximumPoints: 8 } });
     assert.equal(selected.kind, required ? "rejected" : "resolved", "only a required body consumes its CFG budget");
@@ -75,7 +124,7 @@ for (const [name, expression, input] of [
     const field = source.ast.as.AsReturnStatement(returned)?.Expression;
     assert.equal(field !== undefined, true, "the checked return has its exact field expression");
     for (const eligible of [false, true]) {
-      const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
+      const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
         isOnceCallable: () => false, canMoveStoredField: node => eligible && source.ast.is.IsPropertyAccessExpression(node),
         isOwnedOperationResult: () => false });
       assert.equal(selected.kind, "resolved");
@@ -105,7 +154,7 @@ test("capture transfer is selected at the checked closure point, not at a later 
   const reference = references(source, storage, "value")[0];
   const declaration = source.navigation.sourceReferenceFor(reference).declaration;
   for (const once of [false, true]) {
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+    const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes,
       capturesFor: owner => owner === closure ? { receivers: [], receiverFields: [], captures: [
         { declaration, reference, carrier: { kind: "source-primitive", name: "int32" }, storage: "value" },
       ] } : undefined,
@@ -121,7 +170,7 @@ test("capture transfer does not cross a finally observation", async () => {
   const closure = storage.nodes.find(node => source.ast.is.IsArrowFunction(node));
   const reference = references(source, storage, "value")[0];
   const declaration = source.navigation.sourceReferenceFor(reference).declaration;
-  const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+  const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes,
     capturesFor: owner => owner === closure ? { receivers: [], receiverFields: [], captures: [
       { declaration, reference, carrier: { kind: "source-primitive", name: "int32" }, storage: "value" },
     ] } : undefined,
@@ -143,7 +192,7 @@ test("a native argument lease prevents a later last-use move only inside the sam
   const reads = references(source, storage, "value");
   assert.equal(reads.length, 2);
   for (const borrowed of [false, true]) {
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
+    const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
       isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false,
       mayBorrowArgument: argument => borrowed && argument === reads[0] });
     assert.equal(selected.kind, "resolved");
@@ -180,7 +229,7 @@ for (const [argument, retained] of [["value", true], ["produce(value)", false], 
     }
     const records = { targetOperation, runtimeCarrier,
       argumentPassing: new Map([[first, { mode: "borrow-shared" }]]) };
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
+    const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
       isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false,
       mayBorrowArgument: (actual, reference) => rustNativeArgumentBorrowsRead(actual, reference, source.ast, records) });
     assert.equal(selected.kind, "resolved");
@@ -193,7 +242,7 @@ for (const [argument, retained] of [["value", true], ["produce(value)", false], 
 test("foreign checked storage cannot manufacture an ownership proof", async () => {
   const first = await fixture("function run(value: string) { return value; }");
   const second = await fixture("function run(value: string) { return value; }");
-  assert.throws(() => analyzeRustOwnershipFlow({ source: first.source, storage: second.storage, nativeNodes: first.storage.nodes,
+  assert.throws(() => analyzeFlow({ source: first.source, storage: second.storage, nativeNodes: first.storage.nodes,
     capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
     isOwnedOperationResult: () => false }), /identical checked source program/u);
 });
@@ -225,7 +274,7 @@ test("an owned await last-use still cannot overlap an earlier argument's actual 
   const reads = references(source, storage, "pending");
   assert.equal(reads.length, 2, "the exact overlapping invocation has two source reads");
   for (const borrowed of [false, true]) {
-    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+    const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes,
       capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
       isOwnedOperationResult: () => false, mayBorrowArgument: argument => borrowed && argument === reads[0] });
     assert.equal(selected.kind, "resolved", "the same graph and actual native borrowing premise close");

@@ -5,6 +5,7 @@ import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable,
   type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
+import type { RustBorrowUseAnalysis } from "./effects.js";
 
 export interface RustOwnershipFlow {
   readonly movingReads: ReadonlySet<Node>;
@@ -17,6 +18,7 @@ export interface RustOwnershipFlowInput {
   readonly source: TargetSourceProgram;
   readonly storage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
+  readonly borrowUses: RustBorrowUseAnalysis;
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
   readonly isOnceCallable: (closure: Node) => boolean;
   readonly canMoveStoredField: (field: Node) => boolean;
@@ -31,6 +33,11 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
   const { source, storage } = input;
   if (storage.source !== source) throw new Error("Rust ownership and flow require the identical checked source program.");
+  if (input.borrowUses === undefined) return { kind: "rejected", diagnostics: [{
+    code: "RUST_OWNERSHIP_FLOW_UNRESOLVED", category: "error", source: "tsonic-rust",
+    message: "Rust ownership flow requires its original canonical native-use analysis.",
+    evidence: ["target.capability=rust.analysis.ownership"],
+  }] };
   const { ast } = source;
   const domain = createSourceControlFlowDomain(source, input.nativeNodes);
   if (domain.kind === "unresolved") return { kind: "rejected", diagnostics: [{
@@ -44,6 +51,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const graphs = new Map<Node, SourceControlFlowGraph>();
   const livenessByDeclaration = new Map<Node, Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }>>();
   for (const declaration of input.nativeNodes) {
+    if (input.borrowUses.failure() !== undefined) break;
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
     const selected = createSourceControlFlow(source, declaration, { domain: domain.domain, limits: input.limits });
     const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, input.limits) : selected;
@@ -82,8 +90,10 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     }
   }
   for (const node of input.nativeNodes) {
+    if (input.borrowUses.failure() !== undefined) break;
     if (sourceParameterIsProperty(ast, node)) {
-      const summary = source.navigation.declarationUseSummary(node);
+      const summary = input.borrowUses.useSummaryFor(node);
+      if (summary === undefined) break;
       const name = ast.name(node);
       if (name !== undefined && !summary.bindingWritten && summary.uses.every(use => !nativeNodes.has(use.reference) ||
         use.kind === "source-linkage" || use.kind === "type-only" || input.isInstanceFieldUse?.(use.reference, node) === true)) {
@@ -91,6 +101,11 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
       }
     }
   }
+  const useFailure = input.borrowUses.failure();
+  if (useFailure !== undefined) return { kind: "rejected", diagnostics: [{
+    code: "RUST_BORROW_STABILITY_BUDGET_INVALID", category: "error", source: "tsonic-rust",
+    message: useFailure, evidence: ["target.capability=rust.backend.borrow-stability"],
+  }] };
   for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
     const node = input.nativeNodes[index]!;
     if (ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node) || input.isOwnedOperationResult(node)) movingReads.add(node);
@@ -106,11 +121,12 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
 
 function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput, awaitedReads: ReadonlySet<Node>,
   nativeNodes: ReadonlySet<Node>): boolean {
-  const { ast, navigation } = input.source;
+  const { ast } = input.source;
   if (sourceEnclosingCallable(binding, ast) !== callable) return false;
   const kind = ast.variableDeclarationKind(binding);
   if (kind === "using" || kind === "await using") return false;
-  const summary = navigation.declarationUseSummary(binding);
+  const summary = input.borrowUses.useSummaryFor(binding);
+  if (summary === undefined) return false;
   return !summary.exported && summary.uses.every(use => !nativeNodes.has(use.reference) ||
     use.role !== "value" || awaitedReads.has(use.reference));
 }
@@ -118,7 +134,7 @@ function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipF
 function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: RustOwnershipFlowInput,
   nativeNodes: ReadonlySet<Node>): boolean {
   if (input.mayBorrowArgument === undefined) return false;
-  const { ast, navigation } = input.source;
+  const { ast } = input.source;
   const invocations = new Set<Node>();
   for (let parent = ast.parent(reference); parent !== undefined && !isSourceCallableBodyBoundary(ast, parent); parent = ast.parent(parent)) {
     if (ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent)) invocations.add(parent);
@@ -126,7 +142,9 @@ function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: Rus
   if (invocations.size === 0) return false;
   const range = ast.authoredRange(reference);
   if (range.kind !== "authored") return true;
-  return navigation.declarationUses(binding).some(use => {
+  const summary = input.borrowUses.useSummaryFor(binding);
+  if (summary === undefined) return false;
+  return summary.uses.some(use => {
     if (!nativeNodes.has(use.reference) || use.kind === "source-linkage" || use.kind === "type-only" || use.reference === reference) return false;
     const other = ast.authoredRange(use.reference);
     if (other.kind !== "authored" || other.end > range.start) return false;

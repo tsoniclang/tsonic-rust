@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustBorrowEffects, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
+import { analyzeRustBorrowEffects, createRustBorrowUseAnalysis, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
 
 function analyze(input, maximumNodes) {
+  input = { ...input, borrowUses: createRustBorrowUseAnalysis(input, maximumNodes) };
   const selected = analyzeRustBorrowEffects(input, maximumNodes);
   return selected.kind === "resolved" ? { ...selected, input } : selected;
 }
@@ -208,6 +209,20 @@ test("indexed receiver stability has one sealed declaration proof beyond the ret
   fixture.input.ast.parent = () => { throw new Error("sealed lookup cannot walk source syntax"); };
   for (const receiver of fixture.receivers) assert.equal(result.effects.stableBindings.has(receiver), true);
   assert.equal(result.effects.stableBindings.has({}), false, "foreign identity cannot obtain borrowing evidence");
+});
+
+test("borrow consumers reuse one original native-use summary and accounting owner", () => {
+  const fixture = indexedBindingFixture({ uses: 3 });
+  const declaration = fixture.input.records.sourceBinding.get(fixture.receivers[0]).sourceDeclaration;
+  const borrowUses = createRustBorrowUseAnalysis(fixture.input, 128);
+  const summary = borrowUses.useSummaryFor(declaration);
+  assert.equal(summary !== undefined, true, "the original use producer admits its checked declaration once");
+  const selected = analyzeRustBorrowEffects({ ...fixture.input, borrowUses }, 128);
+  assert.equal(selected.kind, "resolved", "the same producer also accounts for all effect work");
+  assert.equal(borrowUses.useSummaryFor(declaration) === summary, true, "later consumers read the identical native summary");
+  assert.equal(fixture.summaries(), 1, "source use facts are not selected a second time");
+  const superseded = analyzeRustBorrowEffects(fixture.input);
+  assert.equal(superseded.kind, "rejected", "the old independently computed use path is not accepted");
 });
 
 test("indexed binding stability rejects exhaustion rather than silently materializing a receiver", () => {

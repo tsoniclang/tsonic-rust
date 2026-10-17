@@ -161,10 +161,18 @@ export function mutated(value: NoClone): NoClone {
   function update(): int32 { return advance(value); }
   update();
   return value;
+}
+class Holder {
+  constructor(public value: NoClone) {
+    function erased(): void { value = value; }
+  }
+}
+export function constructed(value: NoClone): NoClone {
+  return new Holder(value).value;
 }` },
   });
   assertNoTargetDiagnostics(result.diagnostics);
-  for (const name of ["borrowed", "repeated", "transferred", "mutated"]) {
+  for (const name of ["borrowed", "repeated", "transferred", "mutated", "constructed"]) {
     assert.equal(nativeMethods(nativeFunction(result, name), "clone").length, 0,
       `${name}: the native ownership contract does not allocate a payload snapshot`);
   }
@@ -180,7 +188,7 @@ export function duplicated(value: NoClone): [NoClone, NoClone] { return [value, 
   assert.equal(refused.artifacts.length, 0, "unavailable owned snapshots produce no partial native output");
   const directory = writeGeneratedProject("borrowed-no-clone-environments", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
-  writeFileSync(join(directory, "tests/borrowed.rs"), `use ownership_borrow_control::index::{borrowed, mutated, repeated, transferred};
+  writeFileSync(join(directory, "tests/borrowed.rs"), `use ownership_borrow_control::index::{borrowed, constructed, mutated, repeated, transferred};
 use ownership_fixture::{advance, observe, NoClone};
 use std::cell::Cell;
 use std::rc::Rc;
@@ -198,6 +206,8 @@ fn handwritten_repeated(value: NoClone) -> NoClone {
 
 fn handwritten_transferred(value: NoClone) -> NoClone { value }
 
+fn handwritten_constructed(value: NoClone) -> NoClone { value }
+
 fn handwritten_mutated(mut value: NoClone) -> NoClone {
     let _ = advance(&mut value);
     value
@@ -205,11 +215,12 @@ fn handwritten_mutated(mut value: NoClone) -> NoClone {
 
 #[test]
 fn native_helper_costs_match_without_clone_or_early_drop() {
-    let cases: [(fn(NoClone) -> NoClone, fn(NoClone) -> NoClone, usize, i32); 4] = [
+    let cases: [(fn(NoClone) -> NoClone, fn(NoClone) -> NoClone, usize, i32); 5] = [
         (borrowed, handwritten_borrowed, 1, 7),
         (repeated, handwritten_repeated, 2, 7),
         (transferred, handwritten_transferred, 0, 7),
         (mutated, handwritten_mutated, 1, 8),
+        (constructed, handwritten_constructed, 0, 7),
     ];
     for (generated, native, expected_reads, expected_value) in cases {
         let reads = Rc::new(Cell::new(0));

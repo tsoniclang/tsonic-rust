@@ -41,6 +41,14 @@ export interface RustBorrowEffectsInput {
   readonly frozenDataWrites: RustTargetProgram["frozenDataWrites"];
   readonly structuralShapes: RustTargetProgram["structuralShapes"];
   readonly navigation: RustTargetProgram["sourceNavigation"];
+  readonly borrowUses: RustBorrowUseAnalysis;
+}
+
+export interface RustBorrowUseAnalysis {
+  readonly maximumNodes: number;
+  useSummaryFor(declaration: Node): SourceDeclarationUseSummary | undefined;
+  reserve(count: number): boolean;
+  failure(): string | undefined;
 }
 
 export type AnalyzeRustBorrowEffectsResult =
@@ -48,6 +56,39 @@ export type AnalyzeRustBorrowEffectsResult =
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
 
 const maximumBorrowStabilityNodes = 4_194_304;
+
+export function createRustBorrowUseAnalysis(
+  input: Pick<RustBorrowEffectsInput, "ast" | "navigation" | "isNativeNode">,
+  maximumNodes = maximumBorrowStabilityNodes,
+): RustBorrowUseAnalysis {
+  const summaries = new Map<Node, SourceDeclarationUseSummary>();
+  let reservations = 0;
+  let failure = !Number.isSafeInteger(maximumNodes) || maximumNodes < 1 || maximumNodes > maximumBorrowStabilityNodes
+    ? "Rust borrow stability requires a positive finite node budget within its analysis bound." : undefined;
+  const reserve = (count: number): boolean => {
+    if (failure !== undefined) return false;
+    reservations += count;
+    if (reservations > maximumNodes) failure = "Rust borrow stability exceeds its finite source-node accounting bound.";
+    return failure === undefined;
+  };
+  return Object.freeze({ maximumNodes, reserve, failure: () => failure,
+    useSummaryFor(declaration: Node): SourceDeclarationUseSummary | undefined {
+      if (failure !== undefined) return undefined;
+      const existing = summaries.get(declaration);
+      if (existing !== undefined) return existing;
+      if (!reserve(1)) return undefined;
+      const uses: SourceDeclarationUse[] = [];
+      for (const use of input.navigation.declarationUseSummary(declaration).uses) {
+        if (!input.isNativeNode(use.reference)) continue;
+        if (!reserve(1)) return undefined;
+        uses.push(use);
+      }
+      const summary = sourceDeclarationUseSummary(input.ast, declaration, Object.freeze(uses));
+      summaries.set(declaration, summary);
+      return summary;
+    },
+  });
+}
 
 export function analyzeRustBorrowEffects(
   input: RustBorrowEffectsInput,
@@ -59,9 +100,10 @@ export function analyzeRustBorrowEffects(
       evidence: ["target.capability=rust.backend.borrow-stability"],
     }],
   });
-  if (!Number.isSafeInteger(maximumNodes) || maximumNodes < 1 || maximumNodes > maximumBorrowStabilityNodes) {
-    return rejected("Rust borrow stability requires a positive finite node budget within its analysis bound.");
-  }
+  if (input.borrowUses === undefined || input.borrowUses.maximumNodes !== maximumNodes)
+    return rejected("Rust borrow effects require their one original native-use analysis and exact accounting bound.");
+  const initialFailure = input.borrowUses.failure();
+  if (initialFailure !== undefined) return rejected(initialFailure);
   const positions = new Map(input.nodes.map((node, index) => [node, index]));
   if (positions.size !== input.nodes.length) return rejected("Rust borrow effects require unique checked source-node identities.");
   if (input.nodes.some(node => !input.isNativeNode(node)))
@@ -71,27 +113,15 @@ export function analyzeRustBorrowEffects(
   const nativeWrites = new Map<Node, readonly Node[]>();
   const stableBindings = new Set<Node>();
   const bindingDecisions = new WeakMap<Node, boolean>();
-  const useSummaries = new Map<Node, SourceDeclarationUseSummary>();
   const directField = (node: Node): boolean => rustDirectBorrowField(node, input);
-  let reservations = 0;
   let exhausted = false;
   const reserveTargets = (count: number): boolean => {
-    reservations += count;
-    if (reservations > maximumNodes) exhausted = true;
+    if (!input.borrowUses.reserve(count)) exhausted = true;
     return !exhausted;
   };
   const nativeUseSummary = (declaration: Node): SourceDeclarationUseSummary | undefined => {
-    const existing = useSummaries.get(declaration);
-    if (existing !== undefined) return existing;
-    if (!reserveTargets(1)) return undefined;
-    const uses: SourceDeclarationUse[] = [];
-    for (const use of input.navigation.declarationUseSummary(declaration).uses) {
-      if (!input.isNativeNode(use.reference)) continue;
-      if (!reserveTargets(1)) return undefined;
-      uses.push(use);
-    }
-    const summary = sourceDeclarationUseSummary(input.ast, declaration, Object.freeze(uses));
-    useSummaries.set(declaration, summary);
+    const summary = input.borrowUses.useSummaryFor(declaration);
+    if (summary === undefined) exhausted = true;
     return summary;
   };
   const selectStableBinding = (node: Node): void => {

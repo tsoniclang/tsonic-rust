@@ -31,7 +31,7 @@ import { analyzeRustNativeResultLoans } from "../ownership/result-loans.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
-import { analyzeRustBorrowEffects } from "../ownership/effects.js";
+import { analyzeRustBorrowEffects, createRustBorrowUseAnalysis } from "../ownership/effects.js";
 import {
   analyzeRustBinaryHooks,
   analyzeRustDispatchContextCatalog,
@@ -204,10 +204,13 @@ export function analyzeRustTargetProgram(
       }
       return { receivers: [], receiverFields: [], captures };
   };
+  const borrowUses = createRustBorrowUseAnalysis({ ast: context.ast,
+    navigation: context.source.navigation, isNativeNode: context.isNativeNode });
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
     nativeNodes: context.nativeNodes,
+    borrowUses,
     capturesFor,
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
       rustNativeArgumentBorrowsRead(argument, reference, context.ast, records),
@@ -314,6 +317,7 @@ export function analyzeRustTargetProgram(
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
   const borrowEffectsInput = {
+    borrowUses,
     isNativeNode: context.isNativeNode,
     sourceFacts: context.source.sourceFacts,
     ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
