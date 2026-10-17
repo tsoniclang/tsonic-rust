@@ -10,6 +10,8 @@ import {
   rustErrorBoundaryForDeclaration,
   rustErrorType,
   rustProjectTypeHasPublicImplementationAbi,
+  requireRustEmissionContext,
+  rustContextForEmission,
 } from "../../program/plan-context.js";
 import {
   rustAuthoredFieldDeadCodeDisposition,
@@ -496,6 +498,17 @@ function planConstructor(
     member ?? classDeclaration,
     [],
   );
+  const definition = context.input.program.projectTypes.definitionForDeclaration(classDeclaration);
+  const constructionPlan = definition === undefined ? undefined
+    : context.input.program.projectConstructions.forDefinition(definition);
+  const selectedLayer = constructionPlan?.layers[constructionPlan.layers.length - 1];
+  if (definition === undefined || constructionPlan === undefined || selectedLayer === undefined) {
+    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, classDeclaration),
+      "rust.backend.constructor-plan", "Class has no sealed native constructor readiness plan."));
+    return undefined;
+  }
+  const wrapperContext = rustContextForEmission(context, requireRustEmissionContext(context, constructionPlan, "constructor", classDeclaration));
+  context = rustContextForEmission(wrapperContext, requireRustEmissionContext(wrapperContext, selectedLayer, "constructor-layer", member ?? classDeclaration));
   const parameterPlan = member === undefined
     ? { params: [], prelude: [] } satisfies RustCallableParameterPlan
     : planRustCallableParameters(member, context, syntheticNames);
@@ -539,14 +552,6 @@ function planConstructor(
   if (parameterStatements === undefined) {
     return undefined;
   }
-  const definition = context.input.program.projectTypes.definitionForDeclaration(classDeclaration);
-  const constructionPlan = definition === undefined ? undefined
-    : context.input.program.projectConstructions.forDefinition(definition);
-  if (definition === undefined || constructionPlan === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, classDeclaration),
-      "rust.backend.constructor-plan", "Class has no sealed native constructor readiness plan."));
-    return undefined;
-  }
   const frame = context.input.program.callableValues.frames.definitionForOwner(classDeclaration);
   const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, constructorContext,
     rustProjectImplementationVisibility(publiclyReachable));
@@ -571,7 +576,7 @@ function planConstructor(
   const returnLabel = !constructionPlan.layerHasEarlyReturn(definition) ? undefined
     : { id: constructorContext.controlFlow!.nextLoopId++,
       label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
-  const layerContext = construction.contextForLayer(constructorContext, returnLabel);
+  const layerContext = construction.contextForLayer(constructorContext, selectedLayer, returnLabel);
   const statements: RustStmt[] = [...parameterStatements, ...construction.declarations];
   for (const field of constructionPlan.fields) {
     const slot = construction.values.get(field.declaration);

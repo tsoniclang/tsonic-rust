@@ -3,7 +3,7 @@ import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustOwnershipFlow } from "../ownership/flow.js";
+import { rustReadTransferRequirement, type RustOwnershipFlow } from "../ownership/flow.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
@@ -70,7 +70,7 @@ export function collectRustCallableInvocationRequirements(
       if (argument.sourceForm !== "value") continue;
       const expression = ast.arguments(node)[argument.sourceArgumentIndex];
       if (expression === undefined || !ast.is.IsIdentifier(expression) ||
-        input.ownershipFlow.movingReads.has(expression)) continue;
+        rustReadTransferRequirement(input.ownershipFlow, expression) === "transfer") continue;
       const argumentCarrier = records.runtimeCarrier.get(expression)?.carrier;
       if (argumentCarrier === undefined || isRustCopyCarrier(argumentCarrier)) continue;
       const error = addUse(expression, argumentCarrier, ["clone"]);

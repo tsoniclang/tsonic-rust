@@ -2,6 +2,7 @@ import { createRustRecordFixture } from "../../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { applyFinalizedRustArgumentMode } from "../../../../dist/backend/planner/expressions/input-shaping.js";
+import { planExpressionBeforeValueProjections, planRustValueFormation } from "../../../../dist/backend/planner/expressions/entry.js";
 import { rustStringTargetType } from "../../../../dist/target-model/types/index.js";
 
 
@@ -27,6 +28,11 @@ function context(parameter, override, capture) {
     capturedBindings: capture === undefined ? [] : [{ declaration, expression: { kind: "path", path: "capture" },
       storage: "value", valueCarrier: stringCarrier, borrowed: capture }],
     input: { program: { typeDefinitions: emptyRustTypeDefinitions,
+      ownership: { reads: new Map([[sourceNode, { carrier: stringCarrier, operandCarrier: stringCarrier,
+        formation: { kind: "clone" }, source: { kind: "borrow", mutable: false }, value: { kind: "borrow", mutable: false },
+        snapshot: { kind: "clone" }, stablePlace: true, readsStorage: true, pure: true,
+        sharedReference: false, flowResultBorrow: false, flowConversionInputBorrow: false,
+        borrowedAcross: new Set(), nativeResults: Object.freeze([]) }]]) },
       callableValues: { generic: { definitionFor: () => undefined } },
       records: createRustRecordFixture({sourceParameterAbi: { get: (_node) => parameter },
 sourceBinding: { get: (_node) => ({ sourceDeclaration: declaration }) },
@@ -39,6 +45,51 @@ runtimeCarrier: { get: () => ({ carrier: stringCarrier }) }}),
     expressionOverrides: new Map(override === undefined ? [] : [[sourceNode, override]]),
   };
 }
+
+test("storage overrides consume the admitted source read rather than snapshot capability", () => {
+  const expression = { kind: "path", path: "pending" };
+  for (const source of [{ kind: "move" }, { kind: "copy" }, { kind: "borrow", mutable: false },
+    { kind: "borrow", mutable: true }, { kind: "clone" }]) {
+    const selected = context(undefined, { expression, carrier: stringCarrier, valueForm: "storage" });
+    const ownership = selected.input.program.ownership.reads.get(sourceNode);
+    selected.input.program.ownership.reads.set(sourceNode, { ...ownership, source, snapshot: { kind: "clone" } });
+    const actual = planExpressionBeforeValueProjections(sourceNode, selected, "value");
+    if (source.kind === "clone") {
+      assert.equal(actual.kind, "method-call", "only the admitted clone read emits a method call");
+      assert.equal(actual.method, "clone", "the admitted source clone is retained");
+      assert.equal(actual.receiver, expression, "cloning retains the original storage expression");
+    } else {
+      assert.equal(actual, expression, `${source.kind} retains the exact source expression without a snapshot clone`);
+    }
+  }
+  const missing = context(undefined, { expression, carrier: stringCarrier, valueForm: "storage" });
+  missing.input.program.ownership.reads.clear();
+  assert.throws(() => planExpressionBeforeValueProjections(sourceNode, missing, "value"),
+    error => error instanceof Error && error.message.includes("ownership"),
+    "missing admission remains an invariant failure rather than an implicit move");
+});
+
+test("contextual owner stabilization renders only the completed formation contract", () => {
+  const expression = { kind: "path", path: "captured" };
+  for (const formation of [{ kind: "move" }, { kind: "clone" }, { kind: "borrow", mutable: false },
+    { kind: "borrow", mutable: true }]) {
+    const selected = context(undefined, { expression, carrier: stringCarrier, valueForm: "storage" });
+    const ownership = selected.input.program.ownership.reads.get(sourceNode);
+    selected.input.program.ownership.reads.set(sourceNode, { ...ownership, formation });
+    const actual = planRustValueFormation(sourceNode, selected);
+    if (formation.kind === "move") {
+      assert.equal(actual, expression, "an admitted owned transfer is not replaced with a snapshot");
+    } else if (formation.kind === "clone") {
+      assert.equal(actual.kind, "method-call", "the selected native snapshot is rendered once");
+      assert.equal(actual.method, "clone", "only the admitted formation selects cloning");
+      assert.equal(actual.receiver, expression, "snapshotting retains the original source place");
+    } else {
+      assert.equal(actual.kind, "reference", "a borrowed-only formation never consumes the native owner");
+      assert.equal(actual.expr, expression, "the original place supplies the admitted borrow");
+      assert.equal(actual.mutable === true, formation.mutable, "the actual borrow qualifier is retained");
+    }
+  }
+});
 
 test("exact borrowed lexical captures pass once through the canonical shared-input owner", () => {
   const expression = { kind: "path", path: "capture" };

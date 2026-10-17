@@ -253,6 +253,7 @@ export function normalizeTypeMembers(
               associatedTypeBindings: selected.associatedTypeBindings,
               traitDispatch: selected.traitDispatch,
               selfOwner: ownerIdentity,
+              selfType: selected.selfType,
               declarationIdentity: rustCompilerNestedItemIdentity(member.dependency, member.item, selected.context.owner),
               ...(resolveItem === undefined ? {} : { resolveItem }),
             }));
@@ -275,6 +276,7 @@ export function normalizeTypeMembers(
               associatedTypeBindings: selected.associatedTypeBindings,
               ...(selected.traitDispatch === undefined ? {} : { traitDispatch: selected.traitDispatch }),
               selfOwner: ownerIdentity,
+              selfType: selected.selfType,
               declarationIdentity: rustCompilerNestedItemIdentity(
                 dependency,
                 item,
@@ -476,6 +478,7 @@ function normalizeImplementation(
   readonly context: RustCompilerNormalizationContext;
   readonly genericParameters: readonly RustCompilerGenericParameter[];
   readonly bindings: RustCompilerSubstitutions;
+  readonly selfType: RustCompilerType;
   readonly sourceRequirements: readonly RustCompilerTypeParameter[];
   readonly associatedTypeBindings: ReadonlyMap<string, RustCompilerType>;
   readonly traitDispatch?: RustCompilerTraitDispatch;
@@ -538,11 +541,14 @@ function normalizeImplementation(
         traitDispatch,
         bindings,
       );
+  const selfType = normalizeMemberType(document, impl.for, generics.context, bindings,
+    associatedTypeBindings, traitDispatch);
   return Object.freeze({
     kind: "selected",
     context: generics.context,
     genericParameters: generics.parameters,
     bindings,
+    selfType,
     sourceRequirements,
     associatedTypeBindings,
     ...(traitDispatch === undefined ? {} : { traitDispatch }),

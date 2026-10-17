@@ -12,6 +12,42 @@ function select(ast, node, operation) {
     arguments: undefined, address: undefined, location: undefined, guard: undefined, callableMode: undefined });
 }
 
+test("native projections retain their original source receiver and evaluated key at the one read-use owner", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-native-projection-inputs", {
+    "src/index.ts": `
+class View { get value(): number { return 1; } set value(next: number) {} }
+function read(values: [string, string], view: View): string { view.value; return values[0]; }
+`,
+  }));
+  let indexed;
+  let property;
+  const visit = node => {
+    if (source.ast.is.IsElementAccessExpression(node)) indexed = node;
+    if (source.ast.is.IsPropertyAccessExpression(node)) property = node;
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.sourceFiles.forEach(visit);
+  assert.equal(indexed !== undefined && property !== undefined, true, "both checked operation subjects exist");
+  const access = source.ast.as.AsElementAccessExpression(indexed);
+  for (const kind of ["tuple-index", "fixed-index"]) {
+    const uses = select(source.ast, indexed, { kind });
+    const use = uses.get(access.Expression);
+    assert.equal(use?.mode, "projection", `${kind}: final ownership, not the renderer, decides the receiver transfer`);
+    assert.equal(use.later[0] === access.ArgumentExpression && use.later.length === 1, true,
+      `${kind}: the original evaluated key remains ordered after its receiver`);
+    assert.equal(use.stableAcrossEffects, true, `${kind}: any held borrow still needs its actual effect proof`);
+    assert.equal(Object.isFrozen(use), true, `${kind}: immutable policy result`);
+  }
+  const receiver = Node_Expression(source.ast, property);
+  for (const [accessMode, expected] of [["read", "shared"], ["write", "mutable"], ["read-write", "mutable"]]) {
+    const uses = select(source.ast, property, { kind: "source-accessor", accessMode, receiver: { kind: "instance" } });
+    assert.equal(uses.get(receiver)?.mode, expected, `${accessMode}: the selected native accessor retains its receiver contract`);
+    assert.equal(uses.get(receiver).later.length, 0, `${accessMode}: no later borrow is invented`);
+  }
+  assert.equal(select(source.ast, property, { kind: "source-accessor", accessMode: "read",
+    receiver: { kind: "static" } }).has(receiver), false, "a static accessor never invents an instance borrow");
+});
+
 test("operator ownership consumes selected operand modes instead of rediscovering them from token or result type", async () => {
   const source = createTargetSourceProgram(await checkedSource("ownership-native-operand-modes", {
     "src/index.ts": "function add(left: number, right: number) { return left + right; }",

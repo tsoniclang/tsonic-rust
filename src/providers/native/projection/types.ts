@@ -1,6 +1,7 @@
 import {
   rustFixedArrayTargetType,
   rustNamedTargetType,
+  rustNamedTypeCarrierValue,
   rustNativeScalarTargetId,
   rustNeverTargetType,
   rustOptionTargetId,
@@ -445,11 +446,13 @@ export function targetTypeFor(
         );
         const path = standard.targetPath.join("::");
         recordCarrierPath(context.carrierPaths, standard.targetId, path);
+        const current = rustNamedTypeCarrierValue(context.currentType?.carrier);
         return rustNamedTargetType(
           standard.targetId,
           path,
           arguments_,
           genericDefaults,
+          current?.id === standard.targetId ? current.traits : undefined,
         );
       }
       if (type.crateName !== context.dependency.crateName && pathResolution === "source-visible") {
@@ -471,7 +474,9 @@ export function targetTypeFor(
         ? type.genericArguments.map((argument) => targetGenericArgumentFor(argument, context, position, pathResolution))
         : targetGenericArgumentsForApplication(type, local, context, position);
       const genericDefaults = local === undefined ? [] : targetGenericDefaultsForApplication(type, local, context, position);
-      return rustNamedTargetType(id, path, genericArguments, genericDefaults);
+      const current = rustNamedTypeCarrierValue(context.currentType?.carrier);
+      return rustNamedTargetType(id, path, genericArguments, genericDefaults,
+        current?.id === id ? current.traits : undefined);
     }
   }
 }

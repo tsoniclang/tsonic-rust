@@ -5,13 +5,10 @@ import type { RustFinalizedSourceInput } from "../../../target-model/records/fin
 
 import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
 import { rustTargetOperationIsDirectLocation } from "../../../analysis/operations/target-operation.js";
-import { rustNativeStorageRoot } from "../../../analysis/storage/native-paths.js";
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath, type RustPlanContext } from "../program/plan-context.js";
-import { planRustPromotedStorageLocation, type RustExpressionPlanner } from "../expressions/typed-locations.js";
-import { rustDirectProjectFieldStoragePath, rustProjectObjectRepresentation } from "../objects/project-storage.js";
-import { providerSourceInputNode, providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
+import type { RustPlanContext } from "../program/plan-context.js";
+import { planRustLocationStorage, type RustExpressionPlanner } from "../expressions/typed-locations.js";
 
 export type MutableProviderInput =
   | {
@@ -44,173 +41,37 @@ export type MutableProviderInput =
 export function collectMutableInputs(
   context: RustPlanContext,
   fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
-  receiverNode: Node | undefined,
-  argumentNodes: readonly (Node | undefined)[],
+  operationNode: Node,
   planExpression: RustExpressionPlanner,
 ): Map<string, MutableProviderInput> | undefined {
   const mutableInputs = new Map<string, MutableProviderInput>();
-  for (const input of rustFinalizedSourceInputs(fact.abi)) {
-    if (input.mode !== "mut-ref") {
-      continue;
-    }
-    const sourceNode = providerSourceInputNode(input, receiverNode, argumentNodes);
-    if (sourceNode === undefined) {
-      return undefined;
-    }
-    const node = providerMutableLocationNode(sourceNode, context);
-    if (node === undefined) {
-      return undefined;
-    }
-    if (input.conversion.kind !== "identity") {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.typed-location-mutable-input",
-        "Mutable provider input requires one exact identity conversion.",
-      ));
-      return undefined;
-    }
-    const location = planRustPromotedStorageLocation(
-      node,
-      context,
-      planExpression,
-      true,
-    );
-    if (location.kind === "promoted" && location.expression === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.typed-location-mutable-input",
-        "Promoted mutable provider input has no exact Rust location expression.",
-      ));
-      return undefined;
-    }
-    const key = providerSourceInputKey(input);
-    const existing = mutableInputs.get(key);
-    if (existing === undefined) {
-      if (location.kind === "promoted") {
-        const expression = location.expression;
-        if (expression === undefined) {
-          return undefined;
-        }
-        mutableInputs.set(key, {
-          kind: "promoted",
-          node,
-          inputs: [input],
-          location: expression,
-          rootDeclaration: location.rootDeclaration,
-        });
-      } else {
-        const projectField = providerMutableProjectField(node, context);
-        const direct = projectField === undefined && providerMutableInputIsDirect(node, context);
-        const rootDeclaration = projectField?.rootDeclaration ??
-          (direct ? rustNativeStorageRoot(node, { ast: context.input.program.source.ast,
-            records: context.input.program.records, navigation: context.input.program.sourceNavigation }) : undefined);
-        mutableInputs.set(
-          key,
-          projectField !== undefined
-            ? {
-                kind: "project-field",
-                node,
-                inputs: [input],
-                receiverNode: projectField.receiverNode,
-                storagePath: projectField.storagePath,
-                ...(rootDeclaration === undefined ? {} : { rootDeclaration }),
-              }
-            : direct
-            ? {
-                kind: "direct",
-                node,
-                inputs: [input],
-                ...(rootDeclaration === undefined
-                  ? {}
-                  : { rootDeclaration }),
-              }
-            : {
-                kind: "owned",
-                node,
-                inputs: [input],
-              },
-        );
-      }
+  if (!rustFinalizedSourceInputs(fact.abi).some(input => input.mode === "mut-ref")) return mutableInputs;
+  const emission = context.emissionContext;
+  if (emission === undefined) return failRustPlannerInvariant(
+    "A mutable native source operation requires its original sealed emission context.", operationNode);
+  const proof = context.input.program.providerMutableInputs.forOperation(operationNode, fact, emission.use);
+  if (proof?.kind !== "proved" || proof.operation !== fact || proof.context !== emission || proof.contextUse !== emission.use)
+    return failRustPlannerInvariant("Mutable native rendering requires its exact admitted source-storage proof.", operationNode);
+  for (const selected of proof.inputs) {
+    const { key, node, input, place } = selected;
+    const storage = place.storage;
+    if (storage.kind === "promoted") {
+      const location = planRustLocationStorage(node, storage.expression, true, context, planExpression);
+      if (location === undefined) return undefined;
+      mutableInputs.set(key, { kind: "promoted", node, inputs: [input], location, rootDeclaration: storage.declaration });
+    } else if (storage.kind === "project-field") {
+      mutableInputs.set(key, { kind: "project-field", node, inputs: [input], receiverNode: storage.receiverNode,
+        storagePath: storage.storagePath,
+        ...(storage.rootDeclaration === undefined ? {} : { rootDeclaration: storage.rootDeclaration }) });
+    } else if (storage.kind === "direct") {
+      const rootDeclaration = place.sourcePath?.declaration;
+      mutableInputs.set(key, { kind: "direct", node, inputs: [input],
+        ...(rootDeclaration === undefined ? {} : { rootDeclaration }) });
     } else {
-      existing.inputs.push(input);
+      mutableInputs.set(key, { kind: "owned", node, inputs: [input] });
     }
   }
   return mutableInputs;
-}
-
-export function mutableRootsAreDisjoint(
-  node: Node,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
-  mutableInputs: ReadonlyMap<string, MutableProviderInput>,
-  context: RustPlanContext,
-): boolean {
-  if (mutableInputs.size === 0) return true;
-  const proof = context.input.program.providerMutableInputs.forOperation(node);
-  if (proof?.kind === "proved" && proof.operation === fact && proof.inputs.length === mutableInputs.size &&
-    proof.inputs.every(value => {
-      const selected = mutableInputs.get(value.key);
-      return selected?.node === value.node && selected.inputs.length === 1 && selected.inputs[0] === value.input;
-    })) return true;
-  context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
-    "rust.backend.typed-location-mutable-proof", "Mutable native lowering requires its exact sealed source-storage admission proof."));
-  return false;
-}
-
-function providerMutableInputIsDirect(
-  node: Node,
-  context: RustPlanContext,
-): boolean {
-  const { ast } = context.input.program.source;
-  if (ast.is.IsIdentifier(node)) {
-    const binding = context.input.program.records.sourceBinding.get(node);
-    const path = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
-    return path !== undefined && isValidRustIdentifier(path);
-  }
-  const kind = ast.kindName(node);
-  if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
-    return true;
-  }
-  const operation = context.input.program.records.targetOperation.get(node);
-  return rustTargetOperationIsDirectLocation(operation) ||
-    operation?.kind === "source-field" &&
-      operation.storage === "project-object" &&
-      operation.valueSemantics.kind === "stored" &&
-      operation.dispatch === undefined &&
-      rustProjectObjectRepresentation(operation.receiverCarrier, context)?.kind === "value";
-}
-
-function providerMutableProjectField(
-  node: Node,
-  context: RustPlanContext,
-): {
-  readonly receiverNode: Node;
-  readonly storagePath: readonly string[];
-  readonly rootDeclaration?: Node;
-} | undefined {
-  const operation = context.input.program.records.targetOperation.get(node);
-  if (operation?.kind !== "source-field" || operation.storage !== "project-object" ||
-    operation.valueSemantics.kind !== "stored" || operation.dispatch !== undefined) {
-    return undefined;
-  }
-  const representation = rustProjectObjectRepresentation(operation.receiverCarrier, context);
-  const storagePath = rustDirectProjectFieldStoragePath(
-    operation.receiverCarrier,
-    operation.storageIndex,
-    context,
-  );
-  const receiverNode = Node_Expression(context.input.program.source.ast, node);
-  if (representation === undefined || representation.kind === "value" ||
-    representation.kind === "shared-immutable" || storagePath === undefined ||
-    receiverNode === undefined) {
-    return undefined;
-  }
-  const rootDeclaration = rustNativeStorageRoot(receiverNode, { ast: context.input.program.source.ast,
-    records: context.input.program.records, navigation: context.input.program.sourceNavigation });
-  return {
-    receiverNode,
-    storagePath,
-    ...(rootDeclaration === undefined ? {} : { rootDeclaration }),
-  };
 }
 
 export function providerMutableStorageEffects(
@@ -269,25 +130,4 @@ function mergeSourceExpressionEffects(
     suspends: left.suspends || right.suspends,
     mayThrow: left.mayThrow || right.mayThrow,
   };
-}
-
-function providerMutableLocationNode(
-  sourceNode: Node,
-  context: RustPlanContext,
-): Node | undefined {
-  const operation = context.input.program.records.targetOperation.get(sourceNode);
-  if (operation?.kind !== "flow-marker") {
-    return sourceNode;
-  }
-  const arguments_ = [...context.input.program.source.ast.arguments(sourceNode)];
-  if (operation.state === "borrowed-mut" &&
-    arguments_.length === 1 && arguments_[0] !== undefined) {
-    return arguments_[0];
-  }
-  context.diagnostics.push(unsupportedConstructDiagnostic(
-    diagnosticInput(context, sourceNode),
-    "rust.backend.typed-location-mutable-flow",
-    "Promoted mutable provider input requires one exact finalized mutable-borrow operand.",
-  ));
-  return undefined;
 }

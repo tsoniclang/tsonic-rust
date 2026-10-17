@@ -8,6 +8,9 @@ import {
   rootNormalizationContextForIdentity,
   rustCompilerItemIdentity,
   rustCompilerLifetimeSemanticKey,
+  rustCompilerTypeSemanticKey,
+  substituteRustCompilerArgument,
+  substituteRustCompilerType,
 } from "../rustdoc-types.js";
 import {
   normalizeAbi,
@@ -24,6 +27,7 @@ import type {
   RustCompilerGenericArgument,
   RustCompilerGenericParameter,
   RustCompilerItemIdentity,
+  RustCompilerLifetime,
   RustCompilerParameter,
   RustCompilerTraitDispatch,
   RustCompilerType,
@@ -32,6 +36,7 @@ import type {
 import type { RustdocItemResolver } from "../rustdoc-items.js";
 import type { RustdocDocument } from "../rustdoc-schema.js";
 import type { RustCompilerSubstitutions } from "../rustdoc-types.js";
+import type { RustNativeResultLoanContract, RustNativeResultLoanOrigin } from "../../../../target-model/operations/result-loans.js";
 
 export interface NormalizeRustCompilerFunctionOptions {
   readonly inheritedGenericParameters?: readonly RustCompilerGenericParameter[];
@@ -40,6 +45,7 @@ export interface NormalizeRustCompilerFunctionOptions {
   readonly associatedTypeBindings?: ReadonlyMap<string, RustCompilerType>;
   readonly traitDispatch?: RustCompilerTraitDispatch;
   readonly selfOwner?: RustCompilerItemIdentity;
+  readonly selfType?: RustCompilerType;
   readonly declarationIdentity?: RustCompilerItemIdentity;
   readonly resolveItem?: RustdocItemResolver;
 }
@@ -72,7 +78,11 @@ export function normalizeFunction(
   );
   const implementationBindings = options.implementationBindings ?? emptyRustCompilerSubstitutions;
   const associatedTypeBindings = options.associatedTypeBindings ?? new Map<string, RustCompilerType>();
-  const normalizeSelectedType = (raw: unknown, position: string): RustCompilerType => normalizeMemberType(
+  const selfBindings: RustCompilerSubstitutions = Object.freeze({
+    types: new Map(options.selfType === undefined || options.selfOwner === undefined
+      ? [] : [[options.selfOwner.itemId, options.selfType]]), lifetimes: new Map(), consts: new Map(),
+  });
+  const normalizeDeclaredType = (raw: unknown, position: string): RustCompilerType => normalizeMemberType(
     document,
     raw,
     Object.freeze({ ...generics.context, position: `${generics.context.position}/${position}` }),
@@ -80,6 +90,8 @@ export function normalizeFunction(
     associatedTypeBindings,
     options.traitDispatch,
   );
+  const normalizeSelectedType = (raw: unknown, position: string): RustCompilerType =>
+    substituteRustCompilerType(normalizeDeclaredType(raw, position), selfBindings);
   const rawInputs = requireArray(signature.inputs, `${name}.inputs`);
   let receiver: RustCompilerFunction["receiver"];
   const parameters: RustCompilerParameter[] = [];
@@ -88,12 +100,13 @@ export function normalizeFunction(
     if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== "string") {
       throw new Error(`Rust function '${name}' input ${index} has an invalid rustdoc shape.`);
     }
-    const type = normalizeSelectedType(pair[1], `parameter:${index}`);
+    const declaredType = normalizeDeclaredType(pair[1], `parameter:${index}`);
+    const type = substituteRustCompilerType(declaredType, selfBindings);
     if (index === 0 && pair[0] === "self") {
       if (allowReceiver !== true) {
         throw new Error(`Free Rust function '${name}' unexpectedly declares a self receiver.`);
       }
-      receiver = receiverKind(type, name);
+      receiver = receiverKind(declaredType, type, name);
       continue;
     }
     parameters.push(Object.freeze({ name: pair[0], type }));
@@ -101,19 +114,27 @@ export function normalizeFunction(
   const result = signature.output === null
     ? Object.freeze({ kind: "unit" as const })
     : normalizeSelectedType(signature.output, "result");
-  const borrowed = borrowedResultProjection(
-    document,
-    dependency,
-    result,
-    receiver,
-    parameters,
-    options.resolveItem,
-  );
+  const selectedGenerics = generics.parameters.map(parameter => parameter.kind !== "type" ? parameter
+    : substituteMemberParameter(parameter, implementationBindings, associatedTypeBindings, options.traitDispatch));
+  const resultLoans = selectRustCompilerResultLoans({ identity, result, parameters,
+    ...(receiver === undefined ? {} : { receiver }),
+    genericParameters: [...inherited, ...selectedGenerics].map(parameter => {
+      if (parameter.kind !== "lifetime") return parameter;
+      const lifetime = substituteRustCompilerArgument({ kind: "lifetime", lifetime: parameter.lifetime }, implementationBindings);
+      const outlives = parameter.outlives.map(selected => {
+        const value = substituteRustCompilerArgument({ kind: "lifetime", lifetime: selected }, implementationBindings);
+        if (value.kind !== "lifetime") throw new Error("A native lifetime substitution changed its declared argument kind.");
+        return value.lifetime;
+      });
+      if (lifetime.kind !== "lifetime") throw new Error("A native lifetime substitution changed its declared argument kind.");
+      return lifetime.lifetime.kind === "parameter" || lifetime.lifetime.kind === "bound"
+        ? Object.freeze({ ...parameter, lifetime: lifetime.lifetime, outlives: Object.freeze(outlives) }) : parameter;
+    }),
+  });
+  const borrowed = borrowedResultProjection(document, dependency, result, resultLoans, options.resolveItem);
   if (borrowed === undefined && !rustResultTypeHasClosedCarrier(result)) {
     throw new Error(`Rust function '${name}' returns an unsized value with no closed target carrier.`);
   }
-  const selectedGenerics = generics.parameters.map(parameter => parameter.kind !== "type" ? parameter
-    : substituteMemberParameter(parameter, implementationBindings, associatedTypeBindings, options.traitDispatch));
   const ownTypeParameters = selectedGenerics.filter((parameter): parameter is RustCompilerTypeParameter =>
     parameter.kind === "type");
   const typeRequirements = mergeTypeParameterRequirements([
@@ -130,6 +151,7 @@ export function normalizeFunction(
     result,
     genericParameters: Object.freeze(selectedGenerics),
     typeRequirements,
+    resultLoans,
     ...(receiver === undefined ? {} : { receiver }),
     ...(options.traitDispatch === undefined ? {} : { traitDispatch: options.traitDispatch }),
     ...(borrowed === undefined ? {} : { borrowedResult: borrowed.projection }),
@@ -173,15 +195,16 @@ function genericArgumentHasClosedCarrier(argument: RustCompilerGenericArgument):
   return argument.kind !== "type" || rustResultTypeHasClosedCarrier(argument.type);
 }
 
-function receiverKind(type: RustCompilerType, functionName: string): RustCompilerFunction["receiver"] {
-  if (type.kind === "self") return Object.freeze({ kind: "value" });
-  if (type.kind === "reference" && type.target.kind === "self") {
+function receiverKind(declared: RustCompilerType, type: RustCompilerType, functionName: string): RustCompilerFunction["receiver"] {
+  if (declared.kind === "self") return Object.freeze({ kind: "value", type });
+  if (declared.kind === "reference" && declared.target.kind === "self") {
     return Object.freeze({
-      kind: type.mutable ? "mutable" : "shared",
-      lifetime: type.lifetime,
+      kind: declared.mutable ? "mutable" : "shared",
+      lifetime: declared.lifetime,
+      type,
     });
   }
-  if (compilerTypeContainsSelf(type)) {
+  if (compilerTypeContainsSelf(declared)) {
     return Object.freeze({ kind: "custom", type });
   }
   throw new Error(`Rust method '${functionName}' has a custom receiver that does not contain Self.`);
@@ -248,8 +271,7 @@ function borrowedResultProjection(
   document: RustdocDocument,
   dependency: RustCompilerDependency,
   result: RustCompilerType,
-  receiver: RustCompilerFunction["receiver"],
-  parameters: readonly RustCompilerParameter[],
+  resultLoans: RustNativeResultLoanContract,
   resolveItem?: RustdocItemResolver,
 ): {
   readonly projection: NonNullable<RustCompilerFunction["borrowedResult"]>;
@@ -257,14 +279,14 @@ function borrowedResultProjection(
 } | undefined {
   const selected = borrowedResultReference(result);
   if (selected === undefined || selected.reference.mutable) return undefined;
-  const origin = borrowedResultOrigin(selected.reference, receiver, parameters);
-  if (origin === undefined) return undefined;
+  const resultPath = selected.optional ? ["argument:0", "reference"] : ["reference"];
+  if (selected.reference.lifetime.kind !== "static" && !resultLoans.loans.some(loan =>
+    loan.resultPath.length === resultPath.length && loan.resultPath.every((value, index) => value === resultPath[index]))) return undefined;
   if (selected.reference.target.kind === "primitive" &&
       selected.reference.target.name === "str") {
     return {
       projection: Object.freeze({
         sourceType: selected.sourceType,
-        origin,
         conversion: selected.optional ? "optional-owned-string" : "owned-string",
       }),
     };
@@ -281,7 +303,6 @@ function borrowedResultProjection(
   return {
     projection: Object.freeze({
       sourceType: selected.sourceType,
-      origin,
       conversion: selected.optional ? "optional-copy" : "copy",
     }),
     ...(typeRequirements.length === 0 ? {} : { typeRequirements }),
@@ -333,30 +354,125 @@ function isCoreOption(
     type.genericArguments.length === 1;
 }
 
-function borrowedResultOrigin(
-  result: Extract<RustCompilerType, { readonly kind: "reference" }>,
-  receiver: RustCompilerFunction["receiver"],
-  parameters: readonly RustCompilerParameter[],
-): NonNullable<RustCompilerFunction["borrowedResult"]>["origin"] | undefined {
-  if (result.lifetime.kind === "static") return Object.freeze({ kind: "static" });
-  if (receiver?.kind === "shared" || receiver?.kind === "mutable") {
-    if (result.lifetime.kind === "elided" || lifetimesEqual(result.lifetime, receiver.lifetime)) {
-      return Object.freeze({ kind: "receiver" });
-    }
-  }
-  const candidates = parameters.flatMap((parameter, index) =>
-    parameter.type.kind === "reference" &&
-      (result.lifetime.kind === "elided" || lifetimesEqual(result.lifetime, parameter.type.lifetime))
-      ? [index]
-      : []);
-  return candidates.length === 1
-    ? Object.freeze({ kind: "parameter", index: candidates[0]! })
-    : undefined;
+interface RustCompilerLifetimeSlot {
+  readonly lifetime: RustCompilerLifetime;
+  readonly path: readonly string[];
+  readonly kind: "borrow" | "carried";
+  readonly mutable: boolean;
 }
 
-function lifetimesEqual(
-  left: import("../model.js").RustCompilerLifetime,
-  right: import("../model.js").RustCompilerLifetime,
-): boolean {
-  return rustCompilerLifetimeSemanticKey(left) === rustCompilerLifetimeSemanticKey(right);
+export function selectRustCompilerResultLoans(
+  fn: Pick<RustCompilerFunction, "identity" | "result" | "receiver" | "parameters" | "genericParameters">,
+): RustNativeResultLoanContract {
+  const reasons = new Set<string>();
+  const resultSlots = compilerLifetimeSlots(fn.result, true, reasons);
+  const identity = { declarationIdentity: fn.identity.itemId,
+    resultTypeIdentity: rustCompilerTypeSemanticKey(fn.result), valueTypeIdentity: rustCompilerTypeSemanticKey(fn.result) };
+  if (reasons.size === 0 && resultSlots.every(slot => slot.lifetime.kind === "static")) {
+    return Object.freeze({ ...identity, kind: "complete", loans: Object.freeze([]) });
+  }
+  const origins: RustNativeResultLoanOrigin[] = [];
+  const lifetimeKey = (lifetime: RustCompilerLifetime, inputPath: readonly string[]): string =>
+    lifetime.kind === "placeholder" ? `anonymous:${fn.identity.itemId.length}:${fn.identity.itemId}:${JSON.stringify(inputPath)}`
+      : rustCompilerLifetimeSemanticKey(lifetime);
+  const collect = (type: RustCompilerType, input: RustNativeResultLoanOrigin["input"]): void => {
+    for (const slot of compilerLifetimeSlots(type, false, new Set())) origins.push(Object.freeze({
+      kind: slot.kind, input, inputType: rustCompilerTypeSemanticKey(type), inputPath: slot.path,
+      lifetime: lifetimeKey(slot.lifetime, [input.kind, ...input.kind === "argument" ? [String(input.sourceIndex)] : [], ...slot.path]),
+      mutable: slot.mutable,
+    }));
+  };
+  const receiver = fn.receiver;
+  if (receiver !== undefined) collect(receiver.type, receiver.kind === "custom"
+    ? Object.freeze({ kind: "argument", sourceIndex: 0 }) : Object.freeze({ kind: "receiver" }));
+  const elidedReceiver = receiver?.kind === "shared" || receiver?.kind === "mutable"
+    ? origins.find(origin => origin.input.kind === "receiver" && origin.inputPath.length === 1 && origin.inputPath[0] === "reference")
+    : undefined;
+  for (const [index, parameter] of fn.parameters.entries()) collect(parameter.type,
+    Object.freeze({ kind: "argument", sourceIndex: index + (receiver?.kind === "custom" ? 1 : 0) }));
+  const bounds = new Map<string, readonly string[]>();
+  for (const parameter of fn.genericParameters) if (parameter.kind === "lifetime") {
+    const key = rustCompilerLifetimeSemanticKey(parameter.lifetime);
+    bounds.set(key, [...bounds.get(key) ?? [], ...parameter.outlives.map(rustCompilerLifetimeSemanticKey)]);
+  }
+  const outlives = (source: string, target: string): boolean => {
+    const pending = [source];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const current = pending.pop()!;
+      if (current === target || current === rustCompilerLifetimeSemanticKey({ kind: "static" })) return true;
+      if (visited.has(current)) continue;
+      visited.add(current);
+      pending.push(...bounds.get(current) ?? []);
+    }
+    return false;
+  };
+  const uniqueInputLifetimes = new Set(origins.map(origin => origin.lifetime));
+  const loans = [];
+  for (const slot of resultSlots) {
+    if (slot.lifetime.kind === "static") continue;
+    const anonymous = slot.lifetime.kind === "elided" || slot.lifetime.kind === "placeholder";
+    const selectedLifetime = anonymous ? elidedReceiver?.lifetime ??
+      (uniqueInputLifetimes.size === 1 ? uniqueInputLifetimes.values().next().value : undefined)
+      : rustCompilerLifetimeSemanticKey(slot.lifetime);
+    if (selectedLifetime === undefined || slot.lifetime.kind === "bound") {
+      reasons.add("The declared returned lifetime has no unique enclosing input elision or escaping binder correspondence.");
+      continue;
+    }
+    const selected = origins.filter(origin => outlives(origin.lifetime, selectedLifetime));
+    if (selected.length === 0) {
+      reasons.add("The declared returned lifetime has no established source-input provenance.");
+      continue;
+    }
+    loans.push(Object.freeze({ resultPath: slot.path, lifetime: selectedLifetime, origins: Object.freeze(selected) }));
+  }
+  const common = { ...identity, loans: Object.freeze(loans) };
+  return reasons.size === 0 ? Object.freeze({ ...common, kind: "complete" })
+    : Object.freeze({ ...common, kind: "unavailable", reasons: Object.freeze([...reasons]) });
+}
+
+function compilerLifetimeSlots(type: RustCompilerType, result: boolean, reasons: Set<string>): readonly RustCompilerLifetimeSlot[] {
+  const slots: RustCompilerLifetimeSlot[] = [];
+  const add = (lifetime: RustCompilerLifetime, path: readonly string[], kind: RustCompilerLifetimeSlot["kind"], mutable = false): void => {
+    slots.push(Object.freeze({ lifetime, path: Object.freeze([...path]), kind, mutable }));
+  };
+  const argument = (value: RustCompilerGenericArgument, path: readonly string[]): void => {
+    if (value.kind === "lifetime") add(value.lifetime, path, "carried");
+    else if (value.kind === "type") visit(value.type, path);
+  };
+  const visit = (value: RustCompilerType, path: readonly string[]): void => {
+    switch (value.kind) {
+      case "unit":
+      case "primitive":
+      case "raw-pointer":
+      case "function-pointer": return;
+      case "generic":
+      case "self":
+        if (result) reasons.add("A declared generic or Self result requires its actual instantiated lifetime correspondence.");
+        return;
+      case "reference":
+        add(value.lifetime, [...path, "reference"], path.length === 0 ? "borrow" : "carried", value.mutable);
+        visit(value.target, [...path, "referent"]);
+        return;
+      case "tuple": value.elements.forEach((element, index) => visit(element, [...path, `element:${index}`])); return;
+      case "array":
+      case "slice": visit(value.element, [...path, "element"]); return;
+      case "path": value.genericArguments.forEach((value, index) => argument(value, [...path, `argument:${index}`])); return;
+      case "associated-type":
+        if (result) reasons.add("An associated returned type requires its actual normalized selected type before loan projection.");
+        value.genericArguments.forEach((value, index) => argument(value, [...path, `argument:${index}`]));
+        return;
+      case "trait-object":
+        add(value.lifetime, [...path, "object"], "carried");
+        value.principal.genericArguments.forEach((value, index) => argument(value, [...path, `trait-argument:${index}`]));
+        return;
+      case "opaque":
+        if (result) reasons.add("An opaque returned type requires its actual selected capture/outlives correspondence.");
+        value.captures.forEach((value, index) => argument(value, [...path, `capture:${index}`]));
+        value.outlives.forEach((lifetime, index) => add(lifetime, [...path, `outlives:${index}`], "carried"));
+        return;
+    }
+  };
+  visit(type, []);
+  return slots;
 }

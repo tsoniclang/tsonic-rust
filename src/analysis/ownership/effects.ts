@@ -1,10 +1,12 @@
 import type { AstReader, Node, ReadonlySourceFactResolver } from "@tsonic/tsts";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand,
-  sourceBindingHasMutableExposure, sourceEnclosingCallable, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
+  sourceBindingHasMutableExposure, sourceDeclarationUseSummary, sourceEnclosingCallable,
+  sourceTransparentExpressionOperand, type SourceDeclarationUse,
+  type SourceDeclarationUseSummary } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustFixedArrayCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
@@ -16,6 +18,7 @@ import { rustNativeWriteTargets, rustNoNativeWrites } from "./effect-paths.js";
 
 import { rustSourceValueWrapperContains } from "../../policy/ownership/source-value-wrappers.js";
 import { rustCallArgumentMode } from "../callables/parameter-passing.js";
+import type { RustReadUse } from "../../policy/ownership/read-use.js";
 
 type StoredField = Extract<RustTargetOperationFact, { readonly kind: "source-field" }>;
 
@@ -39,6 +42,15 @@ export interface RustBorrowEffectsInput {
   readonly frozenDataWrites: RustTargetProgram["frozenDataWrites"];
   readonly structuralShapes: RustTargetProgram["structuralShapes"];
   readonly navigation: RustTargetProgram["sourceNavigation"];
+  readonly borrowUses: RustBorrowUseAnalysis;
+  readonly readUses: ReadonlyMap<Node, RustReadUse>;
+}
+
+export interface RustBorrowUseAnalysis {
+  readonly maximumNodes: number;
+  useSummaryFor(declaration: Node): SourceDeclarationUseSummary | undefined;
+  reserve(count: number): boolean;
+  failure(): string | undefined;
 }
 
 export type AnalyzeRustBorrowEffectsResult =
@@ -46,6 +58,39 @@ export type AnalyzeRustBorrowEffectsResult =
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] };
 
 const maximumBorrowStabilityNodes = 4_194_304;
+
+export function createRustBorrowUseAnalysis(
+  input: Pick<RustBorrowEffectsInput, "ast" | "navigation" | "isNativeNode">,
+  maximumNodes = maximumBorrowStabilityNodes,
+): RustBorrowUseAnalysis {
+  const summaries = new Map<Node, SourceDeclarationUseSummary>();
+  let reservations = 0;
+  let failure = !Number.isSafeInteger(maximumNodes) || maximumNodes < 1 || maximumNodes > maximumBorrowStabilityNodes
+    ? "Rust borrow stability requires a positive finite node budget within its analysis bound." : undefined;
+  const reserve = (count: number): boolean => {
+    if (failure !== undefined) return false;
+    reservations += count;
+    if (reservations > maximumNodes) failure = "Rust borrow stability exceeds its finite source-node accounting bound.";
+    return failure === undefined;
+  };
+  return Object.freeze({ maximumNodes, reserve, failure: () => failure,
+    useSummaryFor(declaration: Node): SourceDeclarationUseSummary | undefined {
+      if (failure !== undefined) return undefined;
+      const existing = summaries.get(declaration);
+      if (existing !== undefined) return existing;
+      if (!reserve(1)) return undefined;
+      const uses: SourceDeclarationUse[] = [];
+      for (const use of input.navigation.declarationUseSummary(declaration).uses) {
+        if (!input.isNativeNode(use.reference)) continue;
+        if (!reserve(1)) return undefined;
+        uses.push(use);
+      }
+      const summary = sourceDeclarationUseSummary(input.ast, declaration, Object.freeze(uses));
+      summaries.set(declaration, summary);
+      return summary;
+    },
+  });
+}
 
 export function analyzeRustBorrowEffects(
   input: RustBorrowEffectsInput,
@@ -57,9 +102,12 @@ export function analyzeRustBorrowEffects(
       evidence: ["target.capability=rust.backend.borrow-stability"],
     }],
   });
-  if (!Number.isSafeInteger(maximumNodes) || maximumNodes < 1 || maximumNodes > maximumBorrowStabilityNodes) {
-    return rejected("Rust borrow stability requires a positive finite node budget within its analysis bound.");
-  }
+  if (input.borrowUses === undefined || input.borrowUses.maximumNodes !== maximumNodes)
+    return rejected("Rust borrow effects require their one original native-use analysis and exact accounting bound.");
+  if (input.readUses === undefined)
+    return rejected("Rust borrow effects require the original selected operation-read inventory.");
+  const initialFailure = input.borrowUses.failure();
+  if (initialFailure !== undefined) return rejected(initialFailure);
   const positions = new Map(input.nodes.map((node, index) => [node, index]));
   if (positions.size !== input.nodes.length) return rejected("Rust borrow effects require unique checked source-node identities.");
   if (input.nodes.some(node => !input.isNativeNode(node)))
@@ -70,12 +118,15 @@ export function analyzeRustBorrowEffects(
   const stableBindings = new Set<Node>();
   const bindingDecisions = new WeakMap<Node, boolean>();
   const directField = (node: Node): boolean => rustDirectBorrowField(node, input);
-  let reservations = 0;
   let exhausted = false;
   const reserveTargets = (count: number): boolean => {
-    reservations += count;
-    if (reservations > maximumNodes) exhausted = true;
+    if (!input.borrowUses.reserve(count)) exhausted = true;
     return !exhausted;
+  };
+  const nativeUseSummary = (declaration: Node): SourceDeclarationUseSummary | undefined => {
+    const summary = input.borrowUses.useSummaryFor(declaration);
+    if (summary === undefined) exhausted = true;
+    return summary;
   };
   const selectStableBinding = (node: Node): void => {
     const write = input.records.compoundWrite.get(node);
@@ -89,7 +140,8 @@ export function analyzeRustBorrowEffects(
     let stable = bindingDecisions.get(binding.sourceDeclaration);
     if (stable === undefined) {
       if (!reserveTargets(1)) return;
-      const summary = input.navigation.declarationUseSummary(binding.sourceDeclaration);
+      const summary = nativeUseSummary(binding.sourceDeclaration);
+      if (summary === undefined) return;
       stable = !summary.bindingWritten && !summary.exported &&
         !sourceBindingHasMutableExposure({ ast: input.ast, sourceFacts: input.sourceFacts }, summary, () => reserveTargets(1));
       if (exhausted) return;
@@ -102,7 +154,8 @@ export function analyzeRustBorrowEffects(
       "KindTrueKeyword", "KindFalseKeyword"].includes(input.ast.kindName(node))) stableBindings.add(node);
     if (!(input.ast.is.IsVariableDeclaration(node) || input.ast.is.IsParameterDeclaration(node) || input.ast.is.IsBindingElement(node)) ||
       sourceEnclosingCallable(node, input.ast) === undefined) continue;
-    const summary = input.navigation.declarationUseSummary(node);
+    const summary = nativeUseSummary(node);
+    if (summary === undefined) break;
     if (summary.captured || summary.exported || summary.bindingWritten || summary.memberWritten || summary.hasUnclassifiedValueUse) continue;
     let stable = true;
     for (const use of summary.uses) {
@@ -112,6 +165,7 @@ export function analyzeRustBorrowEffects(
       for (let parent = input.ast.parent(argument); parent !== undefined &&
         sourceTransparentExpressionOperand(input.ast, parent) === argument; parent = input.ast.parent(argument)) argument = parent;
       if (!["comparison", "condition", "return", "storage"].includes(use.role) &&
+        !(use.role === "receiver" && input.readUses.get(use.reference)?.mode === "shared") &&
         !(use.role === "argument" && rustCallArgumentMode(argument, input.ast, input.records) === "ref")) {
         stable = false;
         break;
@@ -166,7 +220,9 @@ export function selectRustBorrowRelationship(source: Node, later: Node,
   const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
   const binding = path?.length === 0 && input.records.sourceBinding.get(source)?.scope === "lexical";
   const field = input.records.targetOperation.get(source);
-  if (!binding && (!rustDirectBorrowField(source, input) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
+  const readable = field?.kind === "tuple-index" || field?.kind === "fixed-index" ||
+    field?.kind === "source-field" && field.accessMode === "read";
+  if (!binding && (!rustDirectBorrowField(source, input) || !readable)) return false;
   const targets = effects.pureValues.has(later) ? rustNoNativeWrites : effects.nativeWrites.get(later);
   return root !== undefined && path !== undefined && targets !== undefined && targets.every(target => {
     const targetRoot = rustNativeStorageRoot(target, input);
@@ -177,6 +233,18 @@ export function selectRustBorrowRelationship(source: Node, later: Node,
 }
 
 function rustDirectBorrowField(node: Node, input: RustBorrowEffectsInput): boolean {
+  const operation = input.records.targetOperation.get(node);
+  if (operation?.kind === "tuple-index" || operation?.kind === "fixed-index") {
+    if (!rustBorrowValueIsUnprojected(node, input.records)) return false;
+    const receiver = Node_Expression(input.ast, node);
+    const carrier = receiver === undefined ? undefined : input.records.runtimeCarrier.get(receiver)?.carrier;
+    const owner = carrier?.kind === "reference" ? carrier.referent : carrier;
+    const selected = operation.kind === "tuple-index" ? owner?.kind === "tuple" &&
+      Number.isSafeInteger(operation.index) && operation.index >= 0 ? owner.elements[operation.index] : undefined
+      : operation.index >= 0n ? rustFixedArrayCarrierValue(owner)?.element : undefined;
+    return selected !== undefined && rustTargetTypeRefEquals(selected, input.records.runtimeCarrier.get(node)?.carrier) &&
+      (operation.kind !== "tuple-index" || rustTargetTypeRefEquals(selected, operation.resultCarrier));
+  }
   const field = ordinaryStoredField(node, input);
   if (field === undefined || field.storage !== "project-object") return false;
   const receiver = Node_Expression(input.ast, node);
@@ -229,7 +297,8 @@ function selectBorrowedWrite(
   const captured = objectRepresentations.receiverCaptures.isCaptured(field.declaration);
   if (captured) {
     const storage = validatedRustCapturedFieldStorageFact(field.declaration, input);
-    if (storage === undefined || !rustTargetTypeRefEquals(storage.valueCarrier, field.resultCarrier)) return undefined;
+    if (storage === undefined || storage.storage.kind !== "shared" && storage.storage.kind !== "borrow-cell" ||
+      !rustTargetTypeRefEquals(storage.valueCarrier, field.resultCarrier)) return undefined;
   } else if (records.capturedFieldStorage.get(field.declaration) !== undefined) return undefined;
   if (!(captured && parentKind === "value") &&
     parentKind !== "shared-mutable" && parentKind !== "shared-immutable") return undefined;

@@ -65,9 +65,12 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
         identity: widgetTypeParameter.identity,
         name: "T",
       },
-      origin: { kind: "receiver" },
       conversion: "copy",
     });
+    assert.equal(valueMethod.resultLoans.loans.length, 1, "one normalized returned reference");
+    assert.equal(valueMethod.resultLoans.loans[0].origins.length, 1, "one declared receiver origin");
+    assert.equal(valueMethod.resultLoans.loans[0].origins[0].input.kind, "receiver", "the receiver remains the exact origin");
+    assert.equal(valueMethod.resultLoans.loans[0].origins[0].inputType.length > 0, true, "normalized receiver type identity retained");
     assert.deepEqual(valueMethod?.typeRequirements, [{
       kind: "type",
       identity: widgetTypeParameter.identity,
@@ -483,15 +486,20 @@ test("compiler worker reflects exact Cargo and standard-library snapshots once p
     const borrowedAnswer = functionModule.exports.find(({ name }) => name === "borrowed_answer");
     assert.deepEqual(borrowedAnswer?.kind === "function" ? borrowedAnswer.function.borrowedResult : undefined, {
       sourceType: { kind: "primitive", name: "i32" },
-      origin: { kind: "parameter", index: 0 },
       conversion: "copy",
     });
+    assert.equal(borrowedAnswer.function.resultLoans.kind, "complete", "the formal reference relation is complete");
+    assert.equal(borrowedAnswer.function.resultLoans.loans.length, 1, "one declared returned formal lifetime");
+    assert.equal(borrowedAnswer.function.resultLoans.loans[0].origins.length, 1, "one declared formal origin");
+    assert.equal(borrowedAnswer.function.resultLoans.loans[0].origins[0].input.kind, "argument", "the formal remains the source");
+    assert.equal(borrowedAnswer.function.resultLoans.loans[0].origins[0].input.sourceIndex, 0, "the same exact parameter index");
     const borrowedLabel = functionModule.exports.find(({ name }) => name === "borrowed_label");
     assert.deepEqual(borrowedLabel?.kind === "function" ? borrowedLabel.function.borrowedResult : undefined, {
       sourceType: { kind: "primitive", name: "str" },
-      origin: { kind: "static" },
       conversion: "owned-string",
     });
+    assert.equal(borrowedLabel.function.resultLoans.kind, "complete", "the declared static result is known");
+    assert.equal(borrowedLabel.function.resultLoans.loans.length, 0, "a static result has no source input loan");
     const cloned = functionModule.exports.find(({ name }) => name === "cloned");
     assert.equal(cloned?.kind, "function");
     const clonedParameter = cloned.function.genericParameters.find((parameter) =>

@@ -88,6 +88,7 @@ export function materializeProviderOperationRow(
       nativeErrorCarriers: row.nativeErrorCarriers.map(carrier => materializeProviderCarrier(carrier, carrierPaths, carrierTraits, typeDeclarations)),
     }),
     resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths, carrierTraits, typeDeclarations),
+    ...(row.resultLoans === undefined ? {} : { resultLoans: row.resultLoans }),
     ...(row.receiverCarrier === undefined
       ? {}
       : { receiverCarrier: materializeProviderCarrier(row.receiverCarrier, carrierPaths, carrierTraits, typeDeclarations) }),

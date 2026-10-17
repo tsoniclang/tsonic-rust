@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/program/borrowed-element-reads.js";
+import { createRustBorrowUseAnalysis } from "../../../dist/analysis/ownership/effects.js";
 
 
 for (const expression of ["values[0]", "values[0]!"]) {
@@ -21,6 +22,8 @@ export function read(values: string[]): number { return parseInt(${expression}, 
     assert.equal(call !== undefined, true);
     const selected = program.borrowedElementReads.forExpression(call);
     assert.equal(selected !== undefined, true);
+    assert.equal(selected.valueForm, "storage", "provider source input form is selected before publication");
+    assert.equal(Object.isFrozen(selected), true, "selected expression read is immutable");
     assert.equal(program.borrowedElementReads.forRead(selected.element) === selected, true);
     const operation = program.records.targetOperation.get(call);
     assert.equal(operation.abi.sourceArguments[0].carrier.kind, "reference");
@@ -34,7 +37,11 @@ export function read(values: string[]): number { return parseInt(${expression}, 
 targetOperation: { get: (node) => {
     return node === call ? replacement : program.records.targetOperation.get(node);
 } }}, program.records);
-      const reads = analyzeRustBorrowedElementReads(ast, rustNativeFixtureNodes(program), records, program.sourceNavigation);
+      const nodes = rustNativeFixtureNodes(program);
+      const domain = new Set(nodes);
+      const isNativeNode = node => domain.has(node);
+      const uses = createRustBorrowUseAnalysis({ ast, navigation: program.sourceNavigation, isNativeNode });
+      const reads = analyzeRustBorrowedElementReads(ast, nodes, records, program.sourceNavigation, uses, isNativeNode);
       assert.equal(reads.forExpression(call) === undefined, true, `invalid native input contract ${index}`);
     }
     const { result } = compileRust(options);

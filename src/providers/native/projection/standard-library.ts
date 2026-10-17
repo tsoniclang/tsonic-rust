@@ -532,18 +532,16 @@ export function collectModuleStandardTypeLocations(
   const visitParameters = (parameters: readonly RustCompilerGenericParameter[]): void => {
     for (const parameter of parameters) {
       if (parameter.kind === "type") {
-        parameter.requirements.forEach((requirement) => {
-          if (typeof requirement === "string") {
-            selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
-          } else {
-            visitTrait(requirement.trait);
-          }
-        });
+        parameter.requirements.forEach(visitRequirement);
         if (parameter.defaultType !== undefined) visitType(parameter.defaultType);
       } else if (parameter.kind === "const") {
         visitType(parameter.type);
       }
     }
+  };
+  const visitRequirement = (requirement: import("../model/model.js").RustCompilerTypeRequirement): void => {
+    if (typeof requirement === "string") selectCanonicalPath(compilerTypeRequirementCanonicalPath(requirement));
+    else visitTrait(requirement.trait);
   };
   const visitFunction = (fn: RustCompilerFunction): void => {
     visitParameters(fn.genericParameters);
@@ -556,6 +554,12 @@ export function collectModuleStandardTypeLocations(
     if (fn.traitDispatch !== undefined) visitTrait(fn.traitDispatch);
   };
   for (const exported of module.exports) {
+    if (exported.kind === "struct" || exported.kind === "union" || exported.kind === "enum") {
+      for (const implementation of exported.traits.implementations) {
+        visitRequirement(implementation.trait);
+        implementation.requirements.forEach(requirement => visitRequirement(requirement.requirement));
+      }
+    }
     switch (exported.kind) {
       case "primitive":
         exported.methods.forEach(visitFunction);

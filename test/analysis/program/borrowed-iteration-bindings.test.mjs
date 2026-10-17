@@ -61,10 +61,14 @@ function fixture() {
 } },
 conversion: { get: () => undefined },
 runtimeCarrier: { get: (node) => { return { carrier: node === input ? inputCarrier : string }; } }});
-  const navigation = { declarationUseSummary: () => summary,
+  const excluded = new Set();
+  const uses = { useSummaryFor: () => summary };
+  const isNativeNode = node => !excluded.has(node);
+  const navigation = { declarationUseSummary: () => { throw new Error("the native summary is already owned"); },
     sourceReferenceFor: node => ({ declaration: node === reference ? declaration : node.declaration }) };
   return { ast, records, navigation, loop, body, append, reference, declaration, input, string,
-    select: () => selectRustBorrowedIterationBinding(loop, ast, records, navigation),
+    uses, isNativeNode, excluded,
+    select: () => selectRustBorrowedIterationBinding(loop, ast, records, navigation, uses, isNativeNode),
     setCarrier: carrier => { inputCarrier = carrier; },
     setIteration: value => { iteration = value; },
     setOperation: value => { operation = value; },
@@ -108,7 +112,7 @@ test("borrowed loop selection rejects ownership, alias escapes and observable op
     const input = fixture();
     assert.ok(input.select());
     mutate(input);
-    assert.equal(input.select(), undefined);
+    assert.equal(input.select() === undefined, true, "an owned or observable use cannot become a borrowed binding");
   }
 });
 
@@ -137,7 +141,7 @@ test("borrowed loop provider uses require exact compiler-selected pure shared-re
     } } } },
   ]) {
     read.operation = operation;
-    assert.equal(input.select(), undefined);
+    assert.equal(input.select() === undefined, true, "an unproved provider input cannot become a borrowed binding");
   }
   const sourceInput = original.abi.targetReceiver.input;
   const borrowed = rustBorrowedStrTargetType();
@@ -164,5 +168,20 @@ test("borrowed loop provider uses require exact compiler-selected pure shared-re
       kind: "semantic-conversion", id: "borrowed-str-from-optional-string",
     } } },
     { ...semantic, conversion: { kind: "sequence", steps: [semantic.conversion] } },
-  ]) assert.equal(selectInput(selected), undefined, "nonborrow or inconsistent native input remains rejected");
+  ]) assert.equal(selectInput(selected) === undefined, true, "nonborrow or inconsistent native input remains rejected");
+});
+
+test("borrowed iteration consumes the one native summary and ignores only actually erased statements", () => {
+  const input = fixture();
+  const erased = { kind: "KindExpressionStatement", expression: { kind: "KindCallExpression" }, parent: input.body };
+  input.body.statements.push(erased);
+  assert.equal(input.select() === undefined, true, "a participating unknown call prevents the borrow");
+  input.excluded.add(erased);
+  const selected = input.select();
+  assert.equal(selected?.declaration === input.declaration, true, "an actually erased statement has no native effects");
+  assert.equal(selected?.references.length, 1, "the complete native summary is used without another source walk");
+  input.excluded.add(input.loop);
+  assert.equal(input.select() === undefined, true, "an erased loop has no native borrowed binding");
+  assert.throws(() => selectRustBorrowedIterationBinding(input.loop, input.ast, input.records, input.navigation),
+    TypeError, "the replaced source-only entry signature is not supported");
 });

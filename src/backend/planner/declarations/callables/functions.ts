@@ -10,13 +10,15 @@ import {
   isValidRustIdentifier,
   rustCurrentErrorBoundary,
   rustSourceItemIsPubliclyReachable,
+  requireRustEmissionContext,
+  rustContextForEmission,
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../program/reachability-directives.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
+import type { RustPhysicalEmissionContext } from "../../../../target-model/records/physical-emission-contexts.js";
 
 import {
   planRustCallableGenerics,
-  rustCallableSpecialization,
 } from "./generics.js";
 import type {
   RustSourceCallableSpecializationVariant,
@@ -90,6 +92,7 @@ export function planFunctionDeclarations(
       nameDeclaration: node,
       name: outerContext.input.program.names.functionNameForDeclaration(node),
       exported: outerContext.input.program.source.ast.hasModifierKind(node, "export"),
+      emissionContext: requireRustEmissionContext(outerContext, node, "native-body", node),
     }, outerContext);
     return item === undefined ? undefined : Object.freeze(item.helper === undefined ? [item.item] : [item.item, item.helper]);
   }
@@ -105,6 +108,7 @@ export function planFunctionDeclarations(
       name: variant.targetName,
       exported: false,
       specialization: variant,
+      emissionContext: requireRustEmissionContext(outerContext, variant, "specialized-body", node),
     }, outerContext);
     if (item === undefined) {
       return undefined;
@@ -121,12 +125,14 @@ export function planNativeModuleFunction(
   name: string,
   exported: boolean,
   outerContext: RustPlanContext,
+  emissionContext: RustPhysicalEmissionContext,
 ): RustItem | undefined {
   return planRustFunctionItem({
     callableDeclaration,
     nameDeclaration: declaration,
     name,
     exported,
+    emissionContext,
   }, outerContext)?.item;
 }
 
@@ -137,6 +143,7 @@ function planRustFunctionItem(
     readonly name?: string;
     readonly exported: boolean;
     readonly specialization?: RustSourceCallableSpecializationVariant;
+    readonly emissionContext: RustPhysicalEmissionContext;
   },
   outerContext: RustPlanContext,
 ): RustFunctionItemPlan | undefined {
@@ -182,8 +189,9 @@ function planRustFunctionItem(
     source.nameDeclaration,
   );
   const declarationAttributes = [...safetyAttributes];
-  let context: RustPlanContext = nativeBody === undefined ? functionContext
-    : { ...functionContext, promiseBody: true, promiseBodyName: nativeBodyName! };
+  const selectedContext = rustContextForEmission(functionContext, source.emissionContext);
+  let context: RustPlanContext = nativeBody === undefined ? selectedContext
+    : { ...selectedContext, promiseBody: true, promiseBodyName: nativeBodyName! };
   if (!isValidRustIdentifier(name)) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
       diagnosticInput(context, node),
@@ -192,26 +200,12 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  const specialization = source.specialization === undefined
-    ? undefined
-    : rustCallableSpecialization(
-        source.specialization.sourceTypeParameterIdentities,
-        source.specialization.targetTypeArguments,
-      );
-  if (source.specialization !== undefined && specialization === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.callable-specialization",
-      "Callable specialization does not match its exact source type-parameter arity.",
-    ));
-    return undefined;
-  }
   if (lexical?.kind === "unresolved") {
     context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node),
       "rust.backend.lexical-function-contract", lexical.reason));
     return undefined;
   }
-  const genericPlan = planRustCallableGenerics(node, context, specialization, lexical?.genericParameters);
+  const genericPlan = planRustCallableGenerics(node, context, lexical?.genericParameters);
   if (genericPlan === undefined) {
     return undefined;
   }
@@ -425,7 +419,7 @@ function planRustFunctionItem(
   };
   if (nativeBody === undefined || !context.input.program.promiseBodies.objects.has(node))
     return Object.freeze({ item, helper: undefined });
-  const adapterGenerics = planRustCallableGenerics(node, functionContext, specialization, lexical?.genericParameters);
+  const adapterGenerics = planRustCallableGenerics(node, selectedContext, lexical?.genericParameters);
   if (adapterGenerics === undefined) return undefined;
   const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context);
   if (adapterParameters === undefined) return undefined;

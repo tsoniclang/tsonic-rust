@@ -38,11 +38,18 @@ export function rustNativeStorageProjections(
     if (kind === "KindThisExpression" || kind === "KindThisKeyword") return input.ast.getSourceFile(node) === root
       ? Object.freeze(projections) : undefined;
     if (kind !== "KindParenthesizedExpression") {
-      if (kind !== "KindPropertyAccessExpression") return undefined;
       const operation = input.records.targetOperation.get(node);
-      if (operation?.kind !== "source-field" || operation.valueSemantics.kind !== "stored" ||
-        operation.dispatch !== undefined || !Number.isSafeInteger(operation.storageIndex) || operation.storageIndex < 0) return undefined;
-      projections.unshift(operation.declaration ?? `${operation.operationId}\0${operation.storageIndex}`);
+      if (kind === "KindElementAccessExpression" && input.ast.is.IsElementAccessExpression(node) &&
+        (operation?.kind === "tuple-index" || operation?.kind === "fixed-index")) {
+        if (operation.kind === "tuple-index" && (!Number.isSafeInteger(operation.index) || operation.index < 0) ||
+          operation.kind === "fixed-index" && operation.index < 0n) return undefined;
+        projections.unshift(`${operation.kind}\0${operation.index}`);
+      } else {
+        if (kind !== "KindPropertyAccessExpression" || operation?.kind !== "source-field" ||
+          operation.valueSemantics.kind !== "stored" || operation.dispatch !== undefined ||
+          !Number.isSafeInteger(operation.storageIndex) || operation.storageIndex < 0) return undefined;
+        projections.unshift(operation.declaration ?? `${operation.operationId}\0${operation.storageIndex}`);
+      }
     }
     const receiver = Node_Expression(input.ast, node);
     if (receiver === undefined) return undefined;

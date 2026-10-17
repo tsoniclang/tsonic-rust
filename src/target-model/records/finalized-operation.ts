@@ -2,6 +2,8 @@ import type { RustArgumentMode, RustFinalizedOperationKind, RustOperationEvaluat
 import type { RustFallibleErrorBoundary, RustOperationErrorBoundary } from "../operations/error-boundary.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 import type { RustResolvedDispatchContextInput } from "../operations/dispatch-contexts.js";
+import type { RustNativeResultLoan, RustNativeResultLoanContract,
+  RustNativeResultLoanOrigin } from "../operations/result-loans.js";
 
 export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "evaluation-only";
 
@@ -91,7 +93,15 @@ export interface RustFinalizedDispatchContextInput {
 
 export type RustFinalizedTargetInput = RustFinalizedSourceInput | RustFinalizedSliceInput | RustFinalizedArrayInput | RustFinalizedTaggedArrayInput | RustFinalizedConstantInput | RustFinalizedDispatchContextInput;
 
-export type RustFinalizedOperationResult =
+export interface RustFinalizedNativeResultLoans {
+  readonly contract: RustNativeResultLoanContract;
+  readonly loans: readonly {
+    readonly loan: RustNativeResultLoan;
+    readonly origins: readonly { readonly origin: RustNativeResultLoanOrigin; readonly input: RustFinalizedSourceInput }[];
+  }[];
+}
+
+export type RustFinalizedOperationResult = (
   | {
       readonly kind: "sync";
       readonly rawCarrier: TargetTypeRef;
@@ -104,7 +114,7 @@ export type RustFinalizedOperationResult =
       readonly awaitedRawCarrier: TargetTypeRef;
       readonly awaitedConversion: RustFinalizedValueConversion;
       readonly awaitedCarrier: TargetTypeRef;
-    };
+    }) & { readonly resultLoans?: RustFinalizedNativeResultLoans };
 
 export interface RustFinalizedOperationAbi {
   readonly operationKind: RustFinalizedOperationKind;
@@ -149,6 +159,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];
   readonly evaluationOnlySourceArgumentIndexes?: readonly number[];
   readonly resultCarrier: TargetTypeRef;
+  readonly resultLoans?: RustNativeResultLoanContract;
   readonly dispatchInputs?: readonly RustResolvedDispatchContextInput[];
   readonly nativeErrorCarriers?: readonly TargetTypeRef[];
   readonly targetGenericArguments?: readonly RustTargetGenericArgument[];

@@ -1,106 +1,120 @@
 import type { Node } from "@tsonic/tsts";
-import { Node_Expression, BinaryExpression_Left, BinaryExpression_Right,
-  ElementAccessExpression_ArgumentExpression, asSourceNode } from "@tsonic/target-api/source";
-import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
-import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
-import { providerSourceInputKey, providerSourceInputNode } from "../operations/provider-source-inputs.js";
-
+import type { TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustNativeInputOwnership, RustNativeInputPlace, RustNativePlace } from "../../target-model/records/ownership.js";
+import type { RustCallableEmissionContexts, RustPhysicalEmissionContext, RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
+import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
+import { providerSourceInputKey } from "../operations/provider-source-inputs.js";
 import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
-import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";
-import type { RustNativeStoragePathInput, RustNativeStorageProjection } from "./native-paths.js";
-import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
-import type { RustStatementCompletionIndex } from "../../target-model/records/statement-completion.js";
+import type { RustNativeStoragePathInput } from "./native-paths.js";
+import { rustNativeStoragePathsDisjoint } from "./native-paths.js";
 
 type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;
 
 type RustProviderMutableInputContext = RustNativeStoragePathInput & {
-  readonly statementCompletions: Pick<RustStatementCompletionIndex, "setterFor">;
+  readonly physicalEmissionContexts: RustCallableEmissionContexts;
+  readonly nativeInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership>;
 };
 
 export type RustProviderMutableInputSelection =
-  | { readonly kind: "proved"; readonly operation: ProviderOperation;
-      readonly inputs: readonly { readonly input: RustFinalizedSourceInput; readonly key: string; readonly node: Node }[] }
+  | { readonly kind: "proved"; readonly operation: ProviderOperation; readonly context: RustPhysicalEmissionContext;
+      readonly contextUse: TargetUseSiteRef; readonly inputs: readonly RustNativeInputPlace[] }
   | { readonly kind: "rejected"; readonly node: Node; readonly reason: string };
 
 export interface RustProviderMutableInputPlan {
-  forOperation(node: Node): RustProviderMutableInputSelection | undefined;
+  readonly operations: readonly { readonly node: Node; readonly operation: ProviderOperation;
+    readonly contextUse: TargetUseSiteRef; readonly selection: RustProviderMutableInputSelection }[];
+  forOperation(node: Node, operation: ProviderOperation, contextUse: TargetUseSiteRef): RustProviderMutableInputSelection | undefined;
 }
 
-export function createRustProviderMutableInputPlan(input: RustProviderMutableInputContext & {
-  readonly nodes: readonly Node[];
-}): RustProviderMutableInputPlan {
-  const selections = new Map<Node, RustProviderMutableInputSelection>();
-  for (const node of input.nodes) {
-    const operation = input.records.compoundWrite.get(node) ?? input.records.targetOperation.get(node);
-    if (operation?.kind !== "provider-operation" && operation?.kind !== "runtime-set") continue;
-    const selected = selectRustProviderMutableInputs(node, operation, input);
-    if (selected !== undefined) selections.set(node, selected);
+export function createRustProviderMutableInputPlan(input: RustProviderMutableInputContext): RustProviderMutableInputPlan {
+  const groups = new Map<Node, Map<ProviderOperation, Map<TargetUseSiteRef, RustPhysicalEmissionOperand[]>>>();
+  for (const operand of input.physicalEmissionContexts.operands) {
+    const origin = operand.origin;
+    const source = origin.kind !== "call-input" && origin.evaluation.kind === "provider-source"
+      ? origin.evaluation.slot : undefined;
+    const node = origin.kind === "call-input" ? origin.operationNode : source?.operationNode;
+    const operation = origin.kind === "call-input" ? origin.operation : source?.operation;
+    if (node === undefined || operation === undefined ||
+      !rustFinalizedSourceInputs(operation.abi).some(value => value.mode === "mut-ref")) continue;
+    const operations = groups.get(node) ?? new Map<ProviderOperation, Map<TargetUseSiteRef, RustPhysicalEmissionOperand[]>>();
+    const contexts = operations.get(operation) ?? new Map<TargetUseSiteRef, RustPhysicalEmissionOperand[]>();
+    const operands = contexts.get(operand.context.use) ?? [];
+    if (origin.kind === "call-input" && origin.input.mode === "mut-ref") operands.push(operand);
+    contexts.set(operand.context.use, operands);
+    operations.set(operation, contexts);
+    groups.set(node, operations);
   }
-  return Object.freeze({ forOperation: (node: Node) => selections.get(node) });
+  const selections = new Map<Node, Map<ProviderOperation, Map<TargetUseSiteRef, RustProviderMutableInputSelection>>>();
+  const inventory: RustProviderMutableInputPlan["operations"][number][] = [];
+  for (const [node, operations] of groups) for (const [operation, contexts] of operations) {
+    const selectedContexts = new Map<TargetUseSiteRef, RustProviderMutableInputSelection>();
+    for (const [contextUse, operands] of contexts) {
+      const selection = selectRustProviderMutableInputs(node, operation, contextUse, operands, input);
+      if (selection === undefined) continue;
+      selectedContexts.set(contextUse, selection);
+      inventory.push(Object.freeze({ node, operation, contextUse, selection }));
+    }
+    const selectedOperations = selections.get(node) ?? new Map<ProviderOperation, Map<TargetUseSiteRef, RustProviderMutableInputSelection>>();
+    selectedOperations.set(operation, selectedContexts);
+    selections.set(node, selectedOperations);
+  }
+  return Object.freeze({ operations: Object.freeze(inventory),
+    forOperation: (node: Node, operation: ProviderOperation, contextUse: TargetUseSiteRef) =>
+      selections.get(node)?.get(operation)?.get(contextUse) });
 }
 
 export function selectRustProviderMutableInputs(
-  operationNode: Node, operation: ProviderOperation, input: RustProviderMutableInputContext,
+  operationNode: Node, operation: ProviderOperation, contextUse: TargetUseSiteRef,
+  operands: readonly RustPhysicalEmissionOperand[], input: RustProviderMutableInputContext,
 ): RustProviderMutableInputSelection | undefined {
-  if ((input.records.compoundWrite.get(operationNode) ?? input.records.targetOperation.get(operationNode)) !== operation)
-    return Object.freeze({ kind: "rejected", node: operationNode,
-      reason: "Mutable provider admission requires its exact owned operation fact." });
+  const reject = (node: Node, reason: string): RustProviderMutableInputSelection => Object.freeze({ kind: "rejected", node, reason });
+  const primary = input.records.compoundWrite.get(operationNode) ?? input.records.targetOperation.get(operationNode);
+  if (primary !== operation && !(primary?.kind === "union-property" &&
+    primary.variants.some(variant => variant.operation === operation)))
+    return reject(operationNode, "Mutable provider admission requires its exact owned operation fact.");
   const mutable = rustFinalizedSourceInputs(operation.abi).filter(value => value.mode === "mut-ref");
   if (mutable.length === 0) return undefined;
-  const setter = operation.kind === "runtime-set" ? input.statementCompletions.setterFor(operationNode) : undefined;
-  if (operation.kind === "runtime-set" && setter === undefined) return Object.freeze({ kind: "rejected", node: operationNode,
-    reason: "Mutable setter admission requires its exact admitted source operand binding." });
-  const kind = input.ast.kindName(operationNode);
-  const selectedReceiver = input.records.selectedOperation.get(operationNode)?.provenance?.sourceReceiver;
-  const callee = kind === "KindCallExpression" || kind === "KindNewExpression" ? Node_Expression(input.ast, operationNode) : undefined;
-  const receiver = operation.kind === "runtime-set" ? setter!.receiver
-    : asSourceNode(selectedReceiver, input.ast) ?? rustMemberAccessReceiver(input.ast, callee ?? operationNode);
-  let arguments_: readonly (Node | undefined)[];
-  if (operation.kind === "runtime-set") arguments_ = setter!.sourceArguments;
-  else if (kind === "KindElementAccessExpression") arguments_ = [ElementAccessExpression_ArgumentExpression(input.ast, operationNode)];
-  else if (kind === "KindBinaryExpression") {
-    const left = BinaryExpression_Left(input.ast, operationNode);
-    const right = BinaryExpression_Right(input.ast, operationNode);
-    arguments_ = left !== undefined && input.ast.is.IsElementAccessExpression(left) &&
-      receiver === rustMemberAccessReceiver(input.ast, left)
-      ? [ElementAccessExpression_ArgumentExpression(input.ast, left), right] : [right];
-  } else arguments_ = [...input.ast.arguments(operationNode)];
-  const selected: { input: RustFinalizedSourceInput; key: string; node: Node }[] = [];
-  const paths: { root: Node; projections: readonly RustNativeStorageProjection[] }[] = [];
   const keys = new Set<string>();
-  const reject = (node: Node, reason: string): RustProviderMutableInputSelection => Object.freeze({ kind: "rejected", node, reason });
   for (const value of mutable) {
-    const source = providerSourceInputNode(value, receiver, arguments_);
-    if (source === undefined) return reject(operationNode, "Mutable provider input has no exact authored source operand.");
     const key = providerSourceInputKey(value);
-    if (keys.has(key)) return reject(source, "One source value cannot supply multiple mutable inputs to one Rust provider operation.");
+    if (keys.has(key)) return reject(operationNode, "One source value cannot supply multiple mutable inputs to one Rust provider operation.");
     keys.add(key);
-    let node = source;
-    const marker = input.records.targetOperation.get(source);
-    if (marker?.kind === "flow-marker") {
-      const operands = [...input.ast.arguments(source)];
-      if (marker.state !== "borrowed-mut" || operands.length !== 1 || operands[0] === undefined)
-        return reject(source, "Mutable provider input requires its exact finalized mutable-borrow operand.");
-      node = operands[0];
-    }
+  }
+  const context = input.physicalEmissionContexts.contextFor(contextUse);
+  const occurrence = input.physicalEmissionContexts.sourceFor(operationNode, operation);
+  if (context === undefined || occurrence === undefined || occurrence.operation !== operation ||
+    occurrence.node !== operationNode || operands.length !== mutable.length)
+    return reject(operationNode, "Mutable provider admission requires every exact physical input in its original emission context.");
+  const selected: RustNativeInputPlace[] = [];
+  const directPaths: NonNullable<RustNativePlace["sourcePath"]>[] = [];
+  for (const value of mutable) {
+    const key = providerSourceInputKey(value);
+    const sourceRows = occurrence.inputs.filter(row => row.input === value);
+    const physicalRows = operands.filter(operand => operand.origin.kind === "call-input" && operand.origin.input === value);
+    if (sourceRows.length !== 1 || physicalRows.length !== 1)
+      return reject(operationNode, "Mutable provider input requires one original source slot and one original physical operand.");
+    const operand = physicalRows[0]!;
+    const place = input.nativeInputs.get(operand.use);
+    if (place === undefined || place.kind !== "place" || place.operand !== operand || place.operand.context !== context ||
+      place.input !== value || place.slot !== sourceRows[0]!.slot || place.key !== key)
+      return reject(operationNode, "Mutable provider input has no exact admitted physical place for its original input use.");
+    const node = place.node;
     if (value.conversion.kind !== "identity") return reject(node, "Mutable provider input requires one exact identity conversion.");
-    selected.push({ input: value, key, node });
+    selected.push(place);
     if (mutable.length <= 1) continue;
     const fact = input.records.targetOperation.get(node);
     const direct = input.ast.is.IsIdentifier(node) && input.records.sourceBinding.get(node) !== undefined ||
       ["KindThisExpression", "KindThisKeyword"].includes(input.ast.kindName(node)) || rustTargetOperationIsDirectLocation(fact) ||
       fact?.kind === "source-field" && fact.valueSemantics.kind === "stored" && fact.dispatch === undefined;
     if (!direct) continue;
-    const root = rustNativeStorageRoot(node, input);
-    if (root === undefined) {
-      return reject(node, "Multiple direct mutable provider inputs require exact disjoint source storage roots.");
-    }
-    const projections = rustNativeStorageProjections(node, root, input);
-    if (projections === undefined) return reject(node, "Mutable provider input has no exact projection path from its source storage root.");
-    if (paths.some(previous => previous.root === root && !rustNativeStoragePathsDisjoint(previous.projections, projections)))
+    const path = place.place.sourcePath;
+    if (path === undefined) return reject(node,
+      "Multiple direct mutable provider inputs require an exact projection path from their source storage root.");
+    if (directPaths.some(previous => previous.declaration === path.declaration &&
+      !rustNativeStoragePathsDisjoint(previous.projections, path.projections)))
       return reject(node, "One provider operation cannot hold overlapping mutable Rust locations from the same exact source storage root.");
-    paths.push({ root, projections });
+    directPaths.push(path);
   }
-  return Object.freeze({ kind: "proved", operation, inputs: Object.freeze(selected.map(value => Object.freeze(value))) });
+  return Object.freeze({ kind: "proved", operation, context, contextUse, inputs: Object.freeze(selected) });
 }

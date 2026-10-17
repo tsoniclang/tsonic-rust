@@ -21,6 +21,8 @@ import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/ca
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
+import { rustReadTransferRequirement } from "../ownership/flow.js";
+import { rustCaptureReadFormation, type RustReadOwnershipRequirements } from "../ownership/reads.js";
 import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
@@ -55,6 +57,7 @@ import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
 
 interface ClassifyCallableInput extends RustCallableInvocationRequirementContext {
+  readonly readRequirements: RustReadOwnershipRequirements;
   readonly isStoredValue: (node: Node) => boolean;
   readonly readsValue: (node: Node) => boolean;
   readonly names: RustNamePlan;
@@ -252,6 +255,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
   }
   const visit = (node: Node): string | undefined => {
+    if (rustReadTransferRequirement(input.ownershipFlow, node) === "unavailable")
+      return "A native read transfer requires its original physical capture formation before generic requirements can be selected.";
     if (node !== declaration && (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node))) {
       if (ast.is.IsSourceFile(declaration)) return undefined;
       const nestedId = input.idByDeclaration.get(node);
@@ -376,7 +381,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     if (carrier !== undefined && ast.is.IsIdentifier(node) &&
-      !input.ownershipFlow.movingReads.has(node) &&
+      rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer" &&
       (isRustReturnedValue(node, declaration, ast) || input.isStoredValue(node))) {
       const error = addUse(node, carrier, ["clone"]);
       if (error !== undefined) return error;
@@ -419,7 +424,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     const indexedField = records.targetOperation.get(node);
     if (indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored" &&
-      input.readsValue(node) && !input.ownershipFlow.movingReads.has(node) &&
+      input.readsValue(node) && rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer" &&
       !isRustBorrowedValueRead(node, ast, records)) {
       const fieldError = addUse(node, indexedField.resultCarrier, ["clone"]);
       if (fieldError !== undefined) return fieldError;
@@ -560,7 +565,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const projection = records.flowReadProjection.get(node);
-    if (projection !== undefined && !input.ownershipFlow.movingReads.has(node)) {
+    if (projection !== undefined && rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer") {
       const cloneSources = projection.kind === "union-map"
         ? projection.arms.filter(arm => arm.source[arm.source.length - 1]?.variant.kind === "payload").map(arm => arm.carrier)
         : projection.kind === "option-value" ||
@@ -574,6 +579,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     const providerOperations = operation?.kind === "provider-operation" ? [operation]
       : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : [];
     for (const providerOperation of providerOperations) {
+      for (const result of input.readRequirements.nativeResults.get(node) ?? []) {
+        if (result.abi !== providerOperation.abi || !result.requiresClone) continue;
+        const error = addUse(node, result.carrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
       for (const argument of rustFinalizedSourceInputs(providerOperation.abi)) {
         const conversions = argument.conversion.kind === "sequence" ? argument.conversion.steps
           : argument.conversion.kind === "semantic" ? [argument.conversion] : [];
@@ -594,7 +604,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
           : ast.is.IsElementAccessExpression(node) && argument.role === "index" && argument.sourceIndex === 0
             ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
         if (expression === undefined || !ast.is.IsIdentifier(expression) ||
-          input.ownershipFlow.movingReads.has(expression)) continue;
+          rustReadTransferRequirement(input.ownershipFlow, expression) === "transfer") continue;
         const carrier = records.runtimeCarrier.get(expression)?.carrier;
         if (carrier === undefined) return "A provider argument lost its exact source storage carrier.";
         if (isRustCopyCarrier(carrier)) continue;
@@ -631,9 +641,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         if (error !== undefined) return error;
       }
       for (const capture of captures?.captures ?? []) {
-        const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
-          input.ownershipFlow.captureTransfers.get(sourceValue.sourceDeclaration)?.has(capture.declaration) === true;
-        const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), ...storage], true);
+        const requirement = input.ownershipFlow.captureRequirements.get(sourceValue.sourceDeclaration)?.find(value =>
+          value.capture.declaration === capture.declaration);
+        if (requirement === undefined) return "A source callable capture requires its exact physical formation requirement.";
+        const formation = rustCaptureReadFormation(requirement, input.ownershipFlow.captureTransfers);
+        const error = addUse(capture.reference, requirement.carrier,
+          [...(formation.requiresClone ? ["clone" as const] : []), ...storage], true);
         if (error !== undefined) return error;
       }
     }
@@ -658,17 +671,22 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         if (error !== undefined) return error;
       }
       for (const capture of captures.captures) {
-        const error = addUse(capture.reference, capture.carrier,
-          capture.storage === "cell" || capture.storage === "borrow-cell" ||
-            input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true
-            ? required.filter(requirement => requirement !== "clone") : required, true);
+        const requirement = input.ownershipFlow.captureRequirements.get(node)?.find(value =>
+          value.capture.declaration === capture.declaration);
+        if (requirement === undefined) return "A native closure capture requires its exact physical formation requirement.";
+        const formation = rustCaptureReadFormation(requirement, input.ownershipFlow.captureTransfers);
+        const error = addUse(capture.reference, requirement.carrier,
+          formation.requiresClone ? required : required.filter(value => value !== "clone"), true);
         if (error !== undefined) return error;
       }
     }
     if (ast.kindName(node) === "KindClassDeclaration" || ast.kindName(node) === "KindClassExpression") {
       for (const capture of records.closureCapture.get(node)?.captures ?? []) {
-        if (input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true) continue;
-        const error = addUse(node, capture.carrier, ["clone"]);
+        const requirement = input.ownershipFlow.captureRequirements.get(node)?.find(value =>
+          value.capture.declaration === capture.declaration);
+        if (requirement === undefined) return "A native class capture requires its exact physical formation requirement.";
+        if (!rustCaptureReadFormation(requirement, input.ownershipFlow.captureTransfers).requiresClone) continue;
+        const error = addUse(node, requirement.carrier, ["clone"]);
         if (error !== undefined) return error;
       }
     }

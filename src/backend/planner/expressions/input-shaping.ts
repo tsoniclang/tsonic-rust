@@ -10,7 +10,7 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant } from "../diagnostics.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpression } from "./entry.js";
-import { planRustSharedReceiver } from "./typed-locations.js";
+import { planRustSharedReceiver, requireRustReadOwnership } from "./typed-locations.js";
 import { rustErrorFieldSharedView } from "./error-field-borrows.js";
 
 export function planRustCallArguments(
@@ -120,7 +120,7 @@ export function createRustSharedReferenceArgument(
   argument: RustExpr,
   node: Node | undefined,
 ): RustExpr {
-  if (node !== undefined && context.input.program.ownership.reads.get(node)?.sharedReference === true) return argument;
+  if (node !== undefined && requireRustReadOwnership(node, context).sharedReference) return argument;
   const errorField = node === undefined ? undefined : rustErrorFieldSharedView(node, argument, context);
   if (errorField !== undefined) return errorField;
   const borrowedString = rustBorrowedStringView(argument);

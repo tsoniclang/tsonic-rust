@@ -243,21 +243,15 @@ export interface RustCompilerParameter {
   readonly type: RustCompilerType;
 }
 
-export type RustCompilerBorrowOrigin =
-  | { readonly kind: "static" }
-  | { readonly kind: "receiver" }
-  | { readonly kind: "parameter"; readonly index: number };
-
 export interface RustCompilerBorrowedResultProjection {
   readonly sourceType: RustCompilerType;
-  readonly origin: RustCompilerBorrowOrigin;
   readonly conversion: "copy" | "owned-string" | "optional-copy" | "optional-owned-string";
 }
 
 export type RustCompilerReceiver =
-  | { readonly kind: "value" }
-  | { readonly kind: "shared"; readonly lifetime: RustCompilerLifetime }
-  | { readonly kind: "mutable"; readonly lifetime: RustCompilerLifetime }
+  | { readonly kind: "value"; readonly type: RustCompilerType }
+  | { readonly kind: "shared"; readonly lifetime: RustCompilerLifetime; readonly type: RustCompilerType }
+  | { readonly kind: "mutable"; readonly lifetime: RustCompilerLifetime; readonly type: RustCompilerType }
   | { readonly kind: "custom"; readonly type: RustCompilerType };
 
 export interface RustCompilerTraitDispatch {
@@ -275,6 +269,7 @@ export interface RustCompilerFunction {
   readonly result: RustCompilerType;
   readonly genericParameters: readonly RustCompilerGenericParameter[];
   readonly typeRequirements: readonly RustCompilerTypeParameter[];
+  readonly resultLoans: import("../../../target-model/operations/result-loans.js").RustNativeResultLoanContract;
   readonly receiver?: RustCompilerReceiver;
   readonly traitDispatch?: RustCompilerTraitDispatch;
   readonly borrowedResult?: RustCompilerBorrowedResultProjection;
