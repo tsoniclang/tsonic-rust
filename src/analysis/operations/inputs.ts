@@ -14,7 +14,6 @@ import {
   KindIdentifier,
   KindArrayBindingPattern,
   KindNewExpression,
-  KindNumericLiteral,
   KindObjectBindingPattern,
   KindOmittedExpression,
   KindPostfixUnaryExpression,
@@ -25,10 +24,10 @@ import {
   KindVariableDeclaration,
   Node_Expression,
   Node_Name,
+  type SourceLiteralValue,
 } from "@tsonic/target-api/source";
 import {
   isRustJsArrayCarrier,
-  isRustNumericCarrier,
   rustJsArrayLikeElementTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
@@ -61,6 +60,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
 import { resolveRustArrayElementStorage } from "../expressions/array-storage.js";
+import { selectRustInferredNumericArrayElement } from "../../policy/types/collections/array-elements.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -404,8 +404,7 @@ function inferArrayLiteralElement(
     return selectedElement;
   }
   const probe = createRustCarrierProbe(walk);
-  const rows: { readonly type: Type; readonly carrier: TargetTypeRef }[] = [];
-  let first: TargetTypeRef | undefined;
+  const rows: { readonly type: Type; readonly carrier: TargetTypeRef; readonly literal: SourceLiteralValue | undefined }[] = [];
   for (const element of elements) {
     const spread = ast.is.IsSpreadElement(element);
     const operand = spread ? Node_Expression(ast, element) : element;
@@ -417,31 +416,30 @@ function inferArrayLiteralElement(
       const source = types.expressionType(operand);
       const type = source === undefined ? undefined : types.typeArguments(source)[0] ?? sourceElement;
       if (type === undefined) return undefined;
-      first ??= candidates[0];
-      for (const carrier of candidates) rows.push({ type, carrier });
+      for (const carrier of candidates) rows.push({ type, carrier, literal: undefined });
       continue;
     }
-    const literalContext = first !== undefined && isRustNumericCarrier(first) &&
-      (ast.kindName(operand) === KindNumericLiteral || ast.is.IsBigIntLiteral(operand)) ? first : undefined;
-    const issueStart = probe.context.diagnostics.length;
-    const value = resolveExpressionCarrier(probe, operand, sourceFile, literalContext);
-    if (value === undefined && literalContext !== undefined) {
-      for (const issue of probe.context.diagnostics.slice(issueStart)) {
-        appendRustDiagnostic(walk, issue.code, issue.message, issue.sourceNode, issue.evidence ?? []);
-      }
-      return undefined;
-    }
-    const carrier = value;
+    const carrier = resolveExpressionCarrier(probe, operand, sourceFile, undefined);
     const source = types.expressionType(operand);
     const elementType = source === undefined ? undefined : spread ? types.typeArguments(source)[0] : source;
     const type = elementType === undefined ? undefined : types.literalBaseType(elementType);
     if (carrier === undefined || type === undefined) return undefined;
-    first ??= carrier;
-    rows.push({ type, carrier });
+    const literal = walk.context.literalValues.literalValue.get(operand);
+    rows.push({ type, carrier, literal: literal?.numeric?.kind === "authored" ||
+      literal?.numeric === undefined && literal?.integer !== undefined ? literal : undefined });
   }
+  const numeric = selectRustInferredNumericArrayElement(selectedElement, rows);
+  if (numeric !== undefined) return numeric;
+  const first = rows[0]?.carrier;
   if (rows.every(row => rustTargetTypeRefEquals(first, row.carrier))) return first;
   if (sourceElement === undefined) return undefined;
   const members = types.isUnion(sourceElement) ? types.unionOrIntersectionTypes(sourceElement) : [sourceElement];
+  if (rows.some(row => !members.some(member => {
+    const base = types.literalBaseType(member);
+    return base !== undefined && sourceBoundTypeRelationship(
+      row.type, base, walk.context.semanticsFor(expression), () => undefined,
+    ) === "identity";
+  }))) return undefined;
   const carriers: TargetTypeRef[] = [];
   for (const member of members) {
     const base = types.literalBaseType(member);
