@@ -1,11 +1,13 @@
 import {
   rustFixedArrayTargetType,
   rustNamedTargetType,
+  rustNamedTypeCarrierValue,
   rustNativeScalarTargetId,
   rustNeverTargetType,
   rustOptionTargetId,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  substituteRustTargetGenerics,
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 import {
@@ -52,14 +54,16 @@ import type {
 } from "../model/model.js";
 import type {
   RustTargetAssociatedConstraint,
+  RustTargetConstArgument,
   RustTargetGenericArgument,
+  RustNamedTypeTraitContract,
   RustTargetTraitRef,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import type {
   RustProviderGenericParameter,
 } from "../../../target-model/operations/model.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { isCompilerCallableTrait } from "./callable-generics.js";
 import {
   compilerModuleSpecifierForIdentity,
@@ -450,6 +454,7 @@ export function targetTypeFor(
           path,
           arguments_,
           genericDefaults,
+          currentTypeTraitsForApplication(standard.targetId, arguments_, context),
         );
       }
       if (type.crateName !== context.dependency.crateName && pathResolution === "source-visible") {
@@ -471,9 +476,33 @@ export function targetTypeFor(
         ? type.genericArguments.map((argument) => targetGenericArgumentFor(argument, context, position, pathResolution))
         : targetGenericArgumentsForApplication(type, local, context, position);
       const genericDefaults = local === undefined ? [] : targetGenericDefaultsForApplication(type, local, context, position);
-      return rustNamedTargetType(id, path, genericArguments, genericDefaults);
+      return rustNamedTargetType(id, path, genericArguments, genericDefaults,
+        currentTypeTraitsForApplication(id, genericArguments, context));
     }
   }
+}
+
+function currentTypeTraitsForApplication(id: string, arguments_: readonly RustTargetGenericArgument[],
+  context: ProjectionContext): RustNamedTypeTraitContract | undefined {
+  const current = rustNamedTypeCarrierValue(context.currentType?.carrier);
+  if (current?.id !== id) return undefined;
+  const types = new Map<string, TargetTypeRef>();
+  const lifetimes = new Map<string, RustLifetimeRef>();
+  const consts = new Map<string, RustTargetConstArgument>();
+  for (const [index, parameter] of current.genericArguments.entries()) {
+    const argument = arguments_[index];
+    if (argument?.kind !== parameter.kind) throw new Error("A native Self application differs from its declared generic argument domain.");
+    if (parameter.kind === "type" && argument.kind === "type" && parameter.type.kind === "type-parameter")
+      types.set(parameter.type.identity, argument.type);
+    else if (parameter.kind === "lifetime" && argument.kind === "lifetime" && parameter.lifetime.kind === "parameter")
+      lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
+    else if (parameter.kind === "const" && argument.kind === "const" && parameter.value.kind === "parameter")
+      consts.set(parameter.value.identity, argument.value);
+  }
+  if (types.size === 0 && lifetimes.size === 0 && consts.size === 0) return current.traits;
+  const applied = rustNamedTypeCarrierValue(substituteRustTargetGenerics(context.currentType!.carrier, types, lifetimes, consts));
+  if (applied === undefined) throw new Error("A native Self application must preserve its exact declared nominal trait contract.");
+  return applied.traits;
 }
 
 export function sourceGenericArgumentFor(

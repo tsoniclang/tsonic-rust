@@ -2,6 +2,7 @@ import { asRecord, requireExactKeys, requireRustIdentifier, validateCarrier, val
 import { closedMetadataKey, isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
 import { isRustDispatchContextInput, rustProviderOperationFormAcceptsDispatchInputs } from "../../../policy/operations/dispatch-contexts.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
+import { isRustNativeResultLoanContract } from "../../../target-model/operations/result-loans.js";
 import { isRustFallibleErrorBoundary } from "../../../target-model/operations/error-boundary.js";
 import {
   rustProviderOperationFormAcceptsTargetGenericArguments,
@@ -35,9 +36,18 @@ export function validateOperationRows(
   for (const row of definition.operations) {
     requireExactKeys(asRecord(row), [
       "exportId", "memberId", "signatureId", "operationKind", "target", "resultCarrier",
-      "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback", "dispatchInputs", "nativeErrorCarriers",
+      "parameterCarriers", "receiverCarrier", "genericParameters", "typeRequirements", "targetGenericArguments", "resultConversion", "resultLoans", "evaluation", "isAsync", "isFallible", "errorBoundary", "errorCarrier", "isUnsafe", "immediateCallback", "dispatchInputs", "nativeErrorCarriers",
     ], `operation row '${String((row as { readonly memberId?: unknown; readonly exportId?: unknown }).memberId ?? row.exportId)}'`, fail);
     const label = row.memberId ?? row.exportId;
+    if (Object.prototype.hasOwnProperty.call(row, "resultLoans") && !isRustNativeResultLoanContract(row.resultLoans)) {
+      fail(`row '${label}' requires exact declaration-backed native result/input lifetime correspondence`);
+    }
+    for (const loan of row.resultLoans?.loans ?? []) for (const origin of loan.origins) {
+      if (origin.input.kind === "receiver" ? row.receiverCarrier === undefined
+        : origin.input.sourceIndex >= (row.parameterCarriers?.length ?? 0)) {
+        fail(`row '${label}' has native returned-loan correspondence outside its actual declared input list`);
+      }
+    }
     if (row.dispatchInputs !== undefined && (
       !isDenseDataArray(row.dispatchInputs) || !row.dispatchInputs.every(isRustDispatchContextInput) ||
       row.dispatchInputs.length > 0 && (!rustProviderOperationFormAcceptsDispatchInputs(row.target) || row.evaluation === "pure") ||

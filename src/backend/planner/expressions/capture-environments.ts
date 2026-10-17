@@ -1,4 +1,3 @@
-import { requireRustCaptureOwnership } from "./typed-locations.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustClosureCaptureFact } from "../../../target-model/records/operation-selections.js";
 
@@ -6,7 +5,6 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustCapturedBinding, RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput, isValidRustIdentifier, rustSourceBindingPath } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCaptureValue } from "./typed-locations.js";
 
@@ -18,11 +16,7 @@ export function planRustCapturedEnvironment(
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const capturedBindings = [...(context.capturedBindings ?? [])];
   for (const [index, capture] of captures.entries()) {
-    const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
-      (requireRustCaptureOwnership(owner, capture.declaration, context).read.kind !== "clone");
-    if (context.syntheticNames === undefined || !requireRustCarrierRequirements(capture.carrier,
-      [...(move ? [] : ["clone" as const]), ...(options.staticStorage ? ["static" as const] : [])],
-      capture.reference, context)) return undefined;
+    if (context.syntheticNames === undefined) return undefined;
     const binding = context.input.program.records.sourceBinding.get(capture.reference);
     if (binding === undefined) return undefined;
     const functionValue = context.input.program.source.ast.is.IsFunctionDeclaration(binding.sourceDeclaration) &&

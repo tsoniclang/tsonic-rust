@@ -85,8 +85,6 @@ function rustDeadCodeAttribute(disposition: RustDeadCodeDisposition): RustAttrib
       return rustLintAttributes.authoredUnreadField;
     case "authored-unused-variant":
       return rustLintAttributes.authoredUnusedVariant;
-    case "generated-enum-discriminant":
-      return rustLintAttributes.generatedEnumDiscriminant;
     case "generated-retained-constructor":
       return rustLintAttributes.generatedRetainedConstructor;
     case "generated-unconstructed-instance":

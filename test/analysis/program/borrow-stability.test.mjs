@@ -4,9 +4,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { analyzeRustBorrowEffects, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
+import { analyzeRustBorrowEffects, createRustBorrowUseAnalysis, selectRustBorrowRelationship } from "../../../dist/analysis/ownership/effects.js";
+import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
+import { rustNativeWriteTargets } from "../../../dist/analysis/ownership/effect-paths.js";
 
 function analyze(input, maximumNodes) {
+  input = { ...input, borrowUses: createRustBorrowUseAnalysis(input, maximumNodes),
+    readUses: analyzeRustReadUses(input.ast, input.nodes, input.records) };
   const selected = analyzeRustBorrowEffects(input, maximumNodes);
   return selected.kind === "resolved" ? { ...selected, input } : selected;
 }
@@ -134,6 +138,39 @@ targetOperation: { get: (node) => {
   }
 });
 
+test("selected direct field and tuple reads retain the effects of their original receiver and key", () => {
+  const { program } = analyzeRust({ files: { "index.ts": `
+export function read(holder: { value: number }, tuple: [number]): number {
+  return holder.value + tuple[0];
+}` } });
+  const { ast } = program.source;
+  const nodes = rustNativeFixtureNodes(program).filter(node => ast.is.IsPropertyAccessExpression(node) ||
+    ast.is.IsElementAccessExpression(node));
+  assert.equal(nodes.length, 2, "both exact authored projection forms are checked");
+  for (const node of nodes) {
+    const receiver = Node_Expression(ast, node);
+    const key = ast.is.IsElementAccessExpression(node) ? ast.as.AsElementAccessExpression(node).ArgumentExpression : undefined;
+    const writes = new Map([[receiver, [receiver]], ...(key === undefined ? [] : [[key, [key]]])]);
+    const reservations = [];
+    const selected = rustNativeWriteTargets(node, { ast, records: program.records },
+      child => writes.get(child), child => child === node, count => { reservations.push(count); return true; });
+    assert.equal(selected.length, key === undefined ? 1 : 2, "all receiver and key effects remain ordered");
+    assert.equal(selected[0] === receiver, true, "the original receiver write retains identity");
+    if (key !== undefined) assert.equal(selected[1] === key, true, "the original key write follows its receiver");
+    assert.equal(reservations.length, 1, "the finite owner accounts for the composed effect row once");
+    assert.equal(reservations[0], selected.length, "every retained effect is charged");
+    for (const missing of [receiver, ...(key === undefined ? [] : [key])]) {
+      assert.equal(rustNativeWriteTargets(node, { ast, records: program.records },
+        child => child === missing ? undefined : writes.get(child), child => child === node, () => true), undefined,
+      "an unknown receiver or key never becomes a pure projection");
+    }
+    assert.equal(rustNativeWriteTargets(node, { ast, records: program.records }, child => writes.get(child),
+      child => child === node, () => false), undefined, "exhausted effect accounting refuses partial composition");
+    const pure = rustNativeWriteTargets(node, { ast, records: program.records }, () => [], child => child === node, () => true);
+    assert.equal(pure.length, 0, "a genuinely effect-free receiver and key remain effect-free");
+  }
+});
+
 function analysisInput(program, sourceFacts, records = program.records) {
   const nodes = rustNativeFixtureNodes(program);
   const nativeNodes = new Set(nodes);
@@ -158,8 +195,8 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
   const receivers = [{ kindName: "KindIdentifier" }, { kindName: "KindIdentifier" }];
   const updates = receivers.map(receiver => ({ kindName: "KindPostfixUnaryExpression",
     operand: { kindName: "KindElementAccessExpression", receiver } }));
-  const root = { children: updates };
   const useNodes = Array.from({ length: uses }, () => ({ kindName: "KindIdentifier" }));
+  const root = { children: [...updates, ...useNodes] };
   let summaries = 0;
   const reader = fakeAstReader();
   const input = {
@@ -168,6 +205,7 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
       IsIdentifier: node => receivers.includes(node) || useNodes.includes(node),
       IsPostfixUnaryExpression: node => updates.includes(node),
       IsElementAccessExpression: node => updates.some(update => update.operand === node),
+      IsVariableDeclarationList: () => false,
     }, as: {
       AsPostfixUnaryExpression: node => ({ Operand: node.operand }),
       AsElementAccessExpression: node => ({ Expression: node.receiver }),
@@ -188,13 +226,15 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
     navigation: { declarationUseSummary(selected) {
       assert.equal(selected === declaration, true, "exact lexical declaration identity");
       summaries += 1;
-      return { bindingWritten, exported: false, uses: useNodes.map(reference => ({ reference })) };
+      return { bindingWritten, exported: false, uses: useNodes.map((reference, index) => ({ reference,
+        kind: "first-class", role: bindingWritten && index === 0 ? "write" : "receiver",
+        captured: false, throughMember: false })) };
     } },
   };
   input.nodes = allNodes(input.ast, [root]);
   const nativeNodes = new Set(input.nodes);
   input.isNativeNode = node => nativeNodes.has(node);
-  return { input, receivers, summaries: () => summaries };
+  return { input, receivers, useNodes, summaries: () => summaries };
 }
 
 test("indexed receiver stability has one sealed declaration proof beyond the retired per-use cutoff", () => {
@@ -206,6 +246,21 @@ test("indexed receiver stability has one sealed declaration proof beyond the ret
   fixture.input.ast.parent = () => { throw new Error("sealed lookup cannot walk source syntax"); };
   for (const receiver of fixture.receivers) assert.equal(result.effects.stableBindings.has(receiver), true);
   assert.equal(result.effects.stableBindings.has({}), false, "foreign identity cannot obtain borrowing evidence");
+});
+
+test("borrow consumers reuse one original native-use summary and accounting owner", () => {
+  const fixture = indexedBindingFixture({ uses: 3 });
+  const declaration = fixture.input.records.sourceBinding.get(fixture.receivers[0]).sourceDeclaration;
+  const borrowUses = createRustBorrowUseAnalysis(fixture.input, 128);
+  const summary = borrowUses.useSummaryFor(declaration);
+  assert.equal(summary !== undefined, true, "the original use producer admits its checked declaration once");
+  const selected = analyzeRustBorrowEffects({ ...fixture.input, borrowUses,
+    readUses: analyzeRustReadUses(fixture.input.ast, fixture.input.nodes, fixture.input.records) }, 128);
+  assert.equal(selected.kind, "resolved", "the same producer also accounts for all effect work");
+  assert.equal(borrowUses.useSummaryFor(declaration) === summary, true, "later consumers read the identical native summary");
+  assert.equal(fixture.summaries(), 1, "source use facts are not selected a second time");
+  const superseded = analyzeRustBorrowEffects(fixture.input);
+  assert.equal(superseded.kind, "rejected", "the old independently computed use path is not accepted");
 });
 
 test("indexed binding stability rejects exhaustion rather than silently materializing a receiver", () => {
@@ -236,6 +291,26 @@ test("indexed binding stability caches negative decisions and preserves exact pa
   }
 });
 
+test("indexed stability ignores erased exposure uses without weakening any retained native exposure", () => {
+  for (const options of [{ bindingWritten: true }, { passing: "borrow-mut" }, { pointer: "address-of" }]) {
+    const current = indexedBindingFixture({ uses: 2, ...options });
+    const retained = analyze(current.input, 100);
+    assert.equal(retained.kind, "resolved", "the complete retained exposure is analyzed");
+    assert.equal(retained.effects.stableBindings.has(current.receivers[0]), false, "retained native exposure still blocks borrowing");
+    const excluded = new Set(current.useNodes);
+    const nodes = current.input.nodes.filter(node => !excluded.has(node));
+    const nativeNodes = new Set(nodes);
+    const selected = analyze({ ...current.input, nodes, isNativeNode: node => nativeNodes.has(node),
+      sourceFacts: { getFact(node) {
+        assert.equal(excluded.has(node), false, "erased exposures do not issue native fact queries");
+        return undefined;
+      } } }, 100);
+    assert.equal(selected.kind, "resolved", "the actual preselected domain is analyzed");
+    for (const receiver of current.receivers) assert.equal(selected.effects.stableBindings.has(receiver), true,
+      "only actual native uses decide borrowing stability");
+  }
+});
+
 test("source-checked indexed updates retain stable member writes but reject captured and direct rebinding", () => {
   const { program, source: checkedSource } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
 const moduleValues: number[] = [1];
@@ -243,15 +318,20 @@ export function stable(values: number[]): void { values[0]++; values[0] += 2; }
 export function readonlyCapture(values: number[]): number { const read = () => values[0]; values[0]++; return read(); }
 export function rebound(values: number[]): void { values[0]++; values = [2]; }
 export function capturedWrite(values: number[]): void { const change = () => { values = [2]; }; values[0]++; change(); }
+export function erasedWrite(values: number[]): void { function unused(): void { values = [2]; } values[0]++; }
 export function moduleUpdate(): void { moduleValues[0]++; }
 ` } });
   const sourceFacts = createTargetSourceProgram(checkedSource).sourceFacts;
   const ast = program.source.ast;
   const nodes = allNodes(ast, program.sourceFiles);
   for (const [name, expected] of [["stable", true], ["readonlyCapture", true], ["rebound", false],
-    ["capturedWrite", false], ["moduleUpdate", false]]) {
+    ["capturedWrite", false], ["erasedWrite", true], ["moduleUpdate", false]]) {
     const declaration = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === name);
     assert.equal(declaration !== undefined, true, name);
+    if (name === "erasedWrite") {
+      const summary = program.sourceNavigation.declarationUseSummary(ast.parameters(declaration)[0]);
+      assert.equal(summary.bindingWritten && summary.captured, true, "the full checked source summary is not rewritten as native evidence");
+    }
     const demands = allNodes(ast, [declaration]).filter(node => program.records.compoundWrite.get(node) !== undefined);
     assert.equal(demands.length > 0, true, name + " real finalized update demands");
     for (const demand of demands) {

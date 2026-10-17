@@ -1,7 +1,5 @@
 import {
   requirementContractsEqual,
-  requirementUseHasValidStorage,
-  stringListsEqual,
   type RequirementContractState,
 } from "./generic-requirement-contract.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -26,15 +24,11 @@ import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";
-import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustCarrierSupportsTrait, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
+import { rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 import { classifyRustCallableRequirements } from "./generic-callable-requirements.js";
-import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
-import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
-import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
@@ -47,6 +41,7 @@ import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
+import type { RustReadOwnershipRequirements } from "../ownership/reads.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
@@ -71,14 +66,6 @@ export interface RustDeclarationGenericRequirementIndex {
   contractFor(declaration: Node, body?: true): RustDeclarationGenericRequirementContract | undefined;
   contractForCarrier(carrier: TargetTypeRef): RustShapeGenericRequirementContract | undefined;
   contractForStructuralView(view: RustProjectStructuralView): RustShapeGenericRequirementContract | undefined;
-  supportsClone(declaration: Node, carrier: TargetTypeRef, body?: true): boolean;
-  hasUse(
-    declaration: Node,
-    node: Node,
-    carrier: TargetTypeRef,
-    requirements: readonly RustGenericRequirement[],
-    body?: true,
-  ): boolean;
 }
 
 export type AnalyzeRustDeclarationGenericRequirementsResult =
@@ -112,6 +99,7 @@ export function analyzeRustDeclarationGenericRequirements(
   nativeStorage: RustNativeStoragePlan,
   classValues: RustClassValuePlan,
   errorTypes: RustErrorTypeContext,
+  readRequirements: RustReadOwnershipRequirements,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -133,7 +121,8 @@ export function analyzeRustDeclarationGenericRequirements(
     }
     return references.has(node);
   };
-  const declarations = collectRustCallableDeclarations(ast, nativeNodes);
+  const declarations = [...collectRustCallableDeclarations(ast, nativeNodes),
+    ...nativeNodes.filter(node => ast.is.IsSourceFile(node))];
   const declarationById = new Map<string, Node>();
   const idByDeclaration = new WeakMap<Node, string>();
   const bodyIdByDeclaration = new WeakMap<Node, string>();
@@ -210,6 +199,7 @@ export function analyzeRustDeclarationGenericRequirements(
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
         ownershipFlow,
+        readRequirements,
         isStoredValue,
         readsValue(node) {
           const access = ast.is.IsElementAccessExpression(node)
@@ -273,7 +263,6 @@ export function analyzeRustDeclarationGenericRequirements(
     if (bodyIdByDeclaration.get(contract.declaration) === id) bodyContractByDeclaration.set(contract.declaration, contract);
     if (idByDeclaration.get(contract.declaration) === id) contractByDeclaration.set(contract.declaration, contract);
   }
-  const normalizeFamily = rustTypeFamilyNormalizer(typeFamilies);
   const index: RustDeclarationGenericRequirementIndex = Object.freeze({
     projectionImplementationsFor: createRustProjectProjectionImplementationIndex(projectionRequirements, projectTypes),
     contractFor(declaration: Node, body?: true) {
@@ -282,31 +271,6 @@ export function analyzeRustDeclarationGenericRequirements(
     contractForCarrier(carrier: TargetTypeRef) { return shapeContracts.get(closedMetadataKey(carrier)); },
     contractForStructuralView(view: RustProjectStructuralView) {
       return viewContracts.get(closedMetadataKey([view.sourceCarrier, view.targetCarrier]));
-    },
-    supportsClone(declaration: Node, carrier: TargetTypeRef, body?: true) {
-      const contract = (body === true ? bodyContractByDeclaration : contractByDeclaration).get(declaration);
-      if (contract === undefined) return false;
-      const parameters = [...contract.typeParameters, ...contract.capturedTypeParameters,
-        ...contract.optionalStorage.map(entry => ({ identity: entry.carrier.identity, requirements: entry.requirements }))];
-      return rustCarrierSupportsTrait(mapRustTargetTypes(carrier, normalizeFamily), "core::clone::Clone", (name, trait) =>
-        trait === "core::clone::Clone" && parameters.some(parameter =>
-          parameter.identity === name && parameter.requirements.includes("clone")),
-        (projection, trait) => trait === "core::clone::Clone" && contract.associatedTypes.some(requirement =>
-          rustTargetTypeRefEquals(requirement.carrier, projection) && requirement.requirements.includes("clone")), definitions);
-    },
-    hasUse(
-      declaration: Node,
-      node: Node,
-      carrier: TargetTypeRef,
-      requirements: readonly RustGenericRequirement[],
-      body?: true,
-    ) {
-      const normalized = normalizeRustGenericRequirements(requirements);
-      const contract = (body === true ? bodyContractByDeclaration : contractByDeclaration).get(declaration);
-      return contract !== undefined && contract.uses.some((use) => use.node === node &&
-          requirementUseHasValidStorage(use) &&
-          rustTargetTypeRefEquals(use.carrier, carrier) &&
-          stringListsEqual(use.requirements, normalized));
     },
   });
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();

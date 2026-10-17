@@ -8,6 +8,8 @@ import {
   isValidRustIdentifier,
   rustCurrentErrorBoundary,
   rustSourceItemIsPubliclyReachable,
+  requireRustEmissionContext,
+  rustContextForEmission,
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../program/reachability-directives.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
@@ -15,7 +17,7 @@ import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDi
 import { Node_Type } from "@tsonic/target-api/source";
 import { planBlockLike } from "../../statements/index.js";
 import { planExpression } from "../../expressions/index.js";
-import { planRustCallableGenerics, rustCallableSpecialization } from "../callables/generics.js";
+import { planRustCallableGenerics } from "../callables/generics.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
 import { rustSelfParameter } from "../callables/self-parameter.js";
 import { projectOwnMethods } from "../../objects/polymorphism/model.js";
@@ -29,16 +31,15 @@ import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustExpr, RustImplFunction, RustStmt } from "../../../target-ast/syntax/nodes.js";
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "../callables/async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
-import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import { rustClassEnvironmentParameter, rustClassMemberEnvironmentContext } from "../../objects/class-environments.js";
 import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
 import type { RustSourceCallableSpecializationVariant } from "../../../../analysis/callables/specializations.js";
+import type { RustPhysicalEmissionContext } from "../../../../target-model/records/physical-emission-contexts.js";
 
 export function planProjectMethod(
   member: Node,
@@ -46,14 +47,17 @@ export function planProjectMethod(
   options?: {
     readonly targetName?: string;
     readonly safetyPlacement?: "getter" | "setter";
-    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly fallibleBoundary?: import("../../../../target-model/records/error-regions.js").RustSourcePackageErrorBoundary;
     readonly promiseBody?: true;
     readonly specialization?: RustSourceCallableSpecializationVariant;
+    readonly emissionContext?: RustPhysicalEmissionContext;
   },
 ): RustImplFunction | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...methodContext } = outerContext;
-  let context = rustClassMemberEnvironmentContext(member, methodContext);
+  const emissionContext = options?.emissionContext ?? (options?.specialization === undefined
+    ? requireRustEmissionContext(methodContext, member, "native-body", member)
+    : requireRustEmissionContext(methodContext, options.specialization, "specialized-body", member));
+  let context = rustContextForEmission(rustClassMemberEnvironmentContext(member, methodContext), emissionContext);
   if (options?.promiseBody !== true && context.input.program.promiseBodies.declarations.has(member))
     return planProjectPromiseObjectMethod(member, context, options);
   if (options?.promiseBody === true) context = { ...context, promiseBody: true,
@@ -92,7 +96,6 @@ export function planProjectMethod(
   const genericPlan = planRustCallableGenerics(
     member,
     context,
-    options?.typeArgumentSubstitutions,
   );
   if (genericPlan === undefined) {
     return undefined;
@@ -101,16 +104,7 @@ export function planProjectMethod(
   const generatorFact = context.input.program.records.generator.get(member);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const asyncFact = context.input.program.records.asyncFunction.get(member);
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        options?.promiseBody !== true && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-      ? {
-          requiredStaticParameters: generatorFact?.capturedParameters ??
-            (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-              ? asyncFact.lowering.capturedParameters : []),
-        }
-      : {}),
-  });
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -178,14 +172,6 @@ export function planProjectMethod(
       "rust.backend.js-promise-method-return",
       "JavaScript-surface async methods require one renderable finalized Promise carrier.",
     ));
-    return undefined;
-  }
-  if (returnsJsPromise && !requireRustCarrierRequirements(
-    asyncFact.outputCarrier,
-    asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
-    member,
-    context,
-  )) {
     return undefined;
   }
   const isStatic = ast.hasModifierKind(member, "static");
@@ -398,16 +384,13 @@ function planProjectPromiseObjectMethod(
   const nativeName = options?.specialization === undefined ? body.name : options.specialization.nativeBodyName;
   if (nativeName === undefined) failRustPlannerInvariant(
     "A specialized Promise method adapter requires its exact native-body name.", member);
-  const genericPlan = planRustCallableGenerics(member, outerContext, options?.typeArgumentSubstitutions);
-  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, options?.typeArgumentSubstitutions);
+  const genericPlan = planRustCallableGenerics(member, outerContext);
+  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true });
   if (genericPlan === undefined || nativeGenerics === undefined) return undefined;
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
   const context = { ...genericPlan.context, syntheticNames };
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    requiredStaticParameters: asynchronous.lowering.kind === "factory" ? asynchronous.lowering.capturedParameters : [],
-  });
-  if (parameterPlan === undefined || !requireRustCarrierRequirements(asynchronous.outputCarrier,
-    asynchronous.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], member, context)) return undefined;
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
+  if (parameterPlan === undefined) return undefined;
   const isStatic = ast.hasModifierKind(member, "static");
   const selfMode = isStatic ? undefined : context.input.program.records.selfMode.get(member);
   if (!isStatic && selfMode === undefined) return undefined;
@@ -523,25 +506,17 @@ export function planProjectMethodVariants(
   }
   const methods: RustImplFunction[] = [];
   for (const variant of variants) {
-    const specialization = rustCallableSpecialization(
-      variant.sourceTypeParameterIdentities,
-      variant.targetTypeArguments,
-    );
-    if (specialization === undefined) {
-      return undefined;
-    }
     if (context.input.program.promiseBodies.declarations.has(member)) {
       if (variant.nativeBodyName === undefined) failRustPlannerInvariant(
         "A selected native Promise method specialization requires its physical name.", member);
       const native = planProjectMethod(member, context, { targetName: variant.nativeBodyName,
-        typeArgumentSubstitutions: specialization, promiseBody: true, specialization: variant });
+        promiseBody: true, specialization: variant });
       if (native === undefined) return undefined;
       methods.push(native);
       if (!context.input.program.promiseBodies.objects.has(member)) continue;
     }
     const method = planProjectMethod(member, context, {
       targetName: variant.targetName,
-      typeArgumentSubstitutions: specialization,
       specialization: variant,
     });
     if (method === undefined) {

@@ -10,6 +10,8 @@ import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callable
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustPhysicalEmissionContexts } from "../../../dist/analysis/program/physical-emission-contexts.js";
 import { analyzeRustInitializationErrors } from "../../../dist/analysis/errors/initialization.js";
+import { requireRustEmissionContext, rustContextForEmission } from "../../../dist/backend/planner/program/plan-context.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const genericSource = `
 type Identity = <Value>(value: Value) => Value;
@@ -59,6 +61,32 @@ export function readNative(pointer: NativePointer<int32>): int32 {
 }
 `;
 
+const finiteEmissionSource = `
+import type { int32 } from "@tsonic/core/types.js";
+class Base {
+  text: string = "ready";
+  constructor(value: string = "ready") { this.text = value; }
+  identity<Value>(value: Value): Value { return value; }
+  get present(): boolean { return this.text.includes("ready"); }
+  set present(value: boolean) { this.text = value ? "ready" : "empty"; }
+}
+class Derived extends Base {
+  constructor(value: string = "ready") { super(value); }
+  identity<Other>(value: Other): Other { return value; }
+}
+function openCall<Value>(receiver: Base, value: Value): Value { return receiver.identity<Value>(value); }
+function relay<Other>(receiver: Base, value: Other): Other { return openCall<Other>(receiver, value); }
+function apply<Value>(value: Value, callback: (value: Value) => Value): Value { return callback(value); }
+export function nativeInput(value: number): number { return apply(value, current => current); }
+export function numberCall(receiver: Base, value: int32): int32 { return relay<int32>(receiver, value); }
+export function stringCall(receiver: Base, value: string): string { return relay<string>(receiver, value); }
+export function create(): boolean {
+  const value = new Derived();
+  value.present = true;
+  return value.present;
+}
+`;
+
 const earlyStorageConsumerSource = `
 async function first(value: number): Promise<number> { return value; }
 async function second(value: number): Promise<number> { return value; }
@@ -75,6 +103,14 @@ export async function invoke(value: number): Promise<number> {
 
 const scalarReturnSource = `
 export function owner(value: boolean): boolean { return value; }
+`;
+
+const ownedCaptureSource = `
+export async function keep(value: number, pending: Promise<void>): Promise<number> {
+  const read = () => value;
+  await pending;
+  return read();
+}
 `;
 
 const frameSource = `
@@ -239,18 +275,20 @@ function observeCallablePublication(registry, assertions, carriers, observations
 
 function observeNativeStorage(queries, observations) {
   observations.storageFactories++;
+  observations.storagePlan = queries;
   const methods = Object.fromEntries(["valueFor", "operandFor", "invocationCallableFor"].map(method => {
     const reads = new Map();
     observations.rawSelections.set(method, reads);
     return [method, node => {
+      const before = observations.storageMaterializations;
+      const beforeReturns = observations.returnMaterializations;
       const selected = queries[method](node);
-      if (observations.earlyStoragePhase === "materializing") {
-        const previous = reads.get(node);
-        reads.set(node, { count: (previous?.count ?? 0) + 1, selected });
-      } else if (observations.earlyStoragePhase === "consumers" || observations.earlyStoragePhase === "verifying") {
-        const previous = reads.get(node);
-        if (previous !== undefined) reads.set(node, { ...previous, count: previous.count + 1 });
-      }
+      const stored = reads.get(node);
+      assert.equal(stored === undefined ? selected.kind === "unresolved" : stored.selected === selected, true,
+        method + ": a pure read retains the canonical record or honest unprepared state");
+      assert.equal(observations.storageMaterializations, before, method + ": pure reads never select missing storage");
+      assert.equal(observations.returnMaterializations, beforeReturns, method + ": pure reads never select a return indirectly");
+      observations.storageLookups++;
       return selected;
     }];
   }));
@@ -266,12 +304,14 @@ function observeNativeStorage(queries, observations) {
     },
     returnFor(node) {
       const before = observations.returnMaterializations;
+      const beforeStorage = observations.storageMaterializations;
       const selected = queries.returnFor(node);
       observations.returnLookups++;
       const stored = observations.returnSelections.get(node);
       assert.equal(stored === undefined ? selected.kind === "unresolved" : stored.selected === selected, true,
         "a return lookup reads the original canonical record or honest unprepared state");
       assert.equal(observations.returnMaterializations, before, "pure return lookup never prepares a missing record");
+      assert.equal(observations.storageMaterializations, beforeStorage, "pure return lookup never prepares other physical storage");
       return selected;
     },
   });
@@ -296,7 +336,7 @@ function observeNativeProducerSeal(producers, observations) {
 
 test("the planner phase label starts at publication, after the actual callable seal and reachability (instrumented load observation)", () => {
   const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } },
-    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource } };
+    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource + ownedCaptureSource } };
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
@@ -328,11 +368,23 @@ import { sourceMarkerFactKey } from "@tsonic/tsts";
 const observationKey = Symbol.for(${JSON.stringify(key)});
 const observations = { seals: 0, publications: 0, components: [], anchors: new Set(), handlerSelections: 0,
   requestSelections: 0, rawSelections: new Map(), earlyStoragePhase: "idle", preparedConsumers: 0, storageFactories: 0,
+  storageMaterializations: 0, storageLookups: 0, earlyStorageSelections: 0, storageWriteAnchors: new Set(),
   returnSelections: new Map(), returnMaterializations: 0, returnPreparations: 0, returnLookups: 0, earlyReturnSelections: 0,
   returnWriteAnchors: 0, producerSeals: 0, producerSealing: false, terminalReturnReads: new Set() };
 globalThis[observationKey] = observations;
 observations.storage = queries => (${observeNativeStorage.toString()})(queries, observations);
 observations.producers = producers => (${observeNativeProducerSeal.toString()})(producers, observations);
+observations.storageSelected = (method, node, selected) => {
+  assert.equal(selected.kind !== "unresolved" && Object.isFrozen(selected), true,
+    method + ": only a completed immutable physical selection enters the canonical map");
+  assert.equal(observations.earlyStoragePhase !== "closed" && observations.earlyStoragePhase !== "verifying", true,
+    method + ": no selection writer runs after publication");
+  const reads = observations.rawSelections.get(method);
+  const previous = reads.get(node);
+  reads.set(node, { count: (previous?.count ?? 0) + 1, selected });
+  observations.storageMaterializations++;
+  if (observations.lifecycle === undefined) observations.earlyStorageSelections++;
+};
 observations.returnSelected = (node, selected) => {
   assert.equal(selected.kind !== "unresolved" && Object.isFrozen(selected), true,
     "only an actually completed immutable physical return is materialized");
@@ -370,6 +422,7 @@ observations.verifyHandlerInputs = () => {
   assert.equal(selected > 0, true, "real pointer and safety source selects nonempty canonical handlers");
 };
 observations.beforeRequests = input => {
+  observations.requestInput = input;
   assert.equal(observations.handlerSelections, 1, "the single original handler owner finishes before early requests");
   assert.equal(input.nativeNodes === observations.handlerInputs.nodes && input.records === observations.handlerInputs.records, true,
     "the original canonical nativeNodes and records are passed unchanged");
@@ -411,6 +464,13 @@ registerHooks({ load(url, context, nextLoad) {
     observations.returnWriteAnchors++;
     observed = observed.replace(anchor, "{ " + anchor + " globalThis[Symbol.for(" +
       ${JSON.stringify(JSON.stringify(key))} + ")].returnSelected(declaration, selection); }");
+    for (const [method, storage] of [["valueFor", "values"], ["operandFor", "operands"], ["invocationCallableFor", "invocations"]]) {
+      const write = storage + ".set(node, selection);";
+      assert.equal(observed.split(write).length, 2, method + ": one exact canonical successful-selection write anchor");
+      observations.storageWriteAnchors.add(method);
+      observed = observed.replace(write, "{ " + write + " globalThis[Symbol.for(" +
+        ${JSON.stringify(JSON.stringify(key))} + ")].storageSelected(" + JSON.stringify(method) + ", node, selection); }");
+    }
   }
   return { ...loaded, source: observed + "\\n" + selection.extension };
 } });
@@ -425,6 +485,7 @@ assert.equal(observations.anchors.has(${JSON.stringify(registryUrl)}) && observa
   "both original production functions are observed without writing dist");
 assert.equal(observations.anchors.size, 9, "each original stage, required input and actual producer-seal observer has one exact anchor");
 assert.equal(observations.returnWriteAnchors, 1, "one exact write anchor belongs to the existing canonical return owner");
+assert.equal(observations.storageWriteAnchors.size, 3, "all other physical selections use their actual single canonical writer");
 assert.equal(observations.seals, 1, "one actual late callable seal");
 assert.equal(observations.producerSeals, 1, "one actual terminal native producer seal remains inside the measured window");
 assert.equal(observations.publications, 1, "one actual planner publication");
@@ -438,9 +499,34 @@ assert.equal(observations.earlyReturnSelections > 0, true,
   "the actual source preserves legitimate return materialization before lifecycle creation");
 assert.equal(observations.returnLookups > 0 && observations.terminalReturnReads.size > 0, true,
   "both pure readers and actual terminal producer projections consume canonical return records");
+assert.equal(observations.storageLookups > 0 && observations.earlyStorageSelections > 0, true,
+  "legitimate early metadata preparation and later pure consumers share the same canonical storage");
 assert.equal("prepareReturn" in observations.published.nativeStorage, false,
   "published storage never exposes its return construction writer");
+for (const writer of ["prepareValue", "prepareOperand", "prepareInvocation"])
+  assert.equal(writer in observations.published.nativeStorage, false, writer + ": no construction service is published");
 const sourceAst = compiled.result.program.source.ast;
+const lexicalProducer = observations.requestInput.nativeProducers.producers.find(producer => {
+  const declaration = producer.declaration;
+  const body = sourceAst.body(declaration);
+  return sourceAst.is.IsArrowFunction(declaration) && body !== undefined && sourceAst.text(body).trim() === "value";
+});
+assert.equal(lexicalProducer !== undefined, true, "the actual used captured arrow has its original selected native producer");
+const lexicalDeclaration = lexicalProducer.declaration;
+assert.equal(observations.requestInput.records.targetOperation.get(lexicalDeclaration)?.kind !== "closure", true,
+  "native lexical body demand does not depend on a target closure operation");
+const lexicalReturn = observations.requests.value.filter(request => request.kind === "return" && request.subject === lexicalDeclaration);
+assert.equal(lexicalReturn.length, 1, "the existing construct owner selects each used native body return exactly once");
+assert.equal(lexicalReturn[0].owner === lexicalDeclaration, true, "the native body retains its exact declaration owner");
+const lexical = observations.requestInput.lexicalFunctions.forDeclaration(lexicalDeclaration);
+assert.equal(lexical?.kind === "resolved" && lexical.captures.length > 0, true, "the unchanged source selects real captured inputs");
+for (const capture of lexical.captures) assert.equal(observations.requests.value.filter(request =>
+  request.kind === "value" && request.subject === capture.reference && request.owner === lexicalDeclaration).length, 1,
+  "each original captured reference retains one actual body-owned value request");
+const lexicalContext = compiled.result.program.physicalEmissionContexts.contexts.find(context =>
+  context.use.subject === lexicalDeclaration && context.use.role === "native-body");
+assert.equal(lexicalContext !== undefined && lexicalContext.bindings === lexicalReturn[0].bindings, true,
+  "the complete published body consumes the original immutable selecting-owner binding object");
 const scalar = observations.published.nativeProducers.producers.find(producer => {
   const name = sourceAst.name(producer.declaration);
   return name !== undefined && sourceAst.text(name) === "owner";
@@ -464,17 +550,30 @@ for (const [method, reads] of observations.rawSelections) {
   assert.equal(observations.published.nativeStorage[method] === observations.lifecycle.prepared[method], true,
     method + ": early and final readers are the same lookup function");
   for (const [node, row] of reads) {
-    assert.equal(observations.lifecycle.prepared[method](node) === row.selected, true,
+    assert.equal(observations.storagePlan[method](node) === row.selected, true,
       method + ": original materialization identity survives all real caller stages");
+    const kind = method === "valueFor" ? "value" : method === "operandFor" ? "operand"
+      : method === "returnFor" ? "return" : "invocation";
+    const required = observations.requests.value.some(request => request.kind === kind && request.subject === node);
+    const selected = observations.lifecycle.prepared[method](node);
+    assert.equal(required ? selected === row.selected : selected.kind === "unresolved", true,
+      method + ": the exact requested-role domain is retained; metadata-only selections are not runtime demand");
     assert.equal(reads.get(node).count, 1, method + ": no raw reselection from first materialization through terminal publication");
     primed++;
   }
+  const before = reads.size;
+  assert.equal(observations.lifecycle.prepared[method](Object.freeze({})).kind, "unresolved",
+    method + ": a foreign unrequested key remains honestly unprepared");
+  assert.equal(reads.size, before, method + ": a foreign pure lookup never materializes storage");
 }
 observations.earlyStoragePhase = "closed";
 assert.equal(primed > 0, true, "the actual generic materialization domain is nonempty");
 const { IsTypeSyntaxNode } = await import("@tsonic/target-api/source");
 const { records } = observations.handlerInputs;
 let metadata = 0;
+const roles = new Set(observations.requests.value.map(request => request.kind));
+for (const role of ["value", "operand", "return", "invocation", "type", "producer"])
+  assert.equal(roles.has(role), true, role + ": the unchanged source exercises every original required request role");
 for (const request of observations.requests.value) {
   assert.equal(Object.isFrozen(request) && Object.isFrozen(request.context) && Object.isFrozen(request.bindings), true,
     "the exact early use and binding inputs are immutable");
@@ -496,6 +595,62 @@ process.stdout.write("R14_INSTRUMENTED_PHASE_PROOF " + JSON.stringify(compiled.r
 });
 
 for (const surfaces of [[], ["js"]]) {
+  test(`finite specialized and concrete body contexts preserve original selecting identities (${surfaces[0] ?? "native"})`, () => {
+    const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
+      files: { "index.ts": finiteEmissionSource } }).result;
+    assert.equal(compiled.diagnostics.length, 0, compiled.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+    const program = compiled.program;
+    const prepared = program.physicalEmissionContexts;
+    const counts = new Map();
+    for (const context of prepared.contexts) {
+      counts.set(context.role, (counts.get(context.role) ?? 0) + 1);
+      assert.equal(context.role === context.use.role, true, "finite role retains the original shared use role");
+      assert.equal(prepared.contextForOwner(context.use.subject, context.role) === context, true,
+        "the original selecting owner reads the same context and use");
+      assert.equal(prepared.contextForOwner({ ...context.use.subject }, context.role) === undefined, true,
+        "a copied owner never recovers a selected native context");
+      assert.equal(prepared.contextForOwner({}, context.role) === undefined, true, "foreign owners stay absent");
+      const metadata = { input: { program }, emissionContext: undefined };
+      const original = requireRustEmissionContext(metadata, context.use.subject, context.role, context.declaration);
+      const rendering = rustContextForEmission(metadata, original);
+      assert.equal(rendering.emissionContext === context && rendering.emissionContext.use === context.use, true,
+        "renderer transport preserves the exact original use");
+      assert.equal(rendering.typeParameterSubstitutions === context.bindings.types &&
+        rendering.lifetimeSubstitutions === context.bindings.lifetimes, true,
+      "renderer transport forwards the same immutable maps, not another binder");
+      assert.equal(typeof context.bindings.types.set === "undefined" && typeof context.bindings.lifetimes.set === "undefined" &&
+        typeof context.bindings.consts.set === "undefined", true, "no mutable binding builder is exposed");
+    }
+    for (const role of ["native-body", "specialized-body", "project-body", "constructor", "constructor-layer"])
+      assert.equal((counts.get(role) ?? 0) > 0, true, role + ": actual emitted route is nonempty");
+    for (const body of program.projectMethodDispatch.bodies) {
+      const context = prepared.contextForOwner(body, "project-body");
+      assert.equal(context !== undefined && context.declaration === body.declaration, true,
+        "every selected concrete native body has complete pre-seal coverage");
+      assert.equal(program.projectMethodDispatch.bodyFor(body.concrete, body.declaration, body.contractVariant) === body, true,
+        "concrete body reader retains the original selected row");
+      assert.equal(program.projectMethodDispatch.bodyFor({ ...body.concrete }, body.declaration, body.contractVariant) === undefined, true,
+        "a copied concrete definition never selects a body");
+      if (body.contractVariant !== undefined) assert.equal(
+        program.projectMethodDispatch.bodyFor(body.concrete, body.declaration, { ...body.contractVariant }) === undefined, true,
+      "a copied contract variant never selects by equal arguments");
+      for (const [identity, value] of body.bindings.types)
+        assert.equal(rustTargetTypeRefEquals(context.bindings.types.get(identity), value), true,
+          identity + ": selected concrete binding survives unchanged");
+    }
+    let specialized = 0;
+    for (const producer of program.callableValues.nativeProducers.producers)
+      for (const variant of program.sourceCallableSpecializations.variantsForCallable(producer.declaration)) {
+        const context = prepared.contextForOwner(variant, "specialized-body");
+        assert.equal(context !== undefined && context.use.subject === variant, true, "the actual finite source variant owns its body context");
+        for (const [index, identity] of variant.sourceTypeParameterIdentities.entries())
+          assert.equal(rustTargetTypeRefEquals(context.bindings.types.get(identity), variant.targetTypeArguments[index]), true,
+            identity + ": actual finite replacement, not an identity binding or another variant");
+        specialized++;
+      }
+    assert.equal(specialized > 1, true, "both real native finite replacements are exercised");
+    assert.equal(compiled.artifacts.some(artifact => artifact.path.endsWith(".rs")), true, "ordinary uninstrumented planning emits source");
+  });
   test(`actual helper, body, member and native-input contexts share one immutable binding (${surfaces[0] ?? "native"})`, () => {
     const program = actual(genericSource, surfaces);
     const prepared = program.physicalEmissionContexts;
@@ -671,6 +826,8 @@ export function ordinary(value: number): number { const stored = value; return s
     for (const context of prepared.contexts) {
       assert.equal(prepared.contextFor(context.use) === context, true, "exact canonical context key");
       assert.equal(prepared.contextFor({ ...context.use }) === undefined, true, "copied context key is foreign");
+      assert.equal(prepared.contextForOwner(context.use.subject, context.role) === context, true, "same original selecting owner and finite role");
+      assert.equal(prepared.contextForOwner({ ...context.use.subject }, context.role) === undefined, true, "copied original owner is foreign");
     }
     for (const operand of prepared.operands) {
       assert.equal(prepared.operandFor(operand.use) === operand, true, "exact canonical operand key");
@@ -705,9 +862,23 @@ function verifyRequiredMissingOperand(program, observations) {
   const original = observations.preparations.find(preparation => preparation.requests.some(request => request.use === operand.context.use));
   assert.equal(original !== undefined, true, "the operand retains its actual complete preparation input");
   const owner = original.requests.find(request => request.use === operand.context.use);
+  const duplicate = prepareRustEmissionContextRequests(original.input, [owner, { ...owner,
+    use: targetUseSiteRef(owner.use.subject, owner.role, owner.use.enclosingContract + ":duplicate") }]);
+  assert.equal(duplicate.kind, "rejected", "duplicate original owner/role coverage is rejected before sealing");
+  assert.equal(duplicate.diagnostics.some(issue => issue.message ===
+    "One original emitted owner and role requires exactly one selected physical context."), true,
+  "equal-looking native context keys do not hide duplicate selecting ownership");
+  const missing = prepareRustPhysicalEmissionContexts({ ...original.input,
+    nativeProducers: { ...original.input.nativeProducers,
+      producers: original.input.nativeProducers.producers.filter(producer => producer.declaration !== owner.declaration) } });
+  assert.equal(missing.kind, "rejected", "missing required source body coverage is rejected before publication");
+  assert.equal(missing.diagnostics.some(issue => issue.code === "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED" &&
+    issue.message === "An emitted callable demand requires its original selected body context before publication."), true,
+  "a required actual body never falls back to metadata or an enclosing context");
   const result = prepareRustEmissionContextRequests({ ...original.input, sourceOccurrences: [],
     nativeStorage: { ...original.input.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
-  [{ use: targetUseSiteRef(operand.node, "missing-control", "actual-native-owner"), declaration: operand.context.declaration,
+  [{ use: targetUseSiteRef(operand.node, "native-body", "actual-native-owner"), role: "native-body", specialization: owner.specialization,
+    declaration: operand.context.declaration,
     bindings: operand.context.bindings, returnDestination: operand.context.returnDestination, error: operand.context.error,
     source: owner.source,
     demands: [Object.freeze({ kind: "value", subject: operand.node, owner: operand.context.declaration,

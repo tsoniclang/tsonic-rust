@@ -13,12 +13,15 @@ import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbi
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
+import { isRustNativeResultLoanContract } from "../../../target-model/operations/result-loans.js";
+import { rustFinalizedSourceInputs } from "./conversions.js";
+import type { RustFinalizedNativeResultLoans } from "../../../target-model/records/finalized-operation.js";
 import { hasExactKeys, isRecord } from "./validation-records.js";
 
 const finalizationOptionKeys = new Set([
   "operationKind", "form", "sourceReceiver", "sourceArgumentCarriers", "spreadSourceArgumentIndexes",
   "declaredSourceArgumentCarriers", "evaluationOnlySourceArgumentIndexes", "resultCarrier", "dispatchInputs",
-  "nativeErrorCarriers", "targetGenericArguments", "resultConversion", "isAsync", "isFallible",
+  "nativeErrorCarriers", "targetGenericArguments", "resultConversion", "resultLoans", "isAsync", "isFallible",
   "returnedFuture", "evaluation", "errorBoundary", "errorCarrier", "isUnsafe",
 ]);
 
@@ -27,6 +30,7 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFinalizedOperationAbiFor<OperationKind> | undefined {
   if (Object.keys(options).some(key => !finalizationOptionKeys.has(key)) ||
+    (Object.prototype.hasOwnProperty.call(options, "resultLoans") && !isRustNativeResultLoanContract(options.resultLoans)) ||
     !operationKinds.has(options.operationKind) || !isRustTargetTypeRef(options.resultCarrier) ||
     (options.sourceReceiver !== undefined && (!isRecord(options.sourceReceiver) ||
       (options.sourceReceiver.kind === "compile-time"
@@ -200,7 +204,35 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
       ...(options.nativeErrorCarriers === undefined ? {} : { nativeErrorCarriers: options.nativeErrorCarriers }),
     },
   };
-  return validateRustFinalizedOperationAbi(abi, definitions) ? snapshotClosedMetadata(abi) : undefined;
+  if (!validateRustFinalizedOperationAbi(abi, definitions)) return undefined;
+  const selected = snapshotClosedMetadata(abi);
+  if (options.resultLoans === undefined) return selected;
+  const resultLoans = bindNativeResultLoans(options.resultLoans, selected);
+  if (resultLoans === undefined) return undefined;
+  const completed = Object.freeze({ ...selected, result: Object.freeze({ ...selected.result, resultLoans }) });
+  return validateRustFinalizedOperationAbi(completed, definitions) ? completed : undefined;
+}
+
+function bindNativeResultLoans(
+  declared: NonNullable<FinalizeRustProviderOperationAbiOptions["resultLoans"]>,
+  abi: RustFinalizedOperationAbiFor<RustFinalizedOperationKind>,
+): RustFinalizedNativeResultLoans | undefined {
+  const contract = snapshotClosedMetadata(declared);
+  const inputs = rustFinalizedSourceInputs(abi);
+  const loans: RustFinalizedNativeResultLoans["loans"][number][] = [];
+  for (const loan of contract.loans) {
+    const origins: RustFinalizedNativeResultLoans["loans"][number]["origins"][number][] = [];
+    for (const origin of loan.origins) {
+      const selected = inputs.filter(input => input.source.kind === origin.input.kind &&
+        (input.source.kind === "receiver" || origin.input.kind === "argument" &&
+          input.source.sourceIndex === origin.input.sourceIndex));
+      if (selected.length === 0 || origin.kind === "borrow" && selected.some(input =>
+        origin.mutable ? input.mode !== "mut-ref" : input.mode !== "ref" && input.mode !== "mut-ref")) return undefined;
+      for (const input of selected) origins.push(Object.freeze({ origin, input }));
+    }
+    loans.push(Object.freeze({ loan, origins: Object.freeze(origins) }));
+  }
+  return Object.freeze({ contract, loans: Object.freeze(loans) });
 }
 
 function mappingUsesSourceReceiver(

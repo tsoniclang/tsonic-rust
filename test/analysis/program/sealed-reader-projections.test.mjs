@@ -98,7 +98,9 @@ export function value(limit: number): number {
       reader("RustCaptureStoragePlan.iterationsForScope", nodes, node => program.captureStorage.iterationsForScope(node), () => program.captureStorage.iterationsForScope(foreign), "empty"),
       reader("RustLocalStorageAliasPlan.owner", nodes, node => program.localStorageAliases.owner(node), () => program.localStorageAliases.owner(foreign)),
       reader("RustLocalStorageAliasPlan.requiresMutableOwner", nodes, node => program.localStorageAliases.requiresMutableOwner(node), () => program.localStorageAliases.requiresMutableOwner(foreign), "false"),
-      reader("RustProviderMutableInputPlan.forOperation", nodes, node => program.providerMutableInputs.forOperation(node), () => program.providerMutableInputs.forOperation(foreign)),
+      reader("RustProviderMutableInputPlan.forOperation", program.providerMutableInputs.operations,
+        selected => program.providerMutableInputs.forOperation(selected.node, selected.operation, selected.contextUse),
+        () => program.providerMutableInputs.forOperation(foreign, foreign, foreign)),
     ];
     const declared = new Set(keelOwnedTargets["tsonic-rust"].recordReaders.map(entry => entry.symbol));
     assert.equal(readers.length, 41);

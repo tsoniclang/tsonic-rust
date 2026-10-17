@@ -4,7 +4,6 @@ import type {
   Node,
   SourceFile,
 } from "@tsonic/tsts";
-import type { TargetCompilationPaths } from "@tsonic/target-api";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
@@ -31,7 +30,6 @@ export type RustSourceOutputIdentityPlan =
 export interface RustSourceOutputIdentityAnalysisInput {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
-  readonly paths: TargetCompilationPaths;
   readonly sourcePackages: TargetSourcePackageGraph;
 }
 
@@ -219,17 +217,13 @@ export function analyzeRustSourceOutputIdentities(
 
   const byFileName = new Map<string, RustSourceFileOutputIdentity>();
   const byModuleName = new Map<string, string>();
-  const byArtifactPath = new Map<string, string>();
   for (const sourcePath of sourcePaths) {
     const { fileName, relativeSourcePath } = sourcePath;
     const root = rootsByComponent.get(sourcePath.componentId)!;
     const moduleSegments = resolveRustModuleSegments(root, sourcePath.sourceSegments);
     const moduleName = moduleSegments.join("::");
-    const artifactPath = `src/${moduleSegments.join("/")}.rs`;
     const moduleIdentity = `${sourcePath.componentId}\u0000${moduleName}`;
-    const artifactIdentity = `${sourcePath.componentId}\u0000${artifactPath}`;
     const moduleOwner = byModuleName.get(moduleIdentity);
-    const artifactOwner = byArtifactPath.get(artifactIdentity);
     if (moduleOwner !== undefined && moduleOwner !== fileName) {
       diagnostics.push(identityCollisionDiagnostic(
         "RUST_SOURCE_MODULE_IDENTITY_COLLISION",
@@ -240,25 +234,13 @@ export function analyzeRustSourceOutputIdentities(
       ));
       continue;
     }
-    if (artifactOwner !== undefined && artifactOwner !== fileName) {
-      diagnostics.push(identityCollisionDiagnostic(
-        "RUST_SOURCE_ARTIFACT_IDENTITY_COLLISION",
-        fileName,
-        artifactOwner,
-        "artifact identity",
-        artifactPath,
-      ));
-      continue;
-    }
     byModuleName.set(moduleIdentity, fileName);
-    byArtifactPath.set(artifactIdentity, fileName);
     const moduleNode = resolveModuleSegmentNode(root, sourcePath.sourceSegments);
     byFileName.set(fileName, Object.freeze({
       fileName,
       relativeSourcePath,
       moduleSegments: Object.freeze(moduleSegments),
       moduleName,
-      artifactPath,
       childModuleNames: Object.freeze(
         [...moduleNode.children.values()]
           .map((child) => child.rustName!)

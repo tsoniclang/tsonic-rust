@@ -150,8 +150,7 @@ export function lowerRustValueConversion(
     case "owned-string-from-borrowed-str":
       return { kind: "owned-string-from-borrowed-str", expression: source };
     case "borrowed-str-from-owned-string":
-      return source.kind === "str-literal" ? source
-        : { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
+      return { kind: "call", path: "core::convert::AsRef::<str>::as_ref", args: [source] };
     case "borrowed-str-from-optional-string":
       return { kind: "method-call", receiver: {
         kind: "method-call", receiver: source.kind === "reference" ? source.expr : source, method: "as_deref", args: [],

@@ -6,7 +6,6 @@ import { setCarrierFact } from "../operations/project-calls.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { RustNativeEnumDeclaration } from "../../target-model/records/native-value-declarations.js";
-import { selectRustEnumConstantRepresentation } from "../../policy/types/enums/constant-admission.js";
 
 export function recordEnumFacts(walk: RustFactWalk, declaration: Node): void {
   const { ast, names, source, typeDefinitions } = walk.context;
@@ -31,7 +30,6 @@ export function recordEnumFacts(walk: RustFactWalk, declaration: Node): void {
       : "RUST_ENUM_CONSTANT_NOT_SUPPORTED", width.reason, width.member, ["target.capability=rust.declaration.native-form"]);
     return;
   }
-  const values: bigint[] = [];
   const variants: RustNativeEnumDeclaration["variants"][number][] = [];
   for (const member of members as readonly Node[]) {
     const memberName = names.nameForDeclaration(member);
@@ -45,14 +43,13 @@ export function recordEnumFacts(walk: RustFactWalk, declaration: Node): void {
       failTargetAnalysisInvariant("tsonic-rust",
         "A resolved shared enum width requires every identical member's completed integer constant.", member);
     }
-    values.push(constant.value);
     variants.push(Object.freeze({ declaration: member, name: memberName, discriminant: constant.value.toString() }));
   }
   const carrier = walk.sourceTypes.carrierForDeclaration(declaration);
   if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
     "A registered source enum has no nominal carrier before physical type initialization.", declaration);
   const definition: RustNativeEnumDeclaration = Object.freeze({ kind: "enum", name,
-    integerWidth: width.integerWidth, representation: selectRustEnumConstantRepresentation(values),
+    integerWidth: width.integerWidth,
     variants: Object.freeze(variants) });
   if (!typeDefinitions.registerSourceEnum(carrier, definition)) failTargetAnalysisInvariant("tsonic-rust",
     "A source enum requires one complete native definition from its sole early producer.", declaration);

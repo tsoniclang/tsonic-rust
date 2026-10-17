@@ -6,7 +6,6 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 
 import { rustLocationTargetType } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 
 export function planRustDeferredCaptureStorage(scope: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
   const statements: RustStmt[] = [];
@@ -20,7 +19,6 @@ export function planRustDeferredCaptureStorage(scope: Node, context: RustPlanCon
         "rust.backend.deferred-capture-storage", "Deferred capture storage requires its exact native location and declaration identity."));
       return undefined;
     }
-    if (!requireRustLocationValueCarrier(fact.valueCarrier, declaration, context)) return undefined;
     context.usedAliases?.add("rt");
     statements.push({ kind: "let", name, mutable: fact.iterationScope !== undefined, type,
       init: { kind: "call", path: "rt::Location::uninitialized", args: [] } });

@@ -10,7 +10,7 @@ import { planRustConstructionBody } from "../../declarations/classes/constructio
 import { planRustCallableParameters } from "../../declarations/callables/parameters.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../class-environments.js";
 import { diagnosticInput, rustErrorBoundaryForDeclaration, rustErrorType,
-  rustProjectTypeHasPublicImplementationAbi, type RustPlanContext } from "../../program/plan-context.js";
+  rustProjectTypeHasPublicImplementationAbi, requireRustEmissionContext, rustContextForEmission, type RustPlanContext } from "../../program/plan-context.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustProjectConstructorDeadCodeDisposition } from "../../program/reachability-directives.js";
@@ -37,6 +37,9 @@ export function planProjectClassConstructor(
     return undefined;
   }
   const constructor = selected.constructor;
+  context = rustContextForEmission(context, requireRustEmissionContext(context, plan, "constructor", definition.declaration));
+  context = rustContextForEmission(context, requireRustEmissionContext(context, selected, "constructor-layer",
+    constructor ?? definition.declaration));
   const safetyDeclaration = constructor ?? definition.declaration;
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, safetyDeclaration, []);
   for (const layer of plan.layers) {

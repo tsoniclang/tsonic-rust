@@ -1,6 +1,5 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustAwaitValueFact, RustAwaitValueLeafFact } from "../../../target-model/records/await-values.js";
-import { rustAwaitValueRequirements } from "../../../analysis/callables/await-values.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import type { RustAwaitSelection } from "../../../target-model/types/await.js";
@@ -8,7 +7,6 @@ import { rustJsPromiseTargetId, isRustNeverCarrier, isRustUnitCarrier } from "..
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import { diagnosticInput, type RustPlanContext } from "../program/plan-context.js";
 import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import { rustPropagateNativeError } from "../program/fallible-boundaries.js";
@@ -33,8 +31,6 @@ export function planRustAwaitBranches(
     let output = value;
     if (future !== undefined) {
       const promise = selected.carrier.kind === "target-named" && selected.carrier.id === rustJsPromiseTargetId;
-      const requirements = rustAwaitValueRequirements(selected);
-      if (requirements.length > 0 && !requireRustCarrierRequirements(future.outputCarrier, requirements, node, context)) return undefined;
       output = { kind: "await", expr: promise
         ? { kind: "method-call", receiver: value, method: future.awaiting === "fallible" ? "into_result" : "into_value", args: [] }
         : value };

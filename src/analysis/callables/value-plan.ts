@@ -89,6 +89,9 @@ export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | 
 export interface RustCallableValueSealInput {
   readonly nativeTypeInputFor: (fileName: string,
     callables: RustNativeTypeInputContext["callableValues"]) => RustNativeTypeSelectionInput;
+  readonly sourceCallableSpecializations: import("./specializations.js").RustSourceCallableSpecializationPlan;
+  readonly projectMethodDispatch: import("../project-types/method-dispatch.js").RustProjectMethodDispatchPlan;
+  readonly lexicalFunctions: import("./lexical-functions.js").RustLexicalFunctionQueries;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly genericErrors: RustGenericCallableErrorIndex;
   readonly errorRegions: Pick<RustErrorRegionRecords, "get" | "sourceFor">;

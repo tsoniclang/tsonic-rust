@@ -29,7 +29,8 @@ export function planRustNativeCallableGenerics(
   const typeParameterNames = new Map(source.context.typeParameterNames);
   const usedNames = new Set([...typeParameterNames.values(), ...sourceGenerics.parameters.map(parameter => parameter.name)]);
   for (const input of inputs) {
-    if (source.context.typeParameterSubstitutions?.has(input.implementation.identity) === true) continue;
+    const binding = source.context.typeParameterSubstitutions?.get(input.implementation.identity);
+    if (binding !== undefined && (binding.kind !== "type-parameter" || binding.identity !== input.implementation.identity)) continue;
     typeParameterNames.set(input.implementation.identity, allocateRustGeneratedName(usedNames, input.implementation.name));
   }
   const context: RustPlanContext = { ...source.context, typeParameterNames };
@@ -97,7 +98,8 @@ export function planRustNativeCallableGenerics(
         } }] });
       }
     }
-    if (context.typeParameterSubstitutions?.has(input.implementation.identity) === true) {
+    const binding = context.typeParameterSubstitutions?.get(input.implementation.identity);
+    if (binding !== undefined && (binding.kind !== "type-parameter" || binding.identity !== input.implementation.identity)) {
       const type = rustTypeFromCarrierInContext(input.implementation, context);
       if (type === undefined) return undefined;
       if (selectedBounds.length > 0) predicates.push({ kind: "type", type, bounds: selectedBounds });

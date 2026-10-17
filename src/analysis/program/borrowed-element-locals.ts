@@ -1,7 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import {
   BinaryExpression_Left, BinaryExpression_Right, BreakOrContinueStatement_Label, Node_Expression, Node_Initializer, Node_Operand,
-  VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceProgramNavigation,
+  VariableDeclarationList_Declarations, VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 
 import { isRustStringCarrier } from "../../target-model/types/index.js";
@@ -10,6 +10,7 @@ import type { RustBorrowedElementRead } from "./borrowed-element-reads.js";
 import { rustBorrowedElementRead, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustBorrowUseAnalysis } from "../ownership/effects.js";
 
 export interface RustBorrowedElementLocal extends RustBorrowedElementRead {
   readonly declaration: Node;
@@ -21,13 +22,15 @@ export function analyzeRustBorrowedElementLocals(
   ast: AstReader,
   nativeNodes: readonly Node[],
   records: RustProgramRecords,
-  navigation: SourceProgramNavigation,
+  uses: Pick<RustBorrowUseAnalysis, "useSummaryFor">,
+  isNativeNode: (node: Node) => boolean,
 ) {
   const starts = new WeakMap<Node, RustBorrowedElementLocal>();
   const endings = new WeakMap<Node, readonly RustBorrowedElementLocal[]>();
   const pureStatements = new WeakMap<Node, boolean>();
   const pureExpression = (node: Node | undefined): boolean => {
     if (node === undefined) return false;
+    if (!isNativeNode(node)) return true;
     const kind = ast.kindName(node);
     if (["KindNumericLiteral", "KindStringLiteral", "KindNoSubstitutionTemplateLiteral",
       "KindTrueKeyword", "KindFalseKeyword", "KindNullKeyword"].includes(kind)) return true;
@@ -63,6 +66,7 @@ export function analyzeRustBorrowedElementLocals(
   };
   const pureStatement = (node: Node | undefined): boolean => {
     if (node === undefined) return false;
+    if (!isNativeNode(node)) return true;
     const cached = pureStatements.get(node);
     if (cached !== undefined) return cached;
     let pure = false;
@@ -147,12 +151,12 @@ export function analyzeRustBorrowedElementLocals(
     if (read === undefined || !ast.is.IsIdentifier(read.array)) return undefined;
     const arrayBinding = records.sourceBinding.get(read.array)?.sourceDeclaration;
     if (arrayBinding === undefined || !isLocal(arrayBinding, ast)) return undefined;
-    const summary = navigation.declarationUseSummary(declaration);
-    if (summary.bindingWritten || summary.captured || summary.exported) return undefined;
-    const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
-    if (uses.length === 0 || !uses.every(use => readonlyUse(use.reference))) return undefined;
+    const summary = uses.useSummaryFor(declaration);
+    if (summary === undefined || summary.bindingWritten || summary.captured || summary.exported) return undefined;
+    const references = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
+    if (references.length === 0 || !references.every(use => readonlyUse(use.reference))) return undefined;
     let end = start;
-    for (const use of uses) {
+    for (const use of references) {
       let enclosing: Node | undefined = use.reference;
       while (enclosing !== undefined && ast.parent(enclosing) !== block) enclosing = ast.parent(enclosing);
       const index = statementIndexes.get(enclosing);
@@ -160,7 +164,7 @@ export function analyzeRustBorrowedElementLocals(
       end = Math.max(end, index);
     }
     return Object.freeze({ ...read, declaration, lastStatement: statements[end]!,
-      references: Object.freeze(uses.map(use => use.reference)) });
+      references: Object.freeze(references.map(use => use.reference)) });
   };
   const visit = (node: Node): void => {
     if (ast.is.IsBlock(node)) {

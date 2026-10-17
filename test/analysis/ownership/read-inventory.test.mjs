@@ -3,7 +3,8 @@ import test from "node:test";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
-import { analyzeRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import { analyzeRustReadOwnership, prepareRustReadOwnership } from "../../../dist/analysis/ownership/reads.js";
+import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
@@ -16,26 +17,49 @@ async function fixture() {
   const builder = createRustProgramRecordBuilder();
   const selected = storage.nodes.filter(node => source.ast.is.IsParenthesizedExpression(node) ||
     source.ast.is.IsIdentifier(node) && source.ast.text(node) === "value");
-  for (const node of selected) builder.runtimeCarriers.selected(node, { kind: "target-named", id: "rust.std.String" });
+  for (const node of selected) {
+    builder.runtimeCarriers.selected(node, { kind: "target-named", id: "rust.std.String" });
+    if (source.ast.is.IsIdentifier(node)) {
+      const parent = source.ast.parent(node);
+      const declaration = source.navigation.sourceReferenceFor(node)?.declaration ??
+        (source.ast.is.IsParameterDeclaration(parent) ? parent : undefined);
+      assert.equal(declaration !== undefined, true, "the fixture supplies each original checked storage binding");
+      builder.sourceBindings.lexical(node, declaration, "value");
+    }
+  }
+  const records = builder.seal([]);
   const input = {
     storage,
     nativeNodes: storage.nodes,
-    records: builder.seal([]),
-    flow: { movingReads: new Set(), captureTransfers: new Map() },
+    records,
+    movingReads: new Set(),
+    flow: { readTransfers: new Map(), captureRequirements: new Map(), captureTransfers: new Map(), graphs: new Map(), liveness: new Map() },
+    captures: new Map(),
+    nativeStorage: { operandFor(node) {
+      assert.equal(nativeNodes.has(node), true, "only the original checked source can obtain native formation");
+      return { kind: "resolved", carrier: records.runtimeCarrier.get(node).carrier };
+    } },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
-    borrowEffectsInput: { ast: source.ast, isNativeNode: node => nativeNodes.has(node) },
+    borrowEffectsInput: { ast: source.ast, records, navigation: source.navigation,
+      readUses: analyzeRustReadUses(source.ast, storage.nodes, records), isNativeNode: node => nativeNodes.has(node) },
     definitions: emptyRustTypeDefinitions,
-    genericRequirements: { supportsClone: () => true },
+    genericRequirements: { contractFor: declaration => Object.freeze({ declaration,
+      typeParameters: [], capturedTypeParameters: [], nativeInputs: [], associatedTypes: [],
+      projectProjections: [], optionalStorage: [] }) },
+    typeFamilies: { implementation: () => undefined },
     genericCallables: { definitionFor: () => undefined },
-    capturesFor: () => undefined,
-    invocationTransfersCapture: () => false,
   };
   return { input, selected };
 }
 
+function analyze(input) {
+  const prepared = prepareRustReadOwnership(input);
+  return prepared.kind === "rejected" ? prepared : analyzeRustReadOwnership({ ...input, requirements: prepared.requirements });
+}
+
 test("transparent storage reads are classified once from the complete checked inventory", async () => {
   const { input, selected } = await fixture();
-  const selectedAnalysis = analyzeRustReadOwnership(input);
+  const selectedAnalysis = analyze(input);
   assert.equal(selectedAnalysis.kind, "resolved");
   const wrappers = selected.filter(node => input.storage.source.ast.is.IsParenthesizedExpression(node));
   assert.equal(wrappers.length, 80);
@@ -50,19 +74,42 @@ test("an incomplete or unordered transparent inventory never silently selects a 
   const { input, selected } = await fixture();
   const operand = selected.at(-1);
   for (const nodes of [input.storage.nodes.filter(node => node !== operand), [...input.storage.nodes].reverse()]) {
-    const result = analyzeRustReadOwnership({ ...input, nativeNodes: nodes, storage: { ...input.storage, nodes } });
+    const result = analyze({ ...input, nativeNodes: nodes, storage: { ...input.storage, nodes } });
     assert.equal(result.kind, "rejected");
     assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID");
     assert.equal("ownership" in result, false);
   }
+  const nodes = input.nativeNodes.filter(node => node !== operand);
+  const nativeNodes = new Set(nodes);
+  const result = analyze({ ...input, nativeNodes: nodes,
+    borrowEffectsInput: { ...input.borrowEffectsInput, isNativeNode: node => nativeNodes.has(node) } });
+  assert.equal(result.kind, "rejected", "a selected wrapper cannot manufacture an owned value from an excluded runtime operand");
+  assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID", "the exact missing input remains an inventory error");
+  assert.equal("ownership" in result, false, "a partial native inventory never publishes a read plan");
 });
 
 test("storage-read materialization respects finite node, work and row budgets before publication", async () => {
   const { input } = await fixture();
   for (const limits of [{ maximumNodes: 1 }, { maximumSteps: 1 }, { maximumTransportRows: 1 }]) {
-    const result = analyzeRustReadOwnership({ ...input, limits });
+    const result = analyze({ ...input, limits });
     assert.equal(result.kind, "rejected");
     assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED");
     assert.equal("ownership" in result, false);
   }
+});
+
+test("prepared and completed reads share their original cumulative work budget", async () => {
+  const { input } = await fixture();
+  const measured = prepareRustReadOwnership(input);
+  assert.equal(measured.kind, "resolved", "the complete original source preparation is available");
+  const work = measured.requirements.budget.usage().steps;
+  assert.equal(measured.requirements.budget.usage().nodes, input.nativeNodes.length,
+    "the original checked nodes are charged once");
+  const prepared = prepareRustReadOwnership({ ...input,
+    limits: { maximumSteps: work + input.nativeNodes.length - 1 } });
+  assert.equal(prepared.kind, "resolved", "the same finite budget admits preparation");
+  const selected = analyzeRustReadOwnership({ ...input, requirements: prepared.requirements });
+  assert.equal(selected.kind, "rejected", "completion cannot reset the same work budget");
+  assert.equal(selected.diagnostics[0].code, "RUST_OWNERSHIP_READ_BUDGET_EXCEEDED", "the original finite owner rejects exhaustion");
+  assert.equal("ownership" in selected, false, "no partial read records are published");
 });

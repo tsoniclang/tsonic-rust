@@ -34,7 +34,6 @@ import {
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import { rustOptionDefaultValue } from "../expressions/option-default.js";
 import { planRustCheckedSourceOptional } from "../expressions/optional-storage.js";
 import { rustBindingNormalizationContract } from "../../../target-model/types/binding-normalization.js";
@@ -178,9 +177,6 @@ function planBindingProjection(
 ): RustExpr | undefined {
   switch (fact.projection.kind) {
     case "object-field":
-      if (!isRustCopyCarrier(fact.projectedCarrier) && !rustCarrierHasCloneContract(fact.projectedCarrier, context)) {
-        return rejectClone(node, context);
-      }
       return readRustStoredObjectField(
         fact.projection.storage,
         fact.sourceCarrier,
@@ -195,16 +191,11 @@ function planBindingProjection(
       return ownedProjection(
         { kind: "field", receiver: source, name: String(fact.projection.index) },
         fact.projectedCarrier,
-        node,
-        context,
       );
     case "fixed-array-element":
-      return ownedProjection(indexExpression(source, fact.projection.index), fact.projectedCarrier, node, context);
+      return ownedProjection(indexExpression(source, fact.projection.index), fact.projectedCarrier);
     case "vec-element": {
       if (fact.projection.checked) {
-        if (!rustCarrierHasCloneContract(fact.sourceCarrier.kind === "array" ? fact.sourceCarrier.element : undefined, context)) {
-          return rejectClone(node, context);
-        }
         return {
           kind: "method-call",
           receiver: {
@@ -217,7 +208,7 @@ function planBindingProjection(
           args: [],
         };
       }
-      return ownedProjection(indexExpression(source, fact.projection.index), fact.projectedCarrier, node, context);
+      return ownedProjection(indexExpression(source, fact.projection.index), fact.projectedCarrier);
     }
     case "js-array-element":
       return {
@@ -269,9 +260,6 @@ function planObjectRest(
   }
   const values: RustExpr[] = [];
   for (const field of fields) {
-    if (!isRustCopyCarrier(field.carrier) && !rustCarrierHasCloneContract(field.carrier, context)) {
-      return rejectClone(node, context);
-    }
     const value = readRustStoredObjectField(
       fact.projection.storage,
       fact.sourceCarrier,
@@ -310,8 +298,6 @@ function planTupleRest(
     const value = ownedProjection(
       { kind: "field", receiver: source, name: String((fact.projection.kind === "tuple-rest" ? fact.projection.start : 0) + offset) },
       carrier,
-      node,
-      context,
     );
     if (value === undefined) {
       return undefined;
@@ -371,8 +357,7 @@ function planVecRest(
 ): RustExpr | undefined {
   const start = fact.projection.kind === "vec-rest" ? fact.projection.start : 0;
   if (!isRustVecCarrier(fact.sourceCarrier) || !isRustVecCarrier(fact.bindingCarrier) ||
-    !rustTargetTypeRefEquals(fact.sourceCarrier.element, fact.bindingCarrier.element) ||
-    !rustCarrierHasCloneContract(fact.sourceCarrier.element, context)) {
+    !rustTargetTypeRefEquals(fact.sourceCarrier.element, fact.bindingCarrier.element)) {
     return rejectProjection(node, context, "Vector rest projection has incompatible or non-cloneable finalized carriers.");
   }
   return {
@@ -433,14 +418,9 @@ function normalizeBindingValue(
 function ownedProjection(
   value: RustExpr,
   carrier: RustBindingProjectionFact["projectedCarrier"],
-  node: Node,
-  context: RustPlanContext,
 ): RustExpr | undefined {
   if (isRustCopyCarrier(carrier)) {
     return value;
-  }
-  if (!rustCarrierHasCloneContract(carrier, context)) {
-    return rejectClone(node, context);
   }
   return { kind: "method-call", receiver: value, method: "clone", args: [] };
 }
@@ -451,10 +431,6 @@ function indexExpression(receiver: RustExpr, index: number): RustExpr {
 
 function integer(value: number): RustExpr {
   return { kind: "int-literal", text: String(value) };
-}
-
-function rejectClone(node: Node, context: RustPlanContext): undefined {
-  return rejectProjection(node, context, "Binding projection requires an owned value whose exact carrier is not cloneable.");
 }
 
 function rejectProjection(node: Node, context: RustPlanContext, message: string): undefined {

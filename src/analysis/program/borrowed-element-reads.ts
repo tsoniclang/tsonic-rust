@@ -5,17 +5,24 @@ import { analyzeRustBorrowedElementLocals, type RustBorrowedElementLocal } from 
 import { rustBorrowedElementRead, rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
 import { analyzeRustBorrowedIterationBindings, type RustBorrowedIterationBinding } from "./borrowed-iteration-bindings.js";
+import type { RustBorrowUseAnalysis } from "../ownership/effects.js";
+import type { RustFinalizedSourceInput, RustFinalizedConstantInput } from "../../target-model/records/finalized-operation.js";
 
 export interface RustBorrowedElementRead {
   readonly receiver: Node;
   readonly element: Node;
   readonly array: Node;
   readonly index: Node;
+  readonly targetIndex: RustFinalizedSourceInput | RustFinalizedConstantInput;
   readonly method: string;
 }
 
+export interface RustBorrowedElementExpressionRead extends RustBorrowedElementRead {
+  readonly valueForm: "shared-reference" | "storage";
+}
+
 export interface RustBorrowedElementReads {
-  forExpression(node: Node): RustBorrowedElementRead | undefined;
+  forExpression(node: Node): RustBorrowedElementExpressionRead | undefined;
   forRead(node: Node): RustBorrowedElementRead | undefined;
   forStatement(node: Node): RustBorrowedElementLocal | undefined;
   endingAt(node: Node): readonly RustBorrowedElementLocal[];
@@ -27,13 +34,17 @@ export function analyzeRustBorrowedElementReads(
   nativeNodes: readonly Node[],
   records: RustProgramRecords,
   navigation: SourceProgramNavigation,
+  uses: Pick<RustBorrowUseAnalysis, "useSummaryFor">,
+  isNativeNode: (node: Node) => boolean,
 ): RustBorrowedElementReads {
-  const reads = new WeakMap<Node, RustBorrowedElementRead>();
+  const reads = new WeakMap<Node, RustBorrowedElementExpressionRead>();
   const indexedReads = new WeakMap<Node, RustBorrowedElementRead>();
-  const locals = analyzeRustBorrowedElementLocals(ast, nativeNodes, records, navigation);
-  const select = (consumer: Node, read: RustBorrowedElementRead): void => {
-    reads.set(consumer, read);
-    indexedReads.set(read.element, read);
+  const locals = analyzeRustBorrowedElementLocals(ast, nativeNodes, records, uses, isNativeNode);
+  const select = (consumer: Node, read: RustBorrowedElementRead,
+    valueForm: RustBorrowedElementExpressionRead["valueForm"]): void => {
+    const selected = Object.freeze({ ...read, valueForm });
+    reads.set(consumer, selected);
+    indexedReads.set(read.element, selected);
   };
   const visit = (node: Node): void => {
     const local = locals.forStatement(node);
@@ -43,7 +54,7 @@ export function analyzeRustBorrowedElementReads(
       Node_Expression(ast, parent) === node && rustBorrowedStringAppend(node, ast, records)) {
       const right = BinaryExpression_Right(ast, node);
       const read = right === undefined ? undefined : rustBorrowedElementRead(right, ast, records);
-      if (read !== undefined) select(node, read);
+      if (read !== undefined) select(node, read, "shared-reference");
     }
     const operation = rustBorrowPureOperation(node, records);
     if (operation !== undefined) {
@@ -56,14 +67,14 @@ export function analyzeRustBorrowedElementReads(
         if (read !== undefined && argumentsList.every(argument => argument !== undefined &&
           (argument === receiver || isLiteral(argument, ast))) &&
           (operation.abi.sourceReceiver.kind === "none" || sourceReceiver === receiver)) {
-          select(node, read);
+          select(node, read, "storage");
           break;
         }
       }
     }
   };
   nativeNodes.forEach(visit);
-  const forIteration = analyzeRustBorrowedIterationBindings(ast, nativeNodes, records, navigation);
+  const forIteration = analyzeRustBorrowedIterationBindings(ast, nativeNodes, records, navigation, uses, isNativeNode);
   return Object.freeze({ forExpression: (node: Node) => reads.get(node),
     forRead: (node: Node) => indexedReads.get(node), ...locals, forIteration });
 }

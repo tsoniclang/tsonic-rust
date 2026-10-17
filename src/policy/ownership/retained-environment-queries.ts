@@ -1,12 +1,15 @@
 import type { Node } from "@tsonic/tsts";
 import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity, type SourceLexicalEnvironment } from "@tsonic/target-api/source";
+import { Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity,
+  type SourceLexicalEnvironment, type SourceNodeDomain } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import type { RustRetainedEnvironment } from "../../target-model/records/retained-environments.js";
 import type { RustRetainedEnvironmentSelection } from "./retained-environments.js";
 
-type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes">;
+type RustRetainedEnvironmentHost = Pick<RustSourcePolicyContext, "source" | "sourceStorage" | "sourceLifetimes"> & {
+  readonly domain: SourceNodeDomain;
+};
 type LexicalSelection = SourceLexicalEnvironment | { readonly kind: "unresolved"; readonly reason: string };
 
 export interface RustRetainedEnvironmentQueries {
@@ -20,6 +23,7 @@ export function createRustRetainedEnvironmentQueries(
 ): RustRetainedEnvironmentQueries {
   const { ast, navigation } = input.source;
   const storage = input.sourceStorage;
+  const includes = (node: Node): boolean => input.domain === "source" || input.domain.has(node);
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
   const suspended = new Map<Node, readonly Node[] | undefined>();
   const lexical = new Map<Node, LexicalSelection>();
@@ -39,6 +43,7 @@ export function createRustRetainedEnvironmentQueries(
       if (uses === undefined) { suspended.set(declaration, undefined); return undefined; }
       let used = false;
       for (const use of uses.uses) {
+        if (!includes(use.reference)) continue;
         if (!step()) { suspended.set(declaration, undefined); return undefined; }
         if (use.kind !== "type-only" && use.role !== "type-only") used = true;
       }
@@ -57,7 +62,7 @@ export function createRustRetainedEnvironmentQueries(
       const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
       return initializer === undefined ? [] : [initializer];
     }), body];
-    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation);
+    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation, input.domain);
     lexical.set(declaration, selected);
     return selected;
   };
@@ -88,6 +93,7 @@ export function createRustRetainedEnvironmentQueries(
           if (opaqueInvocations === undefined) {
             const invocations = new Set<Node>();
             for (const boundary of storage.boundaries) {
+              if (boundary.kind === "opaque-invocation" && !includes(boundary.invocation)) continue;
               if (!step()) return false;
               if (boundary.kind === "opaque-invocation") invocations.add(boundary.invocation);
             }

@@ -11,13 +11,14 @@ import {
   diagnosticInput,
   rustErrorBoundaryForProjectMember,
   rustErrorType,
+  requireRustEmissionContext,
+  rustContextForEmission,
   sourceTypePath,
 } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { planProjectMethod } from "../../declarations/nominal.js";
 import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
-import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
 import { rustProjectDispatchObjectType, rustProjectDispatchTraitType } from "./names.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
@@ -28,8 +29,7 @@ import type { RustEffectiveExpressionOverride, RustPlanContext } from "../../pro
 import type { RustExpr, RustImplFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustProjectDowncastRoute } from "../../../../analysis/project-types/type-policy.js";
-import type { RustProjectMethodDispatchVariant } from "../../../../analysis/project-types/method-dispatch.js";
-import { instantiateRustProjectMethodDispatchArguments } from "../../../../analysis/project-types/method-dispatch.js";
+import type { RustProjectMethodBodySelection } from "../../../../analysis/project-types/method-dispatch.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { ProjectCallableShape } from "./model.js";
 
@@ -113,56 +113,26 @@ export function planProjectDowncastRouteImplementation(
 }
 
 export function planRootMethodImplementation(
-  concreteCarrier: TargetTypeRef,
-  implementation: Node,
-  variant: RustProjectMethodDispatchVariant,
+  body: RustProjectMethodBodySelection,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
-    implementation, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
-  );
-  if (targetTypeArguments === undefined) return undefined;
-  const specialization = rustCallableSpecialization(
-    variant.sourceTypeParameterIdentities,
-    targetTypeArguments,
-  );
-  return specialization === undefined
-    ? undefined
-    : planRootCallableImplementation(
-        concreteCarrier,
-        implementation,
-        context,
-        {
-          targetName: variant.exactSlot,
-          typeArgumentSubstitutions: specialization,
-        },
-      );
+  return planRootCallableImplementation(body, context, { targetName: body.targetName });
 }
 
 export function planRootAccessorImplementation(
-  concreteCarrier: TargetTypeRef,
-  accessor: Node,
+  body: RustProjectMethodBodySelection,
   role: "read" | "write",
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const targetName = context.input.program.projectTypes.memberSlotName(accessor, role);
-  return targetName === undefined
-    ? undefined
-    : planRootCallableImplementation(
-        concreteCarrier,
-        accessor,
-        context,
-        {
-          targetName,
-          safetyPlacement: role === "read" ? "getter" : "setter",
-        },
-      );
+  return planRootCallableImplementation(body, context, {
+    targetName: body.targetName, safetyPlacement: role === "read" ? "getter" : "setter",
+  });
 }
 
 export function planRootAccessorForwarder(
   concreteCarrier: TargetTypeRef,
   contractAccessor: Node,
-  implementation: Node,
+  body: RustProjectMethodBodySelection,
   role: "read" | "write",
   slot: string,
   rootType: RustType,
@@ -170,6 +140,7 @@ export function planRootAccessorForwarder(
   contractShape: ProjectCallableShape,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
+  const implementation = body.declaration;
   if (rustTypeEquals(helper.errorType, contractShape.errorType)) {
     return planRootCallableForwarder(
       concreteCarrier,
@@ -191,8 +162,7 @@ export function planRootAccessorForwarder(
     return rejectRootContractErrorAbi(implementation, context);
   }
   const planned = planRootCallableImplementation(
-    concreteCarrier,
-    implementation,
+    body,
     context,
     {
       targetName: slot,
@@ -206,49 +176,38 @@ export function planRootAccessorForwarder(
 }
 
 function planRootCallableImplementation(
-  concreteCarrier: TargetTypeRef,
-  implementation: Node,
+  body: RustProjectMethodBodySelection,
   context: RustPlanContext,
   options: {
     readonly targetName: string;
     readonly safetyPlacement?: "getter" | "setter";
-    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly fallibleBoundary?: import("../../../../target-model/records/error-regions.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
-  const owner = context.input.program.projectTypes.definitionContainingDeclaration(implementation);
-  if (owner === undefined) {
-    return undefined;
-  }
-  const ownerRelation = context.input.program.projectTypes.relationship(concreteCarrier, owner);
-  if (ownerRelation.kind !== "related") {
-    return undefined;
-  }
+  const implementation = body.declaration;
+  const owner = body.owner;
+  const emission = requireRustEmissionContext(context, body, "project-body", implementation);
   const syntheticNames = createRustSyntheticNameState(context.input.program.source.ast, implementation, []);
   const thisBindingName = allocateRustSyntheticName(syntheticNames, "project_this");
   const thisPlan = projectThisOverrides(
     implementation,
     owner.declaration,
-    ownerRelation.targetType,
+    body.ownerCarrier,
     thisBindingName,
     context,
   );
   if (thisPlan === undefined) return undefined;
   const planned = planProjectMethod(implementation, {
-    ...context,
+    ...rustContextForEmission(context, emission),
     syntheticNames,
-    typeParameterSubstitutions: projectTypeSubstitutions(owner, ownerRelation.targetType),
-    lifetimeSubstitutions: projectLifetimeSubstitutions(owner, ownerRelation.targetType),
     expressionOverrides: thisPlan.overrides,
     projectDispatchRoot: { kind: "path", path: "self" },
   }, {
     targetName: options.targetName,
+    emissionContext: emission,
     ...(options.safetyPlacement === undefined
       ? {}
       : { safetyPlacement: options.safetyPlacement }),
-    ...(options.typeArgumentSubstitutions === undefined
-      ? {}
-      : { typeArgumentSubstitutions: options.typeArgumentSubstitutions }),
     ...(options.fallibleBoundary === undefined
       ? {}
       : { fallibleBoundary: options.fallibleBoundary }),
@@ -278,40 +237,19 @@ function planRootCallableImplementation(
 export function planRootMethodForwarder(
   concreteCarrier: TargetTypeRef,
   contractMember: Node,
-  implementation: Node,
-  variant: RustProjectMethodDispatchVariant,
+  body: RustProjectMethodBodySelection,
   slot: string,
   rootType: RustType,
   helper: RustImplFunction,
   overrideStoragePath: readonly string[] | undefined,
   context: RustPlanContext,
 ): RustImplFunction | undefined {
-  const contractOwner = context.input.program.projectTypes.definitionContainingDeclaration(contractMember);
-  if (contractOwner === undefined) {
-    return undefined;
-  }
-  const contractRelation = context.input.program.projectTypes.relationship(concreteCarrier, contractOwner);
-  const targetTypeArguments = instantiateRustProjectMethodDispatchArguments(
-    contractMember, variant.targetTypeArguments, concreteCarrier, context.input.program.projectTypes,
-  );
-  if (targetTypeArguments === undefined) return undefined;
-  const specialization = rustCallableSpecialization(
-    variant.sourceTypeParameterIdentities,
-    targetTypeArguments,
-  );
-  const contractShape = contractRelation.kind === "related" && specialization !== undefined
-    ? projectCallableShape(contractMember, {
+  const implementation = body.declaration;
+  const contractShape = projectCallableShape(contractMember, {
         ...context,
-        typeParameterSubstitutions: projectTypeSubstitutions(
-          contractOwner,
-          contractRelation.targetType,
-        ),
-        lifetimeSubstitutions: projectLifetimeSubstitutions(
-          contractOwner,
-          contractRelation.targetType,
-        ),
-      }, { methodTypeArgumentSubstitutions: specialization })
-    : undefined;
+        typeParameterSubstitutions: body.contractBindings.types,
+        lifetimeSubstitutions: body.contractBindings.lifetimes,
+      }, { methodTypeArgumentSubstitutions: body.contractMethodBindings });
   if (contractShape === undefined) {
     return undefined;
   }
@@ -336,12 +274,10 @@ export function planRootMethodForwarder(
     return rejectRootContractErrorAbi(implementation, context);
   }
   const direct = planRootCallableImplementation(
-    concreteCarrier,
-    implementation,
+    body,
     context,
     {
       targetName: slot,
-      typeArgumentSubstitutions: specialization!,
       fallibleBoundary,
     },
   );

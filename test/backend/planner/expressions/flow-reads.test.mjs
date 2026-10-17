@@ -30,7 +30,7 @@ test("optional readonly native references preserve one exact borrow without redu
   }
 });
 
-test("optional native associated values move or borrow without inventing Clone, and reject an unproved owned copy", () => {
+test("optional native associated values render admitted moves or borrows without inventing Clone", () => {
   const selectedCarrier = { kind: "associated-type", owner: { kind: "type-parameter", identity: "Owner", name: "Owner" },
     trait: { kind: "trait-ref", id: "native::Family", path: "native::Family", genericArguments: [], associatedConstraints: [] },
     name: "Output",
@@ -38,7 +38,7 @@ test("optional native associated values move or borrow without inventing Clone, 
   const sourceCarrier = rustOptionTargetType(selectedCarrier);
   const fact = { kind: "option-value", sourceCarrier, selectedCarrier };
   const node = {};
-  for (const [canMove, borrowedResult, succeeds] of [[true, false, true], [false, true, true], [false, false, false]]) {
+  for (const [canMove, borrowedResult] of [[true, false], [false, true]]) {
     const diagnostics = [];
     const result = planRustFlowReadProjection(node, { kind: "path", path: "value" }, fact, {
       input: { program: {
@@ -47,15 +47,9 @@ test("optional native associated values move or borrow without inventing Clone, 
         source: { ast: { getFileName: () => "", getSourceText: () => "", pos: () => -1, end: () => -1, kindName: () => "KindIdentifier" } },
       } }, diagnostics, syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() },
     }, borrowedResult);
-    if (succeeds) {
-      assert.equal(result.kind, "match");
-      assert.equal(result.arms[0].expression.kind, "path");
-      assertNoTargetDiagnostics(diagnostics);
-    } else {
-      assert.equal(result, undefined);
-      assert.equal(diagnostics.length, 1);
-      assert.match(diagnostics[0].message, /proven non-consuming clone contract/u);
-    }
+    assert.equal(result.kind, "match");
+    assert.equal(result.arms[0].expression.kind, "path");
+    assertNoTargetDiagnostics(diagnostics);
   }
 });
 

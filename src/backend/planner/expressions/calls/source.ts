@@ -221,7 +221,9 @@ export function planSelectedSourceCall(
     const lexical = context.input.program.lexicalFunctions.forDeclaration(selectedDeclaration);
     if (lexical?.kind === "unresolved") return undefined;
     for (const parameter of lexical?.genericParameters ?? []) {
-      if (parameter.kind !== "type" || context.typeParameterSubstitutions?.has(parameter.identity) === true) continue;
+      if (parameter.kind !== "type") continue;
+      const binding = context.typeParameterSubstitutions?.get(parameter.identity);
+      if (binding !== undefined && (binding.kind !== "type-parameter" || binding.identity !== parameter.identity)) continue;
       const type = rustTypeFromCarrierInContext({ kind: "type-parameter", identity: parameter.identity,
         name: parameter.targetName }, context);
       if (type === undefined) return undefined;

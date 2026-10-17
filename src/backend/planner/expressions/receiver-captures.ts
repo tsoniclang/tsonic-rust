@@ -6,7 +6,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
 import { rustCapturedFieldLocation, rustCapturedFieldStorage, rustCapturedFieldType } from "../objects/captured-fields.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
@@ -72,19 +71,17 @@ export function planRustCapturedReceivers(
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
   if (!validateRustCapturedReceivers(node, receivers, creation)) return undefined;
-  return planRustReceiverOwners(node, receivers, creation, invocation, options);
+  return planRustReceiverOwners(receivers, creation, invocation, options);
 }
 
 export function planRustReceiverOwners(
-  node: Node, receivers: RustClosureCaptureFact["receivers"], creation: RustPlanContext,
+  receivers: RustClosureCaptureFact["receivers"], creation: RustPlanContext,
   invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const retained: RustExpr[] = [];
   for (const [index, capture] of receivers.entries()) {
-    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["clone", "static"] : ["clone"],
-      capture.reference, { ...creation, callableDeclaration: node })) return undefined;
     if (options.sharedStateName !== undefined) {
       retained.push({ kind: "field", receiver: { kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state" },
         name: String(options.offset + index) });
@@ -164,7 +161,6 @@ export function planRustReceiverFieldOwners(
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const retained: RustExpr[] = [];
   for (const [index, capture] of fields.entries()) {
-    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["static"] : [], capture.reference, creation)) return undefined;
     if (options.sharedStateName !== undefined) {
       retained.push({ kind: "field", receiver: { kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state" },
         name: String(options.offset + index) });

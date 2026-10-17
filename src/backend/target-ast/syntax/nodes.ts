@@ -387,7 +387,6 @@ export type RustDeadCodeDisposition =
   | "authored-declaration"
   | "authored-unread-field"
   | "authored-unused-variant"
-  | "generated-enum-discriminant"
   | "generated-retained-constructor"
   | "generated-unconstructed-instance"
   | "generated-unconstructed-shape"

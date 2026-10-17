@@ -8,7 +8,6 @@ import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../n
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../../types/error-boundary.js";
-import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { applyRustCallableValueAdapter, applyRustCallableValueAdapterRaw } from "./adapters.js";
 import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
@@ -41,8 +40,6 @@ export function planRustCallableArguments(
     const element = abi === undefined ? undefined : callableRestElement(abi.parameterCarrier);
     if (abi === undefined || source === undefined || element === undefined) return undefined;
     const shared = isRustJsArrayCarrier(abi.parameterCarrier);
-    if (shared && !rustCarrierSupportsClone(element, definitions) &&
-      !requireRustCarrierRequirements(element, ["clone"], input.declaration, context)) return undefined;
     const sequence: RustExpr = shared ? { kind: "method-call", receiver: source, method: "into_values", args: [] } : source;
     const name = allocateRustSyntheticName(names, "rest_values");
     const extracted = input.parameterAdapters.some(adapter => adapter.kind === "rest-element" && adapter.contractParameterIndex === index);

@@ -37,9 +37,9 @@ export enum Aliased { firstValue = 1, secondValue = 1 }
   const ordinary = program.nativeDeclarations.get(ordinaryNode);
   const aliased = program.nativeDeclarations.get(aliasNode);
   assert.equal(ordinary?.kind, "enum", "ordinary enum is admitted");
-  assert.equal(ordinary.representation, "enum", "distinct constants select native enum syntax");
+  assert.equal(Object.hasOwn(ordinary, "representation"), false, "distinct constants have one open integer form");
   assert.equal(aliased?.kind, "enum", "duplicate enum is admitted");
-  assert.equal(aliased.representation, "constants", "duplicate constants select the existing native wrapper");
+  assert.equal(Object.hasOwn(aliased, "representation"), false, "duplicate constants use the identical open integer form");
   assert.deepEqual(ordinary.variants.map(variant => [variant.name, variant.discriminant]),
     [["firstValue", "1"], ["secondValue", "2"]], "authored spelling and checked values are preserved");
   assert.equal(program.nativeDeclarations.get(ordinaryNode) === ordinary, true, "reader returns the identical sealed form");
@@ -132,7 +132,10 @@ test("source-output identities are published once with the analyzed program", ()
   const identity = program.sourceOutputIdentities.get("/src/nested/value.ts");
   assert.equal(identity !== undefined, true, "an emitted module has its admitted identity");
   assert.equal(identity.moduleName, "nested::value", "complete native module identity is retained");
-  assert.equal(identity.artifactPath, "src/nested/value.rs", "the selected output path is retained");
+  assert.equal(Object.hasOwn(identity, "artifactPath"), false,
+    "analysis publishes semantic module identity, not physical output placement");
+  assert.equal(backendNames.rustSourceArtifactPath(identity), "src/nested/value.rs",
+    "the selected output path is rendered from the unchanged native module identity");
   assert.equal(program.sourceOutputIdentities.get("/src/nested/value.ts") === identity, true,
     "consumers receive the identical selected identity without running a selector");
   assert.equal(Object.isFrozen(identity) && Object.isFrozen(identity.moduleSegments), true,

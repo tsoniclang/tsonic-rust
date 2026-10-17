@@ -96,6 +96,7 @@ export function resolveRustSuspendedCallableStorage(
     carriers.push(carrier);
   }
   const lexical = sourceLexicalEnvironment(declaration, [body], ast, walk.context.source.navigation,
+    Object.freeze({ has: walk.context.isNativeNode }),
     (use, referencedDeclaration) => walk.context.records.compileTimeSource.get(use.reference) !== true &&
       walk.context.runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
   if (lexical.kind === "unresolved") return { kind: "rejected", reason: lexical.reason };

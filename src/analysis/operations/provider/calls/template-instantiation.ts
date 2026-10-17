@@ -626,6 +626,7 @@ export function finalizeProviderOperationFact(
       ? {}
       : { evaluationOnlySourceArgumentIndexes: template.evaluationOnlySourceArgumentIndexes }),
     resultCarrier: template.resultCarrier,
+    ...(template.resultLoans === undefined ? {} : { resultLoans: template.resultLoans }),
     dispatchInputs: dispatchInputs.filter(input => input !== undefined),
     ...(Object.prototype.hasOwnProperty.call(template, "nativeErrorCarriers") ? { nativeErrorCarriers: template.nativeErrorCarriers } : {}),
     ...(template.targetGenericArguments === undefined

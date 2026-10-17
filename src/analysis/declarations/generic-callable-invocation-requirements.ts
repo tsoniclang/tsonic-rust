@@ -1,0 +1,237 @@
+import type { AstReader, Node } from "@tsonic/tsts";
+import type { RustAnalysisRecords } from "../program/records/model.js";
+import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import { rustReadTransferRequirement, type RustOwnershipFlow } from "../ownership/flow.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
+import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustFrameCallablePlan } from "../callables/frame-values.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import type { RustGenericRequirement } from "./generic-requirements.js";
+import type { RequirementContractState } from "./generic-requirement-contract.js";
+import type { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
+import type { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
+import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
+import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
+import { bindRustExactTypeParameters } from "../../target-model/types/carriers/generic-inference.js";
+import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { isRustCopyCarrier, rustOptionElementCarrier, rustSourceTypeCarrierValue,
+  rustTargetGenericTypeArguments } from "../../target-model/types/index.js";
+import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
+import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
+import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+
+export interface RustCallableInvocationRequirementContext {
+  readonly ast: AstReader;
+  readonly declaration: Node;
+  readonly records: RustAnalysisRecords;
+  readonly ownershipFlow: RustOwnershipFlow;
+  readonly typeDefinitions: RustTypeDefinitions;
+  readonly sourceLifetimes: RustLifetimeIndex;
+  readonly projectTypes: RustProjectTypePolicy;
+  readonly genericCallables: RustGenericCallablePlan;
+  readonly nativeCallables: RustNativeCallableInputPlan;
+  readonly nativeStorage: RustNativeStoragePlan;
+  readonly frameCallables: RustFrameCallablePlan;
+  readonly structuralShapes: RustStructuralShapePlan;
+  readonly idByDeclaration: WeakMap<Node, string>;
+  readonly bodyIdByDeclaration: WeakMap<Node, string>;
+  readonly implementationDeclaration: (declaration: Node) => Node;
+  readonly contractFor: (declaration: Node, body?: true) => RequirementContractState | undefined;
+}
+
+export interface RustCallableInvocationRequirementCollector {
+  readonly dependencies: Set<string>;
+  readonly projections: Pick<ReturnType<typeof createRustProjectProjectionRequirementCollector>, "require">;
+  readonly associated: Pick<ReturnType<typeof createRustAssociatedRequirementCollector>, "requireField">;
+  addUse(node: Node, carrier: TargetTypeRef | undefined,
+    requirements: readonly RustGenericRequirement[], nativeStorage?: boolean): string | undefined;
+  collectType(carrier: TargetTypeRef): string | undefined;
+}
+
+export function collectRustCallableInvocationRequirements(
+  input: RustCallableInvocationRequirementContext,
+  node: Node,
+  operation: Extract<RustTargetOperationFact, { readonly kind: "source-call" }>,
+  collector: RustCallableInvocationRequirementCollector,
+): string | undefined {
+  const { ast, declaration, records } = input;
+  const { dependencies, projections, associated, addUse, collectType } = collector;
+  for (const parameter of operation.parameters) {
+    if (parameter.mode !== "value") continue;
+    for (const argument of parameter.inputs) {
+      if (argument.sourceForm !== "value") continue;
+      const expression = ast.arguments(node)[argument.sourceArgumentIndex];
+      if (expression === undefined || !ast.is.IsIdentifier(expression) ||
+        rustReadTransferRequirement(input.ownershipFlow, expression) === "transfer") continue;
+      const argumentCarrier = records.runtimeCarrier.get(expression)?.carrier;
+      if (argumentCarrier === undefined || isRustCopyCarrier(argumentCarrier)) continue;
+      const error = addUse(expression, argumentCarrier, ["clone"]);
+      if (error !== undefined) return error;
+    }
+  }
+  const selected = records.selectedCall.get(node);
+  const callableCarrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
+  const genericCallable = rustGenericCallableValue(callableCarrier);
+  const nativeCall = input.nativeCallables.callFor(node);
+  const genericDefinition = callableCarrier === undefined || nativeCall !== undefined ? undefined : input.genericCallables.definitionFor(callableCarrier);
+  const frameEntry = callableCarrier === undefined ? undefined : input.frameCallables.entryFor(callableCarrier);
+  if (genericCallable !== undefined && genericDefinition === undefined && nativeCall === undefined) {
+    return "A quantified call has no exact sealed implementation family for its generic obligations.";
+  }
+  if (rustFrameCallableValue(callableCarrier) !== undefined && frameEntry === undefined) {
+    return "A frame call has no exact sealed implementation entry for its generic obligations.";
+  }
+  const genericInvocation = genericDefinition === undefined ? undefined : records.genericCallableInvocation.get(node);
+  const genericPhysicalDefinition = genericInvocation === undefined ? undefined
+    : input.genericCallables.physical.definitionFor(genericInvocation.carrier);
+  if (genericDefinition !== undefined && genericPhysicalDefinition === undefined) {
+    return "A quantified call has no exact physical implementation family for its generic obligations.";
+  }
+  const physical = nativeCall?.input.protocol.method ?? (frameEntry === undefined && genericDefinition === undefined && operation.target.form === "callable"
+    ? rustCallableProtocol(callableCarrier) ?? rustNativeCallableProtocol(callableCarrier) : undefined);
+  if (physical !== undefined && callableCarrier !== undefined) {
+    const error = collectType(callableCarrier);
+    if (error !== undefined) return error;
+  }
+  const callees = frameEntry?.implementations ?? (genericPhysicalDefinition === undefined
+    ? physical !== undefined || selected?.sourceDeclaration === undefined ? [] : [{ declaration: input.implementationDeclaration(selected.sourceDeclaration) }]
+    : genericPhysicalDefinition.members);
+  for (const selectedCallee of callees) {
+    const implementation = "implementation" in selectedCallee ? selectedCallee.implementation : selectedCallee;
+    const selectedDeclaration = implementation.declaration;
+    const calleeId = (operation.asyncBody === undefined ? input.idByDeclaration : input.bodyIdByDeclaration).get(selectedDeclaration);
+    if ((genericDefinition !== undefined || frameEntry !== undefined) && calleeId === undefined) {
+      return "A sealed callable implementation has no exact source generic-contract owner.";
+    }
+    const selectedClass = operation.target.form === "constructor"
+      ? input.projectTypes.definitionForCarrier(operation.target.typeCarrier)
+      : undefined;
+    const targetTypeArguments = rustTargetGenericTypeArguments(
+      operation.target.form === "constructor"
+        ? selectedClass?.declaration === selectedDeclaration
+          ? rustSourceTypeCarrierValue(operation.target.typeCarrier)?.genericArguments : []
+        : operation.targetGenericArguments,
+    );
+    if (calleeId !== undefined) {
+      dependencies.add(calleeId);
+      const callee = input.contractFor(selectedDeclaration, operation.asyncBody === undefined ? undefined : true);
+      if (callee !== undefined) {
+        if (callee.typeParameters.length !== targetTypeArguments.length) {
+          return "A selected Rust source call has inconsistent generic contract arity.";
+        }
+        for (let index = 0; index < callee.typeParameters.length; index += 1) {
+          const requirements = callee.typeParameters[index]!.requirements;
+          if (requirements.length === 0) continue;
+          const error = addUse(node, targetTypeArguments[index], requirements);
+          if (error !== undefined) return error;
+        }
+        const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
+          [parameter.identity, targetTypeArguments[index]!] as const));
+        const memberBindings = "implementation" in selectedCallee && genericPhysicalDefinition !== undefined && genericInvocation !== undefined
+          ? rustGenericCallableMemberInvocationBindings(genericPhysicalDefinition, selectedCallee, genericInvocation.carrier,
+            operation.targetGenericArguments ?? [], { ast, sourceLifetimes: input.sourceLifetimes,
+              physical: input.genericCallables.physical }) : undefined;
+        if ("implementation" in selectedCallee && memberBindings === undefined) {
+          return "A quantified invocation lost its exact physical member capture bindings.";
+        }
+        const capturedInputs = input.nativeCallables.capturesFor(selectedDeclaration);
+        for (const parameter of [...input.nativeCallables.inputsFor(selectedDeclaration), ...capturedInputs]) {
+          if (memberBindings !== undefined && capturedInputs.includes(parameter)) {
+            const payload = memberBindings.types.get(parameter.implementation.identity);
+            if (payload === undefined) return "A quantified invocation lost a required physical native capture binding.";
+            substitutions.set(parameter.implementation.identity, payload);
+            continue;
+          }
+          const physical = input.nativeStorage.invocationInputFor(parameter, node, declaration);
+          const payload = physical.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(parameter.carrier,
+            physical.carrier, rustOptionElementCarrier(parameter.carrier) ?? parameter.carrier, input.typeDefinitions);
+          if (payload === undefined) return "A source call lost the exact physical native input required by its callee contract.";
+          substitutions.set(parameter.implementation.identity, payload);
+        }
+        if (frameEntry !== undefined && "carrier" in implementation && callableCarrier !== undefined) {
+          const bindings = bindRustExactTypeParameters(implementation.carrier, callableCarrier,
+            new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
+          if (bindings === undefined) return "A frame invocation lost its exact captured generic environment binding.";
+          for (const [identity, carrier] of bindings) substitutions.set(identity, carrier);
+        }
+        if (genericCallable !== undefined && genericDefinition !== undefined && "substitutions" in implementation) {
+          for (const [identity, parameter] of implementation.substitutions) {
+            const index = parameter.kind === "type-parameter"
+              ? genericDefinition.signature.environmentParameters.findIndex(candidate => candidate.identity === parameter.identity) : -1;
+            const argument = genericCallable.environment[index];
+            if (index < 0 || argument === undefined) return "A quantified invocation lost its exact captured generic environment binding.";
+            substitutions.set(identity, argument);
+          }
+        }
+        const frame = rustFrameCallableValue(callableCarrier);
+        const receiver = operation.target.form === "constructor" ? operation.target.typeCarrier
+          : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier ??
+            (frame?.owner.kind === "class" ? frame.owner.instance : undefined);
+        const receiverDeclaration = ast.parent(selectedDeclaration);
+        if (operation.target.form === "structural-method" && callee.capturedTypeParameters.length !== 0 &&
+          receiverDeclaration !== undefined && ast.is.IsObjectLiteralExpression(receiverDeclaration)) {
+          const template = records.runtimeCarrier.get(receiverDeclaration)?.carrier;
+          const bindings = template === undefined || receiver === undefined ? undefined
+            : bindRustStructuralReceiverParameters(template, receiver,
+              new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
+          if (bindings === undefined) return "A structural call lost its exact captured receiver type bindings.";
+          for (const [identity, carrier] of bindings) {
+            const existing = substitutions.get(identity);
+            if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
+              return "A structural call has conflicting captured receiver type bindings.";
+            }
+            substitutions.set(identity, carrier);
+          }
+        }
+        const instantiate = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
+          const instantiated = substituteRustTargetTypeParameters(carrier, substitutions);
+          return receiver === undefined || input.projectTypes.definitionContainingDeclaration(selectedDeclaration) === undefined
+            ? instantiated : input.projectTypes.instantiateMemberCarrier(selectedDeclaration, receiver, instantiated);
+        };
+        for (const parameter of callee.nativeInputs) {
+          if (parameter.requirements.length === 0) continue;
+          const carrier = instantiate({ kind: "type-parameter", identity: parameter.identity, name: parameter.name });
+          const error = addUse(node, carrier, parameter.requirements);
+          if (error !== undefined) return error;
+        }
+        for (const parameter of callee.capturedTypeParameters) {
+          if (parameter.requirements.length === 0) continue;
+          const carrier = instantiate({ kind: "type-parameter", identity: parameter.identity, name: parameter.name });
+          const error = addUse(node, carrier, parameter.requirements);
+          if (error !== undefined) return error;
+        }
+        for (const requirement of callee.optionalStorage) {
+          const error = addUse(node, instantiate(requirement.carrier), requirement.requirements);
+          if (error !== undefined) return error;
+        }
+        for (const requirement of callee.projectProjections) {
+          const sourceCarrier = instantiate(requirement.sourceCarrier);
+          const targetCarrier = instantiate(requirement.targetCarrier);
+          if (sourceCarrier === undefined || targetCarrier === undefined || !projections.require({ sourceCarrier, targetCarrier })) {
+            return "A generic call does not satisfy its exact native projection contract.";
+          }
+        }
+        for (const requirement of callee.associatedTypes) {
+          const carrier = instantiate(requirement.carrier);
+          if (carrier === undefined) return "A generic call lost its exact enclosing member carrier substitution.";
+          const collected = collectType(carrier);
+          if (collected !== undefined) return collected;
+          if (requirement.fieldAccess !== undefined && (carrier.kind !== "associated-type" ||
+            !associated.requireField(carrier, requirement.fieldAccess, requirement.output === undefined ? undefined :
+              instantiate(requirement.output)))) return "A generic call does not satisfy its selected field access contract.";
+          const error = addUse(node, carrier, requirement.requirements);
+          if (error !== undefined) return error;
+        }
+      }
+    }
+  }
+  return undefined;
+}
