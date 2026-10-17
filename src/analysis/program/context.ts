@@ -176,7 +176,7 @@ export function createRustAnalysisContext(
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const records = createRustProgramRecordBuilder(typeDefinitions);
   const requiredRecords: RustRequiredRecord[] = [];
-  const participation = analyzeRustNativeParticipation({ ast, nodes: sourceStorage.nodes, navigation: input.source.navigation,
+  const participation = analyzeRustNativeParticipation({ ast, storage: sourceStorage, navigation: input.source.navigation,
     producer: records.nativeParticipations, requiredRecords });
   if (participation.kind === "unresolved") return rejectedTargetStage([{
     code: "RUST_NATIVE_PARTICIPATION_NOT_CLOSED", category: "error", source: "tsonic-rust", message: participation.reason,

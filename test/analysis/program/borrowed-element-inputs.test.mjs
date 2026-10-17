@@ -1,4 +1,4 @@
-import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { createRustRecordFixture, rustNativeFixtureNodes } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
@@ -34,7 +34,7 @@ export function read(values: string[]): number { return parseInt(${expression}, 
 targetOperation: { get: (node) => {
     return node === call ? replacement : program.records.targetOperation.get(node);
 } }}, program.records);
-      const reads = analyzeRustBorrowedElementReads(ast, program.sourceFiles, records, program.sourceNavigation);
+      const reads = analyzeRustBorrowedElementReads(ast, rustNativeFixtureNodes(program), records, program.sourceNavigation);
       assert.equal(reads.forExpression(call) === undefined, true, `invalid native input contract ${index}`);
     }
     const { result } = compileRust(options);

@@ -1,4 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
+import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { sourceLexicalFunctionIsUnused, sourceNodesOutsideErasedSubtrees,
   sourceCallableDefinitionIsDiscarded,
   type SourceProgramNavigation, type SourceSubtreeParticipation } from "@tsonic/target-api/source";
@@ -8,12 +9,14 @@ import { requireRustRecord, type RustRequiredRecord } from "../program/records/r
 
 export function analyzeRustNativeParticipation(input: {
   readonly ast: AstReader;
-  readonly nodes: readonly Node[];
+  readonly storage: Pick<SourceStorageQueries, "nodes" | "failureReason">;
   readonly navigation: Pick<SourceProgramNavigation, "declarationUseSummary" | "callableImplementation">;
   readonly producer: RustNativeParticipationProducer;
   readonly requiredRecords: RustRequiredRecord[];
 }): SourceSubtreeParticipation {
-  return sourceNodesOutsideErasedSubtrees(input.ast, input.nodes, node => {
+  const failure = input.storage.failureReason();
+  if (failure !== undefined) return Object.freeze({ kind: "unresolved", reason: failure });
+  return sourceNodesOutsideErasedSubtrees(input.ast, input.storage.nodes, node => {
     if (input.ast.is.IsArrowFunction(node) || input.ast.is.IsFunctionExpression(node))
       return sourceCallableDefinitionIsDiscarded(node, input.ast);
     if (!input.ast.is.IsFunctionDeclaration(node)) return false;

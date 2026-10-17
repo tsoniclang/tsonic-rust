@@ -33,7 +33,7 @@ test("ownership creates graphs only for the canonical required native body domai
       return ${required ? "unused()" : "42"};
     }`);
     const builder = createRustProgramRecordBuilder();
-    const participation = analyzeRustNativeParticipation({ ast: source.ast, nodes: storage.nodes,
+    const participation = analyzeRustNativeParticipation({ ast: source.ast, storage,
       navigation: source.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
     assert.equal(participation.kind, "resolved", "checked native participation closes before graph admission");
     const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: participation.nodes,

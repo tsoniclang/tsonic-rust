@@ -53,6 +53,7 @@ export interface RustProjectConstructionQueries {
 
 export interface RustConstructionAnalysisInput {
   readonly ast: AstReader;
+  readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly projectTypes: RustProjectTypePolicy;
@@ -159,6 +160,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
           reason: "A retained override family requires one exact native physical payload carrier." }));
     }
     const readiness = analyzeRustConstructionReadiness({ ast: input.ast, definition,
+      isNativeNode: input.isNativeNode,
       layers: layers.map(layer => ({ ...layer, fields: layer.fields.map(field => ({ ...field,
         declaration: physicalDeclaration(field.declaration) })) })), fields,
       selectedField(node) {

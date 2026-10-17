@@ -98,7 +98,7 @@ export function createRustNativeStorageQueries(input: {
   const argumentWitnesses = new Map<Node, Map<Node, TargetTypeRef>>();
   const conversionBoundaries: SourceStorageSubject[] = [];
   let boundaryFailure: string | undefined;
-  for (const node of input.storage.nodes) {
+  for (const node of input.nativeNodes) {
     if (input.records.contextualValueConversion.get(node)?.conversion.kind !== "callable-adapter") continue;
     const selected = input.storage.subject(node, "value");
     if (selected.kind === "unresolved") boundaryFailure ??= selected.reason;

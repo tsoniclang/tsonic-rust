@@ -49,6 +49,7 @@ export interface RustConstructionReadinessField {
 
 export interface RustConstructionReadinessInput {
   readonly ast: AstReader;
+  readonly isNativeNode: (node: Node) => boolean;
   readonly definition: RustProjectTypeDefinition;
   readonly layers: readonly {
     readonly definition: RustProjectTypeDefinition;
@@ -113,6 +114,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     if (existing !== undefined) return existing;
     const found: RustConstructionExpression[] = [];
     const visit = (node: Node, depth: number, captured = false): void => {
+      if (!input.isNativeNode(node)) return;
       if (!account(node, depth)) return;
       const kind = input.ast.kindName(node);
       if (node !== root && (input.ast.is.IsFunctionDeclaration(node) || input.ast.is.IsFunctionExpression(node) ||
@@ -161,6 +163,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     return selected;
   };
   const expression = (node: Node, state: ConstructionState, depth: number): ConstructionState => {
+    if (!input.isNativeNode(node)) return state;
     if (!account(node, depth)) return state;
     if (input.ast.is.IsConditionalExpression(node)) {
       const condition = ConditionalExpression_Condition(input.ast, node);
@@ -271,6 +274,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
       continues: branches.flatMap(branch => branch.flow.continues) };
   };
   const statement = (node: Node, initial: ConstructionState, depth: number): ConstructionFlow => {
+    if (!input.isNativeNode(node)) return fallthrough(initial);
     if (!account(node, depth) || input.unreachable(node)) return fallthrough(initial);
     const kind = input.ast.kindName(node);
     if (kind === "KindBlock") {

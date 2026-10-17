@@ -113,7 +113,7 @@ export function resolveFunctionExpressionCarrier(
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   if ((ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression)) &&
-    sourceCallableDefinitionIsDiscarded(expression, ast)) return rustUnitTargetType();
+    sourceCallableDefinitionIsDiscarded(expression, ast)) return setCarrierFact(walk, expression, rustUnitTargetType());
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);

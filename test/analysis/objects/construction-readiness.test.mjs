@@ -5,6 +5,9 @@ import { createTargetSourceProgram, selectSourceNativeGuardResult } from "@tsoni
 import { checkedSource, namedDeclaration, projectSourceFile } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { minimalSourceGlobals } from "../../../../tsonic/test/fixtures/minimal-source-globals.mjs";
 import { analyzeRustConstructionReadiness } from "../../../dist/analysis/project-types/construction-readiness.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 
 async function readiness(name, statements) {
   const checked = await checkedSource(name, { "globals.d.ts": minimalSourceGlobals, "src/index.ts": `
@@ -24,7 +27,15 @@ export class Value {
   const constructor = source.ast.members(declaration).find(node => source.ast.is.IsConstructorDeclaration(node));
   const definition = { kind: "class", declaration };
   const fields = [{ declaration: field, absenceDefault: false, externallyInitialized: false }];
+  const storage = createSourceStorageQuery(source, [file]);
+  assert.equal(storage.failureReason() === undefined, true, "the actual checked constructor source domain is complete");
+  const records = createRustProgramRecordBuilder();
+  const participation = analyzeRustNativeParticipation({ ast: source.ast, storage, navigation: source.navigation,
+    producer: records.nativeParticipations, requiredRecords: [] });
+  assert.equal(participation.kind, "resolved", "the same native owner admits the constructor input domain");
+  const nativeNodes = new Set(participation.nodes);
   return analyzeRustConstructionReadiness({ ast: source.ast, definition, fields,
+    isNativeNode: node => nativeNodes.has(node),
     layers: [{ definition, constructor, fields, statements: source.ast.statements(source.ast.body(constructor)) }],
     selectedField(node) {
       const selected = source.semantics.forNode(node).operations.propertyAccess(node);

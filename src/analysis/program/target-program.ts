@@ -166,6 +166,7 @@ export function analyzeRustTargetProgram(
   }
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
   const retainedCallableInputs = analyzeRustRetainedCallableInputs({ ast: context.ast, records: context.records,
+    nativeNodes: context.nativeNodes,
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
@@ -176,6 +177,7 @@ export function analyzeRustTargetProgram(
     records, uses: context.promiseResultUses, definitions: context.typeDefinitions });
   if (promiseResults.diagnostics.length > 0) return rejectedTargetStage(promiseResults.diagnostics);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
+    isNativeNode: context.isNativeNode,
     typeDefinitions: context.typeDefinitions,
     projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
     receiverCaptures: objectRepresentations.receiverCaptures,

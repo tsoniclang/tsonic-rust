@@ -29,6 +29,7 @@ export function analyzeRustRetainedCallableInputs(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
   readonly components: RustSourcePackageComponentClassifications;
@@ -53,7 +54,7 @@ export function analyzeRustRetainedCallableInputs(input: {
   };
   const failure = budget.run(() => {
     if (owned.size === 0) return;
-    for (const node of input.storage.nodes) {
+    for (const node of input.nativeNodes) {
       budget.step();
       const operation = input.records.targetOperation.get(node);
       if (operation?.kind !== "typed-location") continue;
