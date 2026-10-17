@@ -106,7 +106,7 @@ export function make(): number {
     assert.equal(compiled.result.diagnostics.length, 1, "C122 keeps one actual module initializer owner, not a key refusal");
     assert.equal(compiled.result.diagnostics[0]?.code, "RUST_SOURCE_PACKAGE_INITIALIZER_FACT_MISSING",
       "the unchanged K01 capability is mapped to R02, not reported accepted with P01");
-    assert.equal(compiled.result.diagnostics[0]?.message, "Top-level variable declaration has no finalized Rust module-binding fact.",
+    assert.equal(compiled.result.diagnostics[0]?.message, "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.",
       "the precise current module-root/leaf boundary is retained");
     assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true,
       "the unsupported module shape stops before sealing and planning");
