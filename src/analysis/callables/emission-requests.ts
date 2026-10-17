@@ -52,6 +52,16 @@ export function prepareRustPhysicalCallableEmissionRequests(
   const { ast, records } = input;
   const requests: RustPhysicalCallableEmissionRequest[] = [];
   const diagnostics: TargetDiagnostic[] = [];
+  const sourceFiles = new Set(input.sourceFiles);
+  const checkedSourceFile = (node: Node): SourceFile | undefined => {
+    const sourceFile = ast.getSourceFile(node);
+    if (sourceFile === undefined || !sourceFiles.has(sourceFile)) {
+      diagnostics.push(emissionDiagnostic(node,
+        "An emitted source occurrence requires its exact checked owning SourceFile in the current source-file domain."));
+      return undefined;
+    }
+    return sourceFile;
+  };
   const contexts = new Map<Node, { readonly identity: string; readonly bindings: RustTargetGenericBindings }>();
   const constructs = new Set<Node>();
   const states = new Map<Node, Map<TargetUseSiteRef, "visiting" | "closed">>();
@@ -217,7 +227,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
         }
       }
     } else if (operation?.kind === "source-call") {
-      const checked = input.carrierHost.semantics(ast.getSourceFile(node)).operations.call(node);
+      const sourceFile = checkedSourceFile(node);
+      if (sourceFile === undefined) {
+        rows.set(key, "closed");
+        return;
+      }
+      const checked = input.carrierHost.semantics(sourceFile).operations.call(node);
       const target = operation.target;
       if (target.form === "callable" || target.form === "constructor-value") {
         const callee = checked?.sourceCallee.expression;
@@ -312,7 +327,8 @@ export function prepareRustPhysicalCallableEmissionRequests(
       for (const member of ast.members(node)) {
         if (member === undefined) continue;
         if (sourceClassFieldHasStorage(ast, member)) {
-          const storageOwner = ast.hasModifierKind(member, "static") ? ast.getSourceFile(node) : node;
+          const storageOwner = ast.hasModifierKind(member, "static") ? checkedSourceFile(member) : node;
+          if (storageOwner === undefined) continue;
           type(storageOwner, member, "member-type", records.runtimeCarrier.get(member)?.carrier);
           annotation(storageOwner, member);
           const initializer = Node_Initializer(ast, member);
