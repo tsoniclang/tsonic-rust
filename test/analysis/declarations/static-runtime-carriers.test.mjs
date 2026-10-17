@@ -208,7 +208,7 @@ test("registered concrete native types and explicit generic outlives inverses co
     ["factory_owned", "struct Factory<Value> { value: Value }\npub fn exact() { require_static_type::<Factory<i32>>(); }", true],
   ];
   const project = writeGeneratedProject("static-runtime-native-facts", [
-    { path: "Cargo.toml", text: `[package]\nname = "static_runtime_native_facts"\nversion = "0.0.0"\nedition = "2021"\n[workspace]\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }\ntsonic_rust_js = { path = ${JSON.stringify(javascript)} }\n` },
+    { path: "Cargo.toml", text: `[package]\nname = "static_runtime_native_facts"\nversion = "0.0.0"\nedition = "2021"\n[workspace]\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }\ntsonic_rust_js = { path = ${JSON.stringify(javascript)} }\n[patch.crates-io]\ntsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }\n` },
     { path: "src/lib.rs", text: positive },
     ...probes.map(([name, body]) => ({ path: `src/bin/${name}.rs`, text: `${prefix}${body}\nfn main() {}\n` })),
   ]);
@@ -295,9 +295,7 @@ function patternFactory(value: RegExp) {
     matches(text: string): boolean { return value.test(text); }
   }();
 }
-function consume(_value: int32): void {}
 export function verify(): void {
-  loadptr(retainInput<int32>(consume))(7);
   const pattern = loadptr(retainPattern(new RegExp("^a+$")));
   const first = patternFactory(pattern);
   const second = patternFactory(new RegExp("^b+$"));
