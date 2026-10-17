@@ -59,7 +59,8 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
   if (constructionErrorsReady) producers.selectConstructionErrors(new Map());
   queries = createRustNativeStorageQueries({ ast, nativeNodes: input.nativeNodes, storage: sourceStorage, records,
     definitions: context.typeDefinitions, native, producers, generic,
-    physicalCarrierFor: (carrier, fileName, selected) => physical.carrierFor(carrier, fileName, selected),
+    physicalCarrierFor: (carrier, fileName, subject, bindings, selected) =>
+      physical.carrierFor(carrier, fileName, subject, bindings, selected),
     lifetimes: input.lifetimes, lexicalFunctions: input.lexicalFunctions, structuralShapes: context.structuralShapes,
     carrierHost: input.carrierHost });
   const captures = createRustNativeCapturePlan({ records, storage: sourceStorage, nativeStorage: queries });

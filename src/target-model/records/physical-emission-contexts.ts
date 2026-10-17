@@ -1,10 +1,62 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
-import type { TargetUseSiteRef } from "@tsonic/target-api/analysis";
+import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStorageBoundActivation,
+  SourceStorageConstructionSelection, SourceStorageDomainBoundary, SourceStorageProducer,
+  SourceStorageSubject, TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { RustTargetGenericBindings } from "../types/carriers/generic-inference.js";
 import type { TargetTypeRef } from "../types/model.js";
-import type { RustErrorRegionSelection, RustInitializerSelection } from "./error-regions.js";
+import type { RustErrorRegionSelection, RustInitializerSelection, RustModuleErrorInitializer } from "./error-regions.js";
 import type { RustFinalizedOperationAbi, RustFinalizedSourceArgument, RustFinalizedSourceInput } from "./finalized-operation.js";
 import type { RustTargetOperationFact } from "./operations.js";
+
+export type RustPhysicalCallableSourceActivations =
+  | { readonly kind: "resolved"; readonly rows: readonly {
+      readonly activation: SourceStorageBoundActivation;
+      readonly targetBindings: RustTargetGenericBindings;
+    }[] }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
+export interface RustPhysicalCallableSourceProducer {
+  readonly producer: SourceStorageProducer;
+  readonly member: object;
+}
+
+export type RustPhysicalCallableSourceSelection =
+  | { readonly kind: "complete"; readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings;
+      readonly producers: readonly RustPhysicalCallableSourceProducer[] }
+  | { readonly kind: "open"; readonly subject: SourceStorageSubject; readonly bindings: SourceStorageBindings;
+      readonly producers: readonly RustPhysicalCallableSourceProducer[]; readonly boundaries: readonly SourceStorageDomainBoundary[] }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
+export type RustPhysicalEmissionSourceOrigin =
+  | { readonly kind: "callable"; readonly producer: SourceStorageProducer; readonly member: object;
+      readonly execution: SourceStorageProducer; readonly activation: SourceStorageBoundActivation;
+      readonly targetBindings: RustTargetGenericBindings }
+  | { readonly kind: "declaration";
+      readonly activation: Extract<SourceStorageBoundActivation, { readonly kind: "declaration" }>;
+      readonly targetBindings: RustTargetGenericBindings }
+  | { readonly kind: "construction"; readonly invocation: Node;
+      readonly construction: Extract<SourceStorageConstructionSelection, { readonly kind: "resolved" }>["alternatives"][number];
+      readonly root: Extract<SourceStorageConstructionSelection, { readonly kind: "resolved" }>["alternatives"][number];
+      readonly callerBindings: SourceStorageBindings; readonly caller: RustPhysicalEmissionSourceOrigin;
+      readonly owner: Node; readonly region: Node;
+      readonly selection: Extract<SourceStorageBindingsSelection, { readonly kind: "resolved" }>;
+      readonly activation: SourceStorageBoundActivation;
+      readonly targetBindings: RustTargetGenericBindings }
+  | { readonly kind: "module"; readonly sourceFile: SourceFile; readonly initializer: RustInitializerSelection;
+      readonly module: RustModuleErrorInitializer; readonly region: Node;
+      readonly selection: Extract<SourceStorageBindingsSelection, { readonly kind: "resolved" }>;
+      readonly targetBindings: RustTargetGenericBindings };
+
+export type RustPhysicalEmissionSourceOrigins = {
+  readonly use: TargetUseSiteRef;
+  readonly occurrence: RustPhysicalEmissionSourceOccurrence;
+} & (
+  | { readonly kind: "resolved"; readonly subject: SourceStorageSubject;
+      readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[] }
+  | { readonly kind: "open"; readonly subject: SourceStorageSubject;
+      readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[]; readonly boundaries: readonly SourceStorageDomainBoundary[] }
+  | { readonly kind: "unavailable"; readonly reason: string }
+);
 
 export type RustEmissionReturnDestination =
   | { readonly kind: "none" }
@@ -22,6 +74,7 @@ export interface RustPhysicalEmissionContext {
   readonly returnDestination: RustEmissionReturnDestination;
   readonly error: RustEmissionErrorContext;
   readonly operands: readonly TargetTypeRef[];
+  readonly sourceOrigins: readonly RustPhysicalEmissionSourceOrigins[];
 }
 
 export type RustEmissionProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;
@@ -75,4 +128,5 @@ export interface RustCallableEmissionContexts {
   operandFor(use: TargetUseSiteRef): RustPhysicalEmissionOperand | undefined;
   carrierFor(use: TargetUseSiteRef, source: TargetTypeRef): TargetTypeRef | undefined;
   sourceFor(node: Node, operation: RustEmissionProviderOperation): RustPhysicalEmissionSourceOccurrence | undefined;
+  sourceOriginFor(use: TargetUseSiteRef, occurrence: RustPhysicalEmissionSourceOccurrence): RustPhysicalEmissionSourceOrigins | undefined;
 }

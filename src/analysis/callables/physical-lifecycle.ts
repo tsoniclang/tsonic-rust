@@ -200,7 +200,8 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         const selection = operation?.kind === "source-call" && operation.target.form === "structural-method" &&
           input.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.nativeMethod !== true &&
           rustCallableProtocol(storage) !== undefined && storage !== undefined
-          ? Object.freeze({ kind: "identity" as const, carrier: storage }) : queries.invocationCallableFor(request.subject);
+          ? Object.freeze({ kind: "identity" as const, carrier: storage, sources: Object.freeze([]) })
+          : queries.invocationCallableFor(request.subject);
         invocations.set(request.subject, selection);
         return selection;
       }
