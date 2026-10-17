@@ -403,6 +403,14 @@ test("pending callee input completion discharges the original identity or remain
         "the final error carrier contains no retired callee input");
       assert.equal(selection.complete(target, current.program.callableValues.nativeStorage) === completed, true,
         "the same completed owner publishes the identical final result once");
+      assert.equal(selection.complete({ ...target, errorType: rustJsValueTargetType() },
+        current.program.callableValues.nativeStorage) === undefined, true,
+      "a successful cached completion never authorizes a different original source carrier");
+      assert.equal(selection.complete({ ...target, identity: "foreign/completed-input" },
+        current.program.callableValues.nativeStorage) === undefined, true,
+      "an equal-looking completed source cannot acquire another registered identity");
+      assert.equal(selection.complete(target, current.program.callableValues.nativeStorage) === completed, true,
+        "rejected foreign evidence cannot replace the original completed object");
     } else assert.equal(completed === undefined, true, outcome + ": unfinished or still-foreign input evidence cannot publish success");
     assert.equal(completions, 1, outcome + ": one original completion attempt");
   }

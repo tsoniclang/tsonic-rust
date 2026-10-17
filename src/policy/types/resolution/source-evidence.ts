@@ -181,7 +181,8 @@ function resolveRustCallableSignatureCarrier(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const declaration = callable.result.declaration;
-  const retainedMethod = declaration !== undefined && context.ast.is.IsMethodDeclaration(declaration) &&
+  const retainedMethod = context.callableRepresentation !== "signature" &&
+    declaration !== undefined && context.ast.is.IsMethodDeclaration(declaration) &&
     context.ast.body(declaration) !== undefined;
   if (retainedMethod) {
     const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);

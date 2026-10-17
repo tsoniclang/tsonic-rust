@@ -17,7 +17,8 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 
 
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
-import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -589,6 +590,14 @@ const nestedMethodStorageSource = `
 
 test("nested structural methods retain the canonical physical layout through stored arrays and tuples", () => {
   const current = fixture(nestedMethodStorageSource);
+  const leaf = current.declaration("leaf");
+  const logical = rustStructuralObjectCarrierValue(current.program.records.runtimeCarrier.get(leaf)?.carrier);
+  const method = current.storage.nodes.find(node => current.source.ast.is.IsMethodDeclaration(node) &&
+    current.source.ast.parent(node) === current.initializer("leaf"));
+  assert.equal(rustCallableProtocol(logical?.fields[0]?.type)?.lifetime?.kind, "placeholder",
+    "structural signature metadata does not publish the first source body's retained lifetime");
+  assert.equal(rustCallableProtocol(current.program.records.targetOperation.get(method)?.resultCarrier)?.lifetime?.kind, "static",
+    "the actual empty-capture method value still carries its independently proven native retention");
   const methodSlots = new Map();
   const reads = [];
   const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: {
@@ -616,6 +625,45 @@ test("nested structural methods retain the canonical physical layout through sto
     assert.equal(field.methodStorageCarrier === carrier, true, "physical selection never rewrites the method storage carrier");
     assert.equal(Object.isFrozen(field), true, "the physical method field remains frozen");
   }
+});
+
+test("nested method signatures preserve an actual borrowed method value without refining the shared logical type", () => {
+  const current = fixture(`
+    import type { int32 } from "@tsonic/core/types.js";
+    import type { Life, Ref } from "@tsonic/rust/types.js";
+    import { load } from "@tsonic/rust/lang.js";
+    export function read<Region extends Life>(value: Ref<int32, Region>): int32 {
+      const leaf = { read(): int32 { return load(value); } };
+      const selected: { read(): int32 } = leaf;
+      const tuple: [{ read(): int32 }, int32] = [selected, 3];
+      const callback = leaf.read;
+      return callback() + tuple[0].read();
+    }
+  `);
+  const declaration = current.declaration("leaf");
+  const carrier = current.program.records.runtimeCarrier.get(declaration)?.carrier;
+  const logical = rustStructuralObjectCarrierValue(carrier);
+  assert.equal(rustCallableProtocol(logical?.fields[0]?.type)?.lifetime?.kind, "placeholder",
+    "the checked method signature is independent of the actual captured reference");
+  const method = current.storage.nodes.find(node => current.source.ast.is.IsMethodDeclaration(node) &&
+    current.source.ast.parent(node) === current.initializer("leaf"));
+  const actual = rustCallableProtocol(current.program.records.targetOperation.get(method)?.resultCarrier);
+  const parameter = current.source.ast.parameters(current.declaration("read"))[0];
+  const nativeInput = current.program.records.sourceParameterAbi.get(parameter)?.valueCarrier;
+  assert.equal(nativeInput?.kind, "reference", "the original formal retains its native borrowed representation");
+  assert.equal(actual?.lifetime === nativeInput.lifetime, true,
+    "the actual method value keeps the exact original native captured lifetime");
+  for (const name of ["leaf", "selected", "tuple"]) {
+    const node = current.declaration(name);
+    const selected = current.plan.prepareValue(node);
+    assert.equal(selected.kind, "identity", `${name}: ${selected.reason ?? "the canonical stored method layout is complete"}`);
+    assert.equal(selected.carrier === current.program.records.runtimeCarrier.get(node)?.carrier, true,
+      `${name}: no context-dependent rewrite of the logical structural carrier`);
+  }
+  const field = current.program.structuralShapes.field(carrier, 0);
+  assert.equal(field?.methodConstructions?.some(witness => witness.expression === method), true,
+    "the final physical field retains the actual original borrowed construction witness");
+  assert.equal(Object.isFrozen(field), true, "native storage consumes the completed immutable physical owner");
 });
 
 test("nested native method storage rejects missing layouts, slots and foreign source identities", () => {

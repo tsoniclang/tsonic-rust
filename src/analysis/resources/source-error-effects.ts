@@ -326,11 +326,11 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       nativeErrors: Object.freeze(nativeErrors) });
   };
   const complete: RustSourceErrorEffectSelection["complete"] = (error, physical) => {
+    const registered = origins.get(error.identity);
+    if (registered === undefined || !rustTargetTypeRefEquals(registered.selected.errorType, error.errorType)) return undefined;
     const previous = completed.get(error.identity);
     if (previous !== undefined) return previous;
-    const registered = origins.get(error.identity);
-    if (registered === undefined || !rustTargetTypeRefEquals(registered.selected.errorType, error.errorType) ||
-      active.has(error.identity) || active.size >= 128) return undefined;
+    if (active.has(error.identity) || active.size >= 128) return undefined;
     const selected = pending.get(error.identity);
     if (selected === undefined) return error;
     active.add(error.identity);

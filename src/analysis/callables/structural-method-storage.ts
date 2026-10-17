@@ -363,7 +363,7 @@ export function createRustStructuralMethodStorage(input: {
           if (original === undefined) continue;
           const witnesses = constructions.get(original.expression) ?? [];
           for (const physical of constructionCarriers.get(root)!) {
-            const field = structuralShapes.field(root.carrier, root.index)!;
+            const field = root.definition.fields[root.index]!;
             const protocol = rustCallableProtocol(field.presence === "optional"
               ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier)!;
             const signature = rustCallablePhysicalSignature(physical.templateCarrier)!;
