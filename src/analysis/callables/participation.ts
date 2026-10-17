@@ -1,4 +1,4 @@
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { AstReader } from "@tsonic/tsts";
 import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { sourceLexicalFunctionIsUnused, sourceNodesOutsideErasedSubtrees,
   sourceCallableDefinitionIsDiscarded,
