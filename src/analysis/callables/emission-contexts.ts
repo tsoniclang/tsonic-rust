@@ -129,7 +129,8 @@ export function prepareRustCallableEmissionContexts(
     const existing = ownerBindings.get(declaration);
     if (existing !== undefined) return existing;
     const contract = input.sourceLifetimes.contractFor(declaration);
-    if (contract === undefined && input.ast.typeParameters(declaration).length !== 0) return undefined;
+    if (contract === undefined && input.records.sourceCallableReturn.get(declaration) !== undefined &&
+      input.ast.typeParameters(declaration).length !== 0) return undefined;
     const arguments_: RustTargetGenericArgument[] = (contract?.parameters ?? []).map(parameter => parameter.kind === "lifetime"
       ? { kind: "lifetime", lifetime: parameter.lifetime }
       : { kind: "type", type: { kind: "type-parameter", identity: parameter.identity, name: parameter.targetName } });
