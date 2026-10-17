@@ -71,11 +71,11 @@ export function planRustCapturedReceivers(
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {
   if (!validateRustCapturedReceivers(node, receivers, creation)) return undefined;
-  return planRustReceiverOwners(node, receivers, creation, invocation, options);
+  return planRustReceiverOwners(receivers, creation, invocation, options);
 }
 
 export function planRustReceiverOwners(
-  node: Node, receivers: RustClosureCaptureFact["receivers"], creation: RustPlanContext,
+  receivers: RustClosureCaptureFact["receivers"], creation: RustPlanContext,
   invocation: RustPlanContext, options: { readonly staticStorage: boolean; readonly sharedStateName?: string; readonly offset: number },
 ): { readonly bindings: readonly { readonly name: string; readonly value: RustExpr }[];
   readonly context: RustPlanContext } | undefined {

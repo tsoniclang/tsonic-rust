@@ -415,7 +415,7 @@ export function analyzeRustReadOwnership(input: {
       const valueCarrier = projection?.selectedCarrier ?? carrier;
       const physicalValueCarrier = projection === undefined && captured !== undefined ? captured.carrier : valueCarrier;
       const copy = isRustCopyCarrier(physicalValueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const contract = input.genericRequirements.contractFor(declaration);
+      const contract = declaration === undefined ? undefined : input.genericRequirements.contractFor(declaration);
       const clone = contract !== undefined && rustFinalContractSupportsRequirements(contract, physicalValueCarrier, ["clone"],
         input.typeFamilies, input.definitions, undefined).kind === "supported";
       const use = uses.get(node);
