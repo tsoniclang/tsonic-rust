@@ -5,12 +5,12 @@ import { rustNamedTargetType, rustStringTargetType, rustStrTargetType } from "..
 import { instantiateProviderOperationTemplate } from "../../dist/analysis/operations/provider/calls/template-instantiation.js";
 
 const bytes = { kind: "slice", element: { kind: "source-primitive", name: "uint8" } };
-const path = rustNamedTargetType("compiler.path", "std::path::Path");
+const path = rustNamedTargetType("compiler.path", "std::path::Path", [], [], undefined, [], undefined, []);
 const asRef = (target) => ({ kind: "trait", path: "core::convert::AsRef", genericArguments: [{ kind: "type", type: target }], associatedConstraints: [] });
 
 test("native strings satisfy exact AsRef contracts, including reference forwarding", () => {
   for (const source of [rustStringTargetType(), rustStrTargetType()]) {
-    for (const target of [bytes, path, rustStrTargetType(), rustNamedTargetType("compiler.osstr", "std::ffi::OsStr")]) {
+    for (const target of [bytes, path, rustStrTargetType(), rustNamedTargetType("compiler.osstr", "std::ffi::OsStr", [], [], undefined, [], undefined, [])]) {
       for (const carrier of [source, { kind: "reference", referent: source, mutable: false }, { kind: "reference", referent: source, mutable: true }]) {
         assert.equal(rustCarrierSatisfiesTraitRef(carrier, asRef(target)), true);
       }
@@ -20,7 +20,7 @@ test("native strings satisfy exact AsRef contracts, including reference forwardi
 
 test("AsRef rejects wrong elements, lookalike types and malformed trait arguments", () => {
   const source = rustStringTargetType();
-  for (const target of [rustStringTargetType(), rustNamedTargetType("acme.Path", "acme::Path"), { kind: "slice", element: { kind: "source-primitive", name: "int8" } }, { ...path, value: { ...path.value, genericArguments: [{ kind: "type", type: source }] } }]) {
+  for (const target of [rustStringTargetType(), rustNamedTargetType("acme.Path", "acme::Path", [], [], undefined, [], undefined, []), { kind: "slice", element: { kind: "source-primitive", name: "int8" } }, { ...path, value: { ...path.value, genericArguments: [{ kind: "type", type: source }] } }]) {
     assert.equal(rustCarrierSatisfiesTraitRef(source, asRef(target)), false);
   }
   for (const carrier of [{ kind: "source-primitive", name: "uint8" }, { kind: "target-named", id: "acme.String" }, { ...source, genericArguments: [{ kind: "type", type: source }] }]) {

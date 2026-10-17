@@ -20,7 +20,6 @@ import {
 } from "@tsonic/target-api/source";
 
 import {
-  rustCarrierSupportsClone,
   isRustStringCarrier,
 } from "../../../target-model/types/index.js";
 import {
@@ -90,7 +89,7 @@ import { completeRustAuthoredStructScopes } from "../declarations/scoped-types.j
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;
@@ -319,8 +318,7 @@ function planModuleItems(
           }, initializationContext);
           const physical = context.input.program.callableValues.nativeProducers.physicalFor(statement, binding.value.carrier);
           const type = rustTypeFromCarrierInContext(physical, initializationContext);
-          if (value === undefined || type === undefined ||
-            !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
+          if (value === undefined || type === undefined) {
             context.diagnostics.push(unsupportedConstructDiagnostic(
               diagnosticInput(context, statement),
               "rust.backend.hoisted-callable-value",
@@ -566,14 +564,6 @@ function planDefaultExportAssignment(
     ));
     return undefined;
   }
-  if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      { ast, sourceFile: context.sourceFile, node: declaration },
-      "rust.backend.default-export-carrier",
-      "Default export snapshots require one exact Clone-capable Rust value carrier.",
-    ));
-    return undefined;
-  }
   const rustType = rustTypeFromCarrierInContext(binding.valueCarrier, context);
   const value = planExpression(assignment.Expression, context);
   if (rustType === undefined || value === undefined || context.syntheticNames === undefined) {
@@ -669,8 +659,7 @@ function planTopLevelVariableStatement(
       }, context);
       const physical = context.input.program.callableValues.nativeProducers.physicalFor(binding.callableDeclaration, binding.value.carrier);
       const rustType = rustTypeFromCarrierInContext(physical, context);
-      if (value === undefined || rustType === undefined ||
-        !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
+      if (value === undefined || rustType === undefined) {
         context.diagnostics.push(unsupportedConstructDiagnostic(
           { ast, sourceFile: context.sourceFile, node: declaration },
           "rust.backend.module-callable-value",
@@ -726,14 +715,6 @@ function planTopLevelVariableStatement(
           : value,
       });
       continue;
-    }
-    if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        { ast, sourceFile: context.sourceFile, node: declaration },
-        "rust.backend.module-binding-carrier",
-        "Runtime module bindings require one exact Clone-capable Rust value carrier.",
-      ));
-      return undefined;
     }
     context.usedAliases?.add("rt");
     const planned = planRustModuleCell(

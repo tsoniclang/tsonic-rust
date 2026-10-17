@@ -45,7 +45,7 @@ test("Promise.all collects the exact native element output into one JS array pro
   const input = rustJsArrayTargetType(promise);
   const selected = selectJsSurfaceOperation({ ownerName: "PromiseConstructor", memberName: "all", operationKind: "call",
     argumentCarriers: [input], sourceResultCarrier: rustJsPromiseTargetType(rustJsArrayTargetType(value)),
-    canRequireClone: () => true });
+    cloneRequirements: carrier => ({ kind: "required", carriers: [carrier] }) });
   assert.ok(selected, "Promise.all is a selected static Promise operation");
   assert.deepEqual(selected.fact.resultCarrier, rustJsPromiseTargetType(rustJsArrayTargetType(value)));
   assert.deepEqual(selected.fact.target, { form: "call", path: "js_abi::promise_all", argModes: ["ref"] });
@@ -54,7 +54,8 @@ test("Promise.all collects the exact native element output into one JS array pro
   const signed = rustSourcePrimitiveTargetType("int64");
   assert.deepEqual(selectJsSurfaceOperation({ ownerName: "PromiseConstructor", memberName: "all", operationKind: "call",
     argumentCarriers: [rustJsArrayTargetType(rustJsPromiseTargetType(signed))],
-    sourceResultCarrier: rustJsPromiseTargetType(rustJsArrayTargetType(signed)), canRequireClone: () => true })
+    sourceResultCarrier: rustJsPromiseTargetType(rustJsArrayTargetType(signed)),
+    cloneRequirements: carrier => ({ kind: "required", carriers: [carrier] }) })
     .fact.resultCarrier, rustJsPromiseTargetType(rustJsArrayTargetType(signed)), "the int64 payload stays exact");
 });
 

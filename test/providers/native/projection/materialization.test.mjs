@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
 import { rustCompilerProviderProtocolVersion } from "../../../../dist/providers/native/model/model.js";
+import { selectRustCompilerResultLoans } from "../../../../dist/providers/native/model/normalization/functions.js";
+import { targetTypeFor } from "../../../../dist/providers/native/projection/types.js";
+import { compilerTargetTypeId } from "../../../../dist/providers/native/projection/operations.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../../dist/target-model/types/index.js";
+import { rustNativeTraitRef } from "../../../../dist/target-model/types/carriers/native.js";
+import { rustCarrierSatisfiesTraitRef } from "../../../../dist/target-model/types/carriers/traits.js";
 
 const dependency = { alias: "example", packageId: "example 1", packageName: "example", packageVersion: "1",
   crateName: "example", targetCrateName: "example", manifestPath: "/example/Cargo.toml",
@@ -11,10 +17,14 @@ const identity = name => ({ itemId: `example::${name}`, canonicalPath: ["example
 const scalar = { kind: "primitive", name: "u64" };
 
 function declaration(name) {
-  return { id: name, name, kind: "struct", canonicalPath: ["example", name], targetPath: ["example", name],
+  const exported = { id: name, name, kind: "struct", canonicalPath: ["example", name], targetPath: ["example", name],
     genericParameters: [], associatedConstants: [], unsupportedMembers: [], traits: { implementations: [] },
     fields: [{ id: `${name}::field`, name: "count", type: scalar }],
-    methods: [{ identity: identity(`${name}::visit`), name: "visit", receiver: { kind: "shared" },
+    methods: [{ identity: identity(`${name}::visit`), name: "visit", receiver: { kind: "shared",
+      lifetime: { kind: "elided", ownerIdentity: identity(`${name}::visit`).itemId, position: "parameter:0" },
+      type: { kind: "reference", mutable: false,
+        lifetime: { kind: "elided", ownerIdentity: identity(`${name}::visit`).itemId, position: "parameter:0" },
+        target: { kind: "self", owner: identity(name) } } },
       parameters: [{ name: "visitor", type: { kind: "generic", name: "F", identity: identity(`${name}::F`) } }],
       result: { kind: "unit" }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false, typeRequirements: [],
       genericParameters: [{ kind: "type", name: "F", identity: identity(`${name}::F`), outlives: [], maybeSized: false,
@@ -22,12 +32,110 @@ function declaration(name) {
           path: "core::ops::function::Fn", genericArguments: [{ kind: "type", type: { kind: "tuple", elements: [scalar] } }],
           associatedConstraints: [{ kind: "equality", identity: identity("Output"), name: "Output", genericArguments: [], type: scalar }] } }] }] }],
   };
+  for (const method of exported.methods) method.resultLoans = selectRustCompilerResultLoans(method);
+  return exported;
 }
 
 function project(exports, materialization) {
   return projectRustCompilerModule({ protocolVersion: rustCompilerProviderProtocolVersion, projectDigest: "example", dependency, modulePath: [],
     exports, unsupportedExports: [], standardTypeLocations: [] }, owner, materialization);
 }
+
+test("normalized Self paths retain the same native owner traits and actual application arguments", () => {
+  const parameter = { kind: "type", name: "Value", identity: identity("Owner::Value"), requirements: [],
+    outlives: [], maybeSized: false, defaultType: { kind: "primitive", name: "bool" } };
+  const traits = { implementations: [{ trait: { kind: "trait-ref", id: "core::clone::Clone",
+    path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] },
+    requirements: [{ typeArgumentIndex: 0, trait: { kind: "trait-ref", id: "core::clone::Clone",
+      path: "core::clone::Clone", genericArguments: [], associatedConstraints: [] } }] }] };
+  const native = { kind: "path", identity: identity("Owner"), crateName: "example", modulePath: [], name: "Owner",
+    genericArguments: [{ kind: "type", type: scalar }] };
+  for (const standard of [false, true]) {
+    const id = standard ? "exact-snapshot-owner" : compilerTargetTypeId(dependency, native.identity.canonicalPath);
+    const context = { dependency, carrierPaths: new Map(), localTypeLocations: new Map(),
+      genericNames: new Map(), defaultGenericBindings: undefined,
+      standardTypes: new Map(standard ? [[native.identity.canonicalPath.join("\0"), {
+        targetId: id, targetPath: ["example", "Owner"], genericParameters: [parameter],
+      }]] : []),
+      currentType: { carrier: rustNamedTargetType(id, "example::Owner", [{ kind: "type", type: { kind: "source-primitive", name: "uint64" } }], [], traits, [], undefined, []) } };
+    context.localTypeLocations.set(native.identity.canonicalPath.join("\0"), {
+      targetPath: ["example", "Owner"], genericParameters: [parameter], sourceExportName: "Owner",
+    });
+    const selected = rustNamedTypeCarrierValue(targetTypeFor(native, context, "result"));
+    assert.equal(selected.traits === traits, true, "only the exact declared native identity supplies its complete trait evidence");
+    assert.equal(selected.genericArguments.length, 1, "the authored application keeps its original argument");
+    assert.equal(selected.genericArguments[0].type.name, "uint64", "the actual argument is not replaced by the owner's generic placeholder");
+    assert.equal(selected.genericDefaults[0].type.name, "bool", "the original native declaration default is retained");
+    context.currentType = { carrier: rustNamedTargetType("different-native-owner", "example::Owner",
+      [{ kind: "type", type: { kind: "source-primitive", name: "uint64" } }], [], traits, [], undefined, []) };
+    assert.equal(rustNamedTypeCarrierValue(targetTypeFor(native, context, "result")).traits.implementations.length, 0,
+      "equal path spelling cannot borrow a different declaration's native trait contract");
+  }
+});
+
+test("nominal projection retains declaration TYPE requirements separately from conditional implementations", () => {
+  const exported = declaration("Constrained");
+  const parameter = { kind: "type", name: "Value", identity: identity("Constrained::Value"),
+    requirements: ["clone"], outlives: [], maybeSized: false, defaultType: { kind: "primitive", name: "bool" } };
+  exported.genericParameters = [parameter];
+  const projected = project([exported], { kind: "complete" }).types[0];
+  const selected = rustNamedTypeCarrierValue(projected.targetCarrier);
+  assert.equal(selected !== undefined, true, "the native nominal declaration retains its exact carrier");
+  assert.equal(selected.typeRequirements.length, 1, "a native declaration bound is not discarded because no Clone impl was declared");
+  assert.equal(selected.typeRequirements[0].typeArgumentIndex, 0, "the original declaration TYPE slot is selected before instantiation");
+  assert.equal(selected.typeRequirements[0].trait.path, "core::clone::Clone", "the actual native bound is retained");
+  assert.equal(selected.genericArguments[0].type.identity, parameter.identity.itemId, "the original declaration binder remains authoritative");
+  assert.equal(selected.genericDefaults[0].type.name, "bool", "required metadata does not erase the native default suffix");
+  assert.equal(projected.typeRequirements.length, 1, "the same decoded declaration requirements are retained for provider consumers");
+  assert.equal(projected.typeRequirements[0].identity, parameter.identity.itemId, "provider and native rows retain the same exact declaration identity");
+  assert.equal(projected.typeRequirements[0].requirements[0], "clone", "provider requirements preserve their original compiler-owned representation");
+});
+
+test("native Self trait metadata substitutes the actual arguments and defaults without leaking declaration binders", () => {
+  const lifetime = { kind: "lifetime", lifetime: { kind: "parameter", identity: identity("Owner::owner"), name: "owner" }, outlives: [] };
+  const parameter = { kind: "type", name: "Value", identity: identity("Owner::Value"), requirements: [], outlives: [], maybeSized: false };
+  const count = { kind: "const", name: "Count", identity: identity("Owner::Count"), type: { kind: "primitive", name: "usize" } };
+  const allocator = { kind: "type", name: "Allocator", identity: identity("Owner::Allocator"), requirements: [],
+    outlives: [], maybeSized: false, defaultType: { kind: "primitive", name: "bool" } };
+  const valueReference = { kind: "type-parameter", identity: parameter.identity.itemId, name: "Value" };
+  const allocatorReference = { kind: "type-parameter", identity: allocator.identity.itemId, name: "Allocator" };
+  const lifetimeReference = { kind: "parameter", identity: lifetime.lifetime.identity.itemId, name: "owner" };
+  const countReference = { kind: "parameter", identity: count.identity.itemId, name: "Count" };
+  const trait = { kind: "trait-ref", id: "example::NativeTrait", path: "example::NativeTrait",
+    genericArguments: [{ kind: "type", type: valueReference }, { kind: "type", type: allocatorReference },
+      { kind: "lifetime", lifetime: lifetimeReference }, { kind: "const", value: countReference }], associatedConstraints: [] };
+  const traits = { implementations: [{ trait, requirements: [{ typeArgumentIndex: 1, trait }] }] };
+  const native = { kind: "path", identity: identity("Owner"), crateName: "example", modulePath: [], name: "Owner",
+    genericArguments: [{ kind: "lifetime", lifetime: { kind: "static" } }, { kind: "type", type: scalar },
+      { kind: "const", value: { kind: "integer", value: "7" } }] };
+  for (const standard of [false, true]) {
+    const id = standard ? "exact-snapshot-owner" : compilerTargetTypeId(dependency, native.identity.canonicalPath);
+    const context = { dependency, carrierPaths: new Map(), localTypeLocations: new Map(), genericNames: new Map(),
+      defaultGenericBindings: undefined,
+      standardTypes: new Map(standard ? [[native.identity.canonicalPath.join("\0"), {
+        targetId: id, targetPath: ["example", "Owner"], genericParameters: [lifetime, parameter, count, allocator],
+      }]] : []),
+      currentType: { carrier: rustNamedTargetType(id, "example::Owner", [{ kind: "lifetime", lifetime: lifetimeReference },
+        { kind: "type", type: valueReference }, { kind: "const", value: countReference },
+        { kind: "type", type: allocatorReference }], [{ kind: "type", type: { kind: "source-primitive", name: "bool" } }], traits, [], undefined, []) } };
+    context.localTypeLocations.set(native.identity.canonicalPath.join("\0"), {
+      targetPath: ["example", "Owner"], genericParameters: [lifetime, parameter, count, allocator], sourceExportName: "Owner",
+    });
+    const selected = rustNamedTypeCarrierValue(targetTypeFor(native, context, "result"));
+    assert.equal(selected !== undefined, true, "the completed native application retains its valid nominal contract");
+    assert.equal(selected.genericArguments[1].type.name, "uint64", "the actual native argument is retained");
+    assert.equal(selected.genericArguments[3].type.name, "bool", "the omitted allocator uses its exact declared default");
+    for (const selectedTrait of [selected.traits.implementations[0].trait, selected.traits.implementations[0].requirements[0].trait]) {
+      assert.equal(selectedTrait.id, trait.id, "native declaration identity is never replaced");
+      assert.equal(selectedTrait.genericArguments[0].type.name, "uint64", "implementation and conditional bound share the same actual Value");
+      assert.equal(selectedTrait.genericArguments[1].type.name, "bool", "the declaration allocator binder is substituted in every trait position");
+      assert.equal(selectedTrait.genericArguments[2].lifetime.kind, "static", "the original lifetime binder is replaced by its exact actual lifetime");
+      assert.equal(selectedTrait.genericArguments[3].value.kind, "integer", "the native const binder is instantiated without a spelling guess");
+      assert.equal(selectedTrait.genericArguments[3].value.value, "7", "the exact native const value is retained in every bound");
+    }
+    assert.equal(trait.genericArguments[1].type === allocatorReference, true, "the original declaration evidence is immutable and is not rewritten");
+  }
+});
 
 test("native trait projection preserves instantiated arguments and conditional bounds including Self", () => {
   const exported = declaration("First");
@@ -50,6 +158,36 @@ test("native trait projection preserves instantiated arguments and conditional b
   const equality = native.traits.implementations.find(row => row.trait.path === "core::cmp::PartialEq");
   assert.equal(equality.trait.genericArguments[0].type.value.path, "example::First");
   assert.deepEqual(equality.trait.genericArguments[0].type.value.traits.implementations, []);
+});
+
+test("bounded native Self is a finite trait identity reference, never an empty runtime TYPE contract", () => {
+  const exported = declaration("Bound");
+  const parameter = { kind: "type", identity: identity("Bound::Value"), name: "Value",
+    requirements: ["clone"], outlives: [], maybeSized: false };
+  exported.genericParameters = [parameter];
+  exported.methods = [];
+  exported.fields = [{ id: "Bound::value", name: "value", type: { kind: "generic", name: "Value", identity: parameter.identity } }];
+  const self = { kind: "trait", trait: { identity: { itemId: "core::PartialEq", canonicalPath: ["core", "cmp", "PartialEq"] },
+    path: "core::cmp::PartialEq", genericArguments: [{ kind: "type", type: { kind: "self" } }], associatedConstraints: [] } };
+  const valueEquality = { kind: "trait", trait: { ...self.trait, genericArguments: [] } };
+  exported.traits = { implementations: [{ trait: self,
+    requirements: [{ typeArgumentIndex: 0, requirement: "clone" }, { typeArgumentIndex: 0, requirement: valueEquality }] }] };
+  const projected = project([exported], { kind: "complete" });
+  const carrier = projected.types[0].targetCarrier;
+  const native = rustNamedTypeCarrierValue(carrier);
+  assert.equal(native.typeRequirements.length, 1, "the published runtime type retains its actual required Clone evidence");
+  assert.equal(native.typeRequirements[0].trait.path, "core::clone::Clone", "the native declaration's bound is not guessed empty");
+  assert.equal(projected.operations.every(operation =>
+    operation.resultCarrier !== native.traits.implementations[0].trait.genericArguments[0].type), true,
+  "the private finite Self identity does not replace a runtime result carrier");
+  const required = rustNativeTraitRef("core::cmp::PartialEq", [{ kind: "type", type: carrier }]);
+  assert.equal(rustCarrierSatisfiesTraitRef(carrier, required,
+    (type, trait) => type === parameter.identity.itemId &&
+      (trait === "core::clone::Clone" || trait === "core::cmp::PartialEq")), true,
+  "the same native nominal Self matches only while its actual conditional obligations discharge");
+  assert.equal(rustCarrierSatisfiesTraitRef(carrier, required,
+    (type, trait) => type === parameter.identity.itemId && trait === "core::cmp::PartialEq"), false,
+  "native Self identity cannot bypass a missing declaration Clone obligation");
 });
 
 test("native declarations materialize only demanded members with stable identities and metadata", () => {
@@ -78,10 +216,11 @@ test("native declarations materialize only demanded members with stable identiti
 test("primitive methods use exact compiler carriers under export aliases and namespace materialization", () => {
   const primitive = { id: "compiler:u32", kind: "primitive", name: "Integer", canonicalPath: ["core", "u32"],
     targetPath: ["core", "u32"], type: { kind: "primitive", name: "u32" }, associatedConstants: [], unsupportedMembers: [],
-    methods: [{ identity: identity("method"), name: "selected", receiver: { kind: "value" },
+    methods: [{ identity: identity("method"), name: "selected", receiver: { kind: "value", type: { kind: "primitive", name: "u32" } },
       parameters: [{ name: "right", type: { kind: "primitive", name: "u32" } }],
       result: { kind: "primitive", name: "u32" }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false,
       typeRequirements: [], genericParameters: [] }] };
+  for (const method of primitive.methods) method.resultLoans = selectRustCompilerResultLoans(method);
   const header = project([primitive], { kind: "incremental", completeExports: [] });
   assert.equal(header.declarationModel.exports[0].kind, "namespace");
   assert.equal(header.declarationModel.exports[0].members.length, 1);

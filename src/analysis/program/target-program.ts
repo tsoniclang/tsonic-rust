@@ -2,6 +2,7 @@ import {
   rejectedTargetStage,
   resolvedTargetStage,
   type TargetDiagnostic,
+  failTargetAnalysisInvariant,
 } from "@tsonic/target-api/artifacts";
 import {
   snapshotTargetPlanningSourceNavigation,
@@ -24,12 +25,16 @@ import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callab
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
-import { analyzeRustOwnershipFlow } from "../ownership/flow.js";
-import { analyzeRustReadOwnership } from "../ownership/reads.js";
+import { analyzeRustOwnershipFlow, completeRustNativeReadTransfers } from "../ownership/flow.js";
+import { analyzeRustReadOwnership, prepareRustReadOwnership, prepareRustCaptureReadRequirements,
+  completeRustCaptureReadOwnership } from "../ownership/reads.js";
+import { analyzeRustNativeInputs } from "../ownership/native-places.js";
+import { analyzeRustNativeResultLoans } from "../ownership/result-loans.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
 import { analyzeRustBorrowedElementReads } from "./borrowed-element-reads.js";
-import { analyzeRustBorrowEffects } from "../ownership/effects.js";
+import { analyzeRustBorrowEffects, createRustBorrowUseAnalysis } from "../ownership/effects.js";
+import { analyzeRustReadUses } from "../ownership/uses.js";
 import {
   analyzeRustBinaryHooks,
   analyzeRustDispatchContextCatalog,
@@ -38,6 +43,7 @@ import {
 } from "../project/index.js";
 import {
   analyzeRustSourcePackageFacades,
+  rustSourceItemIdentity,
 } from "./source-package-facades.js";
 import {
   validateRustGenericSourcePackageComponents,
@@ -59,8 +65,9 @@ import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
-import { analyzeRustNativeDeclarationForms } from "../declarations/native-forms.js";
+import { prepareRustNativeDeclarationForms } from "../declarations/native-forms.js";
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
@@ -68,6 +75,9 @@ import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js
 import { analyzeRustReachability } from "../reachability/plan.js";
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
+import { rustNativeProjectGeneratedCarrier, rustNativeTypeSelectionInput,
+  type RustNativeTypeInputContext } from "../../policy/types/model/native-type-selection.js";
+import { selectRustOptionalStorageTypeArguments } from "../declarations/type-projections.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -114,16 +124,16 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, sourceLifetimes: context.sourceLifetimes });
   if (genericAdoption.length !== 0) return rejectedTargetStage(genericAdoption);
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
-    sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
+    sourceFiles: context.sourceFiles, sourcePackages: input.sourcePackages });
   if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
-  const sourceStage = analyzeRustProgram(context, configuration.outputType);
+  const sourceStage = analyzeRustProgram(context, configuration.outputType, sourceOutputIdentities.identities);
   if (context.diagnostics.length > 0) {
     return rejectedTargetStage(context.diagnostics);
   }
   if (sourceStage === undefined) throw new Error("Rust program analysis completed without its sealed source-stage output.");
   const { lexicalFunctions, sourcePackageComponents } = sourceStage;
 
-  const sourcePackageFacades = analyzeRustSourcePackageFacades(context);
+  const sourcePackageFacades = analyzeRustSourcePackageFacades(context, sourceOutputIdentities.identities);
   if (sourcePackageFacades.kind === "rejected") {
     return rejectedTargetStage(sourcePackageFacades.diagnostics);
   }
@@ -202,10 +212,27 @@ export function analyzeRustTargetProgram(
       }
       return { receivers: [], receiverFields: [], captures };
   };
+  const borrowUses = createRustBorrowUseAnalysis({ ast: context.ast,
+    navigation: context.source.navigation, isNativeNode: context.isNativeNode });
+  const isOnceCallable = (closure: import("@tsonic/tsts").Node): boolean => {
+    const carrier = records.runtimeCarrier.get(closure)?.carrier;
+    const selection = lexicalFunctions.forDeclaration(closure);
+    return carrier?.kind === "closure" && carrier.callTrait === "FnOnce" ||
+      selection?.kind === "resolved" && selection.captureRoots.every(root => {
+        const captured = lexicalFunctions.forDeclaration(root);
+        return captured?.kind === "resolved" && captured.singleInvocation;
+      });
+  };
+  const captureRequirements = prepareRustCaptureReadRequirements({ storage: context.sourceStorage,
+    nativeNodes: context.nativeNodes, records, genericCallables: context.callableValues.generic,
+    nativeStorage: context.callableValues.nativeStorage, lexicalFunctions, capturesFor, isOnceCallable });
+  if (captureRequirements.kind === "rejected") return rejectedTargetStage(captureRequirements.diagnostics);
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
     nativeNodes: context.nativeNodes,
+    borrowUses,
+    captureRequirements: captureRequirements.requirements,
     capturesFor,
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
       rustNativeArgumentBorrowsRead(argument, reference, context.ast, records),
@@ -213,15 +240,7 @@ export function analyzeRustTargetProgram(
       const operation = records.targetOperation.get(reference);
       return operation?.kind === "source-field" && operation.declaration === declaration;
     },
-    isOnceCallable: (closure) => {
-      const carrier = records.runtimeCarrier.get(closure)?.carrier;
-      const selection = lexicalFunctions.forDeclaration(closure);
-      return carrier?.kind === "closure" && carrier.callTrait === "FnOnce" ||
-        selection?.kind === "resolved" && selection.captureRoots.every(root => {
-          const captured = lexicalFunctions.forDeclaration(root);
-          return captured?.kind === "resolved" && captured.singleInvocation;
-        });
-    },
+    isOnceCallable,
     isOwnedOperationResult: (expression) => {
       const operation = records.targetOperation.get(expression);
       return operation?.kind === "source-field" && operation.valueSemantics.kind === "accessor" && operation.accessMode === "read" ||
@@ -233,11 +252,13 @@ export function analyzeRustTargetProgram(
     },
     canMoveStoredField: (field) => {
       const selected = records.targetOperation.get(field);
-      if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
-        selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
-      const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
-      if (definition === undefined ||
-        objectRepresentations.representationFor(definition)?.kind !== "value") return false;
+      if (selected?.kind !== "tuple-index" && selected?.kind !== "fixed-index") {
+        if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
+          selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
+        const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
+        if (definition === undefined ||
+          objectRepresentations.representationFor(definition)?.kind !== "value") return false;
+      }
       const semantics = context.semanticsFor(field).operations;
       const access = semantics.propertyAccess(field) ?? semantics.elementAccess(field);
       if (access === undefined || records.runtimeCarrier.get(access.receiver.expression)?.carrier.kind === "reference") return false;
@@ -246,6 +267,22 @@ export function analyzeRustTargetProgram(
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
+  const borrowEffectsInput = {
+    borrowUses,
+    readUses: analyzeRustReadUses(context.ast, context.nativeNodes, records),
+    isNativeNode: context.isNativeNode,
+    sourceFacts: context.source.sourceFacts,
+    ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
+    projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
+    structuralShapes: context.structuralShapes,
+  };
+  const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
+  if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
+  const readRequirements = prepareRustReadOwnership({ storage: context.sourceStorage,
+    nativeNodes: context.nativeNodes, records, flow: ownershipFlow.flow,
+    borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    genericCallables: context.callableValues.generic });
+  if (readRequirements.kind === "rejected") return rejectedTargetStage(readRequirements.diagnostics);
   const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
     definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
   const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
@@ -254,6 +291,13 @@ export function analyzeRustTargetProgram(
     names: context.names, callables: context.callableValues.selected });
   if (errorRegions.kind === "rejected") return errorRegions;
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
+  const preparedNativeDeclarations = prepareRustNativeDeclarationForms({ ast: context.ast, semanticsFor: context.semanticsFor,
+    names: context.names, records, projectTypes: context.projectTypes, typeDefinitions: context.typeDefinitions,
+    sourceLifetimes: context.sourceLifetimes, objectRepresentations,
+    frames: context.callableValues.selected.frames,
+    classValues, projectMethodProperties: context.projectMethodProperties, projectConstructions,
+    isNativeNode: context.isNativeNode });
+  if (preparedNativeDeclarations.kind === "rejected") return rejectedTargetStage(preparedNativeDeclarations.diagnostics);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.nativeNodes,
@@ -275,6 +319,7 @@ export function analyzeRustTargetProgram(
     context.callableValues.nativeStorage,
     classValues,
     errorTypes,
+    readRequirements.requirements,
   );
   const retentionIssues = declarationGenericRequirements.kind === "rejected" ? []
     : context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
@@ -310,28 +355,18 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.backend.source-module-construction"],
     })));
   }
-  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
-  const borrowEffectsInput = {
-    isNativeNode: context.isNativeNode,
-    sourceFacts: context.source.sourceFacts,
-    ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
-    projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
-    structuralShapes: context.structuralShapes,
-  };
-  const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
-  if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
-  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
-    flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
-    genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
-    capturesFor, invocationTransfersCapture: owner => {
-      const selected = lexicalFunctions.forDeclaration(owner);
-      return selected?.kind !== "resolved" || !selected.valueObserved && selected.singleInvocation;
-    } });
-  if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
+  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records,
+    context.source.navigation, borrowUses, context.isNativeNode);
+  const captureOwnership = completeRustCaptureReadOwnership({ requirements: captureRequirements.requirements,
+    flow: ownershipFlow.flow, definitions: context.typeDefinitions,
+    genericRequirements: declarationGenericRequirements.index, typeFamilies: context.typeFamilies });
+  if (captureOwnership.kind === "rejected") return rejectedTargetStage(captureOwnership.diagnostics);
+  const movingReads = completeRustNativeReadTransfers(ownershipFlow.flow, captureOwnership.captures);
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
-    sourcePackageComponents, errorStorageDemands: context.errorStorageDemands });
+    sourcePackageComponents, errorStorageDemands: context.errorStorageDemands,
+    sourceModuleConstructions: sourceModuleConstructions.index });
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
   const genericCallableErrors = analyzeRustGenericCallableErrors({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
@@ -366,9 +401,42 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
+  const identities = sourceOutputIdentities.identities;
+  const moduleNameByFileName = new Map([...identities].map(([fileName, identity]) => [fileName, identity.moduleName]));
+  const externalCrateNameByFileName = new Map([...identities].flatMap(([fileName, identity]) =>
+    identity.externalCrateName === undefined ? [] : [[fileName, identity.externalCrateName] as const]));
+  const externalStructuralShapeModuleByFileName = new Map([...identities].flatMap(([fileName, identity]) => {
+    const component = sourcePackageComponents.forComponent(identity.componentId);
+    return identity.externalCrateName === undefined || component === undefined ? []
+      : [[fileName, `${identity.externalCrateName}::${component.structuralShapesModuleName}`] as const];
+  }));
+  const normalizeNativeFamily = rustTypeFamilyNormalizer(context.typeFamilies);
+  const nativeContextFor = (fileName: string, typeParameterNames: ReadonlyMap<string, string> | undefined,
+    callables: RustNativeTypeInputContext["callableValues"]): RustNativeTypeInputContext => {
+    const identity = identities.get(fileName);
+    const component = identity === undefined ? undefined : sourcePackageComponents.forComponent(identity.componentId);
+    if (identity === undefined || component === undefined) return failTargetAnalysisInvariant("tsonic-rust",
+      "A native declaration lost its admitted source-package output identity.");
+    return {
+      moduleName: identity.moduleName, crateName: identity.externalCrateName, moduleNameByFileName,
+      externalCrateNameByFileName, externalStructuralShapeModuleByFileName,
+      structuralShapesModuleName: component.structuralShapesModuleName, typeParameterNames,
+      externalPublicPathFor: (sourceFileName, name) => sourcePackageFacades.plan.externalItemPathByIdentity.get(
+        rustSourceItemIdentity(sourceFileName, name)),
+      nativeTypeItemFor: sourcePackageFacades.plan.nativeTypeItemFor,
+      typeDefinitions, projectTypes, objectRepresentations,
+      structuralShapes: context.structuralShapes, callableValues: callables, classValues,
+      errorRegions: completedErrorRegions,
+      additionalArgumentsFor: (carrier, parameterIndexes) => selectRustOptionalStorageTypeArguments(carrier, {
+        genericRequirements: declarationGenericRequirements.index, projectTypes, normalize: normalizeNativeFamily,
+      }, parameterIndexes),
+      programErrorBoundaryFor: owner => errorTransport.value.nativeBoundaryFor(component.componentId, owner),
+    };
+  };
   const sourceCallableSpecializations = context.sourceCallableSpecializations.seal();
   const projectMethodDispatch = context.projectMethodDispatch.seal();
   const callableValues = context.callableValues.seal({
+    nativeTypeInputFor: (fileName, callables) => rustNativeTypeSelectionInput(nativeContextFor(fileName, undefined, callables)),
     sourceCallableSpecializations, projectMethodDispatch, lexicalFunctions,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
     errorRegions: completedErrorRegions, initialization: initializationErrors.value,
@@ -377,6 +445,33 @@ export function analyzeRustTargetProgram(
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
+  const ownership = analyzeRustReadOwnership({ requirements: readRequirements.requirements,
+    movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
+    borrowEffects: borrowEffects.effects, definitions: context.typeDefinitions,
+    genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
+    typeFamilies: context.typeFamilies,
+  });
+  if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
+  const nativeInputs = analyzeRustNativeInputs({ ast: context.ast, records,
+    navigation: context.source.navigation, definitions: typeDefinitions,
+    projectTypes, objectRepresentations,
+    ownership: ownership.ownership,
+    physicalEmissionContexts: callableValues.value.emissionContexts, statementCompletions: statementCompletions.plan });
+  if (nativeInputs.kind === "rejected") return rejectedTargetStage(nativeInputs.diagnostics);
+  const nativeResultLoans = analyzeRustNativeResultLoans({ storage: context.sourceStorage,
+    physicalEmissionContexts: callableValues.value.emissionContexts, nativeInputs: nativeInputs.inputs,
+    definitions: typeDefinitions });
+  const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
+    navigation: context.source.navigation, physicalEmissionContexts: callableValues.value.emissionContexts,
+    nativeInputs: nativeInputs.inputs });
+  const mutableInputDiagnostics: TargetDiagnostic[] = [];
+  for (const { selection } of providerMutableInputs.operations) {
+    if (selection.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
+      category: "error", source: "tsonic-rust", message: selection.reason,
+      sourceNode: selection.node,
+      evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
+  }
+  if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
   const program: Omit<RustTargetProgram, "reachability" | "records" | "nativeDeclarations"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
@@ -418,7 +513,7 @@ export function analyzeRustTargetProgram(
     callableOwnership: context.callableOwnership.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
-    ownership: ownership.ownership,
+    ownership: Object.freeze({ ...ownership.ownership, nativeInputs: nativeInputs.inputs, nativeResultLoans }),
     borrowedElementReads,
     borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records),
     providerMutableInputs,
@@ -454,11 +549,14 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
-  const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
+  const nativeDeclarations = preparedNativeDeclarations.forms.complete({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
     objectRepresentations, typeFamilies: program.typeFamilies,
-    genericRequirements: declarationGenericRequirements.index });
+    genericRequirements: declarationGenericRequirements.index,
+    nativeTypeInputFor: (fileName, typeParameterNames) => rustNativeTypeSelectionInput(nativeContextFor(fileName, typeParameterNames, callableValues.value)),
+    nativeStateCarrierFor: definition => rustNativeProjectGeneratedCarrier(projectTypes.openCarrier(definition),
+      definition.stateName, nativeContextFor(definition.fileName, undefined, callableValues.value)) });
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
   context.callableValues.publish();

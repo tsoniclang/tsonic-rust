@@ -19,10 +19,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
-import {
-  rustProjectObjectDispatchField,
-  rustProjectObjectIdentityField,
-} from "./project-objects.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../../../target-model/types/field-storage.js";
 import {
   allocateRustSyntheticName,
   createRustSyntheticNameState,

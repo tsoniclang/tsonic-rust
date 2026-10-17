@@ -16,6 +16,8 @@ import {
 import type {
   RustAnalysisContext,
 } from "./context.js";
+import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
+import { selectRustNativeTypeItemNames } from "../names/source-output-identities.js";
 
 export interface RustSourcePackageFacadeExportContract {
   readonly packageId: string;
@@ -30,6 +32,10 @@ export interface RustSourcePackageFacadeExportContract {
 
 export interface RustSourcePackageFacadeClassifications {
   readonly rootComponentId: string;
+  readonly externalItemPathByIdentity: ReadonlyMap<string, string>;
+  nativeTypeItemFor(fileName: string, sourceName: string): {
+    readonly fileName: string; readonly targetName: string; readonly nativeProtocol: boolean;
+  } | undefined;
   readonly componentIds: readonly string[];
   readonly rootExports: readonly RustSourcePackageFacadeExportContract[];
   exportsForComponent(
@@ -53,7 +59,11 @@ export type AnalyzeRustSourcePackageFacadesResult =
 
 export function analyzeRustSourcePackageFacades(
   context: RustAnalysisContext,
+  identitiesByFileName: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ): AnalyzeRustSourcePackageFacadesResult {
+  const nativeItems = selectRustNativeTypeItemNames({ ast: context.ast, nativeNodes: context.nativeNodes,
+    names: context.names, protocols: context.callableValues.native.protocols });
+  if (nativeItems.kind === "rejected") return nativeItems;
   const diagnostics: TargetDiagnostic[] = [];
   const sourcePackages = context.sourcePackages;
   const packageById = new Map(sourcePackages.packages.map((entry) =>
@@ -148,6 +158,28 @@ export function analyzeRustSourcePackageFacades(
   }
 
   exports.sort(compareFacadeExports);
+  const externalItemCandidates = new Map<string, RustSourcePackageFacadeExportContract[]>();
+  for (const exported of exports) {
+    if (exported.componentId === rootPackage.componentId) continue;
+    const key = rustSourceItemIdentity(exported.implementationFileName, exported.implementationName);
+    const candidates = externalItemCandidates.get(key) ?? [];
+    candidates.push(exported);
+    externalItemCandidates.set(key, candidates);
+  }
+  const externalItemPathByIdentity = new Map<string, string>();
+  for (const [key, candidates] of externalItemCandidates) {
+    candidates.sort(compareFacadePreference);
+    const selected = candidates[0]!;
+    const crateName = identitiesByFileName.get(selected.implementationFileName)?.externalCrateName;
+    if (crateName === undefined) {
+      diagnostics.push(facadeDiagnostic("RUST_SOURCE_PACKAGE_FACADE_CRATE_IDENTITY_MISSING",
+        `External package facade '${facadeDisplayPath(selected)}' has no deterministic Rust crate identity.`));
+      continue;
+    }
+    externalItemPathByIdentity.set(key,
+      [crateName, ...selected.facadeModuleSegments, selected.facadeName].join("::"));
+  }
+  if (diagnostics.length > 0) return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
   const rootExports = Object.freeze(exports.filter((entry) =>
     entry.componentId === rootPackage.componentId));
   const exportsByComponentId = new Map(sourcePackages.components.map((component) =>
@@ -188,6 +220,8 @@ export function analyzeRustSourcePackageFacades(
   }
   const plan: RustSourcePackageFacadeClassifications = {
     rootComponentId: rootPackage.componentId,
+    externalItemPathByIdentity: Object.freeze(externalItemPathByIdentity),
+    nativeTypeItemFor: nativeItems.value.nativeTypeItemFor,
     componentIds: Object.freeze(sourcePackages.components
       .map((component) => component.id)
       .sort(compareNames)),
@@ -307,6 +341,14 @@ function compareFacadeExports(
     compareNames(left.facadeName, right.facadeName) ||
     compareNames(left.implementationFileName, right.implementationFileName) ||
     compareNames(left.implementationName, right.implementationName);
+}
+
+function compareFacadePreference(
+  left: RustSourcePackageFacadeExportContract,
+  right: RustSourcePackageFacadeExportContract,
+): number {
+  return left.facadeModuleSegments.length - right.facadeModuleSegments.length ||
+    compareFacadeExports(left, right);
 }
 
 function rejected(

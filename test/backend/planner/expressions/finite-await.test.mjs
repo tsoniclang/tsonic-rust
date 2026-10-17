@@ -10,6 +10,7 @@ import { rustSourcePrimitiveTargetType } from "../../../../dist/target-model/typ
 import { planRustAwaitExpression } from "../../../../dist/backend/planner/expressions/await.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/operations/error-boundary.js";
+import { selectedNativeErrorBoundaries } from "../../../helpers/native-type-selection.mjs";
 
 function awaitProgram(source) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": source } });
@@ -27,13 +28,21 @@ function awaitProgram(source) {
 
 function contextFor(program, node, records = program.records) {
   const { ast } = program.source;
-  return { input: { program: { ...program, records } }, diagnostics: [],
+  const boundary = { componentId: "test", errorDomain: "runtime", errorTypePath: "rt::TsonicError",
+    errorTypeIdentity: rustRuntimeErrorTypeIdentity };
+  const errorTransport = selectedNativeErrorBoundaries({
+    components: [["test", "test", boundary]],
+    native: [["test", { kind: "logical" }, boundary],
+      ["test", { kind: "physical", domain: "runtime" }, boundary]],
+  });
+  errorTransport.domainsByComponentId = new Map([["test", {
+    componentId: "test", errorDomain: "runtime", errorTypeIdentity: rustRuntimeErrorTypeIdentity,
+  }]]);
+  return { input: { program: { ...program, records, errorTransport } }, diagnostics: [],
     sourceFile: ast.getSourceFile(node), moduleName: "index", structuralShapesModuleName: "shapes",
     moduleNameByFileName: new Map([["/src/index.ts", "index"]]), externalCrateNameByFileName: new Map(),
     externalItemPathByIdentity: new Map(), externalStructuralShapeModuleByFileName: new Map(),
-    sourcePackageComponentId: "test", sourcePackageErrors: { domainsByComponentId: new Map([["test", {
-      componentId: "test", errorDomain: "runtime", errorTypeIdentity: rustRuntimeErrorTypeIdentity,
-    }]]) },
+    sourcePackageComponentId: "test", sourcePackageErrors: errorTransport,
     usedAliases: new Set(), syntheticNames: createRustSyntheticNameState(ast, node, []),
     fallibleBoundary: rustPackageFallibleBoundary({ componentId: "test", errorDomain: "runtime",
       errorTypePath: "rt::TsonicError", errorTypeIdentity: "tsonic-rust-runtime:TsonicError" }) };
@@ -87,6 +96,8 @@ import type { uint64 } from "@tsonic/core/types.js";
 export async function read(value: uint64 | Promise<uint64>): Promise<uint64> { return await value; }
 `);
   const selected = contextFor(program, node);
+  selected.sourcePackageErrors.componentBoundaries.clear();
+  selected.sourcePackageErrors.nativeBoundaries.clear();
   selected.sourcePackageErrors.domainsByComponentId.clear();
   assert.equal(planRustAwaitExpression(node, selected, () => ({ kind: "path", path: "value" })) === undefined, true);
   assert.equal(selected.diagnostics.length, 1);

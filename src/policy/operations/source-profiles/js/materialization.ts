@@ -207,7 +207,9 @@ function materializeInferredCarrier(
         ...carrier,
         bounds: carrier.bounds.map((trait) =>
           materializeInferredTraitRef(trait, inferred)),
-        captures: materializeInferredGenericArguments(carrier.captures, inferred),
+        ...(carrier.captures === undefined ? {} : {
+          captures: materializeInferredGenericArguments(carrier.captures, inferred),
+        }),
       };
     case "associated-type":
       return {

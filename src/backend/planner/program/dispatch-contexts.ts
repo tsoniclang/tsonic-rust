@@ -6,7 +6,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { rustDispatchContextRootName } from "../project/dispatch-contexts.js";
 import { rustRuntimeAliasUseItems } from "./plan-context.js";
-import type { RustSourcePackageErrorDomainPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorDomainPlan } from "../../../target-model/records/error-regions.js";
 
 export function planRustDispatchContextRoots(
   context: RustTypeRenderingContext & {
@@ -20,7 +20,8 @@ export function planRustDispatchContextRoots(
   const demand = program.dispatchContextDemand.forComponent(domain.componentId);
   if (demand === undefined) return invalid("A source-package component has no sealed dispatch demand.");
   const error = rustNamedTargetType(domain.errorTypeIdentity, domain.errorDomain === "runtime"
-    ? "tsonic_rust_runtime::TsonicError" : `crate::${programModuleName}::TsonicError`);
+    ? "tsonic_rust_runtime::TsonicError" : `crate::${programModuleName}::TsonicError`,
+    [], [], undefined, [], domain.errorTypeIdentity, []);
   const items: RustItem[] = [];
   const usedAliases = new Set<string>();
   for (const [index, id] of demand.rootContextIds.entries()) {

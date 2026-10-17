@@ -95,7 +95,7 @@ test("anonymous implementation bounds admit exact associated outputs without pos
   }
 });
 const callable = { kind: "closure", callTrait: "FnMut", args: [scalar], result: scalar };
-const owner = rustNamedTargetType("test.adapter", "example::Adapter", [{ kind: "type", type: callable }]);
+const owner = rustNamedTargetType("test.adapter", "example::Adapter", [{ kind: "type", type: callable }], [], undefined, [], undefined, []);
 
 test("native call positions infer anonymous types without erasing their known contract", () => {
   assert.deepEqual(rustCallTypeFromCarrierInContext(callable, context), { kind: "infer" });
@@ -143,6 +143,8 @@ test("canonical physical union payloads retain enclosing anonymous type position
     const scope = { moduleName: "owner", moduleNameByFileName: new Map([["/src/owner.ts", "owner"]]),
       structuralShapesModuleName: "shapes", externalCrateNameByFileName: new Map(), externalStructuralShapeModuleByFileName: new Map(),
       input: { program: { typeDefinitions: registry.seal(), names: { nameForSourceType: (_file, name) => name },
+        sourcePackageFacades: { nativeTypeItemFor: (fileName, typeName) => fileName === "/src/owner.ts" && typeName === "Completion"
+          ? Object.freeze({ fileName, targetName: "Completion", nativeProtocol: false }) : undefined },
         callableValues: { native: { protocolForSourceItem: () => undefined } }, structuralShapes: generated } } };
     assert.equal(rustUnionTypePathInContext(carrier, scope), origin === "authored" ? "Completion"
       : `crate::shapes::${generated.unionForCarrier(carrier).targetName}`,
@@ -151,6 +153,8 @@ test("canonical physical union payloads retain enclosing anonymous type position
       const rendered = rustTypeFromCarrierInContext(physical, scope, position);
       assert.equal(rendered?.kind, "named", `${origin}:${position}`);
       assert.equal(rendered.genericArguments[1].type.kind, "impl-trait");
+      assert.equal(Object.hasOwn(rendered.genericArguments[1].type, "captures"), position === "return",
+        `${origin}:${position}: APIT omission and precise empty RPIT remain distinct`);
       assert.equal(rustUnionTypePathInContext(physical, scope), rendered.path,
         "patterns retain the canonical enum identity without emitting anonymous generic arguments");
       assert.equal(rustTypeFromCarrierInContext({ kind: "function-pointer", args: [], result: physical }, scope, position) === undefined, true,

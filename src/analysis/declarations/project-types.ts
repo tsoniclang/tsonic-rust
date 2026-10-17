@@ -148,8 +148,8 @@ export function selectRustCapturedFieldStorageFact(
       ["target.capability=rust.field.capture-storage"]);
     return undefined;
   }
-  return { storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member),
-    captures.storageImmutable(member)), valueCarrier: carrier };
+  return Object.freeze({ storage: selectRustCapturedFieldStorage(storageCarrier, captures.storageReadonly(member), captures.isDeferred(member),
+    captures.storageImmutable(member)), valueCarrier: carrier });
 }
 
 export function recordClassBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {

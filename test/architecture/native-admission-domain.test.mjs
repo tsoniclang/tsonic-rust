@@ -26,6 +26,7 @@ const walkerContracts = new Map([
   ["analysis/callables/async-results.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/callables/specializations.ts", [1, "admitted-name-inventory"]],
   ["analysis/project-types/construction-readiness.ts", [2, "native-domain"]],
+  ["analysis/project-types/construction-plan.ts", [1, "checked selected construction-exposure subtree membership"]],
   ["analysis/callables/inferred-return.ts", [1, "admitted-callable-subtrees"]],
   ["analysis/declarations/generic-callable-requirements.ts", [1, "admitted-contract-subtrees"]],
   ["analysis/errors/closed-errors.ts", [1, "native-domain"]],
@@ -55,6 +56,7 @@ const walkerContracts = new Map([
 
 const checkedStorageConsumers = new Map([
   ["analysis/program/context.ts", [1, "checked Promise-result disposition; participation receives the actual storage owner"]],
+  ["analysis/callables/promise-results.ts", [1, "checked generic-adoption input; shared owner validates the finite domain and prunes erased subtrees"]],
   ["analysis/callables/participation.ts", [1, "the sole native-domain producer checks source failure before reading the finite domain"]],
   ["analysis/callables/ownership-components.ts", [1, "checked source foreign-node and binding identity domain"]],
   ["analysis/callables/native-future-inputs.ts", [1, "checked source identity membership; discovery uses nativeNodes"]],

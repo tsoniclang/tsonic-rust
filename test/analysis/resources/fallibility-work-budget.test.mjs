@@ -3,6 +3,7 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { createRustAnalysisContext } from "../../../dist/analysis/program/context.js";
 import { analyzeRustProgram } from "../../../dist/analysis/program/analyze.js";
+import { analyzeRustSourceOutputIdentities } from "../../../dist/analysis/names/source-output-identities.js";
 import { analyzeRustRuntimeReferences, analyzeRustDispatchContextCatalog } from "../../../dist/analysis/project/index.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { recordFallibilityFacts } from "../../../dist/analysis/resources/fallibility.js";
@@ -23,7 +24,10 @@ function fixture(text) {
       request.rootPublishesLibrary, dispatch.plan);
     assert.equal(created.kind, "resolved", "the checked context is complete before the fallibility worklist");
     const context = created.value;
-    analyzeRustProgram(context, request.configuration.outputType);
+    const identities = analyzeRustSourceOutputIdentities({ ast: context.ast, sourceFiles: context.sourceFiles,
+      sourcePackages: context.sourcePackages, paths: request.input.paths });
+    assert.equal(identities.kind, "accepted", "the checked fixture supplies its actual native output identities");
+    analyzeRustProgram(context, request.configuration.outputType, identities.identities);
     program = { ...context, records: context.records.seal(context.requiredRecords) };
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
   } });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyCarrierRequirements, rustFinalContractSupportsStatic } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
+import { classifyCarrierRequirements, rustFinalContractSupportsRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustLifetimeOutlives } from "../../../dist/target-model/lifetimes/outlives.js";
 import { rustGenericCallablePhysicalBindings } from "../../../dist/analysis/callables/generic-bindings.js";
@@ -69,14 +69,14 @@ test("function pointer type outlives bounds retain every free lifetime and exclu
   assert.equal(selected({ kind: "function-pointer", args: [], result: borrowed(staticLifetime) }).kind,
     "supported", "static output positive");
   const callable = { kind: "function-pointer", args: [parameter], result: unit };
-  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: [] }] }), callable,
+  assert.equal(rustFinalContractSupportsRequirements(contract({ typeParameters: [{ ...parameter, requirements: [] }] }), callable, ["static"],
     families, emptyRustTypeDefinitions, undefined).kind, "unsatisfied", "fn(T) still requires the actual T static bound");
-  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: ["static"] }] }), callable,
+  assert.equal(rustFinalContractSupportsRequirements(contract({ typeParameters: [{ ...parameter, requirements: ["static"] }] }), callable, ["static"],
     families, emptyRustTypeDefinitions, undefined).kind, "supported", "T static is sufficient for the exact fn(T) type");
   const higherRankedGeneric = { ...higherRanked, args: [{ ...boundReference, referent: parameter }], result: unit };
-  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: [] }] }), higherRankedGeneric,
+  assert.equal(rustFinalContractSupportsRequirements(contract({ typeParameters: [{ ...parameter, requirements: [] }] }), higherRankedGeneric, ["static"],
     families, emptyRustTypeDefinitions, undefined).kind, "unsatisfied", "an inner lifetime binder does not bind free T");
-  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: ["static"] }] }), higherRankedGeneric,
+  assert.equal(rustFinalContractSupportsRequirements(contract({ typeParameters: [{ ...parameter, requirements: ["static"] }] }), higherRankedGeneric, ["static"],
     families, emptyRustTypeDefinitions, undefined).kind, "supported", "the exact HRTB fn type retains the proven free T bound");
 });
 
@@ -106,10 +106,10 @@ test("declared direct and transitive static outlives edges are honored only by t
 
 test("final contracts never infer a bound or confuse unknown identity with native unsatisfied storage", () => {
   const entry = requirements => ({ identity: parameter.identity, name: parameter.name, requirements });
-  const run = fields => rustFinalContractSupportsStatic(contract(fields), parameter, families, emptyRustTypeDefinitions, undefined);
+  const run = fields => rustFinalContractSupportsRequirements(contract(fields), parameter, ["static"], families, emptyRustTypeDefinitions, undefined);
   assert.equal(run({}).kind, "unresolved", "foreign identity");
   const missing = contract({ nativeInputs: [entry(["clone"])] });
-  assert.equal(rustFinalContractSupportsStatic(missing, parameter, families, emptyRustTypeDefinitions, undefined).kind,
+  assert.equal(rustFinalContractSupportsRequirements(missing, parameter, ["static"], families, emptyRustTypeDefinitions, undefined).kind,
     "unsatisfied", "known native input without static");
   assert.equal(missing.nativeInputs[0].requirements.includes("static"), false, "final proof does not collect");
   assert.equal(run({ nativeInputs: [entry(["static"])] }).kind, "supported", "actual native static bound");
@@ -132,7 +132,7 @@ test("closed native joins and actual union variants retain all physical payload 
   const borrowedJoin = rustNativeErrorJoinTargetType("/source.ts", [number, borrowed(scopedLifetime)]);
   assert.equal(selected(owned).kind, "supported", "all actual owned join fields");
   assert.equal(selected(borrowedJoin).kind, "unsatisfied", "borrowed join alternative");
-  assert.equal(selected(rustNamedTargetType("native:Box", "Box", [{ kind: "type", type: borrowed(scopedLifetime) }])).kind,
+  assert.equal(selected(rustNamedTargetType("native:Box", "Box", [{ kind: "type", type: borrowed(scopedLifetime) }], [], undefined, [], undefined, [])).kind,
     "unsatisfied", "actual native generic field bound");
 });
 
@@ -299,7 +299,7 @@ test("native factory environment fields use the existing exact class argument bi
   const boundConstructor = rustClassConstructorTargetType(open, [0]);
   const boundEvidence = evidence({ projectTypes: { definitionForCarrier: () => definition, openCarrier: () => open },
     classValues: { forDeclaration: () => ({ environment: { genericParameterIndexes: [], captures: [], staticFields: [] } }) } });
-  assert.equal(rustFinalContractSupportsStatic(contract({}), boundConstructor, families, emptyRustTypeDefinitions, boundEvidence).kind,
+  assert.equal(rustFinalContractSupportsRequirements(contract({}), boundConstructor, ["static"], families, emptyRustTypeDefinitions, boundEvidence).kind,
     "supported", "a constructor's universally bound parameter is not captured storage");
 });
 

@@ -10,7 +10,7 @@ export const rustJsTimerDispatchContext: RustProviderDispatchContextRow = snapsh
   requiredCrate: "tsonic_rust_js",
   rootCarrier: rustNamedTargetType("rust.js.Timers", "tsonic_rust_runtime::timer_queue::TimerContext", [
     { kind: "type", type: rustCallableTargetType([], rustUnitTargetType()) },
-  ]),
+  ], [], undefined, [], undefined, []),
   construct: { form: "call", path: "tsonic_rust_js::timers::new", const: true },
   composedContexts: [],
   providerPackageId: "tsonic.rust.js-surface",
@@ -27,6 +27,7 @@ function timerGroup(targetArgumentIndex: number): RustDispatchContextGroupInput 
     empty: { form: "associated-call", method: "new", owner: rustNamedTargetType(
       "rust.runtime.DispatchEnd", "tsonic_rust_runtime::dispatch::DispatchEnd",
       [{ kind: "type", type: rustProgramErrorTargetType() }],
+      [], undefined, [], undefined, [],
     ) },
     prepend: { form: "call", path: "tsonic_rust_runtime::dispatch::prepend" },
   };

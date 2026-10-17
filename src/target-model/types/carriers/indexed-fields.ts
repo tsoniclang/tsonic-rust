@@ -23,5 +23,5 @@ export function rustIndexedFieldKey(identity: string): TargetTypeRef {
   ], [], { implementations: [
     { trait: rustNativeTraitRef("core::clone::Clone"), requirements: [] },
     { trait: rustNativeTraitRef("core::marker::Copy"), requirements: [] },
-  ] });
+  ] }, [], undefined, []);
 }

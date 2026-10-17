@@ -16,7 +16,7 @@ import { rustNativeCompletionFutureType } from "../../dist/target-model/types/ca
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
 const infallible = { kind: "target-named", id: rustInfallibleTargetId };
-const failure = rustNamedTargetType("fixture:Failure", "Failure");
+const failure = rustNamedTargetType("fixture:Failure", "Failure", [], [], undefined, [], undefined, []);
 const file = "/adapt.ts";
 const select = (source, target) => selectRustCallableConversion(source, target, selectRustExactIntegerConversion);
 const physicalCarrier = ({ parameters, result, error }) => rustNamedTargetType(rustCallableTargetId, "rt::Callable", [
@@ -24,8 +24,8 @@ const physicalCarrier = ({ parameters, result, error }) => rustNamedTargetType(r
   { kind: "type", type: { kind: "tuple", elements: parameters } },
   { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
     { kind: "type", type: result }, { kind: "type", type: error },
-  ]) },
-]);
+  ], [], undefined, [], undefined, []) },
+], [], undefined, [], undefined, []);
 
 test("physical adapters preserve source error and native Future payload without ambient substitution", () => {
   const future = rustFutureTargetType(integer);

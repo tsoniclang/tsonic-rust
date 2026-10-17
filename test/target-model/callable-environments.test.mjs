@@ -27,16 +27,16 @@ test("ordinary Callable has one explicit environment independent from its invoca
 
 test("physical Callable preserves nonstatic nonClone error payloads without imposing traits", () => {
   const error = { kind: "reference", mutable: false, lifetime: region, referent: integer };
-  const result = rustNamedTargetType("rust.core.Result", "Result", [argument(integer), argument(error)]);
+  const result = rustNamedTargetType("rust.core.Result", "Result", [argument(integer), argument(error)], [], undefined, [], undefined, []);
   const selected = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
     { kind: "lifetime", lifetime: region }, argument(unit), argument(result),
-  ]);
+  ], [], undefined, [], undefined, []);
   const signature = rustCallablePhysicalSignature(selected);
   assert.equal(signature !== undefined, true);
   assert.equal(rustTargetTypeRefEquals(signature.error, error), true);
   assert.equal(rustTargetTypeRefEquals(signature.result, integer), true);
   assert.equal(signature.parameters.length, 0);
-  const stale = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [argument(unit), argument(result)]);
+  const stale = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [argument(unit), argument(result)], [], undefined, [], undefined, []);
   assert.equal(rustCallablePhysicalSignature(stale) === undefined, true);
 });
 

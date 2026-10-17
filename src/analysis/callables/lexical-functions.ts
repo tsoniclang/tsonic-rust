@@ -63,6 +63,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
   sourceCallables: RustSourceCallableQueries,
 ): RustLexicalFunctionEnvironmentPlan {
   const { ast, navigation } = source;
+  const nativeDomain = new Set(nativeNodes);
   const declarations: Node[] = [];
   let steps = 0;
   for (const node of nativeNodes) {
@@ -84,7 +85,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
         const initializer = Node_Initializer(ast, parameter);
         return initializer === undefined ? [] : [initializer];
       })] : [declaration];
-    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation,
+    const selected = sourceLexicalEnvironment(declaration, roots, ast, navigation, nativeDomain,
       (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (selected.kind === "unresolved") return exhausted(selected.reason);
@@ -98,8 +99,9 @@ export function createRustLexicalFunctionEnvironmentPlan(
       })];
     });
     while (evaluatedPending.length > 0) {
-      if (++steps > maximumLexicalCaptureSteps) return exhausted();
       const node = evaluatedPending.pop()!;
+      if (!nativeDomain.has(node)) continue;
+      if (++steps > maximumLexicalCaptureSteps) return exhausted();
       if (evaluated.has(node)) continue;
       evaluated.add(node);
       const passing = records.argumentPassing.get(node);
@@ -182,7 +184,7 @@ export function createRustLexicalFunctionEnvironmentPlan(
   const empty: readonly Node[] = Object.freeze([]);
   const scheduled = new Map<Node, readonly Node[]>();
   for (const [statement, values] of valueDeclarations) {
-    const ordered = sourceLexicalFunctionValueOrder(values, ast, navigation,
+    const ordered = sourceLexicalFunctionValueOrder(values, ast, navigation, nativeDomain,
       (use, referencedDeclaration) => records.compileTimeSource.get(use.reference) !== true &&
         runtimeValueUses.isRuntimeReference(referencedDeclaration, use.reference));
     if (ordered.kind === "resolved") scheduled.set(statement, ordered.declarations);

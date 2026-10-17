@@ -3,9 +3,6 @@ import type { SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustErrorRegionSelection } from "../../../target-model/records/error-regions.js";
 
-import {
-  allocateRustComponentSupportModuleName,
-} from "../names/source-output-identities.js";
 import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustPlanningContext } from "../context.js";
 import {
@@ -41,25 +38,9 @@ export function planRustSourcePackageInitializers(
   const diagnostics: TargetDiagnostic[] = [];
   const facadeModuleNameByComponent = new Map<string, string>();
   for (const component of input.program.sourcePackageComponents.components) {
-    const shapesName = allocateRustComponentSupportModuleName(
-      identitiesByFileName,
-      component.componentId,
-      "shapes",
-    );
-    const programName = allocateRustComponentSupportModuleName(
-      identitiesByFileName,
-      component.componentId,
-      "program",
-      [shapesName],
-    );
     facadeModuleNameByComponent.set(
       component.componentId,
-      allocateRustComponentSupportModuleName(
-        identitiesByFileName,
-        component.componentId,
-        "initializers",
-        [shapesName, programName],
-      ),
+      component.initializerFacadeModuleName,
     );
   }
 

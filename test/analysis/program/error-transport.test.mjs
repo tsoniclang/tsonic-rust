@@ -5,6 +5,7 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { rustJsValueTargetType, rustTsValueTargetType, rustSourceTypeCarrier } from "../../../dist/target-model/types/index.js";
+import { rustRuntimeErrorTypeIdentity } from "../../../dist/target-model/operations/error-boundary.js";
 
 function input(thrownCarriers = [rustTsValueTargetType()], retained = true) {
   const root = { componentId: "root", errorDomain: "project", errorOwnerComponentId: "root",
@@ -16,14 +17,22 @@ function input(thrownCarriers = [rustTsValueTargetType()], retained = true) {
   const native = { componentId: "native", errorDomain: "runtime", errorOwnerComponentId: undefined,
     closedErrorDemand: { thrownCarriers: [], retained: false, sourceView: false } };
   const components = [root, dependency, forwarding, native];
+  for (const component of components) Object.assign(component, {
+    sourceFileNames: [`/${component.componentId}.ts`],
+    dependencyComponentIds: component === forwarding ? ["dependency"] : [],
+    crateName: `${component.componentId}_crate`,
+    programModuleName: "program",
+  });
   return {
     ast: { getSourceFile: boundary => boundary.file, getFileName: file => file.name },
     projectTypes: { programErrorDefinitions: [], sourceErrorDefinitions: [],
       programErrorVariant: definition => definition.variant, openCarrier: definition => definition.carrier },
     typeDefinitions: emptyRustTypeDefinitions,
     sourcePackageComponents: { components,
+      forComponent: id => components.find(component => component.componentId === id),
       componentForFile: file => components.find(component => file === `/${component.componentId}.ts`) },
-    errorStorageDemands: { retainedBoundaries: [] },
+    sourceModuleConstructions: { entries: () => [] },
+    errorStorageDemands: { retainedBoundaries: [], nativeConstructors: [], storageFor: () => ({ kind: "readonly" }) },
   };
 }
 
@@ -103,4 +112,58 @@ test("retained boundary ownership and malformed native inventories reject at ana
   const result = analyzeRustErrorTransport(fixture);
   assert.equal(result.kind, "resolved");
   assert.deepEqual(result.value.forComponent("root").map(variant => variant.name), ["Retained"]);
+});
+
+test("native error boundaries select only local and actual dependency roles before publication", () => {
+  const fixture = input();
+  fixture.sourcePackageComponents.components[0].dependencyComponentIds = ["dependency", "native"];
+  const result = analyzeRustErrorTransport(fixture);
+  assert.equal(result.kind, "resolved", "the real local, project dependency and runtime dependency are admitted");
+  const plan = result.value;
+  const local = plan.componentBoundaryFor("root", "root");
+  const dependency = plan.componentBoundaryFor("root", "dependency");
+  const runtime = plan.componentBoundaryFor("root", "native");
+  assert.equal(local.errorTypePath, "rt::TsonicError", "local spelling remains local");
+  assert.equal(dependency.errorTypePath, "dependency_crate::program::TsonicError", "the actual dependency owns its path");
+  assert.equal(dependency.errorTypeIdentity, "tsonic-source-package:dependency:TsonicError", "dependency identity is authoritative");
+  assert.equal(runtime.errorTypePath, "tsonic_rust_runtime::TsonicError", "the selected runtime dependency uses the runtime path");
+  assert.equal(runtime.errorTypeIdentity, rustRuntimeErrorTypeIdentity, "runtime identity is not a project spelling");
+  assert.equal(plan.nativeBoundaryFor("root", { kind: "logical" }) === local, true, "logical owner reads the same local entry");
+  assert.equal(plan.physicalBoundaryFor("root", { kind: "physical", domain: "project", componentId: "dependency" }) === dependency,
+    true, "the physical project owner reads the exact selected dependency entry");
+  assert.equal(plan.physicalBoundaryFor("root", { kind: "physical", domain: "runtime" }).errorTypePath,
+    "tsonic_rust_runtime::TsonicError", "only the genuine physical runtime role reads the runtime boundary");
+  assert.equal(plan.physicalBoundaryFor("native", { kind: "physical", domain: "runtime" }).errorTypePath,
+    "rt::TsonicError", "a runtime-local physical role retains the native local alias");
+  for (const owner of ["forwarding", "missing"]) {
+    assert.equal(plan.componentBoundaryFor("root", owner) === undefined, true, owner);
+    assert.equal(plan.physicalBoundaryFor("root", { kind: "physical", domain: "project", componentId: owner }) === undefined,
+      true, `${owner}: no missing project dependency becomes a runtime boundary`);
+  }
+  assert.equal(plan.componentBoundaryFor("dependency", "native") === undefined, true,
+    "a globally known runtime component does not create an unselected dependency edge");
+  assert.equal(plan.physicalBoundaryFor("missing", { kind: "physical", domain: "runtime" }) === undefined, true,
+    "an unknown consumer has no preselected runtime role");
+  fixture.sourcePackageComponents.components[0].dependencyComponentIds.length = 0;
+  assert.equal(plan.componentBoundaryFor("root", "dependency") === dependency, true, "later mutable graph changes cannot reselect a boundary");
+  assert.equal(Object.isFrozen(local) && Object.isFrozen(dependency) && Object.isFrozen(runtime), true,
+    "the authoritative entries are frozen before consumers run");
+});
+
+test("duplicate or incomplete sparse native error boundary admissions fail before publication", () => {
+  for (const [label, mutate, code] of [
+    ["component collision", fixture => fixture.sourcePackageComponents.components.push(fixture.sourcePackageComponents.components[0]),
+      "RUST_SOURCE_PACKAGE_ERROR_BOUNDARY_CONFLICT"],
+    ["dependency collision", fixture => { fixture.sourcePackageComponents.components[0].dependencyComponentIds = ["dependency", "dependency"]; },
+      "RUST_SOURCE_PACKAGE_ERROR_BOUNDARY_CONFLICT"],
+    ["missing dependency", fixture => { fixture.sourcePackageComponents.components[0].dependencyComponentIds = ["missing"]; },
+      "RUST_SOURCE_PACKAGE_ERROR_DEPENDENCY_MISSING"],
+  ]) {
+    const fixture = input();
+    mutate(fixture);
+    const result = analyzeRustErrorTransport(fixture);
+    assert.equal(result.kind, "rejected", label);
+    assert.equal(result.value === undefined, true, `${label}: no native boundary index is published`);
+    assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === code), true, `${label}: exact admission diagnostic`);
+  }
 });

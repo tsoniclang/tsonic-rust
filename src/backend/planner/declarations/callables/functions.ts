@@ -17,7 +17,6 @@ import { rustAuthoredDeadCodeDisposition } from "../../program/reachability-dire
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustPhysicalEmissionContext } from "../../../../target-model/records/physical-emission-contexts.js";
 
-import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import {
   planRustCallableGenerics,
 } from "./generics.js";
@@ -57,15 +56,12 @@ interface RustFunctionItemPlan {
 function planRustFunctionParameters(
   node: Node,
   inputContext: RustPlanContext,
-  requiredStaticParameters: readonly Node[],
 ) {
   const { ast } = inputContext.input.program.source;
   const syntheticNames = createRustSyntheticNameState(ast, node, []);
   const environment = planRustLexicalFunctionEnvironment(node, { ...inputContext, syntheticNames });
   if (environment === undefined) return undefined;
-  const parameterPlan = planRustCallableParameters(node, environment.context, syntheticNames, {
-    requiredStaticParameters,
-  });
+  const parameterPlan = planRustCallableParameters(node, environment.context, syntheticNames);
   if (parameterPlan === undefined) return undefined;
   const operation = environment.context.input.program.records.targetOperation.get(node);
   const leading = planRustCallableLeadingParameters(node,
@@ -218,11 +214,7 @@ function planRustFunctionItem(
   if (genericPlan.preservesExplicitLifetimes) {
     declarationAttributes.push(rustLintAttributes.needlessLifetimes);
   }
-  const parameters = planRustFunctionParameters(node, context,
-    generatorFact !== undefined && generatorFact.storage.kind !== "lifetime"
-      ? generatorFact.capturedParameters
-      : nativeBody === undefined && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-        ? asyncFact.lowering.capturedParameters : []);
+  const parameters = planRustFunctionParameters(node, context);
   if (parameters === undefined) return undefined;
   const { params, parameterPlan, syntheticNames } = parameters;
   context = parameters.context;
@@ -268,14 +260,6 @@ function planRustFunctionItem(
     ));
     return undefined;
   }
-  if (returnsJsPromise && nativeBody === undefined && !requireRustCarrierRequirements(
-    asyncFact.outputCarrier,
-    asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
-    node,
-    context,
-  )) {
-    return undefined;
-  }
   const bodyNode = ast.body(node);
   if (bodyNode === undefined) {
     context.diagnostics.push(unsupportedConstructDiagnostic(
@@ -283,14 +267,6 @@ function planRustFunctionItem(
       "rust.backend.function",
       "Functions require a body.",
     ));
-    return undefined;
-  }
-  if (generatorFact !== undefined && generatorFact.storage.kind !== "lifetime" && ![
-    generatorFact.yieldType,
-    generatorFact.returnType,
-    generatorFact.nextType,
-  ].every((carrier) =>
-    requireRustCarrierRequirements(carrier, ["static"], node, context))) {
     return undefined;
   }
   if (generatorFact !== undefined && fallible) {
@@ -446,14 +422,10 @@ function planRustFunctionItem(
     return Object.freeze({ item, helper: undefined });
   const adapterGenerics = planRustCallableGenerics(node, selectedContext, lexical?.genericParameters);
   if (adapterGenerics === undefined) return undefined;
-  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context,
-    asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-      ? asyncFact.lowering.capturedParameters : []);
+  const adapterParameters = planRustFunctionParameters(node, adapterGenerics.context);
   if (adapterParameters === undefined) return undefined;
   const adapterContext = adapterParameters.context;
-  if (asyncFact?.kind !== "js-promise" ||
-    !requireRustCarrierRequirements(asyncFact.outputCarrier,
-      asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], node, adapterContext)) return undefined;
+  if (asyncFact?.kind !== "js-promise") return undefined;
   const adapterReturn = resolveRustJsPromiseReturnType(node, adapterContext);
   const adapterBody = planRustPromiseBodyObjectAdapter(node, { kind: "call", path: nativeBodyName!,
     genericArguments: rustPromiseBodyGenericArguments(generics),

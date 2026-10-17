@@ -4,12 +4,11 @@ import type { RustExpr, RustStructField, RustVisibility } from "../../target-ast
 import type { RustPlanContext } from "../program/plan-context.js";
 import type { RustLiveFrameOwner } from "../program/frame-owners.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { rustProjectObjectStateField } from "./project-objects.js";
+import { rustProjectObjectStateField } from "../../../target-model/types/field-storage.js";
 import { rustFrameCallableTypes } from "../types/frame-callables.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustValueFieldLocation } from "./value-fields.js";
 import { rustFrameBindingLocation } from "../bindings/frame-storage.js";
-import { rustRetainedFrameCounterName } from "../../../analysis/callables/frame-counter-storage.js";
 
 export function rustClassFrameFieldLocation(
   declaration: Node, receiverCarrier: TargetTypeRef, receiver: RustExpr, context: RustPlanContext, sourceReceiver?: Node,
@@ -35,9 +34,10 @@ export function createRustClassFrameValue(
 ): RustExpr | undefined {
   const carrier = definition.entries[0]?.implementations[0]?.carrier;
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
+  const selected = context.input.program.nativeDeclarations.get(definition.activation.ownerDeclaration);
   if (definition.storage.kind !== "standalone" || types?.frameType.kind !== "named" ||
-    definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
-  const counterName = rustRetainedFrameCounterName(definition, context.input.program);
+    selected?.kind !== "class" || definition.bindings.some(binding => !values.has(binding.declaration))) return undefined;
+  const counterName = selected.frameCounterName;
   return { kind: "call", path: "alloc::rc::Rc::new", args: [{
     kind: "struct-literal", path: types.frameType.path, fields: [
       ...(counterName === undefined ? [] : [{ name: counterName, value: counter }]),
@@ -52,21 +52,22 @@ export function rustClassFrameLayout(
 ): RustClassFrameLayout | undefined {
   const carrier = definition.entries[0]?.implementations[0]?.carrier;
   const types = carrier === undefined ? undefined : rustFrameCallableTypes(carrier, context);
-  if (definition.activation.kind !== "class" || types === undefined) return undefined;
-  const counterName = rustRetainedFrameCounterName(definition, context.input.program);
+  const selected = context.input.program.nativeDeclarations.get(definition.activation.ownerDeclaration);
+  if (definition.activation.kind !== "class" || types === undefined || selected?.kind !== "class") return undefined;
+  const counter = selected.physical.storageFields.find(field => field.kind === "frame-counter");
   if (definition.storage.kind === "object") return {
-    fields: counterName === undefined ? [] : [{ name: counterName, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility }],
+    fields: counter === undefined ? [] : [{ name: counter.name, type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility }],
     ownsField: () => false,
-    materialize: (_values, counter) => counterName === undefined ? [] : [{ name: counterName, value: counter }],
+    materialize: (_values, value) => counter === undefined ? [] : [{ name: counter.name, value }],
   };
-  const instanceFieldName = definition.storage.instanceFieldName;
-  if (instanceFieldName === undefined || types.frameType.kind !== "named") return undefined;
+  const retained = selected.physical.storageFields.find(field => field.kind === "frame");
+  if (retained === undefined || types.frameType.kind !== "named") return undefined;
   return {
-    fields: [{ name: instanceFieldName, type: { kind: "named", path: "alloc::rc::Rc",
+    fields: [{ name: retained.name, type: { kind: "named", path: "alloc::rc::Rc",
       genericArguments: [{ kind: "type", type: types.frameType }] }, visibility }],
     ownsField: declaration => definition.bindings.some(binding => binding.declaration === declaration),
-    materialize: (values, counter, retained) => [{ name: instanceFieldName,
-      value: retained ?? createRustClassFrameValue(definition, values, counter, context)! }],
+    materialize: (values, counter, value) => [{ name: retained.name,
+      value: value ?? createRustClassFrameValue(definition, values, counter, context)! }],
   };
 }
 

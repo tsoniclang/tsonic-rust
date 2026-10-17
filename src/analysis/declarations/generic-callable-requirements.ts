@@ -1,14 +1,12 @@
-import { stringListsEqual, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
+import { stringListsEqual, requirementUseHasValidStorage, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
-import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
-import { bindRustExactTypeParameters } from "../../target-model/types/carriers/generic-inference.js";
-import { rustCallableInputProtocol, rustCallableProtocol, rustNativeCallableProtocol } from "../../target-model/types/carriers/callables.js";
+import { rustCallableInputProtocol, rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
-import type { AstReader, Node } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 
 import { classifyCarrierRequirements, type RustCarrierRequirementSelection } from "./generic-carrier-requirements.js";
 import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
@@ -16,86 +14,56 @@ import { createRustOptionalStorageCollector } from "./type-projections.js";
 import { isRustBorrowedValueRead, isRustDeclarationPathUse, isRustReturnedValue, isRustIndependentCallable, isRustGenericTypeDeclaration } from "./generic-reference-uses.js";
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
-import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
-import type { RustOwnershipFlow } from "../ownership/flow.js";
-import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
-import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
+import { rustReadTransferRequirement } from "../ownership/flow.js";
+import { rustCaptureReadFormation, type RustReadOwnershipRequirements } from "../ownership/reads.js";
+import { sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
-import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../operations/finalized-operation/conversions.js";
 import {
   getRustGeneratorProtocol,
-  isRustCopyCarrier,
-  rustOptionElementCarrier,
   rustClosureProtocol,
   rustSourceTypeCarrierValue,
+  rustNamedTypeCarrierValue,
   rustTargetGenericTypeArguments,
+  rustCarrierSatisfiesTraitRef,
 } from "../../target-model/types/index.js";
-import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustBindingProjectionCloneCarriers } from "../../policy/types/storage/binding-normalization.js";
-import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
 import { rustAwaitValueRequirements } from "../callables/await-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
+import { collectRustCallableInvocationRequirements,
+  type RustCallableInvocationRequirementContext } from "./generic-callable-invocation-requirements.js";
 
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
-import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
-import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
-import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
-import type { RustFrameCallablePlan } from "../callables/frame-values.js";
-import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
-import { rustSourceCallCallableStorageCarrier } from "../operations/target-operation.js";
-import { bindRustStructuralReceiverParameters } from "./structural-receiver-requirements.js";
 import { rustProjectViewBindings } from "../objects/view-implementations.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
-import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
-import type { RustNativeStoragePlan } from "../callables/native-storage.js";
-import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
+import { rustCallableParameterCloneSources } from "../callables/adapter-requirements.js";
+import { createRustCloneRequirementCollector } from "./generic-clone-requirements.js";
 
-interface ClassifyCallableInput {
-  readonly ownershipFlow: RustOwnershipFlow;
+interface ClassifyCallableInput extends RustCallableInvocationRequirementContext {
+  readonly readRequirements: RustReadOwnershipRequirements;
   readonly isStoredValue: (node: Node) => boolean;
   readonly readsValue: (node: Node) => boolean;
-  readonly typeDefinitions: RustTypeDefinitions;
-  readonly ast: AstReader;
-  readonly declaration: Node;
-  readonly records: RustAnalysisRecords;
   readonly names: RustNamePlan;
-  readonly sourceLifetimes: RustLifetimeIndex;
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
-  readonly projectTypes: RustProjectTypePolicy;
   readonly objectRepresentations: RustObjectRepresentationPlan;
-  readonly genericCallables: RustGenericCallablePlan;
-  readonly nativeCallables: RustNativeCallableInputPlan;
-  readonly nativeStorage: RustNativeStoragePlan;
-  readonly frameCallables: RustFrameCallablePlan;
   readonly classValues: RustClassValuePlan;
-  readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
-  readonly idByDeclaration: WeakMap<Node, string>;
-  readonly bodyIdByDeclaration: WeakMap<Node, string>;
   readonly promiseObjectFacet?: true;
   readonly nativePromiseBody: boolean;
   readonly inheritedBody?: RequirementContractState;
-  readonly implementationDeclaration: (declaration: Node) => Node;
-  readonly contractFor: (declaration: Node, body?: true) => RequirementContractState | undefined;
   readonly errorRegions: RustAnalyzedErrorRegions;
   readonly errorTypes: RustErrorTypeContext;
 }
@@ -109,7 +77,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   | { readonly kind: "rejected"; readonly reason: string; readonly promiseStorage?: true } {
   const { ast, declaration, records } = input;
   const definition = input.projectTypes.definitionForDeclaration(declaration);
-  const typeParameterNodes = (definition === undefined ? ast.typeParameters(declaration)
+  const typeParameterNodes = (definition === undefined ? ast.is.IsSourceFile(declaration) ? [] : ast.typeParameters(declaration)
     : definition.genericParameters.map(parameter => parameter.declaration)).filter(
     (candidate): candidate is Node => candidate !== undefined &&
       input.sourceLifetimes.parameterFor(candidate)?.kind !== "lifetime",
@@ -200,14 +168,17 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     if (!uses.some((use) => use.node === node &&
       rustTargetTypeRefEquals(use.carrier, carrier) &&
       stringListsEqual(use.requirements, normalized))) {
-      uses.push(Object.freeze({ node, carrier, requirements: normalized,
+      const use = Object.freeze({ node, carrier, requirements: normalized,
         ...(rustTargetTypeRefEquals(carrier, requiredCarrier) ? {} : { nativeStorageCarrier: requiredCarrier }),
-      }));
+      });
+      if (!requirementUseHasValidStorage(use)) return "A native storage requirement lost its exact physical carrier correspondence.";
+      uses.push(use);
     }
     return undefined;
   };
+  const cloneRequirements = createRustCloneRequirementCollector(input, addUse);
   for (const adapter of input.promiseObjectFacet === true ? [] : records.projectCallableAdapters.get(declaration) ?? []) {
-    for (const carrier of rustCallableRestCloneSources(adapter.parameterAdapters)) {
+    for (const carrier of rustCallableParameterCloneSources(adapter.parameterAdapters)) {
       const error = addUse(declaration, carrier, ["clone"]);
       if (error !== undefined) return { kind: "rejected", reason: error };
     }
@@ -281,7 +252,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
   }
   const visit = (node: Node): string | undefined => {
+    if (rustReadTransferRequirement(input.ownershipFlow, node) === "unavailable")
+      return "A native read transfer requires its original physical capture formation before generic requirements can be selected.";
     if (node !== declaration && (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node))) {
+      if (ast.is.IsSourceFile(declaration)) return undefined;
       const nestedId = input.idByDeclaration.get(node);
       if (nestedId !== undefined) {
         dependencies.add(nestedId);
@@ -327,6 +301,22 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       carrier = mapRustTargetTypes(carrier, normalizeFamily);
       if (!optionalStorage.collect(carrier)) return "A native optional storage projection has no exact generic owner.";
       if (!associated.collect(carrier)) return "A dependent Rust type has no exact family implementation or generic obligation.";
+      const native = rustNamedTypeCarrierValue(carrier);
+      if (native !== undefined) {
+        const arguments_ = rustTargetGenericTypeArguments(native.genericArguments);
+        for (const requirement of native.typeRequirements) {
+          const argument = arguments_[requirement.typeArgumentIndex];
+          if (argument === undefined) return "A native type requirement has no exact semantic type argument.";
+          const trait = requirement.trait;
+          if (trait.genericArguments.length === 0 && trait.associatedConstraints.length === 0 && trait.lifetimeBinder === undefined &&
+            (trait.path === "core::clone::Clone" || trait.path === "core::default::Default")) {
+            const error = addUse(node, argument, [trait.path === "core::clone::Clone" ? "clone" : "default"]);
+            if (error !== undefined) return error;
+          } else if (!rustCarrierSatisfiesTraitRef(argument, trait, undefined, input.typeDefinitions)) {
+            return "A native type argument does not provide its exact declared well-formedness trait contract.";
+          }
+        }
+      }
       const sourceType = rustSourceTypeCarrierValue(carrier);
       const definition = sourceType === undefined ? undefined : input.projectTypes.definitionForCarrier(carrier);
       if (definition !== undefined && definition.declaration !== declaration) {
@@ -389,11 +379,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const carrier = records.runtimeCarrier.get(node)?.carrier;
-    const bindingProjection = records.bindingProjection.get(node);
-    for (const copied of bindingProjection === undefined ? [] : rustBindingProjectionCloneCarriers(bindingProjection)) {
-      const error = addUse(node, copied, ["clone"]);
-      if (error !== undefined) return error;
-    }
+    const bindingError = cloneRequirements.binding(node, carrier);
+    if (bindingError !== undefined) return bindingError;
     for (const signatureCarrier of [
       records.sourceCallableReturn.get(node)?.returnCarrier,
       records.sourceParameterAbi.get(node)?.parameterCarrier,
@@ -404,7 +391,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (error !== undefined) return error;
     }
     if (carrier !== undefined && ast.is.IsIdentifier(node) &&
-      !input.ownershipFlow.movingReads.has(node) &&
+      rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer" &&
       (isRustReturnedValue(node, declaration, ast) || input.isStoredValue(node))) {
       const error = addUse(node, carrier, ["clone"]);
       if (error !== undefined) return error;
@@ -447,7 +434,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     const indexedField = records.targetOperation.get(node);
     if (indexedField?.kind === "source-field" && indexedField.valueSemantics.kind === "stored" &&
-      input.readsValue(node) && !input.ownershipFlow.movingReads.has(node) &&
+      input.readsValue(node) && rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer" &&
       !isRustBorrowedValueRead(node, ast, records)) {
       const fieldError = addUse(node, indexedField.resultCarrier, ["clone"]);
       if (fieldError !== undefined) return fieldError;
@@ -457,6 +444,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       return "A dependent field operation has no exact read/write trait obligation.";
     }
     const location = records.bindingStorage.get(node);
+    const frameBinding = input.frameCallables.bindingFor(node);
+    if (frameBinding?.storage === "location") {
+      const error = addUse(node, frameBinding.carrier, ["clone", "static"], true);
+      if (error !== undefined) return error;
+    }
     const objectView = records.objectReferenceView.get(node);
     if (objectView !== undefined) {
       const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
@@ -512,117 +504,14 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = records.targetOperation.get(node);
-    if (operation?.kind === "array-literal") {
-      for (const contribution of operation.contributions) {
-        if (contribution.kind !== "spread") continue;
-        for (const selected of contribution.input.inputs) {
-          if (selected.kind === "empty") continue;
-          const conversion = rustValueConversionContract(selected.conversion, input.typeDefinitions);
-          if (conversion?.lowering !== "rest-sequence") return "An array spread has no exact sequence conversion contract.";
-          for (const element of conversion.cloneSources) {
-            const error = addUse(node, element, ["clone"]);
-            if (error !== undefined) return error;
-          }
-        }
-      }
-    }
-    if (operation?.kind === "source-index-signature" &&
-      (operation.accessMode === "read" || operation.accessMode === "read-write")) {
-      const requirements: readonly RustGenericRequirement[] = operation.storage.kind === "record" &&
-        rustRecordReadAdmitsAbsence(operation.resultCarrier)
-        ? ["clone", "default"] : ["clone"];
-      const error = addUse(node, operation.resultCarrier, requirements);
-      if (error !== undefined) return error;
-    }
-    if (operation?.kind === "record-index-literal" && operation.contributions.some(contribution => contribution.kind === "spread")) {
-      const error = addUse(node, operation.valueCarrier, ["clone"]);
-      if (error !== undefined) return error;
-    }
-    if ((operation?.kind === "source-field" || operation?.kind === "source-union-field") &&
-      operation.accessMode !== "write") {
-      const fields = operation.kind === "source-field" ? [operation]
-        : operation.selectedVariantIndexes.map(index => operation.variants[index]?.field);
-      if (fields.some(field => field?.storage === "structural-object" && field.valueSemantics.kind === "stored")) {
-        const error = addUse(node, operation.resultCarrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-    }
-    if (operation?.kind === "nullish-assignment") {
-      const parent = ast.parent(node);
-      if (parent === undefined || ast.kindName(parent) !== KindExpressionStatement) {
-        const error = addUse(node, operation.rightCarrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-    }
-    if (operation?.kind === "iteration" && operation.iterationKind !== "for-in") {
-      const iterable = Node_Expression(ast, node);
-      const iterableCarrier = iterable === undefined ? undefined : records.runtimeCarrier.get(iterable)?.carrier;
-      if (operation.lowering.kind === "js-array" ||
-        operation.lowering.kind === "borrowed" && operation.lowering.style === "cloned" ||
-        operation.lowering.kind === "receiver-method" && rustJsArrayEntriesElementTargetType(iterableCarrier) !== undefined) {
-        const error = addUse(node, operation.elementCarrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-    }
+    const operationError = cloneRequirements.operation(node, operation);
+    if (operationError !== undefined) return operationError;
     for (const operand of records.genericNumericOperands.get(node) ?? []) {
       const error = addUse(node, operand, ["source-numeric"]);
       if (error !== undefined) return error;
     }
-    if (ast.kindName(node) === KindBinaryExpression) {
-      const parent = ast.parent(node);
-      const assignment = operation?.kind === "runtime-set" ||
-        (operation?.kind === "operator-token" || operation?.kind === "operator-call") &&
-        isRustAssignmentOperator(operation.operator);
-      if (assignment &&
-          (parent === undefined || ast.kindName(parent) !== KindExpressionStatement)) {
-        const carrier = rustValueCarrierBeforeOptionProjection(records, node);
-        if (carrier !== undefined) {
-          const error = addUse(node, carrier, ["clone"]);
-          if (error !== undefined) return error;
-        }
-      }
-    }
-    const projection = records.flowReadProjection.get(node);
-    if ((projection?.kind === "option-value" || projection?.kind === "source-union") &&
-      !input.ownershipFlow.movingReads.has(node)) {
-      const error = addUse(node, projection.selectedCarrier, ["clone"]);
-      if (error !== undefined) return error;
-    }
-    const providerOperations = operation?.kind === "provider-operation" ? [operation]
-      : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : [];
-    for (const providerOperation of providerOperations) {
-      for (const argument of providerOperation.abi.targetArguments) {
-        if (!isRustFinalizedArrayInput(argument) && !isRustFinalizedSliceInput(argument)) continue;
-        for (const element of argument.elements) {
-          if (element.conversion.kind !== "semantic") continue;
-          const conversion = rustValueConversionContract(element.conversion.conversion, input.typeDefinitions);
-          if (conversion?.lowering !== "rest-sequence") continue;
-          for (const carrier of conversion.cloneSources) {
-            const error = addUse(node, carrier, ["clone"]);
-            if (error !== undefined) return error;
-          }
-        }
-      }
-      for (const argument of providerOperation.abi.sourceArguments) {
-        if (argument.disposition !== "runtime" || argument.mode !== "value" ||
-          argument.form !== "value") continue;
-        const expression = ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)
-          ? ast.arguments(node)[argument.sourceIndex]
-          : ast.is.IsElementAccessExpression(node) && argument.role === "index" && argument.sourceIndex === 0
-            ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
-        if (expression === undefined || !ast.is.IsIdentifier(expression) ||
-          input.ownershipFlow.movingReads.has(expression)) continue;
-        const carrier = records.runtimeCarrier.get(expression)?.carrier;
-        if (carrier === undefined) return "A provider argument lost its exact source storage carrier.";
-        if (isRustCopyCarrier(carrier)) continue;
-        const error = addUse(expression, carrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-      for (const requirement of providerOperation.carrierRequirements ?? []) {
-        const error = addUse(node, requirement.carrier, [requirement.requirement]);
-        if (error !== undefined) return error;
-      }
-    }
+    const readError = cloneRequirements.read(node, operation);
+    if (readError !== undefined) return readError;
     if (ast.kindName(node) === "KindAwaitExpression") {
       const awaiting = records.awaitValue.get(node);
       if (awaiting !== undefined) {
@@ -648,9 +537,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         if (error !== undefined) return error;
       }
       for (const capture of captures?.captures ?? []) {
-        const move = capture.storage === "cell" || capture.storage === "borrow-cell" ||
-          input.ownershipFlow.captureTransfers.get(sourceValue.sourceDeclaration)?.has(capture.declaration) === true;
-        const error = addUse(capture.reference, capture.carrier, [...(move ? [] : ["clone" as const]), ...storage], true);
+        const requirement = input.ownershipFlow.captureRequirements.get(sourceValue.sourceDeclaration)?.find(value =>
+          value.capture.declaration === capture.declaration);
+        if (requirement === undefined) return "A source callable capture requires its exact physical formation requirement.";
+        const formation = rustCaptureReadFormation(requirement, input.ownershipFlow.captureTransfers);
+        const error = addUse(capture.reference, requirement.carrier,
+          [...(formation.requiresClone ? ["clone" as const] : []), ...storage], true);
         if (error !== undefined) return error;
       }
     }
@@ -675,17 +567,22 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         if (error !== undefined) return error;
       }
       for (const capture of captures.captures) {
-        const error = addUse(capture.reference, capture.carrier,
-          capture.storage === "cell" || capture.storage === "borrow-cell" ||
-            input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true
-            ? required.filter(requirement => requirement !== "clone") : required, true);
+        const requirement = input.ownershipFlow.captureRequirements.get(node)?.find(value =>
+          value.capture.declaration === capture.declaration);
+        if (requirement === undefined) return "A native closure capture requires its exact physical formation requirement.";
+        const formation = rustCaptureReadFormation(requirement, input.ownershipFlow.captureTransfers);
+        const error = addUse(capture.reference, requirement.carrier,
+          formation.requiresClone ? required : required.filter(value => value !== "clone"), true);
         if (error !== undefined) return error;
       }
     }
     if (ast.kindName(node) === "KindClassDeclaration" || ast.kindName(node) === "KindClassExpression") {
       for (const capture of records.closureCapture.get(node)?.captures ?? []) {
-        if (input.ownershipFlow.captureTransfers.get(node)?.has(capture.declaration) === true) continue;
-        const error = addUse(node, capture.carrier, ["clone"]);
+        const requirement = input.ownershipFlow.captureRequirements.get(node)?.find(value =>
+          value.capture.declaration === capture.declaration);
+        if (requirement === undefined) return "A native class capture requires its exact physical formation requirement.";
+        if (!rustCaptureReadFormation(requirement, input.ownershipFlow.captureTransfers).requiresClone) continue;
+        const error = addUse(node, requirement.carrier, ["clone"]);
         if (error !== undefined) return error;
       }
     }
@@ -701,175 +598,9 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (returnError !== undefined) return returnError;
     }
     if (operation?.kind === "source-call") {
-      for (const parameter of operation.parameters) {
-        if (parameter.mode !== "value") continue;
-        for (const argument of parameter.inputs) {
-          if (argument.sourceForm !== "value") continue;
-          const expression = ast.arguments(node)[argument.sourceArgumentIndex];
-          if (expression === undefined || !ast.is.IsIdentifier(expression) ||
-            input.ownershipFlow.movingReads.has(expression)) continue;
-          const argumentCarrier = records.runtimeCarrier.get(expression)?.carrier;
-          if (argumentCarrier === undefined || isRustCopyCarrier(argumentCarrier)) continue;
-          const error = addUse(expression, argumentCarrier, ["clone"]);
-          if (error !== undefined) return error;
-        }
-      }
-      const selected = records.selectedCall.get(node);
-      const callableCarrier = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
-      const genericCallable = rustGenericCallableValue(callableCarrier);
-      const nativeCall = input.nativeCallables.callFor(node);
-      const genericDefinition = callableCarrier === undefined || nativeCall !== undefined ? undefined : input.genericCallables.definitionFor(callableCarrier);
-      const frameEntry = callableCarrier === undefined ? undefined : input.frameCallables.entryFor(callableCarrier);
-      if (genericCallable !== undefined && genericDefinition === undefined && nativeCall === undefined) {
-        return "A quantified call has no exact sealed implementation family for its generic obligations.";
-      }
-      if (rustFrameCallableValue(callableCarrier) !== undefined && frameEntry === undefined) {
-        return "A frame call has no exact sealed implementation entry for its generic obligations.";
-      }
-      const genericInvocation = genericDefinition === undefined ? undefined : records.genericCallableInvocation.get(node);
-      const genericPhysicalDefinition = genericInvocation === undefined ? undefined
-        : input.genericCallables.physical.definitionFor(genericInvocation.carrier);
-      if (genericDefinition !== undefined && genericPhysicalDefinition === undefined) {
-        return "A quantified call has no exact physical implementation family for its generic obligations.";
-      }
-      const physical = nativeCall?.input.protocol.method ?? (frameEntry === undefined && genericDefinition === undefined && operation.target.form === "callable"
-        ? rustCallableProtocol(callableCarrier) ?? rustNativeCallableProtocol(callableCarrier) : undefined);
-      if (physical !== undefined && callableCarrier !== undefined) {
-        const error = collectType(callableCarrier);
-        if (error !== undefined) return error;
-      }
-      const callees = frameEntry?.implementations ?? (genericPhysicalDefinition === undefined
-        ? physical !== undefined || selected?.sourceDeclaration === undefined ? [] : [{ declaration: input.implementationDeclaration(selected.sourceDeclaration) }]
-        : genericPhysicalDefinition.members);
-      for (const selectedCallee of callees) {
-        const implementation = "implementation" in selectedCallee ? selectedCallee.implementation : selectedCallee;
-        const selectedDeclaration = implementation.declaration;
-        const calleeId = (operation.asyncBody === undefined ? input.idByDeclaration : input.bodyIdByDeclaration).get(selectedDeclaration);
-        if ((genericDefinition !== undefined || frameEntry !== undefined) && calleeId === undefined) {
-          return "A sealed callable implementation has no exact source generic-contract owner.";
-        }
-        const selectedClass = operation.target.form === "constructor"
-          ? input.projectTypes.definitionForCarrier(operation.target.typeCarrier)
-          : undefined;
-        const targetTypeArguments = rustTargetGenericTypeArguments(
-          operation.target.form === "constructor"
-            ? selectedClass?.declaration === selectedDeclaration
-              ? rustSourceTypeCarrierValue(operation.target.typeCarrier)?.genericArguments : []
-            : operation.targetGenericArguments,
-        );
-        if (calleeId !== undefined) {
-          dependencies.add(calleeId);
-          const callee = input.contractFor(selectedDeclaration, operation.asyncBody === undefined ? undefined : true);
-          if (callee !== undefined) {
-            if (callee.typeParameters.length !== targetTypeArguments.length) {
-              return "A selected Rust source call has inconsistent generic contract arity.";
-            }
-            for (let index = 0; index < callee.typeParameters.length; index += 1) {
-              const requirements = callee.typeParameters[index]!.requirements;
-              if (requirements.length === 0) continue;
-              const error = addUse(node, targetTypeArguments[index], requirements);
-              if (error !== undefined) return error;
-            }
-            const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
-              [parameter.identity, targetTypeArguments[index]!] as const));
-            const memberBindings = "implementation" in selectedCallee && genericPhysicalDefinition !== undefined && genericInvocation !== undefined
-              ? rustGenericCallableMemberInvocationBindings(genericPhysicalDefinition, selectedCallee, genericInvocation.carrier,
-                operation.targetGenericArguments ?? [], { ast, sourceLifetimes: input.sourceLifetimes,
-                  physical: input.genericCallables.physical }) : undefined;
-            if ("implementation" in selectedCallee && memberBindings === undefined) {
-              return "A quantified invocation lost its exact physical member capture bindings.";
-            }
-            const capturedInputs = input.nativeCallables.capturesFor(selectedDeclaration);
-            for (const parameter of [...input.nativeCallables.inputsFor(selectedDeclaration), ...capturedInputs]) {
-              if (memberBindings !== undefined && capturedInputs.includes(parameter)) {
-                const payload = memberBindings.types.get(parameter.implementation.identity);
-                if (payload === undefined) return "A quantified invocation lost a required physical native capture binding.";
-                substitutions.set(parameter.implementation.identity, payload);
-                continue;
-              }
-              const physical = input.nativeStorage.invocationInputFor(parameter, node, declaration);
-              const payload = physical.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(parameter.carrier,
-                physical.carrier, rustOptionElementCarrier(parameter.carrier) ?? parameter.carrier, input.typeDefinitions);
-              if (payload === undefined) return "A source call lost the exact physical native input required by its callee contract.";
-              substitutions.set(parameter.implementation.identity, payload);
-            }
-            if (frameEntry !== undefined && "carrier" in implementation && callableCarrier !== undefined) {
-              const bindings = bindRustExactTypeParameters(implementation.carrier, callableCarrier,
-                new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
-              if (bindings === undefined) return "A frame invocation lost its exact captured generic environment binding.";
-              for (const [identity, carrier] of bindings) substitutions.set(identity, carrier);
-            }
-            if (genericCallable !== undefined && genericDefinition !== undefined && "substitutions" in implementation) {
-              for (const [identity, parameter] of implementation.substitutions) {
-                const index = parameter.kind === "type-parameter"
-                  ? genericDefinition.signature.environmentParameters.findIndex(candidate => candidate.identity === parameter.identity) : -1;
-                const argument = genericCallable.environment[index];
-                if (index < 0 || argument === undefined) return "A quantified invocation lost its exact captured generic environment binding.";
-                substitutions.set(identity, argument);
-              }
-            }
-            const frame = rustFrameCallableValue(callableCarrier);
-            const receiver = operation.target.form === "constructor" ? operation.target.typeCarrier
-              : selected?.sourceSelectedOwnerCarrier ?? selected?.sourceSelectedReceiverCarrier ??
-                (frame?.owner.kind === "class" ? frame.owner.instance : undefined);
-            const receiverDeclaration = ast.parent(selectedDeclaration);
-            if (operation.target.form === "structural-method" && callee.capturedTypeParameters.length !== 0 &&
-              receiverDeclaration !== undefined && ast.is.IsObjectLiteralExpression(receiverDeclaration)) {
-              const template = records.runtimeCarrier.get(receiverDeclaration)?.carrier;
-              const bindings = template === undefined || receiver === undefined ? undefined
-                : bindRustStructuralReceiverParameters(template, receiver,
-                  new Set(callee.capturedTypeParameters.map(parameter => parameter.identity)));
-              if (bindings === undefined) return "A structural call lost its exact captured receiver type bindings.";
-              for (const [identity, carrier] of bindings) {
-                const existing = substitutions.get(identity);
-                if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
-                  return "A structural call has conflicting captured receiver type bindings.";
-                }
-                substitutions.set(identity, carrier);
-              }
-            }
-            const instantiate = (carrier: TargetTypeRef): TargetTypeRef | undefined => {
-              const instantiated = substituteRustTargetTypeParameters(carrier, substitutions);
-              return receiver === undefined || input.projectTypes.definitionContainingDeclaration(selectedDeclaration) === undefined
-                ? instantiated : input.projectTypes.instantiateMemberCarrier(selectedDeclaration, receiver, instantiated);
-            };
-            for (const parameter of callee.nativeInputs) {
-              if (parameter.requirements.length === 0) continue;
-              const carrier = instantiate({ kind: "type-parameter", identity: parameter.identity, name: parameter.name });
-              const error = addUse(node, carrier, parameter.requirements);
-              if (error !== undefined) return error;
-            }
-            for (const parameter of callee.capturedTypeParameters) {
-              if (parameter.requirements.length === 0) continue;
-              const carrier = instantiate({ kind: "type-parameter", identity: parameter.identity, name: parameter.name });
-              const error = addUse(node, carrier, parameter.requirements);
-              if (error !== undefined) return error;
-            }
-            for (const requirement of callee.optionalStorage) {
-              const error = addUse(node, instantiate(requirement.carrier), requirement.requirements);
-              if (error !== undefined) return error;
-            }
-            for (const requirement of callee.projectProjections) {
-              const sourceCarrier = instantiate(requirement.sourceCarrier);
-              const targetCarrier = instantiate(requirement.targetCarrier);
-              if (sourceCarrier === undefined || targetCarrier === undefined || !projections.require({ sourceCarrier, targetCarrier })) {
-                return "A generic call does not satisfy its exact native projection contract.";
-              }
-            }
-            for (const requirement of callee.associatedTypes) {
-              const carrier = instantiate(requirement.carrier);
-              if (carrier === undefined) return "A generic call lost its exact enclosing member carrier substitution.";
-              const collected = collectType(carrier);
-              if (collected !== undefined) return collected;
-              if (requirement.fieldAccess !== undefined && (carrier.kind !== "associated-type" ||
-                !associated.requireField(carrier, requirement.fieldAccess, requirement.output === undefined ? undefined :
-                  instantiate(requirement.output)))) return "A generic call does not satisfy its selected field access contract.";
-              const error = addUse(node, carrier, requirement.requirements);
-              if (error !== undefined) return error;
-            }
-          }
-        }
-      }
+      const error = collectRustCallableInvocationRequirements(input, node, operation,
+        { dependencies, projections, associated, addUse, collectType });
+      if (error !== undefined) return error;
     }
     let childError: string | undefined;
     ast.forEachChild(node, (child) => {

@@ -10,7 +10,7 @@ import {
 import { projectAccessorCallableShape, projectDowncastReturnType } from "./forwarders.js";
 import { rustCallableSpecialization } from "../../declarations/callables/generics.js";
 import { rustProjectDispatchTraitName, rustProjectDispatchTraitType, rustProjectRepresentationGenerics } from "./names.js";
-import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../../../../target-model/types/field-storage.js";
 import { rustProjectCloneImplementation } from "../project-wrapper-traits.js";
 import type { RustItem, RustTraitFunction, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
@@ -46,7 +46,8 @@ export function projectIdentityImplementations(
 ): readonly RustItem[] {
   const generics = rustProjectRepresentationGenerics(representation, context);
   return [
-    rustProjectCloneImplementation(wrapperType, generics, [rustProjectObjectIdentityField, rustProjectObjectDispatchField]),
+    rustProjectCloneImplementation(wrapperType, generics, [rustProjectObjectIdentityField, rustProjectObjectDispatchField]
+      .map(name => ({ name, copy: false }))),
     ...planRustProjectProjectionImplementations(definition, context),
     {
       kind: "impl",

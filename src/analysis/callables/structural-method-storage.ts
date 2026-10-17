@@ -32,7 +32,7 @@ import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/err
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-environments.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
-import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier-requirements.js";
+import { rustFinalContractSupportsRequirements } from "../declarations/generic-carrier-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustSourceObjectField, RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
@@ -600,7 +600,7 @@ export function createRustStructuralMethodStorage(input: {
             message: "Structural method retention requires its actual admitted physical error-boundary carriers." });
           continue;
         }
-        const selected = rustFinalContractSupportsStatic(contract, normalized.carrier, families, input.typeDefinitions,
+        const selected = rustFinalContractSupportsRequirements(contract, normalized.carrier, ["static"], families, input.typeDefinitions,
           { lifetimeContract: input.lifetimes.contractFor(owner), genericCallables: input.genericCallables,
             frameCallables: frames, classValues, objectRepresentations: input.objectRepresentations,
             structuralShapes, projectTypes: input.projectTypes, records });

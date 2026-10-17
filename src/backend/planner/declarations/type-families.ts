@@ -4,7 +4,7 @@ import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 import { rustProjectGenerics } from "../objects/polymorphism/names.js";
 import { rustAuthoredDeadCodeDisposition } from "../program/reachability-directives.js";
 import { rustGenericRequirementBounds } from "../types/generic-bounds.js";
@@ -50,10 +50,12 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
     if (contract === undefined) return failRustPlannerInvariant(
       "An admitted type-family implementation lost its selected native generic contract.");
     context = rustGeneratedTypeParameterContext(contract.typeParameters, [], context);
-    const owner = rustTypeFromCarrierInContext(implementation.owner, context);
-    const trait = rustTypeFromCarrierInContext({ ...implementation.family.trait,
-      genericArguments: implementation.arguments }, context);
-    const output = rustTypeFromCarrierInContext(implementation.output, context);
+    const selected = admitted.nativeTypes;
+    if (selected === null) return failRustPlannerInvariant(
+      "An admitted conditional implementation lost its selected native types.", implementation.family.declaration);
+    const owner = rustTypeFromSelectedNativeCarrierInContext(selected.owner, context);
+    const trait = rustTypeFromSelectedNativeCarrierInContext(selected.trait, context);
+    const output = rustTypeFromSelectedNativeCarrierInContext(selected.output, context);
     const definition = admitted.projectDefinition;
     const compoundGenerics: RustGenerics = {
         parameters: contract.typeParameters.map(parameter => ({ kind: "type", name: context.typeParameterNames?.get(parameter.identity) ?? parameter.name,
@@ -61,11 +63,6 @@ export function planRustTypeFamilyImplementations(context: RustPlanContext): rea
         wherePredicates: rustAssociatedPredicates(contract.associatedTypes, context),
       };
     const generics = definition === undefined ? compoundGenerics : rustProjectGenerics(definition, context);
-    if (owner === undefined || trait === undefined || output === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, implementation.family.declaration),
-        "rust.backend.type-family-implementation", "A checked type family implementation has no exact native declaration contract."));
-      continue;
-    }
     items.push({ kind: "impl", trait, target: owner, generics,
       members: [{ kind: "type", name: "Output", generics: emptyRustGenerics, type: output }] });
   }

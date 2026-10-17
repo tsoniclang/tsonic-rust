@@ -478,6 +478,7 @@ export interface RustProviderOperationTemplate<
   readonly operationKind: OperationKind;
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
+  readonly resultLoans?: import("./result-loans.js").RustNativeResultLoanContract;
   readonly dispatchInputs?: readonly import("./dispatch-contexts.js").RustDispatchContextInput[];
   readonly nativeErrorCarriers?: readonly TargetTypeRef[];
   readonly sourceResultCarrier?: TargetTypeRef;

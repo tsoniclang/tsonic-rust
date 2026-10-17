@@ -22,6 +22,17 @@ function fixture(substitutions = new Map()) {
   };
   context.input.program.source = { ast: { forEachChild() {} } };
   context.input.program.records = createRustRecordFixture();
+  context.input.program.declarationGenericRequirements = { contractFor: owner => {
+    if (owner !== declaration) return undefined;
+    const native = context.input.program.callableValues.native;
+    const future = context.input.program.callableValues.nativeStorage.futureEnvironmentFor(owner);
+    const inputs = [...native.inputsFor(owner), ...native.capturesFor(owner), ...future.inputs, ...future.captures];
+    return Object.freeze({ declaration, typeParameters: [], capturedTypeParameters: [], associatedTypes: [],
+      projectProjections: [], optionalStorage: [], nativeInputs: Object.freeze([...new Map(inputs.map(input =>
+        [input.implementation.identity, Object.freeze({ identity: input.implementation.identity,
+          name: input.implementation.name, requirements: Object.freeze([]) })])).values()]) });
+  } };
+  context.input.program.retainedCallableInputs = { forInput: () => [] };
   context.typeParameterSubstitutions = substitutions;
   const source = { context, sourceTypeParameterIdentities: [], preservesExplicitLifetimes: false,
     finalizeGenerics: () => ({ parameters: [], wherePredicates: [] }) };

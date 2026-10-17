@@ -2,7 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import {
   BinaryExpression_Left, BinaryExpression_Right, ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement, Node_Expression, Node_Name, Node_Operand,
-  VariableDeclarationList_Declarations, type SourceProgramNavigation,
+  VariableDeclarationList_Declarations, sourceEnclosingCallable, type SourceProgramNavigation,
 } from "@tsonic/target-api/source";
 
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
@@ -11,6 +11,7 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustBorrowedStringAppend, rustBorrowPureOperation } from "./borrowed-element-purity.js";
 import { rustBorrowedStringInputs } from "../storage/provider-borrows.js";
+import type { RustBorrowUseAnalysis } from "../ownership/effects.js";
 
 export interface RustBorrowedIterationBinding {
   readonly declaration: Node;
@@ -19,7 +20,9 @@ export interface RustBorrowedIterationBinding {
 
 export function selectRustBorrowedIterationBinding(
   node: Node, ast: AstReader, records: RustProgramRecords, navigation: SourceProgramNavigation,
+  uses: Pick<RustBorrowUseAnalysis, "useSummaryFor">, isNativeNode: (node: Node) => boolean,
 ): RustBorrowedIterationBinding | undefined {
+  if (!isNativeNode(node)) return undefined;
   const iteration = records.targetOperation.get(node);
   const iterable = Node_Expression(ast, node);
   const carrier = iterable === undefined ? undefined : rustEffectiveValueCarrier(records, iterable);
@@ -35,12 +38,12 @@ export function selectRustBorrowedIterationBinding(
     !isRustStringCarrier(carrier.referent.element) || declaration === undefined || name === undefined ||
     !ast.is.IsIdentifier(name) || body === undefined ||
     ast.variableDeclarationKind(declaration) === "using" || ast.variableDeclarationKind(declaration) === "await using") return undefined;
-  const summary = navigation.declarationUseSummary(declaration);
-  if (summary.captured || summary.exported || summary.bindingWritten || summary.memberWritten) return undefined;
-  const uses = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
-  if (uses.length === 0 || !uses.every(use => isWithin(use.reference, body, ast) && readonlyUse(use.reference)) ||
+  const summary = uses.useSummaryFor(declaration);
+  if (summary === undefined || summary.captured || summary.exported || summary.bindingWritten || summary.memberWritten) return undefined;
+  const references = summary.uses.filter(use => use.kind !== "source-linkage" && use.kind !== "type-only");
+  if (references.length === 0 || !references.every(use => isWithin(use.reference, body, ast) && readonlyUse(use.reference)) ||
     !safeStatement(body)) return undefined;
-  return Object.freeze({ declaration, references: Object.freeze(uses.map(use => use.reference)) });
+  return Object.freeze({ declaration, references: Object.freeze(references.map(use => use.reference)) });
 
   function readonlyUse(reference: Node): boolean {
     let current = reference;
@@ -65,11 +68,12 @@ export function selectRustBorrowedIterationBinding(
 
   function pureExpression(expression: Node | undefined): boolean {
     if (expression === undefined) return false;
+    if (!isNativeNode(expression)) return true;
     if (["KindNumericLiteral", "KindStringLiteral", "KindNoSubstitutionTemplateLiteral", "KindTrueKeyword",
       "KindFalseKeyword", "KindNullKeyword"].includes(ast.kindName(expression))) return true;
     if (ast.is.IsIdentifier(expression)) {
       const binding = navigation.sourceReferenceFor(expression)?.declaration;
-      return binding !== undefined && enclosingCallable(binding, ast) === enclosingCallable(node, ast);
+      return binding !== undefined && sourceEnclosingCallable(binding, ast) === sourceEnclosingCallable(node, ast);
     }
     if (transparent(expression)) return pureExpression(Node_Expression(ast, expression));
     const operation = records.targetOperation.get(expression);
@@ -88,6 +92,7 @@ export function selectRustBorrowedIterationBinding(
   }
 
   function safeStatement(statement: Node): boolean {
+    if (!isNativeNode(statement)) return true;
     switch (ast.kindName(statement)) {
       case "KindBlock": return ast.statements(statement).every(child => child !== undefined && safeStatement(child));
       case "KindExpressionStatement": {
@@ -109,11 +114,12 @@ export function selectRustBorrowedIterationBinding(
 
 export function analyzeRustBorrowedIterationBindings(
   ast: AstReader, nativeNodes: readonly Node[], records: RustProgramRecords, navigation: SourceProgramNavigation,
+  uses: Pick<RustBorrowUseAnalysis, "useSummaryFor">, isNativeNode: (node: Node) => boolean,
 ): (node: Node) => RustBorrowedIterationBinding | undefined {
   const bindings = new WeakMap<Node, RustBorrowedIterationBinding>();
   const visit = (node: Node): void => {
     if (ast.is.IsForOfStatement(node)) {
-      const selected = selectRustBorrowedIterationBinding(node, ast, records, navigation);
+      const selected = selectRustBorrowedIterationBinding(node, ast, records, navigation, uses, isNativeNode);
       if (selected !== undefined) bindings.set(node, selected);
     }
   };
@@ -126,12 +132,4 @@ function isWithin(node: Node, ancestor: Node, ast: AstReader): boolean {
     if (current === ancestor) return true;
   }
   return false;
-}
-
-function enclosingCallable(node: Node, ast: AstReader): Node | undefined {
-  for (let current = ast.parent(node); current !== undefined; current = ast.parent(current)) {
-    if (["KindFunctionDeclaration", "KindFunctionExpression", "KindArrowFunction", "KindMethodDeclaration",
-      "KindConstructor", "KindGetAccessor", "KindSetAccessor"].includes(ast.kindName(current))) return current;
-  }
-  return undefined;
 }

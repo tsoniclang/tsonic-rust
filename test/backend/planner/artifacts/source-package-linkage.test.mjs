@@ -14,10 +14,10 @@ import {
 } from "../../../../dist/backend/planner/program/source-package-crates.js";
 import { printCargoManifest } from "../../../../dist/print/project/manifest.js";
 import {
-  planRustSourcePackageErrors,
   resolveRustProgramErrorRoute,
   resolveRustSourcePackageErrorBoundary,
 } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { analyzeRustSourcePackageErrors } from "../../../../dist/analysis/program/error-transport.js";
 import {
   artifactText,
   compileRust,
@@ -63,6 +63,7 @@ test("source-package components are dependency ordered and ignore inactive packa
   const result = planRustSourcePackageComponents(planningContext({
     sourcePackageComponents: sourcePackageClassifications("root", [{
       componentId: "dependency",
+      crateName: "dependency_crate",
       sourceFileNames: ["/dep/index.ts"],
       dependencyComponentIds: [],
       publishesImplementationAbi: true,
@@ -146,7 +147,7 @@ test("library roots retain exact facade linkage and component cycles fail closed
   const cycle = analyzeRustSourcePackageComponents({ ...cycleContext,
     sourcePackageComponentIdentities: selectRustSourcePackageComponentIdentities(cycleContext.sourcePackages,
       cycleContext.ast, cycleContext.sourceFiles),
-  }, "bin", subject => cycleContext.records.errorEffects.get(subject));
+  }, "bin", subject => cycleContext.records.errorEffects.get(subject), new Map());
   assert.equal(cycle.kind, "rejected");
   assert.deepEqual(cycle.diagnostics.map((diagnostic) => diagnostic.code), [
     "RUST_SOURCE_PACKAGE_COMPONENT_GRAPH_CYCLE",
@@ -543,7 +544,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
     errorDomain: "project",
     errorOwnerComponentId: "dependency",
   }];
-  const result = planRustSourcePackageErrors(planningContext({
+  const result = analyzeRustSourcePackageErrors(planningContext({
     sourcePackageComponents: sourcePackageClassifications("root", components.map(component => ({
       ...component, sourceFileNames: [...component.sourceFileNames],
       closedErrorDemand: { thrownCarriers: [], retained: false, sourceView: false },
@@ -553,7 +554,7 @@ test("cross-package error planning preserves each component-owned Result ABI", (
       programErrorVariant: (definition) =>
         definition === engineError ? "EngineFailure" : undefined,
     },
-  }), components);
+  }).program, components);
 
   assertNoTargetDiagnostics(result.diagnostics);
   assert.notEqual(result.plan, undefined);
@@ -595,12 +596,12 @@ test("source-package error planning rejects unowned project errors", () => {
     sourceName: "MissingFailure",
     declaration: {},
   };
-  const result = planRustSourcePackageErrors(planningContext({
+  const result = analyzeRustSourcePackageErrors(planningContext({
     projectTypes: {
       programErrorDefinitions: [missingError],
       programErrorVariant: () => "MissingFailure",
     },
-  }), [{
+  }).program, [{
     componentId: "root",
     sourceFileNames: new Set(["/root/index.ts"]),
     dependencyComponentIds: [],
@@ -653,6 +654,10 @@ function planningContext({
       configuration: { outputType },
       projectTypes,
       sourcePackageComponents,
+      errorTransport: {
+        dependencyComponentIdsFor: componentId => sourcePackageComponents.forComponent(componentId)?.dependencyComponentIds,
+      },
+      errorStorageDemands: { retainedBoundaries: [], nativeConstructors: [], storageFor: () => ({ kind: "readonly" }) },
       sourceModuleConstructions: emptySourceModuleConstructions(),
     },
   };
@@ -669,7 +674,11 @@ function emptySourceModuleConstructions() {
 }
 
 function sourcePackageClassifications(rootComponentId, components) {
-  const frozen = Object.freeze(components.map((entry) => Object.freeze({ ...entry })));
+  const frozen = Object.freeze(components.map((entry) => Object.freeze({
+    programModuleName: "program", structuralShapesModuleName: "shapes",
+    initializerFacadeModuleName: "initializers", crateInitializerFunctionBase: "initialize",
+    ...entry,
+  })));
   const byId = new Map(frozen.map((entry) => [entry.componentId, entry]));
   const byFile = new Map(frozen.flatMap((entry) =>
     entry.sourceFileNames.map((fileName) => [fileName, entry])));

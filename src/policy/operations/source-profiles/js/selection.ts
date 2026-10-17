@@ -16,7 +16,7 @@ import {
   getRustJsSetElementTargetType,
   getRustJsWeakMapTargetTypes,
   getRustJsWeakSetElementTargetType,
-  rustCarrierSupportsClone,
+  selectRustCloneRequirements,
   rustCarrierSupportsJsEquality,
   rustCarrierSupportsObjectIdentity,
   isRustBoolCarrier,
@@ -515,7 +515,7 @@ function selectJsSurfaceOperationForDemand(
       operationId,
       ...((row.requirements ?? []).some(requirement => requirement.capability === "numeric-parameter" ||
         requirement.capability === "number-parameter" ||
-        demand === "operation" && requirement.capability === "clone" && !rustCarrierSupportsClone(resolveCarrierRef(requirement.carrier, bindings), definitions))
+        demand === "operation" && requirement.capability === "clone")
         ? { carrierRequirements: Object.freeze((row.requirements ?? [])
             .filter(requirement => demand === "operation" && requirement.capability === "clone" || requirement.capability === "numeric-parameter" ||
               requirement.capability === "number-parameter")
@@ -592,8 +592,8 @@ function carrierRequirementsMatch(
           request.numericParameterArgument?.(requirement.carrier.index, carrier,
             requirement.capability === "number-parameter" ? "number" : "numeric") === true;
       case "clone":
-        return demand === "storage" || rustCarrierSupportsClone(carrier, definitions) ||
-          (carrier !== undefined && request.canRequireClone?.(carrier) === true);
+        return demand === "storage" || carrier !== undefined &&
+          (request.cloneRequirements?.(carrier) ?? selectRustCloneRequirements(carrier, definitions)).kind !== "unavailable";
       case "stringifiable":
         return isRustSourceStringConvertibleCarrier(carrier);
       case "optional-number":

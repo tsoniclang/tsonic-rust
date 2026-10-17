@@ -16,7 +16,7 @@ import { rustNativeCompletionFutureType } from "../../../../dist/target-model/ty
 import { rustTypeGenericArguments } from "../../../../dist/target-model/types/generic-arguments.js";
 import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 
-const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
+const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", [], [], undefined, [], undefined, []);
 
 function producerCarrierRecords(carrier) {
   return (records, producer) => ({ ...records,
@@ -232,9 +232,9 @@ test("closure constructors infer anonymous native payloads without changing thei
   const fixture = nativeClosureProducerFixture();
   const integer = rustSourcePrimitiveTargetType("int32");
   const future = rustNativeCompletionFutureType({ identity: "fixture:future", output: integer, error: failure, captures: [] });
-  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future, failure]));
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future, failure]), [], undefined, [], undefined, []);
   const callable = rustNamedTargetType("rust.runtime.Callable", "rt::Callable",
-    rustTypeGenericArguments([{ kind: "tuple", elements: [integer] }, result]));
+    rustTypeGenericArguments([{ kind: "tuple", elements: [integer] }, result]), [], undefined, [], undefined, []);
   const owner = rustCallableConstructionType(callable, fixture.context);
   assert.equal(owner !== undefined, true);
   assert.equal(printRustType(owner), "rt::Callable<(i32,), _>");

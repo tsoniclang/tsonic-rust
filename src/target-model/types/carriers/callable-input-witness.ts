@@ -25,7 +25,7 @@ export function rustCallableInputAbsenceWitness(carrier: TargetTypeRef): TargetT
     return { ...selected, referent: rustCallableSignatureAbsenceWitness(signature.parameters,
       rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult", [
         { kind: "type", type: signature.result },
-      ]), signature.binder) };
+      ], [], undefined, [], undefined, []), signature.binder) };
   });
   return valid ? witness : undefined;
 }

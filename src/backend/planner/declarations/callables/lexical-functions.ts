@@ -1,8 +1,6 @@
 import { requireRustCaptureOwnership } from "../../expressions/typed-locations.js";
 import type { Node } from "@tsonic/tsts";
 
-import { rustRetainedCallableStorage } from "../../../../analysis/callables/results.js";
-import type { RustLexicalFunctionCapture, RustLexicalFunctionSelection } from "../../../../analysis/callables/lexical-functions.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustType } from "../../../target-ast/syntax/nodes.js";
 import { rustInlineBindingStorageType } from "../../expressions/binding-storage.js";
@@ -12,7 +10,6 @@ import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { rustCarrierHasCopyContract } from "../../types/generic-requirements.js";
 
 export function planRustLexicalFunctionEnvironment(declaration: Node, context: RustPlanContext) {
   const selection = context.input.program.lexicalFunctions.forDeclaration(declaration);
@@ -37,9 +34,10 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
       ? { kind: "named", path: "rt::Location", genericArguments: [{ kind: "type", type: valueType }] }
       : storage === undefined ? valueType : rustInlineBindingStorageType(storage.storage, valueType);
     const name = allocateRustSyntheticName(context.syntheticNames, "capture");
-    const owned = lexicalCaptureIsOwned(declaration, selection, capture, carrier, storage === undefined, context);
+    const read = requireRustCaptureOwnership(declaration, capture.declaration, context).read;
+    const owned = read.kind !== "borrow";
     const borrowedCarrier: TargetTypeRef | undefined = owned || storage !== undefined ? undefined : {
-      kind: "reference", referent: physicalCarrier!, mutable: capture.mutable,
+      kind: "reference", referent: physicalCarrier!, mutable: read.kind === "borrow" && read.mutable,
     };
     const parameterType = borrowedCarrier === undefined ? owned ? physicalType : {
       kind: "reference" as const, referent: physicalType, mutable: false,
@@ -49,7 +47,7 @@ export function planRustLexicalFunctionEnvironment(declaration: Node, context: R
     capturedBindings.push({ declaration: capture.declaration, expression: { kind: "path", path: name },
       storage: storage?.storage ?? "value", valueCarrier: carrier,
       ...(borrowedCarrier === undefined ? {} : { borrowedCarrier }),
-      ...(owned ? {} : { borrowed: storage === undefined && capture.mutable ? "mutable" as const : "shared" as const }) });
+      ...(owned ? {} : { borrowed: read.kind === "borrow" && read.mutable ? "mutable" as const : "shared" as const }) });
     if (storage?.storage === "location") context.usedAliases?.add("rt");
   }
   return { parameters, context: { ...context, capturedBindings } };
@@ -63,11 +61,9 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
   for (const capture of selection.captures) {
     const captured = [...(context.capturedBindings ?? [])].reverse().find(value => value.declaration === capture.declaration);
     const storage = context.input.program.records.bindingStorage.get(capture.declaration);
-    const mutable = storage === undefined && capture.mutable;
-    const carrier = context.input.program.records.runtimeCarrier.get(capture.declaration)?.carrier ??
-      context.input.program.records.runtimeCarrier.get(capture.reference)?.carrier;
-    if (carrier === undefined) return undefined;
-    const owned = lexicalCaptureIsOwned(declaration, selection, capture, carrier, storage === undefined, context);
+    const read = requireRustCaptureOwnership(declaration, capture.declaration, context).read;
+    const mutable = read.kind === "borrow" && read.mutable;
+    const owned = read.kind !== "borrow";
     if (owned) {
       const name = context.input.program.names.nameForDeclaration(capture.declaration);
       if (name === undefined) return undefined;
@@ -93,23 +89,10 @@ export function planRustLexicalFunctionArguments(declaration: Node, context: Rus
       arguments_.push({ kind: "reference", expr: raw });
       continue;
     }
-    const value = planExpressionBeforeValueProjections(capture.reference, context, "value");
+    const value = planExpressionBeforeValueProjections(capture.reference, context, "value", "shared-place");
     if (value === undefined) return undefined;
     arguments_.push({ kind: "reference", expr: value,
       ...(mutable ? { mutable: true } : {}) });
   }
   return arguments_;
-}
-
-function lexicalCaptureIsOwned(
-  declaration: Node,
-  selection: Extract<RustLexicalFunctionSelection, { readonly kind: "resolved" }>,
-  capture: RustLexicalFunctionCapture,
-  carrier: TargetTypeRef,
-  plainStorage: boolean,
-  context: RustPlanContext,
-): boolean {
-  return rustRetainedCallableStorage(context.input.program.records, declaration) !== undefined ||
-    plainStorage && !capture.mutable && (rustCarrierHasCopyContract(carrier, context) ||
-      !selection.valueObserved && (requireRustCaptureOwnership(declaration, capture.declaration, context).read.kind !== "clone"));
 }

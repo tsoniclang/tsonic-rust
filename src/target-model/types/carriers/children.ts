@@ -71,7 +71,8 @@ function targetTypeChildren(type: TargetTypeRef): readonly TargetTypeRef[] {
       if (union !== undefined) return [...arguments_(union.genericArguments),
         ...(union.payloads.kind === "physical" ? union.payloads.types : [])];
       const named = rustNamedTypeCarrierValue(type);
-      if (named !== undefined) return [...arguments_(named.genericArguments), ...arguments_(named.genericDefaults), ...named.upcasts.map(upcast => upcast.target)];
+      if (named !== undefined) return [...arguments_(named.genericArguments), ...arguments_(named.genericDefaults),
+        ...named.typeRequirements.map(requirement => requirement.trait), ...named.upcasts.map(upcast => upcast.target)];
       const fixed = rustFixedArrayCarrierValue(type);
       return fixed === undefined ? [] : [fixed.element];
     }

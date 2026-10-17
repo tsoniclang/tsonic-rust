@@ -44,9 +44,8 @@ import {
   isRustJsValueCarrier,
   rustAbsenceTargetType,
   rustTargetGenericReferences,
-  rustCarrierSupportsClone,
-  rustCarrierCanEnterTsValue,
-  rustTsValueAdmission,
+  rustCarrierHasClosedValueIdentity,
+  rustTsValueProjection,
   rustCarrierSupportsTrait,
   rustJsClosedValueCarrierTraitPath,
   rustTsValueTargetType,
@@ -268,7 +267,7 @@ export function rustValueConversionContract(
       return { category: "projection", lowering: "call", path: "rt::TsValue::from_error",
         sourceMode: "value", source: value.source, target: tsValueCarrier, fallible: false };
     }
-    const admission = rustTsValueAdmission(value.source, definitions);
+    const admission = rustTsValueProjection(value.source);
     return admission === undefined
       ? undefined
       : {
@@ -293,16 +292,15 @@ export function rustValueConversionContract(
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
     }
     if (rustTargetTypeRefEquals(value.source, rustEmptyObjectTargetType()) || rustJsRecordValueAdmission(value.source) ||
-      rustJsSharedObjectValueAdmission(value.source, definitions)) {
+      rustJsSharedObjectValueAdmission(value.source)) {
       return { category: "projection", lowering: "call", path: "js_abi::JsValue::from",
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
     }
-    if (rustTsValueAdmission(value.source, definitions)?.kind === "project-object") {
+    if (rustTsValueProjection(value.source)?.kind === "project-object") {
       return { category: "projection", lowering: "project-closed-value", ownerPath: "js_abi::JsValue",
         sourceMode: "value", source: value.source, target: jsValueCarrier, fallible: false };
     }
-    return !rustCarrierSupportsClone(value.source, definitions) ||
-        !rustCarrierSupportsTrait(value.source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)
+    return !rustCarrierSupportsTrait(value.source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)
       ? undefined
       : {
           category: "projection",
@@ -335,7 +333,7 @@ export function rustValueConversionContract(
   }
   if (value.kind === "js-array-backing") {
     return !isRustTargetTypeRef(value.element) || !hasExactObjectKeys(value, ["kind", "source", "element"]) ||
-      !rustCarrierCanEnterTsValue(value.element, definitions) ||
+      !rustCarrierHasClosedValueIdentity(value.element) ||
       (!rustTargetTypeRefEquals(value.source, jsValueCarrier) && !isRustJsArrayValueCarrier(value.source))
       ? undefined : { category: "projection", lowering: "js-array-backing", sourceMode: "ref",
         source: value.source, target: rustJsArrayTargetType(value.element), fallible: true,
@@ -345,7 +343,7 @@ export function rustValueConversionContract(
   if (value.kind === "js-value-from-array") {
     const elementConversion = rustValueConversionContract(value.elementConversion, definitions);
     return !hasExactObjectKeys(value, ["kind", "source", "element", "elementConversion"]) ||
-        !isRustJsArrayCarrier(value.source) || !rustCarrierCanEnterTsValue(value.element, definitions) ||
+        !isRustJsArrayCarrier(value.source) || !rustCarrierHasClosedValueIdentity(value.element) ||
         !rustTargetTypeRefEquals(
           rustJsArrayLikeElementTargetType(value.source),
           value.element,

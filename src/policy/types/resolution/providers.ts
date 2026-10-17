@@ -42,6 +42,7 @@ import {
   rustRegExpStringIteratorTargetType,
   rustStringTargetType,
   rustVecTargetType,
+  rustNamedTypeCarrierValue,
   substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
 import { denseDefined } from "./project.js";
@@ -239,22 +240,18 @@ export function instantiateProviderTargetType(
       constSubstitutions.set(parameter.targetIdentity, selected.value);
     }
   }
-  if (!rustProviderGenericRequirementsAreSatisfied(
-    relation.typeRequirements,
-    {
-      types: typeSubstitutions,
-      lifetimes: lifetimeSubstitutions,
-      consts: constSubstitutions,
-    }, definitions,
-  )) {
-    return undefined;
-  }
-  return substituteRustTargetGenerics(
+  const selected = substituteRustTargetGenerics(
     relation.targetCarrier,
     typeSubstitutions,
     lifetimeSubstitutions,
     constSubstitutions,
   );
+  if (rustNamedTypeCarrierValue(relation.targetCarrier) !== undefined) {
+    return rustNamedTypeCarrierValue(selected) === undefined ? undefined : selected;
+  }
+  return rustProviderGenericRequirementsAreSatisfied(relation.typeRequirements,
+    { types: typeSubstitutions, lifetimes: lifetimeSubstitutions, consts: constSubstitutions }, definitions)
+    ? selected : undefined;
 }
 
 function substituteGenericArgument(

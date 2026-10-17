@@ -16,10 +16,8 @@ import {
   planRustCrateInitializer,
   planRustModuleInitializers,
 } from "./module-initialization.js";
-import {
-  resolveRustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorPlan,
-} from "./source-package-errors.js";
+import { resolveRustSourcePackageErrorBoundary } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 
 export interface RustWorkerEntryPlan {
   readonly sourceFile: SourceFile;

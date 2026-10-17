@@ -11,7 +11,7 @@ import { rustTargetGenericReferences } from "../../dist/target-model/types/carri
 import { substituteRustTargetTypeParameters, mapRustTargetTypes } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
 import { instantiateRustSourceUnionPayloads, rustSourceUnionPayloadArguments } from "../../dist/target-model/types/source-union-definitions.js";
-import { rustCarrierSupportsClone } from "../../dist/target-model/types/carriers/traits.js";
+import { selectRustCloneRequirements } from "../../dist/target-model/types/carriers/traits.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../dist/target-model/types/await.js";
 import { planRustSourceUnionPayloadTemplate } from "../../dist/backend/planner/types/source-union-payloads.js";
 import { rustTypeFromCarrier } from "../../dist/backend/planner/types/render.js";
@@ -26,8 +26,8 @@ const alias = (name = "MixedCompletion", arguments_ = []) => rustSourceUnionTarg
 const definition = (carrier, types) => ({ carrier, variants: types.map((type, index) => ({ name: `Variant${index}`, carrier: type })) });
 const equals = (actual, expected, label) => assert.equal(rustTargetTypeRefEquals(actual, expected), true, label);
 const ready = error => rustNamedTargetType("native.Ready", "core::future::Ready", [argument(
-  rustNamedTargetType("native.Result", "Result", [argument(unit), argument(error)]),
-)]);
+  rustNamedTargetType("native.Result", "Result", [argument(unit), argument(error)], [], undefined, [], undefined, []),
+)], [], undefined, [], undefined, []);
 
 test("authored union payload instantiation reaches definition-owned futures without changing source identity", () => {
   const registry = createRustTypeDefinitionRegistry();
@@ -49,7 +49,7 @@ test("authored union payload instantiation reaches definition-owned futures with
   assert.equal(rustSourceUnionPayloadArguments(physical, definitions).length, 2);
   assert.equal(Object.isFrozen(physical.value.payloads.types), true);
   assert.equal(Object.isFrozen(definitions.sourceUnionPayloadTemplate(physical).variants), true);
-  assert.equal(rustCarrierSupportsClone(physical, definitions), false, "physical Future does not acquire Clone");
+  assert.equal(selectRustCloneRequirements(physical, definitions).kind === "available", false, "physical Future does not acquire Clone");
 });
 
 test("source generic arguments and physical payload arguments retain independent identities and substitution", () => {

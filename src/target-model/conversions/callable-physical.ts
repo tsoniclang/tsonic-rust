@@ -153,7 +153,8 @@ function conversionError(contract: RustValueConversionContract): TargetTypeRef |
 }
 
 function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalSignature): TargetTypeRef | undefined {
-  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, signature.error]));
+  const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([signature.result, signature.error]),
+    [], undefined, [], undefined, []);
   const tuple: TargetTypeRef = { kind: "tuple", elements: signature.parameters };
   if (rustCallableInputProtocol(logical) !== undefined) return { kind: "closure", args: [tuple], result };
   if (logical.kind === "closure") return rustTargetTypeRefEquals(signature.error, rustRuntimeErrorTargetType())
@@ -161,5 +162,5 @@ function physicalTarget(logical: TargetTypeRef, signature: RustCallablePhysicalS
   const lifetime = rustCallableProtocol(logical)?.lifetime;
   return logical.kind !== "target-named" || logical.id !== rustCallableTargetId || lifetime === undefined ? undefined
     : rustNamedTargetType(rustCallableTargetId, "rt::Callable", [rustLifetimeGenericArgument(lifetime),
-      ...rustTypeGenericArguments([tuple, result])]);
+      ...rustTypeGenericArguments([tuple, result])], [], undefined, [], undefined, []);
 }

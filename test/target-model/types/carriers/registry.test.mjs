@@ -38,7 +38,7 @@ test("Rust registry is metadata only and preserves exact native arguments, quali
     { kind: "type", type: { kind: "reference", referent: value, mutable: true, lifetime } },
     { kind: "const", value: { kind: "integer", value: "9007199254740993" } },
   ];
-  const imported = rustNamedTargetType("checked:native:type", "user::Carrier", arguments_);
+  const imported = rustNamedTargetType("checked:native:type", "user::Carrier", arguments_, [], undefined, [], undefined, []);
   assert.deepEqual(rustNamedTypeCarrierValue(imported).genericArguments, arguments_);
   const pending = rustJsPromiseTargetType(value);
   assert.equal(pending.genericArguments.length, 1);

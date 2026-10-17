@@ -1,7 +1,7 @@
 import type { RustTargetProgram } from "../../../analysis/program/model.js";
 import type { RustErrorPayloadVariant } from "../../../analysis/program/error-transport.js";
-import type { RustExternalSourcePackageError, RustSourcePackageErrorDomainPlan,
-  RustSourcePackageErrorBoundary, RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustExternalSourcePackageError, RustSourcePackageErrorDomainPlan, RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/error-regions.js";
 
 export type RustPlannedErrorVariant = RustErrorPayloadVariant
   | { readonly kind: "external"; readonly name: string; readonly external: RustExternalSourcePackageError };

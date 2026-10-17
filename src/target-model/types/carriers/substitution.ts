@@ -328,14 +328,14 @@ function substituteCarrierParts(
             substituteChild,
           )),
         outlives: type.outlives.map(substituteLifetime),
-        captures: rustTargetCaptureArguments(substituteGenericArguments(
+        ...(type.captures === undefined ? {} : { captures: rustTargetCaptureArguments(substituteGenericArguments(
           type.captures,
           substitutions,
           lifetimeSubstitutions,
           constSubstitutions,
           normalize,
           substituteChild,
-        )),
+        )) }),
       };
     case "associated-type":
       return {
@@ -498,6 +498,12 @@ function substituteCarrierParts(
             ...upcast,
             target: substituteChild(upcast.target, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
           })),
+          namedType.nativeErrorIdentity,
+          namedType.typeRequirements.map(requirement => ({ ...requirement,
+            trait: substituteRustTargetTraitRef(requirement.trait, substitutions, lifetimeSubstitutions,
+              constSubstitutions, normalize, substituteChild),
+          })),
+          namedType.nativeArgumentCount,
         );
       }
       const fixedArray = rustFixedArrayCarrierValue(type);

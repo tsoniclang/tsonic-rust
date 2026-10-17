@@ -52,7 +52,7 @@ export function createRustNativeOutwardResults(input: {
         const effects = input.records.sourceCallEffects.get(declaration);
         if (error === undefined || effects === undefined) return undefined;
         const output = effects.awaiting === "fallible"
-          ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([physical, error])) : physical;
+          ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([physical, error]), [], undefined, [], undefined, []) : physical;
         return rustNativeFutureOutputType({ identity: `${producer.identity}:return:0`, output, captures: producer.environment });
       }
       const completion = rustNativeCallableCompletion(physical, input.definitions);
@@ -64,7 +64,8 @@ export function createRustNativeOutwardResults(input: {
         const channel = input.producers.deferredFor(declaration, future.ordinal);
         if (channel === undefined) return undefined;
         const output = channel.awaiting === "fallible"
-          ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, channel.errorCarrier]))
+          ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([future.output, channel.errorCarrier]),
+            [], undefined, [], undefined, [])
           : future.output;
         return rustNativeFutureOutputType({ identity: `${producer.identity}:return:${future.ordinal}`, output,
           captures: producer.environment, ready: source.implementationCompletion !== undefined });

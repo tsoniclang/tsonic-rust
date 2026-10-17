@@ -1,14 +1,13 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment } from "../../../../target-model/records/callable-adapters.js";
 import { callableRestElement, rustCallableParameterAdaptersMatch, rustCallableValueAdapterIsFallible } from "../../../../analysis/callables/adapters.js";
-import { isRustCopyCarrier, isRustJsArrayCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustOptionTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
+import { isRustCopyCarrier, isRustJsArrayCarrier, isRustStringCarrier, rustOptionTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustPropagateLocalError } from "../../program/fallible-boundaries.js";
 import { rustTargetRuntimeErrorType } from "../../types/error-boundary.js";
-import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { applyRustCallableValueAdapter, applyRustCallableValueAdapterRaw } from "./adapters.js";
 import { planRustParameterEntryValue } from "./parameter-entry-conversion.js";
@@ -41,8 +40,6 @@ export function planRustCallableArguments(
     const element = abi === undefined ? undefined : callableRestElement(abi.parameterCarrier);
     if (abi === undefined || source === undefined || element === undefined) return undefined;
     const shared = isRustJsArrayCarrier(abi.parameterCarrier);
-    if (shared && !rustCarrierSupportsClone(element, definitions) &&
-      !requireRustCarrierRequirements(element, ["clone"], input.declaration, context)) return undefined;
     const sequence: RustExpr = shared ? { kind: "method-call", receiver: source, method: "into_values", args: [] } : source;
     const name = allocateRustSyntheticName(names, "rest_values");
     const extracted = input.parameterAdapters.some(adapter => adapter.kind === "rest-element" && adapter.contractParameterIndex === index);
@@ -171,6 +168,6 @@ function readLogicalParameter(expression: RustExpr, abi: RustCallableParameterAb
   if (abi.mode === "value") return planRustParameterEntryValue(abi, expression, undefined, context);
   if (isRustStringCarrier(abi.valueCarrier)) return { kind: "owned-string-from-borrowed-str", expression };
   const value: RustExpr = { kind: "dereference", pointer: expression };
-  return isRustCopyCarrier(abi.valueCarrier) ? value : rustCarrierSupportsClone(abi.valueCarrier, context.input.program.typeDefinitions)
-    ? { kind: "method-call", receiver: value, method: "clone", args: [] } : undefined;
+  return isRustCopyCarrier(abi.valueCarrier) ? value
+    : { kind: "method-call", receiver: value, method: "clone", args: [] };
 }

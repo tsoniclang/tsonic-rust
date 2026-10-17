@@ -16,7 +16,9 @@ import {
 import {
   rustProviderOperationFormDeclaresWritableInput,
 } from "../../../dist/policy/operations/forms.js";
-import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
+import { rustBorrowedStrToStringValueConversion, rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
+import { projectRustNativeResultLoans } from "../../../dist/providers/native/projection/result-loans.js";
+import { selectRustCompilerResultLoans } from "../../../dist/providers/native/model/normalization/functions.js";
 import { rustStrTargetType, rustOptionTargetType, rustSourceOptionalTargetType } from "../../../dist/target-model/types/index.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { substituteRustValueConversion } from "../../../dist/target-model/conversions/substitution.js";
@@ -33,6 +35,63 @@ const sourceNullish = { kind: "target-named", id: "rust.native.absence" };
 const unit = { kind: "tuple", elements: [] };
 const usize = { kind: "source-primitive", name: "native-uint" };
 const typeArgument = (type) => ({ kind: "type", type });
+
+function nativeReturnedLoanOptions() {
+  const identity = { itemId: "native:loan_fixture::view", canonicalPath: ["loan_fixture", "view"] };
+  const lifetime = { kind: "parameter", name: "owner", identity: {
+    itemId: "native:loan_fixture::view::owner", canonicalPath: ["loan_fixture", "view", "owner"],
+  } };
+  const result = { kind: "reference", mutable: false, lifetime, target: { kind: "primitive", name: "str" } };
+  const fn = { identity, name: "view", result, parameters: [], genericParameters: [], typeRequirements: [],
+    receiver: { kind: "shared", lifetime, type: { kind: "reference", lifetime, mutable: false,
+      target: { kind: "primitive", name: "str" } } }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false };
+  fn.resultLoans = selectRustCompilerResultLoans(fn);
+  return { operationKind: "method", form: { form: "receiver-method", name: "as_str" },
+    sourceReceiver: { kind: "runtime", carrier: string }, sourceArgumentCarriers: [], resultCarrier: string,
+    resultConversion: rustBorrowedStrToStringValueConversion, resultLoans: projectRustNativeResultLoans(fn, result),
+    isAsync: false, isFallible: false };
+}
+
+test("native result provenance binds the exact final ABI input after immutable snapshotting", () => {
+  const abi = finalizeRustProviderOperationAbi(nativeReturnedLoanOptions());
+  assert.equal(abi !== undefined, true, "the declared native receiver relation is admitted");
+  assert.equal(validateRustFinalizedOperationAbi(abi), true, "the completed result/input correspondence is valid");
+  const selected = abi.result.resultLoans;
+  assert.equal(selected.contract.kind, "complete", "known native declaration correspondence preserved");
+  assert.equal(selected.loans[0].loan === selected.contract.loans[0], true, "the canonical declared result row is retained");
+  assert.equal(selected.loans[0].origins[0].origin === selected.contract.loans[0].origins[0], true,
+    "the canonical formal origin is retained");
+  assert.equal(selected.loans[0].origins[0].input === abi.targetReceiver.input, true,
+    "the finalized native input is original, not a structurally equal snapshot copy");
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.loans), true, "published provenance is immutable");
+});
+
+test("a copied or foreign native input cannot satisfy result provenance", () => {
+  const abi = finalizeRustProviderOperationAbi(nativeReturnedLoanOptions());
+  assert.equal(abi !== undefined, true, "the positive ABI closes first");
+  const selected = abi.result.resultLoans;
+  const loan = selected.loans[0];
+  const origin = loan.origins[0];
+  const copied = { ...abi, result: { ...abi.result, resultLoans: { ...selected, loans: [
+    { ...loan, origins: [{ ...origin, input: { ...origin.input } }] },
+  ] } } };
+  assert.equal(validateRustFinalizedOperationAbi(copied), false, "copied finalized inputs fail exact identity admission");
+  const foreign = { ...abi, result: { ...abi.result, resultLoans: { ...selected,
+    contract: { ...selected.contract, loans: [{ ...selected.contract.loans[0] }] },
+  } } };
+  assert.equal(validateRustFinalizedOperationAbi(foreign), false, "a replacement declared row cannot inherit old origin evidence");
+});
+
+test("unavailable native provenance remains unavailable rather than a known empty result", () => {
+  const options = nativeReturnedLoanOptions();
+  options.resultLoans = { ...options.resultLoans, kind: "unavailable", loans: [],
+    reasons: ["The selected generic result has no closed native correspondence yet."] };
+  const abi = finalizeRustProviderOperationAbi(options);
+  assert.equal(abi !== undefined, true, "unavailability is transported without a fabricated proof");
+  assert.equal(abi.result.resultLoans.contract.kind, "unavailable", "unknown is not changed to complete");
+  assert.equal(abi.result.resultLoans.contract.reasons.length, 1, "the exact missing premise is retained");
+  assert.equal("dropProven" in abi.result.resultLoans, false, "signature provenance does not claim native drop liveness");
+});
 
 test("a real closed Vector.add ABI owns exact binary-trait admission", () => {
   const { program } = analyzeRust({ packages: [acmeVectorsPackage()], files: { "index.ts": `

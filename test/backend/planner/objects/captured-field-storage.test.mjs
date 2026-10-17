@@ -8,6 +8,9 @@ import { rustStoredObjectFieldSupportsBorrowedRead } from "../../../../dist/back
 import { validatedRustCapturedFieldStorageFact } from "../../../../dist/analysis/storage/receiver-captures.js";
 import { int32Carrier, stringCarrier } from "../../../helpers/rust-session.mjs";
 import { selectRustCapturedFieldStorage } from "../../../../dist/policy/ownership/captured-field-storage.js";
+import { createRustCapturedFieldStorageProducer } from "../../../../dist/analysis/program/records/captured-field-storage.js";
+import { assertRustRequiredRecords, requireRustRecord } from "../../../../dist/analysis/program/records/required-records.js";
+import { fieldFactKey } from "@tsonic/tsts";
 
 const owner = { kind: "path", path: "payload" };
 const next = { kind: "path", path: "next" };
@@ -143,49 +146,97 @@ test("analysis validates exact captured storage facts against the canonical over
   const generic = { kind: "type-parameter", name: "Value", identity: "source:Value" };
   const captures = { isCaptured: () => true, storageDeclaration: () => canonical, storageReadonly: () => false,
     storageImmutable: () => false, isDeferred: () => true };
-  function program(selectedFact = fact, selectedCaptures = captures, valueCarrier = int32Carrier, storageCarrier = generic) {
-    return { records: createRustRecordFixture({
-      capturedFieldStorage: { get: () => selectedFact },
-      runtimeCarrier: { get: (selected) => ({ carrier: selected === canonical ? storageCarrier : valueCarrier }) },
-    }),
-      objectRepresentations: { receiverCaptures: selectedCaptures } };
+  function admission(selectedFact, selectedCaptures = captures, valueCarrier = int32Carrier, storageCarrier = generic) {
+    let open = true;
+    const producer = createRustCapturedFieldStorageProducer(() => {
+      if (!open) throw new Error("The captured-field producer is sealed.");
+    }, selectedFact === undefined ? undefined : { get: selected => selected === declaration ? selectedFact : undefined });
+    const semantics = { sourceFile: {} };
+    const requiredRecords = [];
+    const context = { requiredRecords, diagnostics: [], ast: {
+      kind: selected => selected === declaration || selected === canonical ? 1 : undefined,
+      kindName: () => "KindIdentifier", getSourceFile: () => undefined,
+      is: { IsTypeAliasDeclaration: () => false, IsInterfaceDeclaration: () => false,
+        IsTypeParameterDeclaration: () => false, IsVariableDeclaration: () => false,
+        IsArrayLiteralExpression: () => false, IsCallExpression: () => false },
+    },
+    source: { sourceFacts: { getFact: (selected, key) => key === fieldFactKey &&
+      (selected !== declaration && selected !== canonical || selected === canonical && storageCarrier === undefined)
+      ? { type: undefined } : undefined }, navigation: { referenceFor: () => undefined } },
+    sourceStorage: { storageSubjectFor: node => ({ kind: "resolved", subject: { kind: "value", node, projection: [] } }) },
+    semanticsFor: () => semantics,
+    records: createRustRecordFixture({ capturedFieldStorage: producer.records,
+      runtimeCarrier: { get: selected => selected === canonical ? storageCarrier === undefined ? undefined : { carrier: storageCarrier }
+        : selected === declaration ? { carrier: valueCarrier } : undefined } }),
+    objectRepresentations: { receiverCaptures: selectedCaptures } };
+    const walk = { context, operationOptions: {}, rejectedExpressions: new WeakSet(), resolving: new Set() };
+    return { producer, context, requiredRecords,
+      resolve: () => producer.resolve(walk, declaration, valueCarrier),
+      seal: () => { open = false; } };
   }
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program()) === fact, true);
-  for (const selected of [undefined, { ...fact, unrelated: true }, { ...fact, valueCarrier: stringCarrier },
+  const inherited = admission(fact);
+  inherited.resolve();
+  assert.equal(inherited.producer.records.get(declaration) === fact, true, "admission preserves exact inherited identity");
+  const missingFact = admission(undefined);
+  assert.equal(validatedRustCapturedFieldStorageFact(declaration, missingFact.context), undefined, "an absent record is not fabricated by a read");
+  requireRustRecord(missingFact.requiredRecords, "capturedFieldStorage", declaration, "captured-field", "capturedFieldStoragePlans.resolve");
+  assert.throws(() => assertRustRequiredRecords(missingFact.context.records, missingFact.requiredRecords),
+    /Required Rust semantic plan 'capturedFieldStorage'/u, "the seal refuses a missing required admission");
+  missingFact.resolve();
+  assert.equal(missingFact.producer.records.get(declaration) !== undefined, true, "the sole producer materializes a new valid record");
+  for (const selected of [{ ...fact, unrelated: true }, { ...fact, valueCarrier: stringCarrier },
     { ...fact, storage: { kind: "cell", initialization: "deferred" } },
     { ...fact, storage: { ...fact.storage, initialization: "ready" } },
     { ...fact, storage: { ...fact.storage, unchecked: true } }]) {
-    const input = program();
-    input.records = { ...input.records, capturedFieldStorage: { get: () => selected } };
-    assert.equal(validatedRustCapturedFieldStorageFact(declaration, input), undefined);
+    assert.throws(() => admission(selected).resolve(), /Conflicting Rust semantic plan/u,
+      "malformed inherited records are rejected at canonical admission");
   }
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, { ...captures, isCaptured: () => false })), undefined);
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact,
-    { ...captures, storageReadonly: () => true, storageImmutable: () => true })), undefined);
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, captures, int32Carrier, int32Carrier)), undefined,
+  assert.throws(() => admission(fact, { ...captures, isCaptured: () => false }).resolve(),
+    /no exact captured source declaration/u, "a foreign non-captured record is not admitted");
+  assert.throws(() => admission(fact, { ...captures, storageReadonly: () => true, storageImmutable: () => true }).resolve(),
+    /Conflicting Rust semantic plan/u, "canonical readonly and immutable flags must match");
+  assert.throws(() => admission(fact, captures, int32Carrier, int32Carrier).resolve(), /Conflicting Rust semantic plan/u,
     "instantiated Copy cannot replace the generic declaration's physical storage");
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(fact, { ...captures, storageDeclaration: () => ({}) })), undefined,
+  assert.throws(() => admission(fact, { ...captures, storageDeclaration: () => ({}) }).resolve(),
+    /no exact captured source declaration/u,
     "canonical override-family owner identity is required");
   const readonly = { ...fact, storage: { kind: "shared", initialization: "ready" } };
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(readonly,
-    { ...captures, storageReadonly: () => true, storageImmutable: () => true, isDeferred: () => false })) === readonly, true);
+  const readonlyAdmission = admission(readonly,
+    { ...captures, storageReadonly: () => true, storageImmutable: () => true, isDeferred: () => false });
+  readonlyAdmission.resolve();
+  assert.equal(readonlyAdmission.producer.records.get(declaration) === readonly, true, "the readonly native selection is retained");
   const ready = { ...fact, storage: { kind: "borrow-cell", initialization: "ready" } };
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(ready, { ...captures, isDeferred: () => false })) === ready, true);
+  const readyAdmission = admission(ready, { ...captures, isDeferred: () => false });
+  readyAdmission.resolve();
+  assert.equal(readyAdmission.producer.records.get(declaration) === ready, true, "the ready native selection is retained");
   const copied = { storage: { kind: "copy", initialization: "ready" }, valueCarrier: int32Carrier };
   const copiedCaptures = { ...captures, storageReadonly: () => true, storageImmutable: () => true, isDeferred: () => false };
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(copied, copiedCaptures, int32Carrier, int32Carrier)) === copied, true);
+  const copyAdmission = admission(copied, copiedCaptures, int32Carrier, int32Carrier);
+  copyAdmission.resolve();
+  assert.equal(copyAdmission.producer.records.get(declaration) === copied, true, "the exact native Copy selection is retained");
   for (const selection of [{ ...copiedCaptures, storageImmutable: () => false },
     { ...copiedCaptures, storageReadonly: () => false }, { ...copiedCaptures, isDeferred: () => true }]) {
-    assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(copied, selection, int32Carrier, int32Carrier)), undefined);
+    assert.throws(() => admission(copied, selection, int32Carrier, int32Carrier).resolve(), /Conflicting Rust semantic plan/u,
+      "each Copy eligibility condition remains mandatory");
   }
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program({ ...copied,
-    storage: { kind: "copy", initialization: "deferred" } }, copiedCaptures, int32Carrier, int32Carrier)), undefined);
-  const missing = program();
-  missing.records = { ...missing.records, runtimeCarrier: { get: () => undefined } };
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, missing), undefined);
+  assert.throws(() => admission({ ...copied, storage: { kind: "copy", initialization: "deferred" } }, copiedCaptures,
+    int32Carrier, int32Carrier).resolve(), /Conflicting Rust semantic plan/u, "Copy cannot acquire deferred initialization");
+  const missingCarrier = admission(fact);
+  missingCarrier.context.source.sourceFacts.getFact = (selected, key) =>
+    selected === canonical && key === fieldFactKey ? { type: undefined } : undefined;
+  assert.throws(() => missingCarrier.resolve(), /no exact captured source declaration/u, "a missing canonical carrier blocks admission");
+  assert.equal(missingCarrier.context.diagnostics[0]?.code, "RUST_CAPTURED_FIELD_STORAGE_NOT_CLOSED",
+    "the original source diagnostic identifies the missing physical declaration carrier");
   let reads = 0;
   const accessor = { ...fact };
   Object.defineProperty(accessor, "storage", { enumerable: true, get() { reads++; return fact.storage; } });
-  assert.equal(validatedRustCapturedFieldStorageFact(declaration, program(accessor)), undefined);
-  assert.equal(reads, 0);
+  assert.throws(() => admission(accessor).resolve(), /Conflicting Rust semantic plan/u, "accessors never enter the stored-data family");
+  assert.equal(reads, 0, "admission never executes a fact accessor");
+  inherited.seal();
+  inherited.context.objectRepresentations = { get receiverCaptures() { throw new Error("post-seal capture decision"); } };
+  inherited.context.records = { ...inherited.context.records,
+    runtimeCarrier: { get() { throw new Error("post-seal carrier resolution"); } } };
+  assert.equal(validatedRustCapturedFieldStorageFact(declaration, inherited.context) === fact, true,
+    "the pure sealed reader retains the exact admitted record without recomputation");
+  assert.throws(() => inherited.resolve(), /producer is sealed/u, "no write can occur after publication");
 });

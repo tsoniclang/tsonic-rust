@@ -4,6 +4,8 @@ import {
   rustMoveOnlyNamedTypeTraits,
   rustNamedTargetType,
   rustNamedTypeCarrierValue,
+  rustNamedTypeRequirementsForArguments,
+  substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import type {
   RustNamedTypeTraitContract,
@@ -29,6 +31,8 @@ import { rustNamedTypeTraitContract } from "../../target-model/types/carriers/na
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetTraitRef } from "../../target-model/types/carriers/substitution.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustProviderTypeRequirementTrait } from "../../target-model/operations/type-requirements.js";
+import { bindRustGenericArguments } from "../../target-model/types/carriers/generic-argument-bindings.js";
 import type { RustDispatchContextDefinition } from "../../target-model/operations/dispatch-contexts.js";
 
 export function materializeProviderDispatchContextRow(
@@ -88,6 +92,7 @@ export function materializeProviderOperationRow(
       nativeErrorCarriers: row.nativeErrorCarriers.map(carrier => materializeProviderCarrier(carrier, carrierPaths, carrierTraits, typeDeclarations)),
     }),
     resultCarrier: materializeProviderCarrier(row.resultCarrier, carrierPaths, carrierTraits, typeDeclarations),
+    ...(row.resultLoans === undefined ? {} : { resultLoans: row.resultLoans }),
     ...(row.receiverCarrier === undefined
       ? {}
       : { receiverCarrier: materializeProviderCarrier(row.receiverCarrier, carrierPaths, carrierTraits, typeDeclarations) }),
@@ -345,6 +350,11 @@ export function materializeProviderCarrier(
   typeDeclarations: readonly RustProviderTypeDefinition[] = [],
 ): TargetTypeRef {
   const named = rustNamedTypeCarrierValue(carrier);
+  const id = named?.id ?? (carrier.kind === "target-named" ? carrier.id : undefined);
+  const declaration = id === undefined ? undefined : typeDeclarations.find(value => {
+    const native = rustNamedTypeCarrierValue(value.targetCarrier);
+    return (native?.id ?? (value.targetCarrier.kind === "target-named" ? value.targetCarrier.id : undefined)) === id;
+  });
   if (named !== undefined) {
     const genericArguments = materializeProviderGenericArguments(
       named.genericArguments,
@@ -365,11 +375,16 @@ export function materializeProviderCarrier(
         typeDeclarations,
       ),
       materializeProviderTraitContract(traits === undefined ? named.traits :
-        instantiateProviderTraitContract(traits, named.id, genericArguments, typeDeclarations), carrierPaths, typeDeclarations),
+        instantiateProviderTraitContract(traits, named.id, genericArguments, declaration), carrierPaths, typeDeclarations),
       named.upcasts.map((upcast) => ({
         ...upcast,
         target: materializeProviderCarrier(upcast.target, carrierPaths, carrierTraits, typeDeclarations),
       })),
+      named.nativeErrorIdentity,
+      named.typeRequirements.map(requirement => ({ ...requirement,
+        trait: materializeProviderTraitRef(requirement.trait, carrierPaths, carrierTraits, typeDeclarations),
+      })),
+      named.nativeArgumentCount,
     );
   }
   if (carrier.kind === "target-named") {
@@ -381,16 +396,47 @@ export function materializeProviderCarrier(
     );
     const path = carrierPaths[carrier.id];
     const traits = carrierTraits[carrier.id];
-    return path === undefined
-      ? { ...carrier, ...(genericArguments.length === 0 ? {} : { genericArguments }) }
-      : rustNamedTargetType(
-          carrier.id,
-          path,
-          genericArguments,
-          [],
-          materializeProviderTraitContract(traits === undefined ? rustMoveOnlyNamedTypeTraits :
-            instantiateProviderTraitContract(traits, carrier.id, genericArguments, typeDeclarations), carrierPaths, typeDeclarations),
-        );
+    if (path === undefined) return { ...carrier, ...(genericArguments.length === 0 ? {} : { genericArguments }) };
+    const native = declaration === undefined ? undefined : rustNamedTypeCarrierValue(declaration.targetCarrier);
+    if (native !== undefined) {
+      const bindings = rustTargetGenericBindingsForArguments(declaration!.genericParameters ?? [], genericArguments);
+      if (bindings === undefined)
+        throw new Error(`Rust provider native type '${carrier.id}' has no exact generic argument correspondence.`);
+      return materializeProviderCarrier(
+        substituteRustTargetGenerics(declaration!.targetCarrier, bindings.types, bindings.lifetimes, bindings.consts),
+        carrierPaths, carrierTraits, typeDeclarations,
+      );
+    }
+    const contract = traits === undefined ? rustMoveOnlyNamedTypeTraits :
+      instantiateProviderTraitContract(traits, carrier.id, genericArguments, declaration);
+    if (declaration === undefined && genericArguments.some(argument => argument.kind === "type"))
+      return { ...carrier, genericArguments };
+    const template = declaration?.targetCarrier.kind === "target-named"
+      ? declaration.targetCarrier.genericArguments ?? [] : [];
+    const declaredRequirements = declaration?.typeRequirements ?? [];
+    const required = rustNamedTypeRequirementsForArguments(template, declaredRequirements.map(parameter => ({
+      identity: parameter.identity,
+      traits: parameter.requirements.map(rustProviderTypeRequirementTrait),
+    })));
+    if (required === undefined)
+      throw new Error(`Rust provider native type '${carrier.id}' requires its exact original declaration TYPE slots.`);
+    const bindings = required.length === 0 ? undefined : bindRustGenericArguments(template, genericArguments);
+    if (required.length > 0 && bindings === undefined)
+      throw new Error(`Rust provider native type '${carrier.id}' has no exact generic argument correspondence.`);
+    return rustNamedTargetType(
+      carrier.id,
+      path,
+      genericArguments,
+      [],
+      materializeProviderTraitContract(contract, carrierPaths, typeDeclarations),
+      [],
+      undefined,
+      required.map(requirement => ({ ...requirement,
+        trait: materializeProviderTraitRef(bindings === undefined ? requirement.trait :
+          substituteRustTargetTraitRef(requirement.trait, bindings.types, bindings.lifetimes, bindings.consts),
+        carrierPaths, carrierTraits, typeDeclarations),
+      })),
+    );
   }
   if (carrier.kind === "array") {
     return { ...carrier, element: materializeProviderCarrier(carrier.element, carrierPaths, carrierTraits, typeDeclarations) };
@@ -506,17 +552,13 @@ function instantiateProviderTraitContract(
   contract: RustNamedTypeTraitContract,
   carrierId: string,
   arguments_: readonly RustTargetGenericArgument[],
-  declarations: readonly RustProviderTypeDefinition[],
+  declaration: RustProviderTypeDefinition | undefined,
 ): RustNamedTypeTraitContract {
   const references = contract.implementations.flatMap(implementation =>
     [implementation.trait, ...implementation.requirements.map(requirement => requirement.trait)])
     .map(trait => rustTargetGenericReferences(trait, "metadata"));
   if (references.every(value => value.typeIdentities.length === 0 && value.lifetimeIdentities.length === 0 &&
     value.constIdentities.length === 0)) return contract;
-  const declaration = declarations.find(value => {
-    const named = rustNamedTypeCarrierValue(value.targetCarrier);
-    return (named?.id ?? (value.targetCarrier.kind === "target-named" ? value.targetCarrier.id : undefined)) === carrierId;
-  });
   if (declaration === undefined)
     throw new Error(`Rust provider native trait contract '${carrierId}' requires its exact generic declaration owner.`);
   const bindings = rustTargetGenericBindingsForArguments(declaration.genericParameters ?? [], arguments_);

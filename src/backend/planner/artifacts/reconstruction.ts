@@ -22,7 +22,7 @@ import type {
   PlannedRustSourceFile,
 } from "../program/source-file.js";
 import type { RustSourcePackageComponentPlan } from "../program/source-package-components.js";
-import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 import { rustSourceItemIdentity } from "../program/source-package-facades.js";
 import type { RustSourceFileModel } from "../../target-ast/syntax/nodes.js";
 

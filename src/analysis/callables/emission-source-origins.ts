@@ -76,7 +76,7 @@ type ConstructionTraceState = {
 };
 
 const unavailable = (reason: string, alternatives: readonly RustPhysicalEmissionSourceOrigin[] = [],
-  boundaries: readonly SourceStorageDomainBoundary[] = []): Origins =>
+  boundaries: readonly SourceStorageDomainBoundary[] = []): Extract<Origins, { readonly kind: "unavailable" }> =>
   Object.freeze({ kind: "unavailable", reason, alternatives: Object.freeze(alternatives), boundaries: Object.freeze(boundaries) });
 const sourceBindings = (origin: RustPhysicalEmissionSourceOrigin): SourceStorageBindings =>
   origin.kind === "module" || origin.kind === "construction" ? origin.selection.bindings : origin.activation.bindings;

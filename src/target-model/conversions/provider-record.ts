@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../types/model.js";
-import { rustStructuralObjectCarrierValue, rustCarrierSupportsClone, rustNamedTypeCarrierValue } from "../types/index.js";
+import { rustStructuralObjectCarrierValue, rustNamedTypeCarrierValue } from "../types/index.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/source-union-definitions.js";
 import { rustValueConversionContract } from "./contracts.js";
@@ -47,7 +47,6 @@ export function rustProviderRecordCopyMatches(
         sourceField !== undefined && sourceField.presence === "required" &&
         sourceField.accessor === undefined && sourceField.method !== true &&
         rustTargetTypeRefEquals(sourceField.type, field.sourceCarrier) &&
-        (field.conversion === undefined ? rustTargetTypeRefEquals(field.sourceCarrier, field.carrier) : exactConversion) &&
-        rustCarrierSupportsClone(field.sourceCarrier, definitions);
+        (field.conversion === undefined ? rustTargetTypeRefEquals(field.sourceCarrier, field.carrier) : exactConversion);
     });
 }

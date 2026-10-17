@@ -7,6 +7,7 @@ export interface RustProjectMethodPropertyUsage {
   readonly declaration: Node;
   readonly readable: boolean;
   readonly writable: boolean;
+  readonly storage: { readonly owner: Node; readonly declaration: Node; readonly targetName: string } | undefined;
 }
 
 export interface RustProjectMethodPropertyPlan {
@@ -129,7 +130,18 @@ export function createRustProjectMethodPropertyPlanRegistry(): RustProjectMethod
       for (const declaration of inputs.keys()) {
         const flags = select(declaration);
         if (flags === undefined) return unresolved();
-        if (flags.readable || flags.writable) usages.push(Object.freeze({ declaration, ...flags }));
+        let storage: RustProjectMethodPropertyUsage["storage"];
+        if (flags.writable) {
+          const implementation = canonical(declaration);
+          const owner = projectTypes.definitionContainingDeclaration(implementation);
+          const targetName = owner === undefined ? undefined : projectTypes.fieldStorageName(owner, implementation);
+          if (owner === undefined || targetName === undefined || ast.typeParameters(implementation).length !== 0) {
+            return Object.freeze({ kind: "unresolved" as const,
+              reason: "A writable native method requires its exact monomorphic declaration, containing owner and physical storage name." });
+          }
+          storage = Object.freeze({ owner: owner.declaration, declaration: implementation, targetName });
+        }
+        if (flags.readable || flags.writable) usages.push(Object.freeze({ declaration, ...flags, storage }));
       }
       usages.sort((left, right) => {
         const leftFile = ast.getFileName(ast.getSourceFile(left.declaration));

@@ -14,6 +14,49 @@ import { captureRustProviderContributions } from "../../helpers/provider-contrib
 
 const int32Carrier = { kind: "source-primitive", name: "int32" };
 
+test("declared native result provenance survives immutable provider materialization without invented drop evidence", () => {
+  const contract = { kind: "complete", declarationIdentity: "native::run", resultTypeIdentity: "i32",
+    valueTypeIdentity: "i32", loans: [] };
+  const source = definition();
+  source.operations[0].resultLoans = contract;
+  const provider = createRustProviderPackage(source);
+  contract.loans.push({ resultPath: ["invented"], lifetime: "invented", origins: [] });
+  const published = provider.createTargetContributions()[0].definition;
+  const selected = collectRustProviderSemanticsFromDefinitions([published]).operations[0].resultLoans;
+  assert.equal(selected.kind, "complete", "the actual known-empty native relation remains known-empty");
+  assert.equal(selected.loans.length, 0, "later source mutation cannot rewrite the published native contract");
+  assert.equal(selected.declarationIdentity, "native::run", "the declaration identity is retained");
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.loans), true, "the relation is closed immutable data");
+  assert.equal("dropProven" in selected || "scopeLive" in selected, false, "signature metadata cannot invent cleanup facts");
+});
+
+test("native result provenance refuses unknown-as-empty, executable data and foreign input positions", () => {
+  const complete = { kind: "complete", declarationIdentity: "native::run", resultTypeIdentity: "i32",
+    valueTypeIdentity: "i32", loans: [] };
+  const origin = { kind: "borrow", input: { kind: "receiver" }, inputType: "native::Owner", inputPath: [],
+    lifetime: "native::owner", mutable: false };
+  const loan = { resultPath: ["argument:0"], lifetime: "native::owner", origins: [origin] };
+  let reads = 0;
+  const accessor = Object.defineProperty({ ...complete }, "loans", { enumerable: true, get() { reads += 1; return []; } });
+  const sparse = []; sparse.length = 1;
+  for (const [label, resultLoans] of [
+    ["missing contract", undefined], ["accessor", accessor], ["unknown kind", { ...complete, kind: "assumed" }],
+    ["native cleanup guess", { ...complete, dropProven: true }],
+    ["unknown as empty", { ...complete, kind: "unavailable", reasons: [] }],
+    ["sparse result rows", { ...complete, loans: sparse }],
+    ["duplicate result path", { ...complete, loans: [loan, loan] }],
+    ["receiver absent from native signature", { ...complete, loans: [loan] }],
+    ["formal absent from native signature", { ...complete, loans: [{ ...loan, origins: [
+      { ...origin, input: { kind: "argument", sourceIndex: 0 } },
+    ] }] }],
+  ]) {
+    const source = definition();
+    source.operations[0].resultLoans = resultLoans;
+    assert.throws(() => createRustProviderPackage(source), undefined, label);
+  }
+  assert.equal(reads, 0, "validation never executes provider accessors");
+});
+
 test("free-call receiver conversions survive immutable provider publication and reject malformed metadata", () => {
   for (const form of ["free-call", "free-call-str-slice"]) {
     const target = { form, path: "acme_validation::read", receiverMode: "value",

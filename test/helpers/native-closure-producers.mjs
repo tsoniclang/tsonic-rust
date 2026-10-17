@@ -6,7 +6,6 @@ import { rustPackageFallibleBoundary } from "../../dist/backend/planner/program/
 import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
 import { materializeRustSourcePackageFacades } from "../../dist/backend/planner/program/source-package-facades.js";
 import { planRustSourcePackageComponents } from "../../dist/backend/planner/program/source-package-components.js";
-import { planRustSourcePackageErrors } from "../../dist/backend/planner/program/source-package-errors.js";
 import { createRustSyntheticNameState } from "../../dist/backend/planner/names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../dist/backend/planner/expressions/callable.js";
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";
@@ -44,9 +43,8 @@ export function create(): () => ${output} {
   assert.equal(facades.plan !== undefined, true, "the actual producer facade plan is admitted");
   const components = planRustSourcePackageComponents(planning, program.sourceOutputIdentities, facades.plan);
   assert.equal(components.kind, "accepted", "the actual producer source-package components are admitted");
-  const sourcePackageErrors = planRustSourcePackageErrors(planning, components.components);
-  assert.equal(sourcePackageErrors.diagnostics.length, 0, "the actual producer error domains are complete");
-  assert.equal(sourcePackageErrors.plan !== undefined, true, "the actual producer error domains are admitted");
+  const sourcePackageErrors = program.errorTransport;
+  assert.equal(sourcePackageErrors !== undefined, true, "the actual producer error domains are admitted");
   const sourceFile = ast.getSourceFile(node);
   const fileName = ast.getFileName(sourceFile);
   const identity = program.sourceOutputIdentities.get(fileName);
@@ -65,7 +63,7 @@ export function create(): () => ${output} {
     publicImplementationItemIdentities: component.publicImplementationItemIdentities,
     publishesImplementationAbi: component.publishesImplementationAbi,
     usedAliases: new Set(), diagnostics: [], syntheticNames: createRustSyntheticNameState(ast, node, []),
-    sourcePackageErrors: sourcePackageErrors.plan,
+    sourcePackageErrors,
     fallibleBoundary: rustPackageFallibleBoundary({ componentId: "unrelated-consumer", errorDomain: "program",
       errorTypeIdentity: "unrelated:ConsumerFailure", errorTypePath: "ConsumerFailure",
     }),

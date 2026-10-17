@@ -1,5 +1,5 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
+import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_ArgumentExpression, Node_Expression, Node_Operand } from "@tsonic/target-api/source";
 
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustBorrowPrimitiveCopyValue, rustBorrowPureCopyValue, rustBorrowPureProviderInputs,
@@ -62,7 +62,18 @@ reserve: (count: number) => boolean): readonly Node[] | undefined {
       ? Object.freeze(children.flatMap(child => targetsFor(child) ?? rustNoNativeWrites)) : undefined;
   }
   const field = records.targetOperation.get(node);
-  if (directField(node) && field?.kind === "source-field" && field.accessMode === "read") return rustNoNativeWrites;
+  if (directField(node) && (field?.kind === "source-field" && field.accessMode === "read" ||
+    field?.kind === "tuple-index" || field?.kind === "fixed-index")) {
+    const receiver = Node_Expression(ast, node);
+    const key = ast.is.IsElementAccessExpression(node) ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
+    if (receiver === undefined || ast.is.IsElementAccessExpression(node) && key === undefined) return undefined;
+    const receiverWrites = targetsFor(receiver);
+    const keyWrites = key === undefined ? rustNoNativeWrites : targetsFor(key);
+    if (receiverWrites === undefined || keyWrites === undefined) return undefined;
+    const count = receiverWrites.length + keyWrites.length;
+    return count === 0 ? rustNoNativeWrites : reserve(count)
+      ? Object.freeze([...receiverWrites, ...keyWrites]) : undefined;
+  }
   if (!ast.is.IsPrefixUnaryExpression(node) && !ast.is.IsPostfixUnaryExpression(node)) return undefined;
   const operand = Node_Operand(ast, node);
   const target = operand === undefined ? undefined : records.targetOperation.get(operand);

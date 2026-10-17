@@ -6,7 +6,6 @@ import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { requireRustCarrierRequirements, requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustLocationCallback } from "./location-callbacks.js";
 import { optionReference, typedLocationFactMatchesPlan } from "./location-expressions.js";
@@ -48,8 +47,7 @@ export function planRustTypedLocationCall(
       const writeValue = planExpression(plan.writeExpression, context);
       const read = readValue === undefined ? undefined : planRustLocationCallback(node, 1, readValue, context);
       const write = writeValue === undefined ? undefined : planRustLocationCallback(node, 2, writeValue, context);
-      if (identity === undefined || read === undefined || write === undefined ||
-        !requireRustCarrierRequirements(fact.pointeeCarrier, ["static"], node, context)) return undefined;
+      if (identity === undefined || read === undefined || write === undefined) return undefined;
       return { kind: "call", path: "rt::Location::try_bind", args: [identity, read, write] };
     }
     case "view-pointer": {
@@ -58,9 +56,7 @@ export function planRustTypedLocationCall(
       const writeValue = planExpression(plan.writeExpression, context);
       const read = readValue === undefined ? undefined : planRustLocationCallback(node, 1, readValue, context);
       const write = writeValue === undefined ? undefined : planRustLocationCallback(node, 2, writeValue, context);
-      if (pointer === undefined || read === undefined || write === undefined ||
-        !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
-        !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
+      if (pointer === undefined || read === undefined || write === undefined) return undefined;
       const source = pointer;
       return plan.optional
         ? { kind: "call", path: "rt::Location::try_view_optional", args: [{ kind: "reference", expr: source }, read, write] }
@@ -72,9 +68,7 @@ export function planRustTypedLocationCall(
       const writeValue = planExpression(plan.toSourceExpression, context);
       const read = readValue === undefined ? undefined : planRustLocationCallback(node, 1, readValue, context);
       const write = writeValue === undefined ? undefined : planRustLocationCallback(node, 2, writeValue, context);
-      if (pointer === undefined || read === undefined || write === undefined ||
-        !requireRustCarrierRequirements(plan.pointeeCarrier, ["static"], node, context) ||
-        !requireRustCarrierRequirements(plan.sourcePointeeCarrier, ["static"], node, context)) return undefined;
+      if (pointer === undefined || read === undefined || write === undefined) return undefined;
       const source = pointer;
       return plan.optional
         ? { kind: "call", path: "rt::Location::try_map_optional", args: [optionReference(source), read, write] }
@@ -90,11 +84,7 @@ export function planRustTypedLocationCall(
         return initial === undefined ? undefined : planRustNativeAllocation(node, initial, context, rustProgramErrorTargetType());
       }
       const owner = rustTypeFromCarrierInContext(fact.locationCarrier, context);
-      return initial === undefined || owner === undefined || !requireRustLocationValueCarrier(
-        fact.pointeeCarrier,
-        node,
-        context,
-      )
+      return initial === undefined || owner === undefined
         ? undefined
         : { kind: "associated-call", owner, method: "allocate", args: [initial] };
     }

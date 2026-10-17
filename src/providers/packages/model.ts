@@ -48,6 +48,7 @@ interface RustProviderOperationDefinitionBase<
   readonly operationKind: OperationKind;
   readonly target: RustProviderOperationForm;
   readonly resultCarrier: TargetTypeRef;
+  readonly resultLoans?: import("../../target-model/operations/result-loans.js").RustNativeResultLoanContract;
   readonly parameterCarriers?: readonly TargetTypeRef[];
   readonly receiverCarrier?: TargetTypeRef;
   readonly genericParameters?: readonly RustProviderGenericParameter[];

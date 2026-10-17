@@ -7,6 +7,7 @@ import { rustTargetGenericReferences } from "../../../dist/target-model/types/ca
 import { rustGenericCallableTargetType, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustGeneratedTypeParameterNames } from "../../../dist/target-model/names/type-parameters.js";
 import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
+import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 
 const outer = Object.freeze({ kind: "type-parameter", identity: "source:outer/0", name: "T" });
 const inner = Object.freeze({ kind: "type-parameter", identity: "source:inner/0", name: "T" });
@@ -46,7 +47,9 @@ test("generated generic scopes reserve authored binders and render nested refere
   assert.equal(names.get(outer.identity), "CapturedT2");
   assert.equal(names.get(reserved.identity), "CapturedT");
   assert.equal(names.has(inner.identity), false);
-  const rendering = { typeParameterNames: names, pathFor: () => undefined, additionalArgumentsFor: () => [] };
+  const rendering = { typeDefinitions: emptyRustTypeDefinitions, typeParameterNames: names,
+    pathFor: () => undefined, additionalArgumentsFor: () => [], programErrorCarrier: () => undefined,
+    producerErrorCarrier: () => undefined, nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
   assert.deepEqual(rustTypeFromCarrier(outer), { kind: "named", path: "T" });
   assert.deepEqual(rustTypeFromCarrier(outer, rendering), { kind: "named", path: "CapturedT2" });
   assert.deepEqual(rustTypeFromCarrier(inner, rendering), { kind: "named", path: "T" });

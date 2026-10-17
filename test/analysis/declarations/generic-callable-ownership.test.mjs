@@ -170,7 +170,7 @@ closureCapture: { get: (node) => {
       types: { resolveNode: node => records.runtimeCarrier.get(node)?.carrier },
       semantics: currentSource.semantics.forFile };
     const retainedEnvironments = createRustRetainedEnvironmentQueries({ source: currentSource, sourceStorage,
-      sourceLifetimes: emptyRustLifetimeIndex });
+      sourceLifetimes: emptyRustLifetimeIndex, domain: Object.freeze({ has: isNativeNode }) });
     return { ...planInput, sourceStorage, nativeNodes: participation.nodes,
       isNativeNode, lexicalFunctions, typeDefinitions, sourceTypes, projectTypes, objectRepresentations,
       structuralShapes, carrierHost, retainedEnvironments };

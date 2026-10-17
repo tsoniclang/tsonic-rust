@@ -5,7 +5,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { SourceDeclarationUse } from "@tsonic/target-api/source";
 import type { RustFactWalk } from "../program/walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../target-model/types/index.js";
 
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import { rustCallArgumentIsOwned } from "./parameter-passing.js";
@@ -68,7 +68,7 @@ export function rustCapturedBindingStorage(
     : !mutated || iterationValue ? { storage: "value" }
     : unique && (nativeCallTrait === "FnMut" || nativeCallTrait === "FnOnce")
       ? { storage: "value", mutable: true }
-      : unique && rustCarrierSupportsClone(carrier, walk.context.typeDefinitions)
+      : unique
         ? { storage: isRustCopyCarrier(carrier) ? "cell" : "borrow-cell" }
         : location;
   const storage = Object.freeze(selectedStorage);

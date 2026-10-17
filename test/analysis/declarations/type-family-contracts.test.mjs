@@ -42,7 +42,8 @@ function errorBoundaryFixture() {
     class AppError extends Error {}
     export function fail(): never { throw new AppError("shape boundary"); }
   `);
-  const components = analyzeRustSourcePackageComponents(context, "lib", node => context.records.errorEffects.get(node));
+  const components = analyzeRustSourcePackageComponents(context, "lib", node => context.records.errorEffects.get(node),
+    context.sourceOutputIdentities);
   assert.equal(components.kind, "resolved", "the fixture has its actual completed source error component");
   const scope = context.sourceFiles[0];
   assert.equal(scope !== undefined, true, "the fixture has an exact checked source scope");
@@ -189,7 +190,9 @@ test("source trait references require source-owned paths rather than native-path
   assert.equal(isRustTargetTypeRef(family.trait), true);
   assert.equal(isRustTargetTypeRef({ ...family.trait, path: "other" }), false);
   assert.equal(rustTypeFromCarrier(projection), undefined);
-  assert.deepEqual(rustTypeFromCarrier(projection, { pathFor: (source) => {
+  assert.deepEqual(rustTypeFromCarrier(projection, { typeDefinitions: emptyRustTypeDefinitions,
+    typeParameterNames: undefined, programErrorCarrier: () => undefined, producerErrorCarrier: () => undefined,
+    nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined, pathFor: (source) => {
     assert.deepEqual(source, family.trait.sourceItem);
     return "crate::storage::Storage";
   }, additionalArgumentsFor: () => [] }), { kind: "qualified", owner: { kind: "named", path: "T" },

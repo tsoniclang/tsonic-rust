@@ -7,7 +7,7 @@ import { rustCallableInvocationResult } from "./results.js";
 import type { RustProjectTypeDefinition, RustProjectTypePolicy } from "../project-types/type-policy.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { closedMetadataEquals, isDenseDataArray } from "../../target-model/metadata/closed-data.js";
-import { isRustCopyCarrier, rustCallableProtocol, rustCarrierSupportsClone, rustClosureProtocol, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, rustCallableProtocol, selectRustCloneRequirements, rustClosureProtocol, rustOptionElementCarrier, rustSourceTypeCarrierValue, rustTargetGenericTypeArguments, substituteRustTargetTypeParameters } from "../../target-model/types/index.js";
 import { rustRestSequenceElements } from "../../target-model/operations/rest-assembly.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
 import { rustContextualValueConversionIsFallible } from "../../target-model/conversions/contextual.js";
@@ -139,7 +139,7 @@ export function selectRustCallableParameterAdapters(
     }
     if (source.form !== "required" && source.form !== "rest" ||
       source.mode !== "value" && !isRustCopyCarrier(source.valueCarrier) &&
-        !rustCarrierSupportsClone(source.valueCarrier, definitions)) {
+        selectRustCloneRequirements(source.valueCarrier, definitions, () => true, () => true).kind === "unavailable") {
       return undefined;
     }
     const targetLogicalCarrier = target.form === "optional"

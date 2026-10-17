@@ -14,7 +14,7 @@ import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } 
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustCarrierSatisfiesTraitRef } from "../../target-model/types/carriers/traits.js";
-import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
+import { isRustNeverCarrier, rustCarrierSupportsTrait, selectRustCloneRequirements, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue,
   rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -54,9 +54,10 @@ const supported: RustCarrierRequirementSelection = Object.freeze({ kind: "suppor
 const unsatisfied = (reason: string): RustCarrierRequirementSelection => Object.freeze({ kind: "unsatisfied", reason });
 const unresolved = (reason: string): RustCarrierRequirementSelection => Object.freeze({ kind: "unresolved", reason });
 
-export function rustFinalContractSupportsStatic(
+export function rustFinalContractSupportsRequirements(
   contract: RustDeclarationGenericRequirementContract,
   carrier: TargetTypeRef,
+  required: readonly RustGenericRequirement[],
   families: Pick<RustSourceTypeFamilyRegistry, "implementation">,
   definitions: RustTypeDefinitions,
   evidence: RustStaticRequirementEvidence | undefined,
@@ -71,14 +72,18 @@ export function rustFinalContractSupportsStatic(
     available.set(parameter.identity, requirements);
   }
   if (rustTargetTypeParameterIdentities(normalized).some(identity => !available.has(identity)))
-    return unresolved("Native static retention requires every free generic identity to belong to its actual final contract.");
+    return unresolved(required.includes("static")
+      ? "Native static retention requires every free generic identity to belong to its actual final contract."
+      : "A native requirement requires every free generic identity to belong to its actual final contract.");
   const demanded = new Map([...available.keys()].map(identity => [identity, new Set<RustGenericRequirement>()]));
-  const selected = classifyCarrierRequirements(normalized, ["static"], new Set(available.keys()), demanded,
+  const selected = classifyCarrierRequirements(normalized, required, new Set(available.keys()), demanded,
     (projection, requirement) => contract.associatedTypes.some(associated =>
       rustTargetTypeRefEquals(associated.carrier, projection) && associated.requirements.includes(requirement)), definitions, evidence);
   if (selected.kind !== "supported") return selected;
   return [...demanded].every(([identity, requirements]) => [...requirements].every(requirement => available.get(identity)!.has(requirement)))
-    ? supported : unsatisfied("Native static retention requires an existing static bound in its exact final generic contract.");
+    ? supported : unsatisfied(required.includes("static")
+      ? "Native static retention requires an existing static bound in its exact final generic contract."
+      : "A native requirement requires its existing bound in the exact final generic contract.");
 }
 
 export function classifyCarrierRequirements(
@@ -114,11 +119,18 @@ export function classifyCarrierRequirements(
       continue;
     }
     const traitPath = requirement === "clone" ? "core::clone::Clone" : "core::default::Default";
-    if (!rustCarrierSupportsTrait(carrier, traitPath, (name, selectedTrait) => {
+    const parameterSupports = (name: string, selectedTrait: string): boolean => {
       if (!declared.has(name) || selectedTrait !== traitPath) return false;
       byParameter.get(name)!.add(requirement);
       return true;
-    }, (projection, selectedTrait) => selectedTrait === traitPath && associatedSupports(projection, requirement), definitions))
+    };
+    const associated = (projection: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, selectedTrait: string): boolean =>
+      selectedTrait === traitPath && associatedSupports(projection, requirement);
+    if (requirement === "clone") {
+      const selected = selectRustCloneRequirements(carrier, definitions, parameterSupports, associated);
+      if (selected.kind === "required") return unresolved("A native Clone requirement has no completed physical source-object field definition.");
+      if (selected.kind === "available") continue;
+    } else if (rustCarrierSupportsTrait(carrier, traitPath, parameterSupports, associated, definitions)) continue;
       return unsatisfied(`The exact native carrier does not provide ${requirement}.`);
   }
   return supported;

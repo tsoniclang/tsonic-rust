@@ -91,7 +91,7 @@ function path(name: string): RustExpr {
 export function planRustProgramErrorModule(
   input: RustPlanningContext,
   moduleNameByFileName: ReadonlyMap<string, string>,
-  domain: import("./source-package-errors.js").RustSourcePackageErrorDomainPlan,
+  domain: import("../../../target-model/records/error-regions.js").RustSourcePackageErrorDomainPlan,
   diagnostics: TargetDiagnostic[],
 ): RustSourceFileModel | undefined {
   if (domain.forwardModulePath !== undefined) {

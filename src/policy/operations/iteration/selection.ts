@@ -5,7 +5,7 @@ import { rustJsArrayEntriesElementTargetType, rustJsArrayEntryTargetType } from 
 import { isRustCopyCarrier, isRustStringCarrier, rustFixedArrayCarrierValue, getRustGeneratorProtocol,
   rustStringTargetType, rustJsArrayLikeElementTargetType, rustJsRegExpExecArrayTargetType,
   rustJsRegExpStringIteratorTargetId, rustRegExpExecArrayTargetType, rustRegExpStringIteratorTargetId,
-  getRustJsMapTargetTypes, getRustJsSetElementTargetType, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
+  getRustJsMapTargetTypes, getRustJsSetElementTargetType, selectRustCloneRequirements } from "../../../target-model/types/index.js";
 
 type RustIterableTargetPolicy =
   | {
@@ -59,8 +59,8 @@ export function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, de
     return { kind: "js-array", elementCarrier: jsElement };
   }
   const mapTypes = getRustJsMapTargetTypes(iterable);
-  if (mapTypes !== undefined && rustCarrierSupportsClone(mapTypes.key, definitions) &&
-    rustCarrierSupportsClone(mapTypes.value, definitions)) {
+  if (mapTypes !== undefined && selectRustCloneRequirements(mapTypes.key, definitions, () => true, () => true).kind !== "unavailable" &&
+    selectRustCloneRequirements(mapTypes.value, definitions, () => true, () => true).kind !== "unavailable") {
     return {
       kind: "receiver-method",
       elementCarrier: { kind: "tuple", elements: [mapTypes.key, mapTypes.value] },
@@ -68,7 +68,7 @@ export function rustIterableTargetPolicy(iterable: TargetTypeRef | undefined, de
     };
   }
   const setElement = getRustJsSetElementTargetType(iterable);
-  if (setElement !== undefined && rustCarrierSupportsClone(setElement, definitions)) {
+  if (setElement !== undefined && selectRustCloneRequirements(setElement, definitions, () => true, () => true).kind !== "unavailable") {
     return { kind: "receiver-method", elementCarrier: setElement, method: "values" };
   }
   if (iterable?.kind === "target-named") {

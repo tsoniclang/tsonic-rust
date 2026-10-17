@@ -72,7 +72,7 @@ export function rustFoundationForCarrier(carrier: RustTargetTypeRef): RustFounda
         return;
       case "impl-trait":
         current.bounds.forEach(visit);
-        current.captures.forEach(visitArgument);
+        current.captures?.forEach(visitArgument);
         return;
       case "associated-type":
         visit(current.owner);

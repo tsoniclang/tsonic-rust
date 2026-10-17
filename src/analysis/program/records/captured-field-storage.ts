@@ -21,13 +21,14 @@ export function createRustCapturedFieldStorageProducer(
 ): RustCapturedFieldStorageProducer {
   const family = createRustRecordFamily({ id: "tsonic.rust.capturedFieldStorage",
     equals: rustCapturedFieldStorageEquals }, assertOpen, inherited);
+  const admitted = new WeakSet<Node>();
   return Object.freeze({
     records: family.reader,
     resolve(walk: RustFactWalk, declaration: Node, carrier: TargetTypeRef): void {
       assertOpen();
       const existing = family.reader.get(declaration);
-      if (existing !== undefined) {
-        if (!rustTargetTypeRefEquals(existing.valueCarrier, carrier)) {
+      if (admitted.has(declaration)) {
+        if (existing === undefined || !rustTargetTypeRefEquals(existing.valueCarrier, carrier)) {
           failTargetAnalysisInvariant("tsonic-rust",
             "Conflicting Rust semantic plan 'tsonic.rust.capturedFieldStorage' for one exact source subject.", declaration);
         }
@@ -38,6 +39,10 @@ export function createRustCapturedFieldStorageProducer(
         requireRustRecord(walk.context.requiredRecords, "capturedFieldStorage", declaration,
           "captured-field", "capturedFieldStoragePlans.resolve");
         family.writer.set(declaration, selection);
+        admitted.add(declaration);
+      } else if (existing !== undefined) {
+        failTargetAnalysisInvariant("tsonic-rust",
+          "An inherited captured-field plan has no exact captured source declaration at admission.", declaration);
       }
     },
   });

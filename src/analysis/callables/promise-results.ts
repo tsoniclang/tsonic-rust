@@ -14,7 +14,7 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustLifetimesEqual, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
-import { classifyCarrierRequirements, rustFinalContractSupportsStatic,
+import { classifyCarrierRequirements, rustFinalContractSupportsRequirements,
   type RustStaticRequirementEvidence } from "../declarations/generic-carrier-requirements.js";
 import type { AnalyzeRustDeclarationGenericRequirementsResult, RustGenericRequirement } from "../declarations/generic-requirements.js";
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
@@ -341,7 +341,7 @@ export function analyzeRustPromiseResults(input: {
       const contract = input.requirements.kind === "resolved" && owner !== undefined
         ? input.requirements.index.contractFor(owner) : undefined;
       return contract === undefined ? { kind: "unresolved", reason: "Native generic retention requires its actual completed final contract." }
-        : rustFinalContractSupportsStatic(contract, carrier, input.families, input.definitions, nativeEvidence);
+        : rustFinalContractSupportsRequirements(contract, carrier, ["static"], input.families, input.definitions, nativeEvidence);
     };
     const classifyExecution = (subject: SourceStorageSubject, bindings: SourceStorageBindings): ReturnType<typeof classify> => {
       if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };

@@ -14,10 +14,10 @@ function fixture(options = {}) {
   const argument = { kind: "type", type: integer };
   const physical = { kind: "type", type: { kind: "source-primitive", name: "bool" } };
   const selectedPhysical = options.wrongPhysical ? { kind: "type", type: integer } : physical;
-  const carrier = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [selectedPhysical, argument] : [argument]);
+  const carrier = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [selectedPhysical, argument] : [argument], [], undefined, [], undefined, []);
   const memberCarrier = options.noSourceParameters ? integer : { kind: "type-parameter", identity: "T", name: "T" };
   const genericArgument = { kind: "type", type: memberCarrier };
-  const generic = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [physical, genericArgument] : [genericArgument]);
+  const generic = rustNamedTargetType("native.box", "native::Box", options.physicalArguments ? [physical, genericArgument] : [genericArgument], [], undefined, [], undefined, []);
   const owner = { providerId: "fixture", providerVersion: "1", providerModuleId: "native", moduleSpecifier: "@fixture/native", exportId: "box", exportName: "Box" };
   const facts = new Map();
   const rows = selected.evidence.members.map((member, index) => {
@@ -38,10 +38,10 @@ function fixture(options = {}) {
     sourceStorage: { storageSubjectFor: () => ({ kind: "unresolved" }) },
     semantics: file => selected.source.semantics.forFile(file), semanticsFor: () => selected.semantics,
     records: createRustRecordFixture({ runtimeCarrier: { get: node => node === selected.evidence.owner ? { carrier: options.missingGeneric
-      ? rustNamedTargetType("native.box", "native::Box") : carrier } : undefined } }),
+      ? rustNamedTargetType("native.box", "native::Box", [], [], undefined, [], undefined, []) : carrier } : undefined } }),
   };
   return resolveRustProviderIndexedAccess(selected.node, context, {
-    providerTypes: [{ ...owner, targetCarrier: options.wrongOwner ? rustNamedTargetType("native.other", "native::Other") : generic, genericParameters: parameters }],
+    providerTypes: [{ ...owner, targetCarrier: options.wrongOwner ? rustNamedTargetType("native.other", "native::Other", [], [], undefined, [], undefined, []) : generic, genericParameters: parameters }],
     providerRows: options.missingRelation ? [] : options.duplicate ? [...rows, rows[0]] : rows,
   });
 }

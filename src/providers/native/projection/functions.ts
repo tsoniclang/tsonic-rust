@@ -23,6 +23,7 @@ import {
 } from "./source-generics.js";
 import { compilerFunctionResult } from "./representability.js";
 import { withCallableGenericProjections } from "./callable-generics.js";
+import { projectRustNativeResultLoans } from "./result-loans.js";
 import {
   rustBorrowedStrToStringValueConversion,
 } from "../../../target-model/conversions/model.js";
@@ -170,6 +171,7 @@ export function projectFunction(
     operationKind: constructor ? "constructor" as const : "method" as const,
     target,
     resultCarrier,
+    resultLoans: projectRustNativeResultLoans(fn, result.type),
     parameterCarriers: Object.freeze(parameterCarriers),
     ...(context.currentType === undefined || !instanceMethod
       ? {}

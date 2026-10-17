@@ -1,10 +1,10 @@
 import { rustDeriveAttributes } from "../../target-ast/syntax/attributes.js";
 import { planRustTypeFamilyDeclaration } from "./type-families.js";
-import { diagnosticInput, rustProjectTypeHasPublicImplementationAbi } from "../program/plan-context.js";
+import { rustProjectTypeHasPublicImplementationAbi } from "../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition } from "../program/reachability-directives.js";
-import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant } from "../diagnostics.js";
 
-import { rustTypeFromCarrierInContext } from "../types/render.js";
+import { rustTypeFromSelectedNativeCarrierInContext } from "../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem } from "../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
@@ -27,15 +27,9 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
     const generics = contract === undefined
       ? undefined
       : rustSourceDeclarationGenerics(contract);
-    const target = rustTypeFromCarrierInContext(fact.target, context);
-    if (generics === undefined || target === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.native-type-alias",
-        "A lifetime-bearing type alias has no exact generic contract or renderable target type.",
-      ));
-      return undefined;
-    }
+    if (generics === undefined || admitted.nativeCarrier === null) return failRustPlannerInvariant(
+      "An admitted native alias lost its selected generic contract or native type.", node);
+    const target = rustTypeFromSelectedNativeCarrierInContext(admitted.nativeCarrier, context);
     const visibility = ast.hasModifierKind(node, "export")
       ? "public" as const
       : "crate" as const;
@@ -61,12 +55,10 @@ export function planTypeAliasDeclaration(node: Node, context: RustPlanContext): 
   if (unionGenerics === undefined) return failRustPlannerInvariant(
     "An admitted runtime union lost its selected native generic contract.", node);
   const template = admitted.payloadTemplate;
-  const payloadPlan = template === undefined ? undefined : planRustSourceUnionPayloadTemplate(template, unionGenerics,
-    selected => rustTypeFromCarrierInContext(selected, context));
+  const payloadPlan = template === null ? undefined : planRustSourceUnionPayloadTemplate(template, unionGenerics,
+    selected => rustTypeFromSelectedNativeCarrierInContext(selected, context));
   if (fact.kind === "runtime" && payloadPlan === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, node), "rust.backend.union-variant-carrier",
-      "Runtime union variants require one exact renderable physical payload template."));
-    return undefined;
+    return failRustPlannerInvariant("An admitted runtime alias lost its selected native payload template.", node);
   }
   return [{
     kind: "enum",

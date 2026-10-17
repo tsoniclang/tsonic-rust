@@ -383,6 +383,7 @@ export function providerOperationTemplate<
     target: row.target,
     ...(row.dispatchInputs === undefined ? {} : { dispatchInputs: row.dispatchInputs }),
     resultCarrier: row.resultCarrier,
+    ...(row.resultLoans === undefined ? {} : { resultLoans: row.resultLoans }),
     ...(row.parameterCarriers === undefined ? {} : { parameterCarriers: row.parameterCarriers }),
     ...(row.receiverCarrier === undefined ? {} : { receiverCarrier: row.receiverCarrier }),
     ...(row.genericParameters === undefined ? {} : { genericParameters: row.genericParameters }),

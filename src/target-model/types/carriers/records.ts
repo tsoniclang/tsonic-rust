@@ -9,7 +9,7 @@ export function rustRecordTargetType(key: TargetTypeRef, value: TargetTypeRef): 
   return rustNamedTargetType("tsonic.rust.Record", "rt::Record", rustTypeGenericArguments([key, value]), [], {
     implementations: ["core::clone::Clone", "core::cmp::Eq", "core::cmp::PartialEq", "core::default::Default", "core::fmt::Debug"]
       .map(path => ({ trait: rustNativeTraitRef(path), requirements: [] })),
-  });
+  }, [], undefined, []);
 }
 
 export function rustRecordCarrierValue(carrier: TargetTypeRef | undefined): {

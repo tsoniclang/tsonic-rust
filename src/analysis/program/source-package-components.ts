@@ -18,11 +18,18 @@ import type { RustClosedErrorTransportDemand } from "../errors/closed-errors.js"
 import type { RustNativeStorageSelection } from "../callables/native-storage.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { IsTypeSyntaxNode } from "@tsonic/target-api/source";
+import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
+import { allocateRustComponentSupportModuleName } from "../names/source-output-identities.js";
 
 export interface RustSourcePackageComponentSemantics {
   readonly componentId: string;
   readonly sourceFileNames: readonly string[];
   readonly dependencyComponentIds: readonly string[];
+  readonly crateName: string | undefined;
+  readonly programModuleName: string;
+  readonly structuralShapesModuleName: string;
+  readonly initializerFacadeModuleName: string;
+  readonly crateInitializerFunctionBase: string;
   readonly publishesImplementationAbi: boolean;
   readonly errorDomain: RustErrorDomain;
   readonly errorOwnerComponentId: string | undefined;
@@ -169,6 +176,7 @@ export function analyzeRustSourcePackageComponents(
   context: RustAnalysisContext,
   outputType: "bin" | "lib",
   effectsFor: (node: Node) => RustErrorEffectsFact | undefined,
+  sourceOutputIdentities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
 ): AnalyzeRustSourcePackageComponentsResult {
   const selected = context.sourcePackageComponentIdentities;
   if (selected.kind === "rejected") return selected;
@@ -251,11 +259,33 @@ export function analyzeRustSourcePackageComponents(
     errorOwners.set(componentId, errorComponents.has(componentId) || dependencyOwners.size > 1
       ? componentId : [...dependencyOwners][0]);
   }
-  const components = Object.freeze(order.map(
-    (componentId): RustSourcePackageComponentSemantics => {
+  const components: RustSourcePackageComponentSemantics[] = [];
+  for (const componentId of order) {
       const component = componentById.get(componentId)!;
       const root = componentId === rootComponentId;
-      return Object.freeze({
+      const componentIdentities = [...sourceOutputIdentities.values()].filter(identity => identity.componentId === componentId);
+      const selectedFiles = new Set(componentIdentities.map(identity => identity.fileName));
+      const sourceFiles = sourceFileNamesByComponent.get(componentId) ?? new Set<string>();
+      if (selectedFiles.size !== sourceFiles.size || [...selectedFiles].some(file => !sourceFiles.has(file))) {
+        diagnostics.push(componentDiagnostic("RUST_SOURCE_PACKAGE_COMPONENT_IDENTITY_MISMATCH",
+          `Physical module identities for source-package component '${componentId}' do not match its sealed source files.`));
+        continue;
+      }
+      const crateNames = new Set(componentIdentities.flatMap(identity => identity.externalCrateName === undefined
+        ? [] : [identity.externalCrateName]));
+      if (!root && crateNames.size !== 1) {
+        diagnostics.push(componentDiagnostic("RUST_SOURCE_PACKAGE_COMPONENT_CRATE_IDENTITY_INVALID",
+          `External source-package component '${componentId}' does not resolve to one exact Rust crate identity.`));
+        continue;
+      }
+      const structuralShapesModuleName = allocateRustComponentSupportModuleName(sourceOutputIdentities, componentId, "shapes");
+      const programModuleName = allocateRustComponentSupportModuleName(sourceOutputIdentities, componentId, "program",
+        [structuralShapesModuleName]);
+      const initializerFacadeModuleName = allocateRustComponentSupportModuleName(sourceOutputIdentities, componentId, "initializers",
+        [structuralShapesModuleName, programModuleName]);
+      const crateInitializerFunctionBase = allocateRustComponentSupportModuleName(sourceOutputIdentities, componentId, "initialize",
+        [structuralShapesModuleName, programModuleName, initializerFacadeModuleName]);
+      components.push(Object.freeze({
         componentId,
         sourceFileNames: Object.freeze([
           ...(sourceFileNamesByComponent.get(componentId) ?? []),
@@ -263,6 +293,11 @@ export function analyzeRustSourcePackageComponents(
         dependencyComponentIds: Object.freeze([...component.dependencies]
           .filter((candidate) => activeComponentIds.has(candidate))
           .sort(compareNames)),
+        crateName: root ? undefined : [...crateNames][0]!,
+        structuralShapesModuleName,
+        programModuleName,
+        initializerFacadeModuleName,
+        crateInitializerFunctionBase,
         publishesImplementationAbi: !root || outputType === "lib",
         errorDomain: errorOwners.get(componentId) !== undefined
           ? "project"
@@ -272,9 +307,10 @@ export function analyzeRustSourcePackageComponents(
           sourceView: closedErrorsByComponent.get(componentId)?.sourceView ?? false,
           thrownCarriers: Object.freeze(closedErrorsByComponent.get(componentId)?.thrownCarriers ?? []) }),
         root,
-      });
-    },
-  ));
+      }));
+  }
+  if (diagnostics.length > 0) return { kind: "rejected", diagnostics: Object.freeze(diagnostics) };
+  Object.freeze(components);
   const byComponentId = new Map(components.map((component) =>
     [component.componentId, component] as const));
   for (const componentId of order) reachable(componentId);

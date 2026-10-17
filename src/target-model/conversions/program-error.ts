@@ -7,7 +7,7 @@ import { emptyRustTypeDefinitions, type RustTypeDefinitions } from "../types/sou
 import { isRustMutableJsErrorCarrier, isRustSourceErrorCarrier, isRustWritableSourceErrorCarrier, rustWritableSourceErrorTargetType,
   isRustRetainedErrorCarrier, isRustWritableRetainedErrorCarrier } from "../types/carriers/source-error.js";
 import { isRustClosedValueCarrier } from "../types/carriers/closed-value-kind.js";
-import { rustTsValueAdmission } from "../types/carriers/traits.js";
+import { rustTsValueProjection } from "../types/carriers/traits.js";
 import { rustClosedValueAdmissionConversion, type RustClosedValueAdmissionConversion } from "./closed-admission.js";
 
 export type RustProgramErrorRoute =
@@ -85,7 +85,7 @@ export function selectRustProgramErrorConversion(
     if (leaves === undefined) {
       const admission = isRustProgramErrorCarrier(target) && !isErrorDestination(carrier) &&
         isRustClosedValueCarrier(definitions.closedValueCarrier) &&
-        rustTsValueAdmission(carrier, definitions) !== undefined
+        rustTsValueProjection(carrier) !== undefined
         ? rustClosedValueAdmissionConversion(carrier, definitions.closedValueCarrier, definitions) : undefined;
       return admission === undefined ? undefined : Object.freeze({ kind: "closed-admission", admission });
     }
@@ -155,7 +155,7 @@ function rustProgramErrorRouteMatches(
   if (route.kind === "closed") return hasExactObjectKeys(route, ["kind"]) && isRustClosedValueCarrier(source);
   if (route.kind === "closed-admission") return hasExactObjectKeys(route, ["kind", "admission"]) &&
     isRustClosedValueCarrier(definitions.closedValueCarrier) &&
-    !isErrorDestination(source) && rustTsValueAdmission(source, definitions) !== undefined &&
+    !isErrorDestination(source) && rustTsValueProjection(source) !== undefined &&
     closedMetadataEquals(route.admission, rustClosedValueAdmissionConversion(source, definitions.closedValueCarrier, definitions));
   if (route.kind === "source-created") return hasExactObjectKeys(route, ["kind"]) && isRustMutableJsErrorCarrier(source);
   if (route.kind === "retained") return hasExactObjectKeys(route, ["kind"]) && isRustRetainedErrorCarrier(source);

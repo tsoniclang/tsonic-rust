@@ -8,18 +8,13 @@ import { rustErrorType, rustNativeFallibleBoundary, rustPackageFallibleBoundary,
   type RustFallibleBoundary } from "./fallible-boundaries.js";
 import { resolveRustPhysicalProgramErrorBoundary } from "./source-package-errors.js";
 import { registerAliasFromPath, type RustPlanContext } from "./plan-context.js";
-import type { RustProducerErrorReference } from "../../../target-model/types/carriers/producer-errors.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
-import { rustNativeErrorJoinIdentity, type RustNativeErrorJoinReference } from "../../../target-model/types/native-error-joins.js";
+import { rustNativeErrorJoinIdentity } from "../../../target-model/types/native-error-joins.js";
 import { planRustJsRejectionRegion } from "./js-rejection-regions.js";
 
 export interface RustErrorRegionCatalog {
   nameFor(fileName: string, arity: number): string | undefined;
   itemsFor(fileName: string): readonly RustItem[];
-  producerErrorType(reference: RustProducerErrorReference,
-    render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined;
-  nativeErrorJoinType(reference: RustNativeErrorJoinReference, context: RustTypeRenderingContext,
-    render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined;
 }
 
 export function createRustErrorRegionCatalog(program: Pick<RustTargetProgram, "sourceFiles" | "errorRegions"> & {
@@ -43,26 +38,6 @@ export function createRustErrorRegionCatalog(program: Pick<RustTargetProgram, "s
   return Object.freeze({
     nameFor: (fileName: string, arity: number) => names.get(fileName)?.get(arity),
     itemsFor: (fileName: string) => declarations.get(fileName) ?? empty,
-    nativeErrorJoinType(reference: RustNativeErrorJoinReference, context: RustTypeRenderingContext,
-      render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
-      const arity = reference.errors.length;
-      const name = names.get(reference.fileName)?.get(arity);
-      const moduleName = context.moduleNameByFileName.get(reference.fileName);
-      const external = context.externalCrateNameByFileName.get(reference.fileName);
-      if (name === undefined || moduleName === undefined) return undefined;
-      const errors = reference.errors.map(render);
-      if (errors.some(error => error === undefined)) return undefined;
-      return planRustNativeErrorJoin({ identity: rustNativeErrorJoinIdentity(reference.fileName, arity), name,
-        referencePath: `${external !== undefined && external !== context.crateName ? external : "crate"}::${moduleName}::${name}`,
-        visibility: "public", sources: (errors as RustType[]).map((errorType, index) => ({
-          identity: String(index), variant: `Error${index}`, errorType,
-        })) })?.errorType;
-    },
-    producerErrorType(reference: RustProducerErrorReference,
-      render: (carrier: TargetTypeRef) => RustType | undefined): RustType | undefined {
-      const selected = program.errorRegions.producerError(reference);
-      return selected === undefined ? undefined : render(selected);
-    },
   });
 }
 

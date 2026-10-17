@@ -7,17 +7,17 @@ const constant = value => ({ kind: "const", value: { kind: "integer", value } })
 
 test("instantiated native identity depends on exact arguments, not optional spelling defaults", () => {
   const argument = constant("9007199254740993");
-  const explicit = rustNamedTargetType("crate.Token", "crate::Token", [argument]);
-  const defaulted = rustNamedTargetType("crate.Token", "crate::Token", [argument], [argument]);
+  const explicit = rustNamedTargetType("crate.Token", "crate::Token", [argument], [], undefined, [], undefined, []);
+  const defaulted = rustNamedTargetType("crate.Token", "crate::Token", [argument], [argument], undefined, [], undefined, []);
   assert(rustTargetTypeRefEquals(explicit, defaulted));
   assert(rustTargetTypeRefEquals(defaulted, explicit));
-  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("crate.Token", "crate::Token", [constant("9007199254740992")])));
-  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("other.Token", "crate::Token", [argument])));
-  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("crate.Token", "other::Token", [argument])));
+  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("crate.Token", "crate::Token", [constant("9007199254740992")], [], undefined, [], undefined, [])));
+  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("other.Token", "crate::Token", [argument], [], undefined, [], undefined, [])));
+  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("crate.Token", "other::Token", [argument], [], undefined, [], undefined, [])));
   assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("crate.Token", "crate::Token", [argument], [], {
     implementations: [{ trait: { kind: "trait-ref", id: "core::marker::Copy", path: "core::marker::Copy", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
-  })));
-  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("crate.Token", "crate::Token", [argument], [argument, argument])));
-  const outer = inner => rustNamedTargetType("crate.Outer", "crate::Outer", [{ kind: "type", type: inner }]);
+  }, [], undefined, [])));
+  assert(!rustTargetTypeRefEquals(explicit, rustNamedTargetType("crate.Token", "crate::Token", [argument], [argument, argument], undefined, [], undefined, [])));
+  const outer = inner => rustNamedTargetType("crate.Outer", "crate::Outer", [{ kind: "type", type: inner }], [], undefined, [], undefined, []);
   assert(rustTargetTypeRefEquals(outer(explicit), outer(defaulted)));
 });

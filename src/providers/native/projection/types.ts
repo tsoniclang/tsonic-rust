@@ -1,11 +1,14 @@
 import {
   rustFixedArrayTargetType,
   rustNamedTargetType,
+  rustNamedTypeCarrierValue,
+  rustNamedTypeRequirementsForArguments,
   rustNativeScalarTargetId,
   rustNeverTargetType,
   rustOptionTargetId,
   rustSourcePrimitiveTargetType,
   rustStringTargetType,
+  substituteRustTargetGenerics,
   rustUnitTargetType,
 } from "../../../target-model/types/index.js";
 import {
@@ -30,7 +33,11 @@ import {
   providerFunctionPointerAbi,
   recordCarrierPath,
   rustPath,
+  typeRequirements,
 } from "./operations.js";
+import { rustProviderTypeRequirementTrait } from "../../../target-model/operations/type-requirements.js";
+import { bindRustGenericArguments } from "../../../target-model/types/carriers/generic-argument-bindings.js";
+import { substituteRustTargetTraitRef } from "../../../target-model/types/carriers/substitution.js";
 import {
   rustConstPointerExport,
   rustMutPointerExport,
@@ -52,14 +59,17 @@ import type {
 } from "../model/model.js";
 import type {
   RustTargetAssociatedConstraint,
+  RustTargetConstArgument,
   RustTargetGenericArgument,
+  RustNamedTypeTraitRequirement,
   RustTargetTraitRef,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
 import type {
   RustProviderGenericParameter,
+  RustProviderTypeParameterRequirement,
 } from "../../../target-model/operations/model.js";
-import { rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, type RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 import { isCompilerCallableTrait } from "./callable-generics.js";
 import {
   compilerModuleSpecifierForIdentity,
@@ -445,11 +455,17 @@ export function targetTypeFor(
         );
         const path = standard.targetPath.join("::");
         recordCarrierPath(context.carrierPaths, standard.targetId, path);
+        const current = currentTypeForApplication(standard.targetId, arguments_, context);
         return rustNamedTargetType(
           standard.targetId,
           path,
           arguments_,
           genericDefaults,
+          current?.traits,
+          current?.upcasts ?? [],
+          current?.nativeErrorIdentity,
+          current === undefined ? targetTypeRequirementsFor(standard.genericParameters, arguments_, context).nativeRequirements
+            : current.typeRequirements,
         );
       }
       if (type.crateName !== context.dependency.crateName && pathResolution === "source-visible") {
@@ -466,14 +482,71 @@ export function targetTypeFor(
         (type.crateName === context.dependency.crateName
           ? rustPath(context.dependency.targetCrateName, type.modulePath, type.name)
           : type.identity.canonicalPath.join("::"));
-      recordCarrierPath(context.carrierPaths, id, path);
       const genericArguments = local === undefined
         ? type.genericArguments.map((argument) => targetGenericArgumentFor(argument, context, position, pathResolution))
         : targetGenericArgumentsForApplication(type, local, context, position);
       const genericDefaults = local === undefined ? [] : targetGenericDefaultsForApplication(type, local, context, position);
-      return rustNamedTargetType(id, path, genericArguments, genericDefaults);
+      const current = currentTypeForApplication(id, genericArguments, context);
+      const requirements = current !== undefined ? current.typeRequirements
+        : local !== undefined ? targetTypeRequirementsFor(local.genericParameters, genericArguments, context).nativeRequirements
+        : genericArguments.every(argument => argument.kind !== "type") ? []
+        : undefined;
+      if (requirements === undefined) return Object.freeze({ kind: "target-named", id,
+        genericArguments: Object.freeze(genericArguments) });
+      recordCarrierPath(context.carrierPaths, id, path);
+      return rustNamedTargetType(id, path, genericArguments, genericDefaults,
+        current?.traits, current?.upcasts ?? [], current?.nativeErrorIdentity, requirements);
     }
   }
+}
+
+function currentTypeForApplication(id: string, arguments_: readonly RustTargetGenericArgument[],
+  context: ProjectionContext): ReturnType<typeof rustNamedTypeCarrierValue> {
+  const current = rustNamedTypeCarrierValue(context.currentType?.carrier);
+  if (current?.id !== id) return undefined;
+  const types = new Map<string, TargetTypeRef>();
+  const lifetimes = new Map<string, RustLifetimeRef>();
+  const consts = new Map<string, RustTargetConstArgument>();
+  for (const [index, parameter] of current.genericArguments.entries()) {
+    const argument = arguments_[index];
+    if (argument?.kind !== parameter.kind) throw new Error("A native Self application differs from its declared generic argument domain.");
+    if (parameter.kind === "type" && argument.kind === "type" && parameter.type.kind === "type-parameter")
+      types.set(parameter.type.identity, argument.type);
+    else if (parameter.kind === "lifetime" && argument.kind === "lifetime" && parameter.lifetime.kind === "parameter")
+      lifetimes.set(rustLifetimeKey(parameter.lifetime), argument.lifetime);
+    else if (parameter.kind === "const" && argument.kind === "const" && parameter.value.kind === "parameter")
+      consts.set(parameter.value.identity, argument.value);
+  }
+  if (types.size === 0 && lifetimes.size === 0 && consts.size === 0) return current;
+  const applied = rustNamedTypeCarrierValue(substituteRustTargetGenerics(context.currentType!.carrier, types, lifetimes, consts));
+  if (applied === undefined) throw new Error("A native Self application must preserve its exact declared nominal trait contract.");
+  return applied;
+}
+
+export function targetTypeRequirementsFor(
+  parameters: readonly RustCompilerGenericParameter[],
+  arguments_: readonly RustTargetGenericArgument[],
+  context: ProjectionContext,
+): {
+  readonly nativeRequirements: readonly RustNamedTypeTraitRequirement[];
+  readonly typeRequirements: readonly RustProviderTypeParameterRequirement[];
+} {
+  const declared = withProjectionGenericParameters(context, parameters);
+  const template = targetGenericParameterArguments(parameters, declared);
+  const typeParameters = parameters.filter(parameter => parameter.kind === "type");
+  const selected = typeRequirements(typeParameters, typeParameters.map(parameter => sourceGenericParameterName(parameter, declared)),
+    declared, trait => targetTraitFor(trait, declared, "parameter", "target-default")).typeRequirements ?? [];
+  const requirements = rustNamedTypeRequirementsForArguments(template, selected.map(parameter => ({
+    identity: parameter.identity, traits: parameter.requirements.map(rustProviderTypeRequirementTrait),
+  })));
+  const bindings = bindRustGenericArguments(template, arguments_);
+  if (requirements === undefined || bindings === undefined)
+    throw new Error("A native type application requires its exact original declaration TYPE slots and generic bindings.");
+  return Object.freeze({ typeRequirements: selected,
+    nativeRequirements: Object.freeze(requirements.map(requirement => Object.freeze({ ...requirement,
+      trait: substituteRustTargetTraitRef(requirement.trait, bindings.types, bindings.lifetimes, bindings.consts),
+    }))),
+  });
 }
 
 export function sourceGenericArgumentFor(

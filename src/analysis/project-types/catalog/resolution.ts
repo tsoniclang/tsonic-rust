@@ -98,7 +98,6 @@ export function createRustProjectTypePolicy(
       if (byDeclaration.has(edge.target.declaration)) continue;
       const external = host.resolveExternalHeritage(edge);
       if (external !== undefined && definition.kind === "class" &&
-        definition.genericParameters.length === 0 &&
         !externalBaseByDeclaration.has(definition.declaration)) {
         externalBaseByDeclaration.set(definition.declaration, external);
         externalBaseByHeritage.set(edge.heritage, external);

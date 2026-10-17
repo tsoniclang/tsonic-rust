@@ -1,5 +1,9 @@
 import { hasExactObjectKeys, isMetadataRecord } from "../metadata/closed-data.js";
 
+export const rustProjectObjectStateField = "state";
+export const rustProjectObjectIdentityField = "identity";
+export const rustProjectObjectDispatchField = "dispatch";
+
 export type RustCapturedFieldStorageKind = "copy" | "shared" | "cell" | "borrow-cell";
 
 export interface RustCapturedFieldStorage {

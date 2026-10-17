@@ -6,6 +6,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
 import assert from "node:assert/strict";
+import { nativeDeclarationSelectionInput } from "../../helpers/native-type-selection.mjs";
 import test from "node:test";
 import { acmeTestingPackage, analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
@@ -36,9 +37,9 @@ export enum Aliased { firstValue = 1, secondValue = 1 }
   const ordinary = program.nativeDeclarations.get(ordinaryNode);
   const aliased = program.nativeDeclarations.get(aliasNode);
   assert.equal(ordinary?.kind, "enum", "ordinary enum is admitted");
-  assert.equal(ordinary.representation, "enum", "distinct constants select native enum syntax");
+  assert.equal(Object.hasOwn(ordinary, "representation"), false, "distinct constants have one open integer form");
   assert.equal(aliased?.kind, "enum", "duplicate enum is admitted");
-  assert.equal(aliased.representation, "constants", "duplicate constants select the existing native wrapper");
+  assert.equal(Object.hasOwn(aliased, "representation"), false, "duplicate constants use the identical open integer form");
   assert.deepEqual(ordinary.variants.map(variant => [variant.name, variant.discriminant]),
     [["firstValue", "1"], ["secondValue", "2"]], "authored spelling and checked values are preserved");
   assert.equal(program.nativeDeclarations.get(ordinaryNode) === ordinary, true, "reader returns the identical sealed form");
@@ -131,7 +132,10 @@ test("source-output identities are published once with the analyzed program", ()
   const identity = program.sourceOutputIdentities.get("/src/nested/value.ts");
   assert.equal(identity !== undefined, true, "an emitted module has its admitted identity");
   assert.equal(identity.moduleName, "nested::value", "complete native module identity is retained");
-  assert.equal(identity.artifactPath, "src/nested/value.rs", "the selected output path is retained");
+  assert.equal(Object.hasOwn(identity, "artifactPath"), false,
+    "analysis publishes semantic module identity, not physical output placement");
+  assert.equal(backendNames.rustSourceArtifactPath(identity), "src/nested/value.rs",
+    "the selected output path is rendered from the unchanged native module identity");
   assert.equal(program.sourceOutputIdentities.get("/src/nested/value.ts") === identity, true,
     "consumers receive the identical selected identity without running a selector");
   assert.equal(Object.isFrozen(identity) && Object.isFrozen(identity.moduleSegments), true,
@@ -257,7 +261,11 @@ test("sealed family implementations have completed contracts and missing contrac
     objectRepresentations: program.objectRepresentations,
     typeFamilies: program.typeFamilies,
     genericRequirements: { ...program.declarationGenericRequirements, contractForCarrier: () => undefined },
-  }), error => error instanceof Error && error.message.includes(
+    ...nativeDeclarationSelectionInput(program),
+  }, new WeakMap(program.projectTypes.definitions.flatMap(definition => {
+    const form = program.nativeDeclarations.get(definition.declaration);
+    return form === undefined ? [] : [[definition.declaration, form]];
+  }))), error => error instanceof Error && error.message.includes(
     "A sealed type-family implementation has no completed native generic requirement contract."),
   "a broken completed internal contract cannot become a user source rejection");
 });
