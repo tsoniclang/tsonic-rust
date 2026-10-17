@@ -7,6 +7,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { selectRustPromiseBodyRecursion } from "../../../dist/analysis/callables/promise-recursion.js";
 import { rustDirectPromiseBodyCallee } from "../../../dist/analysis/callables/promise-bodies.js";
 import { rustAwaitSelection } from "../../../dist/target-model/types/await.js";
+import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 
 const header = `import type { int32 } from "@tsonic/core/types.js";`;
 const recursive = `${header}
@@ -117,8 +118,15 @@ await main();`);
     "ordinary generic value completion does not establish an awaitable or owned native contract");
 });
 
-test("a generic JS async return keeps ordinary values and actual Promise adoption coherent", { timeout: 300_000 }, () => {
-  native("promise-generic-actual-adoption", `
+function rejectedAdoption(source, call) {
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `${header}\n${source}` },
+    target: { id: "rust", options: { outputType: "bin", crateName: "promise_native_recursion" } } });
+  assertRejectedAsyncSource(compilation, [{ code: "TSONIC_GENERIC_ASYNC_ADOPTION_UNSUPPORTED",
+    kind: "KindCallExpression", text: call }]);
+}
+
+test("a generic JS async return keeps ordinary values and refuses the frozen actual Promise adoption", () => {
+  rejectedAdoption(`
 async function identity<Value>(value: Value) { return value; }
 async function main(): Promise<void> {
   const ordinary: int32 = 7;
@@ -126,11 +134,11 @@ async function main(): Promise<void> {
   const promised = Promise.resolve(other);
   if (await identity(ordinary) !== 7 || await identity(promised) !== 9) throw new Error("generic adoption");
 }
-await main();`);
+await main();`, "identity(promised)");
 });
 
-test("a public generic JS Promise result preserves actual adoption when stored before await", { timeout: 300_000 }, () => {
-  native("promise-generic-stored-adoption", `
+test("a public generic JS Promise refuses frozen actual adoption before stored await", () => {
+  rejectedAdoption(`
 export async function identity<Value>(value: Value) { return value; }
 async function main(): Promise<void> {
   const ordinary: int32 = 7;
@@ -139,11 +147,11 @@ async function main(): Promise<void> {
   const second = identity(Promise.resolve(other));
   if (await first !== 7 || await second !== 9) throw new Error("stored generic adoption");
 }
-await main();`);
+await main();`, "identity(Promise.resolve(other))");
 });
 
-test("a generic structural JS method preserves a Promise-valued captured payload", { timeout: 300_000 }, () => {
-  native("promise-generic-method-adoption", `
+test("a generic structural JS method refuses a frozen Promise-valued captured payload", () => {
+  rejectedAdoption(`
 function make<Value>(value: Value): { read(): Promise<Value> } {
   return { async read(): Promise<Value> { return value; } };
 }
@@ -151,6 +159,32 @@ async function main(): Promise<void> {
   const ordinary: int32 = 7;
   const api = make(Promise.resolve(ordinary));
   if (await api.read() !== 7) throw new Error("generic captured Promise adoption");
+}
+await main();`, "make(Promise.resolve(ordinary))");
+});
+
+for (const exported of [false, true]) {
+  test(`ordinary generic JS payloads remain native-executed with public=${exported}`, { timeout: 300_000 }, () => {
+    native(`promise-generic-ordinary-${exported}`, `
+${exported ? "export " : ""}async function identity<Value>(value: Value) { return value; }
+async function main(): Promise<void> {
+  const ordinary: int32 = 7;
+  const selected = identity(ordinary);
+  if (await selected !== 7) throw new Error("ordinary generic payload");
+}
+await main();`);
+  });
+}
+
+test("an ordinary captured generic method keeps its original native result", { timeout: 300_000 }, () => {
+  native("promise-generic-method-ordinary", `
+function make<Value>(value: Value): { read(): Promise<Value> } {
+  return { async read(): Promise<Value> { return value; } };
+}
+async function main(): Promise<void> {
+  const ordinary: int32 = 7;
+  const api = make(ordinary);
+  if (await api.read() !== 7) throw new Error("ordinary generic method payload");
 }
 await main();`);
 });
