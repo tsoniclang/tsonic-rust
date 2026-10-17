@@ -70,7 +70,7 @@ export interface RustStructuralStorageLookup {
   field(
     carrier: TargetTypeRef,
     storageIndex: number,
-  ): Pick<RustStructuralShapeField, "storage" | "presence" | "method" | "methodStorageCarrier" | "nativeMethod"> | undefined;
+  ): Pick<RustStructuralShapeField, "storage" | "presence" | "method" | "methodStorageCarrier" | "methodConstructions" | "nativeMethod"> | undefined;
 }
 
 export interface RustProjectFieldDispatchLookup {
