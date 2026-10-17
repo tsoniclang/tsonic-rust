@@ -24,7 +24,7 @@ test("Rust JS Number locale declaration checks the same source argument contract
 
 for (const [label, argumentsText, code] of [
   ["numeric locale", "42", "TS2345"],
-  ["numeric locale element", "[42]", "TS2345"],
+  ["numeric locale element", "[42]", "TS2322"],
   ["primitive options", '"en", true', "TS2345"],
   ["extra arguments", '"en", {}, 1', "TS2554"],
 ]) {
