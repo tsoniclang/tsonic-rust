@@ -149,7 +149,7 @@ export function planRustConstructionBody(
         const receiverNode = projection.node;
         const substituted = selectedContext.input.program.physicalEmissionContexts.carrierFor(emission.use, projection.carrier);
         if (substituted === undefined) failRustPlannerInvariant("Construction requires its admitted physical receiver application.", receiverNode);
-        let receiver = root;
+        let receiver: RustExpr = root;
         if (projection.projection === "polymorphic") {
           const receiverType = rustTypeFromCarrierInContext(substituted, selectedContext);
           if (receiverType?.kind !== "named") failRustPlannerInvariant("Construction requires its admitted same-root native view type syntax.", receiverNode);

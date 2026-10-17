@@ -229,14 +229,14 @@ function prepareRustConstructionEmission(input: RustConstructionAnalysisInput, d
   const frameValue = rustFrameCallableValue(frameCarrier);
   const frameEntry = frameCarrier === undefined ? undefined : input.frames.entryFor(frameCarrier);
   let selectedExposure: RustConstructionEmissionPlan["exposure"];
-  if (exposure !== undefined) {
+  if (exposure !== undefined && frame !== undefined) {
     const point = readiness.pointFor(exposure.expression);
     const exactFrame = frameCarrier !== undefined && input.frames.definitionFor(frameCarrier) === frame &&
       frameEntry !== undefined && frame.entries.includes(frameEntry) && frameValue !== undefined &&
       frameValue.environment.length === frameEntry.environmentIndexes.length &&
       frame.environmentParameters.every((_parameter, index) => frameEntry.environmentIndexes.includes(index));
     if (!exactFrame || point === undefined || fieldsByDeclaration.get(exposure.declaration)?.initializer !== exposure.expression ||
-      frame!.bindings.some(binding => !fieldsByDeclaration.has(binding.declaration) ||
+      frame.bindings.some(binding => !fieldsByDeclaration.has(binding.declaration) ||
         binding.initialization !== "deferred" && !point.initializedFields.includes(binding.declaration))) {
       issue(exposure.expression, "A retained constructor callback requires initialized native frame storage.");
     } else selectedExposure = Object.freeze({ ...exposure, carrier: frameCarrier! });
