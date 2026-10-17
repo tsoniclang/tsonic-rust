@@ -2,6 +2,7 @@ import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { rustLifetimeKey, rustLifetimeOutlives, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -33,7 +34,7 @@ import type { RustDeclarationGenericRequirementIndex } from "../declarations/gen
 import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
+import type { RustSourceObjectField, RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
 import type { RustNativeCaptureConstruction, RustNativeCaptureSelection } from "./native-captures.js";
 import { completeRustNativeCaptureCarrier } from "./native-captures.js";
 import type { RustFrameCallablePlan } from "./frame-values.js";
@@ -54,6 +55,9 @@ interface RustStructuralMethodRoot extends RustStructuralMethodDestination {
   readonly subject: SourceStorageSubject;
   readonly bindings: SourceStorageBindings;
   readonly construction?: Pick<RustStructuralMethodConstruction, "object" | "property" | "expression" | "storageIndex">;
+  readonly spread?: Extract<Extract<RustTargetOperationFact, { readonly kind: "record-literal" }>["contributions"][number],
+    { readonly kind: "spread" }>;
+  readonly sourceField?: RustSourceObjectField;
 }
 
 export function createRustStructuralMethodStorage(input: {
@@ -102,7 +106,7 @@ export function createRustStructuralMethodStorage(input: {
     return Object.freeze({ carrier, definition, index });
   };
   const register = (node: Node, destination: RustStructuralMethodDestination, subject: SourceStorageSubject,
-    construction?: RustStructuralMethodRoot["construction"]): void => {
+    origin?: Pick<RustStructuralMethodRoot, "construction" | "spread" | "sourceField">): void => {
     const { carrier, index } = destination;
     const carriers = seen.get(subject) ?? new Map<TargetTypeRef, Set<number>>();
     const indexes = carriers.get(carrier) ?? new Set<number>();
@@ -116,9 +120,7 @@ export function createRustStructuralMethodStorage(input: {
       sourceIssues.push({ subject: node, message: "Structural method storage requires its checked lexical activation." });
       return;
     }
-    roots.push(Object.freeze({ ...destination, subject, bindings,
-      ...(construction === undefined ? {} : { construction: Object.freeze(construction) }),
-    }));
+    roots.push(Object.freeze({ ...destination, subject, bindings, ...origin }));
   };
   for (const node of input.nativeNodes) {
     const operation = records.targetOperation.get(node);
@@ -135,8 +137,8 @@ export function createRustStructuralMethodStorage(input: {
           if (destination === undefined) continue;
           const selected = sourceStorage.subject(node, "value", [{ kind: "method-value", declaration: contribution.expression }]);
           if (selected.kind === "unresolved") sourceIssues.push({ subject: contribution.expression, message: selected.reason });
-          else register(node, destination, selected.subject, { object: node, property: contribution.property,
-            expression: contribution.expression, storageIndex: contribution.targetStorageIndex });
+          else register(node, destination, selected.subject, { construction: Object.freeze({ object: node,
+            property: contribution.property, expression: contribution.expression, storageIndex: contribution.targetStorageIndex }) });
         } else if (contribution.kind === "spread") {
           const transported = contribution.fields.filter(selected => selected.method === true && destinations.has(selected.targetStorageIndex));
           if (transported.length === 0) continue;
@@ -164,7 +166,7 @@ export function createRustStructuralMethodStorage(input: {
               const selected = sourceStorage.subject(source.subject.node, source.subject.kind,
                 [...source.subject.projection, { kind: "method-value", declaration }]);
               if (selected.kind === "unresolved") sourceIssues.push({ subject: declaration, message: selected.reason });
-              else register(node, destination, selected.subject);
+              else register(node, destination, selected.subject, { spread: contribution, sourceField: original });
             }
           }
         }
@@ -277,7 +279,8 @@ export function createRustStructuralMethodStorage(input: {
         return selected;
       });
       const candidates = new Map<RustStructuralMethodRoot, readonly TargetTypeRef[]>();
-      const constructionCarriers = new Map<RustStructuralMethodRoot, readonly TargetTypeRef[]>();
+      const constructionCarriers = new Map<RustStructuralMethodRoot,
+        readonly { readonly carrier: TargetTypeRef; readonly templateCarrier: TargetTypeRef; readonly bindings: RustTargetGenericBindings }[]>();
       for (const root of roots) {
         const selected = admittedProducers.get(root);
         if (selected === undefined) throw new Error("Structural method storage requires its constructor-admitted producer domain.");
@@ -285,7 +288,8 @@ export function createRustStructuralMethodStorage(input: {
         const storage = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
         const protocol = rustCallableProtocol(storage)!;
         const signatures: TargetTypeRef[] = [];
-        const constructed: TargetTypeRef[] = [];
+        const constructed: { readonly carrier: TargetTypeRef; readonly templateCarrier: TargetTypeRef;
+          readonly bindings: RustTargetGenericBindings }[] = [];
         for (const producer of selected) {
           const subject = producer.subject;
           const operation = records.targetOperation.get(subject.node);
@@ -296,33 +300,33 @@ export function createRustStructuralMethodStorage(input: {
           const source = physical === undefined ? undefined : rustNativeCallablePhysicalSource(logical,
             { kind: "identity", carrier: physical }, input.typeDefinitions);
           const owner = sourceEnclosingCallable(ast.parent(subject.node), ast);
-          const bound = owner === undefined ? undefined : input.nativeStorage.genericBindingsFor(owner, producer.bindings);
-          if (bound?.kind === "unresolved") throw new Error(bound.reason);
+          const bound = input.nativeStorage.genericBindingsFor(owner ?? subject.node, producer.bindings);
+          if (bound.kind === "unresolved") throw new Error(bound.reason);
           if (source === undefined || protocol.lifetime === undefined)
             throw new Error("Structural method storage requires its existing physical callable signature and destination lifetime.");
-          const physicalCarrier = normalize(bound === undefined ? source.carrier : substituteRustTargetGenerics(source.carrier,
+          const templateCarrier = normalize(source.carrier);
+          const physicalCarrier = normalize(substituteRustTargetGenerics(templateCarrier,
             bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
           const physicalSignature = rustCallablePhysicalSignature(physicalCarrier);
           if (physicalSignature === undefined)
             throw new Error("Structural method storage lost its exact normalized physical source signature.");
-          const destinationLifetime = bound?.bindings.lifetimes.get(rustLifetimeKey(protocol.lifetime)) ?? protocol.lifetime;
+          const destinationLifetime = bound.bindings.lifetimes.get(rustLifetimeKey(protocol.lifetime)) ?? protocol.lifetime;
           const captures = records.closureCapture.get(subject.node);
           if (captures === undefined) throw new Error("Structural method storage requires its admitted closure capture inventory.");
           const sourceCaptureCarriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers]
             .map(capture => capture.carrier);
-          const captureCarriers = sourceCaptureCarriers.map(carrier =>
-            bound === undefined ? carrier : substituteRustTargetGenerics(carrier,
-              bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
+          const captureCarriers = sourceCaptureCarriers.map(carrier => substituteRustTargetGenerics(carrier,
+            bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
           const sourceRetained = rustRetainedValueLifetime(subject.node, sourceCaptureCarriers, { context: {
             ast, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
           } });
-          const retained = sourceRetained === undefined || bound === undefined ? sourceRetained
+          const retained = sourceRetained === undefined ? undefined
             : bound.bindings.lifetimes.get(rustLifetimeKey(sourceRetained)) ?? sourceRetained;
           if (retained === undefined || destinationLifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
             destinationLifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes))) {
             if (destinationLifetime.kind !== "static" || !captureCarriers.some(rustHasOpenOwnedStorage))
               return reject(subject.node, "Structural method storage requires the actual captured lifetime to outlive its selected destination.");
-            retainedRequirements.push({ declaration: subject.node, bindings: bound?.bindings, physicalCaptures: undefined });
+            retainedRequirements.push({ declaration: subject.node, bindings: bound.bindings, physicalCaptures: undefined });
           }
           const carrier = rustCallableTargetType(physicalSignature.parameters, physicalSignature.result,
             destinationLifetime, physicalSignature.error);
@@ -340,20 +344,50 @@ export function createRustStructuralMethodStorage(input: {
           if (root.construction !== undefined) {
             if (subject.node !== root.construction.expression)
               throw new Error("Structural method construction lost its exact source contribution.");
-            if (physicalSignature.parameters.length !== signature.parameters.length ||
-              !physicalSignature.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, parameters[index])) ||
-              !rustTargetTypeRefEquals(physicalSignature.result, signature.result) ||
-              !rustTargetTypeRefEquals(physicalSignature.error, signature.error))
-              throw new Error("Structural method construction requires its exact normalized physical destination correspondence.");
-            constructed.push(physicalCarrier);
           }
+          if (physicalSignature.parameters.length !== signature.parameters.length ||
+            !physicalSignature.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, parameters[index])) ||
+            !rustTargetTypeRefEquals(physicalSignature.result, signature.result) ||
+            !rustTargetTypeRefEquals(physicalSignature.error, signature.error))
+            throw new Error("Structural method construction requires its exact normalized physical destination correspondence.");
+          constructed.push(Object.freeze({ carrier: physicalCarrier, templateCarrier, bindings: bound.bindings }));
         }
         if (signatures.length === 0) throw new Error("Structural method storage cannot invent an ABI for an empty producer set.");
         candidates.set(root, Object.freeze(signatures));
-        if (root.construction !== undefined) constructionCarriers.set(root, Object.freeze(constructed));
+        constructionCarriers.set(root, Object.freeze(constructed));
       }
+      const originals: ReadonlyMap<Node, readonly RustStructuralMethodConstruction[]> = (() => {
+        const constructions = new Map<Node, RustStructuralMethodConstruction[]>();
+        for (const root of roots) {
+          const original = root.construction;
+          if (original === undefined) continue;
+          const witnesses = constructions.get(original.expression) ?? [];
+          for (const physical of constructionCarriers.get(root)!) {
+            const field = structuralShapes.field(root.carrier, root.index)!;
+            const protocol = rustCallableProtocol(field.presence === "optional"
+              ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier)!;
+            const signature = rustCallablePhysicalSignature(physical.templateCarrier)!;
+            const destinationCarrier = rustCallableTargetType(signature.parameters, signature.result, protocol.lifetime, signature.error);
+            witnesses.push(Object.freeze({ ...original, physicalCarrier: physical.templateCarrier, destinationCarrier }));
+          }
+          constructions.set(original.expression, witnesses);
+        }
+        for (const witnesses of constructions.values()) Object.freeze(witnesses);
+        return constructions;
+      })();
       const selections = new Map<RustStructuralShapeDefinition, Map<number, RustStructuralMethodStorageSelection>>();
       for (const root of roots) {
+        if (root.spread !== undefined) {
+          const sourceField = root.sourceField;
+          const projected = root.subject.projection[root.subject.projection.length - 1];
+          const transported = root.spread.fields.filter(field => field.method === true && field.targetStorageIndex === root.index);
+          if (sourceField === undefined || transported.length !== 1 ||
+            transported[0]!.sourceStorageIndex !== sourceField.storageIndex ||
+            !rustTargetTypeRefEquals(transported[0]!.carrier, sourceField.resultCarrier) ||
+            projected?.kind !== "method-value" || !sourceField.declarations.includes(projected.declaration) ||
+            structuralShapes.field(root.spread.sourceValueCarrier, sourceField.storageIndex)?.method !== true)
+            throw new Error("Structural method spread lost its exact source field and destination contribution.");
+        }
         const source = rustStructuralGenericCarrier(root.carrier).carrier;
         const refs = rustTargetGenericReferences(source);
         const shape = rustStructuralObjectCarrierValue(source)!;
@@ -391,11 +425,34 @@ export function createRustStructuralMethodStorage(input: {
           if (existing !== undefined && !rustTargetTypeRefEquals(existing.carrier, selected))
             throw new Error("Structural method storage has incompatible admitted physical signatures.");
           const constructions = [...existing?.constructions ?? []];
-          if (root.construction !== undefined) {
-            const physical = constructionCarriers.get(root)?.[ordinal];
-            if (physical === undefined) throw new Error("Structural method storage lost its actual construction carrier.");
-            const physicalCarrier = exactBindings === undefined ? physical : substituteRustTargetGenerics(physical,
-              exactBindings.types, exactBindings.lifetimes, exactBindings.consts);
+          const actual = constructionCarriers.get(root)?.[ordinal];
+          const producer = admittedProducers.get(root)?.[ordinal];
+          if (actual === undefined || producer === undefined) throw new Error("Structural method storage lost its actual construction carrier.");
+          const originalSources = originals.get(producer.subject.node);
+          if (originalSources === undefined || originalSources.length === 0)
+            throw new Error("Structural method storage lost its original admitted source construction witness.");
+          for (const original of originalSources) {
+            const physical = normalize(substituteRustTargetGenerics(original.physicalCarrier,
+              actual.bindings.types, actual.bindings.lifetimes, actual.bindings.consts));
+            const originalDestination = rustCallableProtocol(normalize(substituteRustTargetGenerics(original.destinationCarrier,
+              actual.bindings.types, actual.bindings.lifetimes, actual.bindings.consts)));
+            const originalSignature = rustCallablePhysicalSignature(physical);
+            if (!rustTargetTypeRefEquals(physical, actual.carrier) || originalSignature === undefined || originalDestination === undefined ||
+              originalSignature.parameters.length !== originalDestination.parameters.length ||
+              !originalSignature.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, originalDestination.parameters[index])) ||
+              !rustTargetTypeRefEquals(originalSignature.result, originalDestination.result) ||
+              !rustTargetTypeRefEquals(originalSignature.error, originalDestination.error))
+              throw new Error("Structural method transport requires its complete actual bound source construction witness.");
+            const references = rustTargetGenericReferences(original.destinationCarrier);
+            const witnessBindings = inferRustTargetGenericBindings(original.destinationCarrier, carrier, {
+              typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
+              constIdentities: new Set(references.constIdentities),
+            });
+            if (witnessBindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(original.destinationCarrier,
+              witnessBindings.types, witnessBindings.lifetimes, witnessBindings.consts), carrier))
+              throw new Error("Structural method construction lost its exact source-to-destination template binding.");
+            const physicalCarrier = normalize(substituteRustTargetGenerics(original.physicalCarrier,
+              witnessBindings.types, witnessBindings.lifetimes, witnessBindings.consts));
             const physicalSignature = rustCallablePhysicalSignature(physicalCarrier);
             const destination = rustCallableProtocol(carrier)!;
             if (physicalSignature === undefined || physicalSignature.parameters.length !== destination.parameters.length ||
@@ -403,7 +460,7 @@ export function createRustStructuralMethodStorage(input: {
               !rustTargetTypeRefEquals(physicalSignature.result, destination.result) ||
               !rustTargetTypeRefEquals(physicalSignature.error, destination.error))
               throw new Error("Structural method construction lost its complete template destination correspondence.");
-            const construction = Object.freeze({ ...root.construction, physicalCarrier, destinationCarrier: carrier });
+            const construction = Object.freeze({ ...original, storageIndex: root.index, physicalCarrier, destinationCarrier: carrier });
             const previous = constructions.find(value => value.object === construction.object &&
               value.property === construction.property && value.expression === construction.expression &&
               value.storageIndex === construction.storageIndex);
@@ -434,7 +491,8 @@ export function createRustStructuralMethodStorage(input: {
         }
       }
       structuralShapes.finalizeMethodStorage(selections);
-      for (const expression of new Set(roots.flatMap(root => root.construction === undefined ? [] : [root.construction.expression])))
+      for (const expression of new Set([...selections.values()].flatMap(fields =>
+        [...fields.values()].flatMap(field => field.constructions.map(construction => construction.expression)))))
         input.nativeCaptures.require(expression);
       for (const requirement of retainedRequirements)
         requirement.physicalCaptures = input.nativeCaptures.require(requirement.declaration);
