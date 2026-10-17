@@ -414,7 +414,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         return sealResult;
       }
       const emission = prepareRustPhysicalEmissionContexts({ ...late, ast: input.ast, sourceFiles: input.sourceFiles,
-        nativeNodes: input.nativeNodes, isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
+        isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
         projectTypes: input.projectTypes,
         generic, frames: selectedPlan.frames, suspended: selectedPlan.suspended, native,
         nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,

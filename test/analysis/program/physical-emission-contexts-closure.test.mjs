@@ -493,13 +493,10 @@ export const seed: number = checked(1);`,
     components: program.sourcePackageComponents, facades: program.sourcePackageFacades, regions: program.errorRegions,
     binaryHooks: [], outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
   assert.equal(selected.kind, "resolved", "the existing initializer owner supplies the exact worker composition");
-  const nodes = [];
-  const visit = node => { nodes.push(node); source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
-  program.sourceFiles.forEach(visit);
   const callable = program.callableValues;
   assert.equal(observations.calls, 1, "the actual selecting owner ran exactly once");
   assert.equal(observations.requests.kind, "resolved", "the actual checked source use inventory was admitted");
-  const result = prepareRustPhysicalEmissionContexts({ ast: source.ast, sourceFiles: program.sourceFiles, nativeNodes: nodes,
+  const result = prepareRustPhysicalEmissionContexts({ ast: source.ast, sourceFiles: program.sourceFiles,
     isNativeNode: () => true, records: program.records, sourceLifetimes: program.sourceLifetimes,
     generic: callable.generic, frames: callable.frames, suspended: callable.suspended, native: callable.native,
     nativeStorage: callable.nativeStorage, nativeProducers: callable.nativeProducers,

@@ -31,7 +31,6 @@ import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
 
 export interface RustCallableEmissionPreparationInput {
   readonly ast: AstReader;
-  readonly nativeNodes: readonly Node[];
   readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
   readonly sourceLifetimes: RustLifetimeIndex;
