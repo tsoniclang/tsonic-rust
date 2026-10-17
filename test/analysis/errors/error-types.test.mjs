@@ -6,6 +6,7 @@ import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/progr
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustStringTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 
@@ -47,6 +48,8 @@ test("native body errors normalize independently from the single JS Promise reje
   const completion = current.input.producers.invocationResultFor(current.producer("failLeft").declaration);
   const output = current.input.records.asyncFunction.get(current.producer("failLeft").declaration)?.outputCarrier;
   assert.equal(output !== undefined, true, "the checked async declaration owns its actual native payload selection");
+  assert.equal(rustTargetTypeRefEquals(output, rustStringTargetType()), true,
+    "the authored Promise<string> payload uses ordinary native String, not the JS UTF-16 wrapper");
   const selected = normalizeRustErrorType(completion, current.input);
   assert.equal(selected?.id, "rust.js.JsPromise");
   assert.equal(selected.genericArguments.length, 1, "the actual Promise object has only its payload argument");
