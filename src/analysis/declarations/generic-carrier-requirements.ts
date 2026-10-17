@@ -5,7 +5,6 @@ import type { RustSourceGenericContract, RustLifetimeRef } from "../../target-mo
 import { rustLifetimeKey, rustLifetimeOutlives, rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, RustFrameCallablePlan } from "../callables/frame-values.js";
-import type { RustNativeCapturePlan } from "../callables/native-captures.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
@@ -44,7 +43,6 @@ export interface RustStaticRequirementEvidence {
   readonly lifetimeContract: RustSourceGenericContract | undefined;
   readonly genericCallables: RustGenericCallablePlan | undefined;
   readonly frameCallables: RustFrameCallablePlan | undefined;
-  readonly nativeCaptures: RustNativeCapturePlan | undefined;
   readonly classValues: RustClassValuePlan | undefined;
   readonly objectRepresentations: RustObjectRepresentationPlan | undefined;
   readonly structuralShapes: RustStructuralShapePlan | undefined;
@@ -201,20 +199,21 @@ function classifyStaticCarrier(
     if (!definition.entries.includes(entry) || entry.implementations.length === 0)
       return unresolved("A native frame slot requires its exact admitted entry alternatives.");
     return every(entry.implementations.map(implementation => {
-      const physical = evidence?.nativeCaptures?.forDeclaration(implementation.declaration);
-      if (physical?.kind !== "resolved") return unresolved(physical?.reason ?? "A native frame entry lacks its completed physical captures.");
       const selected: TargetTypeRef[] = [];
-      for (const [original, retained, carriers] of [
-        [implementation.capture.captures, implementation.captures, physical.captures],
-        [implementation.capture.receiverFields, implementation.receiverFields, physical.receiverFields],
-        [implementation.capture.receivers, implementation.receivers, physical.receivers],
+      for (const [original, retained] of [
+        [implementation.capture.captures, implementation.captures],
+        [implementation.capture.receiverFields, implementation.receiverFields],
       ] as const) {
-        if (original.length !== carriers.length || retained.some(capture => !original.some(candidate => candidate === capture)))
+        if (retained.some(capture => !original.some(candidate => candidate === capture)) || original.some(capture =>
+          !retained.some(candidate => candidate === capture) && !definition.bindings.some(binding => binding.declaration === capture.declaration)))
           return unresolved("A native frame entry lost its exact source-to-physical capture correspondence.");
-        original.forEach((capture, index) => {
-          if (retained.some(candidate => candidate === capture)) selected.push(apply(carriers[index]!, bindings));
-        });
+        selected.push(...retained.map(capture => apply(capture.carrier, bindings)));
       }
+      if (implementation.receivers.some(receiver => !implementation.capture.receivers.includes(receiver)) ||
+        implementation.capture.receivers.some(receiver => !implementation.receivers.includes(receiver) &&
+          (definition.activation.kind !== "class" || receiver.owner !== definition.activation.ownerDeclaration)))
+        return unresolved("A native frame entry lost its exact receiver-to-activation correspondence.");
+      selected.push(...implementation.receivers.map(receiver => apply(receiver.carrier, bindings)));
       return every(selected.map(carrier => visit(carrier, variance, bound)));
     }));
   };

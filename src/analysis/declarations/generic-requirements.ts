@@ -43,7 +43,6 @@ import { rustStructuralViewRequirementUses } from "./structural-view-requirement
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
-import type { RustNativeCapturePlan } from "../callables/native-captures.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
@@ -110,7 +109,6 @@ export function analyzeRustDeclarationGenericRequirements(
   errorRegions: RustAnalyzedErrorRegions,
   promiseBodies: RustPromiseBodies,
   nativeStorage: RustNativeStoragePlan,
-  nativeCaptures: RustNativeCapturePlan,
   classValues: RustClassValuePlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
@@ -203,7 +201,6 @@ export function analyzeRustDeclarationGenericRequirements(
         genericCallables,
         nativeCallables,
         nativeStorage,
-        nativeCaptures,
         classValues,
         errorRegions,
         frameCallables,
@@ -310,7 +307,7 @@ export function analyzeRustDeclarationGenericRequirements(
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
   const shapeEvidence: RustStaticRequirementEvidence = { lifetimeContract: undefined, genericCallables,
-    frameCallables, nativeCaptures, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records };
+    frameCallables, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records };
   for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
     ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
     ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {

@@ -329,8 +329,6 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
       const frames = createRustFrameCallablePlan({ ...input, usedNames });
-      for (const definition of frames.definitions) for (const entry of definition.entries)
-        for (const implementation of entry.implementations) captures.require(implementation.declaration);
       physicalLifecycle = createRustPhysicalCallableLifecycle({ ...input, generic, frames, suspended,
         nativeStorage, nativeProducers, adapterFlows: flows });
       const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.nativeNodes,
@@ -361,7 +359,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan) {
       if (structuralMethodStorage === undefined || selectedPlan === undefined)
         throw new Error("Structural retention requires completed physical field selection.");
-      return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, selectedPlan.nativeCaptures, classValues);
+      return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, classValues);
     },
     seal(): RustCallableValuePlan {
       if (publishedPlan !== undefined) return publishedPlan;
