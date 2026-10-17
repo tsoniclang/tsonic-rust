@@ -84,7 +84,7 @@ export interface RustSourceTypeRegistry extends RustTypeDefinitions {
   registerSourceFile(sourceFile: SourceFile, ast: AstReader, isNativeNode: (node: Node) => boolean): void;
   registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
   registerRepresentationAlias(declaration: Node, carrier: TargetTypeRef): boolean;
-  carrierForDeclaration(declaration: Node, ast: AstReader): TargetTypeRef | undefined;
+  carrierForDeclaration(declaration: Node): TargetTypeRef | undefined;
   declarationForCarrier(carrier: TargetTypeRef): Node | undefined;
   propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader, semanticsFor: (node: Node) => SourceFileSemantics): readonly string[] | undefined;
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;

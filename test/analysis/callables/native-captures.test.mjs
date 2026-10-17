@@ -4,13 +4,15 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 
 function fixture(text) {
   const program = analyzeRustErrorEffects(text, { surfaces: [] });
   const source = program.source;
   const storage = program.sourceStorage;
   const native = program.callableValues.native;
-  const plan = program.callableValues.selected.nativeCaptures;
+  const plan = createRustNativeCapturePlan({ records: program.records, storage,
+    nativeStorage: program.callableValues.nativeStorage });
   const closures = storage.nodes.filter(node => source.ast.is.IsArrowFunction(node));
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
@@ -108,4 +110,9 @@ test("native capture query rejects foreign declarations without inspecting custo
   const declaration = current.plan.forDeclaration(current.declaration("make"));
   assert.equal(declaration.kind === "unresolved" && /exact finalized capture declarations/u.test(declaration.reason), true,
     "only declarations with finalized capture facts are accepted");
+  const unrequired = current.plan.complete().forDeclaration(current.declaration("make"));
+  assert.equal(unrequired.kind === "unresolved" && /only for its required/u.test(unrequired.reason), true,
+    "a failed construction probe does not become a published required environment");
+  assert.equal(current.program.callableValues.selected.nativeCaptures.forDeclaration(current.declaration("make")).kind,
+    "unresolved", "the actual completed owner also excludes an unrequired declaration");
 });

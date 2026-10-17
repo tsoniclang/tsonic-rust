@@ -85,7 +85,7 @@ export function resolveRustTargetType(
   if (resolving.has(type)) {
     const symbol = context.currentSemantics.declarations.typeAliasSymbol(type);
     if (symbol === undefined || !context.currentSemantics.declarations.symbolDeclarations(symbol).some(declaration => {
-      const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+      const carrier = options.sourceTypes.carrierForDeclaration(declaration);
       return rustSourceUnionCarrierValue(rustOptionElementCarrier(carrier) ?? carrier) !== undefined;
     })) return undefined;
     const arguments_ = resolveRustSelectedTypeArguments(type, context, options, resolving);
@@ -291,6 +291,11 @@ export function resolveStructuralObjectType(
   if (selectedContext === undefined) return undefined;
   context = selectedContext;
   const semantics = context.currentSemantics;
+  const symbol = semantics.declarations.typeSymbol(type);
+  const declarations = symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol);
+  if (declarations.some(declaration => context.source.navigation.isProjectDeclaration(declaration) &&
+    (context.ast.is.IsClassDeclaration(declaration) || context.ast.is.IsClassExpression(declaration)) &&
+    options.sourceTypes.carrierForDeclaration(declaration) === undefined)) return undefined;
   const struct = valueStruct ?? context.source.sourceFacts.getFact(type, structFactKey);
   if (struct !== undefined && (struct.valueType !== true || struct.fields === undefined)) return undefined;
   const representation = struct === undefined ? "reference" : "value";

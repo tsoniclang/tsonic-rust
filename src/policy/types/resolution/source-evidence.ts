@@ -128,10 +128,23 @@ export function resolveRustCallableStorageCarrier(
   return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
     (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),
     owner => {
-      const semantics = context.semanticsFor(owner);
-      const type = semantics.declarations.declaredType(owner);
-      return type === undefined ? undefined : resolveRustTargetType(type,
-        { ...context, currentSemantics: semantics, sourceStorageSubject: undefined }, options, resolving);
+      const receiver = context.sourceStorage.subject(owner, "receiver");
+      const producers = context.sourceStorage.storageProducersFor(subject);
+      if (receiver.kind === "unresolved" || producers.kind !== "complete" || producers.producers.length === 0) return undefined;
+      let instance: TargetTypeRef | undefined;
+      for (const producer of producers.producers) {
+        const bound = context.sourceStorage.boundOriginsFor(receiver.subject, producer.bindings);
+        if (bound.kind === "unresolved" || bound.subjects.length === 0) return undefined;
+        for (const actual of bound.subjects) {
+          const checked = context.sourceStorage.typeFor(actual);
+          if (checked.kind === "unresolved") return undefined;
+          const carrier = resolveRustTargetType(checked.type, { ...context,
+            currentSemantics: context.semanticsFor(actual.node), sourceStorageSubject: actual }, options, resolving);
+          if (carrier === undefined || instance !== undefined && !rustTargetTypeRefEquals(instance, carrier)) return undefined;
+          instance = carrier;
+        }
+      }
+      return instance;
     });
 }
 

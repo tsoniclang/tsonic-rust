@@ -166,6 +166,12 @@ function recordVariableDeclarationListFacts(
         ["target.capability=rust.initializer-carrier"]);
     }
     const effective = selected ?? initializerCarrier ?? predeclared;
+    if (effective === undefined && !walk.rejectedExpressions.has(declaration) &&
+      (initializer === undefined || !walk.rejectedExpressions.has(initializer))) {
+      appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
+        "A native binding requires an admitted source type and one finalized Rust value carrier.", declaration,
+        ["target.capability=rust.native-binding-carrier"]);
+    }
     if (effective !== undefined) {
       setCarrierFact(walk, declaration, effective);
       const name = Node_Name(walk.context.ast, declaration);

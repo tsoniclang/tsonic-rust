@@ -48,7 +48,7 @@ export function recordEnumFacts(walk: RustFactWalk, declaration: Node): void {
     values.push(constant.value);
     variants.push(Object.freeze({ declaration: member, name: memberName, discriminant: constant.value.toString() }));
   }
-  const carrier = walk.sourceTypes.carrierForDeclaration(declaration, ast);
+  const carrier = walk.sourceTypes.carrierForDeclaration(declaration);
   if (carrier === undefined) failTargetAnalysisInvariant("tsonic-rust",
     "A registered source enum has no nominal carrier before physical type initialization.", declaration);
   const definition: RustNativeEnumDeclaration = Object.freeze({ kind: "enum", name,

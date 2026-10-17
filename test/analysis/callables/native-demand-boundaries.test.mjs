@@ -4,8 +4,51 @@ import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { Node_Name, createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol } from "../../../dist/target-model/types/index.js";
+import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 
 const surfaces = [["native", []], ["js", ["js"]]];
+
+for (const [surface, selected] of surfaces) {
+  for (const mixed of [false, true]) {
+    test(`class callback storage validates every actual receiver instance (${surface}, ${mixed ? "mixed" : "same"})`, () => {
+      const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+class Value<T> {
+  constructor(readonly seed: T) {}
+  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
+  rebind(): void { this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1); }
+}
+export function escaped(flag: boolean): (count: number) => number {
+  const left = new Value("left");
+  const right = new Value(${mixed ? "7" : '"right"'});
+  const chosen = flag ? left.recurse : right.recurse;
+  return chosen;
+}` } });
+      if (mixed) {
+        assert.equal(result.diagnostics.some(issue => String(issue.code).startsWith("RUST_") && issue.category === "error"), true,
+          "incompatible actual receiver arguments require a precise native source refusal");
+        assert.equal(result.diagnostics.some(issue => String(issue.code).includes("INTERNAL")), false,
+          "a checked mixed receiver domain is not relabelled an internal invariant");
+        assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+          "no first receiver or partially selected frame is published");
+      } else {
+        assert.equal(result.diagnostics.length, 0,
+          result.diagnostics.slice(0, 4).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+        assert.equal(result.program !== undefined && result.plan !== undefined, true,
+          "different instances with the same concrete layout remain natively representable");
+        const ast = result.program.source.ast;
+        const declaration = result.program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+          node !== undefined && ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "escaped");
+        assert.equal(declaration !== undefined, true, "the exact factory remains published");
+        const frame = rustFrameCallableValue(result.program.records.sourceCallableReturn.get(declaration)?.returnCarrier);
+        assert.equal(frame?.owner.kind, "class", "the actual class frame is retained");
+        assert.equal(frame.owner.instance !== undefined, true, "the concrete receiver layout is required evidence");
+      }
+    });
+  }
+}
 
 for (const [surface, selected] of surfaces) {
   for (const [kind, prelude, body] of [
@@ -181,6 +224,55 @@ export function run(): number {
     assert.equal(result.artifacts.length, 0, "a required invalid default has no partial output");
   });
 
+  test(`a value closure inherits its exact callable protocol error and preserves thrown identity (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: selected, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+export function run(): boolean {
+  const failure = new Error("exact callable failure");
+  function signature(value: number): number { return value; }
+  const callback: typeof signature = (value: number): number => {
+    if (value > 0) throw failure;
+    return value;
+  };
+  signature(0);
+  try { callback(1); } catch (caught) { return caught === failure; }
+  return false;
+}
+export function main(): void {
+  if (!run()) throw new Error("callable error identity");
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+      "the real captured throwing closure reaches native planning and emission");
+    const program = result.program;
+    const ast = program.source.ast;
+    const pending = [...program.sourceFiles];
+    const nodes = [];
+    while (pending.length !== 0) {
+      const node = pending.pop();
+      nodes.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    const implementation = nodes.find(ast.is.IsArrowFunction);
+    const invocation = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "callback");
+    assert.equal(implementation !== undefined && invocation !== undefined, true,
+      "the actual captured implementation and value invocation retain their checked identities");
+    const closure = program.records.targetOperation.get(implementation);
+    const call = program.records.targetOperation.get(invocation);
+    assert.equal(closure?.kind === "closure" && call?.kind === "source-call" && call.target.form === "callable", true,
+      "this is the inherited runtime protocol route, not a guessed direct declaration edge");
+    const inheritedError = rustCallableProtocol(closure.resultCarrier)?.error;
+    assert.equal(inheritedError !== undefined, true,
+      "the actual closure construction retains an explicit protocol error carrier");
+    assert.equal(rustTargetTypeRefEquals(rustCallableProtocol(call.target.carrier)?.error, inheritedError), true,
+      "the actual value call preserves the precise inherited error carrier identity");
+    assert.equal(program.records.sourceCallEffects.get(invocation)?.invocation, "fallible",
+      "an inherited protocol error is never reclassified as pure");
+    validateGeneratedProject(`callable-protocol-error-identity-${surface}`, result.artifacts, { run: true });
+  });
+
   test(`type-only escape from an erased local class is a precise native refusal (${surface})`, () => {
     let result;
     assert.doesNotThrow(() => {
@@ -269,6 +361,104 @@ export function run(key: string): number {
       "the actual called inverse still requires the exact native key contract");
     assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
       "a required invalid callable has no partial native output");
+  });
+
+  for (const [wrapper, expression] of [
+    ["as", "(LAMBDA as (() => number))"],
+    ["type-assertion", "(<(() => number)>LAMBDA)"],
+    ["conditional", 'key === "selected" ? LAMBDA : LAMBDA'],
+  ]) {
+    test(`consumed ${wrapper} callable retains its native body obligations (${surface})`, () => {
+      const lambda = '((): number => { const value = { [key]: 7 }; return 1; })';
+      const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+export function run(key: string): number {
+  const callback = ${expression.replaceAll("LAMBDA", lambda)};
+  return callback();
+}` } });
+      assert.equal(result.diagnostics.some(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN"), true,
+        "a consumed callable still requires its actual native body and exact field key");
+      assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+        "consuming the callable never acquires the discarded-unit path");
+    });
+  }
+
+  test(`discarded absence assertions and conditionals retain the native absence carrier (${surface})`, () => {
+    const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+export function run(flag: boolean): number {
+  (null as null);
+  (undefined as undefined);
+  flag ? null : undefined;
+  return 42;
+}` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined, true,
+      "native absence remains representable without pretending it is erased callable unit");
+    const program = result.program;
+    const ast = program.source.ast;
+    const pending = [...program.sourceFiles];
+    const expressions = [];
+    while (pending.length !== 0) {
+      const node = pending.pop();
+      if (ast.is.IsAsExpression(node) || ast.is.IsConditionalExpression(node)) expressions.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    assert.equal(expressions.length, 3, "both absence assertions and their conditional remain checked expressions");
+    for (const expression of expressions) {
+      const carrier = program.records.runtimeCarrier.get(expression)?.carrier;
+      assert.equal(rustTargetTypeRefEquals(carrier, rustAbsenceTargetType()), true,
+        "the actual discarded absence value keeps the canonical native absence carrier");
+      assert.equal(rustTargetTypeRefEquals(carrier, rustUnitTargetType()), false,
+        "native absence is never promoted to empty-tuple erasure");
+    }
+  });
+
+  for (const value of ["3.5e38", "-3.5e38"]) {
+    test(`discarded ${value} as float32 retains its exact numeric refusal (${surface})`, () => {
+      const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+import type { float32 } from "@tsonic/core/types.js";
+export function run(): number {
+  ${value} as float32;
+  return 42;
+}` } });
+      assert.equal(result.diagnostics.some(issue => issue.code === "RUST_ASSERTION_UNSUPPORTED"), true,
+        "discarding a numeric result does not turn an unsupported native conversion into unit identity");
+      assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+        "the native numeric assertion still refuses before publication");
+    });
+  }
+
+  test(`discarded callable wrappers preserve exact condition and numeric operand effects (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: selected, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+let conditionCalls = 0;
+let operandTotal = 0;
+function condition(flag: boolean): boolean { conditionCalls += 1; return flag; }
+function effect(value: number): number { operandTotal += value; return value; }
+export function run(flag: boolean, key: string): boolean {
+  conditionCalls = 0;
+  operandTotal = 0;
+  condition(flag)
+    ? ((): number => { const value = { [key]: 7 }; return 1; })
+    : ((): number => { const value = { [key]: 7 }; return 1; });
+  (((): number => { const value = { [key]: 7 }; return 1; }) as (() => number));
+  (<(() => number)>(() => { const value = { [key]: 7 }; return 1; }));
+  const selectedValue = condition(flag) ? 3 : 7;
+  const effectValue = condition(flag) ? effect(5) : effect(11);
+  (effect(13) as number);
+  (<number>effect(17));
+  return conditionCalls === 3 && operandTotal === (flag ? 35 : 41)
+    && selectedValue === (flag ? 3 : 7) && effectValue === (flag ? 5 : 11);
+}
+export function main(): void {
+  if (!run(true, "runtime") || !run(false, "runtime")) throw new Error("discarded callable effects");
+}
+main();
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+      "the complete effectful source has a published native program and plan");
+    validateGeneratedProject(`discarded-callable-effects-${surface}`, result.artifacts, { run: true });
   });
 
   for (const [kind, prelude, body] of [

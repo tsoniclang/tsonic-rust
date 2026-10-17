@@ -2,9 +2,11 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { createTargetSourceProgram, sourceEnclosingCallable, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { createRustNativeFutureInputPlan } from "../../../dist/analysis/callables/native-future-inputs.js";
+import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/lexical-functions.js";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 
 
@@ -15,13 +17,12 @@ const sourceText = `import type { int32 } from "@tsonic/core/types.js";
   }`;
 
 function fixture(text = sourceText) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
-  const source = createTargetSourceProgram(checked);
-  const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const program = analyzeRustErrorEffects(text, { surfaces: [] });
+  const source = program.source;
+  const storage = program.sourceStorage;
   const ast = source.ast;
-  const participation = sourceNodesOutsideErasedSubtrees(ast, storage.nodes,
-    node => program.records.nativeParticipation.get(node) === "erased");
-  assert.equal(participation.kind, "resolved", "the source Future domain uses its actual selected native participation");
+  const lexicalFunctions = createRustLexicalFunctionEnvironmentPlan(source, program.nativeNodes, program.records,
+    program.runtimeValueUses, program.sourceCallables);
   const bindings = new Map();
   const bindingsFor = declaration => {
     if (bindings.has(declaration)) return bindings.get(declaration);
@@ -31,8 +32,8 @@ function fixture(text = sourceText) {
     bindings.set(declaration, result);
     return result;
   };
-  const input = { ast, storage, nativeNodes: participation.nodes, records: program.records, definitions: program.typeDefinitions,
-    lexicalFunctions: program.lexicalFunctions, bindingsFor };
+  const input = { ast, storage, nativeNodes: program.nativeNodes, records: program.records, definitions: program.typeDefinitions,
+    lexicalFunctions, bindingsFor };
   const outer = storage.nodes.find(node => ast.is.IsFunctionDeclaration(node));
   const closure = storage.nodes.find(node => ast.is.IsArrowFunction(node));
   assert.equal(outer !== undefined && closure !== undefined, true, "source declarations exist");
@@ -96,7 +97,7 @@ test("Future capture discovery preserves unresolved checked provenance instead o
 
 test("Future capture environments reject malformed carrier facts and foreign capture references", () => {
   const current = fixture();
-  const capture = current.program.lexicalFunctions.forDeclaration(current.closure).captures[0];
+  const capture = current.input.lexicalFunctions.forDeclaration(current.closure).captures[0];
   const malformed = createRustNativeFutureInputPlan({ ...current.input, records: createRustRecordFixture({
 runtimeCarrier: { get: (node) => {
     return (node === capture.declaration || node === capture.reference)
@@ -104,7 +105,7 @@ runtimeCarrier: { get: (node) => {
 } }}, current.input.records) });
   rejected(malformed.forDeclaration(current.closure), /valid finalized carrier/u);
   const other = fixture();
-  const foreignCapture = other.program.lexicalFunctions.forDeclaration(other.closure).captures[0];
+  const foreignCapture = other.input.lexicalFunctions.forDeclaration(other.closure).captures[0];
   const foreign = createRustNativeFutureInputPlan({ ...current.input, lexicalFunctions: {
     ...current.input.lexicalFunctions,
     forDeclaration(node) {

@@ -106,7 +106,7 @@ export function selectedMemberReceiverCarrier(
       : undefined;
     const declaration = sourceUnion.declaration ?? (declaredType === undefined ? undefined :
       context.currentSemantics.types.aliasApplication(declaredType)?.declaration);
-    const declaredCarrier = declaration === undefined ? undefined : options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    const declaredCarrier = declaration === undefined ? undefined : options.sourceTypes.carrierForDeclaration(declaration);
     const templateCarrier = rustOptionElementCarrier(declaredCarrier) ?? declaredCarrier;
     const template = templateCarrier === undefined ? undefined : options.sourceTypes.sourceUnionForCarrier(templateCarrier);
     if (declaredType !== undefined && declaration !== undefined && template !== undefined) {

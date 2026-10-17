@@ -47,7 +47,7 @@ export function retainRustStructuralInstantiation(
     const application = context.currentSemantics.types.aliasApplication(sourceType);
     const declaration = application?.declaration;
     const declarationCarrier = declaration === undefined ? templateCarrier :
-      options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+      options.sourceTypes.carrierForDeclaration(declaration);
     const template = declarationCarrier === undefined ? undefined : options.sourceTypes.sourceUnionForCarrier(
       rustOptionElementCarrier(declarationCarrier) ?? declarationCarrier);
     return template !== undefined &&
