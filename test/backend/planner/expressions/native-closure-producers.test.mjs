@@ -14,6 +14,7 @@ import { rustGenericCallableValue } from "../../../../dist/target-model/types/ca
 import { rustCallableConstructionType } from "../../../../dist/backend/planner/expressions/fundamentals.js";
 import { rustNativeCompletionFutureType } from "../../../../dist/target-model/types/callable-completions.js";
 import { rustTypeGenericArguments } from "../../../../dist/target-model/types/generic-arguments.js";
+import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
 
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
 
@@ -71,49 +72,63 @@ export function create(): () => int32 {
   assert.equal(nativeNodes(expression, node => node.kind === "named" && ["ConsumerFailure", "rt::TsonicError", "rt::TsonicResult"].includes(node.path)).length, 0);
 });
 
-for (const throwing of [false, true]) {
-    test(`JS Promise creation separates pure invocation from ${throwing ? "fallible" : "pure"} body`, () => {
+for (const pending of [false, true]) {
+  for (const throwing of [false, true]) {
+    test(`JS Promise creation separates pure invocation from ${pending ? "pending" : "settled"} ${throwing ? "fallible" : "pure"} body`, () => {
       const fixture = nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"],
-        ...(throwing ? { packages: [nativeClosureProducerFailurePackage(failure)], source: `
+        ...(throwing ? { packages: [nativeClosureProducerFailurePackage(rustJsValueTargetType())], source: `
 import { fail } from "test:producer";
 import type { int32 } from "@tsonic/core/types.js";
-export function create(): () => Promise<int32> {
-  return async (): Promise<int32> => { fail(); return 3; };
+export function create(): (${pending ? "pending: Promise<void>" : ""}) => Promise<int32> {
+  return async (${pending ? "pending: Promise<void>" : ""}): Promise<int32> => { ${pending ? "await pending;" : ""} fail(); return 3; };
+}
+` } : pending ? { source: `
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): (pending: Promise<void>) => Promise<int32> {
+  return async (pending: Promise<void>): Promise<int32> => { await pending; return 3; };
 }
 ` } : {}),
       });
       const expression = planNativeClosureProducer(fixture);
-      const error = throwing ? "ProducerFailure" : "core::convert::Infallible";
+      const error = "js_abi::JsValue";
       const completed = nativeCalls(expression, "Ok");
       assert.equal(completed.filter(call => call.genericArguments?.[1].type.path === "core::convert::Infallible" &&
         call.args[0]?.kind !== "int-literal").length, 1, "constructing the Promise is infallible regardless of body errors");
-      assert.equal(fixture.bodyContexts[0].asyncContext, true);
+      assert.equal(fixture.bodyContexts[0].asyncContext, pending,
+        "only a real selected pending body enters an async native context");
       assert.equal(fixture.bodyContexts[0].fallibleBoundary === undefined, !throwing);
       assertNoNativeCalls(expression, ["clone", "Box::new"], "no additional Promise owner");
       assert.equal(nativeNodes(expression, node => node.kind === "named" && ["ConsumerFailure", "rt::TsonicError", "rt::TsonicResult"].includes(node.path)).length, 0);
-      const factories = nativeNodes(expression, node => node.kind === "call" &&
-        node.path === `js_abi::JsPromise::${throwing ? "from_fallible_factory" : "from_infallible_factory"}`);
-      assert.equal(factories.length, 1);
+      const constructors = nativeNodes(expression, node => node.kind === "call" &&
+        node.path === `js_abi::JsPromise::${pending ? throwing ? "from_fallible_factory" : "from_infallible_factory"
+          : throwing ? "from_result" : "resolved"}`);
+      assert.equal(constructors.length, 1, "exactly one constructor agrees with the completed lowering");
       const promiseTypes = nativeNodes(expression, node => node.kind === "named" && node.path === "js_abi::JsPromise");
       assert.equal(promiseTypes.length, 1);
-      assert.deepEqual(promiseTypes[0].genericArguments[0], { kind: "lifetime", lifetime: { kind: "static" } });
-      assert.deepEqual(promiseTypes[0].genericArguments[1].type, nativeType("i32"));
-      assert.equal(promiseTypes[0].genericArguments[2].type.path, error);
-      const body = factories[0].args[0];
-      assert.equal(body.kind, "closure-block");
-      assert.equal(body.async, true);
-      assert.equal(body.move, true);
-      assert.deepEqual(body.params, []);
+      assert.equal(promiseTypes[0].genericArguments.length, 1, "the concrete JS object carries its native payload only");
+      assert.deepEqual(promiseTypes[0].genericArguments[0].type, nativeType("i32"));
+      const body = constructors[0].args[0];
+      if (pending) {
+        assert.equal(body.kind, "closure-block");
+        assert.equal(body.async, true);
+        assert.equal(body.move, true);
+        assert.deepEqual(body.params, []);
+      } else {
+        assert.equal(nativeNodes(expression, node => node.kind === "call" && /from_\w+_factory/u.test(node.path)).length, 0,
+          "a settled copied result has no invented pending factory");
+      }
       if (throwing) {
         const completedBody = nativeCalls(body, "Ok");
         assert.equal(completedBody.length, 1);
         assert.equal(completedBody[0].genericArguments[1].type.path, error);
         assert.deepEqual(completedBody[0].args, [{ kind: "int-literal", text: "3" }]);
       } else {
-        assert.deepEqual(body.body.statements, [{ kind: "tail", expr: { kind: "int-literal", text: "3" } }]);
+        if (pending) assert.deepEqual(body.body.statements, [{ kind: "tail", expr: { kind: "int-literal", text: "3" } }]);
+        else assert.deepEqual(body, { kind: "int-literal", text: "3" });
         assert.equal(nativeCalls(body, "Ok").length, 0, "an infallible body needs no synthetic Result wrapper");
       }
     });
+  }
 }
 
 test("native future closures remain delegated to their sealed generic implementation owner", () => {
@@ -192,9 +207,8 @@ for (const [label, carrier, expected] of [
 
 test("closure construction rejects missing error evidence rather than selecting the ambient error", () => {
   const fixture = nativeClosureProducerFixture({
-    selectRecords: (records, producer) => ({ ...records, errorEffects: {
-      get: node => node === producer ? undefined : records.errorEffects.get(node),
-    } }),
+    selectErrorRegions: (regions, producer) => ({ ...regions,
+      get: node => node === producer ? undefined : regions.get(node) }),
   });
   assert.equal(fixture.plan() === undefined, true, "missing error fact rejects");
   assert.equal(fixture.bodyContexts.length, 0, "invalid producer never plans its body");
@@ -204,7 +218,10 @@ test("closure construction rejects missing error evidence rather than selecting 
 
 for (const method of ["errorFor", "physicalFor"]) {
   test(`closure construction rejects missing producer ${method} evidence`, () => {
-    const fixture = nativeClosureProducerFixture({ selectProducers: plan => ({ ...plan, [method]: () => undefined }) });
+    const fixture = nativeClosureProducerFixture({
+      ...(method === "errorFor" ? { selectRecords: producerCarrierRecords(rustCallableInputTargetType([], rustSourcePrimitiveTargetType("int32"))) } : {}),
+      selectProducers: plan => ({ ...plan, [method]: () => undefined }),
+    });
     assert.equal(fixture.plan() === undefined, true, method);
     assert.equal(fixture.bodyContexts.length, 0);
     assert.equal(fixture.context.diagnostics.length, 1);

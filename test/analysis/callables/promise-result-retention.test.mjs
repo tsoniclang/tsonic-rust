@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { compileRust } from "../../helpers/rust-session.mjs";
-import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 
 const cases = [
   ["owned-capture", `
@@ -85,9 +88,9 @@ async function run(): Promise<boolean> {
 
 for (const [name, source] of cases) {
   test(`Rust native Promise retention preserves ${name}`, { timeout: 300_000 }, () => {
-    const { result } = compileRust({ surfaces: ["js"],
+    const { result } = compileRust({ surfaces: name === "immediate-native-borrow" ? [] : ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "promise_result_retention" } },
-      files: { "index.ts": `${source}
+      files: { "index.ts": `export {};\n${source}
 async function main(): Promise<void> { if (!await run()) throw new Error("native Promise retention"); }
 await main();` },
     });
@@ -114,7 +117,7 @@ export function reject(): void { leaf(); leaf(); }
 });
 
 test("actual formal native leases preserve both escaping diagnostics despite the rejected object facet", () => {
-  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
 import { load } from "@tsonic/rust/lang.js";
@@ -129,11 +132,123 @@ async function escaped<Region extends Life>(value: Ref<int32, Region>, pending: 
 }
 export const marker = 0;
 ` } });
-  const leases = result.diagnostics.filter(issue => issue.code === "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES");
-  assert.equal(leases.length, 2, "both independently proven formal leases survive the native requirement rejection");
-  assert.equal(leases[0].sourceNode !== undefined && leases[1].sourceNode !== undefined &&
-    leases[0].sourceNode !== leases[1].sourceNode, true, "each escaping call retains its exact source identity");
-  assert.equal(result.diagnostics.some(issue => issue.code === "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN"), true,
-    "the native object's independent storage refusal is retained, not replaced by a source-only decision");
-  assert.equal(result.program === undefined && result.artifacts.length === 0, true, "neither rejected facet is published");
+  assertRejectedAsyncSource(compilation, [0, 1].flatMap(occurrence => [
+    { code: "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES", kind: "KindCallExpression", text: "keep(value, pending)", occurrence },
+    { code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text: "keep(value, pending)", occurrence },
+  ]));
 });
+
+test("a settled JS Promise preserves its exact native borrowed payload inside its owner", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } }, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+export async function view<Region extends Life>(value: Ref<int32, Region>): Promise<Ref<int32, Region>> { return value; }
+export async function run(): Promise<int32> {
+  const value = 17 as int32;
+  const borrowed = await view(ref(value));
+  return load(borrowed);
+}
+` } });
+  assert.equal(result.diagnostics.length, 0, "a settled borrowed payload is representable, not a pending static factory");
+  const output = result.artifacts.find(artifact => artifact.path === "src/index.rs")?.text;
+  assert.equal(typeof output, "string", "native scoped view code is emitted");
+  assert.equal(/-> js_abi::JsPromise<&'[A-Za-z_][A-Za-z_0-9]* i32>/u.test(output), true,
+    "the Promise stores the actual native reference, not an owned copy or fictitious Promise lifetime");
+  assert.equal(/\.clone\(|from_\w+_factory/u.test(output), false,
+    "the exact settled view needs neither cloning nor a pending owner");
+  const directory = writeGeneratedProject("promise-settled-native-view", result.artifacts);
+  appendFileSync(join(directory, "src/index.rs"), `
+#[cfg(test)]
+mod scoped_native_view {
+    use super::*;
+
+    #[test]
+    fn settled_reference_and_immediate_source_await_keep_identity() {
+        let value = 17;
+        let pending = view(&value);
+        let borrowed = rt::block_on(pending.into_result()).unwrap();
+        assert!(core::ptr::eq(borrowed, &value));
+        assert_eq!(*borrowed, 17);
+        assert_eq!(rt::block_on(run().into_result()).unwrap(), 17);
+    }
+}
+`);
+  runCargo(directory, ["generate-lockfile", "--offline"]);
+  runCargo(directory, ["fmt", "--all"]);
+  runCargo(directory, ["fmt", "--all", "--check"]);
+  runCargo(directory, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(directory, ["test", "--locked", "--offline", "--", "--test-threads=1"]);
+});
+
+const borrowedHeader = `import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";`;
+const pendingRead = `async function read<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  await pending;
+  return load(value);
+}`;
+
+for (const [name, source, calls] of [
+  ["discarded", `${pendingRead}
+export function escape<Region extends Life>(value: Ref<int32, Region>, previous: Promise<void>): void {
+  read(value, previous);
+}`, ["read(value, previous)"]],
+  ["returned", `${pendingRead}
+export function escape<Region extends Life>(value: Ref<int32, Region>, previous: Promise<void>): Promise<int32> {
+  return read(value, previous);
+}`, ["read(value, previous)"]],
+  ["adopted-and-stored", `${pendingRead}
+async function adopt<Region extends Life>(value: Ref<int32, Region>, previous: Promise<void>): Promise<int32> {
+  return read(value, previous);
+}
+export function escape<Region extends Life>(value: Ref<int32, Region>, previous: Promise<void>): () => Promise<int32> {
+  const pending = adopt(value, previous);
+  return async () => await pending;
+}`, ["read(value, previous)", "adopt(value, previous)"]],
+]) {
+  test(`a ${name} JS pending result cannot extend its actual native input lease`, () => {
+    const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `${borrowedHeader}\n${source}` } });
+    assertRejectedAsyncSource(compilation, calls.flatMap(text => [
+      { code: "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES", kind: "KindCallExpression", text },
+      { code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text },
+    ]));
+  });
+}
+
+const exposedPendingRead = `export ${pendingRead}`;
+const immediatePendingRead = `export async function immediate<Region extends Life>(value: Ref<int32, Region>, previous: Promise<void>): Promise<int32> {
+  return await read(value, previous);
+}`;
+const prefixPendingRead = `export async function read<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  const copied = load(value);
+  await pending;
+  return copied;
+}`;
+const borrowedPayloadClosure = "async (): Promise<Ref<int32, Region>> => await pending";
+
+for (const [name, source, failures] of [
+  ["immediate-await-public-factory", `${exposedPendingRead}\n${immediatePendingRead}`, [
+    { kind: "KindFunctionDeclaration", text: exposedPendingRead },
+    { kind: "KindFunctionDeclaration", text: immediatePendingRead },
+  ]],
+  ["prefix-read-before-pending", prefixPendingRead, [
+    { kind: "KindFunctionDeclaration", text: prefixPendingRead },
+  ]],
+  ["settled-borrowed-payload-in-escaping-closure", `
+async function view<Region extends Life>(value: Ref<int32, Region>): Promise<Ref<int32, Region>> { return value; }
+export function escape<Region extends Life>(value: Ref<int32, Region>): () => Promise<Ref<int32, Region>> {
+  const pending = view(value);
+  return ${borrowedPayloadClosure};
+}`, [ { kind: "KindArrowFunction", text: borrowedPayloadClosure } ]],
+]) {
+  test(`JS ${name} is refused at its exact native factory boundary before publication`, () => {
+    const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `${borrowedHeader}\n${source}` } });
+    assertRejectedAsyncSource(compilation, failures.map(failure => ({ ...failure,
+      code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN" })));
+    assert.equal(compilation.result.diagnostics.every(issue =>
+      issue.message === "A suspending JS Promise body cannot retain a borrowed value across a pending point; its task requires owned storage."),
+    true, "the existing native factory refusal owns every source rejection, not a rustc failure");
+  });
+}

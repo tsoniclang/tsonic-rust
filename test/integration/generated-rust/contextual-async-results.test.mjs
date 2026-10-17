@@ -6,7 +6,8 @@ import { contextualAsyncCostSource, contextualAsyncResultSource, inlineContextua
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { runCargo, validateGeneratedProject, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
-import { verifyNativeBorrowedPromiseBoundary } from "../../helpers/native-promise-lifetimes.mjs";
+import { assertRejectedAsyncSource, assertSettledCopiedPromise, verifyNativeBorrowedPromiseBoundary }
+  from "../../helpers/native-promise-lifetimes.mjs";
 
 test("native JS async bodies retain contextual union completion, captures, aliases and rejection", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } },
@@ -102,6 +103,74 @@ mod contextual_async_cost {
   assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));
 });
 
+for (const [name, body, nativeBody] of [
+  ["read", "await pending; return load(value);", "pending.into_result().await?; Ok::<_, js_abi::JsValue>(value)"],
+  ["readFirst", "const copied = load(value); await pending; return copied;", "let copied = value; pending.into_result().await?; Ok::<_, js_abi::JsValue>(copied)"],
+]) {
+  test(`direct native ${name} adds exactly zero ownership costs against its inlined body`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
+      files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+async function ${name}<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  ${body}
+}
+export async function run(pending: Promise<void>): Promise<int32> {
+  const value: int32 = 17;
+  return await ${name}(ref(value), pending);
+}
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    const output = result.artifacts.find(artifact => artifact.path === "src/index.rs")?.text;
+    assert.equal(typeof output, "string", "the full native borrower/factory pair is emitted");
+    assert.equal((output.match(/JsPromise::from_fallible_factory\(/gu) ?? []).length, 1,
+      "only run's genuine public object facet constructs a task");
+    assert.equal(/Box::pin|'Region: 'static/u.test(output), false, "the borrowed direct body adds no boxed/static adapter");
+    const directory = writeGeneratedProject(`direct-native-${name}-cost`, result.artifacts);
+    appendFileSync(join(directory, "src/index.rs"), `
+#[cfg(test)]
+mod direct_native_cost {
+    use super::*;
+    ${nativeOwnershipCostSupport}
+
+    fn handwritten(pending: js_abi::JsPromise<()>) -> js_abi::JsPromise<i32> {
+        js_abi::JsPromise::from_fallible_factory(move || async move {
+            let value = 17;
+            ${nativeBody}
+        })
+    }
+
+    #[test]
+    fn scoped_native_edge_matches_the_inlined_native_cost_and_result() {
+        for _ in 0..32 {
+            let (actual_value, actual) = measure(|| tsonic_rust_js::event_loop::block_on(async {
+                let pending = js_abi::JsPromise::resolved(());
+                run(pending).into_result().await.unwrap()
+            }).unwrap());
+            let (expected_value, expected) = measure(|| tsonic_rust_js::event_loop::block_on(async {
+                let pending = js_abi::JsPromise::resolved(());
+                handwritten(pending).into_result().await.unwrap()
+            }).unwrap());
+            assert_eq!(actual_value, 17);
+            assert_eq!(expected_value, 17);
+            assert_eq!(actual, expected);
+            assert_eq!(actual.allocations, actual.deallocations);
+            assert_eq!(actual.allocated_bytes, actual.deallocated_bytes);
+            assert_eq!(actual.reallocations, 0);
+        }
+    }
+}
+`);
+    runCargo(directory, ["generate-lockfile", "--offline"]);
+    runCargo(directory, ["fmt", "--all"]);
+    runCargo(directory, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+    const executed = runCargo(directory, ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"]);
+    assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));
+  });
+}
+
 test("contextual storage keeps a settled copied payload after its input loan ends", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -122,12 +191,13 @@ export async function main(): Promise<void> {
 await main();
 ` } });
   assert.equal(result.diagnostics.length, 0, "the unchanged settled read copies its result before the input scope ends");
+  assertSettledCopiedPromise(result, "pending");
   assert.equal(validateGeneratedProject("contextual-async-settled-copy", result.artifacts, { run: true }).status, 0,
     "both retained contextual invocations preserve the copied native value");
 });
 
 test("contextual async output cannot extend a genuinely pending borrowed capture", { timeout: 300_000 }, () => {
-  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
 import { load } from "@tsonic/rust/lang.js";
@@ -140,10 +210,10 @@ export function escape<Region extends Life>(value: Ref<int32, Region>, previous:
   return async () => await pending;
 }
 ` } });
-  assert.equal(result.diagnostics.some(row => row.code === "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES" && row.sourceNode !== undefined), true,
-    "the actual pending capture, unlike a settled copied payload, cannot escape its source region");
-  assert.equal(result.program === undefined && result.artifacts.length === 0, true,
-    "invalid lifetime transport publishes neither a native program nor output");
+  assertRejectedAsyncSource(compilation, [
+    { code: "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES", kind: "KindCallExpression", text: "read(value, previous)" },
+    { code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text: "read(value, previous)" },
+  ]);
   const control = compileRust({ surfaces: ["js"], files: { "index.ts": ordinaryAsyncResultSource } }).result;
   assert.equal(control.diagnostics.length, 0);
   verifyNativeBorrowedPromiseBoundary("contextual-async-borrow-rejected", control.artifacts, true);

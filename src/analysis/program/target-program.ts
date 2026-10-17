@@ -276,7 +276,8 @@ export function analyzeRustTargetProgram(
   );
   const retentionIssues = declarationGenericRequirements.kind === "rejected" ? []
     : context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage,
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, projectRoot: input.paths.projectRoot,
+    storage: context.sourceStorage,
     nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
     nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
     sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies,

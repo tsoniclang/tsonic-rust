@@ -1,6 +1,7 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { failTargetAnalysisInvariant, type TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
+import { analyzeSourceGenericAdoption, sourceGenericAdoptionDiagnosticCode, sourceGenericAdoptionDiagnosticMessage,
+  createSourceOwnershipQuery, createSourceStorageBudget, defaultSourceStorageLimits,
   type SourceOwnershipPremises, type SourceOwnershipUnresolved, type SourceRetentionSelection,
   type SourceStorageBindings, type SourceStorageQueries, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { sourceEnclosingCallable, sourceExpressionResultDisposition, type TargetSourceProgram } from "@tsonic/target-api/source";
@@ -20,6 +21,7 @@ import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-s
 import type { RustNativeStoragePlan } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
+import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 
 export function analyzeRustPromiseResultUses(ast: AstReader, nodes: readonly Node[]): RustPromiseResultUses {
   return new Map(nodes.filter(node => ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node))
@@ -29,6 +31,7 @@ export function analyzeRustPromiseResultUses(ast: AstReader, nodes: readonly Nod
 export function analyzeRustPromiseResults(input: {
   readonly ast: AstReader;
   readonly source: TargetSourceProgram;
+  readonly projectRoot: string;
   readonly storage: SourceStorageQueries;
   readonly nodes: readonly Node[];
   readonly records: RustProgramRecords;
@@ -45,6 +48,15 @@ export function analyzeRustPromiseResults(input: {
   const results = new Map<Node, RustPromiseResult>();
   const diagnostics: TargetDiagnostic[] = [];
   const budget = createSourceStorageBudget(defaultSourceStorageLimits);
+  const adoption = analyzeSourceGenericAdoption({ source: input.source, projectRoot: input.projectRoot, nodes: input.storage.nodes,
+    budget: createSourceStorageBudget(defaultSourceStorageLimits),
+    exemptTypeParameter: parameter => input.sourceLifetimes.parameterFor(parameter)?.kind === "lifetime" });
+  if (adoption.kind === "unresolved") diagnostics.push(Object.freeze({ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN",
+    category: "error", source: "tsonic-rust", sourceNode: adoption.at, message: adoption.reason }));
+  else for (const issue of adoption.issues) diagnostics.push(Object.freeze({ code: sourceGenericAdoptionDiagnosticCode,
+    category: "error", source: "tsonic-rust", sourceNode: issue.site, sourceSpan: issue.sourceSpan,
+    message: sourceGenericAdoptionDiagnosticMessage,
+    evidence: issue.evidence }));
   const unresolved = (at: Node, reason: string): SourceOwnershipUnresolved => Object.freeze({ kind: "unresolved", at, reason });
   const carrierFor = (subject: SourceStorageSubject, bindings: SourceStorageBindings): TargetTypeRef | SourceOwnershipUnresolved => {
     const logical = input.nativeStorage.logicalCarrierFor(subject, bindings);
@@ -104,13 +116,45 @@ export function analyzeRustPromiseResults(input: {
     if (input.requirements.kind === "rejected" || input.retentionIssues.length !== 0) {
       return unresolved(value.node, "Native result retention awaits the existing rejected generic requirement contract.");
     }
-    const contract = owner === undefined ? undefined : input.requirements.index.contractFor(owner);
-    const nativeEvidence = { ...input.evidence,
-      lifetimeContract: rustEnclosingStorageContract(value.node, input.ast, input.sourceLifetimes) };
-    const staticStorage = contract === undefined
-      ? classifyCarrierRequirements(carrier, ["static"], new Set<string>(), new Map<string, Set<RustGenericRequirement>>(),
-        () => false, input.definitions, nativeEvidence)
-      : rustFinalContractSupportsStatic(contract, carrier, input.families, input.definitions, nativeEvidence);
+    const requirements = input.requirements.index;
+    const active = new Map<Node, Set<SourceStorageBindings>>();
+    const classify = (owner: Node | undefined): ReturnType<typeof classifyCarrierRequirements> => {
+      const contract = owner === undefined ? undefined : requirements.contractFor(owner);
+      const nativeEvidence = { ...input.evidence,
+        lifetimeContract: rustEnclosingStorageContract(owner ?? value.node, input.ast, input.sourceLifetimes) };
+      return contract === undefined
+        ? classifyCarrierRequirements(carrier, ["static"], new Set<string>(), new Map<string, Set<RustGenericRequirement>>(),
+          () => false, input.definitions, nativeEvidence)
+        : rustFinalContractSupportsStatic(contract, carrier, input.families, input.definitions, nativeEvidence);
+    };
+    const classifyExecution = (owner: Node | undefined, bindings: SourceStorageBindings): ReturnType<typeof classify> => {
+      if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
+      const direct = classify(owner);
+      if (direct.kind !== "unresolved" || owner === undefined || rustTargetTypeParameterIdentities(carrier).length === 0) return direct;
+      const inProgress = active.get(owner) ?? new Set<SourceStorageBindings>();
+      if (inProgress.has(bindings)) return { kind: "unresolved",
+        reason: "Native result retention requires a complete actual generic execution contract, not a cyclic caller assumption." };
+      inProgress.add(bindings);
+      active.set(owner, inProgress);
+      try {
+        const selected = input.storage.boundActivationsFor(owner, bindings);
+        if (selected.kind === "unresolved") return selected;
+        if (selected.activations.length === 0) return { kind: "unresolved",
+          reason: "Native generic result retention requires its nonempty checked execution activation." };
+        for (const activation of selected.activations) {
+          if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
+          if (activation.declaration !== owner) return { kind: "unresolved",
+            reason: "A native result execution contract must belong to its exact checked declaration." };
+          const selection = activation.kind === "declaration" ? classify(owner)
+            : classifyExecution(sourceEnclosingCallable(activation.invocation, input.ast), activation.callerBindings);
+          if (selection.kind !== "supported") return selection;
+        }
+        return { kind: "supported" };
+      } finally {
+        inProgress.delete(bindings);
+      }
+    };
+    const staticStorage = classifyExecution(owner, bindings);
     if (staticStorage.kind !== "supported") return unresolved(value.node, staticStorage.reason);
     const selection: SourceRetentionSelection = Object.freeze({ kind: "resolved",
       premises: Object.freeze([Object.freeze({ ...evidence, kind: "retained", reason: "owned-value" })]) });
@@ -141,8 +185,9 @@ export function analyzeRustPromiseResults(input: {
       if (isCall && declaration !== undefined && input.ast.body(declaration) !== undefined) return undefined;
       const checked = input.storage.typeFor(value);
       if (checked.kind === "unresolved") return unresolved(value.node, checked.reason);
-      const carrier = carrierFor(value, bindings);
-      if (carrier.kind === "unresolved") return carrier;
+      const carrier = input.nativeStorage.logicalCarrierFor(value, bindings);
+      if (carrier === undefined) return unresolved(value.node,
+        "A native continuation requires its completed checked logical completion contract.");
       const awaited = rustAwaitSelection(carrier, input.definitions);
       if (awaited === undefined) return undefined;
       const future = rustAwaitSelectionLeaves(awaited).some(leaf => leaf.future !== undefined);
@@ -150,7 +195,6 @@ export function analyzeRustPromiseResults(input: {
       const nativeOperation = operation?.kind === "provider-operation" || operation?.kind === "reference-operation" ||
         operation?.kind === "flow-marker" || operation?.kind === "typed-location";
       if (isCall && nativeCall === undefined && !nativeOperation) return undefined;
-      if (!isCall && !future) return undefined;
       return Object.freeze({ kind: future ? "may-suspend" : "never", value,
         contractDeclaration: declaration ?? value.node, checkedType: checked.type });
     },

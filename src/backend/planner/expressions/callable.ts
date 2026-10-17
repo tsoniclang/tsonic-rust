@@ -287,7 +287,7 @@ export function planRustCallableExpressionBody(
   const producerContext = { ...context, callableDeclaration: node, fallibleBoundary: callableErrorBoundary };
   const physicalCarrier = callableProtocol === undefined ? undefined
     : context.input.program.callableValues.nativeProducers.physicalFor(node, constructionCarrier);
-  const invocationErrorCarrier = !resultIsFallible ? undefined : callableProtocol === undefined
+  const invocationErrorCarrier = !resultIsFallible ? undefined : callableProtocol === undefined || borrowedInput
     ? context.input.program.callableValues.nativeProducers.errorFor(node, "invoke")
     : physicalCarrier === undefined ? undefined : rustCallablePhysicalSignature(physicalCarrier)?.error;
   const invocationErrorType = invocationErrorCarrier === undefined ? undefined
