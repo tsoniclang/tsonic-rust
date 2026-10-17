@@ -21,7 +21,7 @@ import {
 import { cargoCratesIoRegistry } from "../../target-model/project/model.js";
 import type { RustFoundation } from "../../target-model/foundation/model.js";
 
-const require = createRequire(import.meta.url);
+const resolveFromTargetPackage = createRequire(import.meta.url).resolve;
 
 export function rustRuntimeCrateReference(
   context: Pick<TargetCompilationSessionContext, "paths"> |
@@ -57,10 +57,10 @@ function resolveRuntimePackageRoot(
   packageName: string,
 ): string {
   const packageJsonSpecifier = `${packageName}/package.json`;
-  const projectRequire = createRequire(resolve(context.paths.projectRoot, "package.json"));
-  for (const resolver of [projectRequire, require]) {
+  const resolveFromProject = createRequire(resolve(context.paths.projectRoot, "package.json")).resolve;
+  for (const resolvePackage of [resolveFromProject, resolveFromTargetPackage]) {
     try {
-      return dirname(resolver.resolve(packageJsonSpecifier));
+      return dirname(resolvePackage(packageJsonSpecifier));
     } catch {
       continue;
     }
