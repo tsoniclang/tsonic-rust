@@ -341,6 +341,65 @@ nativeEntryInverses.push(...[
   ]
 ]);
 
+nativeEntryInverses.push(...[
+  [
+    "opaque-source-helper-demand-context",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Set([payload]).forEach(next => { next(); }); send(resolve, 7); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-source-helper-demand-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); send(resolve, 7); new Set([payload]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-source-helper-chain-demand-context",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function forward<Part>(done: (value: Part) => void, value: Part): void { send(done, value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { forward(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Set([payload]).forEach(next => { next(); }); send(resolve, 7); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-source-helper-chain-demand-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function forward<Part>(done: (value: Part) => void, value: Part): void { send(done, value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { forward(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); send(resolve, 7); new Set([payload]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-native-forwarded-helper-demand-context",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Set([payload]).forEach(next => { [0].forEach(next); }); send(resolve, 7); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-native-forwarded-helper-demand-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); send(resolve, 7); new Set([payload]).forEach(next => { [0].forEach(next); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-default-helper-demand-context",
+    "function send<Part>(done: (value: Part) => void, value: Part, actual: Part = value): void { done(actual); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Set([payload]).forEach(next => { next(); }); send(resolve, 7); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-default-helper-demand-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part, actual: Part = value): void { done(actual); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); send(resolve, 7); new Set([payload]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-component-helper-demand-context",
+    "function send<Part>(done: (value: Part) => void, input: { payload: Part }): void { done(input.payload); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, { payload: value }); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Set([payload]).forEach(next => { next(); }); send(resolve, { payload: 7 }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-component-helper-demand-context-reversed",
+    "function send<Part>(done: (value: Part) => void, input: { payload: Part }): void { done(input.payload); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, { payload: value }); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); send(resolve, { payload: 7 }); new Set([payload]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-recursive-helper-demand-context",
+    "function send<Part>(done: (value: Part) => void, value: Part, depth: number): void { if (depth > 0) send(done, value, depth - 1); else done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value, 1); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Set([payload]).forEach(next => { next(); }); send(resolve, 7, 1); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-recursive-helper-demand-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part, depth: number): void { if (depth > 0) send(done, value, depth - 1); else done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value, 1); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); send(resolve, 7, 1); new Set([payload]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-receiver-helper-demand-context",
+    "class Relay<Part> { constructor(readonly done: (value: Part) => void, readonly value: Part) {} run(): void { this.done(this.value); } } function make<Part>(done: (value: Part) => void, value: Part): () => void { const relay = new Relay(done, value); return () => { relay.run(); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Set([payload]).forEach(next => { next(); }); new Relay(resolve, 7).run(); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-receiver-helper-demand-context-reversed",
+    "class Relay<Part> { constructor(readonly done: (value: Part) => void, readonly value: Part) {} run(): void { this.done(this.value); } } function make<Part>(done: (value: Part) => void, value: Part): () => void { const relay = new Relay(done, value); return () => { relay.run(); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make((actual: Value): void => { void actual; }, value); new Relay(resolve, 7).run(); new Set([payload]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ]
+]);
+
 for (const [name, sourceText] of nativeEntryInverses) {
   test("Rust native callback non-adoption inverse: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"],
@@ -358,6 +417,79 @@ const nativeOpaquePayloadCases = [
 ["set-returned-adopter-actual-creation","function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { done(value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const observer = make((actual: number): void => { void actual; }, 7); const completion = make(resolve, value); new Set([completion]).forEach(next => { next(); }); observer(); }); }","done(value)"],
 ["set-returned-adopter-actual-creation-reversed","function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { done(value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const observer = make((actual: number): void => { void actual; }, 7); const completion = make(resolve, value); observer(); new Set([completion]).forEach(next => { next(); }); }); }","done(value)"]
 ];
+
+nativeOpaquePayloadCases.push(...[
+  [
+    "opaque-source-helper-adopting-context",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Set([payload]).forEach(next => { next(); }); send((actual: number): void => { void actual; }, 7); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-source-helper-adopting-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); send((actual: number): void => { void actual; }, 7); new Set([payload]).forEach(next => { next(); }); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-source-helper-chain-adopting-context",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function forward<Part>(done: (value: Part) => void, value: Part): void { send(done, value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { forward(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Set([payload]).forEach(next => { next(); }); send((actual: number): void => { void actual; }, 7); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-source-helper-chain-adopting-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function forward<Part>(done: (value: Part) => void, value: Part): void { send(done, value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { forward(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); send((actual: number): void => { void actual; }, 7); new Set([payload]).forEach(next => { next(); }); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-native-forwarded-helper-adopting-context",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Set([payload]).forEach(next => { [0].forEach(next); }); send((actual: number): void => { void actual; }, 7); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-native-forwarded-helper-adopting-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part): void { done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); send((actual: number): void => { void actual; }, 7); new Set([payload]).forEach(next => { [0].forEach(next); }); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-default-helper-adopting-context",
+    "function send<Part>(done: (value: Part) => void, value: Part, actual: Part = value): void { done(actual); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Set([payload]).forEach(next => { next(); }); send((actual: number): void => { void actual; }, 7); }); }",
+    "done(actual)"
+  ],
+  [
+    "opaque-default-helper-adopting-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part, actual: Part = value): void { done(actual); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); send((actual: number): void => { void actual; }, 7); new Set([payload]).forEach(next => { next(); }); }); }",
+    "done(actual)"
+  ],
+  [
+    "opaque-component-helper-adopting-context",
+    "function send<Part>(done: (value: Part) => void, input: { payload: Part }): void { done(input.payload); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, { payload: value }); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Set([payload]).forEach(next => { next(); }); send((actual: number): void => { void actual; }, { payload: 7 }); }); }",
+    "done(input.payload)"
+  ],
+  [
+    "opaque-component-helper-adopting-context-reversed",
+    "function send<Part>(done: (value: Part) => void, input: { payload: Part }): void { done(input.payload); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, { payload: value }); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); send((actual: number): void => { void actual; }, { payload: 7 }); new Set([payload]).forEach(next => { next(); }); }); }",
+    "done(input.payload)"
+  ],
+  [
+    "opaque-recursive-helper-adopting-context",
+    "function send<Part>(done: (value: Part) => void, value: Part, depth: number): void { if (depth > 0) send(done, value, depth - 1); else done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value, 1); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Set([payload]).forEach(next => { next(); }); send((actual: number): void => { void actual; }, 7, 1); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-recursive-helper-adopting-context-reversed",
+    "function send<Part>(done: (value: Part) => void, value: Part, depth: number): void { if (depth > 0) send(done, value, depth - 1); else done(value); } function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { send(done, value, 1); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); send((actual: number): void => { void actual; }, 7, 1); new Set([payload]).forEach(next => { next(); }); }); }",
+    "done(value)"
+  ],
+  [
+    "opaque-receiver-helper-adopting-context",
+    "class Relay<Part> { constructor(readonly done: (value: Part) => void, readonly value: Part) {} run(): void { this.done(this.value); } } function make<Part>(done: (value: Part) => void, value: Part): () => void { const relay = new Relay(done, value); return () => { relay.run(); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Set([payload]).forEach(next => { next(); }); new Relay((actual: number): void => { void actual; }, 7).run(); }); }",
+    "this.done(this.value)"
+  ],
+  [
+    "opaque-receiver-helper-adopting-context-reversed",
+    "class Relay<Part> { constructor(readonly done: (value: Part) => void, readonly value: Part) {} run(): void { this.done(this.value); } } function make<Part>(done: (value: Part) => void, value: Part): () => void { const relay = new Relay(done, value); return () => { relay.run(); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const payload = make(resolve, value); new Relay((actual: number): void => { void actual; }, 7).run(); new Set([payload]).forEach(next => { next(); }); }); }",
+    "this.done(this.value)"
+  ]
+]);
 
 for (const [name, declarations, expression] of nativeOpaquePayloadCases) {
   test("Rust native opaque callable input is unresolved, not safe empty: " + name, () => {
