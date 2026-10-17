@@ -49,7 +49,9 @@ export interface RustNativeCallablePhysicalSource {
 
 export function rustNativeCallablePhysicalSource(
   source: TargetTypeRef,
-  storage: RustNativeStorageSelection,
+  storage: Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }>
+    | Pick<Extract<RustNativeStorageSelection, { readonly kind: "identity" }>, "kind" | "carrier">
+    | Pick<Extract<RustNativeStorageSelection, { readonly kind: "selected" }>, "kind" | "carrier" | "inputs">,
   definitions: RustTypeDefinitions,
 ): RustNativeCallablePhysicalSource | undefined {
   if (storage.kind === "unresolved") return undefined;
