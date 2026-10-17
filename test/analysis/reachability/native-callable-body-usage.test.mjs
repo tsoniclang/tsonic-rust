@@ -57,3 +57,28 @@ test("library declaration roots remain externally reachable regardless of local 
   assert.equal(Object.isFrozen(current.program.callableValues.genericDispatch), true);
   assert.equal(current.program.callableValues.genericDispatch.usesDeclarationBody({}), false);
 });
+
+for (const [name, body, retained] of [
+  ["erased forwarding", "function unused() { return identity(value); } return 1;", false],
+  ["live forwarding", "function used() { return identity(value); } await used(); return 1;", true],
+  ["generated callable", "const selected = identity; await selected(value); return 1;", true],
+]) {
+  test(`native body reachability follows only the actual ${name} references`, () => {
+    const { program } = analyzeRust({ surfaces: ["js"],
+      target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+        async function identity<Value>(value: Value): Promise<Value> { return value; }
+        async function consume(value: number): Promise<number> { ${body} }
+        console.log(await consume(7));` } });
+    assert.equal(program !== undefined, true, "the ordinary generic payload is native-admitted");
+    const { ast } = program.source;
+    let declaration;
+    const visit = node => {
+      if (ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "identity") declaration = node;
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    assert.equal(declaration !== undefined, true, "the original generic declaration remains in the checked source");
+    assert.equal(program.reachability.suppressedDeclarations.has(declaration), !retained,
+      "normal and generated references both obey the one completed native-node domain");
+  });
+}

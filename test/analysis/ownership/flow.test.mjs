@@ -188,3 +188,39 @@ test("foreign checked storage cannot manufacture an ownership proof", async () =
     capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
     isOwnedOperationResult: () => false }), /identical checked source program/u);
 });
+
+for (const [name, body, expected] of [
+  ["single await", "await pending;", [true]],
+  ["sequential awaits", "await pending; await pending;", [false, true]],
+  ["exclusive awaits", "if (flag) { await pending; return; } await pending;", [true, true]],
+  ["later read", "await pending; observe(pending);", [false, true]],
+  ["finally read", "try { await pending; } finally { observe(pending); }", [false, true]],
+  ["loop-carried await", "while (flag) { await pending; } await pending;", [false, true]],
+  ["captured owner", "const later = () => pending; await pending; return later;", [false, false]],
+  ["other unclassified read", "await pending; return pending + 'used';", [false, false]],
+]) {
+  test(`owned await movement retains the whole ${name} source contract`, async () => {
+    const { source, storage, selected } = await fixture(`declare function observe(value: Promise<string>): void;
+      async function run(pending: Promise<string>, flag: boolean) { ${body} }`);
+    assert.equal(selected.kind, "resolved", name);
+    const reads = references(source, storage, "pending");
+    assert.equal(reads.length, expected.length, `${name}: all original source occurrences`);
+    for (const [index, read] of reads.entries()) assert.equal(selected.flow.movingReads.has(read), expected[index],
+      `${name}: occurrence ${index} is governed by the same complete checked liveness`);
+  });
+}
+
+test("an owned await last-use still cannot overlap an earlier argument's actual native lease", async () => {
+  const { source, storage } = await fixture(`declare function inspect(first: Promise<string>, second: string): void;
+    async function run(pending: Promise<string>): Promise<void> { inspect(pending, await pending); }`);
+  const reads = references(source, storage, "pending");
+  assert.equal(reads.length, 2, "the exact overlapping invocation has two source reads");
+  for (const borrowed of [false, true]) {
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes,
+      capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
+      isOwnedOperationResult: () => false, mayBorrowArgument: argument => borrowed && argument === reads[0] });
+    assert.equal(selected.kind, "resolved", "the same graph and actual native borrowing premise close");
+    assert.equal(selected.flow.movingReads.has(reads[0]), false, "the earlier argument is not a last-use transfer");
+    assert.equal(selected.flow.movingReads.has(reads[1]), !borrowed, "only the actual nonoverlapping awaited last use moves");
+  }
+});

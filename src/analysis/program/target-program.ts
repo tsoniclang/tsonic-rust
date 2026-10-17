@@ -21,7 +21,7 @@ import type {
   RustTargetProgram,
 } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
-import { analyzeRustPromiseResults } from "../callables/promise-results.js";
+import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -111,6 +111,9 @@ export function analyzeRustTargetProgram(
   if (contextResult.kind === "rejected") return contextResult;
   const context = contextResult.value;
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
+  const genericAdoption = analyzeRustGenericAdoption({ source: context.source, projectRoot: input.paths.projectRoot,
+    storage: context.sourceStorage, sourceLifetimes: context.sourceLifetimes });
+  if (genericAdoption.length !== 0) return rejectedTargetStage(genericAdoption);
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
     sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
   if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
@@ -278,10 +281,12 @@ export function analyzeRustTargetProgram(
   );
   const retentionIssues = declarationGenericRequirements.kind === "rejected" ? []
     : context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, projectRoot: input.paths.projectRoot,
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
     storage: context.sourceStorage,
     nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
     nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
+    nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
+    sourceTypes: sourceStage.sourceTypes,
     sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies,
     evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
       classValues, objectRepresentations, structuralShapes: context.structuralShapes, projectTypes: context.projectTypes, records } });

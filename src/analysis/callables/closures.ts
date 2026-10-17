@@ -53,10 +53,9 @@ import { selectRustSourceValueConversion } from "../../policy/conversions/select
 import { finalizeValueConversion } from "../operations/finalized-operation/conversions.js";
 
 import { rustCallableInvocationResult } from "./results.js";
-import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
+import { rustSourceClosureValueCarrier } from "./function-values.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
-import { rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
 
 export function resolveFunctionExpressionSignature(
@@ -269,8 +268,8 @@ export function resolveFunctionExpressionCarrier(
         selectedResultExpectation, walk.context.typeDefinitions);
   if (suspendedResult !== undefined && selectedResultExpectation !== undefined &&
       !rustTargetTypeRefEquals(suspendedResult, selectedResultExpectation) && invocationResult === undefined) return undefined;
-  const selectedValueResult = selectedResultExpectation ?? suspendedResult;
-  const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? selectedResultExpectation;
+  const selectedValueResult = suspended ? selectedResultExpectation ?? suspendedResult : finalizedReturn ?? selectedResultExpectation;
+  const selectedBodyResult = generator?.returnType ?? asynchronous?.outputCarrier ?? finalizedReturn ?? selectedResultExpectation;
   const resultExpectation = selectedBodyResult ?? finalizedReturn;
   const parameterCarriers = parameterAbis.map((abi) => abi.parameterCarrier);
   const expressionName = Node_Name(ast, expression);
@@ -329,7 +328,7 @@ export function resolveFunctionExpressionCarrier(
   ];
   const valueResult = selectedValueResult ?? bodyCarrier;
   if (finalizeRustCallableSignature(walk, expression,
-    { ...signatureRequest, selectedReturn: generator?.resultCarrier ?? bodyCarrier }) === undefined) return undefined;
+    { ...signatureRequest, selectedReturn: generator?.resultCarrier ?? completedSignature?.logicalReturn ?? selectedResultExpectation }) === undefined) return undefined;
   const captures = collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
     const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
     return initializer === undefined ? [] : [initializer];
@@ -340,23 +339,13 @@ export function resolveFunctionExpressionCarrier(
   if (captures === undefined) {
     return undefined;
   }
-  let constructionCarrier = rustCallableInputProtocol(selectedExpected) === undefined
-    ? selectedExpected : rustCallableTargetType(selectedParameters, selectedResult, undefined,
-      rustCallableProtocol(selectedExpected)?.error);
-  if (rustCallableProtocol(constructionCarrier)?.lifetime !== undefined) {
-    const lifetime = rustRetainedValueLifetime(expression,
-      [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier), walk);
-    if (lifetime === undefined) return undefined;
-    constructionCarrier = rustCallableTargetType(selectedParameters, selectedResult, lifetime,
-      rustCallableProtocol(constructionCarrier)?.error);
-  }
-  const logicalCarrier = rebindRustCallableCarrier(constructionCarrier, finalizedParameterCarriers, valueResult,
+  const logicalCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
     selectedGeneric === undefined ? {} : { typeParameters: genericParameters ?? [],
       environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
         ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],
     });
-  const closureCarrier = resolveRustCallableStorageCarrier(logicalCarrier,
-    rustResolutionContext(walk, expression, "value"), walk.operationOptions, new Set());
+  const closureCarrier = logicalCarrier === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, logicalCarrier,
+    [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture => capture.carrier));
   if (closureCarrier === undefined) return undefined;
   requireRustRecord(walk.context.requiredRecords, "closureCapture", expression, "closure", "analysis/callables/closures.ts");
   walk.context.records.closureCaptures.capture(expression, captures.captures, captures.receivers, captures.receiverFields,

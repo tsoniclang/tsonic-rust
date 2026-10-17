@@ -3,6 +3,9 @@ import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetGenericReferences, type RustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 
 import type { RustNativeCallableInput } from "./native-inputs.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
@@ -20,6 +23,22 @@ export interface RustNativeCapturePlan {
 export interface RustNativeCaptureConstruction extends RustNativeCapturePlan {
   require(declaration: Node): RustNativeCaptureSelection;
   complete(): RustNativeCapturePlan;
+}
+
+export function completeRustNativeCaptureCarrier(
+  declaration: Node,
+  physicalCaptures: RustNativeCaptureSelection,
+  bindings: RustTargetGenericBindings,
+  errorTypes: RustErrorTypeContext,
+): { readonly kind: "resolved"; readonly carrier: TargetTypeRef } | { readonly kind: "unresolved"; readonly reason: string } {
+  if (physicalCaptures.kind === "unresolved") return physicalCaptures;
+  const captured: TargetTypeRef = { kind: "tuple",
+    elements: [...physicalCaptures.captures, ...physicalCaptures.receiverFields, ...physicalCaptures.receivers] };
+  const bound = substituteRustTargetGenerics(captured, bindings.types, bindings.lifetimes, bindings.consts);
+  const carrier = normalizeRustErrorType(bound, errorTypes, declaration);
+  return carrier === undefined
+    ? Object.freeze({ kind: "unresolved", reason: "Native captured storage requires its actual admitted physical error-boundary carriers." })
+    : Object.freeze({ kind: "resolved", carrier });
 }
 
 export function createRustNativeCapturePlan(input: {

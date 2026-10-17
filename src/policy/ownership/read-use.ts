@@ -3,6 +3,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, ElementAccessExpression_
 import type { RustTargetOperationFact, RustTypedLocationPlan } from "../../target-model/records/operations.js";
 import type { RustRawAddressPlan } from "../../target-model/records/raw-addresses.js";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
+import type { RustComputedMemberFact } from "../../target-model/records/operation-selections.js";
 
 export interface RustReadUse {
   readonly mode: "value" | "shared" | "mutable" | "move";
@@ -13,6 +14,7 @@ export interface RustReadUse {
 
 export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
   readonly operation: RustTargetOperationFact | undefined;
+  readonly computedMember: RustComputedMemberFact | undefined;
   readonly arguments: readonly (Node | undefined)[] | undefined;
   readonly nativeInputs: readonly { readonly source: RustFinalizedSourceInput["source"]; readonly mode: "ref" | "mut-ref" | undefined }[];
   readonly argumentModes: readonly (ArgumentPassingMode | undefined)[];
@@ -102,6 +104,7 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     select(input.location.leftExpression, "shared", [input.location.rightExpression]);
     select(input.location.rightExpression, "shared");
   }
+  if (input.computedMember?.evaluateKey) select(input.computedMember.key, "shared");
   select(input.guard, "shared");
   return uses;
 }

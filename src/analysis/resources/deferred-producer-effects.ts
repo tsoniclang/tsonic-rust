@@ -19,12 +19,13 @@ import { rustStoredFutureValues, type RustStoredFutureValue } from "./future-sto
 import { createRustEffectsWorkBudget } from "./effects-work-budget.js";
 import type { RustNativeCallableInput } from "../callables/native-inputs.js";
 import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 const infallible: TargetTypeRef = Object.freeze({ kind: "target-named", id: rustInfallibleTargetId });
 const noFuture: RustDeferredProducerEffectsFact = Object.freeze({ kind: "no-future" });
 const noFutureChannel: RustDeferredProducerChannel = Object.freeze({ awaiting: "infallible", errorCarrier: infallible });
 
-export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
+export function recordRustDeferredProducerEffects(walk: RustFactWalk, sourceErrors: RustSourceErrorEffectSelection): void {
   walk.context.records.assertOpen();
   const { records, sourceStorage: storage, callableValues, typeDefinitions: definitions } = walk.context;
   const completed = new Map<Node, RustDeferredProducerEffectsFact>();
@@ -52,7 +53,7 @@ export function recordRustDeferredProducerEffects(walk: RustFactWalk): void {
       const channels: RustDeferredProducerChannel[] = [];
       for (const future of completion.futures) {
         budget.step();
-        const values = rustStoredFutureValues(walk, declaration, subject.subject, future.carrier, bindings);
+        const values = rustStoredFutureValues(walk, declaration, subject.subject, future.carrier, bindings, sourceErrors);
         if (values === undefined) break;
         const candidates: RustDeferredProducerChannel[] = values.length === 0 ? [noFutureChannel] : [];
         let exact = true;

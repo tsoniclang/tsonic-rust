@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { analyzeRust } from "./rust-session.mjs";
 import { createRustProviderPackage } from "../../dist/public/provider.js";
 
-import { createRustErrorRegionCatalog } from "../../dist/backend/planner/program/error-regions.js";
 import { rustPackageFallibleBoundary } from "../../dist/backend/planner/program/fallible-boundaries.js";
-import { rustRuntimeErrorTypeIdentity } from "../../dist/target-model/operations/error-boundary.js";
+import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
+import { materializeRustSourcePackageFacades } from "../../dist/backend/planner/program/source-package-facades.js";
+import { planRustSourcePackageComponents } from "../../dist/backend/planner/program/source-package-components.js";
+import { planRustSourcePackageErrors } from "../../dist/backend/planner/program/source-package-errors.js";
 import { createRustSyntheticNameState } from "../../dist/backend/planner/names/synthetic.js";
 import { planRustCallableExpressionBody } from "../../dist/backend/planner/expressions/callable.js";
 import { printRustExpr } from "../../dist/print/source/expressions/core.js";
@@ -36,25 +38,34 @@ export function create(): () => ${output} {
     callableValues: { ...original.callableValues,
     nativeProducers: selectProducers(original.callableValues.nativeProducers),
   } };
-  const fileNames = program.sourceFiles.map(file => ast.getFileName(file));
+  const planning = createRustPlanningContext(program);
+  const facades = materializeRustSourcePackageFacades(planning, program.sourceOutputIdentities);
+  assert.equal(facades.diagnostics.length, 0, "the actual producer facade inputs are complete");
+  assert.equal(facades.plan !== undefined, true, "the actual producer facade plan is admitted");
+  const components = planRustSourcePackageComponents(planning, program.sourceOutputIdentities, facades.plan);
+  assert.equal(components.kind, "accepted", "the actual producer source-package components are admitted");
+  const sourcePackageErrors = planRustSourcePackageErrors(planning, components.components);
+  assert.equal(sourcePackageErrors.diagnostics.length, 0, "the actual producer error domains are complete");
+  assert.equal(sourcePackageErrors.plan !== undefined, true, "the actual producer error domains are admitted");
+  const sourceFile = ast.getSourceFile(node);
+  const fileName = ast.getFileName(sourceFile);
+  const identity = program.sourceOutputIdentities.get(fileName);
+  const component = components.components.find(value => value.componentId === identity?.componentId);
+  assert.equal(identity !== undefined && component !== undefined, true, "the producer has its exact native source identity");
   const bodyContexts = [];
   const context = {
-    input: { program, errorRegions: createRustErrorRegionCatalog(program) },
-    sourceFile: ast.getSourceFile(node), sourcePackageComponentId: "root", moduleName: "index",
-    moduleNameByFileName: new Map(fileNames.map(file => [file, "index"])),
-    externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(),
+    input: planning,
+    sourceFile, sourcePackageComponentId: component.componentId, moduleName: identity.moduleName,
+    moduleNameByFileName: new Map([...program.sourceOutputIdentities].map(([file, identity]) => [file, identity.moduleName])),
+    externalCrateNameByFileName: new Map([...program.sourceOutputIdentities].flatMap(([file, identity]) =>
+      identity.externalCrateName === undefined ? [] : [[file, identity.externalCrateName]])),
+    externalItemPathByIdentity: facades.plan.externalItemPathByIdentity,
     externalStructuralShapeModuleByFileName: new Map(),
-    programModuleName: "program", structuralShapesModuleName: "shapes",
-    publicImplementationItemIdentities: new Set(), publishesImplementationAbi: false,
+    programModuleName: component.programModuleName, structuralShapesModuleName: component.structuralShapesModuleName,
+    publicImplementationItemIdentities: component.publicImplementationItemIdentities,
+    publishesImplementationAbi: component.publishesImplementationAbi,
     usedAliases: new Set(), diagnostics: [], syntheticNames: createRustSyntheticNameState(ast, node, []),
-    sourcePackageErrors: {
-      componentIdByFileName: new Map(fileNames.map(file => [file, "root"])),
-      componentIdByDefinition: new Map(), dependencyErrorsByComponentId: new Map(),
-      domainsByComponentId: new Map([["root", { componentId: "root", errorDomain: "runtime",
-        errorTypeIdentity: rustRuntimeErrorTypeIdentity, errorOwnerComponentId: undefined,
-        definitions: [], externalErrors: [],
-      }]]),
-    },
+    sourcePackageErrors: sourcePackageErrors.plan,
     fallibleBoundary: rustPackageFallibleBoundary({ componentId: "unrelated-consumer", errorDomain: "program",
       errorTypeIdentity: "unrelated:ConsumerFailure", errorTypePath: "ConsumerFailure",
     }),

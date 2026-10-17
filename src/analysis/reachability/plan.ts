@@ -103,7 +103,7 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
       externallyReachable.add(selected);
     }
     for (const use of summary.uses) {
-      if (use.kind === "source-linkage") continue;
+      if (use.kind === "source-linkage" || !nativeNodeSet.has(use.reference)) continue;
       const genericImplementation = program.callableValues.generic.implementationFor(selected);
       if (use.kind === "first-class" && genericImplementation?.creation === "declaration" &&
         !program.callableValues.genericDispatch.usesDeclarationBody(selected)) continue;
@@ -139,6 +139,7 @@ export function analyzeRustReachability(program: RustReachabilityInput, nativeNo
   }
 
   for (const use of program.generatedDeclarationUses) {
+    if (!nativeNodeSet.has(use.reference)) continue;
     const owner: DeclarationOwner = runtimeInitializationNodes.has(use.reference)
       ? { kind: "root" }
       : enclosingDeclarationOwner(
@@ -199,6 +200,7 @@ function declarationParticipatesInRustLiveness(
   declaration: Node,
   program: RustReachabilityInput,
 ): boolean {
+  if (program.records.compileTimeSource.get(declaration)) return false;
   if (program.records.typeOnlyDeclaration.get(declaration) !== undefined) return false;
   return program.source.ast.kindName(declaration) !== "KindTypeAliasDeclaration" ||
     program.records.typeAliasDeclaration.get(declaration)?.kind !== "erased";

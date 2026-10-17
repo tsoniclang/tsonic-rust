@@ -11,6 +11,7 @@ import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
@@ -441,5 +442,97 @@ test("structural native dispatch signatures are not stored callable payloads and
     const selected = plan.valueFor(value);
     assert.equal(selected.kind, "unresolved", name);
     assert.match(selected.reason, /layout owner/u, name);
+  }
+});
+
+const nestedMethodStorageSource = `
+  export function run(): number {
+    const leaf = { read(value: number): number { return value; } };
+    const nested = { inner: leaf };
+    const elements = [leaf];
+    const array = { items: elements };
+    const tuple: [{ read(value: number): number; }, number] = [leaf, 3];
+    const tupled = { pair: tuple };
+    return nested.inner.read(array.items[0].read(tupled.pair[1]));
+  }
+`;
+
+test("nested structural methods retain the canonical physical layout through stored arrays and tuples", () => {
+  const current = fixture(nestedMethodStorageSource);
+  const methodSlots = new Map();
+  const reads = [];
+  const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: {
+    field(carrier, index) {
+      const field = current.input.structuralShapes.field(carrier, index);
+      if (field?.method === true) {
+        methodSlots.set(field, field.methodStorageCarrier);
+        reads.push(field);
+      }
+      return field;
+    },
+  } });
+  for (const name of ["leaf", "nested", "elements", "array", "tuple", "tupled"]) {
+    const declaration = current.declaration(name);
+    const before = reads.length;
+    const selected = plan.valueFor(declaration);
+    assert.equal(selected.kind, "identity", selected.reason ?? `${name} uses its existing native structural layout`);
+    assert.equal(selected.carrier === current.program.records.runtimeCarrier.get(declaration).carrier, true,
+      `${name} preserves the exact source carrier rather than inventing an aggregate layout`);
+    assert.equal(reads.length > before, true, `${name} consults its actual nested method layout`);
+    assert.equal(Object.isFrozen(selected), true, `${name} has an immutable physical selection`);
+  }
+  for (const [field, carrier] of methodSlots) {
+    assert.equal(carrier !== undefined, true, "every selected method has its canonical physical storage slot");
+    assert.equal(field.methodStorageCarrier === carrier, true, "physical selection never rewrites the method storage carrier");
+    assert.equal(Object.isFrozen(field), true, "the physical method field remains frozen");
+  }
+});
+
+test("nested native method storage rejects missing layouts, slots and foreign source identities", () => {
+  const current = fixture(nestedMethodStorageSource);
+  const declaration = current.declaration("nested");
+  const rootCarrier = current.program.records.runtimeCarrier.get(declaration).carrier;
+  for (const mode of ["missing-layout", "missing-slot", "unknown-method-role"]) {
+    let nestedReads = 0;
+    const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: {
+      field(carrier, index) {
+        const field = current.input.structuralShapes.field(carrier, index);
+        if (field?.method !== true) return field;
+        assert.equal(rustTargetTypeRefEquals(carrier, rootCarrier), false, `${mode} reaches the nested physical owner`);
+        nestedReads += 1;
+        return mode === "missing-layout" ? undefined : mode === "missing-slot"
+          ? { ...field, methodStorageCarrier: undefined } : { ...field, method: undefined };
+      },
+    } });
+    const selected = plan.valueFor(declaration);
+    assert.equal(selected.kind, "unresolved", `${mode} cannot prove a physical layout`);
+    assert.match(selected.reason, /layout owner/u, `${mode} fails at the actual missing physical layout`);
+    assert.equal(nestedReads > 0, true, `${mode} observes the required nested slot rather than an unrelated refusal`);
+    assert.equal(Object.isFrozen(selected), true, `${mode} preserves immutable unresolved evidence`);
+  }
+  const foreign = fixture(nestedMethodStorageSource);
+  for (const node of [{}, { ...declaration }, foreign.declaration("nested")]) {
+    const selected = current.plan.valueFor(node);
+    assert.equal(selected.kind, "unresolved", "unknown or foreign nodes cannot acquire a physical aggregate layout");
+    assert.equal(Object.isFrozen(selected), true, "unknown source selection remains immutable");
+  }
+  const foreignSubject = foreign.exactSubject(foreign.declaration("nested"));
+  assert.equal(current.plan.subjectFor(foreignSubject, rootCarrier, current.declaration("run")).kind, "unresolved",
+    "an equal-looking foreign aggregate subject cannot acquire the current graph's layout");
+});
+
+test("raw callable and Future data fields still require their own exact physical aggregate storage", () => {
+  const current = fixture(`
+    export function callableData(value: { stored: () => number }): number { return 1; }
+    export function futureData(value: { stored: Promise<number> }): number { return 1; }
+  `);
+  for (const name of ["callableData", "futureData"]) {
+    const owner = current.declaration(name);
+    const parameter = current.source.ast.parameters(owner)[0];
+    const selected = current.plan.parameterFor(parameter);
+    assert.equal(selected.kind, "unresolved", `${name} cannot substitute method-signature readiness for stored data`);
+    assert.match(selected.reason, /physical aggregate layout owner/u,
+      `${name} retains the exact physical data-layout obligation`);
+    assert.equal(Object.isFrozen(selected), true, `${name} preserves its immutable unresolved physical storage`);
   }
 });

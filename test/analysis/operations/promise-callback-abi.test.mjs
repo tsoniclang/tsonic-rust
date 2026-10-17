@@ -9,6 +9,7 @@ for (const [name, body] of [
   ["catch", "return await Promise.reject<number>(new Error('failure')).catch(reason => 2);"],
   ["finally", "return await Promise.resolve(1).finally(() => { const done = 1; });"],
   ["caught await", "try { return await Promise.reject<number>('value'); } catch (error) { return 2; }"],
+  ["PromiseLike then", "const pending: PromiseLike<number> = Promise.resolve(1); return await pending.then(value => value + 1);"],
 ]) {
   test(`Promise ${name} publishes and renders its actual rejection protocol`, () => {
     const { result } = compileRust({ surfaces: ["js"], files: { "index.ts":

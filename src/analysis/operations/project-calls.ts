@@ -36,6 +36,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSelectedTargetSignature, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustArgumentMode } from "../../target-model/operations/model.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import { recordSelectedMethodSpecialization } from "./project-method-calls.js";
@@ -601,16 +602,13 @@ export function applySelectedProjectSourceCall(
       ["target.capability=rust.source-call.retained-environment"]);
     return undefined;
   }
-  if (retainedLifetimes.size > 0) {
-    requireRustRecord(walk.context.requiredRecords, "retainedCallLifetimes", expression, "retained-call", "analysis/operations/project-calls.ts");
-  }
-  walk.context.records.retainedCalls.finalize(expression, retainedLifetimes);
   if (retainedLifetimes.size !== 0) parameters = parameters.map(parameter => ({ ...parameter,
     valueCarrier: rustRetainedCallResult(parameter.valueCarrier, retainedLifetimes),
     parameterCarrier: rustRetainedCallResult(parameter.parameterCarrier, retainedLifetimes),
     inputs: parameter.inputs.map(input => ({ ...input, carrier: rustRetainedCallResult(input.carrier, retainedLifetimes) })),
   }));
-  if (!applySelectedSourceCallArguments(walk, callArguments as readonly Node[], sourceFile, parameters, bindings)) return undefined;
+  const arguments_ = prepareSelectedSourceCallArguments(walk, callArguments as readonly Node[], sourceFile, parameters, bindings);
+  if (arguments_ === undefined) return undefined;
   const actualArgumentCarriers = rustSourceCallArgumentCarriers(expression, ast, walk.context.records);
   const instantiateResult = (carrier: TargetTypeRef): TargetTypeRef => rustRetainedCallResult(rustSourceCallResultWithInputLifetimes(
     carrier, parameters.map(parameter => parameter.parameterCarrier), bindings, actualArgumentCarriers, parameters), retainedLifetimes);
@@ -654,6 +652,13 @@ export function applySelectedProjectSourceCall(
     target.form !== "function" && target.form !== "static-method" || target.classReceiver !== undefined);
   if (computedKey !== undefined &&
     resolveExpressionCarrier(walk, computedKey, sourceFile, undefined) === undefined) return undefined;
+  const completed = setCarrierFact(walk, expression, finalResultCarrier);
+  if (completed === undefined) return undefined;
+  if (retainedLifetimes.size > 0) {
+    requireRustRecord(walk.context.requiredRecords, "retainedCallLifetimes", expression, "retained-call", "analysis/operations/project-calls.ts");
+  }
+  walk.context.records.retainedCalls.finalize(expression, retainedLifetimes);
+  recordSelectedSourceCallArguments(walk, arguments_);
   requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedProjectSourceCall");
   walk.context.records.selectedOperations.project(
     expression,
@@ -673,17 +678,23 @@ export function applySelectedProjectSourceCall(
     ...(asyncBody === undefined ? {} : { asyncBody }),
     resultCarrier: physicalResultCarrier,
   });
-  return setCarrierFact(walk, expression, finalResultCarrier);
+  return completed;
 }
 
-export function applySelectedSourceCallArguments(
+interface RustSelectedSourceCallArgument {
+  readonly argument: Node;
+  readonly mode: RustArgumentMode;
+}
+
+export function prepareSelectedSourceCallArguments(
   walk: RustFactWalk,
   callArguments: readonly Node[],
   sourceFile: SourceFile,
   parameters: readonly import("../../target-model/operations/model.js").RustSourceCallParameterPlan[],
   bindings: readonly NonNullable<RustSelectedTargetSignature["sourceArgumentBindings"]>[number][],
-): boolean {
+): readonly RustSelectedSourceCallArgument[] | undefined {
   const { ast } = walk.context;
+  const selected: RustSelectedSourceCallArgument[] = [];
   for (const [index, argument] of callArguments.entries()) {
     const argumentBindings = bindings.filter((binding) =>
       binding.sourceArgumentIndex === index);
@@ -695,7 +706,7 @@ export function applySelectedSourceCallArguments(
         argument,
         ["target.capability=rust.source-call.argument-bindings"],
       );
-      return false;
+      return undefined;
     }
     const bindingCarriers = parameters.flatMap((parameter) =>
       parameter.inputs
@@ -727,7 +738,7 @@ export function applySelectedSourceCallArguments(
         argument,
         ["target.capability=rust.source-call.argument-carrier"],
       );
-      return false;
+      return undefined;
     }
     const modes = parameters
       .filter((parameter) => parameter.inputs.some((input) =>
@@ -741,9 +752,16 @@ export function applySelectedSourceCallArguments(
         argument,
         ["target.capability=rust.source-call.argument-modes"],
       );
-      return false;
+      return undefined;
     }
     const mode = modes[0]!;
+    selected.push(Object.freeze({ argument, mode }));
+  }
+  return Object.freeze(selected);
+}
+
+export function recordSelectedSourceCallArguments(walk: RustFactWalk, selected: readonly RustSelectedSourceCallArgument[]): void {
+  for (const { argument, mode } of selected) {
     const passingMode = rustArgumentPassingMode(mode);
     requireRustRecord(walk.context.requiredRecords, "argumentPassing", argument, passingMode, "analysis/operations/project-calls.ts");
     walk.context.records.argumentPassingPlans.pass(argument, passingMode);
@@ -752,7 +770,6 @@ export function applySelectedSourceCallArguments(
       recordBindingWrite(walk, argument, "referent");
     }
   }
-  return true;
 }
 
 function selectedSpreadArgumentMatches(

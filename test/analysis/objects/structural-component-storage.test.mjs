@@ -4,6 +4,9 @@ import { createRustStructuralShapePlan, createRustStructuralShapePlanRegistry } 
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 test("structural storage unifies exact component contracts without erasing other differences", () => {
   const primitive = name => ({ kind: "source-primitive", name });
@@ -167,8 +170,20 @@ test("physical method installation completes canonical and already indexed borro
   const logical = definition.fields[0].carrier;
   const protocol = rustCallableProtocol(definition.fields[0].methodStorageCarrier);
   const infallible = { kind: "target-named", id: "rust.core.Infallible" };
+  const object = {};
+  const property = {};
+  const expression = {};
+  const destinationCarrier = rustCallableTargetType(protocol.parameters, protocol.result, protocol.lifetime, infallible);
+  const physicalCarrier = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
+    { kind: "lifetime", lifetime: protocol.lifetime },
+    { kind: "type", type: { kind: "tuple", elements: protocol.parameters } },
+    { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
+      { kind: "type", type: protocol.result }, { kind: "type", type: infallible },
+    ]) },
+  ]);
   builder.finalizeMethodStorage(new Map([[definition, new Map([[0,
-    rustCallableTargetType(protocol.parameters, protocol.result, protocol.lifetime, infallible),
+    { carrier: destinationCarrier, constructions: [{ object, property, expression, storageIndex: 0,
+      physicalCarrier, destinationCarrier }] },
   ]])]]));
   const after = builder.seal();
   assert.equal(after.definitions[0].fields[0].carrier === logical, true, "logical method contract remains unchanged");
@@ -183,6 +198,62 @@ test("physical method installation completes canonical and already indexed borro
     assert.deepEqual(selected.error, infallible, "the completed invocation error is selected before publication");
     assert.equal(Object.isFrozen(field), true, "completed fields are immutable");
     assert.equal(after.field(source, 0) === field, true, "completed indexed lookups have stable identity");
+    assert.equal(field.methodConstructions.length, 1, "the exact original contribution has one completed physical witness");
+    const construction = field.methodConstructions[0];
+    assert.equal(construction.object === object && construction.property === property && construction.expression === expression,
+      true, "template instantiation preserves every original construction identity");
+    assert.equal(construction.storageIndex, 0, "the original target field index is retained");
+    assert.equal(Object.isFrozen(field.methodConstructions) && Object.isFrozen(construction), true,
+      "published construction witnesses are immutable");
+    assert.equal(rustTargetTypeRefEquals(construction.destinationCarrier, field.methodStorageCarrier), true,
+      "the whole witness uses the same finalized destination instance");
+    const physical = rustCallablePhysicalSignature(construction.physicalCarrier);
+    assert.equal(physical !== undefined, true, "the original physical construction signature remains exact");
+    assert.equal(rustTargetTypeRefEquals(physical.result, expectedResult), true,
+      "native construction and destination results receive the same actual generic substitution");
+    assert.equal(rustTargetTypeRefEquals(physical.error, infallible), true,
+      "native construction retains the selected exact error payload");
   }
   assert.throws(() => builder.finalizeMethodStorage(new Map()), /exactly once/u);
+});
+
+test("physical method witnesses reject mismatched complete signatures before publishing any field", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const floating = { kind: "source-primitive", name: "float64" };
+  const lifetime = { kind: "static" };
+  const infallible = { kind: "target-named", id: "rust.core.Infallible" };
+  const otherError = { kind: "target-named", id: "source.NativeError" };
+  const shape = rustStructuralObjectTargetType("/source.ts", [{ sourceName: "read",
+    type: rustCallableTargetType([integer], integer, lifetime), presence: "required", readonly: false, method: true }]);
+  const physical = (parameters, result, error) => rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
+    { kind: "lifetime", lifetime },
+    { kind: "type", type: { kind: "tuple", elements: parameters } },
+    { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
+      { kind: "type", type: result }, { kind: "type", type: error },
+    ]) },
+  ]);
+  for (const label of ["input", "result", "error", "logical source", "destination", "field index"]) {
+    const builder = createRustStructuralShapePlanRegistry();
+    builder.initialize([{ carrier: shape }], [], () => "source", []);
+    builder.initializeUnions([]);
+    const definition = builder.definitions[0];
+    const original = builder.field(shape, 0);
+    const protocol = rustCallableProtocol(original.methodStorageCarrier);
+    const destinationCarrier = rustCallableTargetType(protocol.parameters, protocol.result, protocol.lifetime, infallible);
+    const witness = { object: {}, property: {}, expression: {}, storageIndex: 0,
+      physicalCarrier: physical(protocol.parameters, protocol.result, infallible), destinationCarrier };
+    if (label === "input") witness.physicalCarrier = physical([...protocol.parameters, floating], protocol.result, infallible);
+    if (label === "result") witness.physicalCarrier = physical(protocol.parameters, floating, infallible);
+    if (label === "error") witness.physicalCarrier = physical(protocol.parameters, protocol.result, otherError);
+    if (label === "logical source") witness.physicalCarrier = destinationCarrier;
+    if (label === "destination") witness.destinationCarrier = rustCallableTargetType(protocol.parameters, floating, lifetime, infallible);
+    if (label === "field index") witness.storageIndex = 1;
+    const selections = new Map([[definition, new Map([[0, { carrier: destinationCarrier, constructions: [witness] }]])]]);
+    assert.throws(() => builder.finalizeMethodStorage(selections), /Structural method construction requires/u,
+      `${label}: a whole invalid witness is rejected at the publishing boundary`);
+    assert.equal(builder.field(shape, 0) === original, true,
+      `${label}: failed admission publishes no partially replaced field`);
+    assert.equal(builder.field(shape, 0).methodConstructions === undefined, true,
+      `${label}: failed admission publishes no construction evidence`);
+  }
 });

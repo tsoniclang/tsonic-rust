@@ -46,7 +46,7 @@ import { mergeRustErrorEffects, rustErrorEffectsAreFallible, rustErrorEffectsEqu
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import { rustJsRejectionErrorIdentity } from "../../target-model/records/error-effects.js";
 import { rustJsValueTargetType } from "../../target-model/types/carriers/js.js";
-import { createRustSourceErrorEffectSelection } from "./source-error-effects.js";
+import { createRustSourceErrorEffectSelection, type RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
 import type { RustSourceErrorEffectEdge } from "../../target-model/records/source-error-effects.js";
 import { createRustEffectsWorkBudget, defaultRustEffectsWorkLimit, type RustEffectsWorkBudget } from "./effects-work-budget.js";
@@ -57,6 +57,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 
 export interface RustSourceFallibilityConstruction {
+  readonly sourceErrors: RustSourceErrorEffectSelection;
   effectsFor(subject: Node): RustErrorEffectsFact | undefined;
   complete(): void;
 }
@@ -472,7 +473,7 @@ function collectFallibilityFacts(
             }
             continue;
           }
-          const future = rustFutureValueForStoredBranch(walk, operand, branch.carrier);
+          const future = rustFutureValueForStoredBranch(walk, operand, branch.carrier, selectSourceErrors);
           if (future?.errorBoundary === "source-native") {
             if (future.errorSource === undefined || future.errorCarrier === undefined) return undefined;
             selected.push({ localErrors: false, nativeErrors: [{ identity: future.errorSource, errorType: future.errorCarrier }] });
@@ -730,7 +731,7 @@ function collectFallibilityFacts(
     }
   }
   let published = false;
-  return Object.freeze({ effectsFor: (subject: Node) => intrinsicEffects.get(subject),
+  return Object.freeze({ sourceErrors: selectSourceErrors, effectsFor: (subject: Node) => intrinsicEffects.get(subject),
     complete() {
       if (published) throw new Error("Rust intrinsic error applications publish exactly once after physical binding.");
       const failure = budget.run(() => {

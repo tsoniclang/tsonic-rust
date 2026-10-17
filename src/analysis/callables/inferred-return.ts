@@ -30,6 +30,7 @@ export type RustInferredReturnSelection =
   | { readonly kind: "pending"; readonly hint?: TargetTypeRef };
 
 interface RustInferredReturnCompletion {
+  readonly role: "logical" | "retained";
   readonly baseline: TargetTypeRef;
   readonly parameterAbis: readonly RustSourceParameterAbiFact[];
   readonly callable?: Node;
@@ -46,15 +47,32 @@ export function selectRustInferredReturn(
   declaration: Node,
   baseline: TargetTypeRef | undefined,
 ): RustInferredReturnSelection {
+  return selectReturn(walk, declaration, baseline, "logical");
+}
+
+export function selectRustRetainedReturn(
+  walk: RustFactWalk,
+  declaration: Node,
+  baseline: TargetTypeRef,
+): RustInferredReturnSelection {
+  return selectReturn(walk, declaration, baseline, "retained");
+}
+
+function selectReturn(
+  walk: RustFactWalk,
+  declaration: Node,
+  baseline: TargetTypeRef | undefined,
+  role: "logical" | "retained",
+): RustInferredReturnSelection {
   walk.context.records.assertOpen();
   const { ast } = walk.context;
   const scalar = rustOptionElementCarrier(baseline) ?? baseline;
   const annotated = Node_Type(ast, declaration) !== undefined;
   if (baseline === undefined || scalar === undefined) return { kind: "pending" };
   const callable = rustCallableProtocol(scalar);
-  const inferEnvironment = annotated && scalar.kind === "target-named" && scalar.id === rustCallableTargetId &&
+  const inferEnvironment = role === "retained" && scalar.kind === "target-named" && scalar.id === rustCallableTargetId &&
     callable?.lifetime?.kind === "placeholder";
-  if (annotated && !inferEnvironment || ast.body(declaration) === undefined ||
+  if (!inferEnvironment && (annotated || role === "retained") || ast.body(declaration) === undefined ||
     walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return { kind: "complete", carrier: baseline };
   const numericResult = isRustNumericCarrier(scalar) || isRustBigIntCarrier(scalar);
   const parameterAbis: RustSourceParameterAbiFact[] = [];
@@ -64,7 +82,7 @@ export function selectRustInferredReturn(
     parameterAbis.push(selected);
   }
   const memo = walk.inferredReturns.get(walk.context.records);
-  const completed = memo?.get(declaration)?.find(entry => rustTargetTypeRefEquals(entry.baseline, baseline) &&
+  const completed = memo?.get(declaration)?.find(entry => entry.role === role && rustTargetTypeRefEquals(entry.baseline, baseline) &&
     entry.parameterAbis.length === parameterAbis.length && entry.parameterAbis.every((abi, index) => abi === parameterAbis[index]) &&
     entry.callable === walk.currentCallableDeclaration && rustTargetTypeRefEquals(entry.receiver, walk.currentThisCarrier) &&
     rustTargetTypeRefEquals(entry.superReceiver, walk.currentSuperCarrier));
@@ -94,11 +112,11 @@ export function selectRustInferredReturn(
       : rustOptionElementCarrier(baseline) === undefined ? selected
         : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(selected)
           : rustSourceOptionalTargetType(selected);
-    if (inferEnvironment) result = inferredCallableEnvironment(carriers, baseline) ?? baseline;
+    if (inferEnvironment) result = selected === undefined ? inferredCallableEnvironment(carriers, baseline) : result;
     if (result === undefined) return { kind: "pending", hint: baseline };
     let local = memo;
     if (local === undefined) walk.inferredReturns.set(walk.context.records, local = new WeakMap());
-    local.set(declaration, Object.freeze([...(local.get(declaration) ?? []), Object.freeze({ baseline,
+    local.set(declaration, Object.freeze([...(local.get(declaration) ?? []), Object.freeze({ role, baseline,
       parameterAbis: Object.freeze(parameterAbis), callable: walk.currentCallableDeclaration,
       receiver: walk.currentThisCarrier, superReceiver: walk.currentSuperCarrier, carrier: result,
     })]));
@@ -163,8 +181,11 @@ export function selectRustInferredReturn(
           const left = expressionCarrier(conditional.WhenTrue, expected);
           const right = expressionCarrier(conditional.WhenFalse, expected);
           if (left === undefined || right === undefined) return undefined;
-          const retained = expected === undefined ? undefined : inferredCallableEnvironment([left, right], expected);
-          if (retained !== undefined) return retained;
+          if (inferEnvironment && expected !== undefined) {
+            const retained = rustTargetTypeRefEquals(left, right) ? left : inferredCallableEnvironment([left, right], expected);
+            if (retained === undefined) return undefined;
+            return retained;
+          }
           return selectRustConditionalNumericCarrier(conditional.WhenTrue, conditional.WhenFalse, left, right, walk.context.literalValues) ??
             (left === undefined || right === undefined ? undefined : resolveRustBranchUnion(expression, [
               { expression: conditional.WhenTrue, carrier: left },

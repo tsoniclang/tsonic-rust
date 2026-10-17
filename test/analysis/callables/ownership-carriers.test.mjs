@@ -49,8 +49,9 @@ export async function combine(first: () => int32, pending: () => int32 | Promise
   }
   const selected = program.records.asyncFunction.get(declaration);
   assert.equal(selected?.kind === "js-promise", true, "one exact selected async operation");
-  assert.equal(selected.capturedParameters.length, 4, "all owned callback inputs remain in the suspended frame");
-  assert.equal(selected.storage.kind, "static", "these logical callback signatures contain no borrowed payloads");
+  assert.equal(selected.lowering.kind, "factory", "the Promise-object demand selects its exact owning factory");
+  assert.equal(selected.lowering.capturedParameters.length, 4, "all owned callback inputs remain in the suspended frame");
+  assert.equal(selected.lowering.storage.kind, "static", "these logical callback signatures contain no borrowed payloads");
   for (const [index, parameter] of ast.parameters(declaration).entries()) {
     const physical = program.callableValues.nativeStorage.parameterFor(parameter);
     const input = program.callableValues.native.inputsFor(declaration).find(input => input.subject.node === parameter);

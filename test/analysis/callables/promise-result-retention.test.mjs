@@ -84,6 +84,53 @@ async function run(): Promise<boolean> {
   const value = 7 as int32;
   return await keep(ref(value), Promise.resolve(undefined)) === 7;
 }`],
+  ["bound-structural-method", `
+function make<Value>(value: Value): { read(): Value } { return { read(): Value { return value; } }; }
+async function keep<Actual>(api: { read(): Actual }, pending: Promise<void>): Promise<Actual> {
+  await pending; return api.read();
+}
+async function run(): Promise<boolean> {
+  const original = make(7); const alias = original;
+  const stored = keep(alias, Promise.resolve(undefined));
+  return await stored === 7;
+}`],
+  ["spread-structural-method", `
+function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+async function keep(api: { read(): number }, pending: Promise<void>): Promise<number> {
+  await pending; return api.read();
+}
+async function run(): Promise<boolean> {
+  const original = make(7); const copied = { ...original };
+  const stored = keep(copied, Promise.resolve(undefined));
+  return await stored === 7;
+}`],
+  ["nested-structural-method", `
+function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+async function keep(api: { inner: { read(): number } }, pending: Promise<void>): Promise<number> {
+  await pending; return api.inner.read();
+}
+async function run(): Promise<boolean> {
+  const stored = keep({ inner: make(7) }, Promise.resolve(undefined));
+  return await stored === 7;
+}`],
+  ["array-structural-method", `
+function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+async function keep(api: { read(): number }[], pending: Promise<void>): Promise<number> {
+  await pending; return api[0].read();
+}
+async function run(): Promise<boolean> {
+  const stored = keep([make(7)], Promise.resolve(undefined));
+  return await stored === 7;
+}`],
+  ["tuple-structural-method", `
+function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+async function keep(api: [{ read(): number }, number], pending: Promise<void>): Promise<number> {
+  await pending; return api[0].read() + api[1];
+}
+async function run(): Promise<boolean> {
+  const stored = keep([make(7), 3], Promise.resolve(undefined));
+  return await stored === 10;
+}`],
 ];
 
 for (const [name, source] of cases) {
@@ -162,6 +209,7 @@ export async function run(): Promise<int32> {
 #[cfg(test)]
 mod scoped_native_view {
     use super::*;
+    use tsonic_rust_runtime as rt;
 
     #[test]
     fn settled_reference_and_immediate_source_await_keep_identity() {

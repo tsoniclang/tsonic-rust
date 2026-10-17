@@ -33,7 +33,8 @@ function rejected(compilation, text, kind, declarationName) {
       return `${label} index.ts:${position.line}:${position.column}` === issue.evidence[index];
     });
     assert.equal(candidates.length > 0, true, `${label}: exact related original source coordinates`);
-    if (label === "declaration") assert.equal(candidates.some(node => ast.typeParameters(node).length > 0 &&
+    if (label === "declaration") assert.equal(candidates.some(node => nodes.some(parameter =>
+      ast.is.IsTypeParameterDeclaration(parameter) && ast.parent(parameter) === node) &&
       (declarationName === undefined || ast.text(ast.name(node)) === declarationName)), true,
     "the related declaration owns the actual selected generic binder");
   }
@@ -54,6 +55,17 @@ const cases = [
     function execute(resolve: (value: Value | PromiseLike<Value>) => void): void { resolve(value); }
     return new Promise<Value>(execute);
   }`, "namedExecutor"],
+  ["resolver-helper", `function helper<Value>(value: Value) { return new Promise<Value>(resolve => {
+    function deliver(callback: (value: Value) => void): void { callback(value); } deliver(resolve);
+  }); }`, "helper"],
+  ["generic-resolver-helper", `function deliver<Part>(callback: (value: Part) => void, value: Part): void { callback(value); }
+    function helper<Value>(value: Value) { return new Promise<Value>(resolve => deliver(resolve, value)); }`, "helper"],
+  ["member-resolver", `function helper<Value>(value: Value) { return new Promise<Value>(resolve => {
+    const cell = { done: resolve }; const alias = cell.done; alias(value);
+  }); }`, "helper"],
+  ["typed-returned-executor", `type Executor<Part> = (resolve: (value: Part | PromiseLike<Part>) => void) => void;
+    function create<Part>(value: Part): Executor<Part> { return resolve => resolve(value); }
+    function helper<Value>(value: Value) { return new Promise<Value>(create(value)); }`, "helper"],
   ["nested-return", "function make<Value>(value: Value): { read(): Promise<Value> } { return { async read(): Promise<Value> { return value; } }; }", "make"],
   ["called-nested", "function consume<Value>(value: Value) { async function inner() { return value; } return inner(); }", "consume"],
   ["hoisted-call", "function consume<Value>(value: Value) { return inner(); async function inner() { return value; } }", "consume"],
@@ -99,6 +111,119 @@ test("Rust generic class adoption is refused at the checked constructor", () => 
     export function reject(promised: Promise<number>): void { void new Holder(promised); }
   ` } });
   rejected(compilation, "new Holder(promised)", "KindNewExpression", "Holder");
+});
+
+test("Rust refuses a known Promise wrapper with a still-free inner payload before physical analysis", () => {
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `${identity}
+    function wrap<Value>(value: Value) { return identity(Promise.resolve(value)); }
+    export function run(): void { void wrap(7); }` } });
+  rejected(compilation, "identity(Promise.resolve(value))", "KindCallExpression", "identity");
+});
+
+for (const [name, extra, receiver] of [
+  ["incoming", "", "Holder<Promise<number>>"],
+  ["alias", "type Alias<Part> = Holder<Part>;", "Alias<Promise<number>>"],
+  ["union", "", "Holder<number> | Holder<Promise<number>>"],
+  ["inherited", "class Derived<Part> extends Holder<Part> {}", "Derived<Promise<number>>"],
+  ["fixed-inherited", "class Derived extends Holder<Promise<number>> {}", "Derived"],
+  ["indexed-inherited", "class Derived<Parts extends unknown[]> extends Holder<Parts[0]> {}", "Derived<[Promise<number>]>"],
+  ["wrapped-inherited", "class Derived<Part> extends Holder<Promise<Part>> {}", "Derived<number>"],
+  ["conditional-inherited", "class Derived<Part> extends Holder<Part extends number ? number : Promise<number>> {}", "Derived<string>"],
+]) {
+  test(`Rust generic adoption refuses the actual ${name} class receiver`, () => {
+    const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `
+      class Holder<Value> { constructor(readonly value: Value) {} async get(): Promise<Value> { return this.value; } }
+      ${extra} export function reject(holder: ${receiver}) { return holder.get(); }
+    ` } });
+    rejected(compilation, "holder.get()", "KindCallExpression");
+  });
+}
+
+test("Rust ordinary class receiver retains an executable native payload", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "generic_receiver_payload" } },
+    files: { "index.ts": `class Holder<Value> { constructor(readonly value: Value) {}
+      async get(): Promise<Value> { return this.value; } }
+      async function use(holder: Holder<number>): Promise<number> { return await holder.get(); }
+      console.log(await use(new Holder(7)));` } });
+  assert.equal(result.diagnostics.length, 0,
+    JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+  const output = validateGeneratedProject("generic-receiver-payload", result.artifacts, { run: true });
+  assert.equal(output.stdout.trim(), "7", "ordinary actual receiver bindings remain native and executable");
+});
+
+for (const [name, declaration] of [
+  ["interface", "interface Contract<Value> { read(): Promise<Value>; }"],
+  ["abstract", "abstract class Contract<Value> { abstract read(): Promise<Value>; }"],
+  ["callable-property", "interface Contract<Value> { read: () => Promise<Value>; }"],
+  ["class-callable-property", `class Contract<Value> { read: () => Promise<Value>;
+    constructor(read: () => Promise<Value>) { this.read = read; } }`],
+]) {
+  test(`Rust generic adoption keeps the unknown ${name} receiver contract`, () => {
+    const compiled = compileRust({ surfaces: ["js"], files: { "index.ts": `${declaration}
+      export function reject(value: Contract<Promise<number>>) { return value.read(); }` } });
+    rejected(compiled, "value.read()", "KindCallExpression");
+  });
+}
+
+test("Rust ordinary generic source forms retain their complete native build and execution", { timeout: 300_000 }, () => {
+  const files = Object.fromEntries(cases.map(([, declarations, invoked], index) => [`form${index}.ts`, `${declarations}
+    export function ordinary(value: number): void { void ${invoked}(value); }`]));
+  const entry = cases.map((_, index) => `import { ordinary as call${index} } from "./form${index}.js";`).join("\n") +
+    cases.map((_, index) => `call${index}(7);`).join("\n") + "\nconsole.log(7);";
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
+    crateName: "ordinary_generic_forms" } }, files: { ...files, "index.ts": entry } });
+  assert.equal(result.diagnostics.length, 0,
+    JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+  const output = validateGeneratedProject("ordinary-generic-forms", result.artifacts, { run: true });
+  assert.equal(output.stdout.trim(), "7", "every ordinary form runs under the real native event-loop owner");
+});
+
+for (const recursive of [false, true]) {
+  const helper = recursive ? `function deliver<Value>(callback: (value: Value) => void, value: Value, count: number): void {
+    if (count > 0) bounce(callback, value, count - 1); else callback(value);
+  } function bounce<Value>(callback: (value: Value) => void, value: Value, count: number): void {
+    if (count > 0) deliver(callback, value, count - 1); else callback(value);
+  }` : "function deliver<Value>(callback: (value: Value) => void, value: Value, count: number): void { callback(value); }";
+  test(`Rust retains ${recursive ? "recursive" : "direct"} resolver/value correlation in native execution`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
+      crateName: `resolver_${recursive ? "recursive" : "direct"}_rows` } }, files: { "index.ts": `${helper}
+      function wrap<Value>(value: Value): Promise<number> { return new Promise<number>(resolve => {
+        deliver(resolve, 7, 2); deliver(item => { void item; }, value, 2);
+      }); }
+      console.log(await wrap(Promise.resolve(11)));` } });
+    assert.equal(result.diagnostics.length, 0,
+      JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    const executed = validateGeneratedProject(`resolver-${recursive ? "recursive" : "direct"}-rows`, result.artifacts, { run: true });
+    assert.equal(executed.stdout.trim(), "7", "the Promise-valued actual reaches only the ordinary callback");
+  });
+  test(`Rust refuses the matching ${recursive ? "recursive" : "direct"} adopting resolver row`, () => {
+    const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `${helper}
+      function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => deliver(resolve, value, 2)); }
+      export function reject(promised: Promise<number>): void { void wrap(promised); }` } });
+    rejected(compilation, "wrap(promised)", "KindCallExpression", "wrap");
+  });
+}
+
+test("Rust keeps opaque resolver provenance explicitly unresolved for a Promise-valued actual", () => {
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `declare function opaque<Value>(value: Value): Value;
+    function wrap<Value>(value: Value) { return new Promise<Value>(resolve => { const done = opaque(resolve); done(value); }); }
+    export function reject(promised: Promise<number>): void { void wrap(promised); }` } });
+  assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: "done(value)" }]);
+});
+
+test("Rust preserves an ordinary native actual despite an open symbolic resolver alias", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "ordinary_resolver_alias" } }, files: { "index.ts": `
+      type Alias<Value> = (resolve: (value: Value) => void) => (value: Value) => void;
+      function wrap<Value>(value: Value, alias: Alias<Value>): Promise<Value> {
+        return new Promise<Value>(resolve => { const done = alias(resolve); done(value); });
+      }
+      if (await wrap<number>(7, resolve => resolve) !== 7) throw new Error("ordinary resolver alias");` } });
+  assert.equal(result.diagnostics.length, 0,
+    JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+  assert.equal(validateGeneratedProject("ordinary-resolver-alias", result.artifacts, { run: true }).status, 0,
+    "a proven non-adopting ordinary payload retains its complete native callback and value behavior");
 });
 
 for (const [name, body] of [
