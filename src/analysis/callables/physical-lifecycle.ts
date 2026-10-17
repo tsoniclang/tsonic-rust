@@ -41,6 +41,7 @@ export interface RustPhysicalCallablePublication {
 }
 
 export interface RustPhysicalCallableLifecycle {
+  readonly prepared: Pick<RustPhysicalCallableStorage, "valueFor" | "operandFor" | "returnFor" | "invocationCallableFor">;
   complete(physical: RustGenericCallablePhysicalConstruction): TargetStageResult<RustPhysicalCallablePublication>;
 }
 
@@ -144,6 +145,12 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   const operands = new Map<Node, RustNativeStorageSelection>();
   const returns = new Map<Node, RustNativeStorageSelection>();
   const invocations = new Map<Node, RustNativeStorageSelection>();
+  const prepared = Object.freeze({
+    valueFor: (node: Node) => values.get(node) ?? unpreparedStorage,
+    operandFor: (node: Node) => operands.get(node) ?? unpreparedStorage,
+    returnFor: (node: Node) => returns.get(node) ?? unpreparedStorage,
+    invocationCallableFor: (node: Node) => invocations.get(node) ?? unpreparedStorage,
+  });
   const producerRequests = Object.freeze(input.requests.filter((request): request is
     Extract<RustPhysicalCallableEmissionRequest, { readonly kind: "producer" }> => request.kind === "producer"));
   const flows: { readonly node: Node; readonly conversion: RustGenericCallableConversion }[] = [];
@@ -246,6 +253,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     reject(flow.node, "A required generic callable flow has no exact selected value and operand use requests.");
   let complete = false;
   return Object.freeze({
+    prepared,
     complete(physical: RustGenericCallablePhysicalConstruction): TargetStageResult<RustPhysicalCallablePublication> {
       if (complete) throw new Error("Physical callable storage and applications complete exactly once.");
       complete = true;
@@ -334,13 +342,9 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
           return selected;
         },
       });
-      const nativeStorage: RustPhysicalCallableStorage = Object.freeze({ issues: queries.issues,
+      const nativeStorage: RustPhysicalCallableStorage = Object.freeze({ ...prepared, issues: queries.issues,
         parameterFor: queries.parameterFor,
         futureEnvironmentFor: queries.futureEnvironmentFor,
-        valueFor: (node: Node) => values.get(node) ?? unpreparedStorage,
-        operandFor: (node: Node) => operands.get(node) ?? unpreparedStorage,
-        returnFor: (node: Node) => returns.get(node) ?? unpreparedStorage,
-        invocationCallableFor: (node: Node) => invocations.get(node) ?? unpreparedStorage,
         invocationWitnessFor: queries.invocationWitnessFor,
         invocationArgumentWitnessFor: queries.invocationArgumentWitnessFor,
       });

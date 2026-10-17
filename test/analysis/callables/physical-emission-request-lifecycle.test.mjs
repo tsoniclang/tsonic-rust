@@ -16,7 +16,7 @@ import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.j
 import { prepareRustGenericCallableIdentitySources, prepareRustGenericCallableIdentityRequests,
   createRustGenericCallableIdentityPlan } from "../../../dist/analysis/callables/generic-identities.js";
 import { createRustEffectsWorkBudget } from "../../../dist/analysis/resources/effects-work-budget.js";
-import { rustEmissionSourceIdentity } from "../../../dist/analysis/callables/emission-contexts.js";
+import { rustEmissionIdentityBindings, rustEmissionSourceIdentity } from "../../../dist/analysis/callables/emission-contexts.js";
 import { prepareRustProviderSourceOccurrences } from "../../../dist/analysis/operations/provider-source-inputs.js";
 
 let checkedContext;
@@ -175,7 +175,18 @@ test("all four required runtime roles materialize the exact original checked sub
   const current = fixture();
   const requests = [current.request("value", current.declaration), current.request("operand", current.operand),
     current.request("return", current.owner), current.request("invocation", current.invocation)];
-  const result = completeLifecycle(current.input(requests), current.physical);
+  const lifecycle = createRustPhysicalCallableLifecycle(current.input(requests));
+  assert.equal(Object.isFrozen(lifecycle.prepared), true, "the early view contains readonly lookup-only data, not construction methods");
+  for (const request of requests) {
+    const method = request.kind === "invocation" ? "invocationCallableFor" : `${request.kind}For`;
+    assert.equal(lifecycle.prepared[method](request.subject).kind, "unresolved",
+      `${request.kind}: unavailable nongeneric storage is not guessed or recomputed before its ready stage`);
+    assert.equal(lifecycle.prepared[method](current.metadata).kind, "unresolved",
+      `${request.kind}: unrelated checked metadata never becomes an attempted runtime selection`);
+  }
+  assert.equal(current.calls.length, 0, "reading early unavailable data never calls a raw storage selector");
+  current.physical.closeAdmission();
+  const result = lifecycle.complete(current.physical);
   assert.equal(result.kind, "resolved", "every required runtime role is prepared before publication");
   for (const request of requests) {
     const selected = current.calls.filter(call => call.role === request.kind && call.node === request.subject);
@@ -185,7 +196,12 @@ test("all four required runtime roles materialize the exact original checked sub
       `${request.kind}: selected storage remains published under the original subject`);
     assert.equal(result.value.nativeStorage[method](request.subject) === selected[0].selection, true,
       `${request.kind}: the entire canonical native selection is published unchanged`);
+    assert.equal(result.value.nativeStorage[method] === lifecycle.prepared[method], true,
+      `${request.kind}: final publication reuses the same original materialization lookup`);
+    assert.equal(lifecycle.prepared[method](request.subject) === selected[0].selection, true,
+      `${request.kind}: early and final views never create a second cache or replay the selector`);
   }
+  assert.equal(current.calls.length, requests.length, "all repeated view reads leave exactly the four real required selections");
 });
 
 test("distinct actual contexts retain one canonical subject selection without rebinding", () => {
@@ -563,14 +579,15 @@ export function retainSecond(): Promise<boolean> {
 });
 
 test("the sole generic identity source inventory supplies the exact same comparison rows to storage", () => {
-  const context = analyzeRustErrorEffects(`
+  const checked = checkedSource(`
 async function first(value: number): Promise<number> { return value; }
 async function second(value: number): Promise<number> { return value; }
 function selected(): typeof first { return first; }
 export function compare(): boolean {
   const alias = selected();
   return alias === first && alias !== second;
-}`, { surfaces: [] });
+}`);
+  const { context } = checked;
   const ast = Proxy.revocable(context.ast, {});
   const records = Proxy.revocable(context.records, {});
   const sources = prepareRustGenericCallableIdentitySources({ ast: ast.proxy,
@@ -581,6 +598,40 @@ export function compare(): boolean {
     sources.comparisons.every(Object.isFrozen), true, "the selecting owner publishes frozen source rows once");
   ast.revoke();
   records.revoke();
+  const construction = physicalConstruction(checked);
+  const owner = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+    context.ast.text(context.ast.name(node)) === "compare");
+  const bindings = rustEmissionIdentityBindings([]);
+  assert.equal(owner !== undefined && bindings !== undefined, true, "the actual nongeneric comparison owner supplies its canonical binding identity");
+  const uses = sources.comparisons.flatMap(source => ["left", "right"].flatMap(position => {
+    const subject = source[`${position}Node`];
+    assert.equal(subject !== undefined, true, `${position}: the actual checked comparison operand is present`);
+    const use = targetUseSiteRef(source.node, `callable-identity:${position}`, rustEmissionSourceIdentity(context.ast, owner));
+    return ["value", "operand"].map(kind => Object.freeze({ kind, subject, owner, bindings, context: use }));
+  }));
+  const earlySelections = [];
+  const lifecycle = createRustPhysicalCallableLifecycle({ ast: context.ast, records: context.records,
+    sourceStorage: context.sourceStorage, requests: Object.freeze(uses), sourceOccurrences: construction.sourceOccurrences,
+    typeDefinitions: context.typeDefinitions, lexicalFunctions: checked.input.lexicalFunctions,
+    structuralShapes: context.structuralShapes, adapterFlows: Object.freeze([]), nativeProducers: construction.producers,
+    nativeStorage: Object.freeze({ ...construction.storage, valueFor(node) {
+      earlySelections.push(node);
+      return construction.storage.valueFor(node);
+    } }) });
+  const expectedSubjects = new Set(uses.map(use => use.subject));
+  assert.equal(earlySelections.length, expectedSubjects.size, "every required generic value is selected exactly once before family admission closes");
+  const earlyRequests = prepareRustGenericCallableIdentityRequests({ sources, nativeStorage: lifecycle.prepared });
+  for (const source of sources.comparisons) {
+    const selected = earlyRequests.operands.get(source.node);
+    assert.equal(selected?.left === lifecycle.prepared.valueFor(source.leftNode) &&
+      selected?.right === lifecycle.prepared.valueFor(source.rightNode), true, "identity consumes the original materializations without a raw query");
+    assert.equal(selected.left.kind !== "unresolved" && selected.right.kind !== "unresolved", true,
+      "real early generic-family preparation is retained, not silently deferred or omitted");
+  }
+  construction.physical.closeAdmission();
+  for (const subject of expectedSubjects) assert.equal(lifecycle.prepared.valueFor(subject).kind !== "unresolved", true,
+    "closing family admission cannot turn the view into a late selector");
+  assert.equal(earlySelections.length, expectedSubjects.size, "all early consumers read the same canonical map without duplicate selection");
   const queried = [];
   const requests = prepareRustGenericCallableIdentityRequests({ sources, nativeStorage: { valueFor(node) {
     queried.push(node);
