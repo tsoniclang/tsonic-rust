@@ -74,7 +74,11 @@ export interface RustNativeStoragePlan {
   implementationOriginsFor(input: RustNativeCallableInput): SourceStorageProducersSelection;
 }
 
-export type RustNativeStorageQueries = Omit<RustNativeStoragePlan, "parameterFor">;
+export interface RustNativeStorageConstruction extends RustNativeStoragePlan {
+  prepareReturn(declaration: Node): RustNativeStorageSelection;
+}
+
+export type RustNativeStorageQueries = Omit<RustNativeStorageConstruction, "parameterFor">;
 
 export function createRustNativeStorageQueries(input: {
   readonly ast: AstReader;
@@ -107,6 +111,8 @@ export function createRustNativeStorageQueries(input: {
   const boundaries = Object.freeze(conversionBoundaries);
   const unresolved = (reason: string): Extract<RustNativeStorageSelection, { readonly kind: "unresolved" }> =>
     Object.freeze({ kind: "unresolved", reason });
+  const returns = new Map<Node, RustNativeStorageSelection>();
+  const unpreparedReturn = unresolved("Native callable return requires its prepared physical source selection.");
   const bindingsFor = (owner: Node | undefined): SourceStorageBindings | undefined => owner === undefined
     ? input.storage.emptyBindings : nodes.has(owner) ? input.native.bindingsFor(owner) : undefined;
   const ownerFor = (node: Node): Node | undefined => sourceEnclosingCallable(node, input.ast);
@@ -445,6 +451,23 @@ export function createRustNativeStorageQueries(input: {
       : rustTargetTypeRefEquals(physical, carrier) ? Object.freeze({ kind: "identity", carrier })
         : Object.freeze({ kind: "selected", carrier: physical, inputs: Object.freeze([...selectedInputs]) });
   };
+  const selectReturn = (declaration: Node): RustNativeStorageSelection => {
+    const result = input.records.sourceCallableReturn.get(declaration);
+    const parameter = result?.borrowedParameter;
+    if (parameter !== undefined) {
+      const abi = input.records.sourceParameterAbi.get(parameter);
+      if (input.ast.parent(parameter) !== declaration || !input.ast.parameters(declaration).includes(parameter) ||
+        abi?.parameterCarrier.kind !== "reference" || abi.parameterCarrier.mutable ||
+        !rustTargetTypeRefEquals(abi.valueCarrier, result?.returnCarrier))
+        return unresolved("Native paired return requires its exact source parameter and shared input ABI.");
+      const subject = input.storage.subject(parameter, "input");
+      return subject.kind === "unresolved" ? subject : select(subject.subject, abi.parameterCarrier, bindingsFor(declaration));
+    }
+    const carrier = result?.returnCarrier;
+    if (carrier === undefined) return unresolved("Native callable return has no finalized logical carrier.");
+    const subject = input.storage.subject(declaration, "return");
+    return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(declaration));
+  };
   const invocationCallableFor = (node: Node, bindings: SourceStorageBindings | undefined): RustNativeStorageSelection => {
     if (!nodes.has(node)) return unresolved("Native callable invocation requires its exact owned source call.");
     const operation = input.records.targetOperation.get(node);
@@ -506,23 +529,14 @@ export function createRustNativeStorageQueries(input: {
         : unresolved("Native generic activation requires its exact owned declaration.");
     },
     futureEnvironmentFor: futures.forDeclaration,
-    returnFor(declaration: Node): RustNativeStorageSelection {
+    returnFor: (declaration: Node) => returns.get(declaration) ?? unpreparedReturn,
+    prepareReturn(declaration: Node): RustNativeStorageSelection {
       if (!nodes.has(declaration)) return unresolved("Native callable return requires an owned declaration.");
-      const result = input.records.sourceCallableReturn.get(declaration);
-      const parameter = result?.borrowedParameter;
-      if (parameter !== undefined) {
-        const abi = input.records.sourceParameterAbi.get(parameter);
-        if (input.ast.parent(parameter) !== declaration || !input.ast.parameters(declaration).includes(parameter) ||
-          abi?.parameterCarrier.kind !== "reference" || abi.parameterCarrier.mutable ||
-          !rustTargetTypeRefEquals(abi.valueCarrier, result?.returnCarrier))
-          return unresolved("Native paired return requires its exact source parameter and shared input ABI.");
-        const subject = input.storage.subject(parameter, "input");
-        return subject.kind === "unresolved" ? subject : select(subject.subject, abi.parameterCarrier, bindingsFor(declaration));
-      }
-      const carrier = result?.returnCarrier;
-      if (carrier === undefined) return unresolved("Native callable return has no finalized logical carrier.");
-      const subject = input.storage.subject(declaration, "return");
-      return subject.kind === "unresolved" ? subject : select(subject.subject, carrier, bindingsFor(declaration));
+      const existing = returns.get(declaration);
+      if (existing !== undefined) return existing;
+      const selection = selectReturn(declaration);
+      if (selection.kind !== "unresolved") returns.set(declaration, selection);
+      return selection;
     },
     valueFor(node: Node): RustNativeStorageSelection {
       if (!nodes.has(node)) return unresolved("Native callable value requires an owned source node.");

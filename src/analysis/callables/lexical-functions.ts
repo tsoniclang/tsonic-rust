@@ -15,7 +15,7 @@ import type { RustRuntimeValueUsePlan } from "../program/runtime-value-uses.js";
 import type { RustSourceCallableQueries } from "../../policy/ownership/source-borrowed-return.js";
 import { rustCallableImplicitLifetimeParameters } from "./source-input-lifetimes.js";
 
-import type { RustNativeStoragePlan } from "./native-storage.js";
+import type { RustNativeStorageConstruction } from "./native-storage.js";
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 
 export interface RustLexicalFunctionCapture {
@@ -210,7 +210,7 @@ export function finalizeRustLexicalFunctionQueries(
   source: TargetSourceProgram,
   records: RustProgramRecords,
   lifetimes: RustLifetimeIndex,
-  nativeStorage: RustNativeStoragePlan,
+  nativeStorage: RustNativeStorageConstruction,
   native: RustNativeCallableInputPlan,
 ): RustLexicalFunctionQueries {
   const { ast } = source;
@@ -229,7 +229,7 @@ export function finalizeRustLexicalFunctionQueries(
         records.sourceCallableReturn.get(node)?.returnCarrier;
       if (carrier === undefined) continue;
       const selected = parameter !== undefined ? nativeStorage.parameterFor(node)
-        : records.sourceCallableReturn.get(node) !== undefined ? nativeStorage.returnFor(node)
+        : records.sourceCallableReturn.get(node) !== undefined ? nativeStorage.prepareReturn(node)
         : nativeStorage.valueFor(node);
       if (selected.kind === "unresolved") { failures.set(declaration, selected.reason); continue; }
       const generic = rustTargetGenericReferences(selected.carrier);

@@ -98,7 +98,7 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {
-      const selected = queries.returnFor(declaration);
+      const selected = queries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   producers.selectConstructionErrors(new Map());
@@ -343,7 +343,7 @@ test("published physical reads return stored keys and reject required unprepared
 
 test("before closure, a required read of a physical shape construction never admitted is an analysis invariant", () => {
   const current = construction(joinedLibrary);
-  const selected = current.queries.returnFor(current.declaration("choose"));
+  const selected = current.queries.prepareReturn(current.declaration("choose"));
   assert.equal(selected.kind, "selected", selected.reason);
   const joined = joinedCarrierIn(selected.carrier);
   assert.equal(joined !== undefined && current.physical.plan.definitionFor(joined) !== undefined, true, "an admitted shape links before closure");
@@ -412,7 +412,7 @@ test("every family's canonical self-carrier is stored at closure, including iden
 
 test("closure prepares the canonical self-carrier of every admitted family", () => {
   const current = construction(joinedLibrary);
-  const selected = current.queries.returnFor(current.declaration("choose"));
+  const selected = current.queries.prepareReturn(current.declaration("choose"));
   assert.equal(selected.kind, "selected", selected.reason);
   current.physical.closeAdmission();
   const inventory = current.physical.plan.definitions();
@@ -519,19 +519,19 @@ test("a family requested after admission closes fails as an internal invariant o
   const inventory = current.physical.plan.definitions();
   assert.equal(Object.isFrozen(inventory), true);
   const make = current.declaration("make");
-  assert.throws(() => current.queries.returnFor(make), failure =>
+  assert.throws(() => current.queries.prepareReturn(make), failure =>
     failure.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" && /admission closed/u.test(failure.message));
   assert.equal(current.physical.plan.definitions() === inventory, true);
   current.physical.closeKeys();
   current.physical.publish();
-  assert.throws(() => current.queries.returnFor(make), failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT");
+  assert.throws(() => current.queries.prepareReturn(make), failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT");
   assert.throws(() => current.physical.closeAdmission(), /exactly once/u);
 });
 
 test("families admitted before closure remain linkable after closure without new definitions", () => {
   const current = construction(factorySource);
   const make = current.declaration("make");
-  const selected = current.queries.returnFor(make);
+  const selected = current.queries.prepareReturn(make);
   assert.equal(selected.kind, "selected", selected.reason);
   current.physical.closeAdmission();
   const inventory = current.physical.plan.definitions();
@@ -547,15 +547,15 @@ test("an open environment failure is retried, and a later success is retained on
   const current = construction(factorySource, countedCaptures(state));
   const make = current.declaration("make");
   const [implementation] = current.implementations;
-  assert.equal(current.queries.returnFor(make).kind, "unresolved");
-  assert.equal(current.queries.returnFor(make).kind, "unresolved");
+  assert.equal(current.queries.prepareReturn(make).kind, "unresolved");
+  assert.equal(current.queries.prepareReturn(make).kind, "unresolved");
   assert.equal(state.selections, 2, "an open environment failure is not retained as a completed refusal");
   assert.equal(current.physical.plan.environmentFor(implementation) === undefined, true);
   state.ready = true;
-  assert.equal(current.queries.returnFor(make).kind, "selected");
+  assert.equal(current.queries.prepareReturn(make).kind, "selected");
   const environment = current.physical.plan.environmentFor(implementation);
   assert.equal(environment !== undefined && state.selections === 3, true, "the retried environment succeeds once its capture does");
-  assert.equal(current.queries.returnFor(make).kind, "selected");
+  assert.equal(current.queries.prepareReturn(make).kind, "selected");
   assert.equal(state.selections === 3 && current.physical.plan.environmentFor(implementation) === environment, true,
     "a completed environment is retained and not selected again");
 });
@@ -575,7 +575,7 @@ test("an open physical conversion retries an unfinished environment instead of r
   assert.equal(early.conversionFor(carrier, carrier) === undefined, true, "unfinished capture evidence is absent while open");
   assert.equal(state.selections, 0, "a conversion read does not construct a capture environment");
   state.ready = true;
-  const completed = current.queries.returnFor(current.declaration("make"));
+  const completed = current.queries.prepareReturn(current.declaration("make"));
   assert.equal(completed.kind, "selected", completed.reason);
   assert.equal(sameMetadata(completed.carrier, carrier), true, "the completed actual producer selects the identical physical key");
   const conversion = early.conversionFor(carrier, carrier);
@@ -617,7 +617,7 @@ test("a required environment refusal settled at closure is final", () => {
   assert.equal(state.selections, 1, "closure settles the required environment once");
   assert.equal(current.physical.plan.environmentFor(implementation) === undefined, true);
   state.ready = true;
-  assert.equal(current.queries.returnFor(current.declaration("make")).kind, "unresolved");
+  assert.equal(current.queries.prepareReturn(current.declaration("make")).kind, "unresolved");
   assert.equal(state.selections === 1 && current.physical.plan.environmentFor(implementation) === undefined, true,
     "the settled refusal is not retried after closure");
 });
@@ -628,11 +628,11 @@ test("a re-entrant environment read during its own construction is not a complet
   state.onSelect = () => {
     if (state.entered) return;
     state.entered = true;
-    state.inner = current.queries.returnFor(current.declaration("make"));
+    state.inner = current.queries.prepareReturn(current.declaration("make"));
   };
   current = construction(factorySource, countedCaptures(state));
   const [implementation] = current.implementations;
-  const outer = current.queries.returnFor(current.declaration("make"));
+  const outer = current.queries.prepareReturn(current.declaration("make"));
   assert.equal(state.inner?.kind === "unresolved" && state.selections === 1, true,
     "the re-entrant read neither selects the capture again nor completes the environment");
   assert.equal(outer.kind, "selected");
@@ -643,7 +643,7 @@ test("after closure and capture completion, reads perform no capture selection o
   const state = { selections: 0, ready: true };
   const current = construction(factorySource, countedCaptures(state));
   const make = current.declaration("make");
-  const selected = current.queries.returnFor(make);
+  const selected = current.queries.prepareReturn(make);
   assert.equal(selected.kind, "selected", selected.reason);
   current.physical.closeAdmission();
   const published = current.captures.complete();

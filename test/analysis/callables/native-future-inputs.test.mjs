@@ -105,7 +105,7 @@ test("native Future input substitution preserves the caller implementation acros
     export function forward(value: Promise<int32>): Promise<int32> { const selected = retain(value); return selected; }`);
   const owner = current.declaration("forward");
   const [input] = requireEnvironment(current, owner).inputs;
-  const result = requireSelected(current.plan.returnFor(owner), "forwarded input");
+  const result = requireSelected(current.plan.prepareReturn(owner), "forwarded input");
   assert.equal(rustTargetTypeRefEquals(result, input.implementation), true);
   const invoked = requireSelected(current.plan.invocationReturnFor(current.declaration("retain"), current.initializer("selected")),
     "selected generic invocation");

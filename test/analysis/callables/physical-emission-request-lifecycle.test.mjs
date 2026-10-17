@@ -53,7 +53,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
   const producers = createRustNativeCallableProducerPlan({ ast, nodes: input.nativeNodes, records, native,
     definitions: context.typeDefinitions, returnCarrierFor(node) {
       if (unavailableReturns.has(node)) return undefined;
-      const selected = queries.returnFor(node);
+      const selected = queries.prepareReturn(node);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   if (constructionErrorsReady) producers.selectConstructionErrors(new Map());
@@ -111,7 +111,8 @@ export function inspect(value: string, word: string): boolean { return value.inc
     genericBindingsFor: storage.genericBindingsFor,
     futureEnvironmentFor: storage.futureEnvironmentFor,
     parameterFor: storage.parameterFor,
-    returnFor: node => observe("return", node, storage.returnFor),
+    returnFor: storage.returnFor,
+    prepareReturn: node => observe("return", node, storage.prepareReturn),
     valueFor: node => observe("value", node, storage.valueFor),
     operandFor: node => observe("operand", node, storage.operandFor),
     invocationCallableFor: node => observe("invocation", node, storage.invocationCallableFor),

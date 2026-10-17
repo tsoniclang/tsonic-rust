@@ -26,7 +26,7 @@ import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup 
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustGenericCallablePhysicalConstruction } from "./generic-physical.js";
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
-import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
+import type { RustNativeStorageConstruction, RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustNativeCallableProducerConstruction, RustNativeCallableProducerPlan } from "./native-producers.js";
 import { rustEmissionSourceIdentity } from "./emission-contexts.js";
 
@@ -68,7 +68,7 @@ interface RustPhysicalCallableLifecycleInput {
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralStorageLookup;
   readonly adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[];
-  readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeStorage: RustNativeStorageConstruction;
   readonly nativeProducers: RustNativeCallableProducerConstruction;
 }
 
@@ -143,12 +143,12 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   }
   const values = new Map<Node, RustNativeStorageSelection>();
   const operands = new Map<Node, RustNativeStorageSelection>();
-  const returns = new Map<Node, RustNativeStorageSelection>();
   const invocations = new Map<Node, RustNativeStorageSelection>();
+  const requestedReturns = new Set(input.requests.filter(request => request.kind === "return").map(request => request.subject));
   const prepared = Object.freeze({
     valueFor: (node: Node) => values.get(node) ?? unpreparedStorage,
     operandFor: (node: Node) => operands.get(node) ?? unpreparedStorage,
-    returnFor: (node: Node) => returns.get(node) ?? unpreparedStorage,
+    returnFor: (node: Node) => requestedReturns.has(node) ? queries.returnFor(node) : unpreparedStorage,
     invocationCallableFor: (node: Node) => invocations.get(node) ?? unpreparedStorage,
   });
   const producerRequests = Object.freeze(input.requests.filter((request): request is
@@ -184,11 +184,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   };
   const returned = (node: Node): RustNativeStorageSelection => {
     if (!storageReady && !requiresFamilyAdmission(records.sourceCallableReturn.get(node)?.returnCarrier)) return unpreparedStorage;
-    const existing = returns.get(node);
-    if (existing !== undefined) return existing;
-    const selection = queries.returnFor(node);
-    returns.set(node, selection);
-    return selection;
+    return queries.prepareReturn(node);
   };
   const requestStorage = (request: RustPhysicalCallableEmissionRequest): RustNativeStorageSelection | undefined => {
     switch (request.kind) {
@@ -236,7 +232,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         const owner = ast.is.IsReturnStatement(parent) && Node_Expression(ast, parent) === node
           ? sourceEnclosingCallable(parent, ast) : ast.is.IsArrowFunction(parent) && ast.body(parent) === node ? parent : undefined;
         if (owner !== undefined) {
-          const selected = returns.get(owner);
+          const selected = prepared.returnFor(owner);
           if (selected?.kind === "selected") destination = selected.carrier;
         } else if ((ast.is.IsCallExpression(parent) || ast.is.IsNewExpression(parent)) && ast.arguments(parent).includes(node)) {
           destination = queries.invocationArgumentWitnessFor(parent, node);
@@ -270,7 +266,11 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       if (finalizedProducers.kind === "rejected") return rejectedTargetStage(finalizedProducers.diagnostics);
       const nativeProducers = finalizedProducers.value;
       for (const request of input.requests) if (request.kind === "type") physical.prepare(request.carrier);
-      for (const selections of [values, operands, returns, invocations]) for (const selection of selections.values()) {
+      for (const selections of [values, operands, invocations]) for (const selection of selections.values()) {
+        if (selection.kind !== "unresolved") physical.prepare(selection.carrier);
+      }
+      for (const owner of requestedReturns) {
+        const selection = prepared.returnFor(owner);
         if (selection.kind !== "unresolved") physical.prepare(selection.carrier);
       }
       for (const producer of nativeProducers.producers) for (const carrier of [nativeProducers.outwardReturnFor(producer.declaration),

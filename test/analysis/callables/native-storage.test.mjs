@@ -42,7 +42,7 @@ function fixture(text, options = {}) {
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {
-      const selected = queries.returnFor(declaration);
+      const selected = queries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   producers.selectConstructionErrors(new Map());
@@ -94,6 +94,25 @@ test("finalized formal ABI storage never inspects revoked source or fabricates f
   assert.equal(Object.isFrozen(missing), true);
 });
 
+test("physical return preparation publishes one exact selection without recomputing pure readers", () => {
+  const current = fixture("export function read(value: boolean): boolean { return value; }");
+  const owner = current.declaration("read");
+  assert.equal(current.plan.returnFor(owner).kind, "unresolved", "an unprepared return lookup cannot select source evidence");
+  const selected = current.plan.prepareReturn(owner);
+  assert.equal(selected.kind, "identity", "the actual scalar return retains its canonical native carrier");
+  assert.equal(Object.isFrozen(selected), true, "the prepared result is immutable");
+  assert.equal(current.plan.returnFor(owner) === selected, true, "the pure reader returns the same selection object");
+  assert.equal(current.plan.prepareReturn(owner) === selected, true, "a repeated request does not reselect storage");
+  assert.equal("prepareReturn" in current.program.callableValues.nativeStorage, false,
+    "the published program never exposes the open construction writer");
+  current.revokeSource();
+  current.revokeQueries();
+  assert.equal(current.plan.returnFor(owner) === selected, true, "the reader never inspects revoked construction inputs");
+  assert.equal(current.plan.prepareReturn(owner) === selected, true, "the completed writer never repeats source selection");
+  assert.equal(current.plan.returnFor({}).kind, "unresolved", "a foreign lookup cannot acquire a physical return");
+  assert.equal(current.plan.prepareReturn({}).kind, "unresolved", "a foreign request is rejected before source inspection");
+});
+
 test("closed native generic queries validate ownership without manufacturing unused activations", () => {
   const current = fixture("export function closed(): number { return 7; }");
   const declaration = current.declaration("closed");
@@ -128,7 +147,7 @@ test("physical forwarding preserves distinct equal-signature inputs through alia
     selected(current.plan.valueFor(current.declaration(name)), inputs[index].implementation, name);
     selected(current.plan.valueFor(current.initializer(name)), inputs[index].implementation, `${name} expression`);
   }
-  selected(current.plan.returnFor(owner), inputs[0].implementation, "annotated return retains physical input");
+  selected(current.plan.prepareReturn(owner), inputs[0].implementation, "annotated return retains physical input");
 });
 
 test("physical forwarding crosses package calls without a recipient error or concrete caller closure", () => {
@@ -143,7 +162,7 @@ test("physical forwarding crosses package calls without a recipient error or con
     files: { ...sourcePackageCallbackErrorFiles, "index.ts": source } });
   for (const name of ["retain", "forwarded"]) {
     const owner = current.declaration(name);
-    selected(current.plan.returnFor(owner), current.native.inputsFor(owner)[0].implementation, `${name} local input`);
+    selected(current.plan.prepareReturn(owner), current.native.inputsFor(owner)[0].implementation, `${name} local input`);
   }
   const owner = current.declaration("pair");
   const inputs = current.native.inputsFor(owner);
@@ -157,7 +176,7 @@ test("physical forwarding crosses package calls without a recipient error or con
     assert.equal(targetInput.protocol.identity !== inputs[index].protocol.identity, true,
       "input transport does not assert protocol identity across declarations");
   }
-  selected(current.plan.returnFor(owner), inputs[1].implementation, "second remains independent");
+  selected(current.plan.prepareReturn(owner), inputs[1].implementation, "second remains independent");
   const wrong = current.plan.invocationReturnFor(current.declaration("retain"), current.initializer("first"));
   assert.equal(wrong.kind, "unresolved", "an unselected implementation cannot supply the call result");
 });
@@ -228,8 +247,8 @@ test("physical captured forwarding retains outer inputs without mistaking a new 
   const inputs = current.native.inputsFor(owner);
   const closure = current.storage.nodes.find(node => current.source.ast.is.IsArrowFunction(node));
   selected(current.plan.valueFor(current.declaration("captured")), inputs[1].implementation, "captured exact outer input");
-  selected(current.plan.returnFor(closure), inputs[1].implementation, "nested return retains capture binding");
-  const outward = current.plan.returnFor(owner);
+  selected(current.plan.prepareReturn(closure), inputs[1].implementation, "nested return retains capture binding");
+  const outward = current.plan.prepareReturn(owner);
   assert.equal(outward.kind, "selected", "concrete closure retains a sealed producer-owned signature");
   const callable = rustCallablePhysicalSignature(outward.carrier);
   assert.equal(callable !== undefined, true, "returned closure has the canonical exact callable signature");
@@ -270,7 +289,7 @@ test("physical selection preserves optional topology and borrowed parameter life
   `);
   const owner = current.declaration("maybe");
   const input = current.native.inputsFor(owner)[0];
-  for (const value of [current.plan.returnFor(owner), current.plan.valueFor(current.declaration("optional"))]) {
+  for (const value of [current.plan.prepareReturn(owner), current.plan.valueFor(current.declaration("optional"))]) {
     assert.equal(value.kind, "selected", value.reason);
     assert.equal(rustOptionElementCarrier(value.carrier) === input.implementation, true);
     assert.equal(value.carrier.kind, input.carrier.kind, "native option topology retained");
@@ -300,7 +319,7 @@ test("physical tuple and array transport reuses exact existing component inputs"
   `);
   const tuple = current.declaration("tuple");
   const members = current.native.inputsFor(tuple);
-  const pair = current.plan.returnFor(tuple);
+  const pair = current.plan.prepareReturn(tuple);
   assert.equal(pair.kind, "selected", pair.reason);
   assert.equal(pair.carrier.kind, "tuple");
   assert.equal(pair.inputs.length, 2);
@@ -310,7 +329,7 @@ test("physical tuple and array transport reuses exact existing component inputs"
     assert.equal(member !== undefined && element === member.implementation, true, `tuple component ${index}`);
   }
   const array = current.declaration("array");
-  const list = current.plan.returnFor(array);
+  const list = current.plan.prepareReturn(array);
   assert.equal(list.kind, "selected", list.reason);
   assert.equal(list.carrier.kind, "array");
   assert.equal(list.carrier.element === current.native.inputsFor(array)[0].implementation, true);
@@ -324,7 +343,7 @@ test("physical generic callable forwarding retains its quantified contract", () 
   const owner = current.declaration("retain");
   const input = current.native.inputsFor(owner)[0];
   assert.equal(input.protocol.signature.typeParameters.length, 1);
-  selected(current.plan.returnFor(owner), input.implementation, "quantified identity preserved");
+  selected(current.plan.prepareReturn(owner), input.implementation, "quantified identity preserved");
   selected(current.plan.valueFor(current.declaration("alias")), input.implementation, "generic alias physical identity");
 });
 
@@ -337,7 +356,7 @@ test("concrete quantified producers retain the existing sealed family through al
       return alias;
     }
   `);
-  for (const value of [current.plan.returnFor(current.declaration("make")),
+  for (const value of [current.plan.prepareReturn(current.declaration("make")),
     current.plan.valueFor(current.declaration("original")), current.plan.valueFor(current.declaration("alias"))]) {
     assert.equal(value.kind, "selected", value.reason);
     const definition = current.input.generic.physical.definitionFor(value.carrier);
@@ -348,7 +367,7 @@ test("concrete quantified producers retain the existing sealed family through al
   }
   const unavailable = createRustNativeStorageQueries({ ...current.input, native: current.native,
     physicalCarrierFor: () => undefined });
-  assert.equal(unavailable.returnFor(current.declaration("make")).kind, "unresolved",
+  assert.equal(unavailable.prepareReturn(current.declaration("make")).kind, "unresolved",
     "signature equality cannot substitute for a missing producer identity");
 });
 
@@ -360,10 +379,10 @@ test("physical selection rejects ambiguous mutation alternatives and seals concr
     export function create(): () => number { return () => 7; }
     export function concrete(): () => number { const supplied = create(); return supplied; }
   `);
-  for (const result of [current.plan.returnFor(current.declaration("choose")),
+  for (const result of [current.plan.prepareReturn(current.declaration("choose")),
     current.plan.valueFor(current.declaration("selected"))])
     assert.equal(result.kind, "unresolved", "no signature-based choice, closed error guess, or silent fallback");
-  const created = current.plan.returnFor(current.declaration("create"));
+  const created = current.plan.prepareReturn(current.declaration("create"));
   const returned = current.plan.invocationReturnFor(current.declaration("create"), current.initializer("supplied"));
   assert.equal(created.kind, "selected");
   assert.equal(returned.kind, "selected");
@@ -385,17 +404,17 @@ test("physical storage validates token ownership, exact contracts and finite pro
   for (const candidate of [forged, { ...subject }, foreign.exactSubject(foreign.declaration("alias"))])
     assert.equal(current.plan.subjectFor(candidate, input.carrier, owner).kind, "unresolved");
   assert.equal(getterReads, 0, "foreign shape cannot execute a getter");
-  assert.equal(current.plan.returnFor(foreign.declaration("identity")).kind, "unresolved");
+  assert.equal(current.plan.prepareReturn(foreign.declaration("identity")).kind, "unresolved");
   assert.equal(current.plan.subjectFor(subject, input.carrier, foreign.declaration("identity")).kind, "unresolved");
   const mismatched = rustCallableTargetType([], rustSourcePrimitiveTargetType("bool"));
   assert.equal(current.plan.subjectFor(subject, mismatched, owner).kind, "unresolved", "equal arity cannot substitute a different signature");
   const otherPlan = createRustNativeStorageQueries({ ...current.input, native: foreign.native });
-  assert.equal(otherPlan.returnFor(owner).kind, "unresolved", "another native plan cannot mint this graph's input identity");
+  assert.equal(otherPlan.prepareReturn(owner).kind, "unresolved", "another native plan cannot mint this graph's input identity");
   const limited = createRustNativeStorageQueries({ ...current.input, native: current.native, storage: {
     ...current.storage, boundValueFrontierFor() { return { kind: "resolved",
       frontier: Array(4097).fill({ kind: "origin", subject: input.subject, bindings: current.storage.emptyBindings }) }; },
   } });
-  const rejected = limited.returnFor(owner);
+  const rejected = limited.prepareReturn(owner);
   assert.equal(rejected.kind, "unresolved");
   assert.match(rejected.reason, /budget/u);
 });
@@ -411,7 +430,7 @@ test("non-callable storage remains an exact identity without inspecting unrelate
   const value = plan.valueFor(current.declaration("selected"));
   assert.equal(value.kind, "identity");
   assert.equal(value.carrier === current.program.records.runtimeCarrier.get(current.declaration("selected")).carrier, true);
-  assert.equal(plan.returnFor(owner).kind, "identity");
+  assert.equal(plan.prepareReturn(owner).kind, "identity");
   assert.equal(originQueries, 0);
 });
 

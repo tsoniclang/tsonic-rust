@@ -118,7 +118,7 @@ test("outward carrier queries fail closed before finalized native effects and do
 sourceCallEffects: { get: (node) => { return !finalized ? undefined : records.sourceCallEffects.get(node); } }}, records),
     definitions: current.context.typeDefinitions, producers: current.producers,
     returnCarrierFor(node) {
-      const result = current.context.callableValues.nativeStorage.returnFor(node);
+      const result = current.context.callableValues.nativeStorage.prepareReturn(node);
       return result.kind === "unresolved" ? undefined : result.carrier;
     },
   });
@@ -136,7 +136,7 @@ test("sync JS Promise output uses the uniform rejection channel before deferred-
       forDeclaration: current.producers.forDeclaration, errorFor: current.producers.errorFor,
       deferredFor() { throw new Error("JS output shape must not query unfinished deferred effects"); },
     }, returnCarrierFor(node) {
-      const result = current.context.callableValues.nativeStorage.returnFor(node);
+      const result = current.context.callableValues.nativeStorage.prepareReturn(node);
       return result.kind === "unresolved" ? undefined : result.carrier;
     },
   });
