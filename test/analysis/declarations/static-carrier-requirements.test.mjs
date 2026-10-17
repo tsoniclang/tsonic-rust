@@ -288,10 +288,11 @@ test("real native capture producer supplies owned physical storage without laund
 
 test("the real frame inventory requires native capture entries before their existing completion boundary", () => {
   const program = analyzeRustErrorEffects(`
-    export function escaped(seed: number): (count: number) => number {
-      let selected = (count: number): number => count === 0 ? seed : selected(count - 1);
+    import type { int32 } from "@tsonic/core/types.js";
+    export function escaped(seed: int32): (count: int32) => int32 {
+      let selected = (count: int32): int32 => count === 0 ? seed : selected(count - 1);
       const before = selected;
-      selected = (count: number): number => count === 0 ? 2 : selected(count - 1);
+      selected = (count: int32): int32 => count === 0 ? 2 : selected(count - 1);
       return before;
     }
   `, { surfaces: [] });
