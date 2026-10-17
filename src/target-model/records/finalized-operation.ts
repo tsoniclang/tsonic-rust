@@ -5,6 +5,14 @@ import type { RustResolvedDispatchContextInput } from "../operations/dispatch-co
 
 export type RustFinalizedSourceArgumentRole = "parameter" | "index" | "evaluation-only";
 
+export type RustProviderSourceReceiver =
+  | { readonly kind: "compile-time" }
+  | {
+      readonly kind: "runtime";
+      readonly carrier: TargetTypeRef;
+      readonly declaredCarrier?: TargetTypeRef;
+    };
+
 export interface RustFinalizedSourceArgument {
   readonly sourceIndex: number;
   readonly form: "value" | "spread-sequence";
@@ -101,11 +109,11 @@ export type RustFinalizedOperationResult =
 export interface RustFinalizedOperationAbi {
   readonly operationKind: RustFinalizedOperationKind;
   readonly target: RustProviderOperationForm;
-  readonly sourceReceiver: { readonly kind: "none" } | {
+  readonly sourceReceiver: { readonly kind: "none" | "compile-time" } | {
     readonly kind: "receiver";
     readonly carrier: TargetTypeRef;
     readonly declaredCarrier: TargetTypeRef;
-    readonly disposition: "runtime" | "compile-time";
+    readonly disposition: "runtime" | "evaluation-only";
   };
   readonly sourceArguments: readonly RustFinalizedSourceArgument[];
   readonly targetReceiver: { readonly kind: "none" } | { readonly kind: "input"; readonly input: RustFinalizedSourceInput };
@@ -135,8 +143,7 @@ export interface FinalizeRustProviderOperationAbiOptions<
 > {
   readonly operationKind: OperationKind;
   readonly form: RustProviderOperationForm;
-  readonly sourceReceiverCarrier?: TargetTypeRef;
-  readonly declaredSourceReceiverCarrier?: TargetTypeRef;
+  readonly sourceReceiver?: RustProviderSourceReceiver;
   readonly sourceArgumentCarriers: readonly TargetTypeRef[];
   readonly spreadSourceArgumentIndexes?: readonly number[];
   readonly declaredSourceArgumentCarriers?: readonly (TargetTypeRef | undefined)[];

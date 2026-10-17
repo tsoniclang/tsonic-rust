@@ -1,7 +1,6 @@
 import { allocateRustSyntheticName } from "../names/synthetic.js";
-import { applyRustErrorBoundary } from "../types/error-boundary.js";
+import { applyRustErrorBoundary, applyRustLocalErrorBoundary } from "../types/error-boundary.js";
 import {
-  BreakOrContinueStatement_Label,
   KindVariableDeclaration,
   KindVariableDeclarationList,
   KindVariableStatement,
@@ -9,13 +8,11 @@ import {
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
 import {
-  diagnosticInput,
   isValidRustIdentifier,
-  registerAliasFromPath,
+  diagnosticInput,
   rustActiveErrorType,
 } from "../program/plan-context.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
-import { planStatementSequence } from "./core.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
 import { planVariableStatement } from "./variable-declarations.js";
 
 import type { Node } from "@tsonic/tsts";
@@ -26,23 +23,23 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustVirtualProjectMethodCall } from "../objects/project-method-dispatch.js";
 import { rustBlockDefinitelyExits } from "../../target-ast/normalization/block-flow.js";
 import { isDenseDataArray } from "../../../target-model/metadata/closed-data.js";
+import { isRustFinalizedDispatchContextInput, isRustFinalizedSourceInput } from "../../../analysis/operations/finalized-operation/conversions.js";
+import { finishProviderOperationExpression, planFinalizedTargetInput } from "../expressions/conversions.js";
+import { planRustFinalizedOperationForm } from "../expressions/finalized-operation-form.js";
+import { applyFinalizedValueConversion } from "../expressions/value-conversions.js";
+import { applyFinalizedRustArgumentMode } from "../expressions/input-shaping.js";
+import { planRustDispatchContextInputScope } from "../project/dispatch-contexts.js";
 
-export function directResourceDeclaration(
+export function directResourceDeclarations(
   statement: Node,
   context: RustPlanContext,
-): Node | undefined {
+): readonly Node[] {
   if (context.input.program.source.ast.kindName(statement) !== KindVariableStatement) {
-    return undefined;
+    return [];
   }
   const declarations = collectVariableDeclarations(statement, context);
-  if (declarations.length !== 1) {
-    return undefined;
-  }
-  const [declaration] = declarations;
-  const kind = context.input.program.source.ast.variableDeclarationKind(declaration);
-  return declaration !== undefined && (kind === "using" || kind === "await using")
-    ? declaration
-    : undefined;
+  const kind = context.input.program.source.ast.variableDeclarationKind(declarations[0]);
+  return kind === "using" || kind === "await using" ? declarations : [];
 }
 
 export function collectVariableDeclarations(node: Node, context: RustPlanContext): readonly Node[] {
@@ -56,30 +53,32 @@ export function collectVariableDeclarations(node: Node, context: RustPlanContext
     ? [] : declarations as readonly Node[];
 }
 
-export function planResourceDeclarationScope(
-  statement: Node,
-  declaration: Node,
-  remainder: readonly (Node | undefined)[],
-  diagnosticNode: Node,
+export function planResourceDeclarations(
+  declarations: readonly Node[],
   context: RustPlanContext,
+  planBody: (context: RustPlanContext) => RustBlock | undefined,
 ): readonly RustStmt[] | undefined {
+  const [declaration, ...remaining] = declarations;
+  if (declaration === undefined) return planBody(context)?.statements;
   const fact = resourceFactForPlanning(declaration, context);
   if (fact === undefined) {
     return undefined;
   }
-  const declarations = planVariableStatement(statement, context);
-  const resourceName = context.input.program.names.nameForDeclaration(declaration) ?? "";
-  if (declarations === undefined || !isValidRustIdentifier(resourceName)) {
-    return undefined;
-  }
+  const initialization = planVariableStatement(declaration, context);
+  const resourceName = context.input.program.names.nameForDeclaration(declaration);
+  if (resourceName === undefined) failRustPlannerInvariant("Admitted resource binding requires its sealed native name.", declaration);
+  if (initialization === undefined) return undefined;
   const scope = planResourceManagedBody(
     declaration,
     resourceName,
     fact,
     context,
-    (bodyContext) => planStatementSequence(remainder, diagnosticNode, bodyContext, false),
+    (bodyContext) => {
+      const statements = planResourceDeclarations(remaining, bodyContext, planBody);
+      return statements === undefined ? undefined : { statements };
+    },
   );
-  return scope === undefined ? undefined : [...declarations, scope];
+  return scope === undefined ? undefined : [...initialization, scope];
 }
 
 export function resourceFactForPlanning(
@@ -95,20 +94,10 @@ export function resourceFactForPlanning(
   }
   if ((fact.declarationKind === "await using" || fact.disposal.kind === "async") &&
     context.asyncContext !== true) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.async-resource-management",
-      "Asynchronous resource management requires a finalized async callable context.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Admitted asynchronous disposal requires its native execution frame.", declaration);
   }
   if (fact.disposal.fallible && context.fallibleBoundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.resource-fallibility",
-      "A fallible disposer requires a finalized fallible enclosing callable.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Admitted fallible disposal requires its native error frame.", declaration);
   }
   return fact;
 }
@@ -127,12 +116,7 @@ export function planResourceManagedBody(
     );
   }
   if (!isValidRustIdentifier(resourceName)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, declaration),
-      "rust.backend.resource-binding",
-      "Resource management requires a plain finalized Rust binding name.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Admitted resource management requires its native binding name.", declaration);
   }
   const boundary = createRustCompletionBoundary(
     context,
@@ -223,14 +207,6 @@ function planResourceCleanup(
   context: RustPlanContext,
 ): RustBlock | undefined {
   const receiverMode = resourceDisposalReceiverMode(fact);
-  if (receiverMode === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, context.sourceFile),
-      "rust.backend.resource-disposer",
-      "Finalized resource disposal target has no closed Rust receiver mode.",
-    ));
-    return undefined;
-  }
   const receiver: RustExpr = {
     kind: "path",
     path: fact.nullable ? cleanupResourceName : resourceName,
@@ -245,28 +221,18 @@ function planResourceCleanup(
   if (disposal === undefined) {
     return undefined;
   }
-  if (fact.disposal.kind === "async") {
+  const target = fact.disposal.target;
+  if (target.form === "source-method" && fact.disposal.kind === "async") {
     disposal = { kind: "await", expr: disposal };
   }
-  if (fact.disposal.fallible) {
+  if (target.form === "source-method" && target.errorBoundary !== "none") {
     const resultErrorType = rustActiveErrorType(context);
-    const providerErrorType = fact.disposal.errorBoundary === "provider-native"
-      ? rustTypeFromCarrierInContext(fact.disposal.errorCarrier, context)
-      : undefined;
-    if (resultErrorType === undefined ||
-      fact.disposal.errorBoundary === "provider-native" && providerErrorType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, context.sourceFile),
-        "rust.backend.resource-error-type",
-        "A fallible resource disposer has no exact result or provider error type.",
-      ));
-      return undefined;
-    }
+    if (resultErrorType === undefined) failRustPlannerInvariant("Admitted fallible disposal requires its native result error type.", declaration);
     disposal = applyRustErrorBoundary(
       disposal,
-      fact.disposal.errorBoundary,
+      target.errorBoundary,
       resultErrorType,
-      providerErrorType,
+      undefined,
     );
   }
   const body: RustBlock = { statements: [{ kind: "expr", expr: disposal }] };
@@ -274,7 +240,9 @@ function planResourceCleanup(
     return body;
   }
   return {
-    statements: [{ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: cleanupResourceName }] }, expression: {
+    statements: [{ kind: "expr", expr: { kind: "if-let", pattern: { kind: "tuple-variant", path: "Some", elements: [{ kind: "binding", name: cleanupResourceName }] }, expression: receiverMode === "value" ? {
+        kind: "path", path: resourceName,
+      } : {
         kind: "method-call",
         receiver: { kind: "path", path: resourceName },
         method: receiverMode === "mut-ref" ? "as_mut" : "as_ref",
@@ -286,20 +254,27 @@ function planResourceCleanup(
 
 export function resourceDisposalReceiverMode(
   fact: RustResourceManagementFact,
-): "ref" | "mut-ref" | undefined {
+): "value" | "ref" | "mut-ref" {
   const target = fact.disposal.target;
-  if (target.form === "source-method") {
-    return target.receiverMode;
+  switch (target.form) {
+    case "source-method":
+    case "provider":
+      if (target.form === "provider") {
+        switch (target.abi.target.form) {
+          case "method":
+          case "receiver-method":
+          case "free-call": break;
+          default: return failRustPlannerInvariant("Finalized resource disposal target has no closed Rust receiver mode.");
+        }
+      }
+      switch (target.receiverMode) {
+        case "value": return "value";
+        case "ref": return "ref";
+        case "mut-ref": return "mut-ref";
+        default: return failRustPlannerInvariant("Finalized resource disposal target has no closed Rust receiver mode.");
+      }
+    default: return failRustPlannerInvariant("Finalized resource disposal target has no closed Rust receiver mode.");
   }
-  if (target.target.form === "free-call") {
-    return target.target.receiverMode === "value"
-      ? undefined
-      : target.target.receiverMode;
-  }
-  if (target.target.form === "receiver-method") {
-    return target.target.mutatesReceiver === true ? "mut-ref" : "ref";
-  }
-  return target.target.form === "method" ? "ref" : undefined;
 }
 
 function planResourceDisposalExpression(
@@ -329,25 +304,53 @@ function planResourceDisposalExpression(
       receiverMode: target.receiverMode,
     };
   }
-  const operation = target.target;
-  if (operation.form === "method" || operation.form === "receiver-method") {
-    return {
-      kind: "method-call",
-      receiver,
-      method: operation.name,
-      args: [],
-      receiverMode: operation.form === "receiver-method" && operation.mutatesReceiver === true
-        ? "mut-ref"
-        : "ref",
-    };
+  const { abi } = target;
+  const dispatch = planRustDispatchContextInputScope(abi.targetArguments.filter(isRustFinalizedDispatchContextInput), subject, context);
+  if (dispatch === undefined) return undefined;
+  const planReceiver = (input: import("../../../target-model/records/finalized-operation.js").RustFinalizedSourceInput,
+    position: "receiver" | "argument"): RustExpr | undefined => {
+    if (input.source.kind !== "receiver") failRustPlannerInvariant("A zero-argument disposer requires its admitted resource input.", subject);
+    const borrowed = alreadyBorrowed && target.receiverMode !== "value";
+    const converted = applyFinalizedValueConversion(context, receiver, input.conversion, subject, borrowed);
+    if (converted === undefined || position === "receiver") return converted;
+    if (borrowed && input.conversion.kind === "identity" && input.mode !== "value") return converted;
+    return applyFinalizedRustArgumentMode(context, subject, converted, input, false);
+  };
+  const targetReceiver = abi.targetReceiver.kind === "input" ? planReceiver(abi.targetReceiver.input, "receiver") : undefined;
+  if (abi.targetReceiver.kind === "input" && targetReceiver === undefined) return undefined;
+  const args: RustExpr[] = [];
+  for (const input of abi.targetArguments) {
+    const planned = isRustFinalizedSourceInput(input) ? planReceiver(input, "argument")
+      : planFinalizedTargetInput(context, input, undefined, [], subject, undefined, dispatch);
+    if (planned === undefined) return undefined;
+    args.push(planned);
   }
-  registerAliasFromPath(context, operation.path);
-  const argument = alreadyBorrowed
-    ? receiver
-    : operation.receiverMode === "value"
-      ? receiver
-      : { kind: "reference" as const, expr: receiver, mutable: operation.receiverMode === "mut-ref" };
-  return { kind: "call", path: operation.path, args: [argument] };
+  const native = planRustFinalizedOperationForm(context, abi, targetReceiver, args, subject,
+    { resultUse: "value", assignment: false });
+  if (native === undefined) return undefined;
+  let completed = finishProviderOperationExpression(context, target, native, subject);
+  if (completed === undefined) return undefined;
+  if (abi.result.kind === "async") {
+    completed = { kind: "await", expr: completed };
+    if (abi.effects.awaiting === "fallible") {
+      const region = context.fallibleBoundary;
+      if (region === undefined || abi.effects.errorBoundary === "none") {
+        failRustPlannerInvariant("Admitted asynchronous disposal requires its exact native error boundary.", subject);
+      }
+      const providerErrorType = abi.effects.errorBoundary === "provider-native"
+        ? rustTypeFromCarrierInContext(abi.effects.errorCarrier, context) : undefined;
+      if (abi.effects.errorBoundary === "provider-native" && providerErrorType === undefined) {
+        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, subject), "rust.backend.resource-error-type",
+          "Fallible resource disposal requires its exact rendered native provider error type."));
+        return undefined;
+      }
+      completed = applyRustLocalErrorBoundary(completed, abi.effects.errorBoundary, region, providerErrorType);
+      if (completed === undefined) return undefined;
+    }
+    completed = applyFinalizedValueConversion(context, completed, abi.result.awaitedConversion, subject);
+    if (completed === undefined) return undefined;
+  }
+  return dispatch.apply(completed);
 }
 
 export function planLoopExitStatement(
@@ -355,26 +358,14 @@ export function planLoopExitStatement(
   completion: "break" | "continue",
   context: RustPlanContext,
 ): readonly RustStmt[] | undefined {
-  const sourceLabelNode = BreakOrContinueStatement_Label(context.input.program.source.ast, node);
-  const sourceLabel = sourceLabelNode === undefined
-    ? undefined
-    : context.input.program.source.ast.text(sourceLabelNode);
+  const exit = context.input.program.statementCompletions.exitFor(node);
+  if (exit === undefined || exit.completion !== completion) {
+    failRustPlannerInvariant("Control transfer requires its exact admitted source destination.", node);
+  }
   const target = [...(context.controlTargets ?? [])].reverse().find((candidate) =>
-    completion === "continue"
-      ? candidate.kind === "loop" &&
-        (sourceLabel === undefined || candidate.sourceLabel === sourceLabel)
-      : sourceLabel === undefined
-        ? candidate.kind !== "label"
-        : candidate.sourceLabel === sourceLabel);
+    (completion !== "continue" || candidate.kind === "loop") && candidate.sourceTargets.includes(exit.target));
   if (target === undefined) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.loop-exit",
-      sourceLabel === undefined
-        ? `${completion} has no enclosing Rust loop target.`
-        : `${completion} label '${sourceLabel}' has no finalized Rust loop target.`,
-    ));
-    return undefined;
+    failRustPlannerInvariant("Admitted control transfer requires its active native destination.", node);
   }
   target.used.value = true;
   if (completion === "break" && target.kind === "loop") {
@@ -393,12 +384,7 @@ export function planLoopExitStatement(
     boundary = boundary.parent;
   }
   if (boundary !== target.resourceBoundary || context.completionBoundary === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.loop-resource-boundary",
-      "Loop exit cannot be reconciled with the finalized Rust resource boundary stack.",
-    ));
-    return undefined;
+    failRustPlannerInvariant("Control transfer must preserve the native cleanup-boundary ancestry.", node);
   }
   context.usedAliases?.add("rt");
   return [{

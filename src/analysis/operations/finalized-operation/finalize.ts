@@ -13,15 +13,30 @@ import type { FinalizeRustProviderOperationAbiOptions, RustFinalizedOperationAbi
 import type { RustFinalizedOperationKind } from "../../../target-model/operations/model.js";
 import { insertRustDispatchContextInputs } from "./dispatch-inputs.js";
 import { isRustNativeErrorCarriers } from "../../../target-model/operations/native-error-carriers.js";
+import { hasExactKeys, isRecord } from "./validation-records.js";
+
+const finalizationOptionKeys = new Set([
+  "operationKind", "form", "sourceReceiver", "sourceArgumentCarriers", "spreadSourceArgumentIndexes",
+  "declaredSourceArgumentCarriers", "evaluationOnlySourceArgumentIndexes", "resultCarrier", "dispatchInputs",
+  "nativeErrorCarriers", "targetGenericArguments", "resultConversion", "isAsync", "isFallible",
+  "returnedFuture", "evaluation", "errorBoundary", "errorCarrier", "isUnsafe",
+]);
 
 export function finalizeRustProviderOperationAbi<OperationKind extends RustFinalizedOperationKind>(
   options: FinalizeRustProviderOperationAbiOptions<OperationKind>,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustFinalizedOperationAbiFor<OperationKind> | undefined {
-  if (!operationKinds.has(options.operationKind) || !isRustTargetTypeRef(options.resultCarrier) ||
-    (options.sourceReceiverCarrier !== undefined && !isRustTargetTypeRef(options.sourceReceiverCarrier)) ||
-    (options.declaredSourceReceiverCarrier !== undefined && (
-      options.sourceReceiverCarrier === undefined || !isRustTargetTypeRef(options.declaredSourceReceiverCarrier))) ||
+  if (Object.keys(options).some(key => !finalizationOptionKeys.has(key)) ||
+    !operationKinds.has(options.operationKind) || !isRustTargetTypeRef(options.resultCarrier) ||
+    (options.sourceReceiver !== undefined && (!isRecord(options.sourceReceiver) ||
+      (options.sourceReceiver.kind === "compile-time"
+        ? !hasExactKeys(options.sourceReceiver, ["kind"])
+        : options.sourceReceiver.kind !== "runtime" ||
+          !hasExactKeys(options.sourceReceiver, ["kind", "carrier",
+            ...(Object.prototype.hasOwnProperty.call(options.sourceReceiver, "declaredCarrier") ? ["declaredCarrier"] : [])]) ||
+          !isRustTargetTypeRef(options.sourceReceiver.carrier) ||
+          (Object.prototype.hasOwnProperty.call(options.sourceReceiver, "declaredCarrier") &&
+            !isRustTargetTypeRef(options.sourceReceiver.declaredCarrier))))) ||
     !isDenseDataArray(options.sourceArgumentCarriers) ||
     options.sourceArgumentCarriers.some((carrier) => !isRustTargetTypeRef(carrier)) ||
     (options.declaredSourceArgumentCarriers !== undefined &&
@@ -91,8 +106,10 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   )) {
     return undefined;
   }
-  const input = createInputFactory(options.sourceReceiverCarrier, options.sourceArgumentCarriers, spreadIndexes,
-    definitions, options.declaredSourceReceiverCarrier);
+  const sourceReceiver = options.sourceReceiver;
+  const input = createInputFactory(sourceReceiver?.kind === "runtime" ? sourceReceiver.carrier : undefined,
+    options.sourceArgumentCarriers, spreadIndexes,
+    definitions, sourceReceiver?.kind === "runtime" ? sourceReceiver.declaredCarrier : undefined);
   const sourceMapping = finalizeTargetInputs(
     options.operationKind,
     options.form,
@@ -147,15 +164,15 @@ export function finalizeRustProviderOperationAbi<OperationKind extends RustFinal
   const abi: RustFinalizedOperationAbiFor<OperationKind> = {
     operationKind: options.operationKind,
     target: options.form,
-    sourceReceiver: options.sourceReceiverCarrier === undefined
+    sourceReceiver: sourceReceiver === undefined
       ? { kind: "none" }
-      : {
+      : sourceReceiver.kind === "compile-time" ? { kind: "compile-time" } : {
           kind: "receiver",
-          carrier: options.sourceReceiverCarrier,
-          declaredCarrier: options.declaredSourceReceiverCarrier ?? options.sourceReceiverCarrier,
+          carrier: sourceReceiver.carrier,
+          declaredCarrier: sourceReceiver.declaredCarrier ?? sourceReceiver.carrier,
           disposition: mappingUsesSourceReceiver(mapping.targetReceiver, mapping.targetArguments)
             ? "runtime"
-            : "compile-time",
+            : "evaluation-only",
         },
     sourceArguments,
     targetReceiver: mapping.targetReceiver,

@@ -605,7 +605,7 @@ export function substituteProviderOperationForm(
 export function finalizeProviderOperationFact(
   template: RustProviderOperationTemplate,
   sourceArgumentCarriers: readonly TargetTypeRef[],
-  sourceReceiverCarrier: TargetTypeRef | undefined,
+  sourceReceiver: import("../../../../target-model/records/finalized-operation.js").RustProviderSourceReceiver | undefined,
   definitions: RustTypeDefinitions,
   spreadSourceArgumentIndexes?: readonly number[],
   dispatchContextInputFor?: (input: unknown) =>
@@ -616,8 +616,9 @@ export function finalizeProviderOperationFact(
   const abi = finalizeRustProviderOperationAbi({
     operationKind: template.operationKind,
     form: template.target,
-    ...(sourceReceiverCarrier === undefined ? {} : { sourceReceiverCarrier }),
-    ...(template.receiverCarrier === undefined ? {} : { declaredSourceReceiverCarrier: template.receiverCarrier }),
+    ...(sourceReceiver === undefined ? {} : { sourceReceiver: sourceReceiver.kind === "runtime"
+      ? { ...sourceReceiver, ...(template.receiverCarrier === undefined ? {} : { declaredCarrier: template.receiverCarrier }) }
+      : sourceReceiver }),
     sourceArgumentCarriers,
     ...(spreadSourceArgumentIndexes === undefined ? {} : { spreadSourceArgumentIndexes }),
     declaredSourceArgumentCarriers: template.parameterCarriers,

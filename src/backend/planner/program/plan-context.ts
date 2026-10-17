@@ -47,7 +47,7 @@ export interface RustCapturedBinding {
 interface RustControlTargetBase {
   readonly id: number;
   readonly label: string;
-  readonly sourceLabel?: string;
+  readonly sourceTargets: readonly Node[];
   readonly resourceBoundary?: RustCompletionBoundary;
   readonly used: { value: boolean };
 }

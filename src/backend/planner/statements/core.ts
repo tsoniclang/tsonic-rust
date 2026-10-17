@@ -18,9 +18,9 @@ import {
 } from "@tsonic/target-api/source";
 import { diagnosticInput } from "../program/plan-context.js";
 import { prepareRustFrameScope } from "../bindings/frame-storage.js";
-import { directResourceDeclaration, planLoopExitStatement, planResourceDeclarationScope } from "./resources.js";
+import { directResourceDeclarations, planLoopExitStatement, planResourceDeclarations } from "./resources.js";
 import { isErasedRustSafetyExpressionStatement, isRustExplicitUnsafeBlockMarker, withExplicitUnsafeContext } from "../safety/explicit-safety.js";
-import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../diagnostics.js";
 import { planDoStatement, planForStatement, planIfStatement, planLabeledStatement, planWhileStatement } from "./control-flow.js";
 import { planSwitchStatement } from "./switch-statements.js";
 import { planExpression } from "../expressions/index.js";
@@ -72,7 +72,11 @@ export function planStatement(node: Node, context: RustPlanContext): readonly Ru
 }
 
 function planStatementInner(node: Node, context: RustPlanContext): readonly RustStmt[] | undefined {
-  if (context.input.program.records.nativeUnreachable.get(node) === true) return [];
+  if (context.input.program.records.nativeUnreachable.get(node) === true ||
+    context.input.program.records.compileTimeSource.get(node) !== undefined ||
+    context.input.program.records.nativeParticipation.get(node) === "erased") return [];
+  if (!context.input.program.statementCompletions.admitted(node))
+    failRustPlannerInvariant("Statement dispatch requires its admitted native source construct.", node);
   const { ast } = context.input.program.source;
   const kind = ast.kindName(node);
   switch (kind) {
@@ -169,12 +173,7 @@ function planStatementInner(node: Node, context: RustPlanContext): readonly Rust
       return body === undefined ? undefined : [{ kind: "scope", body }];
     }
     default: {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.statement",
-        "The Rust target does not support this statement.",
-      ));
-      return undefined;
+      failRustPlannerInvariant("Statement dispatch requires its admitted native source construct.", node);
     }
   }
 }
@@ -207,13 +206,7 @@ export function planStatementSequence(
   for (let index = 0; index < children.length; index += 1) {
     const child = children[index];
     if (child === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, diagnosticNode),
-        "rust.backend.block-statement",
-        "Source block contains an undefined statement slot.",
-      ));
-      failed = true;
-      continue;
+      failRustPlannerInvariant("Statement sequence requires its dense checked source nodes.", diagnosticNode);
     }
     const callableValues = planRustLexicalFunctionValues(child, sequenceContext);
     if (callableValues === undefined) return undefined;
@@ -231,14 +224,12 @@ export function planStatementSequence(
       statements.push({ kind: "unsafe-scope", body });
       return { statements };
     }
-    const resourceDeclaration = directResourceDeclaration(child, sequenceContext);
-    if (resourceDeclaration !== undefined) {
-      const planned = planResourceDeclarationScope(
-        child,
-        resourceDeclaration,
-        children.slice(index + 1),
-        diagnosticNode,
+    const resourceDeclarations = directResourceDeclarations(child, sequenceContext);
+    if (resourceDeclarations.length > 0) {
+      const planned = planResourceDeclarations(
+        resourceDeclarations,
         sequenceContext,
+        (bodyContext) => planStatementSequence(children.slice(index + 1), diagnosticNode, bodyContext, false),
       );
       if (planned === undefined) {
         failed = true;

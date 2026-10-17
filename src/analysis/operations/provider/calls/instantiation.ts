@@ -43,6 +43,7 @@ import {
   instantiateProviderOperationTemplate,
 } from "./template-instantiation.js";
 import { selectReferenceReborrow, selectReceiverReferenceReborrow } from "./reference-reborrows.js";
+import { selectRustProviderSourceReceiver } from "../source-qualifiers.js";
 import type { InstantiatedProviderOperationTemplate } from "./template-instantiation.js";
 import type { RustCheckedCallSelectionInput, RustCheckedCallSelectionResult, RustPolicySelection, RustTargetOperationSelection } from "../../../../policy/operations/contracts.js";
 import type { RustProviderOperationForm, RustProviderOperationTemplate } from "../../../../target-model/operations/model.js";
@@ -373,7 +374,6 @@ export function acceptSelectedCall(
   }
   const selectedReceiverCarrier = selectedCallReceiverCarrier(
     request,
-    instantiatedTemplate.target,
     context,
     resolutionOptions,
   );
@@ -382,7 +382,13 @@ export function acceptSelectedCall(
   }
   const spreadIndexes = request.source.sourceArguments.flatMap((argument, index) =>
     context.ast.is.IsSpreadElement(argument.expression) ? [index] : []);
-  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, selectedReceiverCarrier,
+  const sourceReceiver = request.source.sourceReceiver;
+  const receiver = sourceReceiver === undefined ? undefined
+    : selectRustProviderSourceReceiver(sourceReceiver.expression, selectedReceiverCarrier, context, resolutionOptions);
+  if (sourceReceiver !== undefined && receiver === undefined) {
+    return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver evaluation.`);
+  }
+  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, receiver,
     context.typeDefinitions, spreadIndexes.length === 0 ? undefined : spreadIndexes, resolutionOptions.dispatchContextInputFor);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
@@ -689,13 +695,9 @@ function selectedCallArgumentTargetCarrier(
 
 function selectedCallReceiverCarrier(
   request: RustCheckedCallSelectionInput,
-  form: RustProviderOperationForm,
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  if (!providerFormRequiresSourceReceiver(form)) {
-    return undefined;
-  }
   return selectedCallReceiverValueCarrier(request, context, options);
 }
 

@@ -43,7 +43,7 @@ export type MutableProviderInput =
 
 export function collectMutableInputs(
   context: RustPlanContext,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   receiverNode: Node | undefined,
   argumentNodes: readonly (Node | undefined)[],
   planExpression: RustExpressionPlanner,
@@ -140,7 +140,7 @@ export function collectMutableInputs(
 
 export function mutableRootsAreDisjoint(
   node: Node,
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>,
+  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
   mutableInputs: ReadonlyMap<string, MutableProviderInput>,
   context: RustPlanContext,
 ): boolean {

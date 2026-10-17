@@ -222,7 +222,7 @@ export function planRustConstructionBody(
         let boundary = returnContext.completionBoundary;
         while (boundary.parent !== undefined) boundary = boundary.parent;
         const target = { kind: "label" as const, id: returnLabel.id, label: returnLabel.label,
-          used: { value: true }, resourceBoundary: selectedContext.completionBoundary };
+          used: { value: true }, sourceTargets: [], resourceBoundary: selectedContext.completionBoundary };
         boundary.dispatchTargets.set(target.id, target);
         return [{ kind: "completion-exit", completion: "break", loopId: returnLabel.id,
           resultWrapped: returnContext.completionBoundary.fallible }];

@@ -10,8 +10,13 @@ import { rustTargetOperationIsDirectLocation } from "../operations/target-operat
 import { rustNativeStoragePathsDisjoint, rustNativeStorageProjections, rustNativeStorageRoot } from "./native-paths.js";
 import type { RustNativeStoragePathInput, RustNativeStorageProjection } from "./native-paths.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
+import type { RustStatementCompletionIndex } from "../../target-model/records/statement-completion.js";
 
-type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" }>;
+type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;
+
+type RustProviderMutableInputContext = RustNativeStoragePathInput & {
+  readonly statementCompletions: Pick<RustStatementCompletionIndex, "setterFor">;
+};
 
 export type RustProviderMutableInputSelection =
   | { readonly kind: "proved"; readonly operation: ProviderOperation;
@@ -22,13 +27,13 @@ export interface RustProviderMutableInputPlan {
   forOperation(node: Node): RustProviderMutableInputSelection | undefined;
 }
 
-export function createRustProviderMutableInputPlan(input: RustNativeStoragePathInput & {
+export function createRustProviderMutableInputPlan(input: RustProviderMutableInputContext & {
   readonly nodes: readonly Node[];
 }): RustProviderMutableInputPlan {
   const selections = new Map<Node, RustProviderMutableInputSelection>();
   for (const node of input.nodes) {
-    const operation = input.records.targetOperation.get(node);
-    if (operation?.kind !== "provider-operation") continue;
+    const operation = input.records.compoundWrite.get(node) ?? input.records.targetOperation.get(node);
+    if (operation?.kind !== "provider-operation" && operation?.kind !== "runtime-set") continue;
     const selected = selectRustProviderMutableInputs(node, operation, input);
     if (selected !== undefined) selections.set(node, selected);
   }
@@ -36,26 +41,31 @@ export function createRustProviderMutableInputPlan(input: RustNativeStoragePathI
 }
 
 export function selectRustProviderMutableInputs(
-  operationNode: Node, operation: ProviderOperation, input: RustNativeStoragePathInput,
+  operationNode: Node, operation: ProviderOperation, input: RustProviderMutableInputContext,
 ): RustProviderMutableInputSelection | undefined {
-  if (input.records.targetOperation.get(operationNode) !== operation)
+  if ((input.records.compoundWrite.get(operationNode) ?? input.records.targetOperation.get(operationNode)) !== operation)
     return Object.freeze({ kind: "rejected", node: operationNode,
       reason: "Mutable provider admission requires its exact owned operation fact." });
   const mutable = rustFinalizedSourceInputs(operation.abi).filter(value => value.mode === "mut-ref");
   if (mutable.length === 0) return undefined;
+  const setter = operation.kind === "runtime-set" ? input.statementCompletions.setterFor(operationNode) : undefined;
+  if (operation.kind === "runtime-set" && setter === undefined) return Object.freeze({ kind: "rejected", node: operationNode,
+    reason: "Mutable setter admission requires its exact admitted source operand binding." });
   const kind = input.ast.kindName(operationNode);
   const selectedReceiver = input.records.selectedOperation.get(operationNode)?.provenance?.sourceReceiver;
   const callee = kind === "KindCallExpression" || kind === "KindNewExpression" ? Node_Expression(input.ast, operationNode) : undefined;
-  const receiver = asSourceNode(selectedReceiver, input.ast) ?? rustMemberAccessReceiver(input.ast, callee ?? operationNode);
-  let arguments_: readonly (Node | undefined)[] = [...input.ast.arguments(operationNode)];
-  if (kind === "KindElementAccessExpression") arguments_ = [ElementAccessExpression_ArgumentExpression(input.ast, operationNode)];
+  const receiver = operation.kind === "runtime-set" ? setter!.receiver
+    : asSourceNode(selectedReceiver, input.ast) ?? rustMemberAccessReceiver(input.ast, callee ?? operationNode);
+  let arguments_: readonly (Node | undefined)[];
+  if (operation.kind === "runtime-set") arguments_ = setter!.sourceArguments;
+  else if (kind === "KindElementAccessExpression") arguments_ = [ElementAccessExpression_ArgumentExpression(input.ast, operationNode)];
   else if (kind === "KindBinaryExpression") {
     const left = BinaryExpression_Left(input.ast, operationNode);
     const right = BinaryExpression_Right(input.ast, operationNode);
     arguments_ = left !== undefined && input.ast.is.IsElementAccessExpression(left) &&
       receiver === rustMemberAccessReceiver(input.ast, left)
       ? [ElementAccessExpression_ArgumentExpression(input.ast, left), right] : [right];
-  }
+  } else arguments_ = [...input.ast.arguments(operationNode)];
   const selected: { input: RustFinalizedSourceInput; key: string; node: Node }[] = [];
   const paths: { root: Node; projections: readonly RustNativeStorageProjection[] }[] = [];
   const keys = new Set<string>();

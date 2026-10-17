@@ -109,7 +109,7 @@ test("owned and receiver rest arrays retain the same closed sequence evidence", 
   ]) {
     const options = {
       operationKind: "method", form,
-      ...(form.form === "receiver-value-array" ? { sourceReceiverCarrier: receiver } : {}),
+      ...(form.form === "receiver-value-array" ? { sourceReceiver: { kind: "runtime", carrier: receiver } } : {}),
       sourceArgumentCarriers: [receiver], spreadSourceArgumentIndexes: [0],
       resultCarrier: element, isAsync: false, isFallible: false,
     };
