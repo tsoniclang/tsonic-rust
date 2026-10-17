@@ -225,7 +225,8 @@ function use(value: Value, selected: "value", holder: Key, argument: string): nu
   source.sourceFiles.forEach(visit);
   assert.equal(elements.length, 4, "identifier, effectful call, getter and literal key cases are actual checked accesses");
   const consumed = {};
-  const operations = [undefined, { kind: "source-field" }, { kind: "source-accessor" },
+  const operations = [undefined, { kind: "source-field" },
+    { kind: "source-accessor", receiver: { kind: "instance" }, accessMode: "read" },
     { kind: "source-call", target: { form: "method", mutatesSelf: false } },
     { kind: "source-call", target: { form: "method", mutatesSelf: true } }];
   for (const node of elements) {
