@@ -3,7 +3,7 @@ import test from "node:test";
 import { resolve } from "node:path";
 import { analyzeRust, artifactText, compileRust, unitCarrier, stringCarrier, int32Carrier, fixtureCratesRoot, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
-import { validateRustDisposalLifecycle } from "../../../dist/analysis/resources/disposal-lifecycle.js";
+import { validateRustDisposalLifecycle } from "../../../dist/analysis/control-flow/resource-lifecycle.js";
 import { resourceDisposalReceiverMode } from "../../../dist/backend/planner/statements/resources.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
