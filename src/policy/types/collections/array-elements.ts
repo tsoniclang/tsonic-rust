@@ -45,16 +45,24 @@ export function selectRustInferredNumericArrayElement(
     peers.every(peer => rustTargetTypeRefEquals(peer.carrier, homogeneous)) && accepts(homogeneous)) {
     return { kind: "resolved", carrier: homogeneous };
   }
-  const unresolved: RustInferredNumericArrayElementSelection = peers.some(peer =>
-    peer.carrier.kind === "source-primitive" && peer.carrier.name === "float32")
-    ? { kind: "rejected", reason: "Array literal requires a lossless native element carrier for every fixed floating and numeric contribution." }
+  const unresolved: RustInferredNumericArrayElementSelection = constraints.some(({ carrier, literal }) =>
+    flexibleInteger(literal) && literal?.numeric?.kind === "authored" && isRustNumericCarrier(carrier) &&
+    (carrier.name === "float32" || carrier.name === "float64") &&
+    !sourceNumericLiteralIsExactlyRepresentableAsBinaryFloat(literal.numeric.token, carrier.name))
+    ? { kind: "rejected", reason: "An inferred numeric union requires an exact canonical carrier for every authored integer literal." }
     : unavailable;
   if (!isRustNumericCarrier(sourceElement)) return unresolved;
+  const fixedIntegers = peers.filter(peer => isRustIntegerCarrier(peer.carrier));
+  const incompatibleIntegers = fixedIntegers.some(left => fixedIntegers.some(right =>
+    !numericConversion(left.carrier, right.carrier, "inferred-storage") &&
+    !numericConversion(right.carrier, left.carrier, "inferred-storage")));
+  const actualFloating = constraints.some(({ carrier, literal }) => isRustNumericCarrier(carrier) &&
+    (carrier.name === "float32" || carrier.name === "float64") && !flexibleInteger(literal));
   const candidates: TargetTypeRef[] = [];
   for (const contribution of constraints) {
-    const { carrier, literal } = contribution;
-    if (!isRustNumericCarrier(carrier) || literal?.integer !== undefined &&
-      peers.some(peer => isRustIntegerCarrier(peer.carrier) && literalFits(literal, peer.carrier))) {
+    const { carrier } = contribution;
+    if (!isRustNumericCarrier(carrier) || incompatibleIntegers && !actualFloating &&
+      (carrier.name === "float32" || carrier.name === "float64")) {
       continue;
     }
     if (!candidates.some(candidate => rustTargetTypeRefEquals(candidate, carrier))) candidates.push(carrier);
@@ -63,15 +71,26 @@ export function selectRustInferredNumericArrayElement(
   const least = applicable.filter(candidate =>
     applicable.every(other => numericConversion(candidate, other, "inferred-storage")));
   if (least.length === 1) return { kind: "resolved", carrier: least[0]! };
-  return unresolved;
+  return unresolved.kind === "rejected" ? unresolved : peers.some(peer =>
+    peer.carrier.kind === "source-primitive" && peer.carrier.name === "float32")
+    ? { kind: "rejected", reason: "Array literal requires a lossless native element carrier for every fixed floating and numeric contribution." }
+    : unresolved;
+}
+
+function flexibleInteger(literal: SourceLiteralValue | undefined): boolean {
+  if (literal?.numeric?.kind !== "authored") return literal?.numeric === undefined && literal?.integer !== undefined;
+  const { token } = literal.numeric;
+  return !(token.negative && token.coefficient === 0n) &&
+    (token.exponent >= 0n || token.coefficient === 0n || literal.integer !== undefined);
 }
 
 function literalFits(literal: SourceLiteralValue, target: TargetTypeRef): boolean {
   if (!isRustNumericCarrier(target)) return false;
   if (isRustIntegerCarrier(target) && literal.numeric?.kind === "authored" &&
     literal.numeric.token.negative && literal.numeric.token.coefficient === 0n) return false;
-  if (target.name === "float32" && literal.numeric?.kind === "authored" &&
-    !sourceNumericLiteralIsExactlyRepresentableAsBinaryFloat(literal.numeric.token, "float32")) return false;
+  if ((target.name === "float32" || target.name === "float64" && flexibleInteger(literal)) &&
+    literal.numeric?.kind === "authored" &&
+    !sourceNumericLiteralIsExactlyRepresentableAsBinaryFloat(literal.numeric.token, target.name)) return false;
   return selectedSourceLiteralIsRepresentable(literal, target.name);
 }
 

@@ -97,3 +97,56 @@ test("C130 integer physical unions are unavailable rather than rejected or rescu
       "the existing physical-union owner, not numeric defaulting, receives the complete contribution set");
   }
 });
+
+test("C130 canonical integer tokens never erase incompatible fixed peers or silently round a physical arm", () => {
+  const positions = literal => [[fixed("int32"), fixed("uint32"), literal], [fixed("int32"), literal, fixed("uint32")],
+    [literal, fixed("int32"), fixed("uint32")], [fixed("uint32"), fixed("int32"), literal],
+    [fixed("uint32"), literal, fixed("int32")], [literal, fixed("uint32"), fixed("int32")]];
+  for (const value of [1n, 2147483648n, 4294967296n, 9007199254740992n, 9007199254740994n, 1n << 200n]) {
+    const literal = authored(value, 0n, value.toString().length <= 40 ? value : undefined);
+    for (const rows of positions(literal)) {
+      assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), rows, []).kind, "unavailable",
+        `${value}: every position retains the exact integer peers and canonical third arm`);
+      assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), [...rows, literal], []).kind, "unavailable",
+        `${value}: repeated literals do not make their default a real floating requirement`);
+    }
+  }
+  for (const literal of [authored(9007199254740993n, 0n, 9007199254740993n), authored(1n, 100n)]) {
+    for (const rows of [...positions(literal), [fixed("int32"), literal], [literal, fixed("int32")],
+      [fixed("int32"), fixed("uint32"), literal, authored(5n, -1n)],
+      [fixed("int32"), fixed("uint32"), literal, fixed("float64")]]) {
+      const selection = selectRustInferredNumericArrayElement(primitive("float64"), rows, []);
+      assert.equal(selection.kind === "rejected" && selection.reason ===
+        "An inferred numeric union requires an exact canonical carrier for every authored integer literal.", true,
+      "no failed exact inference escapes through a rounded physical arm, real fraction or computed float");
+      const explicit = selectRustInferredNumericArrayElement(primitive("float64"), rows, [primitive("float64")]);
+      assert.equal(explicit.kind === "resolved" && explicit.carrier.name === "float64", true,
+        "an actual native f64 destination keeps ordinary native rounding, not inferred exactness");
+    }
+  }
+  const wide = authored(9007199254740993n, 0n, 9007199254740993n);
+  const retained = selectRustInferredNumericArrayElement(primitive("float64"), [fixed("int64"), wide], []);
+  assert.equal(retained.kind === "resolved" && retained.carrier.name === "int64", true,
+    "native int64 exactness never becomes an artificial 53-bit admission restriction");
+  const negativeZero = authored(0n, 0n, 0n);
+  negativeZero.literal.numeric.token.negative = true;
+  for (const literal of [authored(5n, -1n), authored(1n, -1n), negativeZero, fixed("float64")]) {
+    for (const rows of positions(literal)) {
+      const selection = selectRustInferredNumericArrayElement(primitive("float64"), rows, []);
+      assert.equal(selection.kind === "resolved" && selection.carrier.name === "float64", true,
+        "a real fraction, signed zero or fixed float genuinely requires the existing f64 carrier");
+    }
+  }
+});
+
+test("C130 genuine float32 width unions stay with their existing checked union owner", () => {
+  for (const name of ["int64", "uint64"]) {
+    for (const rows of [[fixed("float32"), fixed(name)], [fixed(name), fixed("float32")]]) {
+      const genuine = rustSourceUnionTargetType("/src/index.ts", "NativeWidths", [], "generated", {
+        kind: "physical", types: rows.map(row => row.carrier),
+      });
+      assert.equal(selectRustInferredNumericArrayElement(genuine, rows, []).kind, "unavailable",
+        `${name}: an already-distinct checked union is not a new collapsed-number float/int rescue`);
+    }
+  }
+});

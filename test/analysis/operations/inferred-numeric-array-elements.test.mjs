@@ -165,6 +165,80 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: bool
     }
   });
 
+  test(`C130 ${lane}: canonical integer tokens preserve all peer arms in every literal position`, () => {
+    for (const literal of ["2147483648", "4294967296", "9007199254740992", "9007199254740994", "-4294967297",
+      (1n << 200n).toString(), `0x${(1n << 200n).toString(16)}`]) {
+      for (const expression of [`[signed, unsigned, ${literal}]`, `[signed, ${literal}, unsigned]`,
+        `[${literal}, signed, unsigned]`, `[unsigned, signed, ${literal}]`, `[unsigned, ${literal}, signed]`,
+        `[${literal}, unsigned, signed]`, `[signed, ${literal}, unsigned, ${literal}]`]) {
+        const { program } = analyzeRust({ surfaces, files: { "index.ts": header +
+          `export function inspect(signed: int32, unsigned: uint32) { const values = ${expression}; return values; }` } });
+        const fact = program.records.targetOperation.get(bindings(program).get("values"));
+        assert.equal(fact?.kind === "array-literal", true, `${expression}: complete native aggregate admitted`);
+        const leaves = rustUnionLeaves(fact.elementCarrier, program.typeDefinitions);
+        assert.equal(leaves?.length, 3, `${expression}: integer defaults cannot replace either fixed peer`);
+        for (const name of ["int32", "uint32", "float64"]) assert.equal(leaves.some(leaf =>
+          rustTargetTypeRefEquals(leaf.carrier, rustSourcePrimitiveTargetType(name))), true,
+        `${expression}: exact ${name} physical payload retained`);
+        assert.equal(fact.contributions.length, expression.split(",").length, `${expression}: no value or repetition disappears`);
+      }
+    }
+  });
+
+  test(`C130 ${lane}: canonical inexact integer arms fail before sealing without restricting explicit native floats`, () => {
+    for (const literal of ["9007199254740993", "-9007199254740993", "1e100"]) {
+      for (const expression of [`[signed, unsigned, ${literal}]`, `[signed, ${literal}, unsigned]`,
+        `[${literal}, signed, unsigned]`, `[unsigned, signed, ${literal}]`, `[unsigned, ${literal}, signed]`,
+        `[${literal}, unsigned, signed]`, `[signed, ${literal}]`, `[${literal}, signed]`,
+        `[signed, unsigned, ${literal}, 0.5]`, `[signed, unsigned, ${literal}, computed]`]) {
+        const files = { "index.ts": header +
+          `export function inspect(signed: int32, unsigned: uint32, computed: number) { const values = ${expression}; return values; }` };
+        const { result, source } = compileRust({ surfaces, files });
+        const issues = result.diagnostics.filter(issue => issue.category === "error");
+        assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+          `${expression}: invalid inference publishes no program, plan or output`);
+        assert.equal(issues.length, 1, `${expression}: one canonical inference refusal`);
+        assert.equal(issues[0].code, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", "the existing numeric aggregate owner decides");
+        assert.equal(issues[0].message,
+          "An inferred numeric union requires an exact canonical carrier for every authored integer literal.");
+        assert.deepEqual(issues[0].evidence, [], "no invented precision cap or target metadata");
+        const range = source.ast.authoredRange(issues[0].sourceNode);
+        assert.equal(range.kind === "authored" && range.start === files["index.ts"].indexOf(expression) &&
+          range.end === range.start + expression.length, true, `${expression}: the exact original aggregate span`);
+      }
+    }
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
+export function inspect(signed: int32, unsigned: uint32, wide: int64, computed: number): void {
+  const explicit: number[] = [signed, unsigned, 9007199254740993];
+  const wideLiteral = [wide, 9007199254740993];
+  const signedZero = [signed, unsigned, -0];
+  const realFraction = [signed, unsigned, 0.1];
+  const actualFloating = [signed, unsigned, computed];
+}
+` } });
+    const initializers = bindings(program);
+    for (const name of ["explicit", "signedZero", "realFraction", "actualFloating"]) assertArray(program, initializers, name, "float64");
+    assertArray(program, initializers, "wideLiteral", "int64");
+  });
+
+  test(`C130 ${lane}: genuine checked float32 and int64 unions retain their baseline native admission`, () => {
+    for (const expression of ["[narrow, wide]", "[wide, narrow]"]) {
+      const { program, source } = analyzeRust({ surfaces, files: { "index.ts": header +
+        `export function inspect(narrow: float32, wide: int64) { const values = ${expression}; return values; }` } });
+      const initializer = bindings(program).get("values");
+      const semantics = createTargetSourceProgram(source).semantics.forNode(initializer);
+      const sourceArray = semantics.types.expressionType(initializer);
+      const sourceElement = semantics.types.typeArguments(sourceArray)[0];
+      assert.equal(semantics.types.isUnion(sourceElement), true, `${expression}: actual checked members are already distinct`);
+      const fact = program.records.targetOperation.get(initializer);
+      assert.equal(fact?.kind === "array-literal", true, `${expression}: preserve the pinned accepted aggregate`);
+      const leaves = rustUnionLeaves(fact.elementCarrier, program.typeDefinitions);
+      assert.equal(leaves?.length, 2, `${expression}: keep both original native widths`);
+      for (const name of ["float32", "int64"]) assert.equal(leaves.some(leaf =>
+        rustTargetTypeRefEquals(leaf.carrier, rustSourcePrimitiveTargetType(name))), true, `${expression}: exact ${name} payload`);
+    }
+  });
+
   test(`C130 ${lane}: fixed float32 inference is lossless across native integer domains`, () => {
     for (const name of ["int32", "uint32"]) {
       for (const expression of ["[narrow, integer]", "[integer, narrow]"]) {
@@ -232,6 +306,21 @@ export function nested(): number[] {
       "a directly returned array consumes the same native async output contract as an aliased return");
   });
 
+  test(`C130 ${lane}: selected arguments and aliases retain actual unseeded native array destinations`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
+type NativeValues = float32[];
+function selected(values: NativeValues): NativeValues { return values; }
+export function inspect(): NativeValues {
+  const argumentValues = [1, 2];
+  return selected(argumentValues);
+}
+export function alias(): NativeValues { const aliasValues = [1, 2]; return aliasValues; }
+` } });
+    const initializers = bindings(program);
+    assertArray(program, initializers, "argumentValues", "float32");
+    assertArray(program, initializers, "aliasValues", "float32");
+  });
+
   test(`C130 ${lane}: nonnumeric subtype reduction preserves final native admission`, () => {
     for (const declarations of [
       "class Base { value: number = 1; } class Derived extends Base { extra: number = 2; }",
@@ -243,14 +332,9 @@ export function nested(): number[] {
       const { result } = compileRust({ surfaces, files: { "index.ts": header + declarations +
         `export function inspect(${parameters}) { const values = ${body}; return values; }` } });
       const issues = result.diagnostics.filter(issue => issue.category === "error");
-      assert.equal(issues.every(issue => issue.code !== "RUST_MISSING_RUNTIME_CARRIER_FACT" &&
-        !/missing.*(?:carrier|fact)|internal invariant/iu.test(issue.message)), true,
-      `${classes ? "class" : "interface"}: subtype reduction never silently loses the aggregate carrier`);
-      if (issues.length !== 0) {
-        assert.equal(result.artifacts.length, 0, "a final native admission refusal publishes no output");
-        assert.equal(issues.every(issue => ["RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", "RUST_INITIALIZER_CARRIER_MISMATCH",
-          "RUST_RETURN_CARRIER_MISMATCH"].includes(issue.code)), true, "only the existing final conversion owners may refuse");
-      } else assert.equal(result.artifacts.length > 0, true, "a natively representable subtype aggregate keeps its output");
+      assert.equal(issues.length, 0, `${classes ? "class" : "interface"}: preserve the pinned native admission, never substitute another refusal`);
+      assert.equal(result.program !== undefined && result.plan !== undefined, true, "the admitted subtype program is planned");
+      assert.equal(result.artifacts.length, 3, "the complete accepted native project remains emitted");
     }
   });
 
