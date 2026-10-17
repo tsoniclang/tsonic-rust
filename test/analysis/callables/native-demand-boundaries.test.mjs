@@ -111,6 +111,47 @@ export function escaped(flag: boolean): (count: number) => number {
 }
 
 for (const [surface, selected] of surfaces) {
+  for (const active of [false, true]) {
+    test(`ambient runtime reads require implementation only in an actual native body (${surface}, ${active ? "active" : "dormant"})`, () => {
+      const { source, result } = compileRust({ surfaces: selected, files: { "index.ts": `
+declare const external: number;
+export function run(): number {
+  function hidden(): number { return external; }
+  return ${active ? "hidden()" : "42"};
+}` } });
+      if (active) {
+        assert.equal(result.diagnostics.filter(issue => issue.code === "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING").length, 1,
+          "the actual native reference retains its one precise implementation refusal");
+        assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+          "an unsupported actual native read publishes no program, plan or artifact");
+      } else {
+        assert.equal(result.diagnostics.length, 0, "an erased body adds no native implementation obligation");
+        assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+          "the remaining native program is published");
+        const ast = result.program.source.ast;
+        const nodes = [...result.program.sourceFiles];
+        let hidden;
+        let external;
+        while (nodes.length !== 0) {
+          const node = nodes.pop();
+          const name = ast.name(node);
+          if (name !== undefined && ast.is.IsIdentifier(name)) {
+            if (ast.is.IsFunctionDeclaration(node) && ast.text(name) === "hidden") hidden = node;
+            if (ast.is.IsVariableDeclaration(node) && ast.text(name) === "external") external = node;
+          }
+          ast.forEachChild(node, child => { if (child !== undefined) nodes.push(child); });
+        }
+        assert.equal(hidden !== undefined && external !== undefined, true, "both original source declarations remain available");
+        assert.equal(result.program.records.nativeParticipation.get(hidden), "erased", "the canonical owner selects the dormant body");
+        assert.equal(result.program.records.typeOnlyDeclaration.get(external)?.reason, "ambient",
+          "ambient source metadata is preserved without a native value implementation");
+        assert.equal(createTargetSourceProgram(source).navigation.declarationUses(external).length, 1,
+          "the original checked source reference is not filtered out");
+        assert.equal(/\bfn hidden\b|\bstatic external\b/u.test(rustSourceText(result)), false,
+          "neither the erased body nor an invented ambient runtime binding is emitted");
+      }
+    });
+  }
   for (const [kind, prelude, body] of [
     ["object", "", 'function unused(key: string): number { const value = { [key]: 7 }; return 1; }'],
     ["struct", 'import { field, struct } from "@tsonic/core/lang.js"; function key(): "value" { return "value"; }',

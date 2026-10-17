@@ -221,7 +221,7 @@ test("an unavailable captured-field query stays retryable until its receiver evi
     "an earlier unavailable query must not be cached as completed");
 });
 
-function ambientFixture(builder, { malformed = false, runtime = false } = {}) {
+function ambientFixture(builder, { malformed = false, runtime = false, nativeReference = true } = {}) {
   const file = { kind: "KindSourceFile" };
   const statement = { kind: "KindVariableStatement", parent: file };
   const declaration = { kind: "KindVariableDeclaration", parent: statement };
@@ -233,6 +233,7 @@ function ambientFixture(builder, { malformed = false, runtime = false } = {}) {
       IsVariableDeclarationList: node => node === list, IsSourceFile: node => node === file },
     as: { AsVariableStatement: () => ({ DeclarationList: list }), AsVariableDeclarationList: () => list } };
   const walk = { context: { requiredRecords: [], ast, records: builder, diagnostics: [], typeFamilies: { families: () => [] },
+    isNativeNode: node => nativeReference && node === reference,
     source: { navigation: { declarationUses(subject) {
       assert.equal(subject === declaration, true);
       events.push(builder.typeOnlyDeclaration.get(statement)?.reason);
@@ -278,6 +279,21 @@ test("source-ready ambient statement admission precedes native binding work with
     "late conditional/interface finalization does not replace the source-ready fact");
   assert.equal(selected.events.length, 1, "late finalization never repeats the ambient source-use decision");
   assert.equal(selected.walk.context.diagnostics.length, 1, "late family readiness never duplicates the original diagnostic");
+});
+
+test("ambient use validation reads the same exact native reference admission before requiring an implementation", () => {
+  for (const nativeReference of [false, true]) {
+    const builder = createRustProgramRecordBuilder();
+    const selected = ambientFixture(builder, { runtime: true, nativeReference });
+    builder.typeOnlyDeclarations.finalize(selected.walk, [selected.file]);
+    assert.equal(selected.walk.context.diagnostics.length, nativeReference ? 1 : 0,
+      "only the actual admitted native read has an implementation obligation");
+    assert.equal(builder.typeOnlyDeclaration.get(selected.statement)?.reason, "ambient", "source statement metadata remains whole");
+    assert.equal(builder.typeOnlyDeclaration.get(selected.declaration)?.reason, "ambient", "source declaration metadata remains whole");
+    assert.equal(selected.events.length, 1, "the original source-use inventory is still visited exactly once");
+    if (nativeReference) assert.equal(selected.walk.context.diagnostics[0].code, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
+      "the active native read retains the original precise diagnostic");
+  }
 });
 
 test("malformed ambient declarations retain the original early statement admission and invariant refusal", () => {
