@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Expression } from "@tsonic/target-api/source";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { selectRustOperationReadUses } from "../../../dist/policy/ownership/read-use.js";
@@ -95,6 +95,61 @@ function observed(receiver: Native, value: Native, index: number): void {
     for (const argument of argumentsList.slice(indexed === undefined ? 0 : 1)) {
       assert.equal(uses.has(argument), false, "a value-consumed target argument is not changed to a borrow");
     }
+  }
+});
+
+test("runtime setters add only evaluation-only terminal uses, not native receiver borrows", async () => {
+  const source = createTargetSourceProgram(await checkedSource("ownership-runtime-set-native-aliases", {
+    "src/index.ts": `
+interface Fields { left: number; right: number; }
+function index(values: number[]): number { values[0] = 1; return 0; }
+function value(values: number[]): number { values[1] = 2; return 3; }
+function assign(values: number[], fields: Fields, first: number, second: number): void {
+  values[first] = values[second];
+  fields.left = fields.right;
+  values[index(values)] = value(values);
+}
+`,
+  }));
+  const number = { kind: "source-primitive", name: "float64" };
+  const receiverCarrier = { kind: "target-named", id: "fixture.NativeReceiver" };
+  const statements = [];
+  const visit = node => {
+    if (source.ast.is.IsBinaryExpression(node)) statements.push(node);
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  source.sourceFiles.forEach(visit);
+  assert.equal(statements.length, 5, "plain and aliasing field/index writes all participate");
+  for (const node of statements) {
+    const binary = source.ast.as.AsBinaryExpression(node);
+    const indexed = source.ast.is.IsElementAccessExpression(binary.Left)
+      ? source.ast.as.AsElementAccessExpression(binary.Left) : undefined;
+    const receiver = Node_Expression(source.ast, binary.Left);
+    const argumentsList = indexed === undefined ? [binary.Right] : [indexed.ArgumentExpression, binary.Right];
+    const sourceArguments = argumentsList.map((_, sourceIndex) => ({ sourceIndex, carrier: number, disposition: "runtime" }));
+    const nativeInputs = [
+      { source: { kind: "receiver" }, mode: "mut-ref" },
+      ...sourceArguments.map(argument => ({ source: { kind: "argument", sourceIndex: argument.sourceIndex }, mode: "ref" })),
+    ];
+    const operation = { kind: "runtime-set", abi: {
+      sourceReceiver: { kind: "receiver", disposition: "runtime", carrier: receiverCarrier }, sourceArguments,
+    } };
+    const select = selected => selectRustOperationReadUses(source.ast, selected.kind === "runtime-set" ? node : binary.Left, { operation: selected,
+      arguments: argumentsList, nativeInputs, argumentModes: [], address: undefined, location: undefined,
+      guard: undefined, callableMode: undefined });
+    assert.equal(select(operation).size, 0, "consumed runtime-set native inputs do not acquire new read uses");
+    const evaluationOnly = select({ ...operation, abi: { ...operation.abi,
+      sourceReceiver: { ...operation.abi.sourceReceiver, disposition: "evaluation-only" },
+    } });
+    assert.equal(evaluationOnly.size, 1, "only the admitted source-only receiver is selected");
+    const use = evaluationOnly.get(receiver);
+    assert.equal(use?.mode, "shared", "source-only receiver stays nonconsuming");
+    assert.equal(use.later.length, 0, "no borrow is held across RHS mutation");
+    assert.equal(use.stableAcrossEffects, false, "no alias stability is invented");
+    const provider = select({ ...operation, kind: "provider-operation" });
+    assert.equal(provider.get(receiver)?.mode, "mutable", "provider-operation native mode selection is unchanged");
+    assert.equal(provider.get(receiver)?.later === argumentsList, false, "the immutable use owns its argument list");
+    assert.equal(provider.get(receiver)?.later.length, argumentsList.length, "existing provider borrow scope is retained");
   }
 });
 

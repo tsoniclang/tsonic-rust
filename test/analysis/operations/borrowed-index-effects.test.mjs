@@ -55,6 +55,8 @@ test("provider purity includes the evaluation-only receiver of an actual pure na
     modules: [{ moduleSpecifier: "@r14/pure-receiver", providerModuleId: "r14.pure-receiver", exports: [
       { id: "Receiver", name: "Receiver", kind: "interface", members: [
         { id: "Receiver.empty", name: "empty", kind: "property", readonly: true, type: { kind: "boolean" } },
+        { id: "Receiver.check", name: "check", kind: "method", signatures: [{ id: "Receiver.check(boolean)",
+          parameters: [{ name: "value", type: { kind: "boolean" } }], returnType: { kind: "boolean" } }] },
       ] },
       { id: "open", name: "open", kind: "function", signatures: [{ id: "open()", parameters: [], returnType: reference }] },
     ] }], types: [{ exportId: "Receiver", targetCarrier: carrier }], carrierPaths: { "r14.PureReceiver": "String" }, crates: [],
@@ -62,15 +64,21 @@ test("provider purity includes the evaluation-only receiver of an actual pure na
       { exportId: "open", operationKind: "method", target: { form: "call", path: "String::new" }, resultCarrier: carrier },
       { exportId: "Receiver", memberId: "Receiver.empty", operationKind: "property",
         target: { form: "call", path: "bool::default" }, resultCarrier: nativeBool, evaluation: "pure" },
+      { exportId: "Receiver", memberId: "Receiver.check", operationKind: "method",
+        target: { form: "call", path: "std::hint::black_box", argModes: ["value"] },
+        parameterCarriers: [nativeBool], resultCarrier: nativeBool, evaluation: "pure" },
     ] });
   const { source, program } = analyzeRust({ surfaces: [], packages: [provider], files: { "index.ts": `
     import { open, type Receiver } from "@r14/pure-receiver";
     function selected(): Receiver { return open(); }
     export function observed(): boolean { return selected().empty; }
+    export function observedCall(value: boolean): boolean { return selected().check(value); }
   ` } });
   let property;
+  let call;
   const visit = node => {
-    if (source.ast.is.IsPropertyAccessExpression(node)) property = node;
+    if (source.ast.is.IsPropertyAccessExpression(node) && source.ast.text(source.ast.name(node)) === "empty") property = node;
+    if (source.ast.is.IsCallExpression(node) && program.records.targetOperation.get(node)?.abi?.sourceArguments.length === 1) call = node;
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   program.sourceFiles.forEach(visit);
@@ -85,4 +93,14 @@ test("provider purity includes the evaluation-only receiver of an actual pure na
   assert.equal(inputs[0] === receiver, true, "the effectful checked receiver identity is retained");
   assert.equal(program.sourceNavigation.expressionEffects(receiver).invokes, true,
     "the retained receiver carries the source invocation effect");
+  assert.equal(call !== undefined, true, "the checked method has one actual native-used argument");
+  const called = program.records.targetOperation.get(call);
+  assert.equal(called.abi.sourceReceiver.disposition, "evaluation-only");
+  assert.equal(called.abi.sourceArguments[0].disposition, "runtime");
+  const calledReceiver = Node_Expression(source.ast, Node_Expression(source.ast, call));
+  const argument = source.ast.arguments(call)[0];
+  const callInputs = rustBorrowPureProviderInputs(call, source.ast, program.records);
+  assert.equal(callInputs?.length, 2, "purity includes the runtime source receiver and argument");
+  assert.equal(callInputs[0] === calledReceiver, true, "receiver identity comes first");
+  assert.equal(callInputs[1] === argument, true, "the actual native-used argument follows");
 });

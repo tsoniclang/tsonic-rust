@@ -224,7 +224,14 @@ export function planRustProviderEvaluationScope(
     if (slot.evaluationOnly !== undefined) {
       const discarded = planRustDiscardedValue(slot.node, context);
       if (discarded === undefined) return { kind: "failed" };
-      steps.push({ kind: "effect", value: discarded.expression, discard: discarded.discard });
+      const ownership = context.input.program.ownership.reads.get(slot.node);
+      const borrowed = ownership?.readsStorage === true || ownership?.sharedReference === true;
+      if (slot.evaluationOnly === "value" && discarded.discard === "value" && !borrowed) {
+        const name = allocateRustSyntheticName(syntheticNames, `_operation_evaluation_${index}`);
+        steps.push({ kind: "binding", name, value: discarded.expression });
+      } else {
+        steps.push({ kind: "effect", value: discarded.expression, discard: discarded.discard });
+      }
       continue;
     }
     if (!stabilizationKeys.has(slot.key)) {
