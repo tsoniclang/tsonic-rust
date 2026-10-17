@@ -8,6 +8,29 @@ import { closeRustRetainedParameter, rustHasOpenOwnedStorage, rustRetainedEnviro
 import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustStructuralObjectTargetType, rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustGenericCallableTargetType } from "../../../dist/target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableTargetType } from "../../../dist/target-model/types/carriers/frame-callables.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+
+test("complete source capture carriers preserve the canonical generic and frame environment normalization", () => {
+  const captured = { kind: "type-parameter", identity: "captured:value", name: "Captured" };
+  const nested = { kind: "type-parameter", identity: "captured:nested", name: "Nested" };
+  const parameter = { kind: "type-parameter", identity: "method:value", name: "Value" };
+  const region = { kind: "parameter", identity: "source:Region", name: "Region" };
+  const carriers = [{ kind: "reference", mutable: false, referent: captured, lifetime: region },
+    { kind: "tuple", elements: [nested, captured] }];
+  const reduced = [captured, nested];
+  const origin = { fileName: "/src/index.ts", declarationIdentity: "source:retained-method" };
+  const generic = rustGenericCallableTargetType([parameter], [parameter], parameter, origin, carriers);
+  const previousGeneric = rustGenericCallableTargetType([parameter], [parameter], parameter, origin, reduced);
+  assert.equal(generic !== undefined && rustTargetTypeRefEquals(generic, previousGeneric), true,
+    "the existing generic signature owner retains exactly the same ordered free parameters");
+  const owner = { kind: "lexical", origin };
+  const frame = rustFrameCallableTargetType([parameter], parameter, owner, carriers);
+  const previousFrame = rustFrameCallableTargetType([parameter], parameter, owner, reduced);
+  assert.equal(frame !== undefined && rustTargetTypeRefEquals(frame, previousFrame), true,
+    "the existing frame signature owner performs the same normalization without losing source capture evidence early");
+});
 
 function fixture(text, configure = input => input, maximumSteps) {
   const checked = checkRustSession(createRustSession({ surfaces: ["js"], files: { "index.ts": text } }));
@@ -41,6 +64,79 @@ test("suspended retention uses checked nested-function capture evidence and excl
   assert.equal(selected.environment.parameters[0] === parameters[0], true);
   assert.equal(queries.suspendedParametersFor(owner)[0] === parameters[0], true);
   assert.equal(Object.isFrozen(selected.environment.parameters), true);
+});
+
+for (const [name, body] of [
+  ["async method", "return { async read(): Promise<Value> { return value; } };"],
+  ["native method", "return { read(): Value { return value; } };"],
+  ["stored callback", "return { read: (): Value => value };"],
+  ["copied method", "const original = { read(): Value { return value; } }; return { label: 'copy', ...original };"],
+  ["nested method", "return { nested: { read(): Value { return value; } } };"],
+  ["optional method", "return selected ? { read(): Value { return value; } } : {};"],
+  ["tuple callback", "return [(): Value => value] as const;"],
+  ["array callback", "return [(): Value => value];"],
+]) {
+  test(`returned ${name} retains its actual source capture before signature selection`, () => {
+    const { source, queries, declarations } = fixture(`
+export function make<Value>(value: Value, unused: Value, selected: boolean) { ${body} }
+`);
+    const owner = declarations.get("make");
+    const parameters = source.ast.parameters(owner);
+    const selection = queries.environmentFor(owner);
+    assert.equal(selection.kind, "selected", `${name}: a returned stored capture requires its environment`);
+    assert.equal(selection.environment.parameters.length, 1, `${name}: no unrelated or control-only input is retained`);
+    assert.equal(selection.environment.parameters[0] === parameters[0], true, `${name}: the original captured input owns the lifetime`);
+    assert.equal(selection.environment.lifetime.kind, "parameter", `${name}: no static lifetime is invented`);
+    assert.equal(queries.environmentFor(owner) === selection, true, `${name}: one immutable selection is reused`);
+  });
+}
+
+test("returned method captures preserve the producer activation through a source factory", () => {
+  const { source, queries, declarations } = fixture(`
+function wrap<Value>(captured: Value) { return { read(): Value { return captured; } }; }
+export function make<Value>(value: Value, unused: Value) { return wrap(value); }
+`);
+  for (const name of ["wrap", "make"]) {
+    const owner = declarations.get(name);
+    const selection = queries.environmentFor(owner);
+    assert.equal(selection.kind, "selected", `${name}: the exact returned source construction remains retained`);
+    assert.equal(selection.environment.parameters.length, 1, `${name}: one actual activation-owned input`);
+    assert.equal(selection.environment.parameters[0] === source.ast.parameters(owner)[0], true,
+      `${name}: the factory's formal is rebound to the caller's actual input`);
+  }
+});
+
+test("returned source method traversal stays bounded and never invokes an accessor", () => {
+  const source = `export function make<Value>(value: Value) { return { read(): Value { return value; } }; }`;
+  const bounded = fixture(source, undefined, 2);
+  assert.equal(bounded.queries.environmentFor(bounded.declarations.get("make")).kind, "unresolved",
+    "a missing finite component proof never becomes static");
+  const accessor = fixture(`export function make(unused: number) { return { get value(): number { return 1; } }; }`, input => ({
+    ...input, sourceStorage: { ...input.sourceStorage, subject(node, kind, projection) {
+      assert.equal(projection?.some(component => component.declaration !== undefined &&
+        input.source.ast.is.IsGetAccessorDeclaration(component.declaration)) === true, false,
+      "source retention never manufactures an accessor invocation");
+      return input.sourceStorage.subject(node, kind, projection);
+    } },
+  }));
+  assert.equal(accessor.queries.environmentFor(accessor.declarations.get("make")).kind, "none",
+    "an unused input is not retained by evaluating a getter");
+});
+
+test("retention respects the canonical opaque invocation leaf instead of traversing its advertised native members", () => {
+  const current = fixture(`
+interface NativeResult { next: NativeResult; read(): number; }
+declare function native(value: number): NativeResult;
+export function make(unused: number): NativeResult { return native(1); }
+`, input => ({ ...input, sourceStorage: { ...input.sourceStorage, subject(node, kind, projection) {
+    assert.equal(projection?.length > 0 && input.source.ast.is.IsCallExpression(node), false,
+      "an opaque native result is not a source record allocation");
+    return input.sourceStorage.subject(node, kind, projection);
+  } } }));
+  assert.equal(current.sourceStorage.boundaries.some(boundary => boundary.kind === "opaque-invocation"), true,
+    "the actual source transport declares the native result opaque");
+  assert.equal(current.queries.environmentFor(current.declarations.get("make")).kind, "none",
+    "the unused source input is not retained through an invented native field walk");
 });
 
 test("retention distinguishes type-only parameter uses from evaluated default and body uses", () => {

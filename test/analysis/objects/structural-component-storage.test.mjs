@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createRustStructuralShapePlan } from "../../../dist/analysis/objects/structural-shape-plan.js";
+import { createRustStructuralShapePlan, createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
-import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 
 test("structural storage unifies exact component contracts without erasing other differences", () => {
   const primitive = name => ({ kind: "source-primitive", name });
@@ -145,4 +145,44 @@ test("structural instantiation diamonds require one ultimate template in either 
   assert.throws(() => createRustStructuralShapePlan(shapes, [], () => "source", [], [
     ...edges, { template: instance, instance: template },
   ]), /cyclic storage templates/u);
+});
+
+test("physical method installation completes canonical and already indexed borrowed instances once", () => {
+  const parameter = { kind: "type-parameter", identity: "Value", name: "Value" };
+  const integer = { kind: "source-primitive", name: "int32" };
+  const borrowedLifetime = { kind: "parameter", identity: "borrowed", name: "borrowed" };
+  const carrier = (value, lifetime) => rustStructuralObjectTargetType("/source.ts", [{
+    sourceName: "read", type: rustCallableTargetType([], value, lifetime), presence: "required", readonly: false, method: true,
+  }]);
+  const template = carrier(parameter, { kind: "placeholder" });
+  const owned = carrier(integer, { kind: "static" });
+  const borrowed = carrier(parameter, borrowedLifetime);
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([template, owned, borrowed].map(carrier => ({ carrier })), [], () => "source", [], [
+    { template, instance: owned }, { template, instance: borrowed },
+  ]);
+  builder.initializeUnions([]);
+  const before = builder.definitionForCarrier(owned);
+  const definition = builder.definitions[0];
+  const logical = definition.fields[0].carrier;
+  const protocol = rustCallableProtocol(definition.fields[0].methodStorageCarrier);
+  const infallible = { kind: "target-named", id: "rust.core.Infallible" };
+  builder.finalizeMethodStorage(new Map([[definition, new Map([[0,
+    rustCallableTargetType(protocol.parameters, protocol.result, protocol.lifetime, infallible),
+  ]])]]));
+  const after = builder.seal();
+  assert.equal(after.definitions[0].fields[0].carrier === logical, true, "logical method contract remains unchanged");
+  assert.equal(after.definitionForCarrier(owned) === before, false, "the indexed instance is replaced with the completed definition");
+  for (const [source, expectedResult, expectedLifetime] of [
+    [owned, integer, { kind: "static" }], [borrowed, parameter, borrowedLifetime],
+  ]) {
+    const field = after.field(source, 0);
+    const selected = rustCallableProtocol(field.methodStorageCarrier);
+    assert.deepEqual(selected.result, expectedResult, "the physical result is forward substituted");
+    assert.deepEqual(selected.lifetime, expectedLifetime, "the destination lifetime is forward substituted");
+    assert.deepEqual(selected.error, infallible, "the completed invocation error is selected before publication");
+    assert.equal(Object.isFrozen(field), true, "completed fields are immutable");
+    assert.equal(after.field(source, 0) === field, true, "completed indexed lookups have stable identity");
+  }
+  assert.throws(() => builder.finalizeMethodStorage(new Map()), /exactly once/u);
 });

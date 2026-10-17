@@ -4,7 +4,7 @@ import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/
 import type { RustFactWalk } from "../program/walk.js";
 
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustHasOpenOwnedStorage, rustRetainedEnvironment } from "../../policy/ownership/retained-environments.js";
+import { rustHasOpenOwnedStorage, rustRetainedEnvironment, rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
 import { rustEnclosingStorageContract, selectRustSuspendedStorageLifetime } from "../../policy/ownership/suspended-storage.js";
 import { rustCallScopedElisionLifetime, rustLifetimeKey, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -110,19 +110,4 @@ export function rustRetainedCallLifetimes(
 
 export function rustRetainedCallResult(result: TargetTypeRef, lifetimes: ReadonlyMap<string, RustLifetimeRef>): TargetTypeRef {
   return substituteRustTargetGenerics(result, new Map(), lifetimes);
-}
-
-export function rustRetainedValueLifetime(
-  declaration: Node, captures: readonly TargetTypeRef[], walk: RustFactWalk,
-): RustLifetimeRef | undefined {
-  const { context } = walk;
-  if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime(captures,
-    rustEnclosingStorageContract(declaration, context.ast, context.sourceLifetimes));
-  const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);
-  const selected = owner === undefined ? { kind: "none" as const } : rustRetainedEnvironment(owner,
-    context.ast.parameters(owner).map(parameter => context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), context);
-  if (selected.kind === "unresolved") return undefined;
-  if (selected.kind === "selected") return selected.environment.lifetime;
-  const identity = sourceNodeIdentity(context.ast, declaration);
-  return identity === undefined ? undefined : rustCallScopedElisionLifetime(identity, "owned-environment");
 }

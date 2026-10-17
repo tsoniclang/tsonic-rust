@@ -51,6 +51,7 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
 import type { RustFrameCallablePlan } from "../callables/frame-values.js";
@@ -713,16 +714,23 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       if (rustFrameCallableValue(callableCarrier) !== undefined && frameEntry === undefined) {
         return "A frame call has no exact sealed implementation entry for its generic obligations.";
       }
+      const genericInvocation = genericDefinition === undefined ? undefined : records.genericCallableInvocation.get(node);
+      const genericPhysicalDefinition = genericInvocation === undefined ? undefined
+        : input.genericCallables.physical.definitionFor(genericInvocation.carrier);
+      if (genericDefinition !== undefined && genericPhysicalDefinition === undefined) {
+        return "A quantified call has no exact physical implementation family for its generic obligations.";
+      }
       const physical = nativeCall?.input.protocol.method ?? (frameEntry === undefined && genericDefinition === undefined && operation.target.form === "callable"
         ? rustCallableProtocol(callableCarrier) ?? rustNativeCallableProtocol(callableCarrier) : undefined);
       if (physical !== undefined && callableCarrier !== undefined) {
         const error = collectType(callableCarrier);
         if (error !== undefined) return error;
       }
-      const callees = frameEntry?.implementations ?? (genericDefinition === undefined
+      const callees = frameEntry?.implementations ?? (genericPhysicalDefinition === undefined
         ? physical !== undefined || selected?.sourceDeclaration === undefined ? [] : [{ declaration: input.implementationDeclaration(selected.sourceDeclaration) }]
-        : genericDefinition.implementations);
-      for (const implementation of callees) {
+        : genericPhysicalDefinition.members);
+      for (const selectedCallee of callees) {
+        const implementation = "implementation" in selectedCallee ? selectedCallee.implementation : selectedCallee;
         const selectedDeclaration = implementation.declaration;
         const calleeId = (operation.asyncBody === undefined ? input.idByDeclaration : input.bodyIdByDeclaration).get(selectedDeclaration);
         if ((genericDefinition !== undefined || frameEntry !== undefined) && calleeId === undefined) {
@@ -752,8 +760,21 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
             }
             const substitutions = new Map(callee.typeParameters.map((parameter, index) =>
               [parameter.identity, targetTypeArguments[index]!] as const));
-            for (const parameter of [...input.nativeCallables.inputsFor(selectedDeclaration),
-              ...input.nativeCallables.capturesFor(selectedDeclaration)]) {
+            const memberBindings = "implementation" in selectedCallee && genericPhysicalDefinition !== undefined && genericInvocation !== undefined
+              ? rustGenericCallableMemberInvocationBindings(genericPhysicalDefinition, selectedCallee, genericInvocation.carrier,
+                operation.targetGenericArguments ?? [], { ast, sourceLifetimes: input.sourceLifetimes,
+                  physical: input.genericCallables.physical }) : undefined;
+            if ("implementation" in selectedCallee && memberBindings === undefined) {
+              return "A quantified invocation lost its exact physical member capture bindings.";
+            }
+            const capturedInputs = input.nativeCallables.capturesFor(selectedDeclaration);
+            for (const parameter of [...input.nativeCallables.inputsFor(selectedDeclaration), ...capturedInputs]) {
+              if (memberBindings !== undefined && capturedInputs.includes(parameter)) {
+                const payload = memberBindings.types.get(parameter.implementation.identity);
+                if (payload === undefined) return "A quantified invocation lost a required physical native capture binding.";
+                substitutions.set(parameter.implementation.identity, payload);
+                continue;
+              }
               const physical = input.nativeStorage.invocationInputFor(parameter, node, declaration);
               const payload = physical.kind === "unresolved" ? undefined : rustPhysicalPayloadFor(parameter.carrier,
                 physical.carrier, rustOptionElementCarrier(parameter.carrier) ?? parameter.carrier, input.typeDefinitions);

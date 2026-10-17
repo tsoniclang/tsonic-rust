@@ -7,11 +7,30 @@ import { rustCallableProtocol, rustCallableTargetType, rustNativeCallableProtoco
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOwnedStorageChild, rustOwnedStorageChildren } from "../types/storage/owned-storage.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
+import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { rustCallScopedElisionLifetime, type RustLifetimeRef } from "../../target-model/lifetimes/index.js";
+import { rustEnclosingStorageContract, selectRustSuspendedStorageLifetime } from "./suspended-storage.js";
 
 export type RustRetainedEnvironmentSelection =
   | { readonly kind: "none" }
   | { readonly kind: "selected"; readonly environment: RustRetainedEnvironment }
   | { readonly kind: "unresolved"; readonly reason: string };
+
+export function rustRetainedValueLifetime(
+  declaration: Node, captures: readonly TargetTypeRef[],
+  walk: { readonly context: Pick<RustSourcePolicyContext, "ast" | "sourceLifetimes" | "records" | "retainedEnvironments"> },
+): RustLifetimeRef | undefined {
+  const { context } = walk;
+  if (!captures.some(rustHasOpenOwnedStorage)) return selectRustSuspendedStorageLifetime(captures,
+    rustEnclosingStorageContract(declaration, context.ast, context.sourceLifetimes));
+  const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);
+  const selected = owner === undefined ? { kind: "none" as const } : rustRetainedEnvironment(owner,
+    context.ast.parameters(owner).map(parameter => context.records.sourceParameterAbi.get(parameter)?.parameterCarrier), context);
+  if (selected.kind === "unresolved") return undefined;
+  if (selected.kind === "selected") return selected.environment.lifetime;
+  const identity = sourceNodeIdentity(context.ast, declaration);
+  return identity === undefined ? undefined : rustCallScopedElisionLifetime(identity, "owned-environment");
+}
 
 export function rustSuspendedCapturedParameters(declaration: Node, context: RustSourcePolicyContext): readonly Node[] | undefined {
   return context.retainedEnvironments.suspendedParametersFor(declaration);
@@ -20,7 +39,7 @@ export function rustSuspendedCapturedParameters(declaration: Node, context: Rust
 export function rustRetainedEnvironment(
   declaration: Node,
   parameterCarriers: readonly (TargetTypeRef | undefined)[],
-  context: RustSourcePolicyContext,
+  context: Pick<RustSourcePolicyContext, "ast" | "retainedEnvironments">,
 ): RustRetainedEnvironmentSelection {
   const parameters = context.ast.parameters(declaration);
   if (parameters.length !== parameterCarriers.length || parameters.some(parameter => parameter === undefined) ||

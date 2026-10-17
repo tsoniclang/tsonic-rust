@@ -61,6 +61,7 @@ export interface RustGenericCallablePlan {
 export interface RustGenericCallableRegistry {
   readonly plan: RustGenericCallablePlan;
   initializePhysical(input: RustGenericCallablePhysicalInput): RustGenericCallablePhysicalConstruction;
+  publishPhysical(plan: RustGenericCallablePhysicalPlan): void;
 }
 
 export function createRustGenericCallablePlan(
@@ -220,12 +221,18 @@ export function createRustGenericCallablePlan(
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),
   });
+  let published = false;
   return Object.freeze({ plan,
     initializePhysical(input: RustGenericCallablePhysicalInput): RustGenericCallablePhysicalConstruction {
       if (physical !== undefined) throw new Error("A generic callable physical environment is initialized exactly once.");
       const construction = createRustGenericCallablePhysicalPlan(definitions, definitionFor, input);
       physical = construction.plan;
       return construction;
+    },
+    publishPhysical(selected: RustGenericCallablePhysicalPlan): void {
+      if (physical === undefined || published) throw new Error("Generic callable physical data publishes exactly once after construction.");
+      physical = selected;
+      published = true;
     },
   });
 }

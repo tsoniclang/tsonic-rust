@@ -34,7 +34,7 @@ function classify(dependencies, errors, views = []) {
   context.sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(
     context.sourcePackages, context.ast, context.sourceFiles,
   );
-  const classified = analyzeRustSourcePackageComponents(context, "bin");
+  const classified = analyzeRustSourcePackageComponents(context, "bin", subject => context.records.errorEffects.get(subject));
   assert.equal(classified.kind, "resolved");
   context.sourcePackageComponents = classified.plan;
   const components = classified.plan.components.map(component => ({

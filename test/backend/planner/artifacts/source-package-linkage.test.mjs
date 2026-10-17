@@ -146,7 +146,7 @@ test("library roots retain exact facade linkage and component cycles fail closed
   const cycle = analyzeRustSourcePackageComponents({ ...cycleContext,
     sourcePackageComponentIdentities: selectRustSourcePackageComponentIdentities(cycleContext.sourcePackages,
       cycleContext.ast, cycleContext.sourceFiles),
-  }, "bin");
+  }, "bin", subject => cycleContext.records.errorEffects.get(subject));
   assert.equal(cycle.kind, "rejected");
   assert.deepEqual(cycle.diagnostics.map((diagnostic) => diagnostic.code), [
     "RUST_SOURCE_PACKAGE_COMPONENT_GRAPH_CYCLE",

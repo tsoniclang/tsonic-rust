@@ -264,58 +264,101 @@ export function createRustFrameCallablePlan(input: {
     return value.owner.kind === "class" && input.projectTypes.definitionForCarrier(value.owner.instance)?.declaration !== definition.activation.ownerDeclaration
       ? undefined : definition;
   };
-  const isSameActivationInput = (expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean => {
-    if (!definitions.includes(definition)) return false;
+  const activationInput = (expression: Node, definition: RustFrameCallableDefinition): "independent" | "same" | undefined => {
+    if (!definitions.includes(definition)) return undefined;
     const subject = input.sourceStorage.subject(expression, "value");
     const origins = subject.kind === "resolved" ? input.sourceStorage.closedOriginsFor(subject.subject) : subject;
     if (origins.kind === "complete" && origins.origins.length !== 0 && origins.origins.every(origin => {
       if (origin.subject.kind !== "value" || origin.subject.projection.length !== 0) return false;
       const implementation = implementations.get(origin.subject.node);
       return implementation?.independent === true && definition.entries.some(entry => entry.implementations.includes(implementation));
-    })) return true;
-    if (definition.activation.kind === "class" && receiver !== undefined &&
-      input.ownership.instanceReceiverOwner(receiver) !== definition.activation.ownerDeclaration) return false;
+    })) return "independent";
     const creations = input.sourceStorage.localCallableCreationsFor(expression);
     if (creations.kind === "resolved" && creations.nodes.length !== 0) return creations.nodes.every(node => {
       const implementation = implementations.get(node);
       return implementation !== undefined && definition.entries.some(entry => entry.implementations.includes(implementation));
-    });
+    }) ? "same" : undefined;
     const visited = new Set<Node>();
     let current: Node | undefined = expression;
     while (current !== undefined && !visited.has(current)) {
       visited.add(current);
       const implementation = implementations.get(current);
-      if (implementation !== undefined) return definition.entries.some(entry => entry.implementations.includes(implementation));
+      if (implementation !== undefined) return definition.entries.some(entry => entry.implementations.includes(implementation)) ? "same" : undefined;
       const kind = input.ast.kindName(current);
       if (kind === "KindParenthesizedExpression" || kind === "KindSatisfiesExpression" || kind === "KindNonNullExpression") {
         current = Node_Expression(input.ast, current);
         continue;
       }
-      if (kind !== "KindIdentifier") return false;
+      if (kind !== "KindIdentifier") return undefined;
       const declaration = input.navigation.sourceReferenceFor(current)?.declaration;
-      if (declaration === undefined) return false;
-      if (definition.bindings.some(binding => binding.declaration === declaration && binding.entry !== undefined)) return true;
-      if (!input.ast.is.IsVariableDeclaration(declaration) || input.navigation.declarationUseSummary(declaration).bindingWritten) return false;
+      if (declaration === undefined) return undefined;
+      if (definition.bindings.some(binding => binding.declaration === declaration && binding.entry !== undefined)) return "same";
+      if (!input.ast.is.IsVariableDeclaration(declaration) || input.navigation.declarationUseSummary(declaration).bindingWritten) return undefined;
       let scope = sourceBindingScope(declaration, input.ast);
       const scopes = new Set<Node>();
       while (scope !== undefined && scope !== definition.activation.activationScope && !scopes.has(scope)) {
         scopes.add(scope);
         scope = input.ast.parent(scope);
       }
-      if (scope !== definition.activation.activationScope) return false;
+      if (scope !== definition.activation.activationScope) return undefined;
       current = Node_Initializer(input.ast, declaration);
     }
-    return false;
+    return undefined;
   };
+  const selectedDefinitions = new Map<string, RustFrameCallableDefinition>();
+  const selectedEntries = new Map<string, RustFrameCallableEntryDefinition>();
+  const activationInputs = new Map<Node, Map<RustFrameCallableDefinition, {
+    readonly independent: boolean; readonly receiverOwner?: Node;
+  }>>();
+  const receiverOwners = new Map<Node, Node>();
+  const prepareCarrier = (carrier: TargetTypeRef | undefined): RustFrameCallableDefinition | undefined => {
+    if (carrier === undefined) return undefined;
+    const definition = definitionFor(carrier);
+    if (definition === undefined) return undefined;
+    const key = closedMetadataKey(carrier);
+    selectedDefinitions.set(key, definition);
+    const signature = signatureKey(carrier);
+    const entry = signature === undefined ? undefined : definition.entries.find(entry => entry.key === signature);
+    if (entry !== undefined) selectedEntries.set(key, entry);
+    return definition;
+  };
+  for (const definition of definitions) {
+    for (const binding of definition.bindings) prepareCarrier(binding.carrier);
+    for (const entry of definition.entries) for (const implementation of entry.implementations) prepareCarrier(implementation.carrier);
+  }
+  for (const node of input.sourceStorage.nodes) {
+    const receiverOwner = input.ownership.instanceReceiverOwner(node);
+    if (receiverOwner !== undefined) receiverOwners.set(node, receiverOwner);
+    const declaration = input.records.sourceBinding.get(node)?.sourceDeclaration;
+    const conversion = input.records.contextualValueConversion.get(node);
+    const parent = input.ast.parent(node);
+    const initializerBinding = parent === undefined || Node_Initializer(input.ast, parent) !== node ? undefined : bindings.get(parent);
+    const candidates = new Set([input.records.runtimeCarrier.get(node)?.carrier, conversion?.targetCarrier,
+      declaration === undefined ? undefined : bindings.get(declaration)?.carrier, initializerBinding?.carrier]
+      .map(prepareCarrier).filter((definition): definition is RustFrameCallableDefinition => definition !== undefined));
+    for (const definition of candidates) {
+      const selectedInput = activationInput(node, definition);
+      if (selectedInput === undefined) continue;
+      const selected = activationInputs.get(node) ?? new Map<RustFrameCallableDefinition, {
+        readonly independent: boolean; readonly receiverOwner?: Node;
+      }>();
+      selected.set(definition, Object.freeze({ independent: selectedInput === "independent",
+        ...(definition.activation.kind === "class" ? { receiverOwner: definition.activation.ownerDeclaration } : {}) }));
+      activationInputs.set(node, selected);
+    }
+  }
   return Object.freeze({ definitions: Object.freeze(definitions), issues: Object.freeze(issues),
-    definitionFor,
+    definitionFor: (carrier: TargetTypeRef) => selectedDefinitions.get(closedMetadataKey(carrier)),
     definitionForOwner: (declaration: Node) => byDeclaration.get(declaration),
     entryFor(carrier: TargetTypeRef) {
-      const key = signatureKey(carrier);
-      return key === undefined ? undefined : definitionFor(carrier)?.entries.find(entry => entry.key === key);
+      return selectedEntries.get(closedMetadataKey(carrier));
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),
-    isSameActivationInput,
+    isSameActivationInput(expression: Node, definition: RustFrameCallableDefinition, receiver?: Node): boolean {
+      const selected = activationInputs.get(expression)?.get(definition);
+      return selected !== undefined && (selected.independent || selected.receiverOwner === undefined || receiver === undefined ||
+        receiverOwners.get(receiver) === selected.receiverOwner);
+    },
     bindingFor: (declaration: Node) => bindings.get(declaration),
   });
 }

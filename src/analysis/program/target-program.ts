@@ -40,7 +40,7 @@ import {
   analyzeRustSourcePackageFacades,
 } from "./source-package-facades.js";
 import {
-  analyzeRustSourcePackageComponents,
+  validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
 import {
   analyzeRustCountedLoopRepresentations,
@@ -108,27 +108,23 @@ export function analyzeRustTargetProgram(
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
     sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
   if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
-  const lexicalFunctions = analyzeRustProgram(context);
+  const sourceStage = analyzeRustProgram(context, configuration.outputType);
   if (context.diagnostics.length > 0) {
     return rejectedTargetStage(context.diagnostics);
   }
-  if (lexicalFunctions === undefined) throw new Error("Rust program analysis completed without its sealed lexical callable index.");
+  if (sourceStage === undefined) throw new Error("Rust program analysis completed without its sealed source-stage output.");
+  const { lexicalFunctions, sourcePackageComponents } = sourceStage;
 
   const sourcePackageFacades = analyzeRustSourcePackageFacades(context);
   if (sourcePackageFacades.kind === "rejected") {
     return rejectedTargetStage(sourcePackageFacades.diagnostics);
   }
-  const sourcePackageComponents = analyzeRustSourcePackageComponents(
-    context,
-    configuration.outputType,
-  );
-  if (sourcePackageComponents.kind === "rejected") {
-    return rejectedTargetStage(sourcePackageComponents.diagnostics);
-  }
+  const genericComponentDiagnostics = validateRustGenericSourcePackageComponents(context, sourcePackageComponents);
+  if (genericComponentDiagnostics.length !== 0) return rejectedTargetStage(genericComponentDiagnostics);
   context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     records: context.records, physical: context.callableValues.generic.physical,
     producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
-    components: sourcePackageComponents.plan });
+    components: sourcePackageComponents });
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
 
   const classValues = context.classValues.seal(context);
@@ -168,7 +164,7 @@ export function analyzeRustTargetProgram(
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
   const retainedCallableInputs = analyzeRustRetainedCallableInputs({ ast: context.ast, records: context.records,
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
-    components: sourcePackageComponents.plan });
+    components: sourcePackageComponents });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
   analyzeRustNativeHandlers(context.sourceStorage.nodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
@@ -189,11 +185,11 @@ export function analyzeRustTargetProgram(
     },
   });
   const dispatchContextDemand = analyzeRustDispatchContextDemand(
-    context.ast, context.sourceFiles, records, sourcePackageComponents.plan, dispatchContexts.plan,
+    context.ast, context.sourceFiles, records, sourcePackageComponents, dispatchContexts.plan,
   );
   if (dispatchContextDemand.kind === "rejected") return rejectedTargetStage(dispatchContextDemand.diagnostics);
   const binaryDispatchDemand = analyzeRustBinaryDispatchDemand(
-    binaryHooks, sourcePackageComponents.plan, dispatchContexts.plan, dispatchContextDemand.plan,
+    binaryHooks, sourcePackageComponents, dispatchContexts.plan, dispatchContextDemand.plan,
   );
   if (binaryDispatchDemand.kind === "rejected") return rejectedTargetStage(binaryDispatchDemand.diagnostics);
   const capturesFor = (closure: import("@tsonic/tsts").Node) => {
@@ -258,8 +254,9 @@ export function analyzeRustTargetProgram(
     promiseBodies: context.promiseBodies.plan,
     names: context.names, callables: context.callableValues.selected,
     producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
-    components: sourcePackageComponents.plan });
+    components: sourcePackageComponents });
   if (errorRegions.kind === "rejected") return errorRegions;
+  context.callableValues.finalizeStructuralStorage(errorRegions.value);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.sourceFiles,
@@ -283,6 +280,11 @@ export function analyzeRustTargetProgram(
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
   }
+  const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies);
+  if (retentionIssues.length !== 0) return rejectedTargetStage(retentionIssues.map(issue => ({
+    code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error", source: "tsonic-rust", message: issue.message,
+    sourceNode: issue.subject, evidence: ["target.capability=rust.callable-value.exact-implementation"],
+  })));
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
     sourceFiles: context.sourceFiles,
@@ -319,7 +321,7 @@ export function analyzeRustTargetProgram(
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
-    sourcePackageComponents: sourcePackageComponents.plan, errorStorageDemands: context.errorStorageDemands });
+    sourcePackageComponents, errorStorageDemands: context.errorStorageDemands });
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
   const genericCallableErrors = analyzeRustGenericCallableErrors({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
@@ -327,7 +329,7 @@ export function analyzeRustTargetProgram(
   if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
   const initializationErrors = analyzeRustInitializationErrors({ ast: context.ast, sourceFiles: context.sourceFiles,
     navigation: context.source.navigation, moduleInitialization, sourceModules: sourceModuleConstructions.index,
-    components: sourcePackageComponents.plan, facades: sourcePackageFacades.plan, regions: errorRegions.value,
+    components: sourcePackageComponents, facades: sourcePackageFacades.plan, regions: errorRegions.value,
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
@@ -400,7 +402,7 @@ export function analyzeRustTargetProgram(
     moduleInitialization,
     names: context.names,
     sourcePackageFacades: sourcePackageFacades.plan,
-    sourcePackageComponents: sourcePackageComponents.plan,
+    sourcePackageComponents,
     countedLoops: analyzeRustCountedLoopRepresentations({
       ast: context.ast,
       sourceFiles: context.sourceFiles,
