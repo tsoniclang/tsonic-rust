@@ -160,6 +160,14 @@ export function rustContextForEmission(context: RustPlanContext, emissionContext
     lifetimeSubstitutions: emissionContext.bindings.lifetimes };
 }
 
+export function requireRustCallableBodyContext(context: RustPlanContext, declaration: Node): RustPhysicalEmissionContext {
+  const enclosing = context.emissionContext;
+  if (enclosing === undefined) failRustPlannerInvariant("A callable creation requires its original sealed enclosing use.", declaration);
+  const selected = context.input.program.physicalEmissionContexts.bodyContextFor(enclosing.use, declaration);
+  if (selected === undefined) failRustPlannerInvariant("A callable body requires its original selected creation context.", declaration);
+  return selected;
+}
+
 export function rustErrorBoundaryForDeclaration(
   declaration: Node,
   context: Pick<RustPlanContext, "sourcePackageErrors" | "sourcePackageComponentId"> & {

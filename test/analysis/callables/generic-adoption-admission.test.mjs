@@ -1,11 +1,54 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { checkRustSession, compileRust, createRustSession, rustSourceDiagnostics } from "../../helpers/rust-session.mjs";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const code = "TSONIC_GENERIC_ASYNC_ADOPTION_UNSUPPORTED";
 const identity = "async function identity<Value>(value: Value) { return value; }";
+
+for (const surface of ["native", "js"]) {
+  test(`Rust canonical Promise resolve source arity admits void omission and generic payloads: ${surface}`, () => {
+    const source = checkRustSession(createRustSession({ surfaces: surface === "js" ? ["js"] : [], files: { "index.ts": `
+      export function generic<Value>(value: Value): Promise<Value> {
+        return new Promise<Value>(resolve => { resolve(value); });
+      }
+      export function complete(): Promise<void> { return new Promise<void>(resolve => { resolve(); }); }
+    ` } }));
+    assert.equal(source.diagnostics.length, 0, "the canonical checked signature preserves both valid source contracts");
+    assert.equal(source.extensionDiagnostics.length, 0, "void omission does not require an extension escape");
+  });
+
+  test(`Rust canonical Promise resolve source arity rejects omitted nonvoid payloads: ${surface}`, () => {
+    const diagnostics = rustSourceDiagnostics(createRustSession({ surfaces: surface === "js" ? ["js"] : [], files: { "index.ts": `
+      export function incomplete(): Promise<number> { return new Promise<number>(resolve => { resolve(); }); }
+    ` } }));
+    assert.equal(diagnostics.match(/TS\d+:/gu)?.length, 1, "exactly one original nonvoid arity error");
+    assert.match(diagnostics, /TS2794: Expected 1 arguments, but got 0\. Did you forget to include 'void' in your type argument to 'Promise'\?/u,
+      "the native checked signature retains the precise nonvoid argument requirement");
+    assert.doesNotMatch(diagnostics, /TSEXT\d+:/u,
+      "the source arity refusal is not an extension fallback");
+  });
+}
+
+test("Rust recursive closure creations preserve disjoint local stores at a shared invocation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "recursive_capture_store_prefix" } }, files: { "index.ts": `
+      export {};
+      function factory(count: number, seed: number): () => number {
+        if (count > 0) return factory(count - 1, seed);
+        return () => { let local = seed; local += 1; return local; };
+      }
+      function invoke(callback: () => number): number { return callback(); }
+      console.log(invoke(factory(1, 1)));
+      console.log(invoke(factory(0, 10)));
+    ` } });
+  assert.equal(result.diagnostics.length, 0,
+    JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+  const output = validateGeneratedProject("recursive-capture-store-prefix", result.artifacts, { run: true }).stdout;
+  assert.deepEqual(output.trim().split(/\r?\n/u), ["2", "11"],
+    "different real factory/caller creations cannot merge their private local stores");
+});
 
 const nativeEntryCases = [
   [
@@ -404,7 +447,7 @@ for (const [name, sourceText] of nativeEntryInverses) {
   test("Rust native callback non-adoption inverse: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"],
       target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_inverse" } },
-      files: { "index.ts": sourceText } });
+      files: { "index.ts": "export {};\n" + sourceText } });
     assert.equal(result.diagnostics.length, 0,
       JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     const output = validateGeneratedProject("native-callback-inverse-" + name, result.artifacts, { run: true }).stdout;
@@ -499,7 +542,7 @@ for (const [name, declarations, expression] of nativeOpaquePayloadCases) {
   });
   test("Rust ordinary opaque callable input keeps its native value: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
-      crateName: "ordinary_native_opaque_payload" } }, files: { "index.ts": declarations + "\nconsole.log(await wrap(7));" } });
+      crateName: "ordinary_native_opaque_payload" } }, files: { "index.ts": "export {};\n" + declarations + "\nconsole.log(await wrap(7));" } });
     assert.equal(result.diagnostics.length, 0, JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(validateGeneratedProject("ordinary-native-opaque-" + name, result.artifacts, { run: true }).stdout.trim(), "7",
       "ordinary Awaited identity does not add a refusal or alter the native callback result");
@@ -540,7 +583,7 @@ for (const [name, declarations] of nativeConstructorCases) {
   test("Rust official native constructor preserves its ordinary native value: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: [],
       target: { id: "rust", options: { outputType: "bin", crateName: "official_constructor" } },
-      files: { "index.ts": declarations + "\nif ((await wrap(7)) !== 7) throw new Error(\"ordinary constructor payload\");" } });
+      files: { "index.ts": "export {};\n" + declarations + "\nif ((await wrap(7)) !== 7) throw new Error(\"ordinary constructor payload\");" } });
     assert.equal(result.diagnostics.length, 0, JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(validateGeneratedProject("official-constructor-" + name, result.artifacts, { run: true }).status, 0,
       "the exact officially selected native constructor preserves the ordinary payload");
@@ -550,7 +593,7 @@ for (const [name, sourceText] of nativeConstructorInverses) {
   test("Rust official native constructor inverse: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: [],
       target: { id: "rust", options: { outputType: "bin", crateName: "official_constructor_inverse" } },
-      files: { "index.ts": sourceText } });
+      files: { "index.ts": "export {};\n" + sourceText } });
     assert.equal(result.diagnostics.length, 0, JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
     assert.equal(validateGeneratedProject("official-constructor-inverse-" + name, result.artifacts, { run: true }).status, 0,
       "foreign identity and nonresolving callbacks never manufacture adoption");
@@ -692,7 +735,8 @@ for (const [name, extra, receiver] of [
 test("Rust ordinary class receiver retains an executable native payload", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "generic_receiver_payload" } },
-    files: { "index.ts": `class Holder<Value> { constructor(readonly value: Value) {}
+    files: { "index.ts": `export {};
+      class Holder<Value> { constructor(readonly value: Value) {}
       async get(): Promise<Value> { return this.value; } }
       async function use(holder: Holder<number>): Promise<number> { return await holder.get(); }
       console.log(await use(new Holder(7)));` } });
@@ -737,7 +781,8 @@ for (const recursive of [false, true]) {
   }` : "function deliver<Value>(callback: (value: Value) => void, value: Value, count: number): void { callback(value); }";
   test(`Rust retains ${recursive ? "recursive" : "direct"} resolver/value correlation in native execution`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
-      crateName: `resolver_${recursive ? "recursive" : "direct"}_rows` } }, files: { "index.ts": `${helper}
+      crateName: `resolver_${recursive ? "recursive" : "direct"}_rows` } }, files: { "index.ts": `export {};
+      ${helper}
       function wrap<Value>(value: Value): Promise<number> { return new Promise<number>(resolve => {
         deliver(resolve, 7, 2); deliver(item => { void item; }, value, 2);
       }); }
@@ -759,12 +804,13 @@ test("Rust keeps opaque resolver provenance explicitly unresolved for a Promise-
   const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `declare function opaque<Value>(value: Value): Value;
     function wrap<Value>(value: Value) { return new Promise<Value>(resolve => { const done = opaque(resolve); done(value); }); }
     export function reject(promised: Promise<number>): void { void wrap(promised); }` } });
-  assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: "done(value)" }]);
+  assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: "opaque(resolve)" }]);
 });
 
 test("Rust preserves an ordinary native actual despite an open symbolic resolver alias", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"],
     target: { id: "rust", options: { outputType: "bin", crateName: "ordinary_resolver_alias" } }, files: { "index.ts": `
+      export {};
       type Alias<Value> = (resolve: (value: Value) => void) => (value: Value) => void;
       function wrap<Value>(value: Value, alias: Alias<Value>): Promise<Value> {
         return new Promise<Value>(resolve => { const done = alias(resolve); done(value); });

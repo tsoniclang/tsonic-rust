@@ -2,16 +2,206 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
-import { Node_Name, createTargetSourceProgram } from "@tsonic/target-api/source";
+import { Node_Name, Node_Expression, createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType, rustJsPromiseTargetType } from "../../../dist/target-model/types/index.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { planCallableExpression, planRustCallableExpressionBody } from "../../../dist/backend/planner/expressions/callable.js";
+import { selectRustRuntimeCallableGenerics } from "../../../dist/policy/types/callables/runtime-callable-generics.js";
+import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
+import * as lifetimeIdentity from "../../../dist/target-model/lifetimes/identity.js";
+import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
+import { rustSourceCallArgumentCarriers } from "../../../dist/analysis/callables/source-call-lifetimes.js";
+import { rustRetainedCallSubstitutions } from "../../../dist/analysis/callables/retained-call-lifetimes.js";
 
 const surfaces = [["native", []], ["js", ["js"]]];
+
+for (const [surface, selected] of surfaces) {
+  test(`finalized source calls retain both logical async results and exact native body ABI (${surface})`, () => {
+    const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+async function read(value: int32): Promise<int32> {
+  if (value < 0) throw new Error("negative");
+  return value;
+}
+export async function run(value: int32): Promise<int32> { return await read(value); }
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    const program = result.program;
+    assert.equal(program !== undefined && result.plan !== undefined, true,
+      "the actual source async invocation is admitted before its ABI is consumed");
+    const ast = program.source.ast;
+    const pending = [...program.sourceFiles];
+    let call;
+    while (pending.length !== 0) {
+      const node = pending.pop();
+      if (ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === "read") call = node;
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    const fact = program.records.targetOperation.get(call);
+    const signature = program.records.selectedCall.get(call);
+    assert.equal(fact?.kind === "source-call" && signature !== undefined, true,
+      "the original source call has its exact checked selected signature");
+    assert.equal(fact.asyncBody !== undefined, surface === "js",
+      "only the selected JS Promise protocol separates its logical result from the direct native body");
+    const matches = (candidate, selectedSignature = signature) => sourceCallSelectedMemberMatches(candidate,
+      selectedSignature, selectedSignature.member.returnType, program.typeFamilies.normalize, program.projectTypes,
+      rustSourceCallArgumentCarriers(call, ast, program.records), program.typeDefinitions,
+      rustRetainedCallSubstitutions(program.records, call));
+    assert.equal(matches(fact), true, "logical source return and actual native invocation are both preserved");
+    for (const [label, changed, changedSignature] of [
+      ...(fact.asyncBody === undefined ? [] : [
+        ["foreign body", { ...fact, asyncBody: { ...fact.asyncBody, declaration: {} } }, signature],
+        ["wrong logical result", { ...fact, asyncBody: { ...fact.asyncBody,
+          logicalResultCarrier: rustJsPromiseTargetType(rustSourcePrimitiveTargetType("bool")) } }, signature],
+      ]),
+      ["wrong physical result", { ...fact, resultCarrier: rustSourcePrimitiveTargetType("bool") }, signature],
+      ["invented projection", { ...fact, resultProjection: { kind: "closed-native",
+        sourceCarrier: fact.asyncBody?.logicalResultCarrier ?? fact.resultCarrier, selectedCarrier: fact.resultCarrier } }, signature],
+      ["wrong selected operation", fact, { ...signature, member: { ...signature.member, id: "foreign" } }],
+      ["wrong selected parameter", fact, { ...signature, member: { ...signature.member,
+        parameters: signature.member.parameters.map(parameter => ({ ...parameter, type: rustSourcePrimitiveTargetType("bool") })) } }],
+    ]) {
+      assert.equal(matches(changed, changedSignature), false,
+        `${label}: neither source nor native ABI can bypass the finalized correspondence`);
+    }
+  });
+}
+
+test("source function lifetime binding preserves every exact formal and substituted outlives edge", () => {
+  const { rustFunctionValueLifetimeBinding } = lifetimeIdentity;
+  const first = { kind: "lifetime", declaration: {}, sourceName: "First",
+    lifetime: { kind: "parameter", identity: "first", name: "First" }, outlives: [{ kind: "static" }] };
+  const second = { kind: "lifetime", declaration: {}, sourceName: "Second",
+    lifetime: { kind: "parameter", identity: "second", name: "Second" }, outlives: [first.lifetime] };
+  const selected = rustFunctionValueLifetimeBinding("function", [first, second]);
+  assert.equal(selected !== undefined && selected.binder.parameters.length === 2 && selected.substitutions.size === 2, true,
+    "each actual source lifetime has one complete native binder correspondence");
+  assert.equal(selected.substitutions.get(rustLifetimeKey(first.lifetime)) === selected.binder.parameters[0].lifetime, true,
+    "the first original formal maps to its exact generated bound lifetime");
+  assert.equal(selected.substitutions.get(rustLifetimeKey(second.lifetime)) === selected.binder.parameters[1].lifetime, true,
+    "the second original formal maps to its exact generated bound lifetime");
+  assert.equal(selected.binder.parameters[0].outlives[0] === first.outlives[0], true,
+    "an actual external static outlives edge remains unchanged");
+  assert.equal(selected.binder.parameters[1].outlives[0] === selected.binder.parameters[0].lifetime, true,
+    "a source formal outlives edge binds to the same selected native lifetime");
+  assert.equal(Object.isFrozen(selected.binder) && Object.isFrozen(selected.binder.parameters) &&
+    selected.binder.parameters.every(parameter => Object.isFrozen(parameter) && Object.isFrozen(parameter.outlives)), true,
+  "the published binder and all of its contract vectors are immutable");
+  for (const [identity, parameters] of [["", [first]], ["function", []], ["function", [first, first]],
+    ["function", [{ ...first, lifetime: selected.binder.parameters[0].lifetime }]]]) {
+    assert.equal(rustFunctionValueLifetimeBinding(identity, parameters) === undefined, true,
+      "missing, duplicate or already-bound evidence cannot manufacture a second generated binder");
+  }
+});
+
+test("terminal selected-call refusals retain exact source evidence without inventing a binding failure", () => {
+  for (const [form, values] of [["bare", "[signed, unsigned]"], ["literal last", "[signed, unsigned, 1]"],
+    ["literal middle", "[signed, 1, unsigned]"], ["literal first", "[1, signed, unsigned]"]]) {
+    const sourceText = `import type { int32, uint32 } from "@tsonic/core/types.js";
+export function check(signed: int32, unsigned: uint32): boolean {
+  const values = ${values}; const keys = new Set(values);
+  return keys.has(values[1]) && keys.size === 1;
+}`;
+    const { result, source } = compileRust({ surfaces: ["js"], files: { "index.ts": sourceText } });
+    assert.deepEqual(result.diagnostics.map(issue => issue.code),
+      ["RUST_SELECTED_OPERATION_UNSUPPORTED", "RUST_SELECTED_OPERATION_UNSUPPORTED"],
+      `${form}: each actual operation keeps its refusal without a derivative native-binding diagnostic`);
+    const ast = createTargetSourceProgram(source).ast;
+    for (const [index, text, message] of [
+      [0, "new Set(values)", "The selected JavaScript constructor 'SetConstructor' has no closed Rust operation row for the selected argument carriers."],
+      [1, "keys.has(values[1])", "The selected JavaScript call 'ReadonlySet.has' has no closed Rust operation row for the selected receiver and argument carriers."],
+    ]) {
+      const issue = result.diagnostics[index];
+      const range = ast.authoredRange(issue.sourceNode);
+      assert.equal(issue.message, message, `${form}: the original selected-operation message is unchanged`);
+      assert.equal(range.kind === "authored" && range.start === sourceText.indexOf(text) &&
+        range.end === range.start + text.length, true,
+      `${form}: the original checked operation owns its exact diagnostic span`);
+      assert.equal(issue.evidence.includes("target.capability=rust.selected-operation"), true,
+        `${form}: the original policy refusal retains its evidence`);
+    }
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      `${form}: a real unsupported operation still publishes no native output`);
+  }
+});
+
+for (const [surface, selected] of surfaces) {
+  for (const [use, declarations, invocation] of [
+    ["direct", "", "identity(value)"],
+    ["immutable alias", "const selected = identity;", "selected(value)"],
+    ["forwarded immutable alias", "const selected = identity; const forwarded = selected;", "forwarded(value)"],
+  ]) {
+    for (const explicit of [false, true]) {
+      test(`named lifetime function ${use} preserves its ${explicit ? "explicit" : "inferred"} actual invocation (${surface})`, () => {
+        const expression = explicit ? invocation.replace("(value)", "<Caller>(value)") : invocation;
+        const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+function identity<Region extends Life>(value: Ref<int32, Region>): Ref<int32, Region> { return value; }
+export function run<Caller extends Life>(value: Ref<int32, Caller>): Ref<int32, Caller> {
+  ${declarations}
+  return ${expression};
+}` } });
+        assert.equal(result.diagnostics.length, 0,
+          result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+        assert.equal(result.program !== undefined && result.plan !== undefined, true,
+          "the complete checked source preserves a native named-lifetime invocation");
+        const program = result.program;
+        const ast = program.source.ast;
+        const pending = [...program.sourceFiles];
+        let declaration;
+        let call;
+        while (pending.length !== 0) {
+          const node = pending.pop();
+          if (ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "run") declaration = node;
+          if (ast.is.IsCallExpression(node)) call = node;
+          ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+        }
+        const lifetime = program.sourceLifetimes.contractFor(declaration)?.parameters[0]?.lifetime;
+        const carrier = program.records.runtimeCarrier.get(call)?.carrier;
+        assert.equal(lifetime?.kind, "parameter", "the caller owns its actual named lifetime");
+        assert.equal(carrier?.kind === "reference" && carrier.lifetime !== undefined &&
+          rustLifetimeKey(carrier.lifetime) === rustLifetimeKey(lifetime), true,
+        "the returned loan has the exact caller lifetime, never a callee binder or static replacement");
+        assert.doesNotMatch(rustSourceText(result), /Callable::new/u,
+          "a named native function alias introduces no heap callable adaptation");
+        if (use === "direct") return;
+        const semantics = program.source.semantics.forNode(call);
+        const source = semantics.operations.call(call);
+        const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(source.selectedSignature);
+        const reference = program.source.navigation.sourceReferenceFor(source.sourceCallee.expression);
+        const callable = program.records.runtimeCarrier.get(reference?.declaration)?.carrier;
+        const request = { source, sourceSelectedDeclaration };
+        const context = { ast, currentSemantics: semantics, sourceLifetimes: program.sourceLifetimes };
+        assert.equal(callable?.kind === "function-pointer" && callable.lifetimeBinder !== undefined, true,
+          "the actual alias owns the original native higher-ranked function pointer");
+        const arguments_ = selectRustRuntimeCallableGenerics(request, callable, context);
+        assert.equal(arguments_?.length === 1 && arguments_[0].kind === "lifetime", true,
+          "the checked original formal maps to its generated native binder");
+        for (const [label, changed, changedRequest, changedContext] of [
+          ["foreign binder", { ...callable, lifetimeBinder: { ...callable.lifetimeBinder, identity: "foreign" } }, request, context],
+          ["missing formal", callable, { ...request, source: { ...source, sourceSelectedMethodTypeArguments: [] } }, context],
+          ["foreign formal name", callable, { ...request, source: { ...source,
+            sourceSelectedMethodTypeArguments: source.sourceSelectedMethodTypeArguments.map(argument => ({ ...argument, typeParameterName: "Foreign" })) } }, context],
+          ["missing declaration", callable, { ...request, sourceSelectedDeclaration: undefined }, context],
+          ["foreign declaration", callable, { ...request, sourceSelectedDeclaration: declaration }, context],
+          ["missing lifetime contract", callable, request, { ...context, sourceLifetimes: { ...context.sourceLifetimes, contractFor: () => undefined } }],
+          ["missing formal evidence", callable, request, { ...context, sourceLifetimes: { ...context.sourceLifetimes, parameterFor: () => undefined } }],
+          ["foreign outlives", { ...callable, lifetimeBinder: { ...callable.lifetimeBinder,
+            parameters: callable.lifetimeBinder.parameters.map(parameter => ({ ...parameter, outlives: [{ kind: "static" }] })) } }, request, context],
+        ]) {
+          assert.equal(selectRustRuntimeCallableGenerics(changedRequest, changed, changedContext) === undefined, true,
+            `${label}: unavailable or foreign correspondence never becomes a native argument`);
+        }
+      });
+    }
+  }
+}
 
 test("erased callable rendering reads its sole sealed participation before native body and capture facts", () => {
   const declaration = {};

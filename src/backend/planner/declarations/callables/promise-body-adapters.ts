@@ -26,7 +26,11 @@ export function planRustPromiseBodyObjectAdapter(
     const region = context.input.program.errorRegions.get(declaration);
     const objectBoundary = region === undefined ? undefined : planRustJsRejectionRegion(declaration, region, context)?.boundary;
     if (objectBoundary === undefined || context.syntheticNames === undefined) return undefined;
-    if (!rustTypeEquals(nativeBoundary.errorType, objectBoundary.errorType)) {
+    const sameErrorType = rustTypeEquals(nativeBoundary.errorType, objectBoundary.errorType);
+    if (asynchronous.lowering.kind === "factory" && sameErrorType)
+      return { statements: [{ kind: "tail", expr: { kind: "call", path: "js_abi::JsPromise::from_fallible_factory",
+        args: [{ kind: "closure", params: [], move: true, body: invocation }] } }] };
+    if (!sameErrorType) {
       const errorName = allocateRustSyntheticName(context.syntheticNames, "promise_error");
       const error: RustExpr = { kind: "path", path: errorName };
       const converted = nativeBoundary.kind === "native"

@@ -24,7 +24,7 @@ import {
   rustUnitTargetType,
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
-import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
+import { appendRustDiagnostic, recordPolicySelection, rustOperationContext, rustResolutionContext } from "../program/walk.js";
 import { applySelectedProjectSourceCall, prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments,
   setCarrierFact } from "../operations/project-calls.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -40,7 +40,6 @@ import {
   resolvedRustReferenceOperationCarrier,
 } from "./reference-operations.js";
 import { resolveRustExactNullishValueCarrier, resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 
 import { resolveRustContextualParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
@@ -260,9 +259,7 @@ export function resolveCallLikeCarrier(
         resolveExpressionCarrier(walk, argument, sourceFile, argumentExpected),
     );
     if (prepared.kind === "reject") {
-      walk.context.diagnostics.push(
-        rustPolicyTargetDiagnostic(prepared.diagnostic),
-      );
+      recordPolicySelection(walk, expression, prepared);
       return undefined;
     }
     walk.preparedCallbackCalls.set(expression, {

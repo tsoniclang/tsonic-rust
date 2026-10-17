@@ -32,11 +32,10 @@ import { rustLocalClassIssue } from "../local-classes.js";
 import { projectGenericSubstitutions } from "../../../policy/types/project/generic-substitutions.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../../target-model/metadata/closed-data.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
-import { rustJsErrorTargetType } from "../../../target-model/types/carriers/js.js";
-import { rustSourceErrorTargetType } from "../../../target-model/types/carriers/source-error.js";
 import type { SourceDeclaredHeritageResult } from "@tsonic/target-api/source";
 import { rustProjectObjectLayout } from "../object-layout.js";
 import type { RustProjectObjectLayout } from "../../../target-model/types/project-types.js";
+import { selectRustProjectSourceErrors } from "./source-errors.js";
 
 export function createRustProjectTypePolicy(
   host: RustProjectTypePolicyHost,
@@ -105,27 +104,12 @@ export function createRustProjectTypePolicy(
       }
     }
   }
-  const sourceErrorDeclarations = new Set<Node>();
-  const visitedErrorAncestors = new Set<Node>();
-  const visitingErrorAncestors = new Set<Node>();
-  const admitsSourceError = (definition: RustProjectTypeDefinition): boolean => {
-    if (visitedErrorAncestors.has(definition.declaration)) return sourceErrorDeclarations.has(definition.declaration);
-    if (visitingErrorAncestors.has(definition.declaration) || definition.kind !== "class") return false;
-    visitingErrorAncestors.add(definition.declaration);
-    const selected = declaredHeritage.get(definition.declaration);
-    const admitted = externalBaseByDeclaration.get(definition.declaration)?.programError === true ||
-      selected?.kind === "resolved" && selected.edges.some(edge => {
-        const target = byDeclaration.get(edge.target.declaration);
-        return edge.kind === "extends" && target !== undefined && admitsSourceError(target);
-      });
-    visitingErrorAncestors.delete(definition.declaration);
-    visitedErrorAncestors.add(definition.declaration);
-    if (admitted) sourceErrorDeclarations.add(definition.declaration);
-    return admitted;
-  };
-  const sourceErrorDefinitions = Object.freeze(definitions.filter(definition =>
-    admitsSourceError(definition) && definition.genericParameters.length === 0).sort(compareProjectDefinitions));
-  const sourceErrorCarrier = sourceErrorDefinitions.length === 0 ? rustJsErrorTargetType() : rustSourceErrorTargetType();
+  const { definitions: sourceErrorDefinitions, carrier: sourceErrorCarrier } = selectRustProjectSourceErrors(
+    definitions,
+    byDeclaration,
+    declaredHeritage,
+    externalBaseByDeclaration,
+  );
   publishSourceErrorCarrier(sourceErrorCarrier);
   const implicitInterfaces = host.collectImplicitInterfaces();
   for (const definition of definitions) {

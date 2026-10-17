@@ -6,6 +6,10 @@ import { selectRustProgramErrorConversion } from "../../../../dist/target-model/
 import { planRustProgramErrorConstruction } from "../../../../dist/backend/planner/expressions/program-errors.js";
 import { rustJsErrorTargetType, rustSourceTypeCarrier, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { fakeCompileInput, fakeSourceFile } from "../../../helpers/fake-compile-input.mjs";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createRustNativeCallableInputPlan } from "../../../../dist/analysis/callables/native-inputs.js";
+import { createRustRecordFixture } from "../../../helpers/records.mjs";
 
 test("native error union planning preserves nested paths, original payloads and exact package ownership", () => {
   const builtin = rustJsErrorTargetType();
@@ -24,6 +28,15 @@ test("native error union planning preserves nested paths, original payloads and 
     { name: "Nested", carrier: inner }, { name: "Project", carrier: project },
   ] }, true), true);
   const definitions = registry.seal();
+  const fixture = fakeCompileInput({ sourceFiles: [fakeSourceFile({ fileName: "/src/index.ts" })] });
+  const source = { ...fixture.source, ast: { ...fixture.source.ast, kindName: () => "KindIdentifier" } };
+  const records = createRustRecordFixture();
+  const storage = createSourceStorageQuery(source, source.sourceFiles);
+  assert.equal(storage.failureReason() === undefined, true, "the original error fixture has a complete checked source domain");
+  const nativeInputs = createRustNativeCallableInputPlan({ ast: source.ast, storage, nativeNodes: storage.nodes,
+    records, definitions, sourcePackages: fixture.sourcePackages, usedNames: new Set() });
+  assert.equal(nativeInputs.inputs.length === 0 && nativeInputs.protocols.length === 0 && nativeInputs.calls.length === 0, true,
+    "the actual error-only fixture has no native callable input or protocol");
   const policy = {
     definitionForCarrier: carrier => rustTargetTypeRefEquals(carrier, project) ? definition : undefined,
     programErrorVariant: current => current === definition ? "Failure" : undefined,
@@ -38,10 +51,7 @@ test("native error union planning preserves nested paths, original payloads and 
       externalCrateNameByFileName: new Map(),
       syntheticNames: { reserved: new Set(), nextSuffixByBase: new Map() },
       input: { program: { typeDefinitions: definitions, projectTypes, providerErrorCarriers: registered,
-        names: { nameForSourceType: (_file, name) => name }, source: { ast: {
-          getFileName: () => "/src/index.ts", getSourceText: () => "", pos: () => 0, end: () => 0,
-          kindName: () => "KindIdentifier",
-        } } } },
+        names: { nameForSourceType: (_file, name) => name }, source, records, callableValues: { native: nativeInputs } } },
       sourcePackageErrors: {
         componentIdByDefinition: new Map([[definition, owner]]),
         domainsByComponentId: new Map([["root", { definitions: [definition], externalErrors: [] }]]),

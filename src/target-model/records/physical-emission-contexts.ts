@@ -55,7 +55,8 @@ export type RustPhysicalEmissionSourceOrigins = {
       readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[] }
   | { readonly kind: "open"; readonly subject: SourceStorageSubject;
       readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[]; readonly boundaries: readonly SourceStorageDomainBoundary[] }
-  | { readonly kind: "unavailable"; readonly reason: string }
+  | { readonly kind: "unavailable"; readonly reason: string;
+      readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[]; readonly boundaries: readonly SourceStorageDomainBoundary[] }
 );
 
 export type RustEmissionReturnDestination =
@@ -143,6 +144,7 @@ export interface RustCallableEmissionContexts {
   readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
   contextFor(use: TargetUseSiteRef): RustPhysicalEmissionContext | undefined;
   contextForOwner(subject: object, role: RustPhysicalEmissionRole): RustPhysicalEmissionContext | undefined;
+  bodyContextFor(enclosingUse: TargetUseSiteRef, declaration: Node): RustPhysicalEmissionContext | undefined;
   operandFor(use: TargetUseSiteRef): RustPhysicalEmissionOperand | undefined;
   carrierFor(use: TargetUseSiteRef, source: TargetTypeRef): TargetTypeRef | undefined;
   sourceFor(node: Node, operation: RustEmissionProviderOperation): RustPhysicalEmissionSourceOccurrence | undefined;

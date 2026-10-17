@@ -8,7 +8,9 @@ import { rustValueConversionContract } from "../../../dist/target-model/conversi
 import { planRustUnionProjection } from "../../../dist/backend/planner/expressions/union-mappings.js";
 import { planRustUnionConstruction } from "../../../dist/backend/planner/expressions/union-patterns.js";
 import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { fakeCompileInput, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 
 test("nested union payload paths are exact, immutable and independently checked", () => {
   const integer = rustSourcePrimitiveTargetType("uint64");
@@ -53,9 +55,17 @@ test("nested union payload paths are exact, immutable and independently checked"
   assert.deepEqual(constructed, [[nested, "Variant1"], [inner, "Variant0"]]);
   const node = fakeStatement({ kindName: "KindIdentifier" });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", statements: [node] });
-  const context = { input: { program: { typeDefinitions: definitions, records: createRustRecordFixture({}),
+  const fixture = fakeCompileInput({ sourceFiles: [sourceFile] });
+  const storage = createSourceStorageQuery(fixture.source, [sourceFile]);
+  const records = createRustRecordFixture({});
+  assert.equal(storage.failureReason() === undefined, true, "the original projection fixture has a complete checked source domain");
+  const native = createRustNativeCallableInputPlan({ ast: fixture.source.ast, storage, nativeNodes: storage.nodes,
+    records, definitions, sourcePackages: fixture.sourcePackages, usedNames: new Set() });
+  assert.equal(native.inputs.length === 0 && native.protocols.length === 0 && native.calls.length === 0, true,
+    "the actual projection fixture has no native callable input or protocol");
+  const context = { input: { program: { typeDefinitions: definitions, records, callableValues: { native },
     names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" },
-    source: { ast: fakeAstReader([sourceFile]) } } }, moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
+    source: fixture.source } } }, moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map(), externalItemPathByIdentity: new Map(), diagnostics: [] };
   const expression = { kind: "path", path: "value" };
   assert.deepEqual(planRustUnionConstruction(contract.path, expression, context), {
