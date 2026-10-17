@@ -8,7 +8,7 @@ import type { Node } from "@tsonic/tsts";
 import { isRustFinalizedArrayInput, isRustFinalizedSliceInput, isRustFinalizedSourceInput, isRustFinalizedTaggedArrayInput } from "./finalized-operation/conversions.js";
 import type { RustFinalizedOperationAbi } from "../../target-model/records/finalized-operation.js";
 import { rustValueConversionIsFallible } from "../../target-model/conversions/contracts.js";
-import { rustStructuralFieldIsFallible } from "../objects/structural-shape-plan.js";
+import { rustStructuralFieldIsFallible, type RustStructuralShapeField } from "../objects/structural-shape-plan.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustCarrierProvidesErrorMutation } from "../../target-model/types/carriers/error-protocols.js";
@@ -70,8 +70,7 @@ export interface RustStructuralStorageLookup {
   field(
     carrier: TargetTypeRef,
     storageIndex: number,
-  ): { readonly storage: "stored" | "property" | "bound"; readonly presence: "required" | "optional";
-    readonly methodStorageCarrier?: TargetTypeRef; readonly nativeMethod?: true } | undefined;
+  ): Pick<RustStructuralShapeField, "storage" | "presence" | "method" | "methodStorageCarrier" | "nativeMethod"> | undefined;
 }
 
 export interface RustProjectFieldDispatchLookup {
