@@ -40,6 +40,35 @@ test("floating literal selection consumes sealed numeric facts with transparent 
   }
 });
 
+test("float16 literal selection uses exact authored tokens at the native overflow midpoint", async () => {
+  const cases = [
+    ["1.5", true], ["-1.5", true], ["+1.5", true], ["-0", true],
+    ["65504", true], ["65519.999999999999999999999", true],
+    ["-65519.999999999999999999999", true], ["65520", false], ["-65520", false],
+    ["65520.000000000000000000001", false], ["6.552e4", false], ["-6.552e4", false],
+    ["0xffef", true], ["0xfff0", false], ["1e-5000", true], ["1e9999", false],
+    ["1n", false], ['"1.5"', false], ["1 + 0.5", false],
+  ];
+  const source = await checkedSource("selected-half-literal-text", { "src/index.ts":
+    cases.map(([text], index) => `export const value${index} = ${text};`).join("\n") });
+  const initializers = [];
+  const visit = node => {
+    if (source.ast.is.IsVariableDeclaration(node)) {
+      const initializer = source.ast.as.AsVariableDeclaration(node)?.Initializer;
+      if (initializer !== undefined) initializers.push(initializer);
+    }
+    source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  const sourceFile = projectSourceFile(source, "src/index.ts");
+  visit(sourceFile);
+  const literals = analyzeSourceLiteralValues(source.ast, [sourceFile]);
+  assert.equal(initializers.length, cases.length, "all authored half boundary inputs are observed");
+  for (const [index, initializer] of initializers.entries()) {
+    assert.equal(selectedSourceLiteralIsRepresentable(literals.literalValue.get(initializer), "float16"),
+      cases[index][1], `float16: ${cases[index][0]}`);
+  }
+});
+
 test("source integer literal parsing preserves exact authored integer values", () => {
   assert.equal(parseSourceIntegerLiteral("9_007_199_254_740_991"), 9007199254740991n);
   assert.equal(parseSourceIntegerLiteral("0xFF_FF"), 65535n);

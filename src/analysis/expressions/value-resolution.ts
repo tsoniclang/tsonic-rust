@@ -67,7 +67,7 @@ import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveRecordLiteralCarrier } from "./records.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceLiteralOperandIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { selectRustConditionalNumericCarrier } from "../../policy/types/conditional-numeric-carrier.js";
 import { resolveRustBranchUnion } from "../../policy/types/resolution/branch-unions.js";
@@ -103,11 +103,11 @@ export function resolveExpressionCarrierUncached(
       }
       const effectiveExpected = contextualExpected === undefined ||
           rustRuntimeUnionProjection(contextualExpected, defaultCarrier) !== undefined ||
-          !isRustNumericCarrier(contextualExpected) &&
+          !isRustNumericLiteralCarrier(contextualExpected) &&
           selectRustSourceValueConversion(defaultCarrier, contextualExpected, walk.context.typeDefinitions) !== undefined
         ? defaultCarrier
         : contextualExpected;
-      if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected) &&
+      if (effectiveExpected !== undefined && isRustNumericLiteralCarrier(effectiveExpected) &&
         (selectedSourceLiteralIsRepresentable(
           walk.context.literalValues.literalValue.get(expression),
           effectiveExpected.name,
@@ -119,7 +119,7 @@ export function resolveExpressionCarrierUncached(
         ))) {
         return setCarrierFact(walk, expression, effectiveExpected);
       }
-      if (effectiveExpected !== undefined && isRustNumericCarrier(effectiveExpected)) {
+      if (effectiveExpected !== undefined && isRustNumericLiteralCarrier(effectiveExpected)) {
         const carrierName = effectiveExpected.name;
         const integer = isRustIntegerCarrier(effectiveExpected);
         appendRustDiagnostic(

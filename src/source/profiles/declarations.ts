@@ -176,6 +176,7 @@ declare var Boolean: BooleanConstructor;
 
 interface Number {
   toString(radix?: number): string;
+  toLocaleString(locales?: string | string[], options?: object): string;
   valueOf(): number;
   toFixed(fractionDigits?: number): string;
   toExponential(fractionDigits?: number): string;
