@@ -10,6 +10,7 @@ import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustCallableConstructionType } from "../../../dist/backend/planner/expressions/fundamentals.js";
 import { rustNamedTargetType, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustNativeCompletionFutureType } from "../../../dist/target-model/types/callable-completions.js";
 import { rustTypeGenericArguments } from "../../../dist/target-model/types/generic-arguments.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
@@ -33,15 +34,31 @@ export function create(): () => int32 { return (): int32 => fail(); }
     body: context => ({ kind: "try", expr: { kind: "call", path: "fail", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   }));
-  const pending = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"] }));
+  const settled = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"] }));
+  const pending = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"], source: `
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => Promise<int32> { return async (): Promise<int32> => await Promise.resolve(3); }
+`, body: context => ({ kind: "try", expr: { kind: "await", expr: { kind: "method-call",
+    receiver: { kind: "call", path: "js_abi::JsPromise::resolved", args: [{ kind: "int-literal", text: "3" }] },
+    method: "into_result", args: [] } }, operandErrorType: context.fallibleBoundary.errorType,
+    resultErrorType: context.fallibleBoundary.errorType }),
+  }));
   const rejected = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true, surfaces: ["js"],
-    packages: [nativeClosureProducerFailurePackage(promiseFailure, { path: "reject" })], source: `
+    packages: [nativeClosureProducerFailurePackage(rustJsValueTargetType(), { path: "reject" })], source: `
 import { fail as reject } from "test:producer";
 import type { int32 } from "@tsonic/core/types.js";
 export function create(): () => Promise<int32> { return async (): Promise<int32> => reject(); }
 `,
     body: context => ({ kind: "try", expr: { kind: "call", path: "reject", args: [] },
       operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
+  }));
+  const nativeRejected = printNativeClosureProducer(nativeClosureProducerFixture({ asynchronous: true,
+    packages: [nativeClosureProducerFailurePackage(promiseFailure, { path: "reject_native" })], source: `
+import { fail as reject_native } from "test:producer";
+import type { int32 } from "@tsonic/core/types.js";
+export function create(): () => Promise<int32> { return async (): Promise<int32> => reject_native(); }
+`, body: context => ({ kind: "try", expr: { kind: "call", path: "reject_native", args: [] },
+    operandErrorType: context.fallibleBoundary.errorType, resultErrorType: context.fallibleBoundary.errorType }),
   }));
   const integer = rustSourcePrimitiveTargetType("int32");
   const infallible = rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []);
@@ -59,7 +76,7 @@ export function create(): () => Promise<int32> { return async (): Promise<int32>
       body: { statements: [{ kind: "tail", expr: { kind: "call", path: "fail", args: [] } }] },
     }] },
   }] });
-  assert.doesNotMatch([pure, throws, pending, rejected, constructor].join("\n"),
+  assert.doesNotMatch([pure, throws, settled, pending, rejected, nativeRejected, constructor].join("\n"),
     /ConsumerFailure|TsonicError|TsonicResult|Box::|\.clone\(/u);
   return `
 use tsonic_rust_runtime as rt;
@@ -74,7 +91,8 @@ struct ProducerFailure(core::marker::PhantomPinned);
 struct PromiseFailure;
 
 fn fail() -> Result<i32, ProducerFailure> { Err(ProducerFailure(core::marker::PhantomPinned)) }
-fn reject() -> Result<i32, PromiseFailure> { Err(PromiseFailure) }
+fn reject() -> Result<i32, js_abi::JsValue> { Err(js_abi::JsValue::String(String::from("promise"))) }
+fn reject_native() -> Result<i32, PromiseFailure> { Err(PromiseFailure) }
 fn complete<Value>(future: impl core::future::Future<Output = Value>) -> Value {
     let mut future = core::pin::pin!(future);
     match future.as_mut().poll(&mut core::task::Context::from_waker(core::task::Waker::noop())) {
@@ -97,17 +115,28 @@ fn main() {
     assert_eq!(result, Err(ProducerFailure(core::marker::PhantomPinned)));
     assert_eq!(invoke_cost, Cost::default());
 
-    let pending = ${pending};
-    let (result, generated_cost) = measure(|| complete(pending.call(()).unwrap().into_result()));
-    let (direct, direct_cost) = measure(|| complete(js_abi::JsPromise::from_fallible_factory(move || async move {
-        Ok::<_, Infallible>(3i32)
-    }).into_result()));
-    assert_eq!(result, Ok(3));
-    assert_eq!(result, direct);
-    assert_eq!(generated_cost, direct_cost);
+    tsonic_rust_js::event_loop::block_on(async {
+        let settled = ${settled};
+        let (result, generated_cost) = measure(|| complete(settled.call(()).unwrap().into_result()));
+        let (direct, direct_cost) = measure(|| complete(js_abi::JsPromise::resolved(3i32).into_result()));
+        assert_eq!(result, Ok(3));
+        assert_eq!(result, direct);
+        assert_eq!(generated_cost, direct_cost);
 
-    let rejected = ${rejected};
-    assert_eq!(complete(rejected.call(()).unwrap().into_result()), Err(PromiseFailure));
+        let pending = ${pending};
+        let (result, generated_cost) = measure(|| complete(pending.call(()).unwrap().into_result()));
+        let (direct, direct_cost) = measure(|| complete(js_abi::JsPromise::from_fallible_factory(move || async move {
+            js_abi::JsPromise::resolved(3i32).into_result().await
+        }).into_result()));
+        assert_eq!(result, Ok(3));
+        assert_eq!(result, direct);
+        assert_eq!(generated_cost, direct_cost);
+
+        let rejected = ${rejected};
+        assert_eq!(complete(rejected.call(()).unwrap().into_result()), Err(js_abi::JsValue::String(String::from("promise"))));
+    }).unwrap();
+    let native_rejected = ${nativeRejected};
+    assert_eq!(complete(native_rejected.call(()).unwrap()), Err(PromiseFailure));
     let native = ${constructor};
     let (result, future_cost) = measure(|| complete(native.call(()).unwrap()));
     assert_eq!(result, Err(ProducerFailure(core::marker::PhantomPinned)));
@@ -120,14 +149,20 @@ fn invalid() { let _: rt::Callable<'_, (), Result<i32, ProducerFailure>> = ${pur
 
 #[cfg(wrong_suspension_error)]
 fn invalid() {
+    let selected = ${nativeRejected};
+    let _: Result<i32, ProducerFailure> = complete(selected.call(()).unwrap());
+}
+
+#[cfg(wrong_js_rejection)]
+fn invalid() {
     let selected = ${rejected};
-    let _: js_abi::JsPromise<'static, i32, ProducerFailure> = selected.call(()).unwrap();
+    let _: Result<i32, PromiseFailure> = complete(selected.call(()).unwrap().into_result());
 }
 `;
 }
 
 test("closure emission executes exact owned errors without added allocation or error Clone bounds", { timeout: 300_000 }, () => {
-  const controls = ["wrong_invocation_error", "wrong_suspension_error"];
+  const controls = ["wrong_invocation_error", "wrong_suspension_error", "wrong_js_rejection"];
   const project = writeGeneratedProject("native-closure-producers", [
     { path: "Cargo.toml", text: `[package]\nname = "native_closure_producers"\nversion = "0.0.0"\nedition = "2024"\n
 [dependencies]

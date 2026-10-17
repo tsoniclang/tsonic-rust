@@ -9,6 +9,7 @@ import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { rustCallableInvocationResult } from "../../../dist/analysis/callables/results.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../../dist/target-model/types/await.js";
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/index.js";
+import { rustJsPromiseOutputTargetType } from "../../../dist/target-model/types/carriers/promises.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { finalizedConversionIsValid } from "../../../dist/analysis/operations/finalized-operation/conversions.js";
 
@@ -86,13 +87,14 @@ test("contextual async literals seal the selected output before recording body a
     const binding = declaration === undefined ? undefined : program.records.moduleBinding.get(declaration);
     const label = `async literal ${index}`;
     assert.equal(asynchronous?.kind, "js-promise", label);
-    assert.equal(asynchronous.storage.kind, "static", label);
+    assert.equal(asynchronous.lowering.kind, "settled", `${label} completes its exact ready native prefix`);
     assert.equal(rustOptionElementCarrier(asynchronous.outputCarrier) !== undefined, true, label);
     assert.equal(rustTargetTypeRefEquals(program.records.sourceCallableReturn.get(literal)?.returnCarrier,
       asynchronous.outputCarrier), true, `${label} body return`);
     assert.equal(rustTargetTypeRefEquals(rustCallableInvocationResult(program.records, literal), asynchronous.futureCarrier), true, label);
-    assert.equal(asynchronous.futureCarrier.genericArguments[0].lifetime.kind, "static", label);
-    assert.equal(asynchronous.futureCarrier.genericArguments[2].type.id, "rust.program.TsonicError", label);
+    assert.equal(asynchronous.futureCarrier.genericArguments.length, 1, `${label} has one public payload carrier`);
+    assert.equal(rustTargetTypeRefEquals(rustJsPromiseOutputTargetType(asynchronous.futureCarrier), asynchronous.outputCarrier),
+      true, `${label} preserves the exact native payload without lifetime or rejection type arguments`);
     if (binding?.storage === "native-callable") {
       nativeFunctionCount += 1;
       assert.equal(ast.is.IsVariableDeclaration(declaration), true, label);

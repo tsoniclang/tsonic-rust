@@ -157,6 +157,7 @@ export function rustDirectPromiseBodyCallee(context: RustAnalysisContext, operan
   const { ast } = context;
   const call = rustUnparenthesizedExpression(ast, operand);
   if (!ast.is.IsCallExpression(call) || ast.as.AsCallExpression(call)?.QuestionDotToken !== undefined) return undefined;
+  if (context.records.optionalChain.get(call) !== undefined) return undefined;
   const use = context.promiseResultUses.get(call);
   const awaited = use?.kind === "awaited-in-scope" ? Node_Expression(ast, use.use) : undefined;
   if (awaited === undefined || rustUnparenthesizedExpression(ast, awaited) !== call) return undefined;

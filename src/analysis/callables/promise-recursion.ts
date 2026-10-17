@@ -42,12 +42,14 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext, bud
     if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
     const fact = context.records.targetOperation.get(call);
     if (fact?.kind !== "source-call" || fact.asyncBody?.maySuspend !== true) continue;
-    const caller = sourceEnclosingCallable(call, context.ast);
-    const callers = caller === undefined ? undefined : vertices.get(caller);
-    if (callers === undefined) continue;
     const callees = vertices.get(fact.asyncBody.declaration);
     if (callees === undefined) failTargetAnalysisInvariant("tsonic-rust",
       "A selected suspending native Promise edge requires its complete physical body set.", call);
+    if (callees.length === 0) failTargetAnalysisInvariant("tsonic-rust",
+      "A native Promise edge requires exactly its selected physical specialization.", call);
+    const caller = sourceEnclosingCallable(call, context.ast);
+    const callers = caller === undefined ? undefined : vertices.get(caller);
+    if (callers === undefined) continue;
     for (const vertex of callers) {
       if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
       const specialized = context.sourceCallableSpecializations.requiresSpecialization(fact.asyncBody.declaration);

@@ -165,9 +165,6 @@ export function analyzeRustTargetProgram(
   analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage, nodes: context.nativeNodes,
-    records, uses: context.promiseResultUses, definitions: context.typeDefinitions });
-  if (promiseResults.diagnostics.length > 0) return rejectedTargetStage(promiseResults.diagnostics);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     isNativeNode: context.isNativeNode,
     typeDefinitions: context.typeDefinitions,
@@ -277,14 +274,21 @@ export function analyzeRustTargetProgram(
     context.callableValues.nativeStorage,
     classValues,
   );
-  if (declarationGenericRequirements.kind === "rejected") {
-    return rejectedTargetStage(declarationGenericRequirements.diagnostics);
+  const retentionIssues = declarationGenericRequirements.kind === "rejected" ? []
+    : context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues);
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage,
+    nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
+    nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
+    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies,
+    evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
+      classValues, objectRepresentations, structuralShapes: context.structuralShapes, projectTypes: context.projectTypes, records } });
+  if (declarationGenericRequirements.kind === "rejected" || retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {
+    return rejectedTargetStage([...(declarationGenericRequirements.kind === "rejected" ? declarationGenericRequirements.diagnostics : []),
+      ...retentionIssues.map(issue => ({ code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error" as const,
+        source: "tsonic-rust", message: issue.message, sourceNode: issue.subject,
+        evidence: ["target.capability=rust.callable-value.exact-implementation"] })),
+      ...promiseResults.diagnostics]);
   }
-  const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues);
-  if (retentionIssues.length !== 0) return rejectedTargetStage(retentionIssues.map(issue => ({
-    code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error", source: "tsonic-rust", message: issue.message,
-    sourceNode: issue.subject, evidence: ["target.capability=rust.callable-value.exact-implementation"],
-  })));
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
     sourceFiles: context.sourceFiles,

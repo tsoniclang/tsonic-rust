@@ -95,7 +95,7 @@ fn pending_environment<Value>((value,): (&Value,))
     Ok(async move { Ok(value) })
 }
 
-fn borrowed_javascript((value,): (&str,)) -> Result<js_abi::JsPromise<'_, &str, AwaitFailure<'_>>, Infallible> {
+fn borrowed_javascript((value,): (&str,)) -> Result<js_abi::JsPromise<&str>, Infallible> {
     Ok(js_abi::JsPromise::resolved(value))
 }
 
@@ -116,8 +116,8 @@ fn mixed<'input>((value, branch): (&'input str, u8)) -> Result<Option<Union3<&'i
 }
 
 fn javascript((value, reject): (u64, bool))
-    -> Result<js_abi::JsPromise<'static, u64, AwaitFailure<'static>>, InvocationFailure<'static>> {
-    Ok(if reject { js_abi::JsPromise::rejected(AwaitFailure("JS")) } else { js_abi::JsPromise::resolved(value) })
+    -> Result<js_abi::JsPromise<u64>, InvocationFailure<'static>> {
+    Ok(if reject { js_abi::JsPromise::rejected(js_abi::JsValue::String(String::from("JS"))) } else { js_abi::JsPromise::resolved(value) })
 }
 
 fn complete<Value>(future: impl Future<Output = Value>) -> Value {
@@ -175,21 +175,22 @@ fn main() {
     assert_eq!(cost, Cost::default());
     let (direct, direct_cost) = measure(|| complete(javascript((9, false)).unwrap().into_result()));
     let (bridged, bridge_cost) = measure(|| {
-        let pending: js_abi::JsPromise<'static, u64, AwaitFailure<'static>> = ${jsName}::invoke(&javascript, 9, false).unwrap();
+        let pending: js_abi::JsPromise<u64> = ${jsName}::invoke(&javascript, 9, false).unwrap();
         complete(pending.into_result())
     });
     assert_eq!(direct, Ok(9));
     assert_eq!(bridged, direct);
     assert_eq!(bridge_cost, direct_cost);
-    assert_eq!(complete(${jsName}::invoke(&javascript, 9, true).unwrap().into_result()), Err(AwaitFailure("JS")));
+    assert_eq!(complete(${jsName}::invoke(&javascript, 9, true).unwrap().into_result()), Err(js_abi::JsValue::String(String::from("JS"))));
     let (direct, direct_cost) = measure(|| complete(borrowed_javascript((&text,)).unwrap().into_result()));
     let (bridged, bridge_cost) = measure(|| {
-        let pending: js_abi::JsPromise<'_, &str, AwaitFailure<'_>> = ${borrowedJsName}::invoke(&borrowed_javascript, &text).unwrap();
+        let pending: js_abi::JsPromise<&str> = ${borrowedJsName}::invoke(&borrowed_javascript, &text).unwrap();
         complete(pending.into_result())
     });
     assert_eq!(direct, Ok(text.as_str()));
     assert_eq!(bridged, direct);
     assert_eq!(bridge_cost, direct_cost);
+    assert!(core::ptr::eq(bridged.unwrap().as_ptr(), text.as_ptr()));
     println!("PASS: exact producer errors, lifetimes, optional mixed futures, JS Promise identity and zero bridge allocations");
 }
 

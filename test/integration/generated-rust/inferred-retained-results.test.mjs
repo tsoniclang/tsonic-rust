@@ -13,7 +13,7 @@ test("a returned owned Promise does not retain a loan of its callback input", { 
   ` } });
   assert.deepEqual(result.diagnostics.map(value => `${value.code}: ${value.message}`), []);
   const generated = artifactText(result, "src/index.rs");
-  assert.match(generated, /AwaitError0/u);
+  assert.doesNotMatch(generated, /AwaitError0/u);
   assert.match(generated, /InvocationError/u);
   assert.doesNotMatch(generated, /Implementation\w*: [^\n]*(?:Clone|'static)|transmute/u);
   const root = writeGeneratedProject("inferred-retained-results", result.artifacts);
@@ -27,10 +27,10 @@ use tsonic_rust_runtime as rt;
 struct Borrowed<'region>(&'region str);
 
 impl rt::CallableImplementation<()> for Borrowed<'_> {
-    type Output = Result<JsPromise<'static, String, Infallible>, Infallible>;
+    type Output = Result<JsPromise<String>, Infallible>;
     fn invoke(&self, (): ()) -> Self::Output {
         let value = String::from(self.0);
-        Ok(JsPromise::from_infallible_factory(move || async move { value }))
+        Ok(JsPromise::resolved(value))
     }
 }
 

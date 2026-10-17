@@ -11,8 +11,8 @@ const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
 const region = { kind: "parameter", identity: "scope::borrow", name: "borrow" };
 const promise = (output = integer) => rustJsPromiseTargetType(output);
-const storage = (parameters = [], lifetime = { kind: "static" }, ownedReceiver) => ({
-  capturedParameters: parameters, storage: lifetime,
+const storage = (parameters, capturedCarriers, lifetime, ownedReceiver) => ({
+  kind: "factory", capturedParameters: parameters, capturedCarriers, storage: lifetime,
   ...(ownedReceiver === undefined ? {} : { ownedReceiver }),
 });
 const protocol = (overrides = {}) => ({ kind: "sync", resultCarrier: integer,
@@ -75,18 +75,27 @@ for (const [name, lifetime, capture] of [
   const builder = createRustProgramRecordBuilder();
   const declaration = {};
   const parameters = [{}, {}];
-  const selected = storage(parameters, lifetime, capture);
+  const capturedCarriers = [integer, wide];
+  const selected = storage(parameters, capturedCarriers, lifetime, capture);
   const future = promise(integer);
   builder.asyncFunctions.promise(declaration, future, integer, selected);
   const fact = builder.asyncFunction.get(declaration);
   assert.equal(fact.kind, "js-promise");
   assert.equal(fact.isAsync, true);
   assert.equal(fact.futureCarrier === future && fact.outputCarrier === integer, true);
-  assert.equal(fact.capturedParameters === parameters && fact.storage === lifetime, true);
-  assert.equal(fact.ownedReceiver === capture, true);
-  assert.equal(Object.hasOwn(fact, "ownedReceiver"), capture !== undefined);
+  assert.equal(fact.lowering.kind, "factory");
+  assert.equal(fact.lowering.capturedParameters === parameters && fact.lowering.storage === lifetime, true);
+  assert.equal(fact.lowering.capturedCarriers.length, capturedCarriers.length);
+  assert.equal(fact.lowering.capturedCarriers.every((carrier, index) => carrier === capturedCarriers[index]), true,
+    "every actual physical capture carrier keeps its positional identity");
+  assert.equal(Object.isFrozen(fact.lowering) && Object.isFrozen(fact.lowering.capturedCarriers), true,
+    "the complete current lowering DTO is immutable");
+  assert.equal(fact.lowering.ownedReceiver === capture, true);
+  assert.equal(Object.hasOwn(fact.lowering, "ownedReceiver"), capture !== undefined);
+  assert.equal(Object.hasOwn(fact, "ownedReceiver") || Object.hasOwn(fact, "capturedParameters") || Object.hasOwn(fact, "storage"), false,
+    "the replaced flat lowering fields are absent");
   assertRustInheritedRecordCorrespondence("asyncFunction", declaration, fact, candidate => candidate.asyncFunctions.promise(declaration, { ...future }, { ...integer }, {
-    ...selected, capturedParameters: [...parameters], storage: { ...lifetime },
+    ...selected, capturedParameters: [...parameters], capturedCarriers: capturedCarriers.map(carrier => ({ ...carrier })), storage: { ...lifetime },
     ...(capture === undefined ? {} : { ownedReceiver: { ...capture, occurrences: [...capture.occurrences] } }),
   }));
   assert.equal(builder.asyncFunction.get(declaration) === fact, true, "structural equality keeps original evidence");
@@ -99,7 +108,7 @@ test("promise equality detects output, parameter identity/order, storage region 
   const declaration = {};
   const parameters = [{}, {}];
   const receiver = { carrier: integer, occurrences: [{}, {}] };
-  const selected = storage(parameters, { kind: "lifetime", lifetime: region }, receiver);
+  const selected = storage(parameters, [integer, wide], { kind: "lifetime", lifetime: region }, receiver);
   const future = promise(integer);
   builder.asyncFunctions.promise(declaration, future, integer, selected);
   const original = builder.asyncFunction.get(declaration);
@@ -108,6 +117,8 @@ test("promise equality detects output, parameter identity/order, storage region 
     [future, wide, selected],
     [future, integer, { ...selected, capturedParameters: [parameters[1], parameters[0]] }],
     [future, integer, { ...selected, capturedParameters: [{}, parameters[1]] }],
+    [future, integer, { ...selected, capturedCarriers: [wide, integer] }],
+    [future, integer, { ...selected, capturedCarriers: [integer] }],
     [future, integer, { ...selected, storage: { kind: "receiver" } }],
     [future, integer, { ...selected, storage: { kind: "lifetime", lifetime: { ...region, identity: "other::borrow" } } }],
     [future, integer, { ...selected, ownedReceiver: undefined }],
