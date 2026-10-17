@@ -18,7 +18,8 @@ import {
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { rustTypeEquals } from "../../../target-ast/inspection/type-equality.js";
 import { planProjectMethod } from "../../declarations/nominal.js";
-import { readRustProjectMethodOverride, rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../../../../target-model/types/field-storage.js";
+import { readRustProjectMethodOverride } from "../project-objects.js";
 import { rustProjectDispatchObjectType, rustProjectDispatchTraitType } from "./names.js";
 import { rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";

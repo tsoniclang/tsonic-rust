@@ -30,7 +30,7 @@ import { planExpressionInner } from "./dispatch.js";
 import { planRustFlowReadProjection } from "./flow-reads.js";
 import { createRustSharedReferenceArgument } from "./input-shaping.js";
 import { planRustProjectDowncast } from "../objects/project-downcasts.js";
-import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../objects/project-objects.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../../../target-model/types/field-storage.js";
 import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe } from "../safety/explicit-safety.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";

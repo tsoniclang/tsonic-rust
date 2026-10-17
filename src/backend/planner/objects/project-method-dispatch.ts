@@ -7,7 +7,7 @@ import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustProjectObjectDispatchField } from "./project-objects.js";
+import { rustProjectObjectDispatchField } from "../../../target-model/types/field-storage.js";
 import { rustProjectDispatchTraitType } from "./polymorphism/names.js";
 
 export function planRustVirtualProjectMethodCall(

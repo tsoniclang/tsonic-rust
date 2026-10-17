@@ -60,6 +60,8 @@ export type RustNativeObjectPhysicalField = RustSourceObjectPhysicalField & {
   | { readonly kind: "index" }
   | { readonly kind: "marker" }
   | { readonly kind: "state" }
+  | { readonly kind: "identity" }
+  | { readonly kind: "dispatch" }
 );
 
 export interface RustNativeObjectPhysicalDeclaration {

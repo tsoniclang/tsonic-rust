@@ -42,6 +42,9 @@ import {
   rustRegExpStringIteratorTargetType,
   rustStringTargetType,
   rustVecTargetType,
+  rustNamedTargetType,
+  rustNamedTypeCarrierValue,
+  rustNamedTypeRequirementsForArguments,
   substituteRustTargetGenerics,
 } from "../../../target-model/types/index.js";
 import { denseDefined } from "./project.js";
@@ -49,6 +52,7 @@ import { mergeProviderDeclarationIdentities } from "../../identities/selected-so
 import { providerVirtualDeclarationFactKey } from "@tsonic/tsts";
 import { resolveRustTargetType } from "./target.js";
 import { rustProviderGenericRequirementsAreSatisfied } from "../../constraints/provider-generic-requirements.js";
+import { rustProviderTypeRequirementTrait } from "../../../target-model/operations/type-requirements.js";
 import { rustProviderOperationOwnerMatches } from "../../operations/provider-selection.js";
 import type {
   ExtensionFactSubject,
@@ -61,6 +65,7 @@ import type { RustProviderTypeRow } from "../../../providers/packages/model.js";
 import type { RustSourceProfileRegistry } from "../model/source-profile.js";
 import type { RustTargetTypeResolutionContext, RustTargetTypeResolutionOptions } from "./model.js";
 import type {
+  RustNamedTypeTraitRequirement,
   RustTargetGenericArgument,
   TargetTypeRef,
 } from "../../../target-model/types/model.js";
@@ -239,22 +244,31 @@ export function instantiateProviderTargetType(
       constSubstitutions.set(parameter.targetIdentity, selected.value);
     }
   }
-  if (!rustProviderGenericRequirementsAreSatisfied(
-    relation.typeRequirements,
-    {
-      types: typeSubstitutions,
-      lifetimes: lifetimeSubstitutions,
-      consts: constSubstitutions,
-    }, definitions,
-  )) {
-    return undefined;
-  }
-  return substituteRustTargetGenerics(
+  const selected = substituteRustTargetGenerics(
     relation.targetCarrier,
     typeSubstitutions,
     lifetimeSubstitutions,
     constSubstitutions,
   );
+  const pattern = rustNamedTypeCarrierValue(relation.targetCarrier);
+  const native = rustNamedTypeCarrierValue(selected);
+  const bindings = { types: typeSubstitutions, lifetimes: lifetimeSubstitutions, consts: constSubstitutions };
+  if (pattern === undefined) return rustProviderGenericRequirementsAreSatisfied(
+    relation.typeRequirements, bindings, definitions) ? selected : undefined;
+  if (native === undefined) return undefined;
+  const normalized = rustNamedTypeRequirementsForArguments(pattern.genericArguments,
+    (relation.typeRequirements ?? []).map(parameter => ({ identity: parameter.identity,
+      traits: parameter.requirements.map(rustProviderTypeRequirementTrait),
+    })));
+  if (normalized === undefined) return undefined;
+  const requirements: RustNamedTypeTraitRequirement[] = [...native.typeRequirements];
+  for (const requirement of normalized) {
+    const trait = substituteRustTargetGenerics(requirement.trait, typeSubstitutions, lifetimeSubstitutions, constSubstitutions);
+    if (trait.kind !== "trait-ref") return undefined;
+    requirements.push({ ...requirement, trait });
+  }
+  return rustNamedTargetType(native.id, native.path, native.genericArguments, native.genericDefaults, native.traits,
+    native.upcasts, native.nativeErrorIdentity, requirements, native.nativeArgumentCount);
 }
 
 function substituteGenericArgument(

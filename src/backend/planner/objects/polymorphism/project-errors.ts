@@ -4,7 +4,11 @@ import type { RustExpr, RustImplFunction, RustItem, RustType } from "../../../ta
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { projectFieldStoragePath, type ProjectClassStateLayer } from "./model.js";
 import { rustProjectRepresentationGenerics } from "./names.js";
-import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
+import {
+  rustProjectObjectDispatchField,
+  rustProjectObjectIdentityField,
+  rustProjectObjectStateField,
+} from "../../../../target-model/types/field-storage.js";
 import { planCheckedProjectProjectionImplementation } from "../checked-project-projections.js";
 import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";

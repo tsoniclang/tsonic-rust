@@ -1,9 +1,8 @@
 import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../../../../target-model/types/field-storage.js";
 import {
   readRustProjectObjectField,
   readRustProjectMethodOverride,
-  rustProjectObjectDispatchField,
-  rustProjectObjectIdentityField,
   writeRustProjectObjectField,
   writeRustProjectMethodOverride,
 } from "../project-objects.js";

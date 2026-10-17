@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
@@ -8,9 +9,13 @@ import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mj
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
-import { rustNamedTargetType, rustNativeTraitRef } from "../../../dist/target-model/types/carriers/native.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue, rustNativeTraitRef,
+  rustMoveOnlyNamedTypeTraits } from "../../../dist/target-model/types/carriers/native.js";
 import { selectRustCloneRequirements } from "../../../dist/target-model/types/carriers/traits.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustProviderTypeRequirementTrait } from "../../../dist/target-model/operations/type-requirements.js";
+import { instantiateProviderTargetType } from "../../../dist/policy/types/resolution/providers.js";
+import { classifyCarrierRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 
 const integer = Object.freeze({ kind: "source-primitive", name: "int32" });
 const parameter = Object.freeze({ kind: "type-parameter", identity: "native-clone:Value", name: "Value" });
@@ -21,7 +26,7 @@ test("source object Clone is a once-published exact physical field obligation, n
   const registry = createRustTypeDefinitionRegistry();
   const open = instance(parameter);
   assert.equal(selectRustCloneRequirements(open, registry).kind, "required", "an incomplete physical declaration is an obligation, not success");
-  const noClone = rustNamedTargetType("native.NoClone", "native::NoClone");
+  const noClone = rustNamedTargetType("native.NoClone", "native::NoClone", [], [], rustMoveOnlyNamedTypeTraits, [], undefined, []);
   const mutable = { kind: "reference", mutable: true, referent: integer };
   const selected = { carrier: open, fields: [field("value", { kind: "required", carrier: parameter }),
     field("marker", { kind: "unconditional" })] };
@@ -56,8 +61,91 @@ test("native handles and markers do not inherit Clone from their stored payload,
   const nativeContainer = rustNamedTargetType("native.Container", "native::Container", [{ kind: "type", type: instance(parameter) }], [], {
     implementations: [{ trait: rustNativeTraitRef("core::clone::Clone"), requirements: [{ typeArgumentIndex: 0,
       trait: rustNativeTraitRef("core::clone::Clone") }] }],
-  });
+  }, [], undefined, []);
   assert.equal(selectRustCloneRequirements(nativeContainer, registry).kind, "required", "a conditional native container transports an incomplete source-field requirement");
+});
+
+test("native TYPE well-formedness requirements keep exact semantic TYPE indexes independently of Clone implementations", () => {
+  const registry = createRustTypeDefinitionRegistry();
+  const left = { kind: "type-parameter", identity: "native:Left", name: "Left" };
+  const right = { kind: "type-parameter", identity: "native:Right", name: "Right" };
+  const lifetime = { kind: "lifetime", lifetime: { kind: "parameter", name: "env", identity: "native:env" } };
+  const length = { kind: "const", value: { kind: "parameter", identity: "native:Length", name: "Length" } };
+  const pattern = rustNamedTargetType("native.Ordered", "native::Ordered", [lifetime, { kind: "type", type: right },
+    length, { kind: "type", type: left }], [], rustMoveOnlyNamedTypeTraits, [], undefined, []);
+  const relation = { targetCarrier: pattern, genericParameters: [
+    { kind: "lifetime", sourceName: "env", targetIdentity: "native:env" },
+    { kind: "type", sourceName: "Left", targetIdentity: left.identity },
+    { kind: "const", sourceName: "Length", targetIdentity: "native:Length" },
+    { kind: "type", sourceName: "Right", targetIdentity: right.identity },
+  ], typeRequirements: [
+    { identity: left.identity, name: "Left", requirements: ["clone"] },
+    { identity: right.identity, name: "Right", requirements: ["copy"] },
+  ] };
+  const noClone = rustNamedTargetType("native.NoClone", "native::NoClone", [], [], rustMoveOnlyNamedTypeTraits, [], undefined, []);
+  const arguments_ = value => [{ kind: "lifetime", lifetime: { kind: "static" } }, { kind: "type", type: instance(value) },
+    { kind: "const", value: { kind: "integer", value: "3" } }, { kind: "type", type: integer }];
+  const selected = instantiateProviderTargetType(relation, arguments_(noClone), registry);
+  const native = rustNamedTypeCarrierValue(selected);
+  assert.equal(native !== undefined, true, "an early native type carries an obligation instead of fabricating incomplete object Clone");
+  assert.equal(native.traits.implementations.length, 0, "type bounds never manufacture a conditional Clone implementation");
+  const clone = native.typeRequirements.find(requirement => requirement.trait.path === "core::clone::Clone");
+  const copy = native.typeRequirements.find(requirement => requirement.trait.path === "core::marker::Copy");
+  assert.equal(clone?.typeArgumentIndex, 1, "Clone belongs to the actual second native TYPE slot, not lifetime/const/source offsets");
+  assert.equal(copy?.typeArgumentIndex, 0, "the reordered native integer TYPE slot retains its Copy requirement");
+  assert.equal(native.genericArguments.length, 4, "all semantic lifetime, const and TYPE arguments remain present");
+  assert.equal(registry.registerSourceObjectPhysicalDefinition({ carrier: instance(parameter),
+    fields: [field("value", { kind: "required", carrier: parameter })] }), true, "the actual source field template completes once");
+  for (const [label, value, expected] of [["native move-only", noClone, "unsatisfied"], ["native integer", integer, "supported"]]) {
+    const carrier = rustNamedTypeCarrierValue(instantiateProviderTargetType(relation, arguments_(value), registry));
+    const payload = carrier.genericArguments.filter(argument => argument.kind === "type")[clone.typeArgumentIndex].type;
+    const result = classifyCarrierRequirements(payload, ["clone"], new Set(), new Map(), () => false, registry, undefined);
+    assert.equal(result.kind, expected, `${label}: the final sole classifier discharges the exact native type obligation`);
+  }
+  assert.equal(instantiateProviderTargetType({ ...relation, typeRequirements: [
+    { identity: "foreign", name: "Foreign", requirements: ["clone"] },
+  ] }, arguments_(integer), registry) === undefined, true, "an unmapped native requirement never becomes a guessed argument index");
+
+  const defaulted = rustNamedTargetType("native.Defaulted", "native::Defaulted", [lifetime, { kind: "type", type: left }],
+    [{ kind: "type", type: integer }], rustMoveOnlyNamedTypeTraits, [], undefined, []);
+  const defaultRelation = { targetCarrier: defaulted, genericParameters: [relation.genericParameters[0],
+    { ...relation.genericParameters[1], defaultArgument: { kind: "type", type: integer } }],
+    typeRequirements: [relation.typeRequirements[0]] };
+  const selectedDefault = rustNamedTypeCarrierValue(instantiateProviderTargetType(defaultRelation,
+    [{ kind: "lifetime", lifetime: { kind: "static" } }], registry));
+  assert.equal(selectedDefault !== undefined, true, "the actual native generic default is fully instantiated");
+  assert.equal(selectedDefault.typeRequirements[0].typeArgumentIndex, 0, "default omission never shifts the semantic TYPE requirement");
+  assert.equal(rustTargetTypeRefEquals(selectedDefault.genericArguments[1].type, integer), true,
+    "the defaulted semantic argument remains available before syntax normalization");
+});
+
+test("one provider trait data conversion preserves full native identity, arguments, associated output and binder", () => {
+  const lifetime = Object.freeze({ kind: "bound", binderIdentity: "native-trait-binder",
+    identity: "native-trait-binder:loan", name: "loan" });
+  const binder = Object.freeze({ identity: lifetime.binderIdentity,
+    parameters: Object.freeze([{ lifetime, outlives: [] }]) });
+  const arguments_ = Object.freeze([{ kind: "type", type: parameter }, { kind: "lifetime", lifetime }]);
+  const associated = Object.freeze([{ kind: "equality", name: "Output", genericArguments: [],
+    type: { kind: "reference", mutable: false, lifetime, referent: parameter } }]);
+  const requirement = Object.freeze({ kind: "trait", path: "native::Family", genericArguments: arguments_,
+    associatedConstraints: associated, lifetimeBinder: binder });
+  const selected = rustProviderTypeRequirementTrait(requirement);
+  assert.equal(selected.kind, "trait-ref", "the canonical result is native trait data, not a provider selector");
+  assert.equal(selected.id, "provider-requirement:native::Family", "the existing complete provider trait identity is preserved");
+  assert.equal(selected.path, requirement.path, "the native path is unchanged");
+  assert.equal(selected.genericArguments === arguments_, true, "no native TYPE or bound lifetime argument is dropped");
+  assert.equal(selected.associatedConstraints === associated, true, "the complete associated output constraint is retained");
+  assert.equal(selected.lifetimeBinder === binder, true, "higher-ranked binder identity and scope are unchanged");
+  const unbound = rustProviderTypeRequirementTrait({ kind: "trait", path: "native::Unbound",
+    genericArguments: [], associatedConstraints: [] });
+  assert.equal(Object.hasOwn(unbound, "lifetimeBinder"), false, "an absent binder remains genuine native absence");
+  for (const [name, path] of [["clone", "core::clone::Clone"], ["copy", "core::marker::Copy"]]) {
+    const standard = rustProviderTypeRequirementTrait(name);
+    assert.equal(standard.id, path, `${name}: canonical native standard trait identity`);
+    assert.equal(standard.path, path, `${name}: canonical native standard trait path`);
+    assert.equal(standard.genericArguments.length, 0, `${name}: no invented generic arguments`);
+    assert.equal(standard.associatedConstraints.length, 0, `${name}: no invented associated requirements`);
+  }
 });
 
 const sourceText = `
@@ -68,11 +156,17 @@ export class Marker<Value> {
   constructor(public value: number) {}
 }
 export interface Entry<Value> { value: Value; }
+export interface Tagged<Value> { tag(): number; }
+export class TagValue<Value> implements Tagged<Value> {
+  constructor(public value: number) {}
+  tag(): number { return this.value; }
+}
 export type Choice<Value> = Value | number;
 export function make<Value>(value: Value): Item<Value> { return new Item(value); }
 export function duplicate<Value>(value: Item<Value>): [Item<Value>, Item<Value>] { return [value, value]; }
 export function marker<Value>(value: number): Marker<Value> { return new Marker<Value>(value); }
 export function entry<Value>(value: Value): Entry<Value> { return { value }; }
+export function tagged<Value>(value: number): Tagged<Value> { return new TagValue<Value>(value); }
 export function choice<Value>(value: Value): Choice<Value> { return value; }
 `;
 
@@ -97,6 +191,17 @@ for (const surface of ["native", "js"]) {
         assert.equal(raw.fields.every((field, index) => field.name === form.physical.fields[index].name), true,
           `${name}: emission and trait admission share field identities`);
       }
+      for (const name of ["Tagged", "TagValue"]) {
+        const definition = program.projectTypes.definitions.find(definition => definition.targetName === name);
+        assert.equal(definition !== undefined, true, `${name}: actual polymorphic source declaration`);
+        const raw = program.typeDefinitions.sourceObjectPhysicalDefinition(program.projectTypes.openCarrier(definition));
+        assert.equal(raw !== undefined && Object.isFrozen(raw.fields), true, `${name}: canonical wrapper fields are sealed`);
+        assert.equal(raw.fields.length, 2, `${name}: the native wrapper has exactly its two actual retained handles`);
+        assert.equal(raw.fields[0].name, "identity", `${name}: the first actual emitted native field is identity`);
+        assert.equal(raw.fields[1].name, "dispatch", `${name}: the second actual emitted native field is dispatch`);
+        assert.equal(raw.fields.every(field => field.clone.kind === "unconditional"), true,
+          `${name}: ObjectIdentity and Rc native Clone do not acquire the phantom Value bound`);
+      }
       assert.equal(sourceFile !== undefined, true, "the original source is published");
       const generated = artifactText(result, "src/index.rs");
       assert.equal(/#\[derive\(Clone\)\]\s*pub struct Item/u.test(generated), false,
@@ -105,7 +210,6 @@ for (const surface of ["native", "js"]) {
 #[cfg(test)]
 mod conditional_clone_native_control {
     use super::*;
-    use core::cell::Cell;
     ${nativeOwnershipCostSupport}
 
     struct NoClone(i32);
@@ -127,6 +231,10 @@ mod conditional_clone_native_control {
         let marked = marker::<NoClone>(9.0);
         assert_eq!(marked.clone().value, 9.0);
         assert_eq!(entry(NoClone(11)).value.0, 11);
+        let tagged = tagged::<NoClone>(8.0);
+        let tagged_copy = tagged.clone();
+        assert_eq!(tagged, tagged_copy);
+        assert_eq!(tagged_copy.tag(), 8.0);
         let _ = choice(NoClone(13));
         let clones = Cell::new(0);
         let drops = Cell::new(0);
@@ -159,5 +267,35 @@ mod conditional_clone_native_control {
           endedAt: new Date().toISOString(), durationSeconds: (Date.now() - startedAt.getTime()) / 1000,
           exitCode: native.status })}\n${native.stdout}\n${native.stderr}\n`);
       }
+      const negativeControl = `
+#[cfg(test)]
+mod native_clone_refusal {
+    use super::*;
+    struct NoClone;
+    fn require_clone<Value: Clone>(_: &Value) {}
+    #[test]
+    fn payload_clone_is_a_real_native_requirement() {
+        require_clone(&make(NoClone));
+        require_clone(&entry(NoClone));
+        require_clone(&choice(NoClone));
+    }
+}
+`;
+      const rejectedProject = writeGeneratedProject(`native-clone-refusal-${surface}`, result.artifacts.map(artifact =>
+        artifact.path === "src/index.rs" ? { ...artifact, text: artifact.text + negativeControl } : artifact));
+      runCargo(rejectedProject, ["generate-lockfile", "--offline"]);
+      const negativeArguments = ["check", "--tests", "--locked", "--offline"];
+      const negativeStart = new Date();
+      const rejected = spawnSync("cargo", negativeArguments, { cwd: rejectedProject, encoding: "utf8",
+        env: { ...process.env, CARGO_TERM_COLOR: "never" }, timeout: 300_000 });
+      appendFileSync(join(rejectedProject, "native-clone-refusal.log"), `${JSON.stringify({ command: ["cargo", ...negativeArguments],
+        startedAt: negativeStart.toISOString(), endedAt: new Date().toISOString(),
+        durationSeconds: (Date.now() - negativeStart.getTime()) / 1000, exitCode: rejected.status,
+        signal: rejected.signal, error: rejected.error?.message })}\n${rejected.stdout}\n${rejected.stderr}\n`);
+      assert.equal(rejected.status !== null && rejected.status !== 0 && rejected.signal === null && rejected.error === undefined,
+        true, "native Clone refusal is a completed compiler rejection, not a signal or infrastructure error");
+      assert.equal([...rejected.stderr.matchAll(/^error\[E0277\]/gmu)].length, 3,
+        "class, record interface and union each require their actual payload's native Clone implementation");
+      assert.match(rejected.stderr, /NoClone: Clone/u, "the actual move-only payload is the unsatisfied native requirement");
     });
 }

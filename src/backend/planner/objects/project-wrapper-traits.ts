@@ -1,5 +1,5 @@
 import { rustSelfParameter } from "../declarations/callables/self-parameter.js";
-import { rustProjectObjectStateField } from "./project-objects.js";
+import { rustProjectObjectStateField } from "../../../target-model/types/field-storage.js";
 import { emptyRustGenerics } from "../../target-ast/syntax/nodes.js";
 import type { RustExpr, RustGenerics, RustImplFunction, RustItem, RustType } from "../../target-ast/syntax/nodes.js";
 

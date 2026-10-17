@@ -19,6 +19,8 @@ import type { RustProjectConstructionQueries } from "../project-types/constructi
 import { rustRetainedFrameCounterName } from "../callables/frame-counter-storage.js";
 import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
+import { rustProjectObjectStateField, rustProjectObjectIdentityField,
+  rustProjectObjectDispatchField } from "../../target-model/types/field-storage.js";
 
 interface RustNativeObjectDeclarationInput extends Omit<RustNativeValueDeclarationInput, "typeFamilies"> {
   readonly typeDefinitions: RustTypeDefinitionRegistry;
@@ -47,7 +49,14 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
     if (!input.isNativeNode(declaration) || input.records.typeOnlyDeclaration.get(declaration) !== undefined) continue;
     let form: RustNativeClassDeclaration | RustNativeInterfaceDeclaration;
     if (definition.kind === "interface") {
-      if (ast.parent(declaration) !== ast.getSourceFile(declaration) || projectTypes.isPolymorphic(definition)) continue;
+      if (ast.parent(declaration) !== ast.getSourceFile(declaration)) continue;
+      if (projectTypes.isPolymorphic(definition)) {
+        const selected = physical(definition, [], input);
+        if (!input.typeDefinitions.registerSourceObjectPhysicalDefinition(selected.definition)) {
+          diagnostics.push(objectIssue(declaration, "A native object requires one complete physical-field definition registered exactly once."));
+        }
+        continue;
+      }
       const admitted = admitRustNativeInterfaceFields(declaration, input);
       if (admitted.kind === "rejected") { diagnostics.push(...admitted.diagnostics); continue; }
       const storageFields: RustNativeObjectPhysicalField[] = admitted.form.fields.map(field => Object.freeze({
@@ -70,7 +79,7 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
       const fields: RustNativeClassField[] = [];
       const frame = input.frames.definitionForOwner(declaration);
       const frameCounterName = frame === undefined ? undefined : rustRetainedFrameCounterName(frame,
-        { source: { ast }, projectTypes, projectConstructions: input.projectConstructions });
+        { callableValues: { frames: input.frames }, projectTypes, projectConstructions: input.projectConstructions });
       const storageFields: RustNativeObjectPhysicalField[] = [];
       if (frame !== undefined) {
         if (frame.storage.kind === "standalone") {
@@ -163,9 +172,14 @@ function physical(definition: RustNativeClassDeclaration["definition"], storageF
   const representation = input.objectRepresentations.representationFor(definition);
   if (representation === undefined) failTargetAnalysisInvariant("tsonic-rust",
     "A physical native object requires its selected representation.", definition.declaration);
-  const fields = Object.freeze(representation.kind === "value" ? [...storageFields] : [{
-    kind: "state" as const, name: "state", copy: false, clone: Object.freeze({ kind: "unconditional" as const }),
-  }]);
+  const fields: readonly RustNativeObjectPhysicalField[] = Object.freeze(representation.kind === "value" ? [...storageFields]
+    : representation.kind === "shared-immutable" || representation.kind === "shared-mutable" ? [{
+      kind: "state" as const, name: rustProjectObjectStateField, copy: false, clone: Object.freeze({ kind: "unconditional" as const }),
+    }] : [{
+      kind: "identity" as const, name: rustProjectObjectIdentityField, copy: false, clone: Object.freeze({ kind: "unconditional" as const }),
+    }, {
+      kind: "dispatch" as const, name: rustProjectObjectDispatchField, copy: false, clone: Object.freeze({ kind: "unconditional" as const }),
+    }]);
   const raw: RustSourceObjectPhysicalDefinition = Object.freeze({ carrier: input.projectTypes.openCarrier(definition),
     fields: Object.freeze(fields.map(field => Object.freeze({ name: field.name, clone: field.clone }))) });
   return Object.freeze({ definition: raw, storageFields: Object.freeze([...storageFields]), fields,

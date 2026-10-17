@@ -1,10 +1,10 @@
 import { rustValueBlock, type RustValueBlockEntry } from "../../target-ast/syntax/value-block.js";
 import {
-  createRustProjectObject,
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
   rustProjectObjectStateField,
-} from "../objects/project-objects.js";
+} from "../../../target-model/types/field-storage.js";
+import { createRustProjectObject } from "../objects/project-objects.js";
 import {
   createRustStructuralObjectFromCarrier,
   rustDirectProjectFieldStoragePath,

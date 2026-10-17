@@ -14,7 +14,11 @@ import { diagnosticInput, rustErrorBoundaryForDeclaration, rustErrorType,
 import { applyFallibleShape } from "../../types/fallible-shape.js";
 import { rustDeclarationRequiresUnsafe, rustSafetyAttributesForDeclaration } from "../../safety/explicit-safety.js";
 import { rustProjectConstructorDeadCodeDisposition } from "../../program/reachability-directives.js";
-import { rustProjectObjectDispatchField, rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
+import {
+  rustProjectObjectDispatchField,
+  rustProjectObjectIdentityField,
+  rustProjectObjectStateField,
+} from "../../../../target-model/types/field-storage.js";
 import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import type { ProjectClassStateLayer } from "./model.js";
 import { rustProjectStateType } from "./names.js";

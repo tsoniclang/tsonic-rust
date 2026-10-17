@@ -2,7 +2,8 @@ import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/s
 import { diagnosticInput, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredFieldDeadCodeDisposition, rustGeneratedProjectInterfaceFieldDeadCodeDisposition, rustProjectInterfaceDeadCodeDisposition } from "../../program/reachability-directives.js";
 import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
-import { rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
+import { rustProjectObjectStateField } from "../../../../target-model/types/field-storage.js";
+import { rustProjectObjectType } from "../../objects/project-objects.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
