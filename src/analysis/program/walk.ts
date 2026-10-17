@@ -255,7 +255,7 @@ export function selectExpressionOperation(
     };
     const selection = selectRustCheckedCall(request, context, walk.operationOptions);
     if (selection.kind === "reject") {
-      walk.context.diagnostics.push(rustPolicyTargetDiagnostic(selection.diagnostic));
+      recordPolicyRejection(walk, selection);
     } else if (selection.value.kind === "deferred-callback") {
       walk.deferredCallbackCalls.set(expression, {
         request,

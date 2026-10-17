@@ -11,7 +11,9 @@ import { planRustFlowReadProjection } from "../../../../dist/backend/planner/exp
 
 import { createRustTypeDefinitionRegistry } from "../../../../dist/analysis/project-types/type-definitions.js";
 import { rustOptionTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType } from "../../../../dist/target-model/types/index.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+import { fakeCompileInput, fakeSourceFile, fakeStatement } from "../../../helpers/fake-compile-input.mjs";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createRustNativeCallableInputPlan } from "../../../../dist/analysis/callables/native-inputs.js";
 
 test("union flow projections retain exact optional dispatch and reject altered evidence", () => {
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 8 });
@@ -32,10 +34,17 @@ test("union flow projections retain exact optional dispatch and reject altered e
     assert.equal(selected.kind, "projection");
     assert.deepEqual(selected.fact, { kind: "source-union", sourceCarrier,
       dispatchCarrier: union, selectedCarrier, variant: "Integer" });
+    const fixture = fakeCompileInput({ sourceFiles: [sourceFile] });
+    const storage = createSourceStorageQuery(fixture.source, [sourceFile]);
+    const records = createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }});
+    assert.equal(storage.failureReason() === undefined, true, "the original flow fixture has a complete checked source domain");
+    const native = createRustNativeCallableInputPlan({ ast: fixture.source.ast, storage, nativeNodes: storage.nodes,
+      records, definitions, sourcePackages: fixture.sourcePackages, usedNames: new Set() });
+    assert.equal(native.inputs.length === 0 && native.protocols.length === 0 && native.calls.length === 0, true,
+      "the actual source-union flow fixture has no native callable input or protocol");
     for (const canMove of [false, true]) {
       const context = { input: { program: {
-        source: { ast: fakeAstReader([sourceFile]) },
-        records: createRustRecordFixture({runtimeCarrier: { get: () => ({ carrier: sourceCarrier }) }}),
+        source: fixture.source, records, callableValues: { native },
         names: { nameForSourceType: (_file, name) => name },
         ownership: createRustOwnershipFixture(node, sourceCarrier, canMove ? "move" : "clone"),
         projectTypes, typeDefinitions: definitions, configuration: { edition: "2024" },
