@@ -16,12 +16,10 @@ import {
   KindExportAssignment,
   KindExportDeclaration,
   KindVariableStatement,
-  Node_Initializer,
 } from "@tsonic/target-api/source";
 
 import {
   rustCarrierSupportsClone,
-  isRustStringCarrier,
 } from "../../../target-model/types/index.js";
 import {
   createRustSourceFile,
@@ -32,7 +30,6 @@ import type {
   RustItem,
   RustSourceFileModel,
 } from "../../target-ast/syntax/nodes.js";
-import { rustLintAttributes } from "../../target-ast/normalization/lint-policy.js";
 import type { RustPlanningContext } from "../context.js";
 import {
   failRustPlannerInvariant,
@@ -42,16 +39,13 @@ import {
 import { planExpression } from "../expressions/index.js";
 import {
   planFunctionDeclarations,
-  planNativeModuleFunction,
 } from "../declarations/callables/functions.js";
 import {
   diagnosticInput,
-  isUpperSnakeName,
   isValidRustIdentifier,
-  rustSourceItemIsPubliclyReachable,
   rustRuntimeAliasUseItems,
 } from "./plan-context.js";
-import { rustAuthoredDeadCodeDisposition } from "./reachability-directives.js";
+import { planTopLevelVariableStatement } from "./module-bindings.js";
 import type { RustPlanContext } from "./plan-context.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planBlockLike, planStatement } from "../statements/index.js";
@@ -539,11 +533,6 @@ function ensureTopLevelPlanningDiagnostic(
   ));
 }
 
-interface PlannedTopLevelVariableStatement {
-  readonly items: readonly RustItem[];
-  readonly initialization: readonly import("../../target-ast/syntax/nodes.js").RustStmt[];
-}
-
 function planDefaultExportAssignment(
   declaration: Node,
   context: RustPlanContext,
@@ -583,166 +572,4 @@ function planDefaultExportAssignment(
     "public",
     context.syntheticNames,
   );
-}
-
-function planTopLevelVariableStatement(
-  statement: Node,
-  context: RustPlanContext,
-): PlannedTopLevelVariableStatement | undefined {
-  const { ast } = context.input.program.source;
-  const declarations: Node[] = [];
-  const visit = (candidate: Node): void => {
-    if (ast.kindName(candidate) === "KindVariableDeclaration") {
-      declarations.push(candidate);
-      return;
-    }
-    ast.forEachChild(candidate, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
-  };
-  visit(statement);
-  if (declarations.length === 0) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      { ast, sourceFile: context.sourceFile, node: statement },
-      "rust.backend.module-binding",
-      "Top-level variable statements require at least one exact variable declaration.",
-    ));
-    return undefined;
-  }
-  const items: RustItem[] = [];
-  const initialization: import("../../target-ast/syntax/nodes.js").RustStmt[] = [];
-  for (const declaration of declarations) {
-    if (context.input.program.records.compileTimeSource.get(declaration)) continue;
-    const name = context.input.program.names.nameForDeclaration(declaration) ?? "";
-    const initializer = Node_Initializer(ast, declaration);
-    const binding = context.input.program.records.moduleBinding.get(declaration);
-    if (binding === undefined || !isValidRustIdentifier(name) ||
-      initializer === undefined && (binding.storage !== "module-cell" || binding.initialization !== "declaration") ||
-      initializer !== undefined && binding.storage === "module-cell" && binding.initialization !== "value") {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        { ast, sourceFile: context.sourceFile, node: declaration },
-        "rust.backend.module-binding",
-        "Top-level bindings require a plain Rust identifier and one finalized module-binding fact matching their initialization.",
-      ));
-      return undefined;
-    }
-    const visibility = ast.hasModifierKind(statement, "export") ||
-        rustSourceItemIsPubliclyReachable(context, name)
-      ? "public" as const
-      : "crate" as const;
-    if (binding.storage === "native-callable") {
-      const item = planNativeModuleFunction(
-        declaration,
-        binding.callableDeclaration,
-        binding.name,
-        binding.value === undefined && visibility === "public",
-        context,
-      );
-      if (item === undefined) {
-        return undefined;
-      }
-      items.push(item);
-      const storage = context.input.program.records.moduleCallableStorage.get(declaration);
-      if (binding.value !== undefined && storage === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(diagnosticInput(context, declaration),
-          "rust.backend.module-callable-storage", "Module callable values require their finalized native storage selection."));
-        return undefined;
-      }
-      if (binding.value === undefined || storage?.kind === "inline") {
-        continue;
-      }
-      const value = planRustSourceCallableValue({
-        form: "function",
-        sourceDeclaration: binding.callableDeclaration,
-        fileName: ast.getFileName(context.sourceFile),
-        name: binding.name,
-        carrier: binding.value.carrier,
-        parameterCarriers: binding.value.parameterCarriers,
-        resultCarrier: binding.value.resultCarrier,
-      }, context);
-      const physical = context.input.program.callableValues.nativeProducers.physicalFor(binding.callableDeclaration, binding.value.carrier);
-      const rustType = rustTypeFromCarrierInContext(physical, context);
-      if (value === undefined || rustType === undefined ||
-        !rustCarrierSupportsClone(binding.value.carrier, context.input.program.typeDefinitions)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          { ast, sourceFile: context.sourceFile, node: declaration },
-          "rust.backend.module-callable-value",
-          "Observed module callable values require one exact renderable Clone-capable carrier.",
-        ));
-        return undefined;
-      }
-      context.usedAliases?.add("rt");
-      const planned = planRustModuleCell(
-        binding.value.name,
-        rustType,
-        value,
-        visibility,
-        context.syntheticNames!,
-        [
-          ...(isUpperSnakeName(binding.value.name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
-        ],
-      );
-      items.push(...planned.items);
-      initialization.push(planned.initialization);
-      continue;
-    }
-    const rustType = rustTypeFromCarrierInContext(binding.valueCarrier, context);
-    if (rustType === undefined) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        { ast, sourceFile: context.sourceFile, node: declaration },
-        "rust.backend.module-binding-carrier",
-        "Top-level value binding has no finalized renderable Rust carrier.",
-      ));
-      return undefined;
-    }
-    const value = initializer === undefined ? undefined : planExpression(initializer, context);
-    if (initializer !== undefined && value === undefined) {
-      return undefined;
-    }
-    if (binding.storage === "native-const") {
-      if (value === undefined) return undefined;
-      const deadCode = rustAuthoredDeadCodeDisposition(context, declaration);
-      const attrs = [
-        ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
-      ];
-      items.push({
-        kind: "const",
-        name,
-        visibility,
-        ...(attrs.length === 0 ? {} : { attrs }),
-        ...(deadCode === undefined ? {} : { deadCode }),
-        type: isRustStringCarrier(binding.valueCarrier)
-          ? { kind: "reference", referent: { kind: "str" }, mutable: false }
-          : rustType,
-        value: isRustStringCarrier(binding.valueCarrier) && value.kind === "string-literal"
-          ? { kind: "str-literal", value: value.value }
-          : value,
-      });
-      continue;
-    }
-    if (!rustCarrierSupportsClone(binding.valueCarrier, context.input.program.typeDefinitions)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        { ast, sourceFile: context.sourceFile, node: declaration },
-        "rust.backend.module-binding-carrier",
-        "Runtime module bindings require one exact Clone-capable Rust value carrier.",
-      ));
-      return undefined;
-    }
-    context.usedAliases?.add("rt");
-    const planned = planRustModuleCell(
-      name,
-      rustType,
-      value,
-      visibility,
-      context.syntheticNames!,
-      [
-        ...(isUpperSnakeName(name) ? [] : [rustLintAttributes.nonUpperCaseGlobal]),
-      ],
-    );
-    items.push(...planned.items);
-    initialization.push(planned.initialization);
-  }
-  return { items, initialization };
 }

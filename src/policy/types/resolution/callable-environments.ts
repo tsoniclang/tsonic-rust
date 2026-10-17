@@ -25,7 +25,7 @@ export function resolveRustCallableEnvironment(
       .flatMap(receiver => receiver.references.slice(0, 1).map(reference => ({ reference, declaration: receiver.owner })))]) {
     if (context.ast.is.IsBindingElement(capturedDeclaration)) {
       const projected = context.records.bindingProjection.get(capturedDeclaration);
-      if (projected === undefined) return undefined;
+      if (projected === undefined || !("bindingCarrier" in projected)) return undefined;
       carriers.push(projected.bindingCarrier);
       continue;
     }

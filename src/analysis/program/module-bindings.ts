@@ -3,9 +3,11 @@ import { flowStateFactKey } from "@tsonic/tsts";
 import { isRustStringCarrier } from "../../target-model/types/index.js";
 import {
   KindFalseKeyword,
+  KindArrayBindingPattern,
   KindFunctionExpression,
   KindNonNullExpression,
   KindNumericLiteral,
+  KindObjectBindingPattern,
   KindParenthesizedExpression,
   KindSatisfiesExpression,
   KindTrueKeyword,
@@ -13,6 +15,7 @@ import {
   KindVariableStatement,
   Node_Expression,
   Node_Initializer,
+  Node_Name,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
 } from "@tsonic/target-api/source";
@@ -20,6 +23,7 @@ import { cyclicSourceFiles } from "./module-graph.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustAnalysisContext } from "./context.js";
 import type { RustModuleBindingFact } from "../../target-model/records/operation-selections.js";
+import { selectRustModuleBindingPattern } from "../module-initialization/binding-patterns.js";
 
 export interface RustModuleBindingPolicy {
   nativeCallable(declaration: Node): RustNativeModuleCallable | undefined;
@@ -75,6 +79,11 @@ export function createRustModuleBindingPolicy(
       valueCarrier: TargetTypeRef,
     ): Exclude<RustModuleBindingFact, { readonly storage: "native-callable" }> | undefined {
       if (cyclic.kind === "unresolved") return undefined;
+      const name = Node_Name(context.ast, declaration);
+      const nameKind = name === undefined ? undefined : context.ast.kindName(name);
+      if (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) {
+        return selectRustModuleBindingPattern(declaration, declarationKind, valueCarrier, context);
+      }
       const initializer = Node_Initializer(context.ast, declaration);
       const initializerKind = initializer === undefined
         ? undefined
