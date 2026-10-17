@@ -55,6 +55,8 @@ export interface RustConstructionPreparationSelection {
 
 export interface RustConstructionEmissionPlan {
   readonly frame: RustFrameCallableDefinition | undefined;
+  readonly counterDisposition: { readonly kind: "absent" | "construction-only" }
+    | { readonly kind: "retained"; readonly name: string };
   readonly exposure: { readonly declaration: Node; readonly expression: Node; readonly carrier: TargetTypeRef } | undefined;
   readonly issues: readonly RustConstructionIssue[];
   preparationFor(node: Node): RustConstructionPreparationSelection | undefined;
@@ -242,6 +244,36 @@ function prepareRustConstructionEmission(input: RustConstructionAnalysisInput, d
     } else selectedExposure = Object.freeze({ ...exposure, carrier: frameCarrier! });
   }
   const root = input.projectTypes.openCarrier(definition);
+  let retainedCounter = frame !== undefined &&
+    (frame.activation.kind === "lexical" || frame.constructionExposure !== undefined);
+  if (frame !== undefined && !retainedCounter) {
+    for (const implementation of frame.entries.flatMap(entry => entry.implementations)) {
+      if (implementation.independent) continue;
+      let current = implementation.declaration;
+      let constructionOnly = false;
+      for (let depth = 0; depth < 256; depth += 1) {
+        const point = readiness.pointFor(current);
+        if (point !== undefined) {
+          constructionOnly = !point.published && !point.publishBefore;
+          break;
+        }
+        const parent = input.ast.parent(current);
+        if (parent === undefined) break;
+        if (input.ast.is.IsArrowFunction(parent) || input.ast.is.IsFunctionExpression(parent) ||
+          input.ast.is.IsFunctionDeclaration(parent) || input.ast.is.IsMethodDeclaration(parent) ||
+          input.ast.is.IsGetAccessorDeclaration(parent) || input.ast.is.IsSetAccessorDeclaration(parent)) break;
+        current = parent;
+      }
+      if (!constructionOnly) {
+        retainedCounter = true;
+        break;
+      }
+    }
+  }
+  const counterDisposition: RustConstructionEmissionPlan["counterDisposition"] = frame === undefined
+    ? Object.freeze({ kind: "absent" })
+    : retainedCounter ? Object.freeze({ kind: "retained", name: frame.counterName })
+      : Object.freeze({ kind: "construction-only" });
   const retainedNodes = new Set<Node>();
   if (selectedExposure !== undefined) {
     const pending = [selectedExposure.expression];
@@ -306,6 +338,6 @@ function prepareRustConstructionEmission(input: RustConstructionAnalysisInput, d
     }
     preparations.set(point.node, Object.freeze({ point, layer, retainsFrame, projections: Object.freeze(projections) }));
   }
-  return Object.freeze({ frame, exposure: selectedExposure, issues: Object.freeze(issues),
+  return Object.freeze({ frame, counterDisposition, exposure: selectedExposure, issues: Object.freeze(issues),
     preparationFor: (node: Node) => preparations.get(node) });
 }

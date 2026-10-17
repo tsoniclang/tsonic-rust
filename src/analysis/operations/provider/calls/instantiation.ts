@@ -136,6 +136,38 @@ export function mapSelectedProjectGenericArguments(
     : Object.freeze(arguments_ as RustTargetGenericArgument[]);
 }
 
+export function selectedProjectGenericOwner(
+  request: RustCheckedCallSelectionInput,
+  declaration: import("@tsonic/tsts").Node,
+  context: RustOperationAnalysisContext,
+  options: RustOperationsProviderOptions,
+): import("@tsonic/tsts").Node | undefined {
+  const { ast } = context;
+  const kind = ast.kindName(declaration);
+  const construction = checkedCallIsConstruction(request, context) || kind === "KindConstructor";
+  const callee = asNode(selectedCallCalleeDeclaration(request), context);
+  const classOwner = construction && callee !== undefined &&
+      (ast.kindName(callee) === "KindClassDeclaration" || ast.kindName(callee) === "KindClassExpression")
+    ? callee
+    : kind === "KindClassDeclaration" || kind === "KindClassExpression"
+      ? declaration
+      : kind === "KindConstructor" ? ast.parent(declaration) : undefined;
+  const selectedOwner = options.projectTypes.definitionForDeclaration(classOwner);
+  const callableOwner = options.projectTypes.definitionContainingDeclaration(declaration);
+  const owners = construction
+    ? [...new Set([selectedOwner?.declaration, callableOwner?.declaration])]
+        .filter((owner): owner is import("@tsonic/tsts").Node => owner !== undefined)
+    : [declaration];
+  const selected = request.source.sourceSelectedMethodTypeArguments ?? [];
+  const matching = owners.filter(owner => {
+    const parameters = ast.typeParameters(owner);
+    return parameters.length === selected.length && parameters.every((parameter, index) =>
+      parameter !== undefined && context.currentSemantics.facts.typeSubjects(selected[index]!.typeParameter)
+        .some(subject => asNode(subject, context) === parameter));
+  });
+  return selected.length === 0 ? matching[0] : matching.length === 1 ? matching[0] : undefined;
+}
+
 export function selectedProjectConstructor(
   definition: import("../../../../target-model/types/project-types.js").RustProjectTypeDefinition,
   request: RustCheckedCallSelectionInput,

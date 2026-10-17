@@ -552,3 +552,71 @@ test("an eligible constructor with unavailable selected generic evidence publish
     "the old placeholder/source-union ABI is never published as a substitute");
   assert.equal(input.complete(input.current)?.length, 1, "the same canonical stage completes after its real selected input becomes ready");
 });
+
+for (const [name, source] of [
+  ["constructor", `
+class Box<Value> {
+  value: Value;
+  constructor(value: Value, transform: (value: Value) => Value) { this.value = transform(value); }
+}
+export function run(): number { return new Box<number>(3, value => value).value; }
+`],
+  ["method", `
+class Box {
+  apply<Value>(value: Value, transform: (value: Value) => Value): Value { return transform(value); }
+}
+export function run(): number { return new Box().apply<number>(3, value => value); }
+`],
+  ["function", `
+function apply<Value>(value: Value, transform: (value: Value) => Value): Value { return transform(value); }
+export function run(): number { return apply<number>(3, value => value); }
+`],
+]) test(`checked generic ${name} metadata substitutes its exact selected owner before completing callback inputs`, () => {
+  const input = inputFixture(source, (ast, node) => ast.is.IsArrowFunction(node));
+  const context = input.current.context;
+  const call = context.ast.parent(input.declaration);
+  const semantics = context.semanticsFor(call);
+  const checked = semantics.operations.call(call);
+  const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(checked.selectedSignature);
+  assert.equal(sourceSelectedDeclaration !== undefined && checked.sourceSelectedMethodTypeArguments.length === 1, true,
+    name + ": one actual checked generic declaration and argument");
+  const selected = selectedRustCheckedCallInputCarrier({ source: checked, sourceSelectedDeclaration }, 1,
+    rustOperationContext(input.current, call), { ...input.current.operationOptions,
+      callableParameterCarriers() { throw new Error("selected formal metadata must not reenter callback capture completion"); },
+    });
+  const protocol = rustCallableProtocol(selected);
+  assert.equal(protocol?.parameters.length === 1 && protocol.parameters[0]?.kind === "source-primitive" &&
+    protocol.parameters[0].name === "float64" && protocol.result.kind === "source-primitive" &&
+    protocol.result.name === "float64", true, name + ": exact class or callable substitution, never its unbound formal");
+  const missing = { ...checked, sourceSelectedMethodTypeArguments: [] };
+  assert.equal(selectedRustCheckedCallInputCarrier({ source: missing, sourceSelectedDeclaration }, 1,
+    rustOperationContext(input.current, call), input.current.operationOptions) === undefined, true,
+  name + ": unavailable selected evidence cannot publish an unsubstituted callback signature");
+  const completed = input.complete(input.current);
+  assert.equal(completed?.length === 1 && completed[0].valueCarrier.kind === "source-primitive" &&
+    completed[0].valueCarrier.name === "float64", true, name + ": the same input lifecycle publishes the selected native body value");
+});
+
+test("reduce callback input metadata uses the same selected accumulator without entering its environment", () => {
+  const input = inputFixture(`
+export function run(values: number[]): boolean {
+  return values.reduce((same: boolean, item: number): boolean => same && item > 0, true);
+}`, (ast, node) => ast.is.IsArrowFunction(node));
+  const context = input.current.context;
+  const call = context.ast.parent(input.declaration);
+  const semantics = context.semanticsFor(call);
+  const checked = semantics.operations.call(call);
+  const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(checked.selectedSignature);
+  assert.equal(sourceSelectedDeclaration !== undefined, true, "the real selected reduce declaration is available");
+  const selected = selectedRustCheckedCallInputCarrier({ source: checked, sourceSelectedDeclaration }, 0,
+    rustOperationContext(input.current, call), { ...input.current.operationOptions,
+      callableParameterCarriers() { throw new Error("reduce input selection cannot query the callback environment"); },
+    });
+  assert.equal(selected?.kind === "closure" && selected.args[0]?.kind === "source-primitive" &&
+    selected.args[0].name === "bool" && selected.result.kind === "source-primitive" && selected.result.name === "bool", true,
+  "both callback accumulator and result use the same exact selected bool, not the opaque infer marker");
+  const missing = { ...checked, sourceArgumentBindings: checked.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex !== 1) };
+  assert.equal(selectedRustCheckedCallInputCarrier({ source: missing, sourceSelectedDeclaration }, 0,
+    rustOperationContext(input.current, call), input.current.operationOptions) === undefined, true,
+  "missing accumulator source correspondence stays unresolved instead of using contextual or checked-return evidence");
+});

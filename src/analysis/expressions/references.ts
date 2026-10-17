@@ -81,6 +81,11 @@ export function resolveIdentifierCarrier(
   if (reference !== undefined && declaration !== undefined && reference.project) {
     const declarationKind = ast.kindName(declaration);
     recordProjectSourceBinding(walk, identifier);
+    if (walk.rejectedExpressions.has(declaration)) {
+      walk.rejectedExpressions.add(identifier);
+      for (const dependent of walk.resolving) walk.rejectedExpressions.add(dependent);
+      return undefined;
+    }
     if (declarationKind === "KindClassDeclaration" || declarationKind === "KindClassExpression") {
       const value = walk.context.records.classValues.resolve(walk, identifier, expected);
       if (value !== undefined) return value;

@@ -5,13 +5,14 @@ import { selectRustProviderOperation } from "../../../../policy/operations/provi
 import { selectJsSurfaceCallInputContract, selectJsSurfaceConstructorBySourceOwner } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { providerOperationFact } from "../result.js";
-import { checkedCallIsConstruction, instantiateSelectedCallTemplate, mapSelectedProjectGenericArguments } from "./instantiation.js";
+import { checkedCallIsConstruction, instantiateSelectedCallTemplate, mapSelectedProjectGenericArguments, selectedProjectGenericOwner } from "./instantiation.js";
 import { selectedCallSourceParameterCarriers } from "./source-sequences.js";
 import { createRustJsCallRequest, selectedSoleArgumentNumberKind } from "./source-profile-request.js";
 import { selectedCallArgumentCarriers } from "../operators.js";
 import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
 import { bindRustSelectedCallTypeArguments } from "../../../../policy/types/resolution/generic-arguments.js";
 import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
+import { replaceRustInferCarrier } from "../callbacks.js";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -31,7 +32,9 @@ export function selectedRustCheckedCallInputCarrier(
     const parameter = request.source.sourceSelectedSignatureParameters[first.sourceParameterIndex];
     if (parameter === undefined || parameter.parameterIndex !== first.sourceParameterIndex || parameter.rest) return undefined;
     const signatureContext = { ...context, callableRepresentation: "signature" as const, sourceStorageSubject: undefined };
-    const arguments_ = mapSelectedProjectGenericArguments(request, request.sourceSelectedDeclaration, signatureContext, options);
+    const genericOwner = selectedProjectGenericOwner(request, request.sourceSelectedDeclaration, signatureContext, options);
+    const arguments_ = genericOwner === undefined ? undefined
+      : mapSelectedProjectGenericArguments(request, genericOwner, signatureContext, options);
     const boundContext = arguments_ === undefined ? undefined : bindRustSelectedCallTypeArguments(
       request.source.sourceSelectedMethodTypeArguments ?? [], arguments_, signatureContext,
     );
@@ -60,8 +63,16 @@ export function selectedRustCheckedCallInputCarrier(
     const nativeRequest = createRustJsCallRequest(request, signatureContext, options);
     const selection = nativeRequest === undefined ? undefined
       : selectJsSurfaceCallInputContract(nativeRequest, argumentIndex, context.typeDefinitions);
-    return selection?.fact.kind !== "provider-operation" ? undefined
-      : selectedCallSourceParameterCarriers(request, selection.fact, selection.parameterCarriers, context, options)?.get(argumentIndex);
+    if (selection?.fact.kind !== "provider-operation") return undefined;
+    const parameters = selectedCallSourceParameterCarriers(
+      request, selection.fact, selection.parameterCarriers, signatureContext, options,
+    );
+    const selected = parameters?.get(argumentIndex);
+    if (selected === undefined || selection.callback?.shape !== "reduce" ||
+      selection.callback.sourceArgumentIndex !== argumentIndex) return selected;
+    const accumulatorIndex = selection.callback.accumulatorArgumentIndex;
+    const accumulator = accumulatorIndex === undefined ? undefined : parameters?.get(accumulatorIndex);
+    return accumulator === undefined ? undefined : replaceRustInferCarrier(selected, accumulator);
   }
   if (sourceMember !== undefined) return undefined;
   const provider = selectedCallProviderDeclaration(request, context);
