@@ -1,6 +1,6 @@
 import { createRustProgramRecordBuilder } from "../../dist/analysis/program/records/create.js";
 import assert from "node:assert/strict";
-import { sourceNodesOutsideErasedSubtrees, sourceExpressionResultUse } from "@tsonic/target-api/source";
+import { sourceNodesOutsideErasedSubtrees, sourceCallableDefinitionIsDiscarded } from "@tsonic/target-api/source";
 
 export function rustNativeFixtureNodes(program) {
   const ast = program.source.ast;
@@ -18,7 +18,7 @@ export function rustNativeFixtureNodes(program) {
   }
   const participation = sourceNodesOutsideErasedSubtrees(ast, nodes, node =>
     program.records.nativeParticipation.get(node) === "erased" ||
-    (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && sourceExpressionResultUse(ast, node) === "discarded");
+    (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && sourceCallableDefinitionIsDiscarded(node, ast));
   assert.equal(participation.kind, "resolved", "the same actual fixture participation has one complete native domain");
   return participation.nodes;
 }

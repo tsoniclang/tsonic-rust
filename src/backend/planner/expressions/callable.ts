@@ -19,7 +19,7 @@ import {
   KindArrayBindingPattern,
   KindObjectBindingPattern,
   Node_Initializer,
-  sourceExpressionResultUse,
+  sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
@@ -65,9 +65,9 @@ export function planCallableExpression(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
-  if (resultUse === "discarded" || sourceExpressionResultUse(context.input.program.source.ast, node) === "discarded")
+  if (resultUse === "discarded" || sourceCallableDefinitionIsDiscarded(node, context.input.program.source.ast))
     return { kind: "tuple-literal", elements: [] };
-  return resultUse !== "discarded" && context.input.program.records.closureCapture.get(node)?.invocationOwner === "shared-state"
+  return context.input.program.records.closureCapture.get(node)?.invocationOwner === "shared-state"
     ? planRustSuspendedCallableConstruction(node, context)
     : planRustCallableExpressionBody(node, context, resultUse);
 }
@@ -79,7 +79,7 @@ export function planRustCallableExpressionBody(
 ): RustExpr | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...context } = outerContext;
   const { ast } = context.input.program.source;
-  if (resultUse === "discarded" || sourceExpressionResultUse(ast, node) === "discarded")
+  if (resultUse === "discarded" || sourceCallableDefinitionIsDiscarded(node, ast))
     return { kind: "tuple-literal", elements: [] };
   const closureFact = rustOperationFact(node, context);
   if (closureFact === undefined || closureFact.kind !== "closure") {

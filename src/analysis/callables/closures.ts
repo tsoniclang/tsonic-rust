@@ -16,7 +16,7 @@ import {
   Node_Name,
   Node_Type,
   sourceLexicalEnvironment,
-  sourceExpressionResultUse,
+  sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 
 import {
@@ -113,7 +113,7 @@ export function resolveFunctionExpressionCarrier(
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   if ((ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression)) &&
-    sourceExpressionResultUse(ast, expression) === "discarded") return rustUnitTargetType();
+    sourceCallableDefinitionIsDiscarded(expression, ast)) return rustUnitTargetType();
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);
