@@ -25,7 +25,7 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustSwitchComparisonMatches } from "../operations/contracts/switch.js";
 import type { RustProjectFlowReadSelectionIndex } from "./project-flow-read-selections.js";
-import { validateRustDisposalLifecycle } from "../resources/disposal-lifecycle.js";
+import { validateRustDisposalLifecycle } from "./resource-lifecycle.js";
 
 export interface RustStatementCompletionInput {
   readonly source: TargetSourceProgram;
