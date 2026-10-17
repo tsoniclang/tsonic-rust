@@ -554,7 +554,8 @@ export function planRustProjectUpcast(
     context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),
     "upcast_value",
   );
-  return rustValueBlock([{ name: valueName, value: expression }], {
+  return rustValueBlock([{ name: valueName,
+    value: ownership === "owned" ? expression : { kind: "reference", expr: expression } }], {
       kind: "struct-literal",
       path: targetPath,
       fields: [rustProjectObjectIdentityField, rustProjectObjectDispatchField].map(name => {

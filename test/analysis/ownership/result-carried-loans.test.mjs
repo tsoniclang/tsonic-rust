@@ -52,7 +52,7 @@ function fixture(options = {}) {
   const place = Object.freeze({ kind: options.receiverMode === "value" ? "value" : "place", input: selectedInput, key: "receiver", node: sourceNode, slot, operand,
     ...(options.receiverMode === "value" ? { read: Object.freeze({ carrier: sourceCarrier, operandCarrier: sourceCarrier,
       formation: { kind: "move" }, value: { kind: "move" }, source: { kind: "move" },
-      snapshot: undefined, stablePlace: false, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set() }) }
+      snapshot: undefined, stablePlace: false, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set(), nativeResults: Object.freeze([]) }) }
       : { place: Object.freeze({ node: sourceNode, operand, carrier: sourceCarrier,
       sourcePath: { declaration, projections: [] }, storage: { kind: "direct" } }) }) });
   const physicalEmissionContexts = { contexts: [context], operands: [operand], sourceOccurrences: [occurrence],

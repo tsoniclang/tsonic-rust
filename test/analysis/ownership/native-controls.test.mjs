@@ -183,10 +183,12 @@ export function constructed(value: NoClone): NoClone {
     files: { "index.ts": `import { NoClone } from "@ownership/native";
 export function duplicated(value: NoClone): [NoClone, NoClone] { return [value, value]; }` },
   }).result;
-  assert.equal(refused.diagnostics.some(diagnostic => diagnostic.code === "RUST_VALUE_READ_OWNERSHIP_UNAVAILABLE"), true,
+  assert.equal(refused.diagnostics.some(diagnostic => diagnostic.code === "RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED" &&
+    diagnostic.message === "A generated Rust operation requires an exact Rust Clone implementation that its exact target carrier does not provide."), true,
     "a real duplicated owned NoClone read remains rejected at its analysis owner: " +
       refused.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
   assert.equal(refused.artifacts.length, 0, "unavailable owned snapshots produce no partial native output");
+  assert.equal(refused.program === undefined, true, "the real missing native Clone is rejected before publication");
   const directory = writeGeneratedProject("borrowed-no-clone-environments", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });
   writeFileSync(join(directory, "tests/borrowed.rs"), `use ownership_borrow_control::index::{borrowed, constructed, mutated, repeated, transferred};

@@ -5,7 +5,7 @@ import type { RustTargetOperationFact } from "./operations.js";
 import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand,
   RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins,
   RustPhysicalEmissionSourceSlot, RustPhysicalCallableSourceSelection } from "./physical-emission-contexts.js";
-import type { RustFinalizedNativeResultLoans, RustFinalizedSourceInput } from "./finalized-operation.js";
+import type { RustFinalizedNativeResultLoans, RustFinalizedOperationAbi, RustFinalizedSourceInput } from "./finalized-operation.js";
 import type { RustNativeResultLoan, RustNativeResultLoanOrigin } from "../operations/result-loans.js";
 
 export type RustValueReadOwnership =
@@ -34,6 +34,8 @@ export interface RustReadOwnershipFact {
   readonly pure: boolean;
   readonly sharedReference: boolean;
   readonly borrowedAcross: ReadonlySet<Node>;
+  readonly nativeResults: readonly { readonly abi: RustFinalizedOperationAbi; readonly carrier: TargetTypeRef;
+    readonly read: RustValueReadOwnership }[];
 }
 
 export interface RustCaptureReadOwnership {

@@ -6,7 +6,7 @@ import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression, Node_Op
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
+import { rustFixedArrayCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { RustTargetProgram } from "../program/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
@@ -215,7 +215,9 @@ export function selectRustBorrowRelationship(source: Node, later: Node,
   const path = root === undefined ? undefined : rustNativeStorageProjections(source, root, input);
   const binding = path?.length === 0 && input.records.sourceBinding.get(source)?.scope === "lexical";
   const field = input.records.targetOperation.get(source);
-  if (!binding && (!rustDirectBorrowField(source, input) || field?.kind !== "source-field" || field.accessMode !== "read")) return false;
+  const readable = field?.kind === "tuple-index" || field?.kind === "fixed-index" ||
+    field?.kind === "source-field" && field.accessMode === "read";
+  if (!binding && (!rustDirectBorrowField(source, input) || !readable)) return false;
   const targets = effects.pureValues.has(later) ? rustNoNativeWrites : effects.nativeWrites.get(later);
   return root !== undefined && path !== undefined && targets !== undefined && targets.every(target => {
     const targetRoot = rustNativeStorageRoot(target, input);
@@ -226,6 +228,18 @@ export function selectRustBorrowRelationship(source: Node, later: Node,
 }
 
 function rustDirectBorrowField(node: Node, input: RustBorrowEffectsInput): boolean {
+  const operation = input.records.targetOperation.get(node);
+  if (operation?.kind === "tuple-index" || operation?.kind === "fixed-index") {
+    if (!rustBorrowValueIsUnprojected(node, input.records)) return false;
+    const receiver = Node_Expression(input.ast, node);
+    const carrier = receiver === undefined ? undefined : input.records.runtimeCarrier.get(receiver)?.carrier;
+    const owner = carrier?.kind === "reference" ? carrier.referent : carrier;
+    const selected = operation.kind === "tuple-index" ? owner?.kind === "tuple" &&
+      Number.isSafeInteger(operation.index) && operation.index >= 0 ? owner.elements[operation.index] : undefined
+      : operation.index >= 0n ? rustFixedArrayCarrierValue(owner)?.element : undefined;
+    return selected !== undefined && rustTargetTypeRefEquals(selected, input.records.runtimeCarrier.get(node)?.carrier) &&
+      (operation.kind !== "tuple-index" || rustTargetTypeRefEquals(selected, operation.resultCarrier));
+  }
   const field = ordinaryStoredField(node, input);
   if (field === undefined || field.storage !== "project-object") return false;
   const receiver = Node_Expression(input.ast, node);
@@ -278,7 +292,8 @@ function selectBorrowedWrite(
   const captured = objectRepresentations.receiverCaptures.isCaptured(field.declaration);
   if (captured) {
     const storage = validatedRustCapturedFieldStorageFact(field.declaration, input);
-    if (storage?.storage.kind !== "shared" || !rustTargetTypeRefEquals(storage.valueCarrier, field.resultCarrier)) return undefined;
+    if (storage === undefined || storage.storage.kind !== "shared" && storage.storage.kind !== "borrow-cell" ||
+      !rustTargetTypeRefEquals(storage.valueCarrier, field.resultCarrier)) return undefined;
   } else if (records.capturedFieldStorage.get(field.declaration) !== undefined) return undefined;
   if (!(captured && parentKind === "value") &&
     parentKind !== "shared-mutable" && parentKind !== "shared-immutable") return undefined;

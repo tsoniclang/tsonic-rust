@@ -47,6 +47,7 @@ import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
+import type { RustReadOwnershipRequirements } from "../ownership/reads.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
 
@@ -112,6 +113,7 @@ export function analyzeRustDeclarationGenericRequirements(
   nativeStorage: RustNativeStoragePlan,
   classValues: RustClassValuePlan,
   errorTypes: RustErrorTypeContext,
+  readRequirements: RustReadOwnershipRequirements,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -210,6 +212,7 @@ export function analyzeRustDeclarationGenericRequirements(
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
         ownershipFlow,
+        readRequirements,
         isStoredValue,
         readsValue(node) {
           const access = ast.is.IsElementAccessExpression(node)

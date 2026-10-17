@@ -4,6 +4,7 @@ import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/program/borrowed-element-reads.js";
+import { createRustBorrowUseAnalysis } from "../../../dist/analysis/ownership/effects.js";
 import { analyzeRustCountedLoopRepresentations } from "../../../dist/analysis/control-flow/counted-loop-representations.js";
 
 const sourceText = `
@@ -146,7 +147,11 @@ targetOperation: { get: (node) => {
 } }}, program.records);
     assert.equal(records.targetOperation.get(subject) === replacement, true,
       `selected fact mutation ${mutationIndex}`);
-    const reads = analyzeRustBorrowedElementReads(program.source.ast, rustNativeFixtureNodes(program), records, program.sourceNavigation);
+    const nodes = rustNativeFixtureNodes(program);
+    const domain = new Set(nodes);
+    const isNativeNode = node => domain.has(node);
+    const uses = createRustBorrowUseAnalysis({ ast: program.source.ast, navigation: program.sourceNavigation, isNativeNode });
+    const reads = analyzeRustBorrowedElementReads(program.source.ast, nodes, records, program.sourceNavigation, uses, isNativeNode);
     assert.equal(reads.forExpression(append) === undefined, true, `append mutation ${mutationIndex}`);
     assert.equal(reads.forRead(element) === undefined, true, `read mutation ${mutationIndex}`);
     const counted = analyzeRustCountedLoopRepresentations({ ast: program.source.ast, nativeNodes: rustNativeFixtureNodes(program),

@@ -30,7 +30,7 @@ function context(parameter, override, capture) {
       ownership: { reads: new Map([[sourceNode, { carrier: stringCarrier, operandCarrier: stringCarrier,
         formation: { kind: "clone" }, source: { kind: "borrow", mutable: false }, value: { kind: "borrow", mutable: false },
         snapshot: { kind: "clone" }, stablePlace: true, readsStorage: true, pure: true,
-        sharedReference: false, borrowedAcross: new Set() }]]) },
+        sharedReference: false, borrowedAcross: new Set(), nativeResults: Object.freeze([]) }]]) },
       callableValues: { generic: { definitionFor: () => undefined } },
       records: createRustRecordFixture({sourceParameterAbi: { get: (_node) => parameter },
 sourceBinding: { get: (_node) => ({ sourceDeclaration: declaration }) },

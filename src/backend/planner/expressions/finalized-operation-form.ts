@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { isRustCopyCarrier, rustPrimitiveTypeName } from "../../../target-model/types/index.js";
+import { rustPrimitiveTypeName } from "../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustProviderChainStep } from "../../../target-model/operations/model.js";
 import type { RustFinalizedOperationAbi } from "../../../target-model/records/finalized-operation.js";
@@ -10,7 +10,6 @@ import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.
 import type { RustPlanContext } from "../program/plan-context.js";
 import { rustCallTypeFromCarrierInContext, rustTargetCallGenericArgumentToAstInContext,
   rustTargetGenericArgumentToAstInContext, rustTypeFromCarrierInContext } from "../types/render.js";
-import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
 
 export function planRustFinalizedOperationForm(
@@ -256,18 +255,9 @@ export function planRustFinalizedOperationForm(
       if (options.resultUse === "storage") {
         return place;
       }
-      if (isRustCopyCarrier(abiResultCarrier)) {
-        return place;
-      }
-      if (!rustCarrierHasCloneContract(abiResultCarrier, context)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, operationNode),
-          `rust.backend.provider-${form.form}-read-ownership`,
-          `A provider ${form.form} read requires an exact Copy or Clone result-carrier contract.`,
-        ));
-        return undefined;
-      }
-      return { kind: "method-call", receiver: place, method: "clone", args: [] };
+      const selected = context.input.program.ownership.reads.get(operationNode)?.nativeResults.find(result => result.abi === abi);
+      if (selected === undefined) failRustPlannerInvariant("Admitted provider storage read requires its exact raw-result ownership.", operationNode);
+      return selected.read.kind === "clone" ? { kind: "method-call", receiver: place, method: "clone", args: [] } : place;
     }
     case "binary-operator": {
       const [left, right] = args;

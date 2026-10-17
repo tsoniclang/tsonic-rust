@@ -25,7 +25,7 @@ import { rustTargetTypeParameterIdentities } from "../../target-model/types/carr
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 import { rustReadTransferRequirement, type RustOwnershipFlow } from "../ownership/flow.js";
-import { rustCaptureReadFormation } from "../ownership/reads.js";
+import { rustCaptureReadFormation, type RustReadOwnershipRequirements } from "../ownership/reads.js";
 import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
 import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
 import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
@@ -72,6 +72,7 @@ import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloa
 
 interface ClassifyCallableInput {
   readonly ownershipFlow: RustOwnershipFlow;
+  readonly readRequirements: RustReadOwnershipRequirements;
   readonly isStoredValue: (node: Node) => boolean;
   readonly readsValue: (node: Node) => boolean;
   readonly typeDefinitions: RustTypeDefinitions;
@@ -594,6 +595,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     const providerOperations = operation?.kind === "provider-operation" ? [operation]
       : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : [];
     for (const providerOperation of providerOperations) {
+      for (const result of input.readRequirements.nativeResults.get(node) ?? []) {
+        if (result.abi !== providerOperation.abi || !result.requiresClone) continue;
+        const error = addUse(node, result.carrier, ["clone"]);
+        if (error !== undefined) return error;
+      }
       for (const argument of providerOperation.abi.targetArguments) {
         if (!isRustFinalizedArrayInput(argument) && !isRustFinalizedSliceInput(argument)) continue;
         for (const element of argument.elements) {

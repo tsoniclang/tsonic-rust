@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustBorrowedElementReads } from "../../../dist/analysis/program/borrowed-element-reads.js";
+import { createRustBorrowUseAnalysis } from "../../../dist/analysis/ownership/effects.js";
 
 
 for (const expression of ["values[0]", "values[0]!"]) {
@@ -36,7 +37,11 @@ export function read(values: string[]): number { return parseInt(${expression}, 
 targetOperation: { get: (node) => {
     return node === call ? replacement : program.records.targetOperation.get(node);
 } }}, program.records);
-      const reads = analyzeRustBorrowedElementReads(ast, rustNativeFixtureNodes(program), records, program.sourceNavigation);
+      const nodes = rustNativeFixtureNodes(program);
+      const domain = new Set(nodes);
+      const isNativeNode = node => domain.has(node);
+      const uses = createRustBorrowUseAnalysis({ ast, navigation: program.sourceNavigation, isNativeNode });
+      const reads = analyzeRustBorrowedElementReads(ast, nodes, records, program.sourceNavigation, uses, isNativeNode);
       assert.equal(reads.forExpression(call) === undefined, true, `invalid native input contract ${index}`);
     }
     const { result } = compileRust(options);

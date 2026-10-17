@@ -25,7 +25,7 @@ import { createRustModuleInitializationPlan } from "../module-initialization/ana
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
 import { analyzeRustOwnershipFlow, completeRustNativeReadTransfers } from "../ownership/flow.js";
-import { analyzeRustReadOwnership, prepareRustCaptureReadRequirements,
+import { analyzeRustReadOwnership, prepareRustReadOwnership, prepareRustCaptureReadRequirements,
   completeRustCaptureReadOwnership } from "../ownership/reads.js";
 import { analyzeRustNativeInputs } from "../ownership/native-places.js";
 import { analyzeRustNativeResultLoans } from "../ownership/result-loans.js";
@@ -259,6 +259,21 @@ export function analyzeRustTargetProgram(
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
+  const borrowEffectsInput = {
+    borrowUses,
+    isNativeNode: context.isNativeNode,
+    sourceFacts: context.source.sourceFacts,
+    ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
+    projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
+    structuralShapes: context.structuralShapes,
+  };
+  const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
+  if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
+  const readRequirements = prepareRustReadOwnership({ storage: context.sourceStorage,
+    nativeNodes: context.nativeNodes, records, flow: ownershipFlow.flow,
+    borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    genericCallables: context.callableValues.generic });
+  if (readRequirements.kind === "rejected") return rejectedTargetStage(readRequirements.diagnostics);
   const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
     definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
   const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
@@ -288,6 +303,7 @@ export function analyzeRustTargetProgram(
     context.callableValues.nativeStorage,
     classValues,
     errorTypes,
+    readRequirements.requirements,
   );
   const retentionIssues = declarationGenericRequirements.kind === "rejected" ? []
     : context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
@@ -323,17 +339,8 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.backend.source-module-construction"],
     })));
   }
-  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
-  const borrowEffectsInput = {
-    borrowUses,
-    isNativeNode: context.isNativeNode,
-    sourceFacts: context.source.sourceFacts,
-    ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
-    projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
-    structuralShapes: context.structuralShapes,
-  };
-  const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
-  if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
+  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records,
+    context.source.navigation, borrowUses, context.isNativeNode);
   const captureOwnership = completeRustCaptureReadOwnership({ requirements: captureRequirements.requirements,
     flow: ownershipFlow.flow, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index });
@@ -377,9 +384,9 @@ export function analyzeRustTargetProgram(
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
-  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
+  const ownership = analyzeRustReadOwnership({ requirements: readRequirements.requirements,
     movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
-    borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    borrowEffects: borrowEffects.effects, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
   });
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
