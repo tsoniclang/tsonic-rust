@@ -30,10 +30,8 @@ const declarations = [
 const observed = [...fractional.map(([name, , values]) => [name, "-7, 4294967295", values]),
   ...integer.map(([name, , values]) => [name, "-7, 11", values])];
 const verificationBindings = observed.map(([name, argumentsText]) => `const ${name}Values = ${name}(${argumentsText});`).join("\n");
-const verification = observed.flatMap(([name, , values]) => [
-  `${name}Values.length === ${values.length}`,
-  ...values.map((value, index) => `${name}Values[${index}] === ${value}`),
-]).join(" &&\n");
+const verification = observed.flatMap(([name, , values]) =>
+  values.map((value, index) => `${name}Values[${index}] === ${value}`)).join(" &&\n");
 const source = `
 import type { float32, int32, int64, uint32 } from "@tsonic/core/types.js";
 ${declarations.join("\n")}
@@ -45,31 +43,34 @@ export function verify(): boolean {
   const widePair = [wide, wide];
   const wideLiteral = [wide, 1];
   const genuine = [signed, wide];
-  const integerUnion = [signed, unsigned];
   const explicit: number[] = [signed, unsigned];
   const numbers: number[] = [0.5, 3.5];
   const spread = [1, ...numbers, 2];
   const suffix = [...numbers, 1, 2];
   return ${verification} &&
     widePair[0] === wide && widePair[1] === wide && wideLiteral[0] === wide && wideLiteral[1] === 1 &&
-    genuine[0] === signed && genuine[1] === wide && integerUnion[0] === signed && integerUnion[1] === unsigned &&
+    genuine[0] === signed && genuine[1] === wide &&
     explicit[0] === -7 && explicit[1] === 4294967295 &&
-    spread.length === 4 && spread[0] === 1 && spread[1] === 0.5 && spread[2] === 3.5 && spread[3] === 2 &&
-    suffix.length === 4 && suffix[0] === 0.5 && suffix[1] === 3.5 && suffix[2] === 1 && suffix[3] === 2;
+    spread[0] === 1 && spread[1] === 0.5 && spread[2] === 3.5 && spread[3] === 2 &&
+    suffix[0] === 0.5 && suffix[1] === 3.5 && suffix[2] === 1 && suffix[3] === 2;
 }
 export function negativeZero(signed: int32): number { const values = [signed, -0]; return values[1]; }
 export function nativeFloat32(narrow: float32): float32 { const values = [narrow, 0.1]; return values[1]; }
-export function wideExact(wide: int64): int64 { const values = [wide, 1]; return values[0]; }
+export function wideExact(wide: int64) { const values = [wide, 1]; return values; }
+export function widePair(wide: int64) { const values = [wide, wide]; return values; }
+export function literalBoundary(signed: int32) { const values = [signed, 2147483648]; return values; }
+export function spreadValues() { const numbers: number[] = [0.5, 3.5]; return [1, ...numbers, 2]; }
+export function suffixValues() { const numbers: number[] = [0.5, 3.5]; return [...numbers, 1, 2]; }
 let trace: int32 = 0;
 function signedValue(): int32 { trace = trace * 10 + 1; return -7; }
 function floatingValues(): number[] { trace = trace * 10 + 2; return [0.5]; }
 function unsignedValue(): uint32 { trace = trace * 10 + 3; return 4294967295; }
-export function effectOrder(): int32 {
+export function effectOrder() {
   trace = 0;
   const values = [signedValue(), ...floatingValues(), unsignedValue()];
-  if (values.length !== 3 || values[0] !== -7 || values[1] !== 0.5 || values[2] !== 4294967295) return -1;
-  return trace;
+  return values;
 }
+export function effectTrace(): int32 { return trace; }
 `;
 
 for (const surfaces of [[], ["js"]]) {
@@ -89,10 +90,27 @@ for (const surfaces of [[], ["js"]]) {
       assert.equal(new RegExp(`fn ${name}\\([^)]*\\) -> ${arrayType}<i32>`, "u").test(generated), true,
         `${name}: exact integer peer, no floating detour`);
     }
+    for (const name of ["wideExact", "widePair"]) {
+      assert.equal(new RegExp(`fn ${name}\\([^)]*\\) -> ${arrayType}<i64>`, "u").test(generated), true,
+        `${name}: exact wide integer remains the inferred physical element`);
+    }
     assert.equal(/i64_to_f64|u64_to_f64|\.to_vec\(|\.collect::<|Box::new/u.test(generated), false,
       "no wide rounding, intermediate collection, clone buffer or box");
     const resultType = `${arrayType}<f64>`;
     const allocationCount = lane === "native" ? 1 : 2;
+    const nativeObservations = observed.map(([name, argumentsText, values]) =>
+      `assert_dense(${name}(${argumentsText.replaceAll("4294967295", "u32::MAX")}), &[${values.map(value =>
+        fractional.some(([candidate]) => candidate === name) && Number.isInteger(value) ? `${value}.0_f64` : String(value)).join(", ")}]);`).join("\n    ");
+    const assertDense = lane === "native"
+      ? `fn assert_dense<T: std::fmt::Debug + PartialEq>(actual: Vec<T>, expected: &[T]) {
+    assert_eq!(actual.len(), expected.len());
+    assert_eq!(actual.as_slice(), expected);
+}`
+      : `fn assert_dense<T: std::fmt::Debug + PartialEq + Clone>(actual: js_abi::JsArray<T>, expected: &[T]) {
+    assert_eq!(actual.len(), expected.len());
+    for (index, value) in expected.iter().enumerate() { assert_eq!(actual.get(index).as_ref(), Some(value)); }
+}`;
+    const initialize = artifactText(result, "src/lib.rs").includes("pub fn initialize()") ? "crate::initialize();" : "";
     const handwritten = fractional.map(([name, , values], index) => {
       const entries = values.map(value => value === -7 ? "f64::from(signed)" : value === 4294967295 ? "f64::from(unsigned)" : "0.5_f64").join(", ");
       const construction = lane === "native" ? `vec![${entries}]` : `js_abi::JsArray::from_dense(vec![${entries}])`;
@@ -104,13 +122,21 @@ mod c102_native_proof {
 use super::*;
 ${nativeOwnershipCostSupport}
 ${handwritten}
+${assertDense}
 #[test]
 fn exact_values_widths_signed_zero_and_source_order() {
+    ${initialize}
     assert!(verify());
-    assert_eq!(wideExact(9_007_199_254_740_993_i64), 9_007_199_254_740_993_i64);
+    ${nativeObservations}
+    assert_dense(wideExact(9_007_199_254_740_993_i64), &[9_007_199_254_740_993_i64, 1]);
+    assert_dense(widePair(9_007_199_254_740_993_i64), &[9_007_199_254_740_993_i64, 9_007_199_254_740_993_i64]);
+    assert_dense(literalBoundary(-7), &[-7.0_f64, 2_147_483_648.0_f64]);
+    assert_dense(spreadValues(), &[1.0_f64, 0.5, 3.5, 2.0]);
+    assert_dense(suffixValues(), &[0.5_f64, 3.5, 1.0, 2.0]);
     assert_eq!(negativeZero(-7).to_bits(), (-0.0_f64).to_bits());
     assert_eq!(nativeFloat32(1.5_f32).to_bits(), 0.1_f32.to_bits());
-    assert_eq!(effectOrder(), 123);
+    assert_dense(effectOrder(), &[-7.0_f64, 0.5, 4_294_967_295.0]);
+    assert_eq!(effectTrace(), 123);
 }
 #[test]
 fn exact_per_operation_native_cost() {

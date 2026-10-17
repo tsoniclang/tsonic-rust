@@ -85,15 +85,16 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
   const parenthesized = [(1), signed];
   const negativeZero = [signed, -0];
   const computedFloat = [signed, computed];
+  const literalBoundary = [signed, 2147483648];
   const nativeFloat32 = [narrow, 0.1];
-  const tuple: [int32, int32?] = [signed];
+  const tuple: [int32, int32] = [signed, signed];
   const fixed: FixedArray<int32, 2> = [signed, 1] as const;
   const empty: int32[] = [];
 }
 ` } });
     const initializers = bindings(program);
     for (const name of ["widePair", "wideLiteral"]) assertArray(program, initializers, name, "int64");
-    for (const name of ["explicit", "spread", "suffix", "negativeZero", "computedFloat"]) {
+    for (const name of ["explicit", "spread", "suffix", "negativeZero", "computedFloat", "literalBoundary"]) {
       assertArray(program, initializers, name, "float64");
     }
     for (const name of ["signedLiteral", "parenthesized", "empty"]) assertArray(program, initializers, name, "int32");
@@ -109,15 +110,16 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
 
   test(`C102 ${lane}: genuine native width and heterogeneous unions do not become floating arrays`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
-export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: boolean, value: string): void {
-  const signedUnsigned = [signed, unsigned];
+export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: boolean, value: string): boolean {
   const narrowWide = [signed, wide];
   const heterogeneous = [value, flag];
   const absent: (int32 | null | undefined)[] = [signed, undefined, null];
+  return narrowWide[0] === signed && narrowWide[1] === wide && heterogeneous[0] === value &&
+    heterogeneous[1] === flag && absent[0] === signed && absent[1] === undefined && absent[2] === null;
 }
 ` } });
     const initializers = bindings(program);
-    for (const [name, names] of [["signedUnsigned", ["int32", "uint32"]], ["narrowWide", ["int32", "int64"]]]) {
+    for (const [name, names] of [["narrowWide", ["int32", "int64"]]]) {
       const fact = program.records.targetOperation.get(initializers.get(name));
       assert.equal(fact?.kind === "array-literal", true, `${name}: an array is admitted`);
       const leaves = rustUnionLeaves(fact.elementCarrier, program.typeDefinitions);
@@ -132,17 +134,57 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: bool
     assert.equal(absent?.kind === "array-literal" && absent.contributions.length === 3, true, "both nullish source forms keep one native absence lane");
   });
 
+  test(`C102 ${lane}: incompatible integer peers are refused before publication without an invented floating carrier`, () => {
+    for (const expression of ["[signed, unsigned]", "[signed, unsigned, 1]", "[signed, 1, unsigned]", "[1, signed, unsigned]"]) {
+      const { result, source } = compileRust({ surfaces, files: { "index.ts": header +
+        `export function inspect(signed: int32, unsigned: uint32) { const values = ${expression}; return values; }` } });
+      assert.equal(result.artifacts.length, 0, `${expression}: no output from an unsupported native element set`);
+      const issues = result.diagnostics.filter(issue => issue.category === "error");
+      assert.equal(issues.length, 1, `${expression}: exactly one inference-owner refusal`);
+      assert.equal(issues[0].code, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", `${expression}: original array admission owner`);
+      const range = source.ast.authoredRange(issues[0].sourceNode);
+      const text = source.ast.getSourceText(source.ast.getSourceFile(issues[0].sourceNode));
+      assert.equal(range.kind === "authored" && text.slice(range.start, range.end) === expression, true,
+        `${expression}: exact aggregate source span`);
+    }
+  });
+
+  test(`C102 ${lane}: omitted optional tuple keeps its existing exact initializer refusal`, () => {
+    const { result, source } = compileRust({ surfaces, files: { "index.ts": header +
+      "export function inspect(signed: int32): void { const tuple: [int32, int32?] = [signed]; }" } });
+    assert.equal(result.artifacts.length, 0, "the original optional tuple remains unpublished");
+    assert.deepEqual(result.diagnostics.map(({ code, message, evidence }) => ({ code, message, evidence })), [{
+      code: "RUST_INITIALIZER_CARRIER_MISMATCH",
+      message: "The initializer cannot be represented by the declaration's exact Rust carrier.",
+      evidence: ["target.capability=rust.initializer-carrier"],
+    }], "the exact existing tuple-owner refusal is not hidden by numeric array inference");
+    const range = source.ast.authoredRange(result.diagnostics[0].sourceNode);
+    const text = source.ast.getSourceText(source.ast.getSourceFile(result.diagnostics[0].sourceNode));
+    assert.equal(range.kind === "authored" && text.slice(range.start, range.end) === "[signed]", true,
+      "the unchanged refusal anchors to the omitted tuple initializer");
+  });
+
   for (const [name, body, code] of [
     ["fractional integer destination", "export function invalid(): int32[] { return [0.5]; }", "RUST_INTEGER_LITERAL_NOT_EXACT"],
     ["out-of-range integer destination", "export function invalid(): int32[] { return [2147483648]; }", "RUST_INTEGER_LITERAL_NOT_EXACT"],
-    ["mutable widening", "export function invalid(values: string[]): (string | number)[] { return values; }", undefined],
-    ["non-Clone mutable references", 'import type { Mut } from "@tsonic/rust/types.js"; export function invalid(values: Mut<int32>[]): Mut<int32>[] { return [...values]; }', undefined],
+    ["mutable widening", "export function invalid(values: string[]): (string | number)[] { return values; }", "RUST_RETURN_CARRIER_MISMATCH"],
+    ["non-Clone mutable references", 'import type { Mut } from "@tsonic/rust/types.js"; export function invalid(values: Mut<int32>[]): Mut<int32>[] { return [...values]; }', "RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED"],
   ]) {
     test(`C102 ${lane}: ${name} remains refused without output`, () => {
       const { result } = compileRust({ surfaces, files: { "index.ts": header + body } });
       assert.equal(result.artifacts.length, 0, `${name}: no target artifacts`);
       assert.equal(result.diagnostics.some(diagnostic => diagnostic.category === "error" &&
-        (code === undefined || diagnostic.code === code)), true, `${name}: precise existing owner refusal`);
+        diagnostic.code === code), true, `${name}: precise existing owner refusal`);
+      if (name === "non-Clone mutable references") {
+        assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === code &&
+          diagnostic.message === "A generated Rust operation requires an exact Rust Clone implementation that its exact target carrier does not provide."),
+        true, "the native Clone obligation, not an unrelated error, refuses the spread");
+      }
+      if (name === "mutable widening") {
+        assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === code &&
+          diagnostic.message === "The returned source value cannot be represented by the callable's exact Rust return carrier."),
+        true, "the existing mutable storage conversion is refused at its return owner");
+      }
     });
   }
 
@@ -173,7 +215,8 @@ export function inspect(): number {
 }
 
 test("C102 policy uses exact existing numeric and literal relations, not a synthetic promotion engine", async () => {
-  const { selectRustInferredNumericArrayElement: select } = await import("../../../dist/policy/types/collections/array-elements.js");
+  const { selectRustInferredNumericArrayElement } = await import("../../../dist/policy/types/collections/array-elements.js");
+  const select = (source, contributions) => selectRustInferredNumericArrayElement(source, contributions, []);
   const primitive = rustSourcePrimitiveTargetType;
   const signed = { carrier: primitive("int32"), literal: undefined };
   const unsigned = { carrier: primitive("uint32"), literal: undefined };
@@ -204,6 +247,17 @@ test("C102 policy uses exact existing numeric and literal relations, not a synth
     form: "numeric", number: 1, integer: 1n, numeric: { kind: "checked-float64", value: 1 },
   } }])?.name, "float64", "checked float64 metadata cannot become an adaptable authored integer");
   assert.equal(select(primitive("float64"), []) === undefined, true, "missing contributions are not invented");
+  const narrow = { carrier: primitive("int8"), literal: undefined };
+  const overflow = { ...one, literal: { ...one.literal, number: 200, integer: 200n,
+    numeric: { kind: "authored", token: { coefficient: 200n, exponent: 0n, negative: false, decimalText: "200" } } } };
+  assert.equal(select(primitive("float64"), [narrow, overflow])?.name, "float64",
+    "an unconstrained boundary literal is not forced into the first native peer");
+  assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), [narrow, overflow], [primitive("int8")])?.name,
+    "int8", "the actual destination selects canonical literal admission, not a speculative successful fit");
+  assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), [signed, one], [primitive("float64")])?.name,
+    "float64", "an actual explicit floating destination remains authoritative");
+  assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), [signed, one],
+    [primitive("int32"), primitive("float64")])?.name, "int32", "inconsistent demands cannot choose the first destination");
 });
 
 test("C102 unresolved source storage cannot publish a partial aggregate native domain", () => {

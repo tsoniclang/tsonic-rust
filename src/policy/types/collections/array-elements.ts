@@ -16,6 +16,7 @@ export interface RustInferredNumericArrayContribution {
 export function selectRustInferredNumericArrayElement(
   sourceElement: TargetTypeRef | undefined,
   contributions: readonly RustInferredNumericArrayContribution[],
+  demands: readonly TargetTypeRef[],
 ): TargetTypeRef | undefined {
   if (contributions.length === 0) return undefined;
   const constraints = contributions.map(({ carrier, literal }) => ({ carrier,
@@ -23,6 +24,10 @@ export function selectRustInferredNumericArrayElement(
       ? literal : undefined }));
   const peers = constraints.filter(contribution => contribution.literal === undefined);
   if (peers.some(peer => !isRustNumericCarrier(peer.carrier))) return undefined;
+  const destination = demands[0];
+  if (destination !== undefined && isRustNumericCarrier(destination) &&
+    demands.every(demand => rustTargetTypeRefEquals(demand, destination)) &&
+    peers.every(peer => implicitNumericConversion(peer.carrier, destination))) return destination;
   const accepts = (candidate: TargetTypeRef): boolean => isRustNumericCarrier(candidate) &&
     constraints.every(contribution => contribution.literal === undefined
       ? implicitNumericConversion(contribution.carrier, candidate)

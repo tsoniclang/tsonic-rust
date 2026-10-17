@@ -28,6 +28,7 @@ import {
 } from "@tsonic/target-api/source";
 import {
   isRustJsArrayCarrier,
+  isRustNumericCarrier,
   rustJsArrayLikeElementTargetType,
   rustOptionElementCarrier,
   rustOptionTargetType,
@@ -59,8 +60,9 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
-import { resolveRustArrayElementStorage } from "../expressions/array-storage.js";
+import { collectRustArrayElementStorageDemands } from "../expressions/array-storage.js";
 import { selectRustInferredNumericArrayElement } from "../../policy/types/collections/array-elements.js";
+import { selectRustArrayElementStorage } from "../../policy/types/collections/array-storage.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -336,8 +338,10 @@ export function resolveArrayLiteralCarrier(
     return setCarrierFact(walk, expression, expected);
   }
   if (expectedElement === undefined) {
-    expectedElement = inferArrayLiteralElement(walk, expression, sourceFile, presentElements, selected);
-    if (expectedElement !== undefined) expectedElement = resolveRustArrayElementStorage(walk, expression, expectedElement);
+    const demands = collectRustArrayElementStorageDemands(walk, expression);
+    expectedElement = inferArrayLiteralElement(walk, expression, sourceFile, presentElements, selected, demands);
+    if (expectedElement !== undefined) expectedElement = selectRustArrayElementStorage(
+      expectedElement, demands, walk.context.typeDefinitions);
   }
   if (expectedElement === undefined) {
     return undefined;
@@ -393,6 +397,7 @@ function inferArrayLiteralElement(
   sourceFile: SourceFile,
   elements: readonly Node[],
   selected: TargetTypeRef | undefined,
+  demands: readonly TargetTypeRef[],
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   const types = walk.context.semanticsFor(expression).types;
@@ -426,18 +431,25 @@ function inferArrayLiteralElement(
     if (carrier === undefined || type === undefined) return undefined;
     rows.push({ type, carrier, literal: walk.context.literalValues.literalValue.get(operand) });
   }
-  const numeric = selectRustInferredNumericArrayElement(selectedElement, rows);
+  const numeric = selectRustInferredNumericArrayElement(selectedElement, rows, demands);
   if (numeric !== undefined) return numeric;
   const first = rows[0]?.carrier;
   if (rows.every(row => rustTargetTypeRefEquals(first, row.carrier))) return first;
   if (sourceElement === undefined) return undefined;
+  const refuseElement = (): undefined => {
+    if (rows.every(row => isRustNumericCarrier(row.carrier))) {
+      appendRustDiagnostic(walk, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH",
+        "Array literal requires one exact native element carrier for every checked source contribution.", expression, []);
+    }
+    return undefined;
+  };
   const members = types.isUnion(sourceElement) ? types.unionOrIntersectionTypes(sourceElement) : [sourceElement];
   if (rows.some(row => !members.some(member => {
     const base = types.literalBaseType(member);
     return base !== undefined && sourceBoundTypeRelationship(
       row.type, base, walk.context.semanticsFor(expression), () => undefined,
     ) === "identity";
-  }))) return undefined;
+  }))) return refuseElement();
   const carriers: TargetTypeRef[] = [];
   for (const member of members) {
     const base = types.literalBaseType(member);
@@ -445,14 +457,14 @@ function inferArrayLiteralElement(
       row.type, base, walk.context.semanticsFor(expression), () => undefined,
     ) === "identity");
     const carrier = matches[0]?.carrier;
-    if (carrier === undefined || matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return undefined;
+    if (carrier === undefined || matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return refuseElement();
     carriers.push(carrier);
   }
   return resolveRustSourceUnionCarrier(carriers, values => resolveRustUnionValueCarrier(
     values, walk.operationOptions, () => resolveRustInferredUnion(
       sourceElement, members, carriers, rustResolutionContext(walk, expression), walk.operationOptions,
     ),
-  ));
+  )) ?? refuseElement();
 }
 
 function resolveArrayElementCarrier(
