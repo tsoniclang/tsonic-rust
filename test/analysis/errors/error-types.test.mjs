@@ -5,7 +5,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
 import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustJsStringTargetType, rustJsValueTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustJsValueTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 
@@ -45,11 +45,15 @@ test("native body errors normalize independently from the single JS Promise reje
   assert.equal(rustTargetTypeRefEquals(forwarded, rustJsValueTargetType()), true,
     "synchronous forwarding retains the concrete Promise object's one JS rejection carrier");
   const completion = current.input.producers.invocationResultFor(current.producer("failLeft").declaration);
+  const output = current.input.records.asyncFunction.get(current.producer("failLeft").declaration)?.outputCarrier;
+  assert.equal(output !== undefined, true, "the checked async declaration owns its actual native payload selection");
   const selected = normalizeRustErrorType(completion, current.input);
   assert.equal(selected?.id, "rust.js.JsPromise");
   assert.equal(selected.genericArguments.length, 1, "the actual Promise object has only its payload argument");
   assert.equal(selected.genericArguments[0].kind, "type", "the payload is a native type argument");
-  assert.equal(rustTargetTypeRefEquals(selected.genericArguments[0].type, rustJsStringTargetType()), true,
+  assert.equal(rustTargetTypeRefEquals(completion.genericArguments[0].type, output), true,
+    "the actual Promise producer carries the checked native payload, not a guessed JS storage carrier");
+  assert.equal(rustTargetTypeRefEquals(selected.genericArguments[0].type, output), true,
     "Promise output stays separate from exact native body errors and the shared JS rejection carrier");
 });
 
