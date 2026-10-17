@@ -234,4 +234,3 @@ function planModuleBindingPattern(
   }
   return { items, initialization };
 }
-
