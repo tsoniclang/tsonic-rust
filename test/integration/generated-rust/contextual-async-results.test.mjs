@@ -134,7 +134,7 @@ export async function run(pending: Promise<void>): Promise<int32> {
 #[cfg(test)]
 mod direct_native_cost {
     use super::*;
-    ${nativeOwnershipCostSupport}
+    ${nativeOwnershipCostSupport(directory)}
 
     fn handwritten(pending: js_abi::JsPromise<()>) -> js_abi::JsPromise<i32> {
         js_abi::JsPromise::from_fallible_factory(move || async move {

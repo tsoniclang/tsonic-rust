@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -308,7 +308,8 @@ export function verify(): void {
   assert.match(output, /pub fn retainPattern\(value: js_abi::JsRegExp\)/u);
   assert.equal(/pub fn retainPattern\(value: js_abi::JsRegExp\) -> rt::Location<js_abi::JsRegExp, rt::TsonicError> \{\s*rt::Location::<js_abi::JsRegExp, rt::TsonicError>::allocate\(value\)\s*\}/u.test(output),
     true, "RegExp retention moves the actual native value into Location without an additional clone or adapter");
-  const nativeCost = `${nativeOwnershipCostSupport}
+  const root = writeGeneratedProject("static-runtime-generated", result.artifacts);
+  const nativeCost = `${nativeOwnershipCostSupport(root)}
 use static_runtime_generated::index;
 use tsonic_rust_js::abi as js_abi;
 use tsonic_rust_runtime as rt;
@@ -342,8 +343,13 @@ fn actual_generated_calls_and_locations_match_native_costs() {
 `;
   const formatted = spawnSync("rustfmt", ["--edition", "2021"], { input: nativeCost, encoding: "utf8", timeout: 30_000 });
   assert.equal(formatted.status, 0, "the handwritten control formats independently of generated artifacts");
-  const native = { path: "tests/static_cost.rs", text: formatted.stdout };
-  validateGeneratedProject("static-runtime-generated", [...result.artifacts, native]);
+  mkdirSync(join(root, "tests"), { recursive: true });
+  writeFileSync(join(root, "tests/static_cost.rs"), formatted.stdout);
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(root, ["test", "--locked", "--offline"]);
 });
 
 test("generated RegExp class factories retain both actual native environments", { timeout: 300_000 }, () => {
