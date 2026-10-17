@@ -16,7 +16,6 @@ import {
   Node_Name,
   Node_Type,
   sourceLexicalEnvironment,
-  sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 
 import {
@@ -54,6 +53,7 @@ import { finalizeValueConversion } from "../operations/finalized-operation/conve
 
 import { rustCallableInvocationResult } from "./results.js";
 import { rustSourceClosureValueCarrier } from "./function-values.js";
+import { resolveRustCallableEnvironment } from "../../policy/types/resolution/callable-environments.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
@@ -111,8 +111,11 @@ export function resolveFunctionExpressionCarrier(
   },
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
-  if ((ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression)) &&
-    sourceCallableDefinitionIsDiscarded(expression, ast)) return setCarrierFact(walk, expression, rustUnitTargetType());
+  if (ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression)) {
+    const participation = walk.context.records.nativeParticipation.get(expression);
+    if (participation === undefined) return undefined;
+    if (participation === "erased") return setCarrierFact(walk, expression, rustUnitTargetType());
+  }
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);
@@ -277,8 +280,15 @@ export function resolveFunctionExpressionCarrier(
     if (selectedValueResult === undefined) {
       return undefined;
     }
-    const recursiveCarrier = rebindRustCallableCarrier(selectedExpected, parameterCarriers, selectedValueResult,
-      { typeParameters: genericParameters ?? [] });
+    const recursiveEnvironment = resolveRustCallableEnvironment(expression, rustResolutionContext(walk, expression),
+      walk.operationOptions, new Set());
+    if (recursiveEnvironment === undefined) return undefined;
+    const recursiveTemplate = rebindRustCallableCarrier(selectedExpected, parameterCarriers, selectedValueResult,
+      { typeParameters: genericParameters ?? [], ...(selectedGeneric === undefined ? {} : {
+        environment: [...selectedGeneric.environment, ...selectedGeneric.retainedEnvironment, ...recursiveEnvironment],
+      }) });
+    const recursiveCarrier = recursiveTemplate === undefined ? undefined
+      : rustSourceClosureValueCarrier(walk, expression, recursiveTemplate, recursiveEnvironment);
     if (recursiveCarrier === undefined) return undefined;
     setCarrierFact(walk, expression, recursiveCarrier);
     setCarrierFact(walk, expressionName, recursiveCarrier);
@@ -341,7 +351,8 @@ export function resolveFunctionExpressionCarrier(
   }
   const logicalCarrier = rebindRustCallableCarrier(selectedExpected, finalizedParameterCarriers, valueResult,
     selectedGeneric === undefined ? {} : { typeParameters: genericParameters ?? [],
-      environment: [...selectedGeneric.environment, ...captures.captures.map(capture => capture.carrier),
+      environment: [...selectedGeneric.environment, ...selectedGeneric.retainedEnvironment,
+        ...captures.captures.map(capture => capture.carrier),
         ...captures.receiverFields.map(capture => capture.carrier), ...captures.receivers.map(capture => capture.carrier)],
     });
   const closureCarrier = logicalCarrier === undefined ? undefined : rustSourceClosureValueCarrier(walk, expression, logicalCarrier,

@@ -36,6 +36,7 @@ const walkerContracts = new Map([
   ["analysis/callables/ownership-components.ts", [2, "checked-source-identities-and-native-roots"]],
   ["analysis/callables/signatures.ts", [1, "native-domain"]],
   ["analysis/callables/value-plan.ts", [1, "native-domain"]],
+  ["analysis/callables/emission-requests.ts", [1, "native-domain"]],
   ["analysis/declarations/lifetimes.ts", [1, "native-domain"]],
   ["analysis/module-initialization/analyze.ts", [1, "admitted-module-statements"]],
   ["analysis/names/plan.ts", [1, "native-domain"]],
@@ -59,6 +60,7 @@ const checkedStorageConsumers = new Map([
   ["analysis/callables/ownership-components.ts", [1, "checked source foreign-node and binding identity domain"]],
   ["analysis/callables/native-future-inputs.ts", [1, "checked source identity membership; discovery uses nativeNodes"]],
   ["analysis/callables/native-storage.ts", [1, "checked source identity membership; conversion discovery uses nativeNodes"]],
+  ["analysis/callables/physical-lifecycle.ts", [1, "checked selecting-owner request subject and source-slot identity membership"]],
   ["analysis/callables/generic-physical.ts", [1, "complete checked source-file ownership identity"]],
   ["analysis/callables/native-captures.ts", [1, "complete checked capture identity membership"]],
 ]);
@@ -139,7 +141,9 @@ test("the native-domain owner refuses incomplete source storage before any callb
 test("discarded native callable rendering precedes every body and capture read", () => {
   const source = readFileSync(join(root, "src/backend/planner/expressions/callable.ts"), "utf8");
   const body = source.slice(source.indexOf("export function planRustCallableExpressionBody("));
-  assert.equal(body.indexOf("sourceCallableDefinitionIsDiscarded(node, ast)") >= 0 &&
-    body.indexOf("sourceCallableDefinitionIsDiscarded(node, ast)") < body.indexOf("const closureFact ="), true,
-  "the one shared source-use predicate reaches unit rendering before missing erased records");
+  assert.equal(body.indexOf('records.nativeParticipation.get(node) === "erased"') >= 0 &&
+    body.indexOf('records.nativeParticipation.get(node) === "erased"') < body.indexOf("const closureFact ="), true,
+  "the one published source-use decision reaches unit rendering before missing erased records");
+  assert.doesNotMatch(source, /sourceCallableDefinitionIsDiscarded/u,
+    "planning reads the admitted participation without reclassifying source use after sealing");
 });

@@ -65,7 +65,8 @@ function planRustFunctionParameters(
   if (parameterPlan === undefined) return undefined;
   const operation = environment.context.input.program.records.targetOperation.get(node);
   const leading = planRustCallableLeadingParameters(node,
-    operation?.kind === "closure" ? operation.leadingParameters ?? [] : [], environment.context);
+    operation?.kind === "closure" ? operation.leadingParameters ?? [] : [], environment.context,
+    environment.context.input.program.callableValues.nativeProducers.forDeclaration(node)?.parameterCarriers);
   if (leading === undefined) return undefined;
   const leadingParams = leading.parameters.map(parameter => {
     const type = rustTypeFromCarrierInContext(parameter.carrier, environment.context);

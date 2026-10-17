@@ -298,6 +298,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, usedNames });
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
     nodes: input.nativeNodes, native, definitions: input.typeDefinitions,
+    structuralShapes: input.structuralShapes,
     returnCarrierFor: declaration => {
       const selected = nativeStorageQueries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
@@ -315,6 +316,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     nativeStorage: nativeStorageQueries });
   const physical = genericRegistry.initializePhysical({ ast: input.ast, lifetimes: input.lifetimes,
     storage: input.sourceStorage, captures, native,
+    genericBindingsFor: (declaration, bindings) => nativeStorageQueries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
   let parameterStorage: RustNativeStoragePlan | undefined;

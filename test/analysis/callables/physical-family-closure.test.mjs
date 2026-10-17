@@ -10,10 +10,12 @@ import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analys
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeChildren } from "../../../dist/target-model/types/carriers/children.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedMetadataKey } from "../../../dist/target-model/metadata/closed-data.js";
 import { planRustOutput } from "../../../dist/backend/planner/program/index.js";
 import { createRustPlanningContext } from "../../../dist/backend/planner/context.js";
@@ -101,10 +103,18 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
       const selected = queries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  producers.selectConstructionErrors(new Map());
+  const errors = new Map();
+  for (const producer of producers.producers) {
+    const intrinsic = producers.errorFor(producer.declaration, "invoke");
+    const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, { ast: source.ast,
+      records, components: program.sourcePackageComponents, producers, definitions: program.typeDefinitions }, producer.declaration);
+    if (selected !== undefined) errors.set(producer.declaration, selected);
+  }
+  producers.selectConstructionErrors(errors);
   const queries = createRustNativeStorageQueries({ ...input, native, producers });
   const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
   physical = registry.initializePhysical({ ...input, native, captures,
+    genericBindingsFor: (declaration, bindings) => queries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
@@ -338,6 +348,116 @@ test("closed native substitutions distinguish original source activations from u
   assert.equal(Object.isFrozen(unavailable.sourceActivations), true, "unavailability is immutable data");
 });
 
+for (const [label, source] of [
+  ["closed", "class Work { ready = true; } export function main(): boolean { return new Work().ready; }"],
+  ["generic", "class Work<Value> { ready = true; constructor(readonly value: Value) {} } export function main(): boolean { return new Work(7).ready; }"],
+]) test(`native ${label} class initializer activations use their real class carrier, not a callable parameter ABI`, () => {
+  const observed = [];
+  const current = construction(source, undefined, undefined, storage => Object.freeze({ ...storage,
+    boundActivationsFor(declaration, bindings) {
+      const selected = storage.boundActivationsFor(declaration, bindings);
+      observed.push({ declaration, bindings, selected });
+      return selected;
+    },
+  }));
+  const declaration = current.storage.nodes.find(node => current.ast.is.IsClassDeclaration(node) &&
+    current.ast.text(current.ast.name(node)) === "Work");
+  const invocation = current.storage.nodes.find(node => current.ast.is.IsNewExpression(node));
+  assert.equal(declaration !== undefined && invocation !== undefined, true, "the original class and allocation are checked source nodes");
+  assert.equal(current.program.records.sourceCallableReturn.get(declaration) === undefined, true,
+    "a class initialization owner does not acquire a fabricated callable return contract");
+  assert.equal(current.program.records.runtimeCarrier.get(declaration)?.carrier !== undefined, true,
+    "the class signature owner has already published its actual class carrier");
+  const caller = current.storage.bindingsForLexicalOwner(invocation);
+  assert.equal(caller.kind, "resolved", "the allocation retains its actual source caller bindings");
+  const selectedConstruction = current.storage.constructionFor(invocation, caller.bindings);
+  assert.equal(selectedConstruction.kind, "resolved", "the original allocation selects complete source class regions");
+  const regions = selectedConstruction.alternatives.flatMap(alternative => alternative.classes
+    .filter(selected => selected.owner === declaration).flatMap(selected => selected.regions));
+  assert.equal(regions.length, 1, "the actual ready initializer has one original class execution region");
+  const bindings = regions[0].selection.bindings;
+  const selected = current.queries.genericBindingsFor(declaration, bindings);
+  assert.equal(selected.kind, "resolved", selected.reason ?? "native class substitutions come from the actual selected construction");
+  assert.equal(selected.sourceActivations.kind, "resolved", "actual source activations are distinct from target emptiness");
+  const original = observed.find(row => row.declaration === declaration && row.bindings === bindings);
+  assert.equal(original?.selected.kind, "resolved", "the selector queried the identical original region binding token");
+  assert.equal(selected.sourceActivations.rows.length, original.selected.activations.length,
+    "every original class activation survives native substitution selection");
+  for (const row of selected.sourceActivations.rows) {
+    assert.equal(original.selected.activations.includes(row.activation), true, "the source activation object itself is retained");
+    assert.equal(row.activation.declaration === declaration, true, "the class remains the actual initialization owner");
+    assert.equal(Object.isFrozen(row) && Object.isFrozen(row.targetBindings), true, "published class correspondence is immutable data");
+  }
+  if (label === "generic") {
+    const parameter = current.program.records.selectedCall.get(invocation)?.member.genericParameters?.find(value => value.kind === "type");
+    const operation = current.program.records.targetOperation.get(invocation);
+    const argument = operation?.kind === "source-call" ? operation.targetGenericArguments?.find(value => value.kind === "type") : undefined;
+    assert.equal(parameter !== undefined && argument !== undefined, true, "the real selected constructor owns the native type argument");
+    assert.equal(selected.sourceActivations.rows.every(row =>
+      rustTargetTypeRefEquals(row.targetBindings.types.get(parameter.targetIdentity), argument.type)), true,
+    "all retained source rows use the actual native constructor substitution, never an invented empty environment");
+  } else assert.equal(selected.bindings.types.size + selected.bindings.lifetimes.size + selected.bindings.consts.size, 0,
+    "a closed class has genuinely empty native substitutions");
+  assert.equal(current.queries.genericBindingsFor(declaration, Object.freeze({ substitutions: Object.freeze([]) })).kind,
+    "unresolved", "a copied empty-looking binding token is not owned construction evidence");
+  let missingOwner;
+  const missing = construction(source, undefined, records => Object.freeze({ ...records,
+    runtimeCarrier: Object.freeze({ get(node) {
+      return node === missingOwner ? undefined : records.runtimeCarrier.get(node);
+    } }),
+  }), storage => {
+    missingOwner = storage.nodes.find(node => storage.source.ast.is.IsClassDeclaration(node));
+    return storage;
+  });
+  assert.equal(missingOwner !== undefined, true, "the missing metadata inverse changes only its exact original checked class owner");
+  const unavailable = missing.queries.genericBindingsFor(missingOwner, missing.storage.emptyBindings);
+  assert.equal(unavailable.kind, "unresolved", "a real class with missing finalized native metadata cannot become empty or callable");
+  assert.equal(unavailable.reason, "Native class activation requires its finalized selected class carrier.",
+    "the missing class premise has its exact owning selection reason");
+});
+
+test("actual value and operand preparation retain only completed data and pure readers never reselect", () => {
+  let ready = false;
+  let subject;
+  let reads = 0;
+  const current = construction("export function keep(value: number): number { const stored = value; return stored; }",
+    undefined, records => Object.freeze({ ...records, runtimeCarrier: Object.freeze({ get(node) {
+      if (node !== subject) return records.runtimeCarrier.get(node);
+      reads += 1;
+      return ready ? records.runtimeCarrier.get(node) : undefined;
+    } }) }), storage => {
+      subject = storage.nodes.find(node => storage.source.ast.is.IsVariableDeclaration(node) &&
+        storage.source.ast.text(storage.source.ast.name(node)) === "stored");
+      return storage;
+    });
+  assert.equal(subject !== undefined, true, "the question is the identical existing checked native binding");
+  const before = reads;
+  assert.equal(current.queries.valueFor(subject).kind, "unresolved", "an unprepared value lookup is unavailable, not a selector");
+  assert.equal(current.queries.operandFor(subject).kind, "unresolved", "an unprepared operand lookup is unavailable, not a selector");
+  assert.equal(reads, before, "pure absence reads never inspect source facts");
+  assert.equal(current.queries.prepareValue(subject).kind, "unresolved", "unfinished actual value evidence is not cached as success");
+  assert.equal(current.queries.prepareOperand(subject).kind, "unresolved", "unfinished actual operand evidence is not cached as success");
+  ready = true;
+  const value = current.queries.prepareValue(subject);
+  const operand = current.queries.prepareOperand(subject);
+  assert.equal(value.kind !== "unresolved" && operand.kind !== "unresolved", true,
+    "the actual completed evidence remains selectable after the earlier pending result");
+  const completedReads = reads;
+  current.physical.closeAdmission();
+  current.physical.closeKeys();
+  current.physical.publish();
+  for (let repetition = 0; repetition < 3; repetition += 1) {
+    assert.equal(current.queries.prepareValue(subject) === value, true, "known value preparation returns the same completed object");
+    assert.equal(current.queries.prepareOperand(subject) === operand, true, "known operand preparation returns the same completed object");
+    assert.equal(current.queries.valueFor(subject) === value, true, "value lookup reads the canonical completed object");
+    assert.equal(current.queries.operandFor(subject) === operand, true, "operand lookup reads the canonical completed object");
+  }
+  assert.equal(reads, completedReads, "neither repeated preparation nor any post-publication read performs source selection");
+  assert.equal(Object.isFrozen(value) && Object.isFrozen(operand), true, "only immutable selection data survives completion");
+  assert.equal(current.queries.valueFor({}).kind, "unresolved", "foreign value lookup remains absent without source inspection");
+  assert.equal(current.queries.operandFor({}).kind, "unresolved", "foreign operand lookup remains absent without source inspection");
+});
+
 test("nested generic captures retain their original source selections rather than only the outer native member", () => {
   const observations = [];
   const current = construction(`
@@ -517,7 +637,8 @@ test("published physical reads return stored keys and reject required unprepared
     assert.equal(invariantCode(read), "TSONIC_INTERNAL_PLANNER_INVARIANT", "a required read of a valid unrooted shape after publication is a planner invariant");
   }
   assert.equal(physical.existingSelectionFor(reordered) === undefined, true, "an optional read of a valid unrooted shape stays absent");
-  const logical = rustGenericCallableCarrier({ origin: value.origin, signature: value.signature, environment: value.environment });
+  const logical = rustGenericCallableCarrier({ origin: value.origin, signature: value.signature,
+    environment: value.environment, retainedEnvironment: value.retainedEnvironment });
   assert.equal(physical.definitionFor(logical) === undefined, true, "a logical carrier is not a physical storage key");
   const foreign = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: value.physical.members.map(member =>
     ({ ...member, origin: { ...member.origin, declarationIdentity: "foreign" } })) } });
@@ -644,7 +765,9 @@ test("published callable plans expose no construction capability", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
   const { generic, nativeCaptures } = program.callableValues;
   for (const [owner, names] of [[generic, ["initializePhysical"]], [generic.physical, ["carrierFor", "closeAdmission", "publish"]],
-    [nativeCaptures, ["require", "complete"]], [program.callableValues, ["finalizeSelected", "initialize", "seal", "publish"]]]) {
+    [nativeCaptures, ["require", "complete"]],
+    [program.callableValues.nativeStorage, ["prepareValue", "prepareOperand", "prepareInvocation", "prepareReturn"]],
+    [program.callableValues, ["finalizeSelected", "initialize", "seal", "publish"]]]) {
     assert.equal(Object.isFrozen(owner), true);
     for (const name of names) assert.equal(name in owner, false, name);
   }

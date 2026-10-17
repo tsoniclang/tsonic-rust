@@ -84,6 +84,11 @@ function planRustSourceCallableGenerics(
   const specialization = selected.specialization;
   capturedParameters = [...capturedParameters, ...rustCallableImplicitLifetimeParameters(
     declaration, context.input.program.source.ast, context.input.program.records)];
+  const capturedLifetimes = new Set(capturedParameters.flatMap(parameter =>
+    parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
+  const physicalLifetimes = context.input.program.callableValues.nativeProducers.forDeclaration(declaration)?.inputLifetimeParameters ?? [];
+  capturedParameters = [...capturedParameters, ...physicalLifetimes.filter(parameter =>
+    !capturedLifetimes.has(rustLifetimeKey(parameter.lifetime)))];
   const sourceParameters = context.input.program.source.ast.typeParameters(declaration);
   if (sourceParameters.some((parameter) => parameter === undefined)) {
     context.diagnostics.push(missingFactDiagnostic(

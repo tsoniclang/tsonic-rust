@@ -35,7 +35,11 @@ export function rustGenericCallableEnvironment(
     ...capture.captures, ...capture.receiverFields, ...capture.receivers,
     ...capture.inputs.map(input => input.trait),
   ] });
-  if (references.hasUnnameableLifetime) return undefined;
+  const retained = new Set([...value.environment, ...value.retainedEnvironment]
+    .flatMap(type => rustTargetGenericReferences(type).typeIdentities));
+  for (const selected of capture.inputs) retained.add(selected.implementation.identity);
+  if (references.hasUnnameableLifetime || references.typeIdentities.some(identity =>
+    !types.has(identity) && !retained.has(identity))) return undefined;
   const arguments_: readonly RustTargetGenericArgument[] = [
     ...references.lifetimes.map(lifetime => ({ kind: "lifetime" as const, lifetime })),
     ...references.typeParameters.filter(parameter => !types.has(parameter.identity)).map(type => ({ kind: "type" as const, type })),

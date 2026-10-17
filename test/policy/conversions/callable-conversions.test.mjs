@@ -36,8 +36,12 @@ test("ordinary callable destinations retain the actual environment before select
       "the selected adaptation and its complete native destination agree");
     const returned = selectRustValueCarrierReconciliation(selected.fact.targetCarrier, requested, projectTypes);
     assert.equal(returned.kind, "identity", "returning the already adapted value adds no lifetime-only wrapper");
+    assert.equal(rustTargetTypeRefEquals(returned.selectedCarrier, selected.fact.targetCarrier), true,
+      "identity publishes the exact already-selected lifetime destination instead of dropping it");
     const same = selectRustValueCarrierReconciliation(source, rustCallableTargetType([], number, undefined, error), projectTypes);
     assert.equal(same.kind, "identity", "an otherwise identical callable preserves its exact source carrier");
+    assert.equal(rustTargetTypeRefEquals(same.selectedCarrier, source), true,
+      "the same full parameter, result, error and actual lifetime ABI reaches its consuming formal owner");
     const mismatch = selectRustValueCarrierReconciliation(source,
       rustCallableTargetType([number], number, undefined, otherError), projectTypes);
     assert.equal(mismatch.kind, "incompatible", "environment inference cannot change the native error identity");

@@ -21,7 +21,6 @@ import {
   KindArrayBindingPattern,
   KindObjectBindingPattern,
   Node_Initializer,
-  sourceCallableDefinitionIsDiscarded,
 } from "@tsonic/target-api/source";
 import { planRustCapturedEnvironment } from "./capture-environments.js";
 import { planRustAbsentValue } from "./optional-storage.js";
@@ -68,7 +67,7 @@ export function planCallableExpression(
   context: RustPlanContext,
   resultUse: RustExpressionResultUse = "value",
 ): RustExpr | undefined {
-  if (resultUse === "discarded" || sourceCallableDefinitionIsDiscarded(node, context.input.program.source.ast))
+  if (resultUse === "discarded" || context.input.program.records.nativeParticipation.get(node) === "erased")
     return { kind: "tuple-literal", elements: [] };
   return context.input.program.records.closureCapture.get(node)?.invocationOwner === "shared-state"
     ? planRustSuspendedCallableConstruction(node, context)
@@ -82,7 +81,7 @@ export function planRustCallableExpressionBody(
 ): RustExpr | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...context } = outerContext;
   const { ast } = context.input.program.source;
-  if (resultUse === "discarded" || sourceCallableDefinitionIsDiscarded(node, ast))
+  if (resultUse === "discarded" || context.input.program.records.nativeParticipation.get(node) === "erased")
     return { kind: "tuple-literal", elements: [] };
   const closureFact = rustOperationFact(node, context);
   if (closureFact === undefined || closureFact.kind !== "closure") {
@@ -287,8 +286,10 @@ export function planRustCallableExpressionBody(
   const callableErrorBoundary = generator === undefined ? errorRegion.boundary
     : generatorErrorOwner === undefined ? undefined : rustPackageFallibleBoundary(generatorErrorOwner);
   const producerContext = { ...context, callableDeclaration: node, fallibleBoundary: callableErrorBoundary };
-  const physicalCarrier = callableProtocol === undefined ? undefined
-    : context.input.program.callableValues.nativeProducers.physicalFor(node, constructionCarrier);
+  const physicalSelection = callableProtocol === undefined ? undefined
+    : context.input.program.callableValues.nativeStorage.valueFor(node);
+  const physicalCarrier = physicalSelection?.kind === "unresolved" ? undefined : physicalSelection?.carrier;
+  const physicalSignature = physicalCarrier === undefined ? undefined : rustCallablePhysicalSignature(physicalCarrier);
   const invocationErrorCarrier = !resultIsFallible ? undefined : callableProtocol === undefined || borrowedInput
     ? context.input.program.callableValues.nativeProducers.errorFor(node, "invoke")
     : physicalCarrier === undefined ? undefined : rustCallablePhysicalSignature(physicalCarrier)?.error;
@@ -323,7 +324,7 @@ export function planRustCallableExpressionBody(
       "rust.backend.closure-invocation-owner", "A suspended callable's retained owner conflicts with its finalized callable contract."));
     return undefined;
   }
-  const leadingPlan = planRustCallableLeadingParameters(node, leadingParameters, context);
+  const leadingPlan = planRustCallableLeadingParameters(node, leadingParameters, context, physicalSignature?.parameters);
   if (leadingPlan === undefined) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, node),
@@ -436,7 +437,8 @@ export function planRustCallableExpressionBody(
     const tupleName = leadingParameterPlans.length + sourceParameterPlans.length === 0
       ? `_${allocatedTupleName}`
       : allocatedTupleName;
-    const tupleType = rustTypeFromCarrierInContext({ kind: "tuple", elements: callableProtocol.parameters }, context);
+    if (physicalSignature === undefined) return undefined;
+    const tupleType = rustTypeFromCarrierInContext({ kind: "tuple", elements: physicalSignature.parameters }, context);
     if (tupleType === undefined) return undefined;
     closureParams = [
       ...(ownedStateName === undefined ? [] : [{ name: ownedStateName, mutable: false }]),

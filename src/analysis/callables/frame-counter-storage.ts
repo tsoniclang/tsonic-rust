@@ -1,35 +1,23 @@
-import type { AstReader } from "@tsonic/tsts";
-import type { RustFrameCallableDefinition } from "./frame-values.js";
+import { failTargetPlannerInvariant } from "@tsonic/target-api/artifacts";
+import type { RustFrameCallableDefinition, RustFrameCallablePlan } from "./frame-values.js";
 import type { RustProjectConstructionQueries } from "../project-types/construction-plan.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 
 export function rustRetainedFrameCounterName(
   definition: RustFrameCallableDefinition,
-  input: { readonly source: { readonly ast: AstReader }; readonly projectTypes: RustProjectTypePolicy;
+  input: { readonly callableValues: { readonly frames: Pick<RustFrameCallablePlan, "definitionForOwner"> };
+    readonly projectTypes: RustProjectTypePolicy;
     readonly projectConstructions: RustProjectConstructionQueries },
 ): string | undefined {
-  if (definition.activation.kind === "lexical" || definition.constructionExposure !== undefined) return definition.counterName;
+  if (input.callableValues.frames.definitionForOwner(definition.activation.ownerDeclaration) !== definition)
+    return failTargetPlannerInvariant("tsonic-rust", "A native frame counter requires its exact canonical frame definition.");
+  if (definition.activation.kind === "lexical") return definition.counterName;
   const owner = input.projectTypes.definitionForDeclaration(definition.activation.ownerDeclaration);
   const construction = owner === undefined ? undefined : input.projectConstructions.forDefinition(owner);
-  if (construction === undefined || construction.issues.length !== 0) return definition.counterName;
-  for (const implementation of definition.entries.flatMap(entry => entry.implementations)) {
-    if (implementation.independent) continue;
-    let current = implementation.declaration;
-    let constructionOnly = false;
-    for (let depth = 0; depth < 256; depth += 1) {
-      const point = construction.pointFor(current);
-      if (point !== undefined) {
-        constructionOnly = !point.published && !point.publishBefore;
-        break;
-      }
-      const parent = input.source.ast.parent(current);
-      if (parent === undefined) break;
-      if (input.source.ast.is.IsArrowFunction(parent) || input.source.ast.is.IsFunctionExpression(parent) ||
-        input.source.ast.is.IsFunctionDeclaration(parent) || input.source.ast.is.IsMethodDeclaration(parent) ||
-        input.source.ast.is.IsGetAccessorDeclaration(parent) || input.source.ast.is.IsSetAccessorDeclaration(parent)) break;
-      current = parent;
-    }
-    if (!constructionOnly) return definition.counterName;
-  }
-  return undefined;
+  if (construction === undefined || construction.issues.length !== 0 || construction.emission.frame !== definition)
+    return failTargetPlannerInvariant("tsonic-rust", "A native frame counter requires its exact completed construction owner.");
+  const selected = construction.emission.counterDisposition;
+  if (selected.kind === "absent" || selected.kind === "retained" && selected.name !== definition.counterName)
+    return failTargetPlannerInvariant("tsonic-rust", "A native frame counter requires its exact sealed disposition.");
+  return selected.kind === "retained" ? selected.name : undefined;
 }

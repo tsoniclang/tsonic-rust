@@ -53,9 +53,10 @@ test("nested result queries close only the outer environment and retain the inne
   const fixture = input(returned);
   const result = resolveRustSelectedSourceCallResult(fixture.selected, fixture.context, options);
   assert.equal(result !== undefined, true, "nested callable result has an exact closed outer environment");
-  assert.deepEqual(rustGenericCallableValue(result).environment, [integer]);
+  assert.deepEqual(rustGenericCallableValue(result).retainedEnvironment, [integer]);
+  assert.deepEqual(rustGenericCallableValue(result).environment, []);
   assert.deepEqual(rustGenericCallableProtocol(result, [string]), { parameters: [string], result: string });
-  assert.deepEqual(rustGenericCallableValue(returned).environment, [outer]);
+  assert.deepEqual(rustGenericCallableValue(returned).retainedEnvironment, [outer]);
   assert.deepEqual(rustGenericCallableValue(result).origin, origin);
 });
 

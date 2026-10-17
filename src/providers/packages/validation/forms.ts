@@ -202,6 +202,8 @@ export function validateOperationForm(
     case "arg-structural-method":
       fail(`${label}.target.arg-structural-method is compiler-owned and cannot be declared by a provider package`);
     case "index":
+      if (form.constantIndex !== undefined)
+        fail(`${label}.target.constantIndex is compiler-owned and cannot be declared by a provider package`);
       requireExactKeys(record, ["form", "indexConversion"], `${label}.target`, fail);
       if (form.indexConversion !== undefined) {
         validateValueConversion(

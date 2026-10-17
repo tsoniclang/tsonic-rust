@@ -393,7 +393,15 @@ export function resolveStructuralObjectType(
     const authoredTypeNodes = propertyTypeNodes.length !== 0 || authoredTypeRoot === undefined
       ? propertyTypeNodes
       : sourceTransformedTypeFactEvidenceNodes(context.ast, semantics, authoredTypeRoot, property.type);
-    const memberContexts = ordinaryDeclarations.length === 0 ? [context] : ordinaryDeclarations.flatMap(declaration => {
+    const methodDeclaration = methods.length === 1 && getters.length === 0 &&
+      setters.length === 0 && ordinaryDeclarations.length === 0 ? methods[0] : undefined;
+    const methodContext = methodDeclaration === undefined ? context
+      : rustSourceStorageComponentContext(context, { kind: "method-value", declaration: methodDeclaration });
+    if (methodDeclaration !== undefined && context.sourceStorageSubject !== undefined &&
+      methodContext.sourceStorageSubject === undefined) return undefined;
+    const memberContexts = ordinaryDeclarations.length === 0
+      ? [methodDeclaration === undefined ? methodContext : { ...methodContext, callableRepresentation: "signature" as const }]
+      : ordinaryDeclarations.flatMap(declaration => {
       const selection = context.sourceStorage.memberSubjectFor(declaration);
       return selection.kind !== "resolved" ? [] : [{ ...context, sourceStorageSubject: selection.subject }];
     });

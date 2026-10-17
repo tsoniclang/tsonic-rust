@@ -60,16 +60,19 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
   const cache = new Map<Node, Map<SourceStorageBindings, RustNativeStorageGenericSelection | "resolving">>();
   const unresolved = (reason: string): RustNativeStorageGenericSelection => Object.freeze({ kind: "unresolved", reason });
   const lexicalOwners = new Map<Node, Node | null>();
+  const classOwner = (declaration: Node): boolean => input.ast.is.IsClassDeclaration(declaration) ||
+    input.ast.is.IsClassExpression(declaration);
   const ownBindings = (declaration: Node): boolean => input.ast.typeParameters(declaration).length !== 0 ||
     input.records.retainedEnvironment.get(declaration) !== undefined ||
-    rustCallableInputLifetimeParameters(declaration, input.ast, input.records).length !== 0;
+    !classOwner(declaration) && rustCallableInputLifetimeParameters(declaration, input.ast, input.records).length !== 0;
   const lexicalOwnerFor = (declaration: Node, depth: number): Node | null | undefined => {
     const previous = lexicalOwners.get(declaration);
     if (previous !== undefined) return previous;
     const captures = input.records.closureCapture.get(declaration);
     const carriers = [input.records.sourceCallableReturn.get(declaration)?.returnCarrier,
       input.records.asyncFunction.get(declaration)?.futureCarrier,
-      ...input.ast.parameters(declaration).map(parameter => input.records.sourceParameterAbi.get(parameter)?.parameterCarrier),
+      ...(classOwner(declaration) ? [input.records.runtimeCarrier.get(declaration)?.carrier]
+        : input.ast.parameters(declaration).map(parameter => input.records.sourceParameterAbi.get(parameter)?.parameterCarrier)),
       ...[...captures?.captures ?? [], ...captures?.receiverFields ?? [], ...captures?.receivers ?? []].map(capture => capture.carrier),
     ].filter((carrier): carrier is TargetTypeRef => carrier !== undefined);
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
@@ -102,6 +105,8 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
       values.set(bindings, selection);
       return selection;
     };
+    if (classOwner(declaration) && input.records.runtimeCarrier.get(declaration)?.carrier === undefined)
+      return finish(unresolved("Native class activation requires its finalized selected class carrier."));
     const lexicalOwner = lexicalOwnerFor(declaration, depth + 1);
     if (lexicalOwner === undefined) return finish(unresolved("Native callable activation exceeds its bounded projection budget."));
     if (!ownBindings(declaration) && lexicalOwner === null) {

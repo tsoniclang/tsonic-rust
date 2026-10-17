@@ -8,22 +8,24 @@ export function planRustCallableLeadingParameters(
   declaration: Node,
   leading: readonly { readonly kind: "this" | "receiver"; readonly carrier: TargetTypeRef }[],
   context: RustPlanContext,
+  physical: readonly TargetTypeRef[] | undefined,
 ) {
   const selected = context.input.program.records.receiverIndependentMethod.get(declaration) === undefined
     ? leading : leading.filter(parameter => parameter.kind !== "this");
   if (selected.length > 0 && context.syntheticNames === undefined) return undefined;
-  const parameters = selected.map(parameter => ({ ...parameter, name: allocateRustSyntheticName(
+  if (selected.length > 0 && (physical === undefined || physical.length < selected.length)) return undefined;
+  const parameters = selected.map((parameter, index) => ({ ...parameter, carrier: physical![index]!, name: allocateRustSyntheticName(
     context.syntheticNames!, parameter.kind === "this" ? "_object_this" : "_object_receiver",
   ) }));
   const expressionOverrides = new Map(context.expressionOverrides ?? []);
   const ast = context.input.program.source.ast;
-  for (const parameter of parameters) {
+  for (const [index, parameter] of parameters.entries()) {
     if (parameter.kind !== "this") continue;
     const visit = (node: Node): void => {
       const kind = ast.kindName(node);
       if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
         const carrier = context.input.program.records.runtimeCarrier.get(node)?.carrier;
-        if (rustTargetTypeRefEquals(carrier, parameter.carrier)) expressionOverrides.set(node, {
+        if (rustTargetTypeRefEquals(carrier, selected[index]!.carrier)) expressionOverrides.set(node, {
           carrier: parameter.carrier, valueForm: "value", expression: { kind: "path", path: parameter.name },
         });
         return;

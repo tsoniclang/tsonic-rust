@@ -13,7 +13,10 @@ import {
   rustJsValueTargetType, rustTsValueTargetType,
 } from "../../../dist/target-model/types/index.js";
 import { lowerRustValueConversion } from "../../../dist/backend/planner/expressions/value-conversions.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { fakeCompileInput, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType, rustMutableJsErrorTargetType } from "../../../dist/target-model/types/carriers/source-error.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/index.js";
 import { selectRustUnionEquality } from "../../../dist/policy/operations/operators/union-equality.js";
@@ -193,7 +196,14 @@ test("exact union payload admission is generic and constructs nested native vari
   assert.deepEqual(contract.path.map(step => step.variant.name), ["Nested", "Complete"]);
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
-  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
+  const input = fakeCompileInput({ sourceFiles: [sourceFile] });
+  const storage = createSourceStorageQuery(input.source, [sourceFile]);
+  assert.equal(storage.failureReason() === undefined, true, "the existing planner fixture has one complete finite checked storage domain");
+  const native = createRustNativeCallableInputPlan({ ast: input.source.ast, storage, nativeNodes: storage.nodes,
+    records: createRustRecordFixture(), definitions, sourcePackages: input.sourcePackages, usedNames: new Set() });
+  assert.equal(native.inputs.length === 0 && native.protocols.length === 0 && native.calls.length === 0, true,
+    "the real native owner completes this fixture's actual empty callable domain without manufacturing a protocol");
+  const context = { input: { program: { source: input.source, typeDefinitions: definitions, callableValues: { native },
     names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
     sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map() };

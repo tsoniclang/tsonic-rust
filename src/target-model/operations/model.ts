@@ -402,6 +402,7 @@ export type RustProviderOperationForm =
   | {
       readonly form: "index";
       readonly indexConversion?: RustValueConversion;
+      readonly constantIndex?: number;
     }
   | {
       // Free function taking the receiver as first argument.

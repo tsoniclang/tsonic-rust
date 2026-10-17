@@ -60,6 +60,45 @@ interface RustStructuralMethodRoot extends RustStructuralMethodDestination {
   readonly sourceField?: RustSourceObjectField;
 }
 
+export type RustStructuralMethodConstructionLookup =
+  | { readonly kind: "not-structural" }
+  | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "unresolved"; readonly reason: string };
+
+export function rustStructuralMethodConstructionFor(expression: Node, input: {
+  readonly ast: AstReader;
+  readonly records: RustProgramRecords;
+  readonly structuralShapes: Pick<RustStructuralShapePlanRegistry, "field">;
+}): RustStructuralMethodConstructionLookup {
+  const parent = input.ast.parent(expression);
+  const parentOperation = input.records.targetOperation.get(parent);
+  const object = parentOperation?.kind === "record-literal" ? parent : parent === undefined ? undefined : input.ast.parent(parent);
+  const operation = input.records.targetOperation.get(object);
+  if (object === undefined || operation?.kind !== "record-literal" || operation.storage !== "structural-object")
+    return Object.freeze({ kind: "not-structural" });
+  const contributions = operation.contributions.filter(contribution => contribution.kind === "structural-method" &&
+    contribution.expression === expression);
+  if (contributions.length === 0) return Object.freeze({ kind: "not-structural" });
+  let carrier: TargetTypeRef | undefined;
+  for (const contribution of contributions) {
+    if (contribution.kind !== "structural-method") continue;
+    const field = input.structuralShapes.field(operation.resultCarrier, contribution.targetStorageIndex);
+    const witnesses = field?.methodConstructions?.filter(witness => witness.object === object &&
+      witness.property === contribution.property && witness.expression === expression &&
+      witness.storageIndex === contribution.targetStorageIndex);
+    if (field?.method !== true || witnesses === undefined || witnesses.length === 0 ||
+      witnesses.some(witness => carrier !== undefined && !rustTargetTypeRefEquals(carrier, witness.physicalCarrier)))
+      return Object.freeze({ kind: "unresolved", reason: "Structural method creation requires its completed exact original field construction witness." });
+    for (const witness of witnesses) {
+      if (carrier !== undefined && !rustTargetTypeRefEquals(carrier, witness.physicalCarrier))
+        return Object.freeze({ kind: "unresolved", reason: "Structural method creation has incompatible actual physical input alternatives." });
+      carrier = witness.physicalCarrier;
+    }
+  }
+  return carrier === undefined ? Object.freeze({ kind: "unresolved", reason: "Structural method creation has no admitted physical input." })
+    : Object.freeze({ kind: "selected", carrier });
+}
+
 export function createRustStructuralMethodStorage(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
@@ -92,7 +131,10 @@ export function createRustStructuralMethodStorage(input: {
     [`${definition.componentId}\0${definition.targetName}`, definition]));
   const roots: RustStructuralMethodRoot[] = [];
   const sourceIssues: RustSourceCallableSpecializationIssue[] = [];
-  const admittedProducers = new Map<RustStructuralMethodRoot, readonly SourceStorageProducer[]>();
+  const admittedProducers = new Map<RustStructuralMethodRoot, readonly {
+    readonly producer: SourceStorageProducer;
+    readonly bindings: RustTargetGenericBindings;
+  }[]>();
   const reject = (subject: Node, message: string): readonly RustSourceCallableSpecializationIssue[] =>
     Object.freeze([{ subject, message }]);
   const seen = new Map<SourceStorageSubject, Map<TargetTypeRef, Set<number>>>();
@@ -216,7 +258,7 @@ export function createRustStructuralMethodStorage(input: {
         const selected = sourceStorage.storageProducersFor(root.subject, root.bindings);
         if (selected.kind !== "complete") return reject(root.subject.node, selected.kind === "unresolved" ? selected.reason
           : "Retained constructor selection requires its exact admitted source producer domain.");
-        admittedProducers.set(root, selected.producers);
+        const admitted: { readonly producer: SourceStorageProducer; readonly bindings: RustTargetGenericBindings }[] = [];
         const fields = slots.get(root.definition) ?? new Map<number, Node>();
         slots.set(root.definition, fields);
         const field = structuralShapes.field(root.carrier, root.index)!;
@@ -228,6 +270,35 @@ export function createRustStructuralMethodStorage(input: {
             records.targetOperation.get(subject.node)?.kind !== "closure")
             throw new Error("Retained constructor selection requires its admitted physical closure producer.");
           const declaration = subject.node;
+          const nativeProducer = input.nativeProducers.forDeclaration(declaration);
+          const owner = sourceEnclosingCallable(ast.parent(declaration), ast);
+          const bound = input.nativeStorage.genericBindingsFor(owner ?? declaration, producer.bindings);
+          if (bound.kind === "unresolved") return reject(declaration, bound.reason);
+          if (nativeProducer?.parameterCarriers === undefined)
+            return reject(declaration, "Structural method construction requires its completed native input template.");
+          const expected = [...protocol.parameters];
+          if (field.receiverIndependent !== true) {
+            if (!rustTargetTypeRefEquals(expected[0], root.carrier))
+              return reject(declaration, "Structural method construction lost its original selected receiver.");
+          }
+          const pattern: TargetTypeRef = { kind: "tuple", elements: nativeProducer.parameterCarriers.map(carrier =>
+            substituteRustTargetGenerics(carrier, bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts)) };
+          const actual: TargetTypeRef = { kind: "tuple", elements: expected };
+          const inputs = inferRustTargetGenericBindings(pattern, actual, {
+            typeIdentities: new Set(), constIdentities: new Set(),
+            lifetimeIdentities: new Set(nativeProducer.inputLifetimeParameters.map(parameter => rustLifetimeKey(parameter.lifetime))),
+          });
+          if (inputs === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(pattern,
+            inputs.types, inputs.lifetimes, inputs.consts), actual))
+            return reject(declaration, "Structural method construction has no exact native receiver input correspondence.");
+          const lifetimes = new Map(bound.bindings.lifetimes);
+          for (const [identity, lifetime] of inputs.lifetimes) {
+            const previous = lifetimes.get(identity);
+            if (previous !== undefined && rustLifetimeKey(previous) !== rustLifetimeKey(lifetime))
+              return reject(declaration, "Structural method construction has conflicting actual native input lifetimes.");
+            lifetimes.set(identity, lifetime);
+          }
+          admitted.push(Object.freeze({ producer, bindings: Object.freeze({ ...bound.bindings, lifetimes }) }));
           rootFor(declaration);
           const error = input.nativeProducers.errorFor(declaration, "invoke");
           const intrinsic = error === undefined ? undefined : normalizeRustErrorType(error, context, declaration);
@@ -244,6 +315,7 @@ export function createRustStructuralMethodStorage(input: {
           if (existing === undefined) fields.set(root.index, declaration);
           else parent.set(rootFor(declaration), rootFor(existing));
         }
+        admittedProducers.set(root, Object.freeze(admitted));
       }
       const groups = new Map<Node, Node[]>();
       for (const declaration of parent.keys()) {
@@ -253,6 +325,11 @@ export function createRustStructuralMethodStorage(input: {
         groups.set(root, members);
       }
       const errors = new Map<Node, TargetTypeRef>();
+      for (const producer of input.nativeProducers.producers) {
+        const intrinsic = input.nativeProducers.errorFor(producer.declaration, "invoke");
+        const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, context, producer.declaration);
+        if (selected !== undefined) errors.set(producer.declaration, selected);
+      }
       const infallible = (carrier: TargetTypeRef): boolean => carrier.kind === "target-named" && carrier.id === rustInfallibleTargetId;
       for (const members of groups.values()) {
         const intrinsic = members.map(member => errorByProducer.get(member)!);
@@ -290,7 +367,7 @@ export function createRustStructuralMethodStorage(input: {
         const signatures: TargetTypeRef[] = [];
         const constructed: { readonly carrier: TargetTypeRef; readonly templateCarrier: TargetTypeRef;
           readonly bindings: RustTargetGenericBindings }[] = [];
-        for (const producer of selected) {
+        for (const { producer, bindings } of selected) {
           const subject = producer.subject;
           const operation = records.targetOperation.get(subject.node);
           if (subject.kind !== "value" || subject.projection.length !== 0 || operation?.kind !== "closure")
@@ -299,34 +376,31 @@ export function createRustStructuralMethodStorage(input: {
           const physical = input.nativeProducers.physicalFor(subject.node, logical);
           const source = physical === undefined ? undefined : rustNativeCallablePhysicalSource(logical,
             { kind: "identity", carrier: physical }, input.typeDefinitions);
-          const owner = sourceEnclosingCallable(ast.parent(subject.node), ast);
-          const bound = input.nativeStorage.genericBindingsFor(owner ?? subject.node, producer.bindings);
-          if (bound.kind === "unresolved") throw new Error(bound.reason);
           if (source === undefined || protocol.lifetime === undefined)
             throw new Error("Structural method storage requires its existing physical callable signature and destination lifetime.");
           const templateCarrier = normalize(source.carrier);
           const physicalCarrier = normalize(substituteRustTargetGenerics(templateCarrier,
-            bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
+            bindings.types, bindings.lifetimes, bindings.consts));
           const physicalSignature = rustCallablePhysicalSignature(physicalCarrier);
           if (physicalSignature === undefined)
             throw new Error("Structural method storage lost its exact normalized physical source signature.");
-          const destinationLifetime = bound.bindings.lifetimes.get(rustLifetimeKey(protocol.lifetime)) ?? protocol.lifetime;
+          const destinationLifetime = bindings.lifetimes.get(rustLifetimeKey(protocol.lifetime)) ?? protocol.lifetime;
           const captures = records.closureCapture.get(subject.node);
           if (captures === undefined) throw new Error("Structural method storage requires its admitted closure capture inventory.");
           const sourceCaptureCarriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers]
             .map(capture => capture.carrier);
           const captureCarriers = sourceCaptureCarriers.map(carrier => substituteRustTargetGenerics(carrier,
-            bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
+            bindings.types, bindings.lifetimes, bindings.consts));
           const sourceRetained = rustRetainedValueLifetime(subject.node, sourceCaptureCarriers, { context: {
             ast, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
           } });
           const retained = sourceRetained === undefined ? undefined
-            : bound.bindings.lifetimes.get(rustLifetimeKey(sourceRetained)) ?? sourceRetained;
+            : bindings.lifetimes.get(rustLifetimeKey(sourceRetained)) ?? sourceRetained;
           if (retained === undefined || destinationLifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
             destinationLifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes))) {
             if (destinationLifetime.kind !== "static" || !captureCarriers.some(rustHasOpenOwnedStorage))
               return reject(subject.node, "Structural method storage requires the actual captured lifetime to outlive its selected destination.");
-            retainedRequirements.push({ declaration: subject.node, bindings: bound.bindings, physicalCaptures: undefined });
+            retainedRequirements.push({ declaration: subject.node, bindings, physicalCaptures: undefined });
           }
           const carrier = rustCallableTargetType(physicalSignature.parameters, physicalSignature.result,
             destinationLifetime, physicalSignature.error);
@@ -337,7 +411,6 @@ export function createRustStructuralMethodStorage(input: {
           if (field.receiverIndependent !== true) {
             if (!rustTargetTypeRefEquals(parameters[0], root.carrier))
               throw new Error("Structural method storage requires its exact selected receiver carrier.");
-            parameters[0] = root.carrier;
           }
           const stored = rustCallableTargetType(parameters, signature.result, destinationLifetime, signature.error);
           signatures.push(field.presence === "optional" ? rustOptionTargetType(stored) : stored);
@@ -350,7 +423,7 @@ export function createRustStructuralMethodStorage(input: {
             !rustTargetTypeRefEquals(physicalSignature.result, signature.result) ||
             !rustTargetTypeRefEquals(physicalSignature.error, signature.error))
             throw new Error("Structural method construction requires its exact normalized physical destination correspondence.");
-          constructed.push(Object.freeze({ carrier: physicalCarrier, templateCarrier, bindings: bound.bindings }));
+          constructed.push(Object.freeze({ carrier: physicalCarrier, templateCarrier, bindings }));
         }
         if (signatures.length === 0) throw new Error("Structural method storage cannot invent an ABI for an empty producer set.");
         candidates.set(root, Object.freeze(signatures));
@@ -363,7 +436,7 @@ export function createRustStructuralMethodStorage(input: {
           if (original === undefined) continue;
           const witnesses = constructions.get(original.expression) ?? [];
           for (const physical of constructionCarriers.get(root)!) {
-            const field = structuralShapes.field(root.carrier, root.index)!;
+            const field = root.definition.fields[root.index]!;
             const protocol = rustCallableProtocol(field.presence === "optional"
               ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier)!;
             const signature = rustCallablePhysicalSignature(physical.templateCarrier)!;
@@ -426,7 +499,7 @@ export function createRustStructuralMethodStorage(input: {
             throw new Error("Structural method storage has incompatible admitted physical signatures.");
           const constructions = [...existing?.constructions ?? []];
           const actual = constructionCarriers.get(root)?.[ordinal];
-          const producer = admittedProducers.get(root)?.[ordinal];
+          const producer = admittedProducers.get(root)?.[ordinal]?.producer;
           if (actual === undefined || producer === undefined) throw new Error("Structural method storage lost its actual construction carrier.");
           const originalSources = originals.get(producer.subject.node);
           if (originalSources === undefined || originalSources.length === 0)

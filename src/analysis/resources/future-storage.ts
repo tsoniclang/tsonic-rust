@@ -74,19 +74,20 @@ export function rustStoredFutureValues(
       if (original === undefined || owner === undefined) return undefined;
       const generics = walk.context.callableValues.nativeStorage.genericBindingsFor(owner, source.bindings);
       if (generics.kind !== "resolved") return undefined;
-      const substitution = rebind.bindingsFor(node, owner, [leaf.carrier,
-        ...(original.errorCarrier === undefined ? [] : [original.errorCarrier])],
+      const sourceError = original.errorBoundary === "source-native" && original.errorCarrier !== undefined && original.errorSource !== undefined
+        ? { identity: original.errorSource, errorType: original.errorCarrier } : undefined;
+      if (original.errorBoundary === "source-native" && sourceError === undefined) return undefined;
+      const substitution = rebind.bindingsFor(node, owner, [{ kind: "carrier", carrier: leaf.carrier },
+        ...(sourceError !== undefined ? [{ kind: "source-effect" as const, effect: sourceError }]
+          : original.errorCarrier === undefined ? [] : [{ kind: "carrier" as const, carrier: original.errorCarrier }])],
         { storageBindings: source.bindings, genericBindings: generics.bindings });
       if (substitution === undefined) return undefined;
       const outputCarrier = substitution.substitute(original.outputCarrier);
       const awaitedConversion = substituteFutureConversion(original.awaitedConversion, substitution, definitions);
       if (outputCarrier === undefined || awaitedConversion === undefined) return undefined;
       let value: RustFutureValueFact = { ...original, outputCarrier, awaitedConversion };
-      if (original.errorBoundary === "source-native") {
-        if (original.errorCarrier === undefined || original.errorSource === undefined) return undefined;
-        const edge = rebind.edgeFor(owner, "await", { localErrors: false, nativeErrors: [{
-          identity: original.errorSource, errorType: original.errorCarrier,
-        }] }, substitution);
+      if (sourceError !== undefined) {
+        const edge = rebind.edgeFor(owner, "await", { localErrors: false, nativeErrors: [sourceError] }, substitution);
         const channel = edge?.effects.nativeErrors[0];
         if (edge?.effects.nativeErrors.length !== 1 || channel === undefined) return undefined;
         value = { ...value, errorCarrier: channel.errorType, errorSource: channel.identity };

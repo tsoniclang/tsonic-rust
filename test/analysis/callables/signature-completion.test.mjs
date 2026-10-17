@@ -4,13 +4,19 @@ import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
-import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
+import { rustOperationContext, rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/signature-query.js";
 import * as callableSignatures from "../../../dist/analysis/callables/signature-query.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed-data.js";
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 import { resolveRustCallableEnvironment } from "../../../dist/policy/types/resolution/callable-environments.js";
+import { resolveReferencedDeclarationType } from "../../../dist/policy/types/resolution/tuples.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { selectedRustCheckedCallInputCarrier } from "../../../dist/analysis/operations/provider/calls/input-contract.js";
+import { selectRustClosedCallableInputs } from "../../../dist/analysis/callables/contextual-inputs.js";
+import { createRustSourceCallableAbiResolver } from "../../../dist/policy/ownership/source-callable-abi.js";
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
   const { context, walk } = analyzeRustOperations(`
@@ -94,6 +100,30 @@ function inputFixture(source, select = (ast, node) => ast.is.IsFunctionDeclarati
   return { current, declaration, parameters, original: context.records,
     complete: current => callableSignatures.finalizeRustCallableParameterAbis(current, declaration) };
 }
+
+test("an unfinished retained input does not poison its later completed intrinsic ABI", () => {
+  const { context, walk } = analyzeRustOperations(`
+export function step(callback: (value: number) => number): () => number {
+  return (): number => callback(3);
+}`, { surfaces: [] });
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node));
+  const parameter = context.ast.parameters(declaration)[0];
+  assert.equal(parameter !== undefined, true, "the actual captured formal is checked");
+  const resolver = createRustSourceCallableAbiResolver({
+    isNativeCallableExpression: node => walk.context.records.nativeParticipation.get(node) !== "erased",
+    parameterAbiFor: () => undefined,
+  });
+  const selected = rustResolutionContext(walk, parameter);
+  const unfinished = { ...selected, retainedEnvironments: { ...selected.retainedEnvironments,
+    environmentFor: () => ({ kind: "unresolved", reason: "the actual retained owner is not ready" }),
+  } };
+  assert.equal(resolver.resolveParameterAbi(parameter, unfinished, walk.operationOptions) === undefined, true,
+    "the unfinished intrinsic input remains unavailable");
+  const complete = resolver.resolveParameterAbi(parameter, selected, walk.operationOptions);
+  assert.equal(complete !== undefined, true, "the same resolver can consume the completed retained evidence");
+  assert.equal(resolver.resolveParameterAbi(parameter, unfinished, walk.operationOptions) === complete, true,
+    "only the exact successfully completed intrinsic input is cached");
+});
 
 for (const [name, source, select, forms] of [
   ["declaration", "export function step(value: number): number { return value; }", undefined, ["required"]],
@@ -373,4 +403,245 @@ for (const [name, path] of [
   const module = new URL(`../../../dist/analysis/callables/${path}.js`, import.meta.url).href;
   const source = `import { ${name} } from ${JSON.stringify(module)};`;
   await assert.rejects(import("data:text/javascript," + encodeURIComponent(source)), /does not provide an export named/u);
+});
+
+for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
+  for (const [name, source] of [
+    ["direct", "function owner(value: boolean): boolean { return value; } export function step(): typeof owner { return owner; }"],
+    ["immutable alias", "function owner(value: boolean): boolean { return value; } const alias = owner; export function step(): typeof owner { return alias; }"],
+    ["forward reference", "export function step(): typeof owner { return owner; } function owner(value: boolean): boolean { return value; }"],
+    ["function expression", "const owner = function(value: boolean): boolean { return value; }; export function step(): typeof owner { return owner; }"],
+    ["arrow", "const owner = (value: boolean): boolean => value; export function step(): typeof owner { return owner; }"],
+    ["parenthesized alias", "function owner(value: boolean): boolean { return value; } const alias = (owner); export function step(): typeof owner { return (alias); }"],
+  ]) test(`${surface} ${name} callable return retains the function value rather than its result annotation`, () => {
+    const { program } = analyzeRust({ files: { "index.ts": source }, surfaces });
+    const ast = program.source.ast;
+    const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+      ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "step");
+    assert.equal(declaration !== undefined, true, name + ": actual returned function owner");
+    const returned = program.records.sourceCallableReturn.get(declaration)?.returnCarrier;
+    assert.equal(returned !== undefined, true, name + ": actual completed retained result");
+    const signature = rustCallableProtocol(returned);
+    assert.equal(signature !== undefined, true, name + ": return is a callable, not bool");
+    assert.equal(signature.parameters.length, 1, name + ": full parameter arity preserved");
+    assert.equal(signature.parameters[0].kind === "source-primitive" && signature.parameters[0].name === "bool", true,
+      name + ": original native input preserved");
+    assert.equal(signature.result.kind === "source-primitive" && signature.result.name === "bool", true,
+      name + ": bool remains the callable result, not the callable value");
+  });
+
+  test(`${surface} referenced function values require their existing canonical signature reader`, () => {
+    const { context, walk } = analyzeRustOperations(
+      "function owner(value: boolean): boolean { return value; } export function step(value: boolean): boolean { return owner(value); }",
+      { surfaces });
+    const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === "owner");
+    const reference = context.sourceStorage.nodes.find(node => context.ast.is.IsIdentifier(node) &&
+      context.source.navigation.referenceFor(node)?.declaration === declaration);
+    assert.equal(declaration !== undefined && reference !== undefined, true, "actual function reference correspondence");
+    const resolution = { ...rustResolutionContext(walk, reference), records: createRustRecordFixture({ runtimeCarrier: {
+      get: node => node === declaration ? undefined : context.records.runtimeCarrier.get(node),
+    } }, context.records) };
+    const canonical = walk.operationOptions.callableSignatureCarrier(declaration);
+    assert.equal(canonical !== undefined && rustCallableProtocol(canonical) !== undefined, true,
+      "the existing callable owner has complete signature evidence");
+    let queries = 0;
+    const selected = resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier(subject) {
+        queries++;
+        assert.equal(subject === declaration, true, "the actual selected declaration owns this request");
+        return walk.operationOptions.callableSignatureCarrier(subject);
+      },
+    });
+    assert.equal(selected === canonical, true, "the complete callable carrier is consumed without reconstruction");
+    assert.equal(queries, 1, "one canonical reader, not a return-annotation path");
+    assert.equal(resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier: () => undefined }) === undefined, true,
+    "unavailable function evidence is unresolved rather than its bool return annotation");
+  });
+
+  test(`${surface} generic function references cannot turn their result type parameter into a function value`, () => {
+    const { context, walk } = analyzeRustOperations(
+      "function owner<Value>(value: Value): Value { return value; } export function step(value: boolean): boolean { return owner(value); }",
+      { surfaces });
+    const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === "owner");
+    const reference = context.sourceStorage.nodes.find(node => context.ast.is.IsIdentifier(node) &&
+      context.source.navigation.referenceFor(node)?.declaration === declaration);
+    assert.equal(declaration !== undefined && reference !== undefined, true, "actual generic invocation reference");
+    const resolution = { ...rustResolutionContext(walk, reference), records: createRustRecordFixture({ runtimeCarrier: {
+      get: node => node === declaration ? undefined : context.records.runtimeCarrier.get(node),
+    } }, context.records) };
+    assert.equal(resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier: () => undefined }) === undefined, true,
+    "generic completion remains owned by its canonical reader, never the generic return annotation");
+  });
+
+  test(`${surface} a wrong callable signature remains a checked source rejection`, () => {
+    assert.throws(() => compileRust({ surfaces, files: { "index.ts":
+      "function owner(value: number): number { return value; } export function step(): (value: boolean) => boolean { return owner; }" } }),
+    /error TS2322: Type '\(value: number\) => number' is not assignable to type '\(value: boolean\) => boolean'/u,
+    "the source checker rejects the exact incompatible signature before target analysis or emission");
+  });
+}
+
+test("referenced getter, property, parameter and local values retain their value annotations", () => {
+  const { context, walk } = analyzeRustOperations(`
+export class Box { field: number = 1; get size(): number { return this.field; } }
+export function step(value: number): number { const local: number = value; return local; }
+export function inspect(box: Box): number { return box.size + box.field; }`, { surfaces: [] });
+  for (const name of ["size", "field", "value", "local"]) {
+    const reference = context.sourceStorage.nodes.find(node => context.ast.is.IsIdentifier(node) &&
+      context.ast.text(node) === name && context.source.navigation.referenceFor(node)?.declaration !== undefined);
+    assert.equal(reference !== undefined, true, name + ": checked value reference");
+    const declaration = context.source.navigation.referenceFor(reference).declaration;
+    const resolution = { ...rustResolutionContext(walk, reference), records: createRustRecordFixture({ runtimeCarrier: {
+      get: node => node === declaration ? undefined : context.records.runtimeCarrier.get(node),
+    } }, context.records) };
+    const value = resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier() { throw new Error("a non-function value must not query a callable signature"); },
+    });
+    assert.equal(value?.kind === "source-primitive" && value.name === "float64", true,
+      name + ": the actual value annotation is still authoritative");
+  }
+});
+
+const genericConstructorCapture = `
+function wrap<Value>(value: Value): Promise<Value> {
+  return new Promise<Value>(resolve => {
+    const first = (): void => { resolve(value); };
+    const second = (): void => { resolve(value); };
+    const callback = value === value ? first : second;
+    [0].forEach(callback);
+  });
+}
+export function run(): Promise<number> { return wrap(7); }
+`;
+
+function executorInputFixture() {
+  return inputFixture(genericConstructorCapture, (ast, node) => ast.is.IsArrowFunction(node) &&
+    ast.parameters(node).some(parameter => ast.text(ast.name(parameter)) === "resolve"));
+}
+
+test("a generic constructor executor publishes its actual native parameter before captured callbacks observe it", () => {
+  const input = executorInputFixture();
+  const completed = input.complete(input.current);
+  assert.equal(completed?.length, 1, "one actual authored resolve formal, not the constructor's unused trailing reject formal");
+  const resolve = rustCallableProtocol(completed[0].valueCarrier);
+  assert.equal(resolve?.parameters[0]?.kind === "target-named" && resolve.parameters[0].id === "rust.js.PromiseResolution" &&
+    resolve.error?.kind === "target-named" && resolve.error.id === "rust.js.JsValue", true,
+  "the sole native Promise constructor contract owns payload adoption and its exact rejection ABI");
+  assert.equal(resolve.lifetime?.kind, "static", "the actual native constructor contract, not source placeholder inference");
+  assert.equal(completed[0] === input.current.context.records.sourceParameterAbi.get(input.parameters[0]), true,
+    "the environment and body share the exact first canonical parameter record");
+  assert.equal(input.complete(input.current)?.[0] === completed[0], true, "a second input request is the same sealed construction fact");
+});
+
+test("checked constructor input metadata does not execute its callback environment to select that callback's ABI", () => {
+  const input = executorInputFixture();
+  const ast = input.current.context.ast;
+  const constructor = ast.parent(input.declaration);
+  assert.equal(ast.is.IsNewExpression(constructor), true, "the original executor is an actual checked constructor argument");
+  const semantics = input.current.context.semanticsFor(constructor);
+  const checked = semantics.operations.call(constructor);
+  const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(checked.selectedSignature);
+  const selected = selectedRustCheckedCallInputCarrier({ source: checked, sourceSelectedDeclaration }, 0,
+    rustOperationContext(input.current, constructor), { ...input.current.operationOptions,
+      callableParameterCarriers() { throw new Error("constructor input metadata cannot demand its own capture environment"); },
+    });
+  const executor = rustCallableProtocol(selected);
+  assert.equal(executor?.parameters.length, 2, "the actual native constructor still retains both resolve and reject slots");
+  assert.equal(rustCallableProtocol(executor.parameters[0])?.parameters[0]?.id, "rust.js.PromiseResolution",
+    "the canonical row supplies the resolve input without a raw checked-union fallback");
+});
+
+test("an eligible constructor with unavailable selected generic evidence publishes no raw parameter ABI", () => {
+  const input = executorInputFixture();
+  const context = input.current.context;
+  const constructor = context.ast.parent(input.declaration);
+  const originalSemantics = context.semanticsFor(constructor);
+  const checked = originalSemantics.operations.call(constructor);
+  const pending = { ...input.current, context: { ...context,
+    semanticsFor(node) {
+      const semantics = context.semanticsFor(node);
+      return node !== constructor ? semantics : { ...semantics, operations: { ...semantics.operations,
+        call(subject) { return subject !== constructor ? semantics.operations.call(subject)
+          : { ...checked, sourceSelectedMethodTypeArguments: [] }; },
+      } };
+    },
+  } };
+  assert.equal(selectRustClosedCallableInputs(pending, input.declaration, []) === undefined, true,
+    "missing required selected constructor evidence is not an ineligible transport or known-empty context");
+  assert.equal(input.complete(pending) === undefined, true, "the input stage remains unresolved before any environment read");
+  assert.equal(context.records.sourceParameterAbi.get(input.parameters[0]) === undefined, true,
+    "the old placeholder/source-union ABI is never published as a substitute");
+  assert.equal(input.complete(input.current)?.length, 1, "the same canonical stage completes after its real selected input becomes ready");
+});
+
+for (const [name, source] of [
+  ["constructor", `
+class Box<Value> {
+  value: Value;
+  constructor(value: Value, transform: (value: Value) => Value) { this.value = transform(value); }
+}
+export function run(): number { return new Box<number>(3, value => value).value; }
+`],
+  ["method", `
+class Box {
+  apply<Value>(value: Value, transform: (value: Value) => Value): Value { return transform(value); }
+}
+export function run(): number { return new Box().apply<number>(3, value => value); }
+`],
+  ["function", `
+function apply<Value>(value: Value, transform: (value: Value) => Value): Value { return transform(value); }
+export function run(): number { return apply<number>(3, value => value); }
+`],
+]) test(`checked generic ${name} metadata substitutes its exact selected owner before completing callback inputs`, () => {
+  const input = inputFixture(source, (ast, node) => ast.is.IsArrowFunction(node));
+  const context = input.current.context;
+  const call = context.ast.parent(input.declaration);
+  const semantics = context.semanticsFor(call);
+  const checked = semantics.operations.call(call);
+  const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(checked.selectedSignature);
+  assert.equal(sourceSelectedDeclaration !== undefined && checked.sourceSelectedMethodTypeArguments.length === 1, true,
+    name + ": one actual checked generic declaration and argument");
+  const selected = selectedRustCheckedCallInputCarrier({ source: checked, sourceSelectedDeclaration }, 1,
+    rustOperationContext(input.current, call), { ...input.current.operationOptions,
+      callableParameterCarriers() { throw new Error("selected formal metadata must not reenter callback capture completion"); },
+    });
+  const protocol = rustCallableProtocol(selected);
+  assert.equal(protocol?.parameters.length === 1 && protocol.parameters[0]?.kind === "source-primitive" &&
+    protocol.parameters[0].name === "float64" && protocol.result.kind === "source-primitive" &&
+    protocol.result.name === "float64", true, name + ": exact class or callable substitution, never its unbound formal");
+  const missing = { ...checked, sourceSelectedMethodTypeArguments: [] };
+  assert.equal(selectedRustCheckedCallInputCarrier({ source: missing, sourceSelectedDeclaration }, 1,
+    rustOperationContext(input.current, call), input.current.operationOptions) === undefined, true,
+  name + ": unavailable selected evidence cannot publish an unsubstituted callback signature");
+  const completed = input.complete(input.current);
+  assert.equal(completed?.length === 1 && completed[0].valueCarrier.kind === "source-primitive" &&
+    completed[0].valueCarrier.name === "float64", true, name + ": the same input lifecycle publishes the selected native body value");
+});
+
+test("reduce callback input metadata uses the same selected accumulator without entering its environment", () => {
+  const input = inputFixture(`
+export function run(values: number[]): boolean {
+  return values.reduce((same: boolean, item: number): boolean => same && item > 0, true);
+}`, (ast, node) => ast.is.IsArrowFunction(node));
+  const context = input.current.context;
+  const call = context.ast.parent(input.declaration);
+  const semantics = context.semanticsFor(call);
+  const checked = semantics.operations.call(call);
+  const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(checked.selectedSignature);
+  assert.equal(sourceSelectedDeclaration !== undefined, true, "the real selected reduce declaration is available");
+  const selected = selectedRustCheckedCallInputCarrier({ source: checked, sourceSelectedDeclaration }, 0,
+    rustOperationContext(input.current, call), { ...input.current.operationOptions,
+      callableParameterCarriers() { throw new Error("reduce input selection cannot query the callback environment"); },
+    });
+  assert.equal(selected?.kind === "closure" && selected.args[0]?.kind === "source-primitive" &&
+    selected.args[0].name === "bool" && selected.result.kind === "source-primitive" && selected.result.name === "bool", true,
+  "both callback accumulator and result use the same exact selected bool, not the opaque infer marker");
+  const missing = { ...checked, sourceArgumentBindings: checked.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex !== 1) };
+  assert.equal(selectedRustCheckedCallInputCarrier({ source: missing, sourceSelectedDeclaration }, 0,
+    rustOperationContext(input.current, call), input.current.operationOptions) === undefined, true,
+  "missing accumulator source correspondence stays unresolved instead of using contextual or checked-return evidence");
 });

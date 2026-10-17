@@ -297,6 +297,29 @@ test("source-produced formal adapters retain their exact input dependency and as
   assert.equal(returned.inputs[0] === inputs[1], true, "physical adapter preserves only its actual formal dependency");
 });
 
+for (const [name, body] of [
+  ["direct", "return callback;"],
+  ["annotated alias", "const adapted: (first: int32) => int32 = callback; return adapted;"],
+  ["wrapped immutable alias", "const adapted: (first: int32) => int32 = callback; const alias = adapted; return (alias satisfies ((first: int32) => int32));"],
+]) test(`retained ${name} result inference preserves the destination invocation ABI`, () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    export function adapt(callback: () => int32): (first: int32) => int32 { ${body} }
+  `);
+  const owner = current.declaration("adapt");
+  const carrier = current.program.records.sourceCallableReturn.get(owner)?.returnCarrier;
+  const protocol = rustCallableProtocol(carrier);
+  assert.equal(protocol?.parameters.length, 1, `${name}: required arity adaptation survives retention inference`);
+  assert.equal(protocol?.parameters[0]?.kind === "source-primitive" && protocol.parameters[0].name === "int32", true,
+    `${name}: the native destination input is retained exactly`);
+  const selected = current.input.storage.returnFor(owner);
+  assert.equal(selected.kind, "selected", `${name}: ${selected.reason ?? "completed physical result"}`);
+  const signature = rustCallablePhysicalSignature(selected.carrier);
+  assert.equal(signature?.parameters.length, 1, `${name}: physical and source result arity agree`);
+  assert.equal(selected.inputs.length, 1, `${name}: the original callback remains the sole captured native input`);
+  assert.equal(selected.inputs[0] === current.program.callableValues.native.inputsFor(owner)[0], true,
+    `${name}: no synthetic producer replaces the actual input`);
+});
+
 test("returned adapters preserve exact invocation bindings through forwarded source calls", () => {
   const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
     export function adapt(callback: () => int32): (first: int32) => int32 {

@@ -258,10 +258,14 @@ function recordCallableValueSignatureFacts(
   expression: Node,
 ): void {
   const { ast } = walk.context;
+  if (walk.context.records.nativeParticipation.get(expression) === "erased") return;
   const nativeCallable = walk.moduleBindings.nativeCallable(declaration);
   if (nativeCallable?.callableDeclaration === expression && Node_Type(ast, declaration) === undefined ||
     walk.context.sourceCallables.directLexicalBinding(expression) === declaration) {
-    finalizeRustCallableSignature(walk, expression);
+    const signature = finalizeRustCallableSignature(walk, expression);
+    const carrier = signature?.callableValue === undefined ? undefined
+      : rustSourceClosureValueCarrier(walk, expression, signature.callableValue);
+    if (carrier !== undefined) setCarrierFact(walk, expression, carrier);
     return;
   }
   const valueCarrier = rustGenericCallableValueOwner(ast, declaration, walk.context.records.runtimeCarrier.get(declaration)?.carrier ??

@@ -400,10 +400,12 @@ export function rustProviderOperationFormContractViolation(
         ? undefined
         : "argument structural-method form requires one exact storage index, receiver/argument metadata, closed trailing constants, and at least one source argument";
     case "index":
-      return hasExactKeys(form, ["form", "indexConversion"], ["form"]) &&
+      return hasExactKeys(form, ["form", "indexConversion", "constantIndex"], ["form"]) &&
+        (form.constantIndex === undefined || Number.isSafeInteger(form.constantIndex) && form.constantIndex >= 0 &&
+          form.indexConversion === undefined) &&
         (form.indexConversion === undefined || rustValueConversionContract(form.indexConversion, definitions) !== undefined) &&
-        ((operationKind === "indexer" && runtimeSourceIndexes.length === 1) ||
-          (operationKind === "index-set" && runtimeSourceIndexes.length === 2))
+        ((operationKind === "indexer" && runtimeSourceIndexes.length === (form.constantIndex === undefined ? 1 : 0)) ||
+          (operationKind === "index-set" && runtimeSourceIndexes.length === (form.constantIndex === undefined ? 2 : 1)))
         ? undefined
         : "index form does not match its selected operation kind or conversion contract";
     case "binary-operator": {

@@ -39,10 +39,12 @@ export function recordCallableParameterInputFacts(
       declared.map(abi => abi!.form === "default" ? abi!.parameterCarrier : abi!.valueCarrier);
     const selected = selectedSignature !== undefined || ast.is.IsArrowFunction(declaration) || ast.is.IsFunctionExpression(declaration)
       ? selectRustClosedCallableInputs(walk, declaration, logical) : logical;
+    if (selected === undefined) return undefined;
     const abis = parameters.map((parameter, index) => {
       const input = selected[index]!;
       const parameterContext = rustResolutionContext(walk, parameter);
-      return rustTargetTypeRefEquals(input, logical[index])
+      const declaredCarrier = declared[index]!.form === "default" ? declared[index]!.parameterCarrier : declared[index]!.valueCarrier;
+      return rustTargetTypeRefEquals(input, declaredCarrier)
         ? declared[index]
         : resolveRustContextualParameterAbi(parameter,
           Node_Initializer(ast, parameter) === undefined ? input : rustSourceOptionalTargetType(input),

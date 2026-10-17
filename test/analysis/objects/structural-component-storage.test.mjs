@@ -238,7 +238,7 @@ test("physical method witnesses reject mismatched complete signatures before pub
   ]);
   for (const label of ["input", "result", "error", "logical source", "destination", "field index"]) {
     const builder = createRustStructuralShapePlanRegistry();
-    builder.initialize([{ carrier: shape }], [], () => "source", []);
+    builder.initialize([{ carrier: shape }], [], () => "source", [], []);
     builder.initializeUnions([]);
     const definition = builder.definitions[0];
     const original = builder.field(shape, 0);
@@ -325,6 +325,15 @@ function checkedStructuralMethods(source, label) {
           ast.parent(witness.property) === witness.object, true,
           `${label}: the checked original property owns its exact method expression`);
         assert.equal(Object.isFrozen(witness), true, `${label}: every original construction witness is frozen`);
+        const producer = selected.nativeProducers.forDeclaration(witness.expression);
+        assert.equal(producer !== undefined && producer.parameterCarriers !== undefined, true,
+          `${label}: each original method publishes its completed physical input template`);
+        assert.equal(Object.isFrozen(producer.parameterCarriers) && Object.isFrozen(producer.inputLifetimeParameters), true,
+          `${label}: physical input and binder selection is immutable before rendering`);
+        for (const parameter of producer.inputLifetimeParameters) {
+          assert.equal(parameter.declaration === witness.expression && Object.isFrozen(parameter) && Object.isFrozen(parameter.outlives), true,
+            `${label}: physical input binders belong to the actual selected producer`);
+        }
         assert.equal(witness.storageIndex, described.storageIndex, `${label}: construction carries the actual destination index`);
         assert.equal(rustTargetTypeRefEquals(witness.destinationCarrier, carrier), true,
           `${label}: construction and field have the same complete final destination`);
@@ -387,6 +396,17 @@ function checkedStructuralMethods(source, label) {
 }
 
 const methodStorageSources = [
+  ["receiver dependent stored method", `function make(value: number): { value: number; read(): number } {
+  return { value, read(): number { return this.value; } };
+}
+export function run(): number { const original = make(7); const copied = { aaa: 3, ...original }; return copied.read(); }`],
+  ["receiver dependent borrowed data", `import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+function make<Region extends Life>(value: Ref<int32, Region>): { value: Ref<int32, Region>; read(): int32 } {
+  return { value, read(): int32 { return load(this.value); } };
+}
+export function run<Region extends Life>(value: Ref<int32, Region>): int32 { const original = make(value); return original.read(); }`],
   ["direct", `function make(value: number): { read(): number } { return { read(): number { return value; } }; }
 export function run(): number { const original = make(7); return original.read(); }`],
   ["prefix index remap", `function make(value: number): { read(): number } { return { read(): number { return value; } }; }
@@ -491,7 +511,7 @@ test("a remapped physical method rejects its old source index without partially 
     { sourceName: "read", type: rustCallableTargetType([], integer, lifetime), presence: "required", readonly: false, method: true },
   ]);
   const builder = createRustStructuralShapePlanRegistry();
-  builder.initialize([{ carrier: shape }], [], () => "source", []);
+  builder.initialize([{ carrier: shape }], [], () => "source", [], []);
   builder.initializeUnions([]);
   const definition = builder.definitions[0];
   const originalFields = definition.fields;

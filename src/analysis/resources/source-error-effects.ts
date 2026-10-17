@@ -45,9 +45,13 @@ export interface RustSourceErrorBindings extends RustTargetGenericBindings {
   complete(carrier: TargetTypeRef, physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">): TargetTypeRef | undefined;
 }
 
+export type RustSourceErrorBindingDemand =
+  | { readonly kind: "carrier"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "source-effect"; readonly effect: RustNativeErrorEffect };
+
 export interface RustSourceErrorEffectSelection {
   register(errors: readonly RustNativeErrorEffect[]): boolean;
-  bindingsFor(node: Node, declaration: Node, carriers: readonly TargetTypeRef[],
+  bindingsFor(node: Node, declaration: Node, demands: readonly RustSourceErrorBindingDemand[],
     activation?: { readonly storageBindings: SourceStorageBindings;
       readonly genericBindings: RustTargetGenericBindings }): RustSourceErrorBindings | undefined;
   edgeFor(declaration: Node, kind: RustSourceErrorEffectEdge["kind"], effects: RustErrorEffectsFact,
@@ -86,7 +90,27 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
   }
   if (!register([{ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() }]))
     throw new Error("JS object rejection requires its one canonical identity and carrier.");
-  const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, carriers, activation) => {
+  const bindingsFor: RustSourceErrorEffectSelection["bindingsFor"] = (node, declaration, demands, activation) => {
+    const carriers: TargetTypeRef[] = [];
+    const pendingInputs = new Set<string>();
+    const immediateInputs = new Set<string>();
+    for (const demand of demands) {
+      let carrier: TargetTypeRef;
+      let references: Set<string>;
+      if (demand.kind === "carrier") {
+        if (!isRustTargetTypeRef(demand.carrier)) return undefined;
+        carrier = demand.carrier;
+        references = immediateInputs;
+      } else if (demand.kind === "source-effect") {
+        const effect = demand.effect;
+        const recorded = effect === undefined ? undefined : origins.get(effect.identity);
+        if (recorded === undefined || !rustTargetTypeRefEquals(recorded.selected.errorType, effect.errorType)) return undefined;
+        carrier = effect.errorType;
+        references = pending.has(effect.identity) ? pendingInputs : immediateInputs;
+      } else return undefined;
+      carriers.push(carrier);
+      for (const identity of rustTargetGenericReferences(carrier, "metadata").typeIdentities) references.add(identity);
+    }
     const signature = walk.context.records.selectedCall.get(node);
     const operation = walk.context.records.targetOperation.get(node);
     const storageBindings = activation?.storageBindings;
@@ -149,6 +173,7 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
     const physicalInputs = new Map<string, TargetTypeRef>();
     const completedInputs = new Map<string, TargetTypeRef>();
     const absentInputs = new Set<string>();
+    const deferredInputs = new Set<string>();
     const bindings = new Set<string>();
     const references = rustTargetGenericReferences({ kind: "tuple", elements: carriers });
     const needed = new Set(references.typeIdentities);
@@ -162,6 +187,10 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       const input = inputs.get(identity);
       if (input === undefined || bindings.has(identity)) continue;
       bindings.add(identity);
+      if (input.owner !== declaration && !available.has(input) && pendingInputs.has(identity) && !immediateInputs.has(identity)) {
+        deferredInputs.add(identity);
+        continue;
+      }
       if (storageBindings === undefined && input.owner !== declaration) {
         if (!available.has(input)) return undefined;
         continue;
@@ -235,6 +264,8 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       complete(carrier: TargetTypeRef, physical: Pick<RustNativeStoragePlan, "invocationInputFor" | "boundSubjectFor">) {
         const logical = substitute(carrier, types);
         if (logical === undefined) return undefined;
+        const remaining = new Set(rustTargetGenericReferences(logical, "metadata").typeIdentities);
+        if ([...deferredInputs].some(identity => remaining.has(identity))) return undefined;
         const needed = new Set(rustTargetGenericReferences(logical).typeIdentities);
         const selectedTypes = new Map(types);
         for (const [identity, logical] of physicalInputs) {
@@ -278,8 +309,9 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         origins.set(identity, { origin, selected: target });
         if (!sourceComplete) pending.set(identity, physical => {
           const completedSource = complete(source, physical);
+          if (completedSource === undefined) return undefined;
           const completedOrigin = complete(origin, physical);
-          if (completedSource === undefined || completedOrigin === undefined) return undefined;
+          if (completedOrigin === undefined) return undefined;
           const selectedType = bindings.complete(completedSource.errorType, physical);
           if (selectedType === undefined) return undefined;
           const selectedIdentity = substitutedErrorIdentity(completedSource, completedOrigin, selectedType);
@@ -294,11 +326,11 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       nativeErrors: Object.freeze(nativeErrors) });
   };
   const complete: RustSourceErrorEffectSelection["complete"] = (error, physical) => {
+    const registered = origins.get(error.identity);
+    if (registered === undefined || !rustTargetTypeRefEquals(registered.selected.errorType, error.errorType)) return undefined;
     const previous = completed.get(error.identity);
     if (previous !== undefined) return previous;
-    const registered = origins.get(error.identity);
-    if (registered === undefined || !rustTargetTypeRefEquals(registered.selected.errorType, error.errorType) ||
-      active.has(error.identity) || active.size >= 128) return undefined;
+    if (active.has(error.identity) || active.size >= 128) return undefined;
     const selected = pending.get(error.identity);
     if (selected === undefined) return error;
     active.add(error.identity);

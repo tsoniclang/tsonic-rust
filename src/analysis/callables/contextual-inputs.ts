@@ -12,16 +12,22 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { selectRustParameterEntryConversion } from "../../policy/ownership/parameter-entry-conversion.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 
-function checkedCallableInputs(walk: RustFactWalk, expression: Node): readonly {
+interface RustCheckedCallableContext {
   readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly carrier: TargetTypeRef;
-}[] | undefined {
+}
+
+type RustCheckedCallableInputs =
+  | { readonly kind: "unavailable" }
+  | { readonly kind: "selected"; readonly contexts: readonly RustCheckedCallableContext[] };
+
+function checkedCallableInputs(walk: RustFactWalk, expression: Node): RustCheckedCallableInputs | undefined {
   const arguments_ = sourceClosedCallableArguments(expression, walk.context.source);
   if (arguments_ === undefined) return undefined;
-  const contexts: { readonly parameters: readonly TargetTypeRef[]; readonly result: TargetTypeRef; readonly carrier: TargetTypeRef }[] = [];
+  const contexts: RustCheckedCallableContext[] = [];
   for (const argument of arguments_) {
     const semantics = walk.context.semanticsFor(argument.call);
     const checked = semantics.operations.call(argument.call);
-    if (checked === undefined) return undefined;
+    if (checked === undefined) return { kind: "unavailable" };
     const selected = selectedRustCheckedCallInputCarrier(
       { source: checked, sourceSelectedDeclaration: semantics.declarations.signatureDeclaration(checked.selectedSignature) },
       argument.argumentIndex, rustOperationContext(walk, argument.call), walk.operationOptions,
@@ -30,10 +36,10 @@ function checkedCallableInputs(walk: RustFactWalk, expression: Node): readonly {
     const selectedCallable = rustCallableProtocol(selected) ?? rustClosureProtocol(selected);
     const callableCarrier = selectedCallable === undefined ? optional : selected;
     const callable = selectedCallable ?? rustCallableProtocol(optional) ?? rustClosureProtocol(optional);
-    if (callable === undefined || callableCarrier === undefined) return undefined;
+    if (callable === undefined || callableCarrier === undefined) return { kind: "unavailable" };
     contexts.push({ ...callable, carrier: callableCarrier });
   }
-  return contexts;
+  return { kind: "selected", contexts };
 }
 
 export function selectRustClosedCallableContext(
@@ -44,9 +50,13 @@ export function selectRustClosedCallableContext(
   const protocol = carrier?.kind === "function-pointer" ? { parameters: carrier.args, result: carrier.result }
     : rustCallableProtocol(carrier) ?? rustClosureProtocol(carrier);
   if (carrier === undefined || protocol === undefined) return carrier;
-  const contexts = checkedCallableInputs(walk, expression);
+  const checked = checkedCallableInputs(walk, expression);
+  if (checked === undefined) return carrier;
+  if (checked.kind === "unavailable") return undefined;
+  const { contexts } = checked;
   const selected = selectClosedCallableInputs(walk, expression, protocol.parameters, contexts);
-  if (contexts === undefined || contexts.length === 0 || selected === undefined) return carrier;
+  if (selected === undefined) return undefined;
+  if (contexts.length === 0) return carrier;
   const { ast } = walk.context;
   const result = contexts[0]?.result;
   const topology = result === undefined ? undefined : rustAwaitSelection(result, walk.context.typeDefinitions);
@@ -64,19 +74,29 @@ export function selectRustClosedCallableInputs(
   walk: RustFactWalk,
   expression: Node,
   parameters: readonly TargetTypeRef[],
-): readonly TargetTypeRef[] {
-  return selectClosedCallableInputs(walk, expression, parameters, checkedCallableInputs(walk, expression)) ?? parameters;
+): readonly TargetTypeRef[] | undefined {
+  const checked = checkedCallableInputs(walk, expression);
+  return checked === undefined ? parameters : checked.kind === "unavailable" ? undefined
+    : selectClosedCallableInputs(walk, expression, parameters, checked.contexts);
 }
 
 function selectClosedCallableInputs(
   walk: RustFactWalk,
   expression: Node,
   logical: readonly TargetTypeRef[],
-  contexts: ReturnType<typeof checkedCallableInputs>,
+  contexts: readonly RustCheckedCallableContext[],
 ): readonly TargetTypeRef[] | undefined {
   const { ast } = walk.context;
   const parameters = ast.parameters(expression);
-  if (contexts === undefined || !isDenseDataArray(parameters) || parameters.some(parameter => parameter === undefined)) return undefined;
+  if (!isDenseDataArray(parameters) || parameters.some(parameter => parameter === undefined)) return undefined;
+  const availableTypes = new Set<string>();
+  const owners = new Set<Node>();
+  for (let owner: Node | undefined = expression; owner !== undefined; owner = ast.parent(owner)) {
+    if (owners.has(owner)) return undefined;
+    owners.add(owner);
+    for (const parameter of walk.context.sourceLifetimes.contractFor(owner)?.parameters ?? [])
+      if (parameter.kind === "type") availableTypes.add(parameter.identity);
+  }
   const broad = (parameters as readonly Node[]).map(parameter => {
     const syntax = ast.typeNode(parameter);
     const types = walk.context.semanticsFor(parameter).types;
@@ -87,7 +107,7 @@ function selectClosedCallableInputs(
   for (const callable of contexts) {
     if (callable.parameters.length < parameters.length) return undefined;
     const current = callable.parameters.slice(0, parameters.length);
-    if (current.some(type => !concrete(type)) ||
+    if (current.some(type => !concrete(type, availableTypes)) ||
       inputs !== undefined && !current.every((type, index) => rustTargetTypeRefEquals(type, inputs![index]))) return undefined;
     inputs = current;
   }
@@ -101,10 +121,11 @@ function selectClosedCallableInputs(
   return selected.some(type => type === undefined) ? undefined : selected as readonly TargetTypeRef[];
 }
 
-function concrete(type: TargetTypeRef): boolean {
+function concrete(type: TargetTypeRef, availableTypes: ReadonlySet<string>): boolean {
   let resolved = true;
   mapRustTargetTypes(type, part => {
-    if (part.kind === "opaque" || part.kind === "type-parameter" || part.kind === "associated-type") resolved = false;
+    if (part.kind === "opaque" || part.kind === "associated-type" ||
+      part.kind === "type-parameter" && !availableTypes.has(part.identity)) resolved = false;
     return part;
   });
   return resolved;

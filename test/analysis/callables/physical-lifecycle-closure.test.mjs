@@ -15,6 +15,7 @@ import { rustOptionElementCarrier } from "../../../dist/target-model/types/carri
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
+import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 
 const joinedSource = `
 type Identity = <Value>(value: Value) => Value;
@@ -591,13 +592,22 @@ export function choose(): typeof identity { return identity; }
   let selections = 0;
   const construction = createRustNativeCallableProducerPlan({ ast: ast.proxy, nodes: sourceNodes(program), records: records.proxy,
     native: program.callableValues.native, definitions: program.typeDefinitions,
+    structuralShapes: program.structuralShapes,
     returnCarrierFor(declaration) {
       assert.equal(open, true, "only private construction selects return storage");
       selections += 1;
       const selected = program.callableValues.nativeStorage.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  construction.selectConstructionErrors(new Map());
+  const errors = new Map();
+  for (const producer of construction.producers) {
+    const intrinsic = construction.errorFor(producer.declaration, "invoke");
+    const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, { ast: program.source.ast,
+      records: program.records, components: program.sourcePackageComponents, producers: construction,
+      definitions: program.typeDefinitions }, producer.declaration);
+    if (selected !== undefined) errors.set(producer.declaration, selected);
+  }
+  construction.selectConstructionErrors(errors);
   const captured = Object.fromEntries(["outwardReturnFor", "invocationResultFor", "bodyResultFor", "errorFor", "physicalFor"]
     .map(name => [name, construction[name]]));
   const requests = [];
@@ -666,6 +676,7 @@ test("a physical reader captured during construction becomes the same terminal l
     selections += 1;
     return generic.definitionFor(carrier);
   }, { ast: context.ast, lifetimes: context.sourceLifetimes, storage: context.sourceStorage, captures, native: context.callableValues.native,
+    genericBindingsFor: (declaration, bindings) => context.callableValues.nativeStorage.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) =>
       context.callableValues.nativeStorage.boundSubjectFor(subject, carrier, bindings) });
   const implementation = generic.definitions[0].implementations[0];
