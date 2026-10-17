@@ -3,7 +3,7 @@ import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries
 import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
-import { rustLifetimeOutlives, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, rustLifetimeOutlives, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
@@ -278,12 +278,16 @@ export function createRustStructuralMethodStorage(input: {
             throw new Error("Structural method storage requires its existing physical callable signature and destination lifetime.");
           const captures = records.closureCapture.get(subject.node);
           if (captures === undefined) throw new Error("Structural method storage requires its admitted closure capture inventory.");
-          const captureCarriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers].map(capture =>
-            bound === undefined ? capture.carrier : substituteRustTargetGenerics(capture.carrier,
+          const sourceCaptureCarriers = [...captures.captures, ...captures.receiverFields, ...captures.receivers]
+            .map(capture => capture.carrier);
+          const captureCarriers = sourceCaptureCarriers.map(carrier =>
+            bound === undefined ? carrier : substituteRustTargetGenerics(carrier,
               bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
-          const retained = rustRetainedValueLifetime(subject.node, captureCarriers, { context: {
+          const sourceRetained = rustRetainedValueLifetime(subject.node, sourceCaptureCarriers, { context: {
             ast, records, sourceLifetimes: input.lifetimes, retainedEnvironments: input.retainedEnvironments,
           } });
+          const retained = sourceRetained === undefined || bound === undefined ? sourceRetained
+            : bound.bindings.lifetimes.get(rustLifetimeKey(sourceRetained)) ?? sourceRetained;
           if (retained === undefined || protocol.lifetime.kind !== "placeholder" && !rustLifetimeOutlives(retained,
             protocol.lifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes))) {
             if (protocol.lifetime.kind !== "static" || !captureCarriers.some(rustHasOpenOwnedStorage))
