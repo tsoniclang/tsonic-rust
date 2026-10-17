@@ -17,7 +17,6 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustValueFieldLocation, rustSourceFieldHasValueReceiver } from "../objects/value-fields.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustAssignmentWrite } from "../statements/expression-statements.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression, planExpressionBeforeContextualConversion, planExpressionBeforeValueProjections } from "./entry.js";
 import type { RustExpressionResultUse } from "./entry.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier, selectedOperationMatches } from "./fundamentals.js";
@@ -90,8 +89,7 @@ export function planNullishAssignment(
   bindings.push({ name: currentName, value: read });
   const value = rustTargetTypeRefEquals(fact.rightCarrier, effectivePlannedExpressionCarrier(right, context))
     ? planExpression(right, context) : planExpressionBeforeContextualConversion(right, context);
-  if (value === undefined || resultUse === "value" && !isRustCopyCarrier(fact.rightCarrier) &&
-    !requireRustCarrierRequirements(fact.rightCarrier, ["clone"], node, context)) return undefined;
+  if (value === undefined) return undefined;
   const valueName = allocateRustSyntheticName(names, "assignment_value");
   const valuePath: RustExpr = { kind: "path", path: valueName };
   overrides.set(right, {

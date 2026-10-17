@@ -32,7 +32,6 @@ import type { RustExpr, RustImplFunction, RustStmt } from "../../../target-ast/s
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "../callables/async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
-import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
 import { rustClassEnvironmentParameter, rustClassMemberEnvironmentContext } from "../../objects/class-environments.js";
 import { rustProjectGenerics } from "../../objects/polymorphism/names.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
@@ -101,16 +100,7 @@ export function planProjectMethod(
   const generatorFact = context.input.program.records.generator.get(member);
   const syntheticNames = context.syntheticNames ?? createRustSyntheticNameState(ast, member, []);
   const asyncFact = context.input.program.records.asyncFunction.get(member);
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    ...((generatorFact !== undefined && generatorFact.storage.kind !== "lifetime") ||
-        options?.promiseBody !== true && asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-      ? {
-          requiredStaticParameters: generatorFact?.capturedParameters ??
-            (asyncFact?.kind === "js-promise" && asyncFact.lowering.kind === "factory"
-              ? asyncFact.lowering.capturedParameters : []),
-        }
-      : {}),
-  });
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
   if (parameterPlan === undefined) {
     return undefined;
   }
@@ -178,14 +168,6 @@ export function planProjectMethod(
       "rust.backend.js-promise-method-return",
       "JavaScript-surface async methods require one renderable finalized Promise carrier.",
     ));
-    return undefined;
-  }
-  if (returnsJsPromise && !requireRustCarrierRequirements(
-    asyncFact.outputCarrier,
-    asyncFact.lowering.kind === "factory" ? ["clone", "static"] : ["clone"],
-    member,
-    context,
-  )) {
     return undefined;
   }
   const isStatic = ast.hasModifierKind(member, "static");
@@ -403,11 +385,8 @@ function planProjectPromiseObjectMethod(
   if (genericPlan === undefined || nativeGenerics === undefined) return undefined;
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
   const context = { ...genericPlan.context, syntheticNames };
-  const parameterPlan = planRustCallableParameters(member, context, syntheticNames, {
-    requiredStaticParameters: asynchronous.lowering.kind === "factory" ? asynchronous.lowering.capturedParameters : [],
-  });
-  if (parameterPlan === undefined || !requireRustCarrierRequirements(asynchronous.outputCarrier,
-    asynchronous.lowering.kind === "factory" ? ["clone", "static"] : ["clone"], member, context)) return undefined;
+  const parameterPlan = planRustCallableParameters(member, context, syntheticNames);
+  if (parameterPlan === undefined) return undefined;
   const isStatic = ast.hasModifierKind(member, "static");
   const selfMode = isStatic ? undefined : context.input.program.records.selfMode.get(member);
   if (!isStatic && selfMode === undefined) return undefined;

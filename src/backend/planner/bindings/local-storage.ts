@@ -11,7 +11,6 @@ import { rustLocationTargetType } from "../../../target-model/types/index.js";
 
 import { rustInlineBindingStoragePath, rustInlineBindingStorageType } from "../expressions/binding-storage.js";
 import { planRustNativeAllocation } from "../expressions/native-memory.js";
-import { requireRustLocationValueCarrier } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planRustValueFieldInput } from "../objects/value-fields.js";
 
@@ -39,7 +38,6 @@ export function planRustLocalBindingStorage(
     return { kind: "binding", type: rustInlineBindingStorageType(storage.storage, type),
       value: { kind: "call", path: `${rustInlineBindingStoragePath(storage.storage)}::new`, args: [value] } };
   }
-  if (!requireRustLocationValueCarrier(storage.valueCarrier, declaration, context)) return undefined;
   context.usedAliases?.add("rt");
   if (storage.initialization === "deferred") return { kind: "store", statement: {
     kind: "expr", expr: { kind: "method-call", receiver: { kind: "path", path: name }, method: "store", args: [value] },

@@ -6,8 +6,10 @@ import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipF
 import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustCopyCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustLocationTargetType } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, isRustStringCarrier, rustLocationTargetType } from "../../target-model/types/index.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
+import { rustFinalContractSupportsRequirements } from "../declarations/generic-carrier-requirements.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustOwnershipFlow } from "./flow.js";
 import { selectRustBorrowRelationship, type RustBorrowEffects, type RustBorrowEffectsInput } from "./effects.js";
@@ -26,6 +28,7 @@ export function analyzeRustReadOwnership(input: {
   readonly borrowEffectsInput: RustBorrowEffectsInput;
   readonly definitions: RustTypeDefinitions;
   readonly genericRequirements: RustDeclarationGenericRequirementIndex;
+  readonly typeFamilies: Pick<RustSourceTypeFamilyRegistry, "implementation">;
   readonly genericCallables: RustGenericCallablePlan;
   readonly capturesFor: (owner: Node) => RustClosureCaptureFact | undefined;
   readonly invocationTransfersCapture: (owner: Node) => boolean;
@@ -118,12 +121,13 @@ export function analyzeRustReadOwnership(input: {
     const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
     const carrier = implicitProperty ? records.sourceParameterAbi.get(parent)?.valueCarrier : records.runtimeCarrier.get(node)?.carrier;
     if (carrier !== undefined) {
-      const declaration = sourceEnclosingCallable(node, ast);
+      const declaration = sourceEnclosingCallable(node, ast) ?? ast.getSourceFile(node);
+      const contract = input.genericRequirements.contractFor(declaration);
       const projection = records.flowReadProjection.get(node);
       const valueCarrier = projection?.selectedCarrier ?? carrier;
       const copy = isRustCopyCarrier(valueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const clone = rustCarrierSupportsClone(valueCarrier, input.definitions) || declaration !== undefined &&
-        input.genericRequirements.supportsClone(declaration, valueCarrier);
+      const clone = contract !== undefined && rustFinalContractSupportsRequirements(contract, valueCarrier, ["clone"],
+        input.typeFamilies, input.definitions, undefined).kind === "supported";
       const use = uses.get(node);
       const borrowed = use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
         use.later.every((later, index) => index < use.laterStart || borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
@@ -131,8 +135,8 @@ export function analyzeRustReadOwnership(input: {
       const value = selectRustValueReadOwnership({ copy, clone, borrowed,
         transfer: use?.mode === "move" || flow.movingReads.has(node) || !storageRead });
       const sourceCopy = isRustCopyCarrier(carrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const sourceClone = rustCarrierSupportsClone(carrier, input.definitions) || declaration !== undefined &&
-        input.genericRequirements.supportsClone(declaration, carrier);
+      const sourceClone = contract !== undefined && rustFinalContractSupportsRequirements(contract, carrier, ["clone"],
+        input.typeFamilies, input.definitions, undefined).kind === "supported";
       const conversion = records.contextualValueConversion.get(node);
       const conversionBorrows = conversion !== undefined &&
         rustContextualRuntimeConversionContract(conversion.conversion, input.definitions)?.sourceMode === "ref";
@@ -168,8 +172,9 @@ export function analyzeRustReadOwnership(input: {
     for (const capture of input.capturesFor(node)?.captures ?? []) {
       const physicalCarrier = capture.storage === "location" ? rustLocationTargetType(capture.carrier) : capture.carrier;
       const copy = isRustCopyCarrier(physicalCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const clone = rustCarrierSupportsClone(physicalCarrier, input.definitions) ||
-        input.genericRequirements.supportsClone(node, physicalCarrier);
+      const contract = input.genericRequirements.contractFor(node);
+      const clone = contract !== undefined && rustFinalContractSupportsRequirements(contract, physicalCarrier, ["clone"],
+        input.typeFamilies, input.definitions, undefined).kind === "supported";
       const read = selectRustValueReadOwnership({ copy, clone,
         transfer: capture.storage === "cell" || capture.storage === "borrow-cell" ||
           flow.captureTransfers.get(node)?.has(capture.declaration) === true });

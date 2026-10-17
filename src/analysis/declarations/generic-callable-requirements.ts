@@ -1,4 +1,4 @@
-import { stringListsEqual, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
+import { stringListsEqual, requirementUseHasValidStorage, type RequirementUse, type RequirementContractState } from "./generic-requirement-contract.js";
 import { substituteElidedLifetime } from "../../target-model/types/carriers/lifetime-elision.js";
 import { rustStaticLifetime } from "../../target-model/lifetimes/index.js";
 
@@ -27,7 +27,7 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { isRustFinalizedArrayInput, isRustFinalizedSliceInput } from "../operations/finalized-operation/conversions.js";
+import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
 import {
   getRustGeneratorProtocol,
   isRustCopyCarrier,
@@ -169,9 +169,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     if (!uses.some((use) => use.node === node &&
       rustTargetTypeRefEquals(use.carrier, carrier) &&
       stringListsEqual(use.requirements, normalized))) {
-      uses.push(Object.freeze({ node, carrier, requirements: normalized,
+      const use = Object.freeze({ node, carrier, requirements: normalized,
         ...(rustTargetTypeRefEquals(carrier, requiredCarrier) ? {} : { nativeStorageCarrier: requiredCarrier }),
-      }));
+      });
+      if (!requirementUseHasValidStorage(use)) return "A native storage requirement lost its exact physical carrier correspondence.";
+      uses.push(use);
     }
     return undefined;
   };
@@ -251,6 +253,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   }
   const visit = (node: Node): string | undefined => {
     if (node !== declaration && (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node))) {
+      if (ast.is.IsSourceFile(declaration)) return undefined;
       const nestedId = input.idByDeclaration.get(node);
       if (nestedId !== undefined) {
         dependencies.add(nestedId);
@@ -426,6 +429,11 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       return "A dependent field operation has no exact read/write trait obligation.";
     }
     const location = records.bindingStorage.get(node);
+    const frameBinding = input.frameCallables.bindingFor(node);
+    if (frameBinding?.storage === "location") {
+      const error = addUse(node, frameBinding.carrier, ["clone", "static"], true);
+      if (error !== undefined) return error;
+    }
     const objectView = records.objectReferenceView.get(node);
     if (objectView !== undefined) {
       const error = addUse(node, objectView.sourceCarrier, ["clone", "static"]);
@@ -552,19 +560,25 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const projection = records.flowReadProjection.get(node);
-    if ((projection?.kind === "option-value" || projection?.kind === "source-union") &&
-      !input.ownershipFlow.movingReads.has(node)) {
-      const error = addUse(node, projection.selectedCarrier, ["clone"]);
-      if (error !== undefined) return error;
+    if (projection !== undefined && !input.ownershipFlow.movingReads.has(node)) {
+      const cloneSources = projection.kind === "union-map"
+        ? projection.arms.filter(arm => arm.source[arm.source.length - 1]?.variant.kind === "payload").map(arm => arm.carrier)
+        : projection.kind === "option-value" ||
+          (projection.kind === "source-union" || projection.kind === "runtime-union") && projection.project === undefined
+          ? [projection.selectedCarrier] : [];
+      for (const source of cloneSources) {
+        const error = addUse(node, source, ["clone"]);
+        if (error !== undefined) return error;
+      }
     }
     const providerOperations = operation?.kind === "provider-operation" ? [operation]
       : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : [];
     for (const providerOperation of providerOperations) {
-      for (const argument of providerOperation.abi.targetArguments) {
-        if (!isRustFinalizedArrayInput(argument) && !isRustFinalizedSliceInput(argument)) continue;
-        for (const element of argument.elements) {
-          if (element.conversion.kind !== "semantic") continue;
-          const conversion = rustValueConversionContract(element.conversion.conversion, input.typeDefinitions);
+      for (const argument of rustFinalizedSourceInputs(providerOperation.abi)) {
+        const conversions = argument.conversion.kind === "sequence" ? argument.conversion.steps
+          : argument.conversion.kind === "semantic" ? [argument.conversion] : [];
+        for (const selected of conversions) {
+          const conversion = rustValueConversionContract(selected.conversion, input.typeDefinitions);
           if (conversion?.lowering !== "rest-sequence") continue;
           for (const carrier of conversion.cloneSources) {
             const error = addUse(node, carrier, ["clone"]);
