@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRustTarget } from "../../dist/backend/compile.js";
-import { compileRust } from "./rust-session.mjs";
-import { nativeFunction, nativeType } from "./native-ast.mjs";
-import { fakeAstReader } from "./fake-compile-input.mjs";
+import { compileRust } from "../helpers/rust-session.mjs";
+import { nativeFunction, nativeType } from "../helpers/native-ast.mjs";
+import { fakeAstReader } from "../helpers/fake-compile-input.mjs";
+import { assertNoTargetDiagnostics } from "../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 
 const files = { "index.ts": "export function identity(value: number): number { return value; }" };
 
@@ -39,7 +40,7 @@ test("Rust session and helper observe the real wrapper's exact program and nativ
     return productionResult;
   } });
   assert.deepEqual(events, ["compile", "analysis", "plan", "return"]);
-  assert.deepEqual(compiled.result.diagnostics, []);
+  assertNoTargetDiagnostics(compiled.result.diagnostics);
   assert.equal(request.input.source.ast === compiled.source.ast, true);
   assert.equal(program.source.ast === compiled.source.ast, true);
   assert.equal(compiled.result.program === program, true);

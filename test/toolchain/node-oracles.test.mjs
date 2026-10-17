@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nodeOraclePrograms, runNodeOracle, runNativeNodeOracle } from "./node-oracles.mjs";
+import { nodeOraclePrograms, runNodeOracle, runNativeNodeOracle } from "../helpers/node-oracles.mjs";
 import { nodeOraclePrograms as sharedPrograms, runNodeOracle as sharedNodeRunner } from "../../../tsonic/test/fixtures/node-oracle/index.mjs";
 
 test("Rust consumes the one shared oracle catalogue and Node reference runner", () => {
