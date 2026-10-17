@@ -6,11 +6,13 @@ export {
 } from "./hooks.js";
 export { analyzeRustDispatchContextCatalog } from "./dispatch-contexts.js";
 export { analyzeRustDispatchContextDemand } from "./dispatch-demand.js";
-export type { RustDispatchContextDemandPlan } from "./dispatch-demand.js";
+export type { RustDispatchContextDemandPlan, RustDispatchContextInputSelection } from "./dispatch-demand.js";
 export type {
   RustDispatchContextAccess,
   RustDispatchContextCatalog,
+  RustDispatchContextDeclarations,
   RustDispatchContextComposition,
+  RustDispatchContextCompositionRequests,
 } from "./dispatch-contexts.js";
 export type {
   RustRuntimeReferenceAnalysisResult,

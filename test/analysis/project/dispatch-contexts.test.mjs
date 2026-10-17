@@ -20,11 +20,11 @@ function catalog(contexts) {
 test("context demand selects no roots for context-free programs and no unused parent", () => {
   const selected = catalog([context({ id: "outer", composedContexts: [projection("inner")] }),
     context({ id: "inner" })]);
-  const empty = selected.compose([]);
+  const empty = selected.compose({ demandedContextIds: [], accessContextIds: [] });
   assert.equal(empty.kind, "resolved");
   assert.equal(empty.plan.rootContextIds.length, 0);
   assert.equal(empty.plan.access("outer"), undefined);
-  const inner = selected.compose(["inner"]);
+  const inner = selected.compose({ demandedContextIds: ["inner"], accessContextIds: ["inner"] });
   assert.equal(inner.kind, "resolved");
   assert.deepEqual(inner.plan.rootContextIds, ["inner"]);
   assert.equal(inner.plan.access("inner")?.rootContextId, "inner");
@@ -37,7 +37,8 @@ test("composed context demand has one physical root and exact immutable projecti
     context({ id: "middle", composedContexts: [projection("inner")] }),
     context({ id: "inner" }),
   ]);
-  const result = selected.compose(["inner", "outer", "middle", "outer"]);
+  const result = selected.compose({ demandedContextIds: ["inner", "outer", "middle", "outer"],
+    accessContextIds: ["outer", "middle", "inner"] });
   assert.equal(result.kind, "resolved");
   assert.deepEqual(result.plan.rootContextIds, ["outer"]);
   const access = result.plan.access("inner");
@@ -51,8 +52,8 @@ test("composed context demand has one physical root and exact immutable projecti
 
 test("independent roots and native spelling are deterministic across declaration and demand order", () => {
   const declarations = [context({ id: "mixedCase" }), context({ id: "other" })];
-  const first = catalog(declarations).compose(["other", "mixedCase"]);
-  const second = catalog(declarations.toReversed()).compose(["mixedCase", "other"]);
+  const first = catalog(declarations).compose({ demandedContextIds: ["other", "mixedCase"], accessContextIds: ["other", "mixedCase"] });
+  const second = catalog(declarations.toReversed()).compose({ demandedContextIds: ["mixedCase", "other"], accessContextIds: ["mixedCase", "other"] });
   assert.equal(first.kind, "resolved");
   assert.equal(second.kind, "resolved");
   assert.deepEqual(first.plan.rootContextIds, ["mixedCase", "other"]);
@@ -87,16 +88,16 @@ test("physical context ownership never guesses between demanded roots or diamond
     context({ id: "right", composedContexts: [projection("shared")] }),
     context({ id: "shared" }),
   ]);
-  assert.equal(selected.compose(["left", "right"]).kind, "rejected");
-  assert.equal(selected.compose(["left", "right", "shared"]).kind, "rejected");
-  assert.equal(selected.compose(["shared"]).kind, "resolved");
+  assert.equal(selected.compose({ demandedContextIds: ["left", "right"], accessContextIds: ["shared"] }).kind, "rejected");
+  assert.equal(selected.compose({ demandedContextIds: ["left", "right", "shared"], accessContextIds: ["shared"] }).kind, "rejected");
+  assert.equal(selected.compose({ demandedContextIds: ["shared"], accessContextIds: ["shared"] }).kind, "resolved");
   const diamond = catalog([
     context({ id: "root", composedContexts: [projection("left"), projection("right")] }),
     context({ id: "left", composedContexts: [projection("shared")] }),
     context({ id: "right", composedContexts: [projection("shared")] }),
     context({ id: "shared" }),
   ]);
-  assert.equal(diamond.compose(["root"]).kind, "rejected");
+  assert.equal(diamond.compose({ demandedContextIds: ["root"], accessContextIds: ["shared"] }).kind, "rejected");
 });
 
 test("root-only input queries fail closed for absent handle projections", () => {
@@ -141,7 +142,7 @@ test("context queries reject malformed indices, ownership modes, invented carrie
     assert.equal(selected.resolveInput(malformed), undefined);
   }
   for (const demand of [null, {}, ["missing"], [null], new Array(1)]) {
-    assert.equal(selected.compose(demand).kind, "rejected");
+    assert.equal(selected.compose({ demandedContextIds: demand, accessContextIds: [] }).kind, "rejected");
   }
 });
 
@@ -151,8 +152,22 @@ test("deep context composition uses iterative accounting and publishes only requ
     id: `context${index}`,
     composedContexts: index + 1 === count ? [] : [projection(`context${index + 1}`)],
   }));
-  const result = catalog(contexts).compose(["context0", `context${count - 1}`]);
+  const result = catalog(contexts).compose({ demandedContextIds: ["context0", `context${count - 1}`],
+    accessContextIds: ["context0", `context${count - 1}`] });
   assert.equal(result.kind, "resolved");
   assert.equal(result.plan.rootContextIds.length, 1);
   assert.equal(result.plan.access(`context${count - 1}`)?.projections.length, count - 1);
+  assert.equal(result.plan.access("context1") === undefined, true, "unrequested paths are never materialized or extended on read");
+});
+
+test("context composition requires the one exact finite request contract without old array acceptance", () => {
+  const selected = catalog([context()]);
+  for (const request of [[], ["acme.dispatch"], {}, { demandedContextIds: [] }, { accessContextIds: [] },
+    { demandedContextIds: [], accessContextIds: ["missing"] },
+    { demandedContextIds: [], get accessContextIds() { throw new Error("request getters must not run"); } }]) {
+    assert.equal(selected.compose(request).kind, "rejected", "only the required data-only construction request is accepted");
+  }
+  assert.equal(Object.hasOwn(selected.declarations, "compose"), false);
+  assert.equal(Object.hasOwn(selected.declarations, "resolveInput"), false);
+  assert.equal(Object.isFrozen(selected.declarations), true);
 });

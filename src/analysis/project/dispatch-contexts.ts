@@ -14,11 +14,20 @@ export interface RustDispatchContextComposition {
   access(contextId: string): RustDispatchContextAccess | undefined;
 }
 
-export interface RustDispatchContextCatalog {
+export interface RustDispatchContextCompositionRequests {
+  readonly demandedContextIds: readonly string[];
+  readonly accessContextIds: readonly string[];
+}
+
+export interface RustDispatchContextDeclarations {
   readonly contexts: readonly RustProviderDispatchContextRow[];
   declaration(contextId: string): RustProviderDispatchContextRow | undefined;
+}
+
+export interface RustDispatchContextCatalog extends RustDispatchContextDeclarations {
+  readonly declarations: RustDispatchContextDeclarations;
   resolveInput(input: unknown): RustResolvedDispatchContextInput | undefined;
-  compose(demandedContextIds: readonly string[]): AnalyzeRustDispatchContextResult<RustDispatchContextComposition>;
+  compose(requests: RustDispatchContextCompositionRequests): AnalyzeRustDispatchContextResult<RustDispatchContextComposition>;
 }
 
 export type AnalyzeRustDispatchContextResult<Plan> =
@@ -66,9 +75,10 @@ export function analyzeRustDispatchContextCatalog(
     }
   }
   if (topologicalOrder.length !== contexts.length) return rejected("Dispatch context composition contains a cycle.");
+  const declarations: RustDispatchContextDeclarations = Object.freeze({ contexts,
+    declaration: (contextId: string) => byId.get(contextId) });
   const catalog: RustDispatchContextCatalog = Object.freeze({
-    contexts,
-    declaration: (contextId: string) => byId.get(contextId),
+    ...declarations, declarations,
     resolveInput(input: unknown): RustResolvedDispatchContextInput | undefined {
       if (!isRustDispatchContextInput(input)) return undefined;
       const context = byId.get(input.contextId);
@@ -78,20 +88,27 @@ export function analyzeRustDispatchContextCatalog(
         carrier,
       });
     },
-    compose: (demandedContextIds: readonly string[]) =>
-      composeContexts(demandedContextIds, topologicalOrder, parents, byId),
+    compose: (requests: RustDispatchContextCompositionRequests) =>
+      composeContexts(requests, topologicalOrder, parents, byId),
   });
   return { kind: "resolved", plan: catalog };
 }
 
 function composeContexts(
-  demandedContextIds: readonly string[],
+  requests: RustDispatchContextCompositionRequests,
   topologicalOrder: readonly string[],
   parents: ReadonlyMap<string, readonly { readonly contextId: string; readonly project: RustDispatchContextProjection }[]>,
   byId: ReadonlyMap<string, RustProviderDispatchContextRow>,
 ): AnalyzeRustDispatchContextResult<RustDispatchContextComposition> {
-  if (!isDenseDataArray(demandedContextIds) ||
-    demandedContextIds.some(id => typeof id !== "string" || !byId.has(id))) {
+  const descriptors = requests === null || typeof requests !== "object" || Array.isArray(requests)
+    ? undefined : Object.getOwnPropertyDescriptors(requests);
+  const demandedContextIds: unknown = descriptors?.demandedContextIds !== undefined && "value" in descriptors.demandedContextIds
+    ? descriptors.demandedContextIds.value : undefined;
+  const accessContextIds: unknown = descriptors?.accessContextIds !== undefined && "value" in descriptors.accessContextIds
+    ? descriptors.accessContextIds.value : undefined;
+  if (!isDenseDataArray(demandedContextIds) || !isDenseDataArray(accessContextIds) ||
+    demandedContextIds.some(id => typeof id !== "string" || !byId.has(id)) ||
+    accessContextIds.some(id => typeof id !== "string" || !byId.has(id))) {
     return rejected("Dispatch context demand must select exact available context identities.");
   }
   const demanded = new Set(demandedContextIds);
@@ -126,26 +143,22 @@ function composeContexts(
       access.set(contextId, { kind: "root", contextId });
     }
   }
+  for (const contextId of new Set(accessContextIds as readonly string[])) {
+    let node = access.get(contextId);
+    if (node === undefined) continue;
+    const projections: RustDispatchContextProjection[] = [];
+    while (node.kind === "projection") {
+      projections.push(node.project);
+      node = node.parent;
+    }
+    published.set(contextId, Object.freeze({ rootContextId: node.contextId,
+      projections: Object.freeze(projections.reverse()) }));
+  }
   return {
     kind: "resolved",
     plan: Object.freeze({
       rootContextIds: Object.freeze(rootContextIds),
-      access(contextId: string): RustDispatchContextAccess | undefined {
-        const existing = published.get(contextId);
-        if (existing !== undefined) return existing;
-        let node = access.get(contextId);
-        if (node === undefined) return undefined;
-        const projections: RustDispatchContextProjection[] = [];
-        while (node.kind === "projection") {
-          projections.push(node.project);
-          node = node.parent;
-        }
-        const result = Object.freeze({
-          rootContextId: node.contextId, projections: Object.freeze(projections.reverse()),
-        });
-        published.set(contextId, result);
-        return result;
-      },
+      access: (contextId: string) => published.get(contextId),
     }),
   };
 }

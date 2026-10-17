@@ -6,7 +6,7 @@ import type { RustSourceCallEffectsFact } from "../../target-model/records/objec
 import type { RustGenericCallableEffectsFact } from "../../target-model/records/generic-callable-effects.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember } from "./generic-physical.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
-import { rustGenericCallableMemberBindings, type RustGenericCallableBindingContext } from "./generic-bindings.js";
+import type { RustGenericCallableBindingContext } from "./generic-bindings.js";
 import { createRustEffectsWorkBudget } from "../resources/effects-work-budget.js";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 
@@ -61,7 +61,7 @@ export function selectRustGenericCallableErrors(
   for (const member of definition.members) {
     const declaration = member.implementation.declaration;
     const effects = input.effectsFor(declaration);
-    const bindings = rustGenericCallableMemberBindings(definition, member, input);
+    const bindings = member.bindings;
     const producer = input.producers.forDeclaration(declaration);
     if (effects === undefined || bindings === undefined || producer === undefined) return undefined;
     const selected: { invocation: RustNativeErrorSource<TargetTypeRef> | undefined;

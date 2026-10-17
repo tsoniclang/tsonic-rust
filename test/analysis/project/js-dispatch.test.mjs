@@ -15,8 +15,9 @@ test("JS dispatch roots remain immutable, root-only and inactive without their e
   assert.equal(declaration !== undefined, true, "one selected builtin owner");
   assert.equal(Object.hasOwn(declaration, "handle"), false);
   assert.equal(Object.isFrozen(declaration.rootCarrier), true);
-  assert.deepEqual(selected.plan.compose([]).plan.rootContextIds, []);
-  assert.deepEqual(selected.plan.compose([rustJsTimerDispatchContextId]).plan.rootContextIds, [rustJsTimerDispatchContextId]);
+  assert.deepEqual(selected.plan.compose({ demandedContextIds: [], accessContextIds: [] }).plan.rootContextIds, []);
+  assert.deepEqual(selected.plan.compose({ demandedContextIds: [rustJsTimerDispatchContextId],
+    accessContextIds: [rustJsTimerDispatchContextId] }).plan.rootContextIds, [rustJsTimerDispatchContextId]);
   for (const hook of [rustJsAsyncExecutor, rustJsEntryOwner]) {
     assert.equal(hook.errorBoundary, "source-program");
     assert.deepEqual(hook.dispatchGroups[0].contextIds, [rustJsTimerDispatchContextId]);
