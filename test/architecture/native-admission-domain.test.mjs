@@ -9,6 +9,7 @@ const walkerContracts = new Map([
   ["analysis/program/source-package-components.ts", [1, "mixed"]],
   ["analysis/reachability/generated-item-usage.ts", [1, "native-domain"]],
   ["analysis/callables/lexical-value-environments.ts", [1, "native-domain"]],
+  ["analysis/callables/emission-requests.ts", [1, "native-domain"]],
   ["analysis/objects/class-values.ts", [1, "native-domain"]],
   ["analysis/project-types/receiver-captures.ts", [1, "native-domain"]],
   ["analysis/errors/regions.ts", [1, "native-domain"]],

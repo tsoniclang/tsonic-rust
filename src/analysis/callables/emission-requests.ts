@@ -11,6 +11,7 @@ import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-mode
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 import { rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import type { RustGenericCallableConversion } from "../../target-model/conversions/generic-callable.js";
 import { rustSourceCallCallableStorageCarrier, type RustStructuralStorageLookup } from "../operations/target-operation.js";
 import type { RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
@@ -290,6 +291,12 @@ export function prepareRustPhysicalCallableEmissionRequests(
         ? rustCallableTargetType(protocol.parameters, protocol.result) : undefined;
       const carrier = independent ?? records.receiverIndependentMethod.get(node)?.carrier ?? operation.resultCarrier;
       if (rustCallableProtocol(carrier) !== undefined) producer(owner, node, node, carrier);
+      const moduleBinding = records.moduleBinding.get(sourceOwner);
+      if (rustGenericCallableValue(carrier) === undefined && rustFrameCallableValue(carrier) === undefined &&
+        records.closureCapture.get(node)?.invocationOwner !== "shared-state" &&
+        !(moduleBinding?.storage === "native-callable" && moduleBinding.callableDeclaration === node) &&
+        input.lexicalFunctions.forDeclaration(node) === undefined)
+        type(owner, node, "inline-body", carrier);
     } else if (operation?.kind === "record-literal") {
       for (const [index, contribution] of operation.contributions.entries()) {
         if (contribution.kind === "property") {
@@ -386,7 +393,11 @@ export function prepareRustPhysicalCallableEmissionRequests(
         records.nativeUnreachable.get(declaration) === true) continue;
       const initializer = Node_Initializer(ast, declaration);
       const name = ast.name(declaration);
-      if (name !== undefined && ast.is.IsIdentifier(name) &&
+      const binding = records.moduleBinding.get(declaration);
+      if (binding?.storage === "native-callable") {
+        visitConstruct(binding.callableDeclaration, binding.callableDeclaration);
+        if (binding.value !== undefined) request(owner, declaration, "binding", { kind: "value" }, declaration);
+      } else if (name !== undefined && ast.is.IsIdentifier(name) &&
         (initializer === undefined || input.lexicalFunctions.forDeclaration(initializer) === undefined))
         request(owner, declaration, "binding", { kind: "value" }, declaration);
     }

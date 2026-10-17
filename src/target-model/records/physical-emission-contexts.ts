@@ -137,6 +137,7 @@ export interface RustCallableEmissionContexts {
   readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
   contextFor(use: TargetUseSiteRef): RustPhysicalEmissionContext | undefined;
   contextForOwner(subject: object, role: RustPhysicalEmissionRole): RustPhysicalEmissionContext | undefined;
+  bodyContextFor(enclosingUse: TargetUseSiteRef, declaration: Node): RustPhysicalEmissionContext | undefined;
   operandFor(use: TargetUseSiteRef): RustPhysicalEmissionOperand | undefined;
   carrierFor(use: TargetUseSiteRef, source: TargetTypeRef): TargetTypeRef | undefined;
   sourceFor(node: Node, operation: RustEmissionProviderOperation): RustPhysicalEmissionSourceOccurrence | undefined;

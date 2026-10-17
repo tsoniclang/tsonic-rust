@@ -12,7 +12,7 @@ import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissi
   RustEmissionCallableSpecialization } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
-import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenerics, substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
 import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
@@ -119,9 +119,9 @@ export function rustEmissionSourceIdentity(ast: AstReader, declaration: Node): s
   return file === undefined || identity === undefined ? undefined : `${ast.getFileName(file)}:${identity}`;
 }
 
-export function prepareRustCallableEmissionContexts(
+export function prepareRustCallableEmissionRequests(
   input: RustCallableEmissionPreparationInput,
-): TargetStageResult<RustCallableEmissionPreparation> {
+): TargetStageResult<readonly RustEmissionContextRequest[]> {
   if (!Array.isArray(input.emissionRequests)) throw new Error("Physical emission requires its complete selecting-owner request vector.");
   const requests: RustEmissionContextRequest[] = [];
   const diagnostics: TargetDiagnostic[] = [];
@@ -395,13 +395,13 @@ export function prepareRustCallableEmissionContexts(
     diagnostics.push(emissionDiagnostic(demands[0]!.subject,
       "An emitted callable demand requires its original selected body context before publication."));
   }
-  return diagnostics.length === 0 ? prepareRustEmissionContextRequests(input, requests) : rejectedTargetStage(diagnostics);
+  return diagnostics.length === 0 ? resolvedTargetStage(Object.freeze(requests)) : rejectedTargetStage(diagnostics);
 }
 
 export function prepareRustEmissionContextRequests(
   input: Pick<RustCallableEmissionPreparationInput, "ast" | "records" | "nativeStorage" | "sourceOccurrences" | "errorRegions" |
-    "sourceStorage" | "genericBindingsFor" | "generic" | "emissionRequests" | "initialization">,
-  requests: readonly RustEmissionContextRequest[],
+    "sourceStorage" | "genericBindingsFor" | "generic" | "emissionRequests" | "initialization" | "sourceLifetimes">,
+  selectedRequests: readonly RustEmissionContextRequest[],
 ): TargetStageResult<RustCallableEmissionPreparation> {
   const contexts: RustPhysicalEmissionContext[] = [];
   const operands: RustPhysicalEmissionOperand[] = [];
@@ -412,6 +412,8 @@ export function prepareRustEmissionContextRequests(
   const applications = new Map<TargetUseSiteRef, ReadonlyMap<TargetTypeRef, TargetTypeRef>>();
   const physicalOperands = new Set<TargetTypeRef>();
   const diagnostics: TargetDiagnostic[] = [];
+  const requests = [...selectedRequests];
+  const bodyUses = new Map<TargetUseSiteRef, Map<Node, TargetUseSiteRef>>();
   const sourceIndex = new Map<Node, Map<RustEmissionProviderOperation, RustPhysicalEmissionSourceOccurrence>>();
   for (const occurrence of input.sourceOccurrences) {
     const selected = sourceIndex.get(occurrence.node) ?? new Map<RustEmissionProviderOperation, RustPhysicalEmissionSourceOccurrence>();
@@ -428,6 +430,56 @@ export function prepareRustEmissionContextRequests(
       "One original emitted owner and role requires exactly one selected physical context."));
     roles.add(request.role);
     requestedOwners.set(request.use.subject, roles);
+  }
+  if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
+  const nativeBodies = new Map(requests.filter(request => request.role === "native-body")
+    .map(request => [request.declaration, request] as const));
+  const creationOwners = new Map<TargetUseSiteRef, ReadonlySet<Node>>();
+  for (let index = 0; index < requests.length; index += 1) {
+    const enclosing = requests[index]!;
+    const bodies = new Map<Node, TargetUseSiteRef>();
+    if (enclosing.role === "native-body" && input.records.closureCapture.get(enclosing.declaration)?.invocationOwner === "shared-state")
+      bodies.set(enclosing.declaration, enclosing.use);
+    const ancestors = creationOwners.get(enclosing.use) ?? new Set([enclosing.declaration]);
+    for (const demand of enclosing.demands) {
+      if (demand.kind !== "type" || demand.context.role !== "inline-body") continue;
+      if (demand.owner !== enclosing.declaration || demand.context.subject !== demand.subject) {
+        diagnostics.push(emissionDiagnostic(demand.subject, "An inline body requires its exact original selecting creation owner and occurrence."));
+        continue;
+      }
+      if (bodies.has(demand.subject)) continue;
+      const original = nativeBodies.get(demand.subject);
+      if (original === undefined || ancestors.has(demand.subject)) {
+        diagnostics.push(emissionDiagnostic(demand.subject, "An inline body requires one complete acyclic original native body selection."));
+        continue;
+      }
+      const parameters = input.sourceLifetimes.contractFor(demand.subject)?.parameters ?? [];
+      const ownTypes = new Set(parameters.flatMap(parameter => parameter.kind === "type" ? [parameter.identity] : []));
+      const ownLifetimes = new Set(parameters.flatMap(parameter => parameter.kind === "lifetime" ? [rustLifetimeKey(parameter.lifetime)] : []));
+      const types = new Map([...original.bindings.types].map(([identity, carrier]) => [identity, ownTypes.has(identity) ? carrier
+        : substituteRustTargetGenerics(carrier, enclosing.bindings.types, enclosing.bindings.lifetimes, enclosing.bindings.consts)]));
+      const lifetimes = new Map([...original.bindings.lifetimes].map(([identity, lifetime]) => [identity, ownLifetimes.has(identity) ? lifetime
+        : enclosing.bindings.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime]));
+      const consts = new Map(original.bindings.consts);
+      for (const [identity, value] of consts) {
+        const selected = substituteRustTargetGenericArgument({ kind: "const", value }, enclosing.bindings.types,
+          enclosing.bindings.lifetimes, enclosing.bindings.consts);
+        if (selected.kind !== "const") {
+          diagnostics.push(emissionDiagnostic(demand.subject, "An inline native const argument lost its original argument kind."));
+          continue;
+        }
+        consts.set(identity, selected.value);
+      }
+      const subject = Object.freeze({ declaration: demand.subject, enclosingUse: enclosing.use });
+      const use = targetUseSiteRef(subject, "native-body", `${targetUseSiteIdentity(enclosing.use)}:${targetUseSiteIdentity(original.use)}`);
+      const selected: RustEmissionContextRequest = { ...original, use,
+        bindings: snapshotRustCallableBindings({ types, lifetimes, consts }),
+        sourceCarriers: [...original.sourceCarriers, ...original.physicalCarriers], physicalCarriers: [] };
+      requests.push(selected);
+      bodies.set(demand.subject, use);
+      creationOwners.set(use, new Set([...ancestors, demand.subject]));
+    }
+    bodyUses.set(enclosing.use, bodies);
   }
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
   const prepareSourceOrigins = createRustEmissionSourceOriginPreparation({ ...input, physical: input.generic.physical }, requests);
@@ -566,6 +618,10 @@ export function prepareRustEmissionContextRequests(
     contexts: Object.freeze({ contexts: Object.freeze(contexts), operands: Object.freeze(operands), sourceOccurrences: input.sourceOccurrences,
       contextFor: (use: TargetUseSiteRef) => contextIndex.get(use),
       contextForOwner: (subject: object, role: RustPhysicalEmissionRole) => ownerIndex.get(subject)?.get(role),
+      bodyContextFor: (enclosingUse: TargetUseSiteRef, declaration: Node) => {
+        const use = bodyUses.get(enclosingUse)?.get(declaration);
+        return use === undefined ? undefined : contextIndex.get(use);
+      },
       operandFor: (use: TargetUseSiteRef) => operandIndex.get(use),
       carrierFor: (use: TargetUseSiteRef, source: TargetTypeRef) => applications.get(use)?.get(source),
       sourceOriginFor: (use: TargetUseSiteRef, occurrence: RustPhysicalEmissionSourceOccurrence) => sourceOrigins.get(use)?.get(occurrence),

@@ -8,7 +8,7 @@ import {
   isValidRustIdentifier,
   rustActiveErrorType,
   rustErrorBoundaryForDeclaration,
-  requireRustEmissionContext,
+  requireRustCallableBodyContext,
   rustContextForEmission,
 } from "../program/plan-context.js";
 import {
@@ -407,7 +407,7 @@ export function planRustCallableExpressionBody(
       : rustRecursiveReceiverFieldContext(captureFact.recursiveField, { kind: "path", path: recursiveName }, wholeEnvironment.context);
   if (recursiveContext === undefined) return undefined;
   const callableClosureContext: RustPlanContext = {
-    ...rustContextForEmission(recursiveContext, requireRustEmissionContext(context, node, "native-body", node)),
+    ...rustContextForEmission(recursiveContext, requireRustCallableBodyContext(context, node)),
     functionAbsenceReturnCarrier: undefined,
     capturedBindings,
   };

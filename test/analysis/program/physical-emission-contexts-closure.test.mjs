@@ -67,7 +67,7 @@ class Base {
   text: string = "ready";
   constructor(value: string = "ready") { this.text = value; }
   identity<Value>(value: Value): Value { return value; }
-  get present(): boolean { return this.text.includes("ready"); }
+  get present(): boolean { return this.text === "ready"; }
   set present(value: boolean) { this.text = value ? "ready" : "empty"; }
 }
 class Derived extends Base {
@@ -166,6 +166,61 @@ test("declaration bindings keep full formals and only free captured generic iden
   const freeOnly = rustEmissionDeclarationBindings([], environment);
   assert.equal(freeOnly !== undefined && freeOnly.types.size === 2 && freeOnly.lifetimes.size === 2 && freeOnly.consts.size === 2,
     true, "an enclosing free environment is retained even when this declaration has no formals");
+});
+
+test("inline callback bodies retain the original finite enclosing use and concrete bindings", () => {
+  const source = `
+    import type { int32 } from "@tsonic/core/types.js";
+    class Base { identity<Value>(value: Value): Value { return value; } }
+    class Derived extends Base { override identity<Value>(value: Value): Value { return value; } }
+    function pass<Value>(value: Value): Value { return value; }
+    function relay<Value>(receiver: Base, value: Value): Value {
+      const mapped = [value].map(current => pass<Value>(current));
+      return receiver.identity<Value>(mapped[0]!);
+    }
+    export function numberValue(value: int32): int32 { return relay<int32>(new Derived(), value); }
+    export function stringValue(value: string): string { return relay<string>(new Derived(), value); }
+  `;
+  const compiled = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
+    files: { "index.ts": source } }).result;
+  assert.equal(compiled.diagnostics.length, 0,
+    compiled.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+  const program = compiled.program;
+  const { ast } = program.source;
+  const callback = program.callableValues.nativeProducers.producers.find(producer => ast.is.IsArrowFunction(producer.declaration));
+  assert.equal(callback !== undefined, true, "the actual mapped callback has its original selected native producer");
+  const prepared = program.physicalEmissionContexts;
+  const parents = prepared.contexts.filter(context => context.role === "specialized-body" &&
+    ast.text(ast.name(context.declaration)) === "relay");
+  assert.equal(parents.length, 2, "the same callback is created in both actual finite source variants");
+  const children = parents.map(parent => {
+    const body = prepared.bodyContextFor(parent.use, callback.declaration);
+    assert.equal(body !== undefined && body.declaration === callback.declaration, true,
+      "the exact enclosing use selects its original callback body before publication");
+    assert.equal(body.use !== parent.use && body.use.subject.enclosingUse === parent.use, true,
+      "a nested body retains the original selected creation use, not a reconstructed owner key");
+    const freeTypes = callback.environment.filter(argument => argument.kind === "type");
+    assert.equal(freeTypes.length > 0, true, "the real callback captures its enclosing source type identity");
+    for (const argument of freeTypes) {
+      assert.equal(argument.type.kind, "type-parameter", "the actual captured type has its canonical source binder");
+      const expected = parent.bindings.types.get(argument.type.identity);
+      assert.equal(expected !== undefined && expected.kind !== "type-parameter", true,
+        "the actual finite enclosing body supplies its concrete replacement");
+      assert.equal(rustTargetTypeRefEquals(body.bindings.types.get(argument.type.identity), expected), true,
+        "the inner body retains exactly that replacement for the same source binder");
+    }
+    assert.equal(prepared.bodyContextFor({ ...parent.use }, callback.declaration) === undefined, true,
+      "a copied enclosing use never recovers the original selected callback body");
+    assert.equal(prepared.bodyContextFor(parent.use, { ...callback.declaration }) === undefined, true,
+      "a copied callable declaration cannot select a body by shape");
+    assert.equal(prepared.bodyContextFor(parent.use, parent.declaration) === undefined, true,
+      "the enclosing declaration is not a substitute for the actual inline creation");
+    assert.equal(prepared.contextFor(body.use) === body, true, "one canonical context index owns the selected body");
+    assert.equal(typeof body.bindings.types.set === "undefined", true, "the selected nested environment is immutable");
+    return body;
+  });
+  assert.equal(children[0] !== children[1] && children[0].use !== children[1].use, true,
+    "distinct actual finite enclosing uses never collapse into one declaration-only callback context");
 });
 
 test("declaration environment admission still rejects duplicate and incompatible binding inputs", () => {
@@ -595,6 +650,47 @@ process.stdout.write("R14_INSTRUMENTED_PHASE_PROOF " + JSON.stringify(compiled.r
 });
 
 for (const surfaces of [[], ["js"]]) {
+  test(`selected native module callables prepare bodies without inventing binding storage (${surfaces[0] ?? "native"})`, () => {
+    const program = actual(`
+const concise = (value: boolean): boolean => value;
+const expression = function(value: boolean): boolean { return value; };
+const observed = (value: boolean): boolean => value;
+export function retain(): typeof observed { return observed; }
+export function read(flag: boolean): boolean {
+  const ordinary = flag;
+  return concise(ordinary) && expression(ordinary);
+}
+`, surfaces);
+    const ast = program.source.ast;
+    const declarations = new Map();
+    const visit = node => {
+      if (ast.is.IsVariableDeclaration(node)) {
+        const name = ast.name(node);
+        if (name !== undefined && ast.is.IsIdentifier(name)) declarations.set(ast.text(name), node);
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+    };
+    program.sourceFiles.forEach(visit);
+    for (const name of ["concise", "expression", "observed"]) {
+      const declaration = declarations.get(name);
+      const binding = program.records.moduleBinding.get(declaration);
+      assert.equal(binding?.storage === "native-callable", true, name + ": the original source owner selects native item storage");
+      const body = program.physicalEmissionContexts.contextForOwner(binding.callableDeclaration, "native-body");
+      assert.equal(body !== undefined && body.declaration === binding.callableDeclaration, true,
+        name + ": the original selected callable owns its required emitted body");
+      assert.equal(body.use.subject === binding.callableDeclaration, true, name + ": no equal-looking binding subject replaces the body owner");
+    }
+    const observed = declarations.get("observed");
+    assert.equal(program.records.moduleBinding.get(observed)?.value !== undefined, true,
+      "an actual first-class module value retains its separately selected binding payload");
+    assert.equal(program.callableValues.nativeStorage.valueFor(observed).kind !== "unresolved", true,
+      "a selected first-class module value still requires its canonical binding storage");
+    const ordinary = declarations.get("ordinary");
+    assert.equal(ordinary !== undefined, true, "the ordinary value binding remains part of the same source control");
+    const storage = program.callableValues.nativeStorage.valueFor(ordinary);
+    assert.equal(storage.kind !== "unresolved" && storage.carrier.kind === "source-primitive" && storage.carrier.name === "bool", true,
+      "an ordinary value binding still requires its canonical physical storage");
+  });
   test(`finite specialized and concrete body contexts preserve original selecting identities (${surfaces[0] ?? "native"})`, () => {
     const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
       files: { "index.ts": finiteEmissionSource } }).result;
