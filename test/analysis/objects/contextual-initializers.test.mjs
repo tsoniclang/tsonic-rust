@@ -4,6 +4,8 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const sourceText = `
+const nativeKey = "value";
+interface Holder { [nativeKey]: number; }
 function direct(): number {
   const { value } = { value: 7 } as const;
   return value;
@@ -22,7 +24,6 @@ function tuple(): number {
 }
 function exactKey(): number {
   const { key } = { key: "value" } as const;
-  interface Holder { [key]: number; }
   const value: Holder = { [key]: 23 };
   return value[key];
 }
