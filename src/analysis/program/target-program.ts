@@ -55,6 +55,7 @@ import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../errors/regions.js";
+import type { RustErrorTypeContext } from "../errors/error-types.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
@@ -248,12 +249,12 @@ export function analyzeRustTargetProgram(
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
-  const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
+  const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
+    definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
+  const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode,
     promiseBodies: context.promiseBodies.plan,
-    names: context.names, callables: context.callableValues.selected,
-    producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
-    components: sourcePackageComponents });
+    names: context.names, callables: context.callableValues.selected });
   if (errorRegions.kind === "rejected") return errorRegions;
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
@@ -276,6 +277,7 @@ export function analyzeRustTargetProgram(
     context.promiseBodies.plan,
     context.callableValues.nativeStorage,
     classValues,
+    errorTypes,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);

@@ -9,7 +9,7 @@ import { rustCallableProtocol, rustProgramErrorTargetType } from "../../target-m
 import { rustOnlyTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
-import { selectRustPhysicalProgramErrorOwner } from "../program/error-types.js";
+import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";

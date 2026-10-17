@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
-import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/program/error-types.js";
+import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner } from "../../../dist/analysis/errors/error-types.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
+import { rustJsStringTargetType, rustJsValueTargetType, rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 
 
@@ -27,24 +27,30 @@ function fixture() {
   });
   const input = { ast: context.ast, records: context.records, definitions: context.typeDefinitions,
     producers, components: classified.plan };
-  const error = name => producers.errorFor(producer(name).declaration, 0);
+  const error = name => producers.errorFor(producer(name).declaration, name === "forwarded" ? 0 : "body");
   return { input, producer, error };
 }
 
-test("closed producer error aliases normalize to pure or exact component-owned carriers, including synchronous forwarding", () => {
+test("native body errors normalize independently from the single JS Promise rejection boundary", () => {
   const current = fixture();
   const pure = ["pureLeft", "pureRight"].map(name => normalizeRustErrorType(current.error(name), current.input));
   assert.equal(pure.every(carrier => carrier?.id === "rust.core.Infallible"), true);
   assert.equal(rustTargetTypeRefEquals(...pure), true);
-  const failed = ["failLeft", "failRight", "forwarded"].map(name => normalizeRustErrorType(current.error(name), current.input));
+  const failed = ["failLeft", "failRight"].map(name => normalizeRustErrorType(current.error(name), current.input));
   assert.equal(failed.every(carrier => carrier?.errorOwner?.kind === "physical" && carrier.errorOwner.domain === "project"), true);
   assert.equal(failed.every(carrier => rustTargetTypeRefEquals(carrier, failed[0])), true);
   assert.equal(rustTargetTypeRefEquals(current.error("failLeft"), current.error("failRight")), false,
     "distinct producers stay distinct symbolic references before normalization");
+  const forwarded = normalizeRustErrorType(current.error("forwarded"), current.input);
+  assert.equal(rustTargetTypeRefEquals(forwarded, rustJsValueTargetType()), true,
+    "synchronous forwarding retains the concrete Promise object's one JS rejection carrier");
   const completion = current.input.producers.invocationResultFor(current.producer("failLeft").declaration);
   const selected = normalizeRustErrorType(completion, current.input);
   assert.equal(selected?.id, "rust.js.JsPromise");
-  assert.equal(rustTargetTypeRefEquals(selected.genericArguments[2].type, failed[0]), true);
+  assert.equal(selected.genericArguments.length, 1, "the actual Promise object has only its payload argument");
+  assert.equal(selected.genericArguments[0].kind, "type", "the payload is a native type argument");
+  assert.equal(rustTargetTypeRefEquals(selected.genericArguments[0].type, rustJsStringTargetType()), true,
+    "Promise output stays separate from exact native body errors and the shared JS rejection carrier");
 });
 
 test("logical errors require a declaration-local owner and foreign physical owners never fall back to ambient scope", () => {

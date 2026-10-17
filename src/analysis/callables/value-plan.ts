@@ -47,7 +47,7 @@ import type { RustValueDomainCarrierHost } from "../../policy/types/objects/valu
 import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import { normalizeRustErrorType } from "../program/error-types.js";
+import { normalizeRustErrorType } from "../errors/error-types.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
