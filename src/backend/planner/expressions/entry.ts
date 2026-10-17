@@ -35,7 +35,7 @@ import { rustSelectedAccessorRequiresUnsafe, rustSelectedCallRequiresUnsafe } fr
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustTypeFromCarrierInContext, rustUnionTypePathInContext } from "../types/render.js";
 import { rustValueCarrierBeforeContextualConversion, rustProjectUpcastSourceMatches, rustValueReferenceReborrow } from "../../../analysis/conversions/value-carrier-queries.js";
-import { rustCompilerOwnedContextualConversionMatches, rustContextualRuntimeConversionContract } from "../../../target-model/conversions/contextual.js";
+import { rustCompilerOwnedContextualConversionMatches } from "../../../target-model/conversions/contextual.js";
 import { rustValueConversionContract } from "../../../target-model/conversions/contracts.js";
 import { planRustNativeHandler } from "./native-handlers.js";
 import type { Node } from "@tsonic/tsts";

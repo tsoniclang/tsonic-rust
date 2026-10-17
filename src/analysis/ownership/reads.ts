@@ -7,8 +7,9 @@ import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipF
 import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustCopyCarrier, isRustStringCarrier, rustCallableProtocol, rustFrameCallableValue,
+import { isRustCopyCarrier, isRustStringCarrier, rustCallableProtocol,
   rustCarrierSupportsClone, rustLocationTargetType, rustOptionElementCarrier } from "../../target-model/types/index.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
