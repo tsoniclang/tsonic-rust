@@ -341,14 +341,21 @@ test("generated RegExp class factories retain both actual native environments", 
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
     outputType: "bin", crateName: "static_regexp_factory",
   } }, files: { "index.ts": `
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
+import type { Pointer } from "@tsonic/core/types.js";
+function retainPattern(value: RegExp): Pointer<RegExp> { return allocateptr(value); }
 function patternFactory(value: RegExp) {
   return new class Pattern {
     matches(text: string): boolean { return value.test(text); }
   }();
 }
-const first = patternFactory(new RegExp("^a+$"));
-const second = patternFactory(new RegExp("^b+$"));
-if (!first.matches("aaa") || first.matches("bbb") || !second.matches("bbb")) throw new Error("factory identity");
+export function verify(): void {
+  const pattern = loadptr(retainPattern(new RegExp("^a+$")));
+  const first = patternFactory(pattern);
+  const second = patternFactory(new RegExp("^b+$"));
+  if (!first.matches("aaa") || first.matches("bbb") || !second.matches("bbb")) throw new Error("factory identity");
+}
+verify();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   validateGeneratedProject("static-regexp-factory", result.artifacts, { run: true });
