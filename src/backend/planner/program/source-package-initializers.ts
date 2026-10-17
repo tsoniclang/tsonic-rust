@@ -5,8 +5,8 @@ import type { RustErrorRegionSelection } from "../../../target-model/records/err
 
 import {
   allocateRustComponentSupportModuleName,
-  type RustSourceFileOutputIdentity,
 } from "../names/source-output-identities.js";
+import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
 import type { RustPlanningContext } from "../context.js";
 import {
   allocateRustSyntheticName,

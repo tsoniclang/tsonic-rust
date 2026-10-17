@@ -26,9 +26,12 @@ export function resolveRustClosedRecordLiteral(
   const names = new Set<string>();
   for (const property of properties) {
     const name = ast.name(property);
-    const sourceName = name === undefined ? "" : ast.text(name);
+    const selected = name !== undefined && (ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name))
+      ? walk.context.semanticsFor(property).propertyNames.get(name) : undefined;
+    const sourceName = name === undefined ? undefined : ast.is.IsComputedPropertyName(name) || ast.is.IsNumericLiteral(name)
+      ? selected?.kind === "resolved" ? selected.name : undefined : ast.text(name);
     const value = ObjectLiteralProperty_Value(ast, property);
-    if (name === undefined || ast.is.IsComputedPropertyName(name) || names.has(sourceName) || value === undefined) {
+    if (sourceName === undefined || names.has(sourceName) || value === undefined) {
       appendRustDiagnostic(walk, "RUST_CLOSED_RECORD_EVIDENCE_MISSING",
         "A closed record requires exact ordered authored data-property evidence.", property,
         ["target.capability=rust.closed-record.authored-construction"]);

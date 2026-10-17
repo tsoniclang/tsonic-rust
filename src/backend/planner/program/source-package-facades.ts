@@ -12,7 +12,7 @@ import type {
 } from "../context.js";
 import type {
   RustSourceFileOutputIdentity,
-} from "../names/source-output-identities.js";
+} from "../../../target-model/names/source-output-identities.js";
 
 export { rustSourceItemIdentity };
 

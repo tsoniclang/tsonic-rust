@@ -6,9 +6,11 @@ import {
   compileRust,
 } from "../../helpers/rust-session.mjs";
 import {
-  planRustSourceOutputIdentities,
+  analyzeRustSourceOutputIdentities,
+} from "../../../dist/analysis/names/source-output-identities.js";
+import {
   rustModuleNameForSourcePath,
-} from "../../../dist/backend/planner/names/source-output-identities.js";
+} from "../../../dist/target-model/names/source-output-identities.js";
 import {
   analyzeRustSourcePackageFacades,
 } from "../../../dist/analysis/program/source-package-facades.js";
@@ -98,7 +100,7 @@ export function value(): int32 { return 22; }
 test("source path collisions receive local readable suffixes without hash names", () => {
   const first = fakeSourceFile({ fileName: "/project/source_name.ts" });
   const second = fakeSourceFile({ fileName: "/project/source-name.ts" });
-  const plan = planRustSourceOutputIdentities({
+  const plan = analyzeRustSourceOutputIdentities({
     ast: fakeAstReader([first, second]),
     sourceFiles: [first, second],
     sourcePackages: fakeSourcePackageGraph([first, second], {
@@ -129,7 +131,7 @@ test("source path allocation reserves sibling bases before assigning collision s
     fakeSourceFile({ fileName: "/project/foo_bar.ts" }),
     fakeSourceFile({ fileName: "/project/foo_bar_2.ts" }),
   ];
-  const plan = planRustSourceOutputIdentities({
+  const plan = analyzeRustSourceOutputIdentities({
     ast: fakeAstReader(files),
     sourceFiles: files,
     sourcePackages: fakeSourcePackageGraph(files, {
@@ -188,7 +190,7 @@ test("identical source paths in distinct package components remain distinct", ()
       { id: dependencyComponentId, packages: [dependencyPackageId], dependencies: [] },
     ],
   };
-  const plan = planRustSourceOutputIdentities({
+  const plan = analyzeRustSourceOutputIdentities({
     ast: fakeAstReader([root, dependency]),
     sourceFiles: [root, dependency],
     sourcePackages,
@@ -317,7 +319,7 @@ test("an authored parent module owns its child declaration", () => {
 
 test("source output identity rejects files outside the checked project root", () => {
   const sourceFile = fakeSourceFile({ fileName: "/outside/index.ts" });
-  const plan = planRustSourceOutputIdentities({
+  const plan = analyzeRustSourceOutputIdentities({
     ast: fakeAstReader([sourceFile]),
     sourceFiles: [sourceFile],
     sourcePackages: fakeSourcePackageGraph([sourceFile], {

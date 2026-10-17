@@ -355,6 +355,15 @@ export function resolveStructuralObjectType(
       (!hasExactTransformedIdentity && projectDeclarations.length !== declarations?.length)) {
       return undefined;
     }
+    const sourceNames = projectDeclarations.map(declaration => {
+      const name = context.ast.name(declaration);
+      if (name === undefined || !context.ast.is.IsComputedPropertyName(name) && !context.ast.is.IsNumericLiteral(name)) return property.name;
+      const selectedName = context.semanticsFor(declaration).propertyNames.get(name);
+      return selectedName?.kind === "resolved" ? selectedName.name
+        : selectedName?.kind === "well-known-symbol" ? property.name : undefined;
+    });
+    const sourceName = sourceNames.length === 0 ? property.name : sourceNames[0];
+    if (sourceName === undefined || !sourceNames.every(name => name === sourceName)) return undefined;
     const getters = projectDeclarations?.filter((declaration) =>
       context.ast.kindName(declaration) === "KindGetAccessor") ?? [];
     const setters = projectDeclarations?.filter((declaration) =>
@@ -436,7 +445,7 @@ export function resolveStructuralObjectType(
             property.symbol,
             ...property.rootSymbols,
           ])]),
-          sourceName: property.name,
+          sourceName,
           sourceType: property.type,
           resultCarrier: fieldCarrier,
           presence: property.optional ? "optional" as const : "required" as const,

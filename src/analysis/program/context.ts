@@ -190,6 +190,7 @@ export function createRustAnalysisContext(
   const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
   const names = createRustNamePlan({
     ast,
+    semanticsFor: input.source.semantics.forNode,
     runtimeValueUses,
     sourceFiles,
     isNativeNode,

@@ -12,6 +12,7 @@ import {
   Node_Type,
   sourceTypeSyntaxRoot,
   sourceBindingCapturedBeforeInitialization,
+  sourceClassFieldIsTypeOnly,
 } from "@tsonic/target-api/source";
 
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
@@ -40,9 +41,40 @@ import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-
 import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 
 import { resolveRustContextualParameterAbi, type RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
+import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 
 export function resolveTypeNodeCarrier(walk: RustFactWalk, typeNode: Node | undefined): TargetTypeRef | undefined {
   if (typeNode === undefined) return undefined;
+  if (walk.rejectedExpressions.has(typeNode)) return undefined;
+  const semantics = walk.context.semanticsFor(typeNode);
+  const requiredType = semantics.types.authoredType(typeNode);
+  let rejectedName = false;
+  if (requiredType !== undefined) {
+    for (const property of semantics.types.propertyInfos(requiredType)) {
+      for (const symbol of new Set([property.symbol, ...property.rootSymbols])) {
+        for (const member of semantics.declarations.symbolDeclarations(symbol)) {
+          if (!walk.context.source.navigation.isProjectDeclaration(member) ||
+            sourceClassFieldIsTypeOnly(walk.context.ast, member)) continue;
+          const name = walk.context.ast.name(member);
+          if (name === undefined) continue;
+          const selectedName = walk.context.semanticsFor(member).propertyNames.get(name);
+          if (selectedName === undefined) {
+            if (walk.context.ast.is.IsComputedPropertyName(name)) failTargetAnalysisInvariant("tsonic-rust",
+              "A native computed field requires its completed checked property-name selection.", name);
+            continue;
+          }
+          const issue = rustNativePropertyNameIssue(name, selectedName);
+          if (issue === undefined) continue;
+          if (!walk.rejectedExpressions.has(name)) appendRustDiagnostic(walk, issue.code, issue.message, name, []);
+          rejectedName = true;
+        }
+      }
+    }
+  }
+  if (rejectedName) {
+    walk.rejectedExpressions.add(typeNode);
+    return undefined;
+  }
   const existing = walk.context.records.runtimeCarrier.get(typeNode);
   if (existing !== undefined) return existing.carrier;
   const carrier = resolveRustTargetTypeRef(typeNode, rustResolutionContext(walk, typeNode), walk.operationOptions);
@@ -297,13 +329,6 @@ export function selectRustTypeAliasDeclaration(
   };
 }
 
-export function recordEnumFacts(walk: RustFactWalk, declaration: Node, _sourceFile: SourceFile): void {
-  const carrier = sourceTypeCarrierForDeclaration(walk, declaration);
-  if (carrier !== undefined) {
-    setCarrierFact(walk, declaration, carrier);
-  }
-}
-
 export function resolveParameterAbi(walk: RustFactWalk, parameter: Node) {
   return walk.sourceCallableAbi.resolveParameterAbi(
     parameter,
@@ -367,7 +392,7 @@ export function recordBindingPatternFacts(
   pattern: Node,
   sourceCarrier: TargetTypeRef,
 ): boolean {
-  return recordRustBindingPatternFacts(pattern, sourceCarrier, {
+  const admission = recordRustBindingPatternFacts(pattern, sourceCarrier, {
     ast: walk.context.ast,
     records: walk.context.records,
     requiredRecords: walk.context.requiredRecords,
@@ -403,6 +428,8 @@ export function recordBindingPatternFacts(
       setCarrierFact(walk, subject, carrier);
     },
   });
+  if (admission.kind === "rejected") appendRustDiagnostic(walk, admission.code, admission.reason, admission.node, []);
+  return admission.kind === "recorded";
 }
 
 export function recordCallableDefaultParameterFacts(walk: RustFactWalk, declaration: Node): boolean {

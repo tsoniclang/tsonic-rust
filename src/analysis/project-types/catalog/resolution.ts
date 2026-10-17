@@ -426,7 +426,7 @@ export function createRustProjectTypePolicy(
   const stateMarkerFieldNamesByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
   for (const definition of definitions) {
     const names = new Map<Node, string>();
-    const layout = rustProjectObjectLayout(definition.declaration, host.ast);
+    const layout = rustProjectObjectLayout(definition.declaration, host.ast, host.semanticsFor);
     if (layout !== undefined) objectLayoutsByDefinition.set(definition, layout);
     const externalBase = externalBaseByDeclaration.get(definition.declaration);
     const usedNames = projectMemberNames(definition.declaration, host.ast, host.names);
