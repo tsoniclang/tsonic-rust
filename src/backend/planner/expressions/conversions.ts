@@ -73,7 +73,7 @@ export function planProviderOperationExpression(
     readonly overrides?: RustFinalizedInputPlanOverrides;
   },
 ): RustExpr | undefined {
-  if (fact.kind === "provider-operation" && !validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
+  if (!validateRustFinalizedOperationAbi(fact.abi, context.input.program.typeDefinitions)) {
     context.diagnostics.push(missingFactDiagnostic(
       diagnosticInput(context, operationNode),
       "rust.backend.provider-operation-abi",
