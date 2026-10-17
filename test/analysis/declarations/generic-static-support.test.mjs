@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { rustFinalContractSupportsStatic } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
+import { rustFinalContractSupportsRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
@@ -11,7 +11,7 @@ const bound = requirements => Object.freeze({ identity: parameter.identity, name
 const contract = fields => Object.freeze({ declaration: Object.freeze({}), typeParameters: [], capturedTypeParameters: [],
   nativeInputs: [], associatedTypes: [], projectProjections: [], optionalStorage: [], ...fields });
 const supports = (selected, carrier, registry = families) =>
-  rustFinalContractSupportsStatic(selected, carrier, registry, emptyRustTypeDefinitions, undefined).kind === "supported";
+  rustFinalContractSupportsRequirements(selected, carrier, ["static"], registry, emptyRustTypeDefinitions, undefined).kind === "supported";
 
 test("final static support reads an existing bound and never infers a missing or unknown one", () => {
   const missing = contract({ typeParameters: [bound([])] });

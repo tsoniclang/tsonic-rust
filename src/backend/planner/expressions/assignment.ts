@@ -10,7 +10,6 @@ import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planExpressionAsStatement } from "../statements/expression-statements.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { planExpressionBeforeContextualConversion } from "./entry.js";
 import { expressionCarrier } from "./fundamentals.js";
@@ -30,9 +29,6 @@ export function planAssignmentExpression(node: Node, context: RustPlanContext): 
     return undefined;
   }
   const copy = isRustCopyCarrier(carrier);
-  if (!copy && !requireRustCarrierRequirements(carrier, ["clone"], node, context)) {
-    return undefined;
-  }
   const value = planExpressionBeforeContextualConversion(right, context);
   if (value === undefined) return undefined;
   const resultName = allocateRustSyntheticName(context.syntheticNames, "assignment_result");

@@ -118,7 +118,7 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, sourceLifetimes: context.sourceLifetimes });
   if (genericAdoption.length !== 0) return rejectedTargetStage(genericAdoption);
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
-    sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
+    sourceFiles: context.sourceFiles, sourcePackages: input.sourcePackages });
   if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
   const sourceStage = analyzeRustProgram(context, configuration.outputType);
   if (context.diagnostics.length > 0) {
@@ -346,7 +346,7 @@ export function analyzeRustTargetProgram(
     context.source.navigation, borrowUses, context.isNativeNode);
   const captureOwnership = completeRustCaptureReadOwnership({ requirements: captureRequirements.requirements,
     flow: ownershipFlow.flow, definitions: context.typeDefinitions,
-    genericRequirements: declarationGenericRequirements.index });
+    genericRequirements: declarationGenericRequirements.index, typeFamilies: context.typeFamilies });
   if (captureOwnership.kind === "rejected") return rejectedTargetStage(captureOwnership.diagnostics);
   const movingReads = completeRustNativeReadTransfers(ownershipFlow.flow, captureOwnership.captures);
   const typeDefinitions = context.typeDefinitions.seal();
@@ -391,6 +391,7 @@ export function analyzeRustTargetProgram(
     movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
     borrowEffects: borrowEffects.effects, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
+    typeFamilies: context.typeFamilies,
   });
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   const nativeInputs = analyzeRustNativeInputs({ ast: context.ast, records,

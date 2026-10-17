@@ -25,6 +25,7 @@ import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
 import { createRustCrateRootSourceFile } from "../project/foundation.js";
 import { rustItemsReferenceModuleAlias } from "../../target-ast/inspection/source-module-usage.js";
 import { rustRuntimeAliasImports, rustRuntimeAliasUseItems } from "./plan-context.js";
+import { rustSourceArtifactPath } from "../names/source-output-identities.js";
 
 export interface RustSourcePackageCrateContentPlan {
   readonly component: RustSourcePackageComponentPlan;
@@ -278,7 +279,7 @@ export function materializeRustSourcePackageCrateArtifacts(
       ));
       continue;
     }
-    sourceArtifacts.push(rustSourceArtifact(identity.artifactPath, source.model));
+    sourceArtifacts.push(rustSourceArtifact(rustSourceArtifactPath(identity), source.model));
   }
   sourceArtifacts.sort((left, right) => compareNames(left.path, right.path));
   artifacts.push(...sourceArtifacts.map((artifact) => ({

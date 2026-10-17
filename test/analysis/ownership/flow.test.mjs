@@ -26,7 +26,10 @@ function analyzeFlow(input) {
   }) });
   if (selected.kind === "rejected") return selected;
   const admitted = completeRustCaptureReadOwnership({ requirements: requirements.requirements, flow: selected.flow,
-    definitions: emptyRustTypeDefinitions, genericRequirements: { supportsClone: () => true } });
+    definitions: emptyRustTypeDefinitions, typeFamilies: { implementation: () => undefined },
+    genericRequirements: { contractFor: declaration => Object.freeze({ declaration,
+      typeParameters: [], capturedTypeParameters: [], nativeInputs: [], associatedTypes: [],
+      projectProjections: [], optionalStorage: [] }) } });
   assert.equal(admitted.kind, "resolved", "capture admission precedes completed read transfers");
   return { ...selected, movingReads: completeRustNativeReadTransfers(selected.flow, admitted.captures), captures: admitted.captures };
 }

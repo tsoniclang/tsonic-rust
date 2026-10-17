@@ -8,7 +8,6 @@ import {
   isRustCopyCarrier,
   isRustProgramErrorCarrier,
   rustJsErrorTargetType,
-  rustCarrierSupportsClone,
   rustOptionElementCarrier,
 } from "../../../target-model/types/index.js";
 import type { RustFlowReadProjectionFact } from "../../../target-model/records/value-projections.js";
@@ -20,7 +19,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustProjectProjection } from "../objects/project-downcasts.js";
 import { planRustClosedNativeProjection } from "../objects/closed-native-values.js";
 import { planRustProgramErrorFlowRead } from "./error-operations.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustOptionalStorageValue } from "../../../target-model/types/projections.js";
 import { planRustOptionalStorageOperation } from "./optional-storage.js";
 import { planRustUnionMapping, planRustUnionProjection } from "./union-mappings.js";
@@ -165,16 +163,6 @@ export function planRustValueProjection(
     if (rustOptionalStorageValue(fact.sourceCarrier) !== undefined) {
       return planRustOptionalStorageOperation(fact.sourceCarrier, ownsValue ? "into_present" : "clone_present",
         [ownsValue ? expression : { kind: "reference", expr: expression }], context);
-    }
-    if (!ownsValue && !reborrow && !borrowedResult && !rustCarrierSupportsClone(fact.selectedCarrier, context.input.program.typeDefinitions) &&
-      (context.callableDeclaration === undefined ||
-        !requireRustCarrierRequirements(fact.selectedCarrier, ["clone"], node, context))) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.flow-read-projection-clone",
-        "A narrowed optional Rust value requires a selected carrier with a proven non-consuming clone contract.",
-      ));
-      return undefined;
     }
     const valueName = allocateRustSyntheticName(
       context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node, []),

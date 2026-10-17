@@ -323,6 +323,9 @@ export function selectRustBinaryOperator(
   }
   const bitwise = bitwiseTokens[operatorKindName];
   if (bitwise !== undefined) {
+    if (rustSourceTypeCarrierValue(left)?.shape === "enum" && rustTargetTypeRefEquals(left, right)) {
+      return { kind: "operator-token", rustOperator: bitwise, resultCarrier: left, operandModes: ["value", "value"] };
+    }
     if (isRustBigIntCarrier(left) && isRustBigIntCarrier(right)) {
       return { kind: "operator-token", rustOperator: bitwise, resultCarrier: left, operandModes: ["value", "value"] };
     }
@@ -503,6 +506,10 @@ export function selectRustCompoundAssignment(
     return undefined;
   }
   const binaryOperator = compoundBinaryOperator(operator);
+  if ((operator === "&=" || operator === "|=" || operator === "^=") &&
+    rustSourceTypeCarrierValue(left)?.shape === "enum" && rustTargetTypeRefEquals(left, right)) {
+    return { kind: "operator-token", operator, resultCarrier: left, operandModes: ["mut-ref", "value"] };
+  }
   if (binaryOperator !== undefined && acceptsPromotedResult !== undefined &&
     isRustNumericCarrier(left) && isRustNumericCarrier(right)) {
     const binary = selectRustBinaryOperator(binaryOperator, left, right);

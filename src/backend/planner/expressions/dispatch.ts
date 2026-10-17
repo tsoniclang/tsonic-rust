@@ -68,7 +68,6 @@ import { planNewExpression, planRegExpCreate } from "./special.js";
 import { planPropertyAccess } from "./properties.js";
 import { planRecordLiteral } from "./records.js";
 import { planUnaryExpression } from "./updates/source.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { rustEffectiveValueCarrier } from "../../../analysis/conversions/value-carrier-queries.js";
 import { rustExpressionContainsStatementBlock } from "../../target-ast/syntax/expressions.js";
 import { planRustAwaitExpression } from "./await.js";
@@ -480,10 +479,6 @@ export function planExpressionInner(
             "rust.backend.generator-delegation",
             "Delegated yield requires one compatible finalized Rust generator protocol.",
           ));
-          return undefined;
-        }
-        if (!requireRustCarrierRequirements(delegated.nextType, ["default"], node, context) ||
-          !requireRustCarrierRequirements(delegated.returnType, ["clone"], node, context)) {
           return undefined;
         }
         const delegate = planExpression(operand, context);

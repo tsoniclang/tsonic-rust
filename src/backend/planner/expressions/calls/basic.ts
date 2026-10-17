@@ -18,7 +18,6 @@ import { planRustSourceCallArgumentEvaluation, requireProviderArgumentPassingFac
 import { planSelectedSourceCall, sourceCallEffectsMatch } from "./source.js";
 import { providerSelectedCallMatches, rustOperationFact } from "../fundamentals.js";
 import { readRustStoredObjectField, writeRustStoredObjectField } from "../../objects/project-storage.js";
-import { requireRustDefaultValueCarrier } from "../../types/generic-requirements.js";
 
 import { rustStringTargetType } from "../../../../target-model/types/index.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -250,9 +249,6 @@ function planRustDefaultValueCall(
       "rust.backend.default-value-selected-signature",
       "Native default initialization conflicts with its finalized zero-argument Rust Default contract.",
     ));
-    return undefined;
-  }
-  if (!requireRustDefaultValueCarrier(fact.resultCarrier, node, context)) {
     return undefined;
   }
   const owner = rustTypeFromCarrierInContext(fact.resultCarrier, context);

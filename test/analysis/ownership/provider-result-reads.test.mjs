@@ -63,7 +63,10 @@ function read(holder: Holder): unknown { return observe(${form === "index" ? "ho
   assert.equal(prepared.kind, "resolved", "the raw-result requirements are complete before generic closure");
   const selected = analyzeRustReadOwnership({ requirements: prepared.requirements, movingReads: new Set(), captures: new Map(),
     nativeStorage: { operandFor: () => ({ kind: "resolved", carrier }) }, borrowEffects: effects,
-    definitions: emptyRustTypeDefinitions, genericRequirements: { supportsClone: () => false },
+    definitions: emptyRustTypeDefinitions, typeFamilies: { implementation: () => undefined },
+    genericRequirements: { contractFor: declaration => Object.freeze({ declaration,
+      typeParameters: [], capturedTypeParameters: [], nativeInputs: [], associatedTypes: [],
+      projectProjections: [], optionalStorage: [] }) },
     genericCallables: input.genericCallables });
   return { node, abi, other, input, prepared, selected };
 }

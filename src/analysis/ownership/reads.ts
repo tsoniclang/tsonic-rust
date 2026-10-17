@@ -8,10 +8,12 @@ import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { isRustCopyCarrier, isRustStringCarrier, rustCallableProtocol,
-  rustCarrierSupportsClone, rustLocationTargetType, rustOptionElementCarrier } from "../../target-model/types/index.js";
+  rustLocationTargetType, rustOptionElementCarrier } from "../../target-model/types/index.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustOptionalStorageValue } from "../../target-model/types/projections.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
+import { rustFinalContractSupportsRequirements } from "../declarations/generic-carrier-requirements.js";
+import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import { rustReadTransferRequirement, type RustOwnershipFlow } from "./flow.js";
 import { selectRustBorrowRelationship, type RustBorrowEffects, type RustBorrowEffectsInput } from "./effects.js";
@@ -103,6 +105,7 @@ export function completeRustCaptureReadOwnership(input: {
   readonly flow: RustOwnershipFlow;
   readonly definitions: RustTypeDefinitions;
   readonly genericRequirements: RustDeclarationGenericRequirementIndex;
+  readonly typeFamilies: Pick<RustSourceTypeFamilyRegistry, "implementation">;
 }): { readonly kind: "resolved"; readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]> }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
   const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
@@ -114,7 +117,9 @@ export function completeRustCaptureReadOwnership(input: {
     const selected: RustCaptureReadOwnership[] = [];
     for (const requirement of requirements) {
       const { capture, carrier, copy } = requirement;
-      const clone = rustCarrierSupportsClone(carrier, input.definitions) || input.genericRequirements.supportsClone(owner, carrier);
+      const contract = input.genericRequirements.contractFor(owner);
+      const clone = contract !== undefined && rustFinalContractSupportsRequirements(contract, carrier, ["clone"],
+        input.typeFamilies, input.definitions, undefined).kind === "supported";
       const { transfer, owned } = rustCaptureReadFormation(requirement, input.flow.captureTransfers);
       const read = owned ? selectRustValueReadOwnership({ copy, clone, transfer })
         : Object.freeze({ kind: "borrow" as const, mutable: requirement.mutable });
@@ -161,12 +166,56 @@ export interface RustReadOwnershipRequirements {
   readonly storage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
   readonly records: RustAnalysisRecords;
-  readonly storageReads: ReadonlyMap<Node, { readonly storage: boolean; readonly binding: Node | undefined }>;
+  readonly storageReads: ReadonlyMap<Node, RustStorageReadRequirement>;
   readonly uses: ReadonlyMap<Node, RustReadUse>;
   readonly borrowed: ReadonlyMap<Node, "shared" | "mutable">;
   readonly borrowedAcross: ReadonlyMap<Node, ReadonlySet<Node>>;
   readonly captureBorrows: ReadonlyMap<Node, RustCaptureReadRequirement>;
   readonly nativeResults: ReadonlyMap<Node, readonly RustNativeResultReadRequirement[]>;
+}
+
+interface RustStorageReadRequirement {
+  readonly storage: boolean;
+  readonly binding: Node | undefined;
+  readonly projection: RustReadProjectionRequirement;
+}
+
+interface RustReadProjectionRequirement {
+  readonly conversionBorrows: boolean;
+  readonly projectBorrows: boolean;
+  readonly constructsContainer: boolean;
+  readonly flowResultBorrow: boolean;
+  readonly flowConversionInput: "value" | "borrow" | "borrow-unless-moving";
+  readonly cloneSources: readonly TargetTypeRef[];
+  readonly cloneBorrowable: boolean;
+}
+
+function selectRustReadProjectionRequirement(node: Node, records: RustAnalysisRecords,
+  definitions: RustTypeDefinitions): RustReadProjectionRequirement {
+  const projection = records.flowReadProjection.get(node);
+  const conversion = records.contextualValueConversion.get(node);
+  const conversionBorrows = conversion !== undefined &&
+    rustContextualRuntimeConversionContract(conversion.conversion, definitions)?.sourceMode === "ref";
+  const projectBorrows = records.projectDowncast.get(node) !== undefined || records.projectUpcast.get(node) !== undefined;
+  const option = records.optionProjection.get(node);
+  const referenceFlow = ((projection?.kind === "source-union" || projection?.kind === "runtime-union") &&
+    projection.project === undefined || projection?.kind === "option-value" &&
+    rustOptionalStorageValue(projection.sourceCarrier) === undefined) &&
+    rustOptionElementCarrier(projection.selectedCarrier) === undefined && !projectBorrows &&
+    records.callScopedLifetimeReconciliation.get(node) === undefined &&
+    option === undefined && records.objectReferenceView.get(node) === undefined;
+  const flowResultBorrow = referenceFlow && conversion === undefined;
+  const flowConversionInput = !referenceFlow || conversion === undefined ||
+    !rustTargetTypeRefEquals(projection?.selectedCarrier, conversion.sourceCarrier) ? "value"
+    : conversionBorrows ? "borrow" : conversion.conversion.kind === "project-union-map" ? "borrow-unless-moving" : "value";
+  const cloneSources = projection?.kind === "union-map"
+    ? projection.arms.filter(arm => arm.source[arm.source.length - 1]?.variant.kind === "payload").map(arm => arm.carrier)
+    : projection?.kind === "option-value" ||
+      (projection?.kind === "source-union" || projection?.kind === "runtime-union") && projection.project === undefined
+      ? [projection.selectedCarrier] : [];
+  return Object.freeze({ conversionBorrows, projectBorrows, constructsContainer: option?.kind === "some",
+    flowResultBorrow, flowConversionInput, cloneSources: Object.freeze(cloneSources),
+    cloneBorrowable: flowResultBorrow || flowConversionInput !== "value" });
 }
 
 export function prepareRustReadOwnership(input: {
@@ -189,7 +238,7 @@ export function prepareRustReadOwnership(input: {
     message: budget.failure() ?? "Rust ownership reads require a complete finite source-use inventory.",
     evidence: ["target.capability=rust.analysis.ownership"],
   }] });
-  const storageReads = new Map<Node, { readonly storage: boolean; readonly binding: Node | undefined }>();
+  const storageReads = new Map<Node, RustStorageReadRequirement>();
   for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
     if (!budget.node() || !budget.step() || !budget.row()) return rejectedBudget();
     const node = input.nativeNodes[index]!;
@@ -208,13 +257,14 @@ export function prepareRustReadOwnership(input: {
       operation.abi.result.conversion.kind !== "identity";
     const parent = ast.parent(node);
     const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
-    storageReads.set(node, inherited ?? Object.freeze({ storage: !convertedNativeStorage &&
+    storageReads.set(node, Object.freeze({ storage: inherited?.storage ?? (!convertedNativeStorage &&
       (ast.is.IsIdentifier(node) && records.sourceBinding.get(node) !== undefined ||
       implicitProperty || rustTargetOperationIsDirectLocation(operation) ||
       operation?.kind === "source-static-field" || records.nativeArrayStorage.get(node)?.kind === "element" ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
-      operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"),
-      binding: records.sourceBinding.get(node)?.sourceDeclaration }));
+      operation?.kind === "source-field" && operation.valueSemantics.kind === "stored")),
+      binding: inherited === undefined ? records.sourceBinding.get(node)?.sourceDeclaration : inherited.binding,
+      projection: selectRustReadProjectionRequirement(node, records, input.definitions) }));
   }
   const uses = input.borrowEffectsInput.readUses;
   const borrowDemands = new Map<Node, Set<Node>>();
@@ -331,6 +381,7 @@ export function analyzeRustReadOwnership(input: {
   readonly borrowEffects: RustBorrowEffects;
   readonly definitions: RustTypeDefinitions;
   readonly genericRequirements: RustDeclarationGenericRequirementIndex;
+  readonly typeFamilies: Pick<RustSourceTypeFamilyRegistry, "implementation">;
   readonly genericCallables: RustGenericCallablePlan;
 }): { readonly kind: "resolved"; readonly ownership: Pick<RustOwnershipRecords, "reads" | "captures" | "writes"> }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
@@ -349,7 +400,7 @@ export function analyzeRustReadOwnership(input: {
     const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
     const carrier = implicitProperty ? records.sourceParameterAbi.get(parent)?.valueCarrier : records.runtimeCarrier.get(node)?.carrier;
     if (carrier !== undefined) {
-      const declaration = sourceEnclosingCallable(node, ast);
+      const declaration = sourceEnclosingCallable(node, ast) ?? ast.getSourceFile(node);
       const sourceStorageRead = storageReads.get(node)!;
       const captured = declaration === undefined || sourceStorageRead.binding === undefined ? undefined
         : captures.get(declaration)?.find(capture => capture.declaration === sourceStorageRead.binding);
@@ -364,8 +415,9 @@ export function analyzeRustReadOwnership(input: {
       const valueCarrier = projection?.selectedCarrier ?? carrier;
       const physicalValueCarrier = projection === undefined && captured !== undefined ? captured.carrier : valueCarrier;
       const copy = isRustCopyCarrier(physicalValueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const clone = rustCarrierSupportsClone(physicalValueCarrier, input.definitions) || declaration !== undefined &&
-        input.genericRequirements.supportsClone(declaration, physicalValueCarrier);
+      const contract = input.genericRequirements.contractFor(declaration);
+      const clone = contract !== undefined && rustFinalContractSupportsRequirements(contract, physicalValueCarrier, ["clone"],
+        input.typeFamilies, input.definitions, undefined).kind === "supported";
       const use = uses.get(node);
       const borrowed = requirements.borrowed.get(node);
       const storageRead = sourceStorageRead.storage;
@@ -374,23 +426,11 @@ export function analyzeRustReadOwnership(input: {
         transfer: !borrowedCapture && (use?.mode === "move" || movingReads.has(node) || !storageRead) });
       const physicalSourceCarrier = captured?.carrier ?? carrier;
       const sourceCopy = isRustCopyCarrier(physicalSourceCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const sourceClone = rustCarrierSupportsClone(physicalSourceCarrier, input.definitions) || declaration !== undefined &&
-        input.genericRequirements.supportsClone(declaration, physicalSourceCarrier);
-      const conversion = records.contextualValueConversion.get(node);
-      const conversionBorrows = conversion !== undefined &&
-        rustContextualRuntimeConversionContract(conversion.conversion, input.definitions)?.sourceMode === "ref";
-      const projectBorrows = records.projectDowncast.get(node) !== undefined || records.projectUpcast.get(node) !== undefined;
-      const constructsContainer = records.optionProjection.get(node)?.kind === "some";
-      const referenceFlow = ((projection?.kind === "source-union" || projection?.kind === "runtime-union") &&
-        projection.project === undefined || projection?.kind === "option-value" &&
-        rustOptionalStorageValue(projection.sourceCarrier) === undefined) &&
-        rustOptionElementCarrier(projection.selectedCarrier) === undefined && !projectBorrows &&
-        records.callScopedLifetimeReconciliation.get(node) === undefined &&
-        records.optionProjection.get(node) === undefined && records.objectReferenceView.get(node) === undefined;
-      const flowResultBorrow = referenceFlow && conversion === undefined;
-      const flowConversionInputBorrow = referenceFlow && conversion !== undefined &&
-        rustTargetTypeRefEquals(projection?.selectedCarrier, conversion.sourceCarrier) &&
-        (conversionBorrows || conversion.conversion.kind === "project-union-map" && value?.kind !== "move");
+      const sourceClone = contract !== undefined && rustFinalContractSupportsRequirements(contract, physicalSourceCarrier, ["clone"],
+        input.typeFamilies, input.definitions, undefined).kind === "supported";
+      const { conversionBorrows, projectBorrows, constructsContainer, flowResultBorrow, flowConversionInput } = sourceStorageRead.projection;
+      const flowConversionInputBorrow = flowConversionInput === "borrow" ||
+        flowConversionInput === "borrow-unless-moving" && value?.kind !== "move";
       const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
         transfer: !borrowedCapture && (movingReads.has(node) || !storageRead), borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
           ? "shared" : constructsContainer ? undefined : borrowed });
@@ -405,8 +445,9 @@ export function analyzeRustReadOwnership(input: {
       const nativeResults: RustReadOwnershipFact["nativeResults"][number][] = [];
       for (const selected of requirements.nativeResults.get(node) ?? []) {
         const read = selectRustValueReadOwnership({ copy: selected.copy, transfer: false,
-          borrowed: selected.borrowed, clone: rustCarrierSupportsClone(selected.carrier, input.definitions) ||
-            declaration !== undefined && input.genericRequirements.supportsClone(declaration, selected.carrier) });
+          borrowed: selected.borrowed, clone: contract !== undefined &&
+            rustFinalContractSupportsRequirements(contract, selected.carrier, ["clone"],
+              input.typeFamilies, input.definitions, undefined).kind === "supported" });
         if (read === undefined) return { kind: "rejected", diagnostics: [{
           code: "RUST_PROVIDER_READ_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust", sourceNode: node,
           message: "A provider storage read requires an exact raw-carrier Copy, owned transfer, Clone or native borrow contract.",

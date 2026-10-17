@@ -11,10 +11,6 @@ import {
 
 import type { RustExpr, RustFunctionParam, RustStmt } from "../../../target-ast/syntax/nodes.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
-import {
-  requireRustCarrierRequirements,
-  requireRustLocationValueCarrier,
-} from "../../types/generic-requirements.js";
 import { planRustBindingPattern } from "../../bindings/patterns.js";
 import {
   diagnosticInput,
@@ -60,7 +56,6 @@ export function planRustCallableParameters(
   callable: Node,
   context: RustPlanContext,
   syntheticNames: RustSyntheticNameState,
-  options?: { readonly requiredStaticParameters?: readonly Node[] },
 ): RustCallableParameterPlan | undefined {
   const { ast } = context.input.program.source;
   const params: RustFunctionParam[] = [];
@@ -97,11 +92,6 @@ export function planRustCallableParameters(
         "rust.backend.parameter",
         `Parameter '${parameterName}' has no supported Rust carrier fact.`,
       ));
-      return undefined;
-    }
-    if (options?.requiredStaticParameters?.includes(parameter) === true &&
-      parameterCarrier !== undefined &&
-      !requireRustCarrierRequirements(parameterCarrier, ["static"], parameter, context)) {
       return undefined;
     }
     const sourceCarrier = context.input.program.records.runtimeCarrier.get(parameter)?.carrier;
@@ -182,9 +172,6 @@ export function planRustCallableParameters(
         init: { kind: "call", path: `${rustInlineBindingStoragePath(locationStorage.storage)}::new`, args: [{ kind: "path", path: parameterName }] },
       } });
       continue;
-    }
-    if (!requireRustLocationValueCarrier(locationStorage.valueCarrier, parameter, context)) {
-      return undefined;
     }
     context.usedAliases?.add("rt");
     const initial: RustExpr = { kind: "path", path: parameterName };

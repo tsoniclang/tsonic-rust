@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { analyzeRust, artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
@@ -7,6 +9,11 @@ import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { admitRustNativeValueDeclaration } from "../../../dist/analysis/declarations/native-value-declarations.js";
+import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
+import { selectRustBinaryOperator, selectRustCompoundAssignment } from "../../../dist/policy/operations/operators/rules.js";
+import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { assertCsharpCompilationSucceeded, compileCsharpSource } from "../../../../tsonic-csharp/test/helpers/direct-csharp-session.mjs";
+import { executeCsharpConstruction } from "../../../../tsonic-csharp/test/helpers/native-construction.mjs";
 
 function enumDeclarations(source) {
   const file = source.sourceFiles.find(sourceFile => source.ast.getFileName(sourceFile) === "/src/index.ts");
@@ -21,9 +28,9 @@ export enum Ordinary { First = 7, Next }
 ` } });
   assert.equal(result.diagnostics.length, 0, "authored exact integer constants remain admitted");
   const generated = artifactText(result, "src/index.rs");
-  assert.match(generated, /First = 9007199254740993/u, "the authored value does not round through Number");
-  assert.match(generated, /Next = 9007199254740994/u, "the explicit large successor retains its exact native integer");
-  assert.match(generated, /Next = 8/u, "a checker-coherent ordinary implicit increment remains supported");
+  assert.match(generated, /pub const First: Self = Self \{\s*value: 9007199254740993,?\s*\}/u, "the authored value does not round through Number");
+  assert.match(generated, /pub const Next: Self = Self \{\s*value: 9007199254740994,?\s*\}/u, "the explicit large successor retains its exact native integer");
+  assert.match(generated, /pub const Next: Self = Self \{\s*value: 8,?\s*\}/u, "a checker-coherent ordinary implicit increment remains supported");
 });
 
 test("source enum definitions retain the identical early completed values and common width", () => {
@@ -36,22 +43,22 @@ export enum Empty {}
 export function read(): Wide { return Wide.First; }
 ` } });
   const expected = new Map([
-    ["Narrow", [32, "enum", ["-2147483648", "2147483647"]]],
-    ["Wide", [64, "enum", ["2147483648", "2147483649"]]],
-    ["Exact", [64, "enum", ["9007199254740993", "9007199254740994"]]],
-    ["Duplicate", [64, "constants", ["2147483648", "2147483648"]]],
-    ["Empty", [32, "constants", []]],
+    ["Narrow", [32, ["-2147483648", "2147483647"]]],
+    ["Wide", [64, ["2147483648", "2147483649"]]],
+    ["Exact", [64, ["9007199254740993", "9007199254740994"]]],
+    ["Duplicate", [64, ["2147483648", "2147483648"]]],
+    ["Empty", [32, []]],
   ]);
   for (const declaration of enumDeclarations(source)) {
     const name = source.ast.text(source.ast.name(declaration));
-    const [width, representation, values] = expected.get(name);
+    const [width, values] = expected.get(name);
     const carrier = program.records.runtimeCarrier.get(declaration)?.carrier;
     assert.equal(carrier !== undefined, true, `${name}: early nominal carrier is published`);
     const form = program.nativeDeclarations.get(declaration);
     assert.equal(program.typeDefinitions.sourceEnumDefinition(carrier) === form, true,
       `${name}: late native emission reads the identical early definition`);
     assert.equal(form.integerWidth, width, `${name}: cached shared width`);
-    assert.equal(form.representation, representation, `${name}: native physical form`);
+    assert.equal(Object.hasOwn(form, "representation"), false, `${name}: there is no competing physical form`);
     assert.deepEqual(form.variants.map(variant => variant.discriminant), values, `${name}: exact decimal constants`);
     assert.equal(Object.isFrozen(form) && Object.isFrozen(form.variants) &&
       form.variants.every(Object.isFrozen), true, `${name}: publication is recursively frozen without cloning source nodes`);
@@ -120,8 +127,11 @@ export function identity(value: Amount): Amount { return value; }
 test("the existing type registry publishes one frozen enum definition and rejects replacement writes", () => {
   const registry = createRustTypeDefinitionRegistry();
   const carrier = rustSourceTypeCarrier("/src/index.ts", "Empty", "enum");
-  const definition = Object.freeze({ kind: "enum", name: "Empty", integerWidth: 32,
-    representation: "constants", variants: Object.freeze([]) });
+  const definition = Object.freeze({ kind: "enum", name: "Empty", integerWidth: 32, variants: Object.freeze([]) });
+  for (const representation of ["enum", "constants"]) {
+    assert.equal(registry.registerSourceEnum(carrier, Object.freeze({ ...definition, representation })), false,
+      `${representation}: the superseded physical-choice signature is rejected`);
+  }
   assert.equal(registry.registerSourceEnum(carrier, definition), true, "sole producer writes once");
   assert.equal(registry.sourceEnumDefinition(carrier) === definition, true, "open readers retain exact identity");
   assert.equal(registry.registerSourceEnum(carrier, definition), false, "even an identical second write is refused");
@@ -190,8 +200,8 @@ export function wideDuplicateIdentity(value: WideDuplicate): WideDuplicate { ret
 ` } });
     assert.equal(result.diagnostics.length, 0, "typed enum declarations and identities remain admitted");
     const generated = artifactText(result, "src/index.rs");
-    assert.match(generated, /#\[repr\(i32\)\][\s\S]*?pub enum Narrow/u, "ordinary narrow enums declare their width");
-    assert.match(generated, /#\[repr\(i64\)\][\s\S]*?pub enum Wide/u, "ordinary wide enums declare their width");
+    assert.match(generated, /pub struct Narrow\s*\{\s*value: i32,/u, "ordinary narrow enums preserve an open 32-bit nominal form");
+    assert.match(generated, /pub struct Wide\s*\{\s*value: i64,/u, "ordinary wide enums preserve an open 64-bit nominal form");
     assert.match(generated, /pub struct Empty\s*\{\s*value: i32,/u, "empty enum reuses the existing inhabited wrapper");
     assert.match(generated, /pub struct Duplicate\s*\{\s*value: i32,/u, "narrow duplicates share the common 32-bit layout");
     assert.match(generated, /pub struct WideDuplicate\s*\{\s*value: i64,/u, "wide duplicates share the common 64-bit layout");
@@ -210,9 +220,9 @@ mod enum_layout_control {
         for value in [i32::MIN, 0, i32::MAX] {
             assert_eq!(emptyIdentity(Empty { value }).value, value);
         }
-        assert_eq!(narrowIdentity(Narrow::First) as i32, 1);
+        assert_eq!(narrowIdentity(Narrow::First).value, 1);
         assert_eq!(duplicateIdentity(Duplicate::Again).value, 1);
-        assert_eq!(wideIdentity(Wide::First) as i64, 2147483648_i64);
+        assert_eq!(wideIdentity(Wide::First).value, 2147483648_i64);
         assert_eq!(wideDuplicateIdentity(WideDuplicate::Again).value, 2147483648_i64);
     }
 }
@@ -229,3 +239,210 @@ mod enum_layout_control {
     assert.match(native.stdout, /enum_layout_control::exact_native_layout_and_identity_roundtrip \.\.\. ok/u,
       "the exact generated carriers execute the native construction/cast/identity roundtrip");
   });
+
+test("source enum bitwise policy preserves exact nominal identity without accepting numeric or foreign enum operands", () => {
+  const flags = rustSourceTypeCarrier("/src/flags.ts", "Flags", "enum");
+  const other = rustSourceTypeCarrier("/src/other.ts", "Flags", "enum");
+  for (const operator of ["|", "&", "^"]) {
+    const selected = selectRustBinaryOperator(operator, flags, flags);
+    assert.equal(selected?.kind, "operator-token", `${operator}: direct native operation`);
+    assert.equal(selected.resultCarrier === flags, true, `${operator}: no integer or float projection`);
+    assert.equal(selected.leftConversion === undefined && selected.rightConversion === undefined, true,
+      `${operator}: no operand coercions`);
+    const compound = selectRustCompoundAssignment(`${operator}=`, flags, flags);
+    assert.equal(compound?.kind, "operator-token", `${operator}=: direct native compound assignment`);
+    assert.equal(compound.resultCarrier === flags, true, `${operator}=: exact mutable enum storage`);
+    for (const peer of [other, rustSourcePrimitiveTargetType("int32"), rustSourcePrimitiveTargetType("float64")]) {
+      assert.equal(selectRustBinaryOperator(operator, flags, peer) === undefined, true, `${operator}: foreign right operand`);
+      assert.equal(selectRustBinaryOperator(operator, peer, flags) === undefined, true, `${operator}: foreign left operand`);
+      assert.equal(selectRustCompoundAssignment(`${operator}=`, flags, peer) === undefined, true,
+        `${operator}=: foreign right operand`);
+    }
+  }
+});
+
+const bitwiseEnumFiles = {
+  "flags.ts": `
+export enum Flags { First = 1, Second = 2 }
+export enum Wide { First = 4294967296, Second = 8589934592 }
+export enum Duplicate { First = 1, Again = 1, Second = 2 }
+export interface Named { [Flags.First]: number; }
+`,
+  "index.ts": `
+import { Flags, Wide, Duplicate } from "./flags.js";
+export function combine(flag: boolean): Flags { return flag ? (Flags.First | Flags.Second) : Flags.First; }
+export function conjunction(left: Flags, right: Flags): Flags { return left & right; }
+export function exclusive(left: Flags, right: Flags): Flags { return left ^ right; }
+export function complement(value: Flags): Flags { return ~value; }
+export function wide(): Wide { return Wide.First | Wide.Second; }
+export function duplicate(): Duplicate { return Duplicate.Again | Duplicate.Second; }
+export function compound(value: Flags): Flags {
+  let result: Flags = value;
+  result |= Flags.Second;
+  result &= ~Flags.Second;
+  result ^= Flags.First;
+  return result;
+}
+export function defaults(value: Flags): boolean {
+  switch (value) { case Flags.First: return false; case Flags.Second: return false; default: return true; }
+}
+export function run(flag: boolean): boolean {
+  const stored = flag ? (Flags.First | Flags.Second) : Flags.First;
+  return stored === combine(flag) && defaults(stored) === flag &&
+    conjunction(stored, Flags.First) === Flags.First &&
+    exclusive(stored, Flags.Second) === (flag ? Flags.First : (Flags.First | Flags.Second)) &&
+    complement(complement(stored)) === stored &&
+    duplicate() === (Duplicate.First | Duplicate.Second) && wide() === (Wide.First | Wide.Second) &&
+    compound(stored) === (((stored | Flags.Second) & ~Flags.Second) ^ Flags.First);
+}
+`,
+};
+
+function checkedEnumObservations(program) {
+  const { ast, semantics } = program.source;
+  const file = program.sourceFiles.find(source => ast.getFileName(source).endsWith("/flags.ts"));
+  assert.equal(file !== undefined, true, "the identical cross-file enum owner is present");
+  const constants = semantics.enumConstants;
+  const values = ast.statements(file).filter(node => ast.is.IsEnumDeclaration(node)).flatMap(declaration =>
+    ast.members(declaration).map(member => {
+      const selected = constants.get(member);
+      assert.equal(selected?.kind === "resolved" && typeof selected.value === "bigint", true,
+        "each actual source member has one exact finite value");
+      return [ast.text(ast.name(declaration)), ast.text(ast.name(member)), selected.value.toString()];
+    }));
+  const names = semantics.forFile(file).propertyNames;
+  const computed = names.entries.filter(entry => ast.is.IsComputedPropertyName(entry.node));
+  assert.equal(computed.length, 1, "one actual enum-member key is checked");
+  assert.equal(computed[0].selection.kind, "resolved", "the key has a native name");
+  assert.equal(computed[0].selection.name, "1", "the exact member value supplies key spelling");
+  return { values, key: computed[0].selection.name };
+}
+
+for (const surface of ["native", "js"]) {
+  test(`transparent source enum flags preserve open values, width, ABI and native costs across files (${surface})`,
+    { timeout: 300_000 }, () => {
+      const compiled = compileRust({ surfaces: surface === "native" ? [] : [surface],
+        target: { id: "rust", options: { outputType: "lib", crateName: "source_enum_bitwise" } }, files: bitwiseEnumFiles });
+      assert.equal(compiled.result.diagnostics.length, 0,
+        compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
+      assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true,
+        "the original flags program reaches sealed native planning");
+      const flagsText = artifactText(compiled.result, "src/flags.rs");
+      assert.equal(/pub enum (Flags|Wide|Duplicate)\b/u.test(flagsText), false, "no closed source enum form survives");
+      assert.equal((flagsText.match(/#\[repr\(transparent\)\]/gu) ?? []).length, 3, "all numeric source enums use one form");
+      assert.match(flagsText, /pub struct Wide\s*\{\s*value: i64,/u, "wide flags retain the shared selected 64-bit carrier");
+      for (const operation of ["BitOr", "BitAnd", "BitXor", "Not", "BitOrAssign", "BitAndAssign", "BitXorAssign"]) {
+        assert.equal((flagsText.match(new RegExp(`impl core::ops::${operation} for`, "gu")) ?? []).length, 3,
+          `${operation}: every enum has the native integer operation without a use-dependent ABI`);
+      }
+      const nativeControl = `
+#[cfg(test)]
+mod source_enum_bitwise_control {
+    use super::*;
+    ${nativeOwnershipCostSupport}
+
+    #[repr(transparent)]
+    #[derive(Clone, Copy)]
+    struct NativeFlags(i32);
+
+    #[inline(never)]
+    fn native_combine(flag: bool) -> NativeFlags {
+        NativeFlags(if flag { 1 | 2 } else { 1 })
+    }
+
+    extern "C" fn native_abi(value: Flags) -> Flags { value }
+
+    #[test]
+    fn open_enum_values_abi_and_cost_match_native() {
+        assert_eq!(core::mem::size_of::<Flags>(), core::mem::size_of::<i32>());
+        assert_eq!(core::mem::align_of::<Flags>(), core::mem::align_of::<i32>());
+        assert_eq!(core::mem::size_of::<Wide>(), core::mem::size_of::<i64>());
+        assert_eq!(core::mem::align_of::<Wide>(), core::mem::align_of::<i64>());
+        assert_eq!(core::mem::size_of::<Duplicate>(), core::mem::size_of::<i32>());
+        assert_eq!(Flags::First.value, 1);
+        assert_eq!(Flags::Second.value, 2);
+        assert_eq!(Duplicate::Again.value, Duplicate::First.value);
+        for flag in [false, true] {
+            let (actual, actual_cost) = measure(|| crate::index::combine(std::hint::black_box(flag)));
+            let (native, native_cost) = measure(|| native_combine(std::hint::black_box(flag)));
+            assert_eq!(actual.value, native.0);
+            assert_eq!(actual_cost, native_cost);
+            assert_eq!(actual_cost, Cost::default());
+            assert_eq!(native_abi(actual).value, native.0);
+            assert_eq!(crate::index::defaults(actual), flag);
+            assert_eq!(crate::index::compound(actual).value, ((native.0 | 2) & !2) ^ 1);
+            assert!(crate::index::run(flag));
+        }
+        for original in [i32::MIN, -1, 0, 1, 2, 3, i32::MAX] {
+            let value = Flags { value: original };
+            let (actual, actual_cost) = measure(|| {
+                let combined = value | Flags::Second;
+                let masked = crate::index::conjunction(combined, Flags::First);
+                let inverted = crate::index::complement(masked);
+                crate::index::exclusive(inverted, Flags::Second)
+            });
+            let (native, native_cost) = measure(|| (!((original | 2) & 1)) ^ 2);
+            assert_eq!(actual.value, native);
+            assert_eq!(actual_cost, native_cost);
+            assert_eq!(actual_cost, Cost::default());
+        }
+        assert_eq!(crate::index::wide().value, 4294967296_i64 | 8589934592_i64);
+        assert_eq!((!Wide::First).value, !4294967296_i64);
+        assert_eq!((Wide::First ^ Wide::Second).value, 4294967296_i64 ^ 8589934592_i64);
+        assert_eq!((Wide::First & Wide::Second).value, 0);
+        assert_eq!(crate::index::duplicate().value, 3);
+    }
+}
+`;
+      const artifacts = compiled.result.artifacts.map(artifact => artifact.path === "src/flags.rs"
+        ? { ...artifact, text: artifact.text + nativeControl } : artifact);
+      const project = writeGeneratedProject(`source-enum-bitwise-${surface}`, artifacts);
+      const nativeLog = join(project, "native-enum-proof.log");
+      for (const arguments_ of [
+        ["generate-lockfile", "--offline"], ["fmt", "--all"], ["fmt", "--all", "--check"],
+        ["check", "--all-targets", "--locked", "--offline"],
+        ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"],
+        ["test", "--release", "--locked", "--offline", "--", "--test-threads=1"],
+      ]) {
+        const started = new Date();
+        const native = runCargo(project, arguments_);
+        appendFileSync(nativeLog, `${JSON.stringify({ command: ["cargo", ...arguments_], startedAt: started.toISOString(),
+          finishedAt: new Date().toISOString(), durationSeconds: (Date.now() - started.getTime()) / 1000,
+          exitCode: native.status })}\n${native.stdout}\n${native.stderr}\n`);
+      }
+      const csharp = compileCsharpSource({ surface: surface === "native" ? undefined : surface, projectRoot: "/src",
+        sourceText: bitwiseEnumFiles["index.ts"], files: { "flags.ts": bitwiseEnumFiles["flags.ts"] } });
+      assertCsharpCompilationSucceeded(csharp);
+      const observedRust = checkedEnumObservations(compiled.result.program);
+      const observedCsharp = checkedEnumObservations(csharp.result.program);
+      assert.deepEqual(observedRust, observedCsharp, "both targets retain exact source member values and key spelling");
+      const nativeCsharp = executeCsharpConstruction(csharp, `source-enum-bitwise-${surface}`, false, false, [], `
+using Tsonic.Generated;
+if (!Index.run(true) || !Index.run(false) || (int)Index.combine(true) != 3 || (int)Index.combine(false) != 1)
+    throw new System.Exception("open enum flags/default arm");
+if (sizeof(Flags) != sizeof(int) || sizeof(Wide) != sizeof(long) || sizeof(Duplicate) != sizeof(int))
+    throw new System.Exception("shared enum width");
+if ((long)Index.wide() != (4294967296L | 8589934592L) || (int)Index.duplicate() != 3)
+    throw new System.Exception("wide and duplicate enum values");
+for (int iteration = 0; iteration < 1000; iteration++) {
+    _ = Index.combine(iteration % 2 == 0);
+    _ = NativeCombine(iteration % 2 == 0);
+}
+long generatedStart = System.GC.GetAllocatedBytesForCurrentThread();
+int generatedValue = 0;
+for (int iteration = 0; iteration < 1000; iteration++) generatedValue += (int)Index.combine(iteration % 2 == 0);
+long generatedBytes = System.GC.GetAllocatedBytesForCurrentThread() - generatedStart;
+long nativeStart = System.GC.GetAllocatedBytesForCurrentThread();
+int nativeValue = 0;
+for (int iteration = 0; iteration < 1000; iteration++) nativeValue += (int)NativeCombine(iteration % 2 == 0);
+long nativeBytes = System.GC.GetAllocatedBytesForCurrentThread() - nativeStart;
+if (generatedValue != nativeValue || generatedBytes != nativeBytes || generatedBytes != 0)
+    throw new System.Exception("native enum allocation cost");
+System.Console.WriteLine($"SOURCE_ENUM_NATIVE_COST values={generatedValue}/{nativeValue} bytes={generatedBytes}/{nativeBytes}");
+static Flags NativeCombine(bool flag) => (Flags)(flag ? 1 | 2 : 1);
+`);
+      appendFileSync(nativeLog, `CSHARP_NATIVE_PROOF\n${nativeCsharp}\n`);
+      assert.match(nativeCsharp, /SOURCE_ENUM_NATIVE_COST values=2000\/2000 bytes=0\/0/u,
+        "the actual generated C# enum operation has the identical zero-allocation native cost");
+    });
+}

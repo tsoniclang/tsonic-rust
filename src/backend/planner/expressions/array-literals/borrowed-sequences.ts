@@ -4,7 +4,6 @@ import type { RustBorrowedSequenceInput } from "../../../../target-model/records
 import { rustEffectiveValueCarrier } from "../../../../analysis/conversions/value-carrier-queries.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
 import { rustOptionElementCarrier } from "../../../../target-model/types/carriers/optional.js";
-import { rustRestSequenceElements } from "../../../../target-model/operations/rest-assembly.js";
 import { rustValueConversionContract } from "../../../../target-model/conversions/contracts.js";
 import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
@@ -14,7 +13,6 @@ import { missingFactDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../entry.js";
 import { planRustSequenceAppend } from "../sequence-conversions.js";
 import { lowerNestedRustValueConversion } from "../value-conversions.js";
-import { rustCarrierHasCloneContract } from "../../types/generic-requirements.js";
 import { rustVecTargetType } from "../../../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { hasExactObjectKeys, isDenseDataArray, isMetadataRecord } from "../../../../target-model/metadata/closed-data.js";
@@ -51,8 +49,7 @@ export function planRustBorrowedSequenceAppend(
       !rustTargetTypeRefEquals(present ?? selected.carrier, selected.presentCarrier) ||
       selected.optional !== (present !== undefined) || contract?.lowering !== "rest-sequence" ||
       !rustTargetTypeRefEquals(contract.source, selected.presentCarrier) ||
-      !rustTargetTypeRefEquals(contract.target, rustVecTargetType(elementCarrier)) ||
-      rustRestSequenceElements(selected.presentCarrier)?.elements.some(element => !rustCarrierHasCloneContract(element, context))) {
+      !rustTargetTypeRefEquals(contract.target, rustVecTargetType(elementCarrier))) {
       return reject("Borrowed sequence selection lost its exact native presence, storage or element conversion.");
     }
     const planned = planExpression(selected.expression, context, "value",

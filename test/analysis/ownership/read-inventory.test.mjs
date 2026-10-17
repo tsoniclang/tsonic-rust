@@ -43,7 +43,10 @@ async function fixture() {
     borrowEffectsInput: { ast: source.ast, records, navigation: source.navigation,
       readUses: analyzeRustReadUses(source.ast, storage.nodes, records), isNativeNode: node => nativeNodes.has(node) },
     definitions: emptyRustTypeDefinitions,
-    genericRequirements: { supportsClone: () => true },
+    genericRequirements: { contractFor: declaration => Object.freeze({ declaration,
+      typeParameters: [], capturedTypeParameters: [], nativeInputs: [], associatedTypes: [],
+      projectProjections: [], optionalStorage: [] }) },
+    typeFamilies: { implementation: () => undefined },
     genericCallables: { definitionFor: () => undefined },
   };
   return { input, selected };

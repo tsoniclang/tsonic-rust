@@ -18,7 +18,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustCompoundAssignmentValue } from "../statements/assignments.js";
 import type { RustAssignmentOperationFact } from "../statements/core.js";
 import { planRustAssignmentWrite } from "../statements/expression-statements.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planExpression } from "./entry.js";
 import { effectivePlannedExpressionCarrier, expressionCarrier, requireExpressionCarrier } from "./fundamentals.js";
 import { planRustDirectStorage } from "./updates/target.js";
@@ -46,7 +45,6 @@ export function planCompoundAssignmentExpression(
     return value === undefined ? undefined : rustValueBlock(evaluation.bindings, value);
   }
   const copy = isRustCopyCarrier(fact.resultCarrier);
-  if (!copy && !requireRustCarrierRequirements(fact.resultCarrier, ["clone"], node, context)) return undefined;
   const names = context.syntheticNames;
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const overrides = new Map(context.expressionOverrides ?? []);

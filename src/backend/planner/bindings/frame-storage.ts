@@ -10,7 +10,7 @@ import { diagnosticInput, rustCurrentErrorBoundary } from "../program/plan-conte
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustFrameCallableTypes } from "../types/frame-callables.js";
-import { requireRustLocationValueCarrier, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
+import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { rustCallableCaptureStorageType } from "../types/capture-storage.js";
 import { planRustFrameCallableEntry, publishRustFrameCallable } from "../expressions/frame-callables.js";
 
@@ -21,7 +21,6 @@ import { initializeOrWriteRustDeferredStorage, initializeRustDeferredStorage } f
 import { planRustProjectedObjectLocation } from "../expressions/object-field-locations.js";
 
 export function rustFrameBindingType(binding: RustFrameCallableBinding, context: RustPlanContext): RustType | undefined {
-  if (binding.storage === "location" && !requireRustLocationValueCarrier(binding.carrier, binding.declaration, context)) return undefined;
   const type = binding.entry === undefined ? rustTypeFromCarrierInContext(binding.carrier, context)
     : rustFrameCallableTypes(binding.carrier, context)?.entryType;
   if (type === undefined) return undefined;

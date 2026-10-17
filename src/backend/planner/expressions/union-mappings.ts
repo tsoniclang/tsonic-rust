@@ -1,10 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { composeRustUnionArmMappings, rustUnionLeaves, rustUnionArmMappingsMatch, rustUnionProjectionContract, type RustUnionArmMapping } from "../../../target-model/types/union-relations.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone } from "../../../target-model/types/index.js";
+import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import type { RustExpr, RustPattern } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { planRustUnionPattern, planRustUnionConstruction } from "./union-patterns.js";
@@ -21,9 +20,7 @@ export function planRustUnionProjection(
   if (selected === undefined) return undefined;
   const type = rustTypeFromCarrierInContext(selected.dispatchCarrier, context);
   if (access === "shared-reference" && selected.targetOptional) return undefined;
-  if (type?.kind !== "named" || selected.variant.kind === "payload" && access === "clone" &&
-    !rustCarrierSupportsClone(selected.carrier, context.input.program.typeDefinitions) &&
-    !requireRustCarrierRequirements(selected.carrier, ["clone"], node, context)) return undefined;
+  if (type?.kind !== "named") return undefined;
   const name = allocateRustSyntheticName(context.syntheticNames ??
     createRustSyntheticNameState(context.input.program.source.ast, node, []), "flow_value");
   const payloadPattern = planRustUnionPattern(selected.path,
@@ -78,9 +75,6 @@ export function planRustUnionMapping(
     const sourceVariant = mapping.source[mapping.source.length - 1]!.variant;
     const projection = payloads === undefined ? null : payloads.projections[index];
     if (projection === undefined) return undefined;
-    if (projection === null && sourceVariant.kind === "payload" && !owned &&
-      !rustCarrierSupportsClone(mapping.carrier, definitions) &&
-      !requireRustCarrierRequirements(mapping.carrier, ["clone"], node, context)) return undefined;
     const name = allocateRustSyntheticName(names, "union_value");
     const bound: RustExpr = { kind: "path", path: name };
     const value: RustExpr | undefined = projection !== null ? projection(bound, owned)

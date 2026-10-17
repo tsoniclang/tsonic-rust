@@ -4,7 +4,7 @@ import type { RustValueConversionContract } from "../../../target-model/conversi
 import type { RustExpr } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../names/synthetic.js";
-import { rustCarrierHasCloneContract, rustCarrierHasCopyContract } from "../types/generic-requirements.js";
+import { rustCarrierHasCopyContract } from "../types/generic-requirements.js";
 import { rustTypeFromCarrierInContext } from "../types/render.js";
 
 type SequenceContract = Extract<RustValueConversionContract, { readonly lowering: "rest-sequence" }>;
@@ -38,7 +38,6 @@ export function planRustSequenceAppend(
   node: Node | undefined,
   convert: ConvertElement,
 ): RustExpr | undefined {
-  if (contract.cloneSources.some(carrier => !rustCarrierHasCloneContract(carrier, context))) return undefined;
   const names = context.syntheticNames ?? createRustSyntheticNameState(context.input.program.source.ast, node ?? context.sourceFile, []);
   if (contract.collection === "tuple") {
     if (contract.source.kind !== "tuple") return undefined;

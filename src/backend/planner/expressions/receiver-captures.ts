@@ -6,7 +6,6 @@ import type { RustPlanContext } from "../program/plan-context.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustCapturedFieldOwner } from "../objects/value-fields.js";
 import { rustCapturedFieldLocation, rustCapturedFieldStorage, rustCapturedFieldType } from "../objects/captured-fields.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { diagnosticInput } from "../program/plan-context.js";
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { closedMetadataEquals } from "../../../target-model/metadata/closed-data.js";
@@ -83,8 +82,6 @@ export function planRustReceiverOwners(
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const retained: RustExpr[] = [];
   for (const [index, capture] of receivers.entries()) {
-    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["clone", "static"] : ["clone"],
-      capture.reference, { ...creation, callableDeclaration: node })) return undefined;
     if (options.sharedStateName !== undefined) {
       retained.push({ kind: "field", receiver: { kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state" },
         name: String(options.offset + index) });
@@ -164,7 +161,6 @@ export function planRustReceiverFieldOwners(
   const bindings: { readonly name: string; readonly value: RustExpr }[] = [];
   const retained: RustExpr[] = [];
   for (const [index, capture] of fields.entries()) {
-    if (!requireRustCarrierRequirements(capture.carrier, options.staticStorage ? ["static"] : [], capture.reference, creation)) return undefined;
     if (options.sharedStateName !== undefined) {
       retained.push({ kind: "field", receiver: { kind: "field", receiver: { kind: "path", path: options.sharedStateName }, name: "state" },
         name: String(options.offset + index) });

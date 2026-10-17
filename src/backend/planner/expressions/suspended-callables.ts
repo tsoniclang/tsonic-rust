@@ -1,4 +1,3 @@
-import { requireRustCaptureOwnership } from "./typed-locations.js";
 import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 
@@ -8,7 +7,6 @@ import { diagnosticInput, rustSourceBindingPath } from "../program/plan-context.
 import { missingFactDiagnostic } from "../diagnostics.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { rustCallableConstructionType } from "./fundamentals.js";
-import { requireRustCarrierRequirements } from "../types/generic-requirements.js";
 import { planRustCaptureValue } from "./typed-locations.js";
 import { rustSuspendedCallableStateType } from "../types/suspended-callables.js";
 import { planRustCapturedReceiverFields, planRustCapturedReceivers } from "./receiver-captures.js";
@@ -28,9 +26,7 @@ export function planRustSuspendedCallableConstruction(node: Node, context: RustP
   for (const [index, capture] of implementation.captures.entries()) {
     const binding = context.input.program.records.sourceBinding.get(capture.reference);
     const source = binding === undefined ? undefined : rustSourceBindingPath(context, binding);
-    const move = (requireRustCaptureOwnership(node, capture.declaration, context).read.kind !== "clone");
-    if (source === undefined || !requireRustCarrierRequirements(capture.carrier,
-      move ? ["static"] : ["clone", "static"], capture.reference, { ...context, callableDeclaration: node })) return undefined;
+    if (source === undefined) return undefined;
     bindings.push({ name: allocateRustSyntheticName(context.syntheticNames, `capture_${index}`),
       value: planRustCaptureValue(node, capture, source, capture.storage, context),
     });
