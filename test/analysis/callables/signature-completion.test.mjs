@@ -12,7 +12,7 @@ import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 import { resolveRustCallableEnvironment } from "../../../dist/policy/types/resolution/callable-environments.js";
 import { resolveReferencedDeclarationType } from "../../../dist/policy/types/resolution/tuples.js";
-import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { compileRust } from "../../helpers/rust-session.mjs";
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
@@ -393,7 +393,7 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
     assert.equal(declaration !== undefined, true, name + ": actual returned function owner");
     const returned = context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
     assert.equal(returned !== undefined, true, name + ": actual completed retained result");
-    const signature = rustCallablePhysicalSignature(returned);
+    const signature = rustCallableProtocol(returned);
     assert.equal(signature !== undefined, true, name + ": return is a callable, not bool");
     assert.equal(signature.parameters.length, 1, name + ": full parameter arity preserved");
     assert.equal(signature.parameters[0].kind === "source-primitive" && signature.parameters[0].name === "bool", true,
@@ -415,7 +415,7 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
       get: node => node === declaration ? undefined : context.records.runtimeCarrier.get(node),
     } }, context.records) };
     const canonical = walk.operationOptions.callableSignatureCarrier(declaration);
-    assert.equal(canonical !== undefined && rustCallablePhysicalSignature(canonical) !== undefined, true,
+    assert.equal(canonical !== undefined && rustCallableProtocol(canonical) !== undefined, true,
       "the existing callable owner has complete signature evidence");
     let queries = 0;
     const selected = resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
