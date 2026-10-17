@@ -300,6 +300,8 @@ export function verify(): void {
   assert.equal(/pub fn retainInput<Value: 'static>\(\s*value: fn\(Value\) -> \(\),?\s*\) -> rt::Location<fn\(Value\) -> \(\), rt::TsonicError>/u.test(output),
     true, "the input-only function pointer has the exact static bound, void result and native Location carrier");
   assert.match(output, /pub fn retainPattern\(value: js_abi::JsRegExp\)/u);
+  assert.equal(/pub fn retainPattern\(value: js_abi::JsRegExp\) -> rt::Location<js_abi::JsRegExp, rt::TsonicError> \{\s*rt::Location::<js_abi::JsRegExp, rt::TsonicError>::allocate\(value\)\s*\}/u.test(output),
+    true, "RegExp retention moves the actual native value into Location without an additional clone or adapter");
   const nativeCost = `${nativeOwnershipCostSupport}
 use static_runtime_generated::index;
 use tsonic_rust_js::abi as js_abi;
@@ -321,14 +323,14 @@ fn actual_generated_calls_and_locations_match_native_costs() {
         assert_eq!(generated_cost.allocations, 1);
         generated.try_load().unwrap()(7);
         native.try_load().unwrap()(7);
-        let generated_input = js_abi::JsRegExp::from_string(&js_abi::JsString::from("^a+$")).unwrap();
+        let generated_input = js_abi::JsRegExp::from_string(&js_abi::JsString::from_utf8("^a+$")).unwrap();
         let native_input = generated_input.clone();
         let (generated_pattern, generated_pattern_cost) = measure(|| index::retainPattern(generated_input));
         let (native_pattern, native_pattern_cost) = measure(|| native_location_like(&generated_pattern, native_input));
         assert_eq!(generated_pattern_cost, native_pattern_cost);
         assert_eq!(generated_pattern_cost.allocations, 1);
-        assert!(generated_pattern.try_load().unwrap().test(&js_abi::JsString::from("aaa")).unwrap());
-        assert!(native_pattern.try_load().unwrap().test(&js_abi::JsString::from("aaa")).unwrap());
+        assert!(generated_pattern.try_load().unwrap().test(&js_abi::JsString::from_utf8("aaa")).unwrap());
+        assert!(native_pattern.try_load().unwrap().test(&js_abi::JsString::from_utf8("aaa")).unwrap());
     }
 }
 `;
