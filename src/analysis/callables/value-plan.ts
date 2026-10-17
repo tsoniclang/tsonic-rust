@@ -377,8 +377,9 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         nativeStorage, nativeProducers, adapterFlows: flows });
       const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.nativeNodes,
         records: input.records, generic, native, nativeStorage, definitions: input.typeDefinitions });
-      const identityRequests = prepareRustGenericCallableIdentityRequests({ sources: identitySources, nativeStorage });
-      const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.nativeNodes, generic, nativeStorage });
+      const identityRequests = prepareRustGenericCallableIdentityRequests({ sources: identitySources, nativeStorage: physicalLifecycle.prepared });
+      const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.nativeNodes, generic,
+        nativeStorage: physicalLifecycle.prepared });
       physical.closeAdmission();
       const nativeCaptures = captures.complete();
       const nativeGenericProducers = createRustNativeGenericProducerPlan({ records: input.records, generic, nativeStorage,

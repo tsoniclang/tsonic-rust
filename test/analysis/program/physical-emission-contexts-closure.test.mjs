@@ -58,6 +58,20 @@ export function readNative(pointer: NativePointer<int32>): int32 {
 }
 `;
 
+const earlyStorageConsumerSource = `
+async function first(value: number): Promise<number> { return value; }
+async function second(value: number): Promise<number> { return value; }
+function selected(): typeof first { return first; }
+export function compare(): boolean {
+  const alias = selected();
+  return alias === first && alias !== second;
+}
+export async function invoke(value: number): Promise<number> {
+  const alias = selected();
+  return await alias(value);
+}
+`;
+
 const frameSource = `
 class Value {
   recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
@@ -101,6 +115,10 @@ function observeCallablePublication(registry, assertions, carriers, observations
   const descriptors = Object.getOwnPropertyDescriptors(registry);
   return Object.freeze(Object.create(Object.getPrototypeOf(registry), {
     ...descriptors,
+    finalizeSelected: { value() {
+      try { return registry.finalizeSelected(); }
+      finally { observations.earlyStoragePhase = "closed"; }
+    } },
     seal: { value(input) {
       observations.seals++;
       assertions.equal(observations.requestSelections, 1, "one actual early physical-use selection precedes the late seal");
@@ -132,8 +150,29 @@ function observeCallablePublication(registry, assertions, carriers, observations
   }));
 }
 
+function observeNativeStorage(queries, observations) {
+  observations.storageFactories++;
+  const methods = Object.fromEntries(["valueFor", "operandFor", "returnFor", "invocationCallableFor"].map(method => {
+    const reads = new Map();
+    observations.rawSelections.set(method, reads);
+    return [method, node => {
+      const selected = queries[method](node);
+      if (observations.earlyStoragePhase === "materializing") {
+        const previous = reads.get(node);
+        reads.set(node, { count: (previous?.count ?? 0) + 1, selected });
+      } else if (observations.earlyStoragePhase === "consumers" || observations.earlyStoragePhase === "verifying") {
+        const previous = reads.get(node);
+        if (previous !== undefined) reads.set(node, { ...previous, count: previous.count + 1 });
+      }
+      return selected;
+    }];
+  }));
+  return Object.freeze({ ...queries, ...methods });
+}
+
 test("the planner phase label starts at publication, after the actual callable seal and reachability (instrumented load observation)", () => {
-  const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } }, files: { "index.ts": genericSource + nativeHandlerSource } };
+  const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } },
+    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource } };
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
@@ -141,6 +180,10 @@ test("the planner phase label starts at publication, after the actual callable s
   const componentsUrl = new URL("../../../dist/analysis/program/source-package-components.js", import.meta.url).href;
   const handlerUrl = new URL("../../../dist/analysis/operations/native-handlers.js", import.meta.url).href;
   const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
+  const storageUrl = new URL("../../../dist/analysis/callables/native-storage.js", import.meta.url).href;
+  const lifecycleUrl = new URL("../../../dist/analysis/callables/physical-lifecycle.js", import.meta.url).href;
+  const identityUrl = new URL("../../../dist/analysis/callables/generic-identities.js", import.meta.url).href;
+  const dispatchUrl = new URL("../../../dist/analysis/callables/generic-dispatch.js", import.meta.url).href;
   const carriersUrl = new URL("../../../dist/target-model/types/carriers/generic-callables.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-instrumented-callable-publication-proof";
@@ -148,13 +191,23 @@ test("the planner phase label starts at publication, after the actual callable s
   const componentsObservation = `export function analyzeRustSourcePackageComponents(...inputs) { const result = observedAnalyzeRustSourcePackageComponents(...inputs); globalThis[Symbol.for(${JSON.stringify(key)})].components.push(result); return result; }`;
   const handlerObservation = `export function analyzeRustNativeHandlers(...inputs) { const result = observedAnalyzeRustNativeHandlers(...inputs); globalThis[Symbol.for(${JSON.stringify(key)})].handlers(inputs); return result; }`;
   const requestObservation = `export function prepareRustPhysicalCallableEmissionRequests(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.beforeRequests(inputs[0]); const result = observedPrepareRustPhysicalCallableEmissionRequests(...inputs); observations.requests = result; observations.requestSelections++; return result; }`;
+  const storageObservation = `export function createRustNativeStorageQueries(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; return observations.storage(observedCreateRustNativeStorageQueries(...inputs)); }`;
+  const lifecycleObservation = `export function createRustPhysicalCallableLifecycle(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.earlyStoragePhase = "materializing"; const result = observedCreateRustPhysicalCallableLifecycle(...inputs); observations.lifecycle = result; observations.earlyStoragePhase = "consumers"; return result; }`;
+  const identityObservation = `export function prepareRustGenericCallableIdentityRequests(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.assertPrepared(inputs[0]); observations.identityComparisons = inputs[0].sources.comparisons.length; return observedPrepareRustGenericCallableIdentityRequests(...inputs); }`;
+  const dispatchObservation = `export function prepareRustGenericCallableDispatchRequests(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.assertPrepared(inputs[0]); const result = observedPrepareRustGenericCallableDispatchRequests(...inputs); observations.dispatched = result.length; return result; }`;
   const script = `
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { sourceMarkerFactKey } from "@tsonic/tsts";
 const observationKey = Symbol.for(${JSON.stringify(key)});
-const observations = { seals: 0, publications: 0, components: [], anchors: new Set(), handlerSelections: 0, requestSelections: 0 };
+const observations = { seals: 0, publications: 0, components: [], anchors: new Set(), handlerSelections: 0,
+  requestSelections: 0, rawSelections: new Map(), earlyStoragePhase: "idle", preparedConsumers: 0, storageFactories: 0 };
 globalThis[observationKey] = observations;
+observations.storage = queries => (${observeNativeStorage.toString()})(queries, observations);
+observations.assertPrepared = input => {
+  assert.equal(input.nativeStorage === observations.lifecycle.prepared, true, "the real caller supplies the SAME canonical prepared view");
+  observations.preparedConsumers++;
+};
 const families = ["targetOperation", "rawLocationPlan", "memoryLayoutObservation", "rawAddressPlan", "memoryBindingPlan", "typedLocationPlan", "nativeHandler"];
 observations.handlers = ([nodes, records, safety, sourceFacts, requirements]) => {
   observations.handlerSelections++;
@@ -198,6 +251,14 @@ registerHooks({ load(url, context, nextLoad) {
       replacement: "function observedAnalyzeRustNativeHandlers(", extension: ${JSON.stringify(handlerObservation)} },
     { url: ${JSON.stringify(collectorUrl)}, anchor: "export function prepareRustPhysicalCallableEmissionRequests(",
       replacement: "function observedPrepareRustPhysicalCallableEmissionRequests(", extension: ${JSON.stringify(requestObservation)} },
+    { url: ${JSON.stringify(storageUrl)}, anchor: "export function createRustNativeStorageQueries(",
+      replacement: "function observedCreateRustNativeStorageQueries(", extension: ${JSON.stringify(storageObservation)} },
+    { url: ${JSON.stringify(lifecycleUrl)}, anchor: "export function createRustPhysicalCallableLifecycle(",
+      replacement: "function observedCreateRustPhysicalCallableLifecycle(", extension: ${JSON.stringify(lifecycleObservation)} },
+    { url: ${JSON.stringify(identityUrl)}, anchor: "export function prepareRustGenericCallableIdentityRequests(",
+      replacement: "function observedPrepareRustGenericCallableIdentityRequests(", extension: ${JSON.stringify(identityObservation)} },
+    { url: ${JSON.stringify(dispatchUrl)}, anchor: "export function prepareRustGenericCallableDispatchRequests(",
+      replacement: "function observedPrepareRustGenericCallableDispatchRequests(", extension: ${JSON.stringify(dispatchObservation)} },
   ];
   const selection = selections.find(selection => selection.url === url);
   if (selection === undefined) return loaded;
@@ -215,11 +276,30 @@ assert.equal(compiled.result.program === observations.published, false, "the obs
 assert.equal(compiled.result.program.callableValues === observations.published, true, "the pipeline publishes the exact observed completed product");
 assert.equal(observations.anchors.has(${JSON.stringify(registryUrl)}) && observations.anchors.has(${JSON.stringify(componentsUrl)}), true,
   "both original production functions are observed without writing dist");
-assert.equal(observations.anchors.size, 4, "each original stage and each required input observer has one exact anchor");
+assert.equal(observations.anchors.size, 8, "each original stage and each required input observer has one exact anchor");
 assert.equal(observations.seals, 1, "one actual late callable seal");
 assert.equal(observations.publications, 1, "one actual planner publication");
 assert.equal(observations.requests.kind, "resolved", "only an admitted complete request inventory is published");
 assert.equal(observations.requestSelections, 1, "the source-use owner is never replayed after sealing");
+assert.equal(observations.storageFactories, 1, "the single actual program constructs one canonical physical storage owner");
+assert.equal(observations.preparedConsumers, 2, "both actual early consumer owners use the canonical prepared view");
+assert.equal(observations.identityComparisons > 0 && observations.dispatched > 0, true,
+  "real native identity comparisons and generic dispatch exercise both consumer paths");
+let primed = 0;
+observations.earlyStoragePhase = "verifying";
+for (const [method, reads] of observations.rawSelections) {
+  assert.equal(reads.size > 0, true, method + ": the actual retained source exercises this generic materialization role");
+  assert.equal(observations.published.nativeStorage[method] === observations.lifecycle.prepared[method], true,
+    method + ": early and final readers are the same lookup function");
+  for (const [node, row] of reads) {
+    assert.equal(observations.lifecycle.prepared[method](node) === row.selected, true,
+      method + ": original materialization identity survives all real caller stages");
+    assert.equal(reads.get(node).count, 1, method + ": no raw reselection after the one early materialization");
+    primed++;
+  }
+}
+observations.earlyStoragePhase = "closed";
+assert.equal(primed > 0, true, "the actual generic materialization domain is nonempty");
 const { IsTypeSyntaxNode } = await import("@tsonic/target-api/source");
 const { records } = observations.handlerInputs;
 let metadata = 0;
