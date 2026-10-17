@@ -416,3 +416,44 @@ fn actual_generated_source_error_payloads_are_static() {
       [...result.artifacts, { path: "tests/static_errors.rs", text: formatted.stdout }]);
   });
 }
+
+for (const [label, surfaces] of [["native", []], ["js", ["js"]]]) {
+  for (const [domain, declaration, construction] of [
+    ["builtin", "", 'new Error("retained caught error")'],
+    ["project", "class AppError extends Error {}", 'new AppError("retained caught error")'],
+  ]) {
+    test(`caught errors cross actual static storage and Promise factory boundaries (${domain}, ${label})`,
+      { timeout: 300_000 }, () => {
+        const { result } = compileRust({ surfaces, target: { id: "rust", options: {
+          outputType: "bin", crateName: `static_caught_errors_${domain}_${label}`,
+        } }, files: { "index.ts": `
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
+${declaration}
+
+export function retainCaught(original: Error) {
+  try { throw original; }
+  catch (caught) { return allocateptr(caught); }
+}
+export function caughtPromise(original: Error) {
+  try { throw original; }
+  catch (caught) { return (async () => caught)(); }
+}
+export async function verify(): Promise<void> {
+  const original = ${construction};
+  const retained = loadptr(retainCaught(original));
+  if (!(retained instanceof Error) || retained !== original || retained.message !== "retained caught error") {
+    throw new Error("caught error storage lost its actual payload or identity");
+  }
+  const pending = caughtPromise(original);
+  const captured = await pending;
+  if (!(captured instanceof Error) || captured !== original || captured.message !== "retained caught error") {
+    throw new Error("caught error Promise capture lost its actual payload or identity");
+  }
+}
+await verify();
+` } });
+        assertNoTargetDiagnostics(result.diagnostics);
+        validateGeneratedProject(`static-caught-errors-${domain}-${label}`, result.artifacts, { run: true });
+      });
+  }
+}
