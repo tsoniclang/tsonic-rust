@@ -21,6 +21,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustPhysicalCallableSourceActivations } from "../../target-model/records/physical-emission-contexts.js";
+import { snapshotRustCallableBindings } from "./generic-bindings.js";
 
 type RustNativeStorageTargetBindingsSelection =
   | { readonly kind: "resolved"; readonly bindings: RustTargetGenericBindings }
@@ -54,7 +55,7 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
   readonly step: (depth: number) => boolean;
 }): (declaration: Node | undefined, bindings: SourceStorageBindings, depth: number) => RustNativeStorageGenericSelection {
   const empty: RustNativeStorageGenericSelection = Object.freeze({ kind: "resolved",
-    bindings: Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() }),
+    bindings: snapshotRustCallableBindings({ types: new Map(), lifetimes: new Map(), consts: new Map() }),
     sourceActivations: Object.freeze({ kind: "unresolved", reason: "An absent source declaration has no callable activation selection." }) });
   const cache = new Map<Node, Map<SourceStorageBindings, RustNativeStorageGenericSelection | "resolving">>();
   const unresolved = (reason: string): RustNativeStorageGenericSelection => Object.freeze({ kind: "unresolved", reason });
@@ -140,10 +141,11 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
           return finish(unresolved("Native callable activation has inconsistent selected generic arguments."));
         actual = merged;
       }
-      rows.push(Object.freeze({ activation, targetBindings: actual }));
-      if (result !== undefined && !sameBindings(result, actual))
+      const completed = snapshotRustCallableBindings(actual);
+      rows.push(Object.freeze({ activation, targetBindings: completed }));
+      if (result !== undefined && !sameBindings(result, completed))
         return finish(unresolved("Native callable activation has distinct generic substitutions requiring a sealed join."));
-      result = actual;
+      result = completed;
     }
     return finish(result === undefined ? unresolved("Native callable activation has no selected generic environment.")
       : Object.freeze({ kind: "resolved", bindings: result,

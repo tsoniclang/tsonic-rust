@@ -277,6 +277,10 @@ test("equal native members retain every original source producer and selecting b
     assert.equal(generic.sourceActivations.rows.every(alternative => Object.isFrozen(alternative) &&
       alternative.targetBindings.types !== undefined && alternative.targetBindings.lifetimes !== undefined &&
       alternative.targetBindings.consts !== undefined), true, "every original alternative retains its complete native substitution");
+    assert.equal(generic.sourceActivations.rows.every(alternative =>
+      [alternative.targetBindings.types, alternative.targetBindings.lifetimes, alternative.targetBindings.consts].every(view =>
+        Object.isFrozen(view) && !("set" in view) && !("delete" in view) && !("clear" in view))), true,
+    "published activation substitutions expose only the existing canonical immutable map views");
   }
   assert.equal(Object.isFrozen(selected.sources) && Object.isFrozen(source) && Object.isFrozen(source.producers) &&
     source.producers.every(Object.isFrozen), true, "source selection and forward correspondences publish as immutable data");
@@ -302,6 +306,9 @@ test("closed native substitutions distinguish original source activations from u
       assert.equal(row.activation.declaration === owner, true, "the exact checked declaration owns the activation");
       assert.equal(row.activation.bindings === activations.activations[index].bindings, true, "actual owned source tokens are retained");
       assert.equal(row.targetBindings === selected.bindings, true, "a real source row may have an empty native substitution");
+      assert.equal([row.targetBindings.types, row.targetBindings.lifetimes, row.targetBindings.consts].every(view =>
+        Object.isFrozen(view) && !("set" in view) && !("delete" in view) && !("clear" in view)), true,
+      "target emptiness does not permit a mutable map builder on a published activation");
     }
   } else assert.equal(selected.sourceActivations.reason, activations.reason, "unavailable remains distinct from resolved empty");
   const reason = "the actual source activation is unfinished";
