@@ -30,8 +30,8 @@ const rustFloat32OverflowMidpoint = (1n << 128n) - (1n << 103n);
 export function isRustNumericLiteralCarrier(
   carrier: TargetTypeRef | undefined,
 ): carrier is Extract<TargetTypeRef, { readonly kind: "source-primitive" }> {
-  return isRustNumericCarrier(carrier) ||
-    carrier?.kind === "source-primitive" && carrier.name === "float16";
+  return carrier?.kind === "source-primitive" &&
+    (carrier.name === "float16" || isRustNumericCarrier(carrier));
 }
 
 export function isUnannotatedRustNumericLiteral(literal: SourceLiteralValue | undefined): boolean {
