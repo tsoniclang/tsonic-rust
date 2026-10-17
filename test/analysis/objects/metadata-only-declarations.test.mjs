@@ -172,9 +172,9 @@ const invalid: ${kind} = ${initializer}; type Metadata = typeof invalid; export 
   }
 
   test(`Rust ${surface} runtime reads before initialization retain their source rejection`, () => {
-    const compiled = compile('const early = key; const key = "value"; interface Metadata { [key]: number; } export function run(): boolean { return early === "value"; }', surfaces);
-    assert.equal(compiled.result.diagnostics.some(issue => issue.category === "error"), true, "before-initialization evidence is retained");
-    assert.equal(compiled.result.program === undefined && compiled.result.artifacts.length === 0, true, "no invalid native output");
+    assert.throws(() => compile('const early = key; const key = "value"; interface Metadata { [key]: number; } export function run(): boolean { return early === "value"; }', surfaces),
+      error => error instanceof Error && error.message.includes("error TS2448:") && error.message.includes("error TS2454:"),
+      "the actual checked-source boundary refuses the unchanged TDZ source before a native result can be returned");
   });
 
   test(`Rust ${surface} an unrelated runtime module cycle is not erased with metadata`, () => {
