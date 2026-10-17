@@ -47,7 +47,8 @@ import {
   sourceDeclarationHasOnlyTypeUses,
   sourceTransparentExpressionOperand,
 } from "@tsonic/target-api/source";
-import { isRustBoolCarrier, isRustNumericCarrier, isRustStringCarrier, rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { isRustBoolCarrier, isRustStringCarrier, rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { isRustNumericLiteralCarrier } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 
@@ -237,7 +238,7 @@ function rustMetadataInitializerIsHarmless(walk: RustFactWalk, initializer: Node
   if (literal.form === "string" || literal.form === "template") return !/[\uD800-\uDFFF]/u.test(literal.text) && (isRustStringCarrier(carrier) ||
       carrier.kind === "source-primitive" && carrier.name === "char");
   if (literal.form === "true" || literal.form === "false") return isRustBoolCarrier(carrier);
-  return isRustNumericCarrier(carrier) && (literal.form === "bigint" && literal.integer !== undefined ||
+  return isRustNumericLiteralCarrier(carrier) && (literal.form === "bigint" && literal.integer !== undefined ||
     (literal.form === "numeric" || literal.form === "prefix-unary") && literal.numeric !== undefined);
 }
 

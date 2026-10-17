@@ -5,8 +5,7 @@ import type { ExtensionFactSubject, Node } from "@tsonic/tsts";
 import type { RustOperationsProviderOptions } from "../operations/provider/model.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { asNode } from "../../policy/identities/selected-source.js";
-import { isRustNumericCarrier } from "../../target-model/types/index.js";
-import { selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { isRustNumericLiteralCarrier, selectedSourceLiteralIsRepresentable, selectedSourceNumericLiteralOperationId } from "../../policy/types/resolution/selected-numeric-literal.js";
 
 import { rustPostCheckUnaryMinusOperationId, rustPostCheckUnaryPlusOperationId } from "../../target-model/operations/model.js";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
@@ -44,7 +43,7 @@ export function normalizeSelectedLiteralCarrier(
       return selectedLiteralCarrier(node, expected, context);
     }
   }
-  if (expected.kind !== "source-primitive" || !isRustNumericCarrier(expected)) {
+  if (!isRustNumericLiteralCarrier(expected)) {
     return actual;
   }
   if (context.literalValues.literalValue.get(node)?.numeric?.kind === "checked-float64") {
