@@ -28,6 +28,70 @@ export function choose(left: () => number, right: () => number, select: boolean)
 }
 `;
 
+for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
+  for (const [label, classKind, fallible, source] of [
+    ["implicit class expression", "KindClassExpression", false, `
+export function make(seed: number) {
+  return new class Capture {
+    value = seed;
+    read(): number { return this.value; }
+  }();
+}
+export function read(seed: number): number { return make(seed).read(); }
+`],
+    ["throwing class-expression initializer", "KindClassExpression", true, `
+function checked(seed: number): number {
+  if (seed < 0) throw new Error("initializer");
+  return seed;
+}
+export function make(seed: number) {
+  return new class Capture {
+    value = checked(seed);
+    read(): number { return this.value; }
+  }();
+}
+export function read(seed: number): number { return make(seed).read(); }
+`],
+    ["ordinary class declaration", "KindClassDeclaration", false, `
+class Regular { value = 7; read(): number { return this.value; } }
+export function make(): Regular { return new Regular(); }
+export function read(): number { return make().read(); }
+`],
+  ]) {
+    test(`${label} retains its exact constructor invocation and initializer effects (${surface})`, () => {
+      const { result } = compileRust({ surfaces, files: { "index.ts": source } });
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+      assert.equal(result.program !== undefined && result.plan !== undefined, true,
+        "the actual constructor evidence reaches native program and plan publication");
+      assert.equal(result.artifacts.some(artifact => String(artifact.path).endsWith(".rs")), true,
+        "the complete constructor program emits native source");
+      const program = result.program;
+      const ast = program.source.ast;
+      const nodes = sourceNodes(program);
+      const declaration = nodes.find(node => ast.kindName(node) === classKind);
+      assert.equal(declaration !== undefined, true, "the actual checked native class identity exists");
+      const invocations = nodes.filter(node => ast.is.IsNewExpression(node) &&
+        program.records.targetOperation.get(node)?.target?.form === "constructor");
+      assert.equal(invocations.length, 1, "one actual native constructor is invoked");
+      const invocation = invocations[0];
+      const selected = program.records.sourceCallEffects.get(invocation);
+      assert.equal(selected !== undefined, true, "the constructor has a completed invocation ABI");
+      assert.equal(selected.invocation, fallible ? "fallible" : "infallible", "initializer effects decide invocation fallibility");
+      assert.equal(selected.awaiting, "not-applicable", "ordinary construction does not invent an await channel");
+      assert.equal(program.records.errorEffects.get(declaration)?.localErrors, fallible,
+        "the exact declaration retains all actual throwing initializer effects");
+      assert.equal(program.records.errorEffects.get(invocation)?.localErrors, fallible,
+        "the invocation preserves those same initializer effects");
+      const edges = program.records.sourceErrorEffects.get(invocation)?.edges;
+      assert.equal(edges?.length, 1, "the invocation has one exact source-to-constructor correspondence");
+      assert.equal(edges[0].declaration === declaration, true,
+        "the error edge names the actual checked class, never a synthetic substitute");
+      assert.equal(edges[0].effects.localErrors, fallible, "an unresolved initializer is never treated as pure");
+    });
+  }
+}
+
 test("one generic source producer retains both actual captured callback error activations", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
 type Identity = <Value>(value: Value) => Value;
