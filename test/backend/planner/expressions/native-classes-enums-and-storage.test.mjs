@@ -482,7 +482,11 @@ export function isGreen(color: Color): boolean {
 
   assert.deepEqual(result.diagnostics, []);
   const text = artifactText(result, "src/index.rs");
-  assert.match(text, /#\[derive\(Clone, Copy, Debug, PartialEq\)\]\npub enum Color \{\n    Red = 0,\n    Green = 5,\n    Blue = 6,\n\}/u);
+  assert.match(text, /#\[repr\(transparent\)\]\n#\[derive\(Clone, Copy, Debug, PartialEq, Eq, Hash\)\]\npub struct Color \{\s*value: i32,\s*\}/u);
+  for (const [name, value] of [["Red", 0], ["Green", 5], ["Blue", 6]]) {
+    assert.match(text, new RegExp(`pub const ${name}: Self = Self \\{\\s*value: ${value},?\\s*\\}`, "u"),
+      `${name}: the exact authored discriminant remains unchanged`);
+  }
   assert.match(text, /Color::Green/u);
   assert.match(text, /color == Color::Green/u);
 });
