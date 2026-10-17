@@ -422,6 +422,30 @@ for (const [label, surfaces] of [["native", []], ["js", ["js"]]]) {
     ["builtin", "", 'new Error("retained caught error")'],
     ["project", "class AppError extends Error {}", 'new AppError("retained caught error")'],
   ]) {
+    test(`caught errors have actual native Location storage (${domain}, ${label})`,
+      { timeout: 300_000 }, () => {
+        const { result } = compileRust({ surfaces, target: { id: "rust", options: {
+          outputType: "bin", crateName: `static_caught_locations_${domain}_${label}`,
+        } }, files: { "index.ts": `
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
+${declaration}
+
+export function verify(): void {
+  const original = ${construction};
+  try { throw original; }
+  catch (caught) {
+    const location = allocateptr(caught);
+    const retained = loadptr(location);
+    if (!(retained instanceof Error) || retained !== original || retained.message !== "retained caught error") {
+      throw new Error("caught native Location lost its actual payload or identity");
+    }
+  }
+}
+verify();
+` } });
+        assertNoTargetDiagnostics(result.diagnostics);
+        validateGeneratedProject(`static-caught-locations-${domain}-${label}`, result.artifacts, { run: true });
+      });
     test(`caught errors cross actual static storage and Promise factory boundaries (${domain}, ${label})`,
       { timeout: 300_000 }, () => {
         const { result } = compileRust({ surfaces, target: { id: "rust", options: {
