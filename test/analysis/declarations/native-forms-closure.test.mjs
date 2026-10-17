@@ -36,9 +36,9 @@ export enum Aliased { firstValue = 1, secondValue = 1 }
   const ordinary = program.nativeDeclarations.get(ordinaryNode);
   const aliased = program.nativeDeclarations.get(aliasNode);
   assert.equal(ordinary?.kind, "enum", "ordinary enum is admitted");
-  assert.equal(ordinary.representation, "enum", "distinct constants select native enum syntax");
+  assert.equal(Object.hasOwn(ordinary, "representation"), false, "distinct constants have one open integer form");
   assert.equal(aliased?.kind, "enum", "duplicate enum is admitted");
-  assert.equal(aliased.representation, "constants", "duplicate constants select the existing native wrapper");
+  assert.equal(Object.hasOwn(aliased, "representation"), false, "duplicate constants use the identical open integer form");
   assert.deepEqual(ordinary.variants.map(variant => [variant.name, variant.discriminant]),
     [["firstValue", "1"], ["secondValue", "2"]], "authored spelling and checked values are preserved");
   assert.equal(program.nativeDeclarations.get(ordinaryNode) === ordinary, true, "reader returns the identical sealed form");

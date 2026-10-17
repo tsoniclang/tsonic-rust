@@ -9,7 +9,6 @@ import type { RustConditionalSourceTypeFamily } from "../types/type-families.js"
 export interface RustNativeEnumDeclaration {
   readonly kind: "enum";
   readonly name: string;
-  readonly representation: "enum" | "constants";
   readonly integerWidth: 32 | 64;
   readonly variants: readonly {
     readonly declaration: Node;
