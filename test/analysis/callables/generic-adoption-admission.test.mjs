@@ -26,6 +26,8 @@ for (const surface of ["native", "js"]) {
     assert.equal(diagnostics.match(/TS\d+:/gu)?.length, 1, "exactly one original nonvoid arity error");
     assert.match(diagnostics, /TS2554: Expected 1 arguments, but got 0\./u,
       "the native checked signature retains the precise nonvoid argument requirement");
+    assert.doesNotMatch(diagnostics, /TSEXT\d+:/u,
+      "the source arity refusal is not an extension fallback");
   });
 }
 
