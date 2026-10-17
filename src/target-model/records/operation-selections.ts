@@ -59,7 +59,21 @@ export interface RustSourceCallableValueFact {
   readonly resultCarrier: TargetTypeRef;
 }
 
+export interface RustModuleBindingPatternStep {
+  readonly declaration: Node;
+  readonly source: Node;
+  readonly kind: "binding" | "pattern";
+  readonly initializer?: Node;
+}
+
 export type RustModuleBindingFact =
+  | {
+      readonly declarationKind: "const" | "let" | "var";
+      readonly storage: "module-pattern";
+      readonly valueCarrier: TargetTypeRef;
+      readonly initializer: Node;
+      readonly steps: readonly RustModuleBindingPatternStep[];
+    }
   | {
       readonly declarationKind: "const" | "function";
       readonly storage: "native-const";

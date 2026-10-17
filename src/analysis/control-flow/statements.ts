@@ -203,6 +203,7 @@ function recordVariableDeclarationListFacts(
           name,
           ["target.capability=rust.binding-pattern"],
         );
+        continue;
       }
       const declarationKind = walk.context.ast.variableDeclarationKind(declaration);
       if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {

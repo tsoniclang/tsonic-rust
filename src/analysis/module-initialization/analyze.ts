@@ -109,12 +109,6 @@ function classifyModuleInitialization(
       }
       for (const declaration of variables) {
         if (input.records.compileTimeSource.get(declaration)) continue;
-        const name = input.ast.name(declaration);
-        const nameKind = name === undefined ? undefined : input.ast.kindName(name);
-        if (nameKind === "KindObjectBindingPattern" || nameKind === "KindArrayBindingPattern") {
-          return unresolved(declaration,
-            "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.");
-        }
         const binding = input.records.moduleBinding.get(declaration);
         if (binding === undefined) {
           return unresolved(
@@ -128,7 +122,7 @@ function classifyModuleInitialization(
             "Module callable values require their finalized native storage selection.");
           if (storage.kind === "stored") required = true;
         }
-        if (binding.storage === "module-cell") {
+        if (binding.storage === "module-cell" || binding.storage === "module-pattern") {
           required = true;
         }
       }
