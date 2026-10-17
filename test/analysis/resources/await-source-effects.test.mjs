@@ -157,8 +157,11 @@ test("await-source selection rejects an unrelated exact Future branch", () => {
     return result;
   };
   assert.equal(select([channel.carrier])?.length, 1);
-  const unrelated = { ...channel.carrier, genericArguments: channel.carrier.genericArguments.map((argument, index) =>
-    index === 1 ? { kind: "type", type: rustSourcePrimitiveTargetType("bool") } : argument) };
+  assert.equal(channel.carrier.kind === "target-named" && channel.carrier.genericArguments.length === 1, true,
+    "the actual native Future has exactly its one physical output type argument");
+  const unrelated = { ...channel.carrier, genericArguments: [{ kind: "type", type: rustSourcePrimitiveTargetType("bool") }] };
+  assert.equal(rustTargetTypeRefEquals(unrelated, channel.carrier), false,
+    "the inverse changes the actual native Future output rather than a nonexistent old generic slot");
   assert.equal(select([unrelated]) === undefined, true, "source error correspondence cannot attach to a different carrier");
 });
 

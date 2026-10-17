@@ -368,15 +368,21 @@ for (const surfaces of [[], ["js"]]) {
     assertChannels(current.effects(call), []);
     const selected = current.program.records.sourceErrorEffects.get(call);
     const awaited = selected?.edges.find(edge => edge.kind === "await");
-    assert.equal(awaited !== undefined, true);
-    assert.equal(awaited.effects.nativeErrors.length, surfaces.length === 0 ? 2 : 1,
-      "the public JS await owns its canonical rejection, while a native future keeps its exact rebound channels");
-    if (surfaces.length !== 0) {
-      assert.equal(awaited.effects.nativeErrors[0].identity === rustJsRejectionErrorIdentity &&
-        rustTargetTypeRefEquals(awaited.effects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
+    if (surfaces.length === 0) {
+      assert.equal(awaited !== undefined, true);
+      assert.equal(awaited.effects.nativeErrors.length, 2, "a native Future keeps its exact rebound channels");
+      assertChannels(current.callable("forward"), awaited.effects.nativeErrors);
+    } else {
+      assert.equal(awaited === undefined, true, "a public JS Promise object does not invent a native Future source edge");
+      const expression = current.nodes.find(node => current.ast.is.IsAwaitExpression(node));
+      assert.equal(expression !== undefined, true, "the original checked await remains present");
+      const effects = current.effects(expression);
+      assert.equal(effects.nativeErrors.length, 1, "the public JS await owns exactly one canonical rejection");
+      assert.equal(effects.nativeErrors[0].identity === rustJsRejectionErrorIdentity &&
+        rustTargetTypeRefEquals(effects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
       "no native invocation channel leaks as a second public JS rejection");
+      assertChannels(current.callable("forward"), effects.nativeErrors);
     }
-    assertChannels(current.callable("forward"), awaited.effects.nativeErrors);
   });
 }
 
