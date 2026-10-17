@@ -11,6 +11,7 @@ import {
 import {
   rustModuleNameForSourcePath,
 } from "../../../dist/target-model/names/source-output-identities.js";
+import { rustSourceArtifactPath } from "../../../dist/backend/planner/names/source-output-identities.js";
 import {
   analyzeRustSourcePackageFacades,
 } from "../../../dist/analysis/program/source-package-facades.js";
@@ -77,7 +78,7 @@ export function value(): int32 { return 22; }
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length === 0, true, "native source-module admission has no diagnostics");
   const docsModule = rustModuleNameForSourcePath("docs/models.ts");
   const resourcesModule = rustModuleNameForSourcePath("resources/models.ts");
   assert.notEqual(docsModule, undefined);
@@ -107,20 +108,13 @@ test("source path collisions receive local readable suffixes without hash names"
       packageRoot: "/project",
       sourceRoot: "/project",
     }),
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
   });
 
   assert.equal(plan.kind, "accepted");
   assert.equal(plan.identities.get("/project/source_name.ts")?.moduleName, "source_name");
   assert.equal(plan.identities.get("/project/source-name.ts")?.moduleName, "source_name_2");
   assert.doesNotMatch(
-    [...plan.identities.values()].map((identity) => identity.artifactPath).join("\n"),
+    [...plan.identities.values()].map(rustSourceArtifactPath).join("\n"),
     /[0-9a-f]{64}/u,
   );
 });
@@ -138,13 +132,6 @@ test("source path allocation reserves sibling bases before assigning collision s
       packageRoot: "/project",
       sourceRoot: "/project",
     }),
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
   });
 
   assert.equal(plan.kind, "accepted");
@@ -194,13 +181,6 @@ test("identical source paths in distinct package components remain distinct", ()
     ast: fakeAstReader([root, dependency]),
     sourceFiles: [root, dependency],
     sourcePackages,
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project/src",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
   });
 
   assert.equal(plan.kind, "accepted");
@@ -274,7 +254,7 @@ export function childValue(): string { return "child"; }
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length === 0, true, "native source-module admission has no diagnostics");
   assert.deepEqual(result.artifacts.map((artifact) => artifact.path), [
     "Cargo.toml",
     "src/lib.rs",
@@ -301,7 +281,7 @@ test("an authored parent module owns its child declaration", () => {
     },
   });
 
-  assert.deepEqual(result.diagnostics, []);
+  assert.equal(result.diagnostics.length === 0, true, "native source-module admission has no diagnostics");
   assert.deepEqual(result.artifacts.map((artifact) => artifact.path), [
     "Cargo.toml",
     "src/lib.rs",
@@ -326,13 +306,6 @@ test("source output identity rejects files outside the checked project root", ()
       packageRoot: "/project",
       sourceRoot: "/project",
     }),
-    paths: {
-      projectFilePath: "/project/tsonic.json",
-      projectRoot: "/project",
-      outputRoot: "/project/out",
-      targetOutputRoot: "/project/out/rust",
-      cacheRoot: "/project/.tsonic/cache",
-    },
   });
 
   assert.equal(plan.kind, "rejected");

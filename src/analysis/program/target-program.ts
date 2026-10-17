@@ -114,7 +114,7 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, sourceLifetimes: context.sourceLifetimes });
   if (genericAdoption.length !== 0) return rejectedTargetStage(genericAdoption);
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
-    sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
+    sourceFiles: context.sourceFiles, sourcePackages: input.sourcePackages });
   if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
   const sourceStage = analyzeRustProgram(context, configuration.outputType);
   if (context.diagnostics.length > 0) {
