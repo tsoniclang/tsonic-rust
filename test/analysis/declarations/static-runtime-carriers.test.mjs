@@ -297,7 +297,8 @@ export function verify(): void {
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn retainInput<Value: 'static>\(value: fn\(Value\)\)/u);
+  assert.equal(/pub fn retainInput<Value: 'static>\(\s*value: fn\(Value\) -> \(\),?\s*\) -> rt::Location<fn\(Value\) -> \(\), rt::TsonicError>/u.test(output),
+    true, "the input-only function pointer has the exact static bound, void result and native Location carrier");
   assert.match(output, /pub fn retainPattern\(value: js_abi::JsRegExp\)/u);
   const nativeCost = `${nativeOwnershipCostSupport}
 use static_runtime_generated::index;
