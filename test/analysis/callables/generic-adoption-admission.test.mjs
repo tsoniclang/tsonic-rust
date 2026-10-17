@@ -761,7 +761,7 @@ test("Rust keeps opaque resolver provenance explicitly unresolved for a Promise-
   const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `declare function opaque<Value>(value: Value): Value;
     function wrap<Value>(value: Value) { return new Promise<Value>(resolve => { const done = opaque(resolve); done(value); }); }
     export function reject(promised: Promise<number>): void { void wrap(promised); }` } });
-  assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: "done(value)" }]);
+  assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: "opaque(resolve)" }]);
 });
 
 test("Rust preserves an ordinary native actual despite an open symbolic resolver alias", { timeout: 300_000 }, () => {
