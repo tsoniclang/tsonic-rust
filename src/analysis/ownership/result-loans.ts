@@ -5,7 +5,7 @@ import { createSourceStorageBudget, defaultSourceStorageLimits,
 import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustFinalizedNativeResultLoans, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
-import type { RustNativeInputPlace, RustNativeResultLoanIndex, RustNativeResultOwnership,
+import type { RustNativeInputOwnership, RustNativeResultLoanIndex, RustNativeResultOwnership,
   RustNativeResultPlaceLoan, RustNativeResultPlaceSelection,
   RustResultLoanSourceSelection } from "../../target-model/records/ownership.js";
 import type { RustCallableEmissionContexts, RustEmissionProviderOperation,
@@ -15,26 +15,26 @@ import type { RustTypeDefinitions } from "../../target-model/types/source-union-
 export function analyzeRustNativeResultLoans(input: {
   readonly storage: SourceStorageQueries;
   readonly physicalEmissionContexts: RustCallableEmissionContexts;
-  readonly nativePlaces: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace>;
+  readonly nativeInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership>;
   readonly definitions: RustTypeDefinitions;
   readonly limits?: Partial<SourceStorageLimits>;
 }): RustNativeResultLoanIndex {
   const inputs = new Map<RustPhysicalEmissionContext,
-    Map<RustEmissionProviderOperation, Map<Node, Map<TargetUseSiteRef, RustNativeInputPlace>>>>();
-  for (const place of input.nativePlaces.values()) {
+    Map<RustEmissionProviderOperation, Map<Node, Map<TargetUseSiteRef, RustNativeInputOwnership>>>>();
+  for (const place of input.nativeInputs.values()) {
     const origin = place.operand.origin;
     if (origin.kind !== "call-input") throw new Error("Native result inputs require original admitted call-input places.");
     const operations = inputs.get(place.operand.context) ??
-      new Map<RustEmissionProviderOperation, Map<Node, Map<TargetUseSiteRef, RustNativeInputPlace>>>();
-    const nodes = operations.get(origin.operation) ?? new Map<Node, Map<TargetUseSiteRef, RustNativeInputPlace>>();
-    const places = nodes.get(origin.operationNode) ?? new Map<TargetUseSiteRef, RustNativeInputPlace>();
+      new Map<RustEmissionProviderOperation, Map<Node, Map<TargetUseSiteRef, RustNativeInputOwnership>>>();
+    const nodes = operations.get(origin.operation) ?? new Map<Node, Map<TargetUseSiteRef, RustNativeInputOwnership>>();
+    const places = nodes.get(origin.operationNode) ?? new Map<TargetUseSiteRef, RustNativeInputOwnership>();
     places.set(place.operand.use, place);
     nodes.set(origin.operationNode, places);
     operations.set(origin.operation, nodes);
     inputs.set(place.operand.context, operations);
   }
   const results = new Map<Node, Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustNativeResultOwnership>>>();
-  const emptyInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace> = new Map();
+  const emptyInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership> = new Map();
   for (const context of input.physicalEmissionContexts.contexts) {
     if (input.physicalEmissionContexts.contextFor(context.use) !== context)
       throw new Error("Native returned-loan admission requires each original completed physical context.");
@@ -47,9 +47,9 @@ export function analyzeRustNativeResultLoans(input: {
       const operations = results.get(node) ?? new Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustNativeResultOwnership>>();
       const contexts = operations.get(operation) ?? new Map<TargetUseSiteRef, RustNativeResultOwnership>();
       if (contexts.has(context.use)) throw new Error("Native returned-loan admission requires one row per original operation and physical context.");
-      const nativePlaces = inputs.get(context)?.get(operation)?.get(node) ?? emptyInputs;
+      const nativeInputs = inputs.get(context)?.get(operation)?.get(node) ?? emptyInputs;
       const place = selectRustNativeResultPlaces(node, operation, context.use, {
-        physicalEmissionContexts: input.physicalEmissionContexts, nativePlaces, definitions: input.definitions,
+        physicalEmissionContexts: input.physicalEmissionContexts, nativeInputs, definitions: input.definitions,
       });
       const source = place.kind === "unavailable" ? place : selectRustResultLoanSources(place, input);
       contexts.set(context.use, Object.freeze({ node, operation, context, place, source }));
@@ -84,7 +84,7 @@ export function selectRustResultLoanSources(
   if (sourceOrigins.alternatives.length === 0)
     return unavailable("The returned native loan has no original source execution alternative.");
   const budget = createSourceStorageBudget({ ...defaultSourceStorageLimits, ...input.limits });
-  const subjects = new Map<RustNativeInputPlace, SourceStorageSubject>();
+  const subjects = new Map<RustNativeInputOwnership, SourceStorageSubject>();
   for (const loan of selected.loans) for (const origin of loan.origins) {
     if (subjects.has(origin.input)) continue;
     if (!budget.node() || !budget.step() || !budget.row()) return unavailable(budget.failure()!);
@@ -127,7 +127,7 @@ export function selectRustResultLoanSources(
 export function selectRustNativeResultPlaces(
   node: Node, operation: RustEmissionProviderOperation, contextUse: TargetUseSiteRef,
   input: { readonly physicalEmissionContexts: RustCallableEmissionContexts;
-    readonly nativePlaces: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace>; readonly definitions: RustTypeDefinitions },
+    readonly nativeInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership>; readonly definitions: RustTypeDefinitions },
 ): RustNativeResultPlaceSelection {
   const unavailable = (...reasons: readonly string[]): RustNativeResultPlaceSelection =>
     Object.freeze({ kind: "unavailable", node, reasons: Object.freeze([...reasons]) });
@@ -144,8 +144,8 @@ export function selectRustNativeResultPlaces(
   const carrier = input.physicalEmissionContexts.carrierFor(contextUse, result.carrier);
   if (carrier === undefined) return unavailable("The returned-loan relation has no actual selected result carrier.");
   const conversion = result.conversion;
-  const places = new Map<RustFinalizedNativeResultLoans["loans"][number]["origins"][number]["input"], RustNativeInputPlace[]>();
-  for (const place of input.nativePlaces.values()) {
+  const places = new Map<RustFinalizedNativeResultLoans["loans"][number]["origins"][number]["input"], RustNativeInputOwnership[]>();
+  for (const place of input.nativeInputs.values()) {
     const origin = place.operand.origin;
     if (origin.kind !== "call-input" || origin.operationNode !== node || origin.operation !== operation ||
       place.operand.context !== context) continue;
@@ -162,10 +162,13 @@ export function selectRustNativeResultPlaces(
     for (const origin of selected.origins) {
       const actual = places.get(origin.input);
       if (actual?.length !== 1) return unavailable("A returned native loan has no unique original input-use place in this physical context.");
-      const kind = inputLoanKind(origin.origin.kind, origin.input.conversion, input.definitions);
-      if (kind === undefined)
+      const selectedInput = actual[0]!;
+      const declaredKind = inputLoanKind(origin.origin.kind, origin.input.conversion, input.definitions);
+      const kind = declaredKind === "borrow" && selectedInput.kind === "value" &&
+        origin.input.conversion.kind === "identity" && origin.input.sourceCarrier.kind === "reference" ? "carried" : declaredKind;
+      if (kind === undefined || kind === "borrow" && selectedInput.kind !== "place")
         return unavailable("The native input conversion does not establish that the returned loan refers to the authored source place.");
-      origins.push(Object.freeze({ declaration: origin.origin, input: actual[0]!, kind }));
+      origins.push(Object.freeze({ declaration: origin.origin, input: selectedInput, kind }));
     }
     loans.push(Object.freeze({ declaration: selected.loan, resultPath: path, origins: Object.freeze(origins) }));
   }

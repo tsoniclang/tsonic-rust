@@ -24,9 +24,10 @@ import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callab
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
-import { analyzeRustOwnershipFlow } from "../ownership/flow.js";
-import { analyzeRustReadOwnership } from "../ownership/reads.js";
-import { analyzeRustNativePlaces } from "../ownership/native-places.js";
+import { analyzeRustOwnershipFlow, completeRustNativeReadTransfers } from "../ownership/flow.js";
+import { analyzeRustReadOwnership, prepareRustCaptureReadRequirements,
+  completeRustCaptureReadOwnership } from "../ownership/reads.js";
+import { analyzeRustNativeInputs } from "../ownership/native-places.js";
 import { analyzeRustNativeResultLoans } from "../ownership/result-loans.js";
 import { analyzeRustLocalStorageAliases } from "../storage/local-aliases.js";
 import { analyzeRustProjectConstructions } from "../project-types/construction-plan.js";
@@ -206,11 +207,16 @@ export function analyzeRustTargetProgram(
   };
   const borrowUses = createRustBorrowUseAnalysis({ ast: context.ast,
     navigation: context.source.navigation, isNativeNode: context.isNativeNode });
+  const captureRequirements = prepareRustCaptureReadRequirements({ storage: context.sourceStorage,
+    nativeNodes: context.nativeNodes, records, genericCallables: context.callableValues.generic,
+    nativeStorage: context.callableValues.nativeStorage, lexicalFunctions, capturesFor });
+  if (captureRequirements.kind === "rejected") return rejectedTargetStage(captureRequirements.diagnostics);
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
     nativeNodes: context.nativeNodes,
     borrowUses,
+    captureRequirements: captureRequirements.requirements,
     capturesFor,
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
       rustNativeArgumentBorrowsRead(argument, reference, context.ast, records),
@@ -326,14 +332,16 @@ export function analyzeRustTargetProgram(
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
+  const captureOwnership = completeRustCaptureReadOwnership({ requirements: captureRequirements.requirements,
+    flow: ownershipFlow.flow, definitions: context.typeDefinitions,
+    genericRequirements: declarationGenericRequirements.index });
+  if (captureOwnership.kind === "rejected") return rejectedTargetStage(captureOwnership.diagnostics);
+  const movingReads = completeRustNativeReadTransfers(ownershipFlow.flow, captureOwnership.captures);
   const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
-    flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    movingReads, captures: captureOwnership.captures,
+    borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
-    nativeStorage: context.callableValues.nativeStorage, lexicalFunctions,
-    capturesFor, invocationTransfersCapture: owner => {
-      const selected = lexicalFunctions.forDeclaration(owner);
-      return selected?.kind !== "resolved" || !selected.valueObserved && selected.singleInvocation;
-    } });
+  });
   if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
@@ -370,17 +378,18 @@ export function analyzeRustTargetProgram(
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
-  const nativePlaces = analyzeRustNativePlaces({ ast: context.ast, records,
+  const nativeInputs = analyzeRustNativeInputs({ ast: context.ast, records,
     navigation: context.source.navigation, definitions: typeDefinitions,
-    genericCallables: callableValues.value.generic, projectTypes, objectRepresentations,
+    projectTypes, objectRepresentations,
+    ownership: ownership.ownership,
     physicalEmissionContexts: callableValues.value.emissionContexts, statementCompletions: statementCompletions.plan });
-  if (nativePlaces.kind === "rejected") return rejectedTargetStage(nativePlaces.diagnostics);
+  if (nativeInputs.kind === "rejected") return rejectedTargetStage(nativeInputs.diagnostics);
   const nativeResultLoans = analyzeRustNativeResultLoans({ storage: context.sourceStorage,
-    physicalEmissionContexts: callableValues.value.emissionContexts, nativePlaces: nativePlaces.places,
+    physicalEmissionContexts: callableValues.value.emissionContexts, nativeInputs: nativeInputs.inputs,
     definitions: typeDefinitions });
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
     navigation: context.source.navigation, physicalEmissionContexts: callableValues.value.emissionContexts,
-    nativePlaces: nativePlaces.places });
+    nativeInputs: nativeInputs.inputs });
   const mutableInputDiagnostics: TargetDiagnostic[] = [];
   for (const { selection } of providerMutableInputs.operations) {
     if (selection.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
@@ -430,7 +439,7 @@ export function analyzeRustTargetProgram(
     callableOwnership: context.callableOwnership.seal(),
     sourceLifetimes: context.sourceLifetimes,
     declarationGenericRequirements: declarationGenericRequirements.index,
-    ownership: Object.freeze({ ...ownership.ownership, nativePlaces: nativePlaces.places, nativeResultLoans }),
+    ownership: Object.freeze({ ...ownership.ownership, nativeInputs: nativeInputs.inputs, nativeResultLoans }),
     borrowedElementReads,
     borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records),
     providerMutableInputs,

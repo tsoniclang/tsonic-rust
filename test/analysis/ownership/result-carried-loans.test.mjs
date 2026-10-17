@@ -47,9 +47,11 @@ function fixture(options = {}) {
   const operand = Object.freeze({ use, node: sourceNode, context,
     origin: { kind: "call-input", operationNode: node, operation, input: selectedInput },
     carrier: sourceCarrier, destination: selectedInput.parameterCarrier });
-  const place = Object.freeze({ input: selectedInput, key: "receiver", node: sourceNode, slot, operand,
-    place: Object.freeze({ node: sourceNode, operand, carrier: sourceCarrier,
-      sourcePath: { declaration, projections: [] }, storage: { kind: "direct" } }) });
+  const place = Object.freeze({ kind: options.receiverMode === "value" ? "value" : "place", input: selectedInput, key: "receiver", node: sourceNode, slot, operand,
+    ...(options.receiverMode === "value" ? { read: Object.freeze({ carrier: sourceCarrier, value: { kind: "move" }, source: { kind: "move" },
+      snapshot: undefined, stablePlace: false, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set() }) }
+      : { place: Object.freeze({ node: sourceNode, operand, carrier: sourceCarrier,
+      sourcePath: { declaration, projections: [] }, storage: { kind: "direct" } }) }) });
   const physicalEmissionContexts = { contexts: [context], operands: [operand], sourceOccurrences: [occurrence],
     contextFor: selected => selected === contextUse ? context : undefined,
     operandFor: selected => selected === use ? operand : undefined,
@@ -57,7 +59,7 @@ function fixture(options = {}) {
     sourceOriginFor: (selected, selectedOccurrence) => selected === contextUse && selectedOccurrence === occurrence
       ? sourceOrigins.find(row => row.occurrence === occurrence) : undefined,
     carrierFor: (selected, carrier) => selected === contextUse && carrier === abi.result.carrier ? resultCarrier : undefined };
-  const input = { physicalEmissionContexts, nativePlaces: new Map([[use, place]]), definitions: emptyRustTypeDefinitions };
+  const input = { physicalEmissionContexts, nativeInputs: new Map([[use, place]]), definitions: emptyRustTypeDefinitions };
   return { node, operation, contextUse, context, occurrence, input, place };
 }
 
@@ -161,7 +163,7 @@ test("owned-string result conversion ends the transient reference relation, not 
 test("returned native relations reject copied input and context identities", () => {
   const selected = fixture();
   const copied = { ...selected.place, input: { ...selected.place.input } };
-  const changed = { ...selected.input, nativePlaces: new Map([[selected.place.operand.use, copied]]) };
+  const changed = { ...selected.input, nativeInputs: new Map([[selected.place.operand.use, copied]]) };
   assert.equal(selectRustNativeResultPlaces(selected.node, selected.operation, selected.contextUse, changed).kind,
     "unavailable", "a copied finalized source input is not the original ABI input");
   assert.equal(selectRustNativeResultPlaces(selected.node, selected.operation, { ...selected.contextUse }, selected.input).kind,

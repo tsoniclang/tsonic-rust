@@ -1,8 +1,9 @@
 import type { Node } from "@tsonic/tsts";
 import { Node_Expression, sourceEnclosingCallable, sourceParameterIsProperty, sourceTransparentExpressionOperand } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
-import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceStorageLimits, type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipFact } from "../../target-model/records/ownership.js";
+import { createSourceStorageBudget, defaultSourceStorageLimits, type SourceStorageLimits, type SourceStorageQueries,
+  type SourceStorageSubject } from "@tsonic/target-api/analysis";
+import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipFact, RustNativeCaptureSource } from "../../target-model/records/ownership.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
@@ -16,28 +17,139 @@ import { rustBorrowedOperationArguments } from "../storage/provider-borrows.js";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { analyzeRustReadUses } from "./uses.js";
 import { rustContextualRuntimeConversionContract } from "../../target-model/conversions/contextual.js";
-import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustNativeStoragePlan, RustNativeStorageSelection } from "../callables/native-storage.js";
 import type { RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import { rustRetainedCallableStorage } from "../callables/results.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+
+export interface RustCaptureReadRequirement {
+  readonly owner: Node;
+  readonly capture: RustClosureCaptureFact["captures"][number];
+  readonly subject: SourceStorageSubject;
+  readonly physical: Exclude<RustNativeStorageSelection, { readonly kind: "unresolved" }>;
+  readonly source: RustNativeCaptureSource;
+  readonly carrier: TargetTypeRef;
+  readonly copy: boolean;
+  readonly formation: "owned" | "borrowed" | "if-transferred";
+  readonly mutable: boolean;
+  readonly aliasesBinding: boolean;
+  readonly invocationTransfers: boolean;
+}
+
+export type RustCaptureReadRequirements = ReadonlyMap<Node, readonly RustCaptureReadRequirement[]>;
+
+export function prepareRustCaptureReadRequirements(input: {
+  readonly storage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
+  readonly records: RustAnalysisRecords;
+  readonly genericCallables: RustGenericCallablePlan;
+  readonly nativeStorage: Pick<RustNativeStoragePlan, "subjectFor">;
+  readonly lexicalFunctions: Pick<RustLexicalFunctionQueries, "forDeclaration">;
+  readonly capturesFor: (owner: Node) => RustClosureCaptureFact | undefined;
+  readonly limits?: Partial<SourceStorageLimits>;
+}): { readonly kind: "resolved"; readonly requirements: RustCaptureReadRequirements }
+  | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
+  const budget = createSourceStorageBudget({ ...defaultSourceStorageLimits, ...input.limits });
+  const requirements = new Map<Node, readonly RustCaptureReadRequirement[]>();
+  const reject = (node: Node, reason: string) => ({ kind: "rejected" as const, diagnostics: [{
+    code: "RUST_CAPTURE_PHYSICAL_STORAGE_UNAVAILABLE", category: "error" as const, source: "tsonic-rust",
+    sourceNode: node, message: reason, evidence: ["target.capability=rust.analysis.ownership"],
+  }] });
+  for (const owner of input.nativeNodes) {
+    if (!budget.node() || !budget.step()) return reject(owner, budget.failure()!);
+    const captures = input.capturesFor(owner)?.captures;
+    if (captures === undefined || captures.length === 0) continue;
+    const lexical = input.lexicalFunctions.forDeclaration(owner);
+    if (lexical?.kind === "unresolved") return reject(owner, lexical.reason);
+    const selected: RustCaptureReadRequirement[] = [];
+    for (const capture of captures) {
+      if (!budget.row() || !budget.step()) return reject(capture.reference, budget.failure()!);
+      const subject = input.storage.subjectFor(capture.reference);
+      if (subject.kind === "unresolved") return reject(capture.reference, subject.reason);
+      const physical = input.nativeStorage.subjectFor(subject.subject, capture.carrier, owner);
+      if (physical.kind === "unresolved") return reject(capture.reference, physical.reason);
+      const lexicalCapture = lexical?.captures.find(value => value.declaration === capture.declaration);
+      if (lexical !== undefined && lexicalCapture === undefined) return reject(capture.reference,
+        "A native lexical capture requires its original selected source capture correspondence.");
+      const carrier = capture.storage === "location" ? rustLocationTargetType(physical.carrier) : physical.carrier;
+      const copy = isRustCopyCarrier(carrier, value => input.genericCallables.definitionFor(value)?.copy === true);
+      const formation = lexical === undefined || rustRetainedCallableStorage(input.records, owner) !== undefined ||
+        capture.storage === "value" && lexicalCapture?.mutable === false && copy ? "owned"
+        : capture.storage === "value" && lexicalCapture?.mutable === false && !lexical.valueObserved
+          ? "if-transferred" : "borrowed";
+      const source = Object.freeze({ subject: subject.subject, carrier: physical.carrier, alternatives: physical.sources });
+      selected.push(Object.freeze({ owner, capture, subject: subject.subject, physical, source, carrier, copy, formation,
+        mutable: capture.storage === "value" && lexicalCapture?.mutable === true,
+        aliasesBinding: capture.storage !== "value",
+        invocationTransfers: lexical === undefined || !lexical.valueObserved && lexical.singleInvocation }));
+    }
+    requirements.set(owner, Object.freeze(selected));
+  }
+  return { kind: "resolved", requirements };
+}
+
+export function completeRustCaptureReadOwnership(input: {
+  readonly requirements: RustCaptureReadRequirements;
+  readonly flow: RustOwnershipFlow;
+  readonly definitions: RustTypeDefinitions;
+  readonly genericRequirements: RustDeclarationGenericRequirementIndex;
+}): { readonly kind: "resolved"; readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]> }
+  | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
+  const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
+  const reject = (node: Node, reason: string) => ({ kind: "rejected" as const, diagnostics: [{
+    code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error" as const, source: "tsonic-rust", sourceNode: node,
+    message: reason, evidence: ["target.capability=rust.analysis.ownership"],
+  }] });
+  for (const [owner, requirements] of input.requirements) {
+    const selected: RustCaptureReadOwnership[] = [];
+    for (const requirement of requirements) {
+      const { capture, carrier, copy } = requirement;
+      const clone = rustCarrierSupportsClone(carrier, input.definitions) || input.genericRequirements.supportsClone(owner, carrier);
+      const { transfer, owned } = rustCaptureReadFormation(requirement, input.flow.captureTransfers);
+      const read = owned ? selectRustValueReadOwnership({ copy, clone, transfer })
+        : Object.freeze({ kind: "borrow" as const, mutable: requirement.mutable });
+      if (read === undefined) return reject(capture.reference,
+        "A retained capture requires a proven transfer, Copy or Clone contract.");
+      const invocation = read.kind === "borrow" || requirement.invocationTransfers ? read :
+        selectRustValueReadOwnership({ copy, clone, transfer: capture.storage === "cell" || capture.storage === "borrow-cell" });
+      if (invocation === undefined) return reject(capture.reference,
+        "A repeated capture invocation requires its exact Copy or Clone contract.");
+      selected.push(Object.freeze({ declaration: capture.declaration, reference: capture.reference,
+        carrier: requirement.physical.carrier, source: requirement.source, read, invocation,
+        borrowed: selectRustValueReadOwnership({ copy, clone,
+          transfer: capture.storage === "cell" || capture.storage === "borrow-cell" }) }));
+    }
+    captures.set(owner, Object.freeze(selected));
+  }
+  return { kind: "resolved", captures };
+}
+
+export function rustCaptureReadFormation(requirement: RustCaptureReadRequirement,
+  transfers: ReadonlyMap<Node, ReadonlySet<Node>>): {
+    readonly transfer: boolean; readonly owned: boolean; readonly requiresClone: boolean;
+  } {
+  const transfer = requirement.capture.storage === "cell" || requirement.capture.storage === "borrow-cell" ||
+    transfers.get(requirement.owner)?.has(requirement.capture.declaration) === true;
+  const owned = requirement.formation === "owned" || requirement.formation === "if-transferred" && transfer;
+  return { transfer, owned, requiresClone: owned && !requirement.copy &&
+    (!transfer || !requirement.invocationTransfers && requirement.capture.storage !== "cell" && requirement.capture.storage !== "borrow-cell") };
+}
 
 export function analyzeRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;
   readonly nativeNodes: readonly Node[];
   readonly records: RustAnalysisRecords;
-  readonly flow: RustOwnershipFlow;
+  readonly movingReads: ReadonlySet<Node>;
+  readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]>;
   readonly borrowEffects: RustBorrowEffects;
   readonly borrowEffectsInput: RustBorrowEffectsInput;
   readonly definitions: RustTypeDefinitions;
   readonly genericRequirements: RustDeclarationGenericRequirementIndex;
   readonly genericCallables: RustGenericCallablePlan;
-  readonly nativeStorage: Pick<RustNativeStoragePlan, "subjectFor">;
-  readonly lexicalFunctions: Pick<RustLexicalFunctionQueries, "forDeclaration">;
-  readonly capturesFor: (owner: Node) => RustClosureCaptureFact | undefined;
-  readonly invocationTransfersCapture: (owner: Node) => boolean;
   readonly limits?: Partial<SourceStorageLimits>;
 }): { readonly kind: "resolved"; readonly ownership: Pick<RustOwnershipRecords, "reads" | "captures" | "writes"> }
   | { readonly kind: "rejected"; readonly diagnostics: readonly TargetDiagnostic[] } {
-  const { storage, records, flow, borrowEffects } = input;
+  const { storage, records, movingReads, captures, borrowEffects } = input;
   const { ast } = storage.source;
   const budget = createSourceStorageBudget({ ...defaultSourceStorageLimits, ...input.limits });
   const rejectedBudget = () => ({ kind: "rejected" as const, diagnostics: [{
@@ -60,14 +172,16 @@ export function analyzeRustReadOwnership(input: {
       }] };
     }
     const operation = records.targetOperation.get(node);
-    storageReads.set(node, inherited ?? Object.freeze({ storage: ast.is.IsIdentifier(node) || ast.is.IsElementAccessExpression(node) ||
+    const parent = ast.parent(node);
+    const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
+    storageReads.set(node, inherited ?? Object.freeze({ storage: ast.is.IsIdentifier(node) && records.sourceBinding.get(node) !== undefined ||
+      implicitProperty || ast.is.IsElementAccessExpression(node) ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       operation?.kind === "source-field" && operation.valueSemantics.kind === "stored",
       binding: records.sourceBinding.get(node)?.sourceDeclaration }));
   }
   const uses = analyzeRustReadUses(ast, input.nativeNodes, records);
   const reads = new Map<Node, RustReadOwnershipFact>();
-  const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
   const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
   const borrowDemands = new Map<Node, Set<Node>>();
   const compare = (source: Node | undefined, later: Node | undefined): void => {
@@ -142,7 +256,7 @@ export function analyzeRustReadOwnership(input: {
       const storageRead = sourceStorageRead.storage;
       const borrowedCapture = captured?.read.kind === "borrow";
       const value = selectRustValueReadOwnership({ copy, clone, borrowed,
-        transfer: !borrowedCapture && (use?.mode === "move" || flow.movingReads.has(node) || !storageRead) });
+        transfer: !borrowedCapture && (use?.mode === "move" || movingReads.has(node) || !storageRead) });
       const physicalSourceCarrier = captured?.carrier ?? carrier;
       const sourceCopy = isRustCopyCarrier(physicalSourceCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
       const sourceClone = rustCarrierSupportsClone(physicalSourceCarrier, input.definitions) || declaration !== undefined &&
@@ -153,7 +267,7 @@ export function analyzeRustReadOwnership(input: {
       const projectBorrows = records.projectDowncast.get(node) !== undefined;
       const constructsContainer = records.optionProjection.get(node)?.kind === "some";
       const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-        transfer: !borrowedCapture && (flow.movingReads.has(node) || !storageRead), borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
+        transfer: !borrowedCapture && (movingReads.has(node) || !storageRead), borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
           ? "shared" : constructsContainer ? undefined : borrowed });
       const operation = records.targetOperation.get(node);
       const binding = records.sourceBinding.get(node);
@@ -178,58 +292,6 @@ export function analyzeRustReadOwnership(input: {
         borrowedAcross: borrowRelationships.get(node) ?? new Set<Node>(),
       }));
     }
-    const selectedCaptures: RustCaptureReadOwnership[] = [];
-    for (const capture of input.capturesFor(node)?.captures ?? []) {
-      const subject = storage.subjectFor(capture.reference);
-      const selected = subject.kind === "unresolved" ? subject
-        : input.nativeStorage.subjectFor(subject.subject, capture.carrier, node);
-      if (selected.kind === "unresolved") return { kind: "rejected", diagnostics: [{
-        code: "RUST_CAPTURE_PHYSICAL_STORAGE_UNAVAILABLE", category: "error", source: "tsonic-rust",
-        sourceNode: capture.reference, message: selected.reason,
-        evidence: ["target.capability=rust.analysis.ownership"],
-      }] };
-      const capturedCarrier = selected.carrier;
-      const physicalCarrier = capture.storage === "location" ? rustLocationTargetType(capturedCarrier) : capturedCarrier;
-      const copy = isRustCopyCarrier(physicalCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const clone = rustCarrierSupportsClone(physicalCarrier, input.definitions) ||
-        input.genericRequirements.supportsClone(node, physicalCarrier);
-      const ownedRead = selectRustValueReadOwnership({ copy, clone,
-        transfer: capture.storage === "cell" || capture.storage === "borrow-cell" ||
-          flow.captureTransfers.get(node)?.has(capture.declaration) === true });
-      const lexical = input.lexicalFunctions.forDeclaration(node);
-      if (lexical?.kind === "unresolved") return { kind: "rejected", diagnostics: [{
-        code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
-        sourceNode: capture.reference, message: lexical.reason,
-        evidence: ["target.capability=rust.analysis.ownership"],
-      }] };
-      const lexicalCapture = lexical?.captures.find(selected => selected.declaration === capture.declaration);
-      if (lexical !== undefined && lexicalCapture === undefined) return { kind: "rejected", diagnostics: [{
-        code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
-        sourceNode: capture.reference, message: "A native lexical capture requires its original selected source capture correspondence.",
-        evidence: ["target.capability=rust.analysis.ownership"],
-      }] };
-      const owned = lexical === undefined || rustRetainedCallableStorage(records, node) !== undefined ||
-        capture.storage === "value" && lexicalCapture?.mutable === false &&
-          (copy || !lexical.valueObserved && ownedRead !== undefined && ownedRead.kind !== "clone");
-      const read = owned ? ownedRead : Object.freeze({ kind: "borrow" as const,
-        mutable: capture.storage === "value" && lexicalCapture?.mutable === true });
-      if (read === undefined) return { kind: "rejected", diagnostics: [{
-        code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
-        sourceNode: capture.reference, message: "A retained capture requires a proven transfer, Copy or Clone contract.",
-        evidence: ["target.capability=rust.analysis.ownership"],
-      }] };
-      const invocation = read.kind === "borrow" || input.invocationTransfersCapture(node) ? read :
-        selectRustValueReadOwnership({ copy, clone, transfer: capture.storage === "cell" || capture.storage === "borrow-cell" });
-      if (invocation === undefined) return { kind: "rejected", diagnostics: [{
-        code: "RUST_CAPTURE_OWNERSHIP_UNAVAILABLE", category: "error", source: "tsonic-rust",
-        sourceNode: capture.reference, message: "A repeated capture invocation requires its exact Copy or Clone contract.",
-        evidence: ["target.capability=rust.analysis.ownership"],
-      }] };
-      selectedCaptures.push(Object.freeze({ declaration: capture.declaration, reference: capture.reference,
-        carrier: capturedCarrier, read, invocation,
-        borrowed: selectRustValueReadOwnership({ copy, clone, transfer: capture.storage === "cell" || capture.storage === "borrow-cell" }) }));
-    }
-    if (selectedCaptures.length > 0) captures.set(node, Object.freeze(selectedCaptures));
     const write = borrowEffects.fieldWrites.get(node);
     if (write !== undefined) writes.set(node, write);
   }

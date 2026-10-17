@@ -4,7 +4,7 @@ import type { TargetTypeRef } from "../types/model.js";
 import type { RustTargetOperationFact } from "./operations.js";
 import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand,
   RustPhysicalEmissionSourceOrigin, RustPhysicalEmissionSourceOrigins,
-  RustPhysicalEmissionSourceSlot } from "./physical-emission-contexts.js";
+  RustPhysicalEmissionSourceSlot, RustPhysicalCallableSourceSelection } from "./physical-emission-contexts.js";
 import type { RustFinalizedNativeResultLoans, RustFinalizedSourceInput } from "./finalized-operation.js";
 import type { RustNativeResultLoan, RustNativeResultLoanOrigin } from "../operations/result-loans.js";
 
@@ -41,13 +41,20 @@ export interface RustCaptureReadOwnership {
   readonly read: RustValueReadOwnership;
   readonly invocation: RustValueReadOwnership;
   readonly borrowed: RustValueReadOwnership | undefined;
+  readonly source: RustNativeCaptureSource;
+}
+
+export interface RustNativeCaptureSource {
+  readonly subject: SourceStorageSubject;
+  readonly carrier: TargetTypeRef;
+  readonly alternatives: readonly RustPhysicalCallableSourceSelection[];
 }
 
 export interface RustOwnershipRecords {
   readonly reads: ReadonlyMap<Node, RustReadOwnershipFact>;
   readonly captures: ReadonlyMap<Node, readonly RustCaptureReadOwnership[]>;
   readonly writes: ReadonlyMap<Node, RustBorrowedFieldWrite>;
-  readonly nativePlaces: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace>;
+  readonly nativeInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership>;
   readonly nativeResultLoans: RustNativeResultLoanIndex;
 }
 
@@ -65,19 +72,30 @@ export interface RustNativePlace {
     | { readonly kind: "owned"; readonly read: Exclude<RustValueReadOwnership, { readonly kind: "borrow" }> };
 }
 
-export interface RustNativeInputPlace {
+interface RustNativeInputBase {
   readonly input: RustFinalizedSourceInput;
   readonly key: string;
   readonly node: Node;
   readonly slot: RustPhysicalEmissionSourceSlot;
   readonly operand: RustPhysicalEmissionOperand;
+}
+
+export interface RustNativeInputPlace extends RustNativeInputBase {
+  readonly kind: "place";
   readonly place: RustNativePlace;
 }
+
+export interface RustNativeInputValue extends RustNativeInputBase {
+  readonly kind: "value";
+  readonly read: RustReadOwnershipFact;
+}
+
+export type RustNativeInputOwnership = RustNativeInputPlace | RustNativeInputValue;
 
 export interface RustNativeResultPlaceLoan {
   readonly declaration: RustNativeResultLoan;
   readonly resultPath: readonly string[];
-  readonly origins: readonly { readonly declaration: RustNativeResultLoanOrigin; readonly input: RustNativeInputPlace;
+  readonly origins: readonly { readonly declaration: RustNativeResultLoanOrigin; readonly input: RustNativeInputOwnership;
     readonly kind: "borrow" | "carried" }[];
 }
 

@@ -3,17 +3,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, acmeVectorsPackage } from "../../helpers/rust-session.mjs";
 import { selectRustProviderMutableInputs } from "../../../dist/analysis/storage/provider-mutable-inputs.js";
-import { analyzeRustNativePlaces } from "../../../dist/analysis/ownership/native-places.js";
+import { analyzeRustNativeInputs } from "../../../dist/analysis/ownership/native-places.js";
 
 
 function selectMutableInputs(node, operation, contextUse, input) {
-  const places = analyzeRustNativePlaces(input);
+  const places = analyzeRustNativeInputs(input);
   const operands = input.physicalEmissionContexts.operands.filter(operand => operand.context.use === contextUse &&
     operand.origin.kind === "call-input" && operand.origin.operationNode === node &&
     operand.origin.operation === operation && operand.origin.input.mode === "mut-ref");
   return places.kind === "rejected" ? { kind: "rejected", node: places.diagnostics[0].sourceNode,
     reason: places.diagnostics[0].message } : selectRustProviderMutableInputs(node, operation, contextUse,
-      operands, { ...input, nativePlaces: places.places });
+      operands, { ...input, nativeInputs: places.inputs });
 }
 
 function fixture() {
@@ -36,7 +36,7 @@ export function main(): void {
     statementCompletions: program.statementCompletions, physicalEmissionContexts: program.physicalEmissionContexts,
     definitions: program.typeDefinitions, genericCallables: program.callableValues.generic,
     genericRequirements: program.declarationGenericRequirements,
-    projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations }, calls };
+    projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations, ownership: program.ownership }, calls };
 }
 
 test("native mutable admission is sealed and retains exact operation and source-input ownership", () => {

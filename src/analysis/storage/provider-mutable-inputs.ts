@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
-import type { RustNativeInputPlace, RustNativePlace } from "../../target-model/records/ownership.js";
+import type { RustNativeInputOwnership, RustNativeInputPlace, RustNativePlace } from "../../target-model/records/ownership.js";
 import type { RustCallableEmissionContexts, RustPhysicalEmissionContext, RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
 import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
 import { providerSourceInputKey } from "../operations/provider-source-inputs.js";
@@ -13,7 +13,7 @@ type ProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "prov
 
 type RustProviderMutableInputContext = RustNativeStoragePathInput & {
   readonly physicalEmissionContexts: RustCallableEmissionContexts;
-  readonly nativePlaces: ReadonlyMap<TargetUseSiteRef, RustNativeInputPlace>;
+  readonly nativeInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership>;
 };
 
 export type RustProviderMutableInputSelection =
@@ -95,8 +95,8 @@ export function selectRustProviderMutableInputs(
     if (sourceRows.length !== 1 || physicalRows.length !== 1)
       return reject(operationNode, "Mutable provider input requires one original source slot and one original physical operand.");
     const operand = physicalRows[0]!;
-    const place = input.nativePlaces.get(operand.use);
-    if (place === undefined || place.operand !== operand || place.operand.context !== context ||
+    const place = input.nativeInputs.get(operand.use);
+    if (place === undefined || place.kind !== "place" || place.operand !== operand || place.operand.context !== context ||
       place.input !== value || place.slot !== sourceRows[0]!.slot || place.key !== key)
       return reject(operationNode, "Mutable provider input has no exact admitted physical place for its original input use.");
     const node = place.node;

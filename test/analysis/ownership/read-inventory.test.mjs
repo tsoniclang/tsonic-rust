@@ -16,21 +16,27 @@ async function fixture() {
   const builder = createRustProgramRecordBuilder();
   const selected = storage.nodes.filter(node => source.ast.is.IsParenthesizedExpression(node) ||
     source.ast.is.IsIdentifier(node) && source.ast.text(node) === "value");
-  for (const node of selected) builder.runtimeCarriers.selected(node, { kind: "target-named", id: "rust.std.String" });
+  for (const node of selected) {
+    builder.runtimeCarriers.selected(node, { kind: "target-named", id: "rust.std.String" });
+    if (source.ast.is.IsIdentifier(node)) {
+      const parent = source.ast.parent(node);
+      const declaration = source.navigation.sourceReferenceFor(node)?.declaration ??
+        (source.ast.is.IsParameterDeclaration(parent) ? parent : undefined);
+      assert.equal(declaration !== undefined, true, "the fixture supplies each original checked storage binding");
+      builder.sourceBindings.lexical(node, declaration, "value");
+    }
+  }
   const input = {
     storage,
     nativeNodes: storage.nodes,
     records: builder.seal([]),
-    flow: { movingReads: new Set(), captureTransfers: new Map() },
+    movingReads: new Set(),
+    captures: new Map(),
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: { ast: source.ast, isNativeNode: node => nativeNodes.has(node) },
     definitions: emptyRustTypeDefinitions,
     genericRequirements: { supportsClone: () => true },
     genericCallables: { definitionFor: () => undefined },
-    nativeStorage: { subjectFor: () => { throw new Error("This fixture has no native capture demand."); } },
-    lexicalFunctions: { forDeclaration: () => undefined },
-    capturesFor: () => undefined,
-    invocationTransfersCapture: () => false,
   };
   return { input, selected };
 }
