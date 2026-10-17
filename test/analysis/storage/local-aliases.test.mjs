@@ -39,7 +39,7 @@ function fixture() {
     nativeArrayStorage: { get: node => promoted.get(node)?.get("nativeArrayStorage") },
     runtimeCarrier: { get: (node) => ({ carrier: carriers.get(node) }) },
 argumentPassing: { get: (node) => modes.has(node) ? { mode: modes.get(node) } : undefined }});
-  const input = { ast, records, sourceFiles: [{ children: [owner, alias] }],
+  const input = { ast, records, nativeNodes: [owner, alias],
     navigation: { expressionValueFlow: () => flow, declarationUseSummary: node => summaries.get(node) } };
   return { input, owner, alias, flow, summaries, carriers, modes, promoted, callable, argument };
 }

@@ -55,8 +55,11 @@ export function selectRustAwaitSourceErrors(
       for (const error of effects.nativeErrors) sourceWork += budget.metadata(error.errorType);
       const replacementWork = budget.metadata(operation.targetGenericArguments);
       budget.expansion(sourceWork, replacementWork);
+      const generics = callableValues.nativeStorage.genericBindingsFor(target, activation.bindings);
+      if (generics.kind !== "resolved") return undefined;
       const substitutions = selection.bindingsFor(invocation, target,
-        [asynchronous.futureCarrier, ...effects.nativeErrors.map(error => error.errorType)], activation.bindings);
+        [asynchronous.futureCarrier, ...effects.nativeErrors.map(error => error.errorType)],
+        { storageBindings: activation.bindings, genericBindings: generics.bindings });
       const edge = selection.edgeFor(target, "await", effects, substitutions);
       if (substitutions === undefined || edge === undefined) return undefined;
       budget.metadata(edge.effects);

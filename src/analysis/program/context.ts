@@ -13,7 +13,7 @@ import type {
 import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import { analyzeSourceLiteralValues } from "@tsonic/target-api/source";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../target-model/types/index.js";
-import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustSourcePolicyContext } from "../../policy/model/context.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProviderSemantics } from "../../providers/packages/model.js";
@@ -90,11 +90,14 @@ import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/promise-bodies.js";
+import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { selectRustSourcePackageComponentIdentities,
   type SelectRustSourcePackageComponentIdentitiesResult } from "./source-package-components.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly promiseResultUses: RustPromiseResultUses;
   readonly promiseBodies: RustPromiseBodySelection;
   readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
@@ -141,7 +144,7 @@ export function createRustAnalysisContext(
   jsEnabled: boolean,
   rootPublishesLibrary: boolean,
   dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextCatalog,
-): RustAnalysisContext {
+): TargetStageResult<RustAnalysisContext> {
   const ast = input.source.ast;
   const rawSourceFiles: readonly (SourceFile | undefined)[] = input.source.sourceFiles;
   const sourceFiles = Object.freeze(
@@ -151,7 +154,6 @@ export function createRustAnalysisContext(
       : [],
   );
   const literalValues = analyzeSourceLiteralValues(ast, sourceFiles);
-  const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues);
   const sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(input.sourcePackages, ast, sourceFiles);
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
@@ -168,14 +170,30 @@ export function createRustAnalysisContext(
   const sourceStorage = createSourceStorageQuery(input.source, sourceFiles, undefined,
     createRustSourceProfileStorageEffects(input.source, sourceProfiles));
   const sourceStorageFailure = sourceStorage.failureReason();
-  const promiseResultUses = analyzeRustPromiseResultUses(ast, sourceStorage.nodes);
-  const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
+  if (sourceStorageFailure !== undefined) return rejectedTargetStage([{
+    code: "RUST_SOURCE_STORAGE_NOT_PROVEN", category: "error", source: "tsonic-rust", message: sourceStorageFailure,
+  }]);
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const records = createRustProgramRecordBuilder(typeDefinitions);
+  const requiredRecords: RustRequiredRecord[] = [];
+  const participation = analyzeRustNativeParticipation({ ast, storage: sourceStorage, navigation: input.source.navigation,
+    producer: records.nativeParticipations, requiredRecords });
+  if (participation.kind === "unresolved") return rejectedTargetStage([{
+    code: "RUST_NATIVE_PARTICIPATION_NOT_CLOSED", category: "error", source: "tsonic-rust", message: participation.reason,
+    evidence: ["target.capability=rust.native-participation"],
+  }]);
+  const nativeNodes = participation.nodes;
+  const nativeNodeSet = new Set(nativeNodes);
+  const isNativeNode = (node: Node): boolean => nativeNodeSet.has(node);
+  const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues, isNativeNode);
+  const promiseResultUses = analyzeRustPromiseResultUses(ast, sourceStorage.nodes);
+  const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
   const names = createRustNamePlan({
     ast,
+    semanticsFor: input.source.semantics.forNode,
     runtimeValueUses,
     sourceFiles,
+    isNativeNode,
   });
   const lifetimes = analyzeRustLifetimes({
     source: input.source,
@@ -183,16 +201,19 @@ export function createRustAnalysisContext(
     sourceFiles,
     records,
     names,
+    isNativeNode,
     referencedDeclaration(node) {
       return input.source.navigation.sourceReferenceFor(node)?.declaration;
     },
     semanticsFor: input.source.semantics.forNode,
   });
   const memoryBindings = createTsonicMemoryBindingIndex(input.source);
-  return Object.freeze({
+  return resolvedTargetStage<RustAnalysisContext>(Object.freeze({
     callableRepresentation: "storage" as const,
     literalValues,
     sourceStorage,
+    nativeNodes,
+    isNativeNode,
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage),
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
@@ -218,7 +239,7 @@ export function createRustAnalysisContext(
     promiseBodies: createRustPromiseBodySelection(),
     rootPublishesLibrary,
     records,
-    requiredRecords: [],
+    requiredRecords,
     projectTypes: createRustProjectTypePolicyRegistry(),
     objectRepresentations: createRustObjectRepresentationPlanRegistry(),
     projectMethodDispatch: createRustProjectMethodDispatchPlanRegistry(),
@@ -241,13 +262,11 @@ export function createRustAnalysisContext(
       ...(receiverOccurrences.kind === "unresolved" ? [{ code: "RUST_RECEIVER_OCCURRENCES_UNRESOLVED",
         category: "error" as const, source: "tsonic-rust", message: receiverOccurrences.reason,
         evidence: ["target.capability=rust.analysis.ownership"] }] : []),
-      ...(sourceStorageFailure === undefined ? [] : [{ code: "RUST_SOURCE_STORAGE_NOT_PROVEN",
-        category: "error" as const, source: "tsonic-rust", message: sourceStorageFailure }]),
       ...memoryBindings.issues.map(issue => ({
       code: "RUST_MEMORY_BINDING_NOT_PROVEN", category: "error" as const, source: "tsonic-rust",
       sourceNode: issue.node, message: issue.reason,
     }))],
     semantics: input.source.semantics.forFile,
     semanticsFor: input.source.semantics.forNode,
-  });
+  }));
 }

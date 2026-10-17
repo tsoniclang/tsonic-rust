@@ -7,6 +7,14 @@ import type { SourceStorageSubject } from "@tsonic/target-api/analysis";
 import type { Node, SourceFile, Type, TypePropertyInfo } from "@tsonic/tsts";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSourceTypeFamilyImplementation } from "../../../target-model/types/type-families.js";
+import type { RustTargetGenericBindings } from "../../../target-model/types/carriers/generic-inference.js";
+
+export interface RustClassFrameInstantiation {
+  readonly instance: TargetTypeRef;
+  readonly parameters: readonly TargetTypeRef[];
+  readonly result: TargetTypeRef;
+  readonly bindings: RustTargetGenericBindings;
+}
 
 export interface RustTargetTypeResolutionOptions {
   readonly jsEnabled: boolean;
@@ -16,11 +24,12 @@ export interface RustTargetTypeResolutionOptions {
   readonly sourceTypes: RustSourceTypeRegistry;
   readonly sourceErrorCarrier: (subject: SourceStorageSubject | undefined) => TargetTypeRef | undefined;
   readonly callableSignatureCarrier: (declaration: Node) => TargetTypeRef | undefined;
+  readonly callableParameterCarriers: (declaration: Node) => readonly TargetTypeRef[] | undefined;
   readonly callableStorageCarrier: (
     subject: SourceStorageSubject,
     logicalCarrier: TargetTypeRef,
     environmentFor: (declaration: Node, excludedCaptures: ReadonlySet<Node>) => readonly TargetTypeRef[] | undefined,
-    instanceFor: (declaration: Node) => TargetTypeRef | undefined,
+    classFrameFor: (declaration: Node) => RustClassFrameInstantiation | undefined,
   ) => TargetTypeRef | undefined;
   readonly projectCarrierSupportsObjectIdentity: (carrier: TargetTypeRef) => boolean;
   readonly projectFieldProjection: (property: TypePropertyInfo, owner: TargetTypeRef, ownerType: Type) => {

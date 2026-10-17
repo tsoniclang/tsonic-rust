@@ -21,7 +21,7 @@ import type {
   RustTargetProgram,
 } from "./model.js";
 import { analyzeRustCaptureStorage } from "../storage/capture-storage.js";
-import { analyzeRustPromiseResults } from "../callables/promise-results.js";
+import { analyzeRustGenericAdoption, analyzeRustPromiseResults } from "../callables/promise-results.js";
 import { createRustModuleInitializationPlan } from "../module-initialization/analyze.js";
 import { analyzeRustProviderErrorCarriers } from "./provider-errors.js";
 import { analyzeRustDeclarationGenericRequirements } from "../declarations/generic-requirements.js";
@@ -38,13 +38,10 @@ import {
   analyzeRustRuntimeReferences,
 } from "../project/index.js";
 import {
-  analyzeRustEnumMemberConstants,
-} from "../declarations/enum-member-constants.js";
-import {
   analyzeRustSourcePackageFacades,
 } from "./source-package-facades.js";
 import {
-  analyzeRustSourcePackageComponents,
+  validateRustGenericSourcePackageComponents,
 } from "./source-package-components.js";
 import {
   analyzeRustCountedLoopRepresentations,
@@ -58,11 +55,14 @@ import { maximumRustFoundation } from "../../target-model/foundation/model.js";
 import { analyzeRustProjectFlowReadSelections } from "../control-flow/project-flow-read-selections.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { analyzeRustErrorRegions, completeRustErrorRegionRecords } from "../errors/regions.js";
+import type { RustErrorTypeContext } from "../errors/error-types.js";
 import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
+import { analyzeRustNativeDeclarationForms } from "../declarations/native-forms.js";
+import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
 import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js";
@@ -100,35 +100,40 @@ export function analyzeRustTargetProgram(
       ...(activeProviderHooks.some(hook => hook.phase === "async-entry-execution") ? [] : [rustJsAsyncExecutor])] : providerBinaryHooks,
     runtimeReferences.plan.activeCrates,
   );
-  const context = createRustAnalysisContext(
+  if (input.source.semantics.enumConstants.issues.length !== 0) return rejectedTargetStage(input.source.semantics.enumConstants.issues);
+  const contextResult = createRustAnalysisContext(
     input,
     providerSemantics,
     jsEnabled,
     rootPublishesLibrary,
     dispatchContexts.plan,
   );
+  if (contextResult.kind === "rejected") return contextResult;
+  const context = contextResult.value;
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
-  const lexicalFunctions = analyzeRustProgram(context);
+  const genericAdoption = analyzeRustGenericAdoption({ source: context.source, projectRoot: input.paths.projectRoot,
+    storage: context.sourceStorage, sourceLifetimes: context.sourceLifetimes });
+  if (genericAdoption.length !== 0) return rejectedTargetStage(genericAdoption);
+  const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
+    sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
+  if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
+  const sourceStage = analyzeRustProgram(context, configuration.outputType);
   if (context.diagnostics.length > 0) {
     return rejectedTargetStage(context.diagnostics);
   }
-  if (lexicalFunctions === undefined) throw new Error("Rust program analysis completed without its sealed lexical callable index.");
+  if (sourceStage === undefined) throw new Error("Rust program analysis completed without its sealed source-stage output.");
+  const { lexicalFunctions, sourcePackageComponents } = sourceStage;
 
   const sourcePackageFacades = analyzeRustSourcePackageFacades(context);
   if (sourcePackageFacades.kind === "rejected") {
     return rejectedTargetStage(sourcePackageFacades.diagnostics);
   }
-  const sourcePackageComponents = analyzeRustSourcePackageComponents(
-    context,
-    configuration.outputType,
-  );
-  if (sourcePackageComponents.kind === "rejected") {
-    return rejectedTargetStage(sourcePackageComponents.diagnostics);
-  }
+  const genericComponentDiagnostics = validateRustGenericSourcePackageComponents(context, sourcePackageComponents);
+  if (genericComponentDiagnostics.length !== 0) return rejectedTargetStage(genericComponentDiagnostics);
   context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     records: context.records, physical: context.callableValues.generic.physical,
     producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
-    components: sourcePackageComponents.plan });
+    components: sourcePackageComponents });
   context.structuralShapes.initializeUnions(context.typeDefinitions.generatedUnions());
 
   const classValues = context.classValues.seal(context);
@@ -157,16 +162,15 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const retainedCallableInputs = analyzeRustRetainedCallableInputs({ ast: context.ast, records: context.records,
+    nativeNodes: context.nativeNodes,
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
-    components: sourcePackageComponents.plan });
+    components: sourcePackageComponents });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
-  analyzeRustNativeHandlers(context.sourceStorage.nodes, context.records, { get: context.safetyApplications.operationForExpression },
+  analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage, nodes: context.sourceStorage.nodes,
-    records, uses: context.promiseResultUses, definitions: context.typeDefinitions });
-  if (promiseResults.diagnostics.length > 0) return rejectedTargetStage(promiseResults.diagnostics);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
+    isNativeNode: context.isNativeNode,
     typeDefinitions: context.typeDefinitions,
     projectTypes: context.projectTypes, receiverFieldAliases: objectRepresentations,
     receiverCaptures: objectRepresentations.receiverCaptures,
@@ -179,11 +183,11 @@ export function analyzeRustTargetProgram(
     },
   });
   const dispatchContextDemand = analyzeRustDispatchContextDemand(
-    context.ast, context.sourceFiles, records, sourcePackageComponents.plan, dispatchContexts.plan,
+    context.ast, context.sourceFiles, records, sourcePackageComponents, context.isNativeNode, dispatchContexts.plan,
   );
   if (dispatchContextDemand.kind === "rejected") return rejectedTargetStage(dispatchContextDemand.diagnostics);
   const binaryDispatchDemand = analyzeRustBinaryDispatchDemand(
-    binaryHooks, sourcePackageComponents.plan, dispatchContexts.plan, dispatchContextDemand.plan,
+    binaryHooks, sourcePackageComponents, dispatchContexts.plan, dispatchContextDemand.plan,
   );
   if (binaryDispatchDemand.kind === "rejected") return rejectedTargetStage(binaryDispatchDemand.diagnostics);
   const capturesFor = (closure: import("@tsonic/tsts").Node) => {
@@ -204,6 +208,7 @@ export function analyzeRustTargetProgram(
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
+    nativeNodes: context.nativeNodes,
     capturesFor,
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
       rustNativeArgumentBorrowsRead(argument, reference, context.ast, records),
@@ -244,15 +249,17 @@ export function analyzeRustTargetProgram(
     },
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
-  const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
+  const errorTypes = { ast: context.ast, records, producers: context.callableValues.nativeProducers,
+    definitions: context.typeDefinitions, components: sourcePackageComponents } satisfies RustErrorTypeContext;
+  const errorRegions = analyzeRustErrorRegions({ ...errorTypes, sourceFiles: context.sourceFiles,
+    isNativeNode: context.isNativeNode,
     promiseBodies: context.promiseBodies.plan,
-    names: context.names, callables: context.callableValues.selected,
-    producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
-    components: sourcePackageComponents.plan });
+    names: context.names, callables: context.callableValues.selected });
   if (errorRegions.kind === "rejected") return errorRegions;
+  context.callableValues.finalizeStructuralStorage(errorRegions.value);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
-    context.sourceFiles,
+    context.nativeNodes,
     records,
     context.names,
     context.sourceLifetimes,
@@ -269,9 +276,26 @@ export function analyzeRustTargetProgram(
     errorRegions.value,
     context.promiseBodies.plan,
     context.callableValues.nativeStorage,
+    classValues,
+    errorTypes,
   );
-  if (declarationGenericRequirements.kind === "rejected") {
-    return rejectedTargetStage(declarationGenericRequirements.diagnostics);
+  const retentionIssues = declarationGenericRequirements.kind === "rejected" ? []
+    : context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues, errorTypes);
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, genericAdoption,
+    storage: context.sourceStorage,
+    nodes: context.nativeNodes, records, uses: context.promiseResultUses, definitions: context.typeDefinitions,
+    nativeStorage: context.callableValues.nativeStorage, native: context.callableValues.native,
+    nativeCaptures: context.callableValues.selected.nativeCaptures, errorTypes,
+    sourceTypes: sourceStage.sourceTypes,
+    sourceLifetimes: context.sourceLifetimes, requirements: declarationGenericRequirements, retentionIssues, families: context.typeFamilies,
+    evidence: { genericCallables: context.callableValues.generic, frameCallables: context.callableValues.selected.frames,
+      classValues, objectRepresentations, structuralShapes: context.structuralShapes, projectTypes: context.projectTypes, records } });
+  if (declarationGenericRequirements.kind === "rejected" || retentionIssues.length !== 0 || promiseResults.diagnostics.length > 0) {
+    return rejectedTargetStage([...(declarationGenericRequirements.kind === "rejected" ? declarationGenericRequirements.diagnostics : []),
+      ...retentionIssues.map(issue => ({ code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error" as const,
+        source: "tsonic-rust", message: issue.message, sourceNode: issue.subject,
+        evidence: ["target.capability=rust.callable-value.exact-implementation"] })),
+      ...promiseResults.diagnostics]);
   }
   const sourceModuleConstructions = analyzeRustSourceModuleConstructions({
     source: context.source,
@@ -289,16 +313,17 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.backend.source-module-construction"],
     })));
   }
-  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, records, context.source.navigation);
+  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
   const borrowEffectsInput = {
+    isNativeNode: context.isNativeNode,
     sourceFacts: context.source.sourceFacts,
-    ast: context.ast, nodes: context.sourceStorage.nodes, records, navigation: context.source.navigation,
+    ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
     structuralShapes: context.structuralShapes,
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
-  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, records,
+  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
     capturesFor, invocationTransfersCapture: owner => {
@@ -309,7 +334,7 @@ export function analyzeRustTargetProgram(
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
-    sourcePackageComponents: sourcePackageComponents.plan, errorStorageDemands: context.errorStorageDemands });
+    sourcePackageComponents, errorStorageDemands: context.errorStorageDemands });
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
   const genericCallableErrors = analyzeRustGenericCallableErrors({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
@@ -317,7 +342,7 @@ export function analyzeRustTargetProgram(
   if (genericCallableErrors.kind === "rejected") return genericCallableErrors;
   const initializationErrors = analyzeRustInitializationErrors({ ast: context.ast, sourceFiles: context.sourceFiles,
     navigation: context.source.navigation, moduleInitialization, sourceModules: sourceModuleConstructions.index,
-    components: sourcePackageComponents.plan, facades: sourcePackageFacades.plan, regions: errorRegions.value,
+    components: sourcePackageComponents, facades: sourcePackageFacades.plan, regions: errorRegions.value,
     binaryHooks, outputType: configuration.outputType, projectRoot: input.paths.projectRoot,
     entryPoint: input.project.entryPoint });
   if (initializationErrors.kind === "rejected") return initializationErrors;
@@ -327,14 +352,16 @@ export function analyzeRustTargetProgram(
   if (binaryExecution.kind === "rejected") return binaryExecution;
   const finalRecords = Object.freeze({ ...records, literalValue: context.literalValues.literalValue });
   const completedErrorRegions = completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value);
-  const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles, records });
+  const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,
+    isNativeNode: context.isNativeNode, records });
   const statementCompletions = analyzeRustStatementCompletions({ source: context.source, sourceFiles: context.sourceFiles,
+    isNativeNode: context.isNativeNode,
     records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,
-    navigation: context.source.navigation, nodes: context.sourceStorage.nodes, statementCompletions: statementCompletions.plan });
+    navigation: context.source.navigation, nodes: context.nativeNodes, statementCompletions: statementCompletions.plan });
   const mutableInputDiagnostics: TargetDiagnostic[] = [];
-  for (const node of context.sourceStorage.nodes) {
+  for (const node of context.nativeNodes) {
     const selection = providerMutableInputs.forOperation(node);
     if (selection?.kind === "rejected") mutableInputDiagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
       category: "error", source: "tsonic-rust", message: selection.reason,
@@ -342,19 +369,20 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
-  const program: Omit<RustTargetProgram, "reachability" | "records"> & {
+  const program: Omit<RustTargetProgram, "reachability" | "records" | "nativeDeclarations"> & {
     readonly records: RustAnalysisRecords & SourceLiteralIndex;
   } = {
+    sourceOutputIdentities: sourceOutputIdentities.identities,
     statementCompletions: statementCompletions.plan,
     errorRegions: completedErrorRegions,
     genericCallableErrors: genericCallableErrors.value,
-    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
+    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records }),
     promiseResults: promiseResults.results,
     promiseBodies: context.promiseBodies.plan,
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
-      navigation: context.source.navigation, sourceFiles: context.sourceFiles, records }),
+      navigation: context.source.navigation, nativeNodes: context.nativeNodes, records }),
     numericRepresentations: analyzeRustNumericRepresentations({ source: context.source,
       sourceFiles: context.sourceFiles, records }),
     host: Object.freeze({
@@ -383,7 +411,7 @@ export function analyzeRustTargetProgram(
     declarationGenericRequirements: declarationGenericRequirements.index,
     ownership: ownership.ownership,
     borrowedElementReads,
-    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, records),
+    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records),
     providerMutableInputs,
     retainedCallableInputs: retainedCallableInputs.value,
     structuralShapes: context.structuralShapes.seal(),
@@ -397,23 +425,18 @@ export function analyzeRustTargetProgram(
     binaryHooks,
     binaryExecution: binaryExecution.value,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
-      context.ast,
-      context.sourceFiles,
+      context.nativeNodes,
       records,
       binaryHooks,
     ),
     safetyApplications: context.safetyApplications,
     moduleInitialization,
     names: context.names,
-    enumMemberConstants: analyzeRustEnumMemberConstants(
-      context.source,
-      context.sourceFiles,
-    ),
     sourcePackageFacades: sourcePackageFacades.plan,
-    sourcePackageComponents: sourcePackageComponents.plan,
+    sourcePackageComponents,
     countedLoops: analyzeRustCountedLoopRepresentations({
       ast: context.ast,
-      sourceFiles: context.sourceFiles,
+      nativeNodes: context.nativeNodes,
       navigation: context.source.navigation,
       records: finalRecords,
       borrowedElementReads,
@@ -422,9 +445,16 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
-  const reachability = analyzeRustReachability(program);
+  const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
+    semanticsFor: context.semanticsFor,
+    names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
+    objectRepresentations, typeFamilies: program.typeFamilies,
+    genericRequirements: declarationGenericRequirements.index });
+  if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
+  const reachability = analyzeRustReachability(program, context.nativeNodes);
   context.callableValues.publish();
   return resolvedTargetStage(Object.freeze({ ...program,
+    nativeDeclarations: nativeDeclarations.forms,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),
     reachability }));
 }

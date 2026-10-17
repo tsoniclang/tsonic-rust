@@ -51,7 +51,7 @@ export function createRustProjectTypePolicy(
   for (const sourceFile of host.sourceFiles) {
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
-    for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast)) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast, host.isNativeNode)) {
       if (host.isRepresentationAlias(statement)) continue;
       if (host.ast.kindName(statement) === "KindClassDeclaration" || host.ast.kindName(statement) === "KindClassExpression") {
         const issue = rustLocalClassIssue(statement, host.ast, host.navigation, host.genericParametersFor(statement));
@@ -426,7 +426,7 @@ export function createRustProjectTypePolicy(
   const stateMarkerFieldNamesByDefinition = new WeakMap<RustProjectTypeDefinition, string>();
   for (const definition of definitions) {
     const names = new Map<Node, string>();
-    const layout = rustProjectObjectLayout(definition.declaration, host.ast);
+    const layout = rustProjectObjectLayout(definition.declaration, host.ast, host.semanticsFor);
     if (layout !== undefined) objectLayoutsByDefinition.set(definition, layout);
     const externalBase = externalBaseByDeclaration.get(definition.declaration);
     const usedNames = projectMemberNames(definition.declaration, host.ast, host.names);

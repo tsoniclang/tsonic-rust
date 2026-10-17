@@ -1,6 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
+import { Node_Expression, sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { substituteRustTargetGenericArgument } from "../../target-model/types/carriers/substitution.js";
@@ -13,13 +13,20 @@ import { rustRetainedCallSubstitutions } from "./retained-call-lifetimes.js";
 import { rustCallableInputLifetimeParameters } from "./source-input-lifetimes.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
+import { inferRustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustStructuralMethodStorageCarrier } from "../../target-model/types/carriers/callables.js";
+import { rustOptionElementCarrier } from "../../target-model/types/carriers/optional.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { RustGenericCallablePlan } from "./generic-values.js";
 
 interface RustNativeStorageGenericInput {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
   readonly genericInvocationBindingsFor: (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
-    arguments_: readonly RustTargetGenericArgument[]) => RustNativeStorageGenericSelection | undefined;
+    arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings) => RustNativeStorageGenericSelection | undefined;
 }
 
 export type RustNativeStorageGenericSelection =
@@ -111,7 +118,7 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
         if (caller.kind === "unresolved") return finish(caller);
         const arguments_ = (operation.targetGenericArguments ?? []).map(argument =>
           substituteRustTargetGenericArgument(argument, caller.bindings.types, caller.bindings.lifetimes, caller.bindings.consts));
-        const generic = input.genericInvocationBindingsFor(declaration, activation.invocation, activation.callerBindings, arguments_);
+        const generic = input.genericInvocationBindingsFor(declaration, activation.invocation, activation.callerBindings, arguments_, caller.bindings);
         if (generic?.kind === "unresolved") return finish(generic);
         const own = generic?.bindings ?? rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], arguments_);
         const merged = own === undefined ? undefined : mergeBindings(actual, { ...own,
@@ -129,6 +136,57 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
       : Object.freeze({ kind: "resolved", bindings: result }));
   };
   return select;
+}
+
+export function selectRustSourceCallableInvocationBindings(input: {
+  readonly ast: AstReader;
+  readonly storage: SourceStorageQueries;
+  readonly records: RustProgramRecords;
+  readonly lifetimes: RustLifetimeIndex;
+  readonly generic: Pick<RustGenericCallablePlan, "implementationFor">;
+}, declaration: Node, invocation: Node, bindings: SourceStorageBindings,
+  arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings): RustNativeStorageGenericSelection | undefined {
+  const operation = input.records.targetOperation.get(invocation);
+  if (operation?.kind !== "source-call") return undefined;
+  const target = operation.target;
+  const logical = target.form === "callable" ? target.carrier
+    : target.form === "structural-method" || target.form === "constructor-value" ? target.callableCarrier : undefined;
+  if (rustGenericCallableValue(logical) === undefined) return undefined;
+  const unresolved = (): RustNativeStorageGenericSelection => Object.freeze({ kind: "unresolved",
+    reason: "A generic activation lost its exact source implementation-to-invocation correspondence." });
+  const callee = Node_Expression(input.ast, invocation);
+  const subject = callee === undefined ? undefined : input.storage.subjectFor(callee);
+  const producers = subject?.kind !== "resolved" ? undefined : input.storage.storageProducersFor(subject.subject, bindings);
+  const implementation = input.generic.implementationFor(declaration);
+  if (producers?.kind !== "complete" || implementation === undefined || !producers.producers.some(producer =>
+    producer.subject.kind === "value" && producer.subject.projection.length === 0 && producer.subject.node === declaration)) return unresolved();
+  const source = rustGenericCallableValue(implementation.carrier);
+  const parameters = input.lifetimes.contractFor(declaration)?.parameters;
+  const selected = parameters === undefined ? undefined : rustTargetGenericBindingsForArguments(parameters.map(parameter =>
+    parameter.kind === "type" ? { kind: "type" as const, sourceName: parameter.sourceName, targetIdentity: parameter.identity }
+      : { kind: "lifetime" as const, sourceName: parameter.lifetime.name, targetIdentity: rustLifetimeKey(parameter.lifetime) }), arguments_);
+  if (source === undefined || selected === undefined) return unresolved();
+  const methodArguments = arguments_.flatMap(argument => argument.kind === "type" ? [argument.type] : []);
+  const pattern = rustGenericCallableProtocol(implementation.carrier, methodArguments);
+  const independent = input.records.receiverIndependentMethod.get(declaration) !== undefined;
+  const destination = target.form === "structural-method" && !independent
+    ? rustStructuralMethodStorageCarrier(target.receiverCarrier, logical!, "required") : logical;
+  const actualCarrier = destination === undefined ? undefined : substituteRustTargetGenerics(
+    rustOptionElementCarrier(destination) ?? destination, caller.types, caller.lifetimes, caller.consts);
+  const actual = rustGenericCallableProtocol(actualCarrier, methodArguments);
+  const actualValue = rustGenericCallableValue(actualCarrier);
+  if (pattern === undefined || actual === undefined || actualValue === undefined ||
+    source.environment.length !== actualValue.environment.length) return unresolved();
+  const template: TargetTypeRef = { kind: "tuple", elements: [...source.environment, ...pattern.parameters, pattern.result] };
+  const references = rustTargetGenericReferences(template);
+  const inferred = inferRustTargetGenericBindings(template,
+    { kind: "tuple", elements: [...actualValue.environment, ...actual.parameters, actual.result] }, {
+      typeIdentities: new Set(references.typeIdentities.filter(identity => !methodArguments.some(argument =>
+        rustTargetGenericReferences(argument).typeIdentities.includes(identity)))),
+      lifetimeIdentities: new Set(references.lifetimeIdentities), constIdentities: new Set(references.constIdentities),
+    });
+  const merged = inferred === undefined ? undefined : mergeBindings(selected, inferred);
+  return merged === undefined ? unresolved() : Object.freeze({ kind: "resolved", bindings: merged });
 }
 
 function mergeBindings(left: RustTargetGenericBindings, right: RustTargetGenericBindings): RustTargetGenericBindings | undefined {

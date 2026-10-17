@@ -118,7 +118,8 @@ function admissionOnly(source, selected) {
     compileTarget(request) {
       const ast = request.input.source.ast;
       const files = request.input.source.sourceFiles.filter(file => file !== undefined && !ast.isDeclarationFile(file));
-      refusals = analyzeRustNumericLiteralAdmission(ast, files, analyzeSourceLiteralValues(ast, files));
+      refusals = analyzeRustNumericLiteralAdmission(ast, files, analyzeSourceLiteralValues(ast, files),
+        node => files.includes(ast.getSourceFile(node)));
       return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
     },
   });

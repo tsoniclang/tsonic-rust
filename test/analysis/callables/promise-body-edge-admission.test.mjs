@@ -38,6 +38,30 @@ async function main(): Promise<void> {
 await main();`);
 });
 
+for (const [name, body] of [
+  ["read", "await pending; return load(value);"],
+  ["readFirst", "const copied = load(value); await pending; return copied;"],
+]) {
+  test(`the JS direct ${name} native body preserves its scoped borrow and executes without an object facet`, { timeout: 300_000 }, () => {
+    const rust = run(`promise-direct-native-${name}`, `
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+async function ${name}<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  ${body}
+}
+async function main(): Promise<void> {
+  const value: int32 = 17;
+  if (await ${name}(ref(value), Promise.resolve(undefined)) !== 17) throw new Error("direct native borrow");
+}
+await main();`);
+    assert.equal(rust.includes(`${name}_native(`), true, "the exact canonical native body is invoked");
+    assert.equal(new RegExp(`\\bfn ${name}(?:<|\\()`, "u").test(rust), false,
+      "no public JsPromise adapter is demanded for this private immediate body");
+    assert.equal(/from_\w+_factory|Box::pin|'Region: 'static/u.test(rust), false,
+      "native scoped execution creates no task, recursive allocation or static input constraint");
+  });
+}
+
 test("a union receiver awaits the selected branch's public Promise body", { timeout: 300_000 }, () => {
   run("promise-union-method-edges", `
 class Left { async value(): Promise<int32> { return 1; } }
@@ -106,6 +130,6 @@ export async function read(): Promise<int32> { return await value(); }` }, compi
     true, "the existing result owner preserves the complete Promise wrapper, not a projected payload");
   assert.equal(rustDirectPromiseBodyCallee(context, call, carrier) === operation.asyncBody.declaration,
     true, "the same result contract admits the actual edge");
-  assert.equal(rustDirectPromiseBodyCallee(context, call, operation.resultCarrier), undefined,
+  assert.equal(rustDirectPromiseBodyCallee(context, call, operation.resultCarrier) === undefined, true,
     "the physical settled payload cannot masquerade as a logical JS Promise result");
 });

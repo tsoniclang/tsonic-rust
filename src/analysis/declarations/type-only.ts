@@ -49,6 +49,7 @@ export function checkRustAmbientVariableUses(walk: RustFactWalk, declaration: No
     return false;
   };
   for (const use of source.navigation.declarationUses(declaration)) {
+    if (!walk.context.isNativeNode(use.reference)) continue;
     if (use.kind === "source-linkage" || use.kind === "type-only" || belongsToErasedMember(use.reference)) continue;
     appendRustDiagnostic(walk, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING",
       "A runtime read of an authored ambient variable requires an exact native implementation.", use.reference,

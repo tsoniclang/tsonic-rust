@@ -14,7 +14,7 @@ export function selectedRustForInKeys(
   options: RustOperationsProviderOptions,
 ): readonly string[] | undefined {
   const { ast } = context;
-  const expected = options.sourceTypes.propertyKeysForCarrier(carrier, ast);
+  const expected = options.sourceTypes.propertyKeysForCarrier(carrier, ast, context.semanticsFor);
   if (expected === undefined) return undefined;
   const expectedKeys = new Set(expected);
   const visited = new Set<Node>();
@@ -50,8 +50,12 @@ export function selectedRustForInKeys(
       const selected = semantics.operations.objectLiteralElement(element);
       if (selected === undefined || selected.objectLiteral !== origin || selected.element !== element ||
         selected.sourceElementSymbol === undefined) return undefined;
-      const name = semantics.declarations.symbolName(selected.sourceElementSymbol);
-      if (name.length === 0 || identities.has(name) || !expectedKeys.has(name)) return undefined;
+      const nameNode = ast.name(element);
+      const selectedName = nameNode !== undefined && (ast.is.IsComputedPropertyName(nameNode) || ast.is.IsNumericLiteral(nameNode))
+        ? semantics.propertyNames.get(nameNode) : undefined;
+      const name = nameNode !== undefined && (ast.is.IsComputedPropertyName(nameNode) || ast.is.IsNumericLiteral(nameNode))
+        ? selectedName?.kind === "resolved" ? selectedName.name : undefined : semantics.declarations.symbolName(selected.sourceElementSymbol);
+      if (name === undefined || identities.has(name) || !expectedKeys.has(name)) return undefined;
       identities.add(name);
       keys.push(name);
     }

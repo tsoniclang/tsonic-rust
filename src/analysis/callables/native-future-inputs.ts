@@ -32,6 +32,7 @@ export interface RustNativeFutureInputPlan {
 
 export function createRustNativeFutureInputPlan(input: {
   readonly ast: AstReader;
+  readonly nativeNodes: readonly Node[];
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
@@ -138,7 +139,7 @@ export function createRustNativeFutureInputPlan(input: {
     };
     visit(carrier, subject, 0, new Set());
   };
-  for (const node of input.storage.nodes) {
+  for (const node of input.nativeNodes) {
     if (!input.ast.is.IsParameterDeclaration(node)) continue;
     const carrier = input.records.sourceParameterAbi.get(node)?.parameterCarrier;
     if (carrier === undefined) continue;
@@ -152,7 +153,7 @@ export function createRustNativeFutureInputPlan(input: {
     if (subject.kind === "resolved") inspect(owner, carrier, subject.subject, true);
     else fail(owner, subject.reason);
   }
-  for (const declaration of input.storage.nodes) {
+  for (const declaration of input.nativeNodes) {
     const fact = input.records.closureCapture.get(declaration);
     const lexical = input.lexicalFunctions.forDeclaration(declaration);
     if (lexical?.kind === "unresolved") { fail(declaration, lexical.reason); continue; }
@@ -175,7 +176,7 @@ export function createRustNativeFutureInputPlan(input: {
   const environments = new Map<Node, RustNativeFutureEnvironmentSelection>();
   const unavailable: RustNativeFutureEnvironmentSelection = Object.freeze({ kind: "unresolved",
     reason: "Native Future environment requires an owned callable declaration." });
-  for (const declaration of input.storage.nodes) {
+  for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(input.ast, declaration) &&
       !input.ast.is.IsMethodSignatureDeclaration(declaration) && !input.ast.is.IsCallSignatureDeclaration(declaration) &&
       !input.ast.is.IsConstructSignatureDeclaration(declaration) && !input.ast.is.IsFunctionTypeNode(declaration) &&

@@ -8,19 +8,18 @@ import { rustFutureValueForOperation, rustFutureValueMatchesCarrier, rustNativeF
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { rustAwaitSelection, rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import { closedMetadataEquals } from "../../target-model/metadata/closed-data.js";
-import { createRustSourceErrorEffectSelection, type RustSourceErrorBindings } from "./source-error-effects.js";
+import type { RustSourceErrorBindings, RustSourceErrorEffectSelection } from "./source-error-effects.js";
 import type { RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
 import { finalizedConversionIsValid } from "../operations/finalized-operation/conversions.js";
 import { substituteRustValueConversion } from "../../target-model/conversions/substitution.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { rustAwaitCarrier } from "../../target-model/types/index.js";
 
-import { rustErrorEffectsAreFallible } from "../errors/error-effects.js";
-
 export function rustFutureValueForStoredBranch(
   walk: RustFactWalk,
   node: Node,
   branch: TargetTypeRef,
+  rebind: RustSourceErrorEffectSelection,
 ): RustFutureValueFact | undefined {
   if (rustAwaitCarrier(branch) === undefined) return undefined;
   const { sourceStorage: storage, ast } = walk.context;
@@ -30,7 +29,7 @@ export function rustFutureValueForStoredBranch(
   const declaration = sourceEnclosingCallable(node, ast);
   const bindings = declaration === undefined ? storage.emptyBindings : walk.context.callableValues.native.bindingsFor(declaration);
   if (subject.kind !== "resolved" || bindings === undefined) return undefined;
-  const sources = rustStoredFutureValues(walk, node, subject.subject, branch, bindings);
+  const sources = rustStoredFutureValues(walk, node, subject.subject, branch, bindings, rebind);
   if (sources === undefined) return undefined;
   let selected: RustFutureValueFact | undefined;
   for (const source of sources) {
@@ -51,6 +50,7 @@ export function rustStoredFutureValues(
   subject: SourceStorageSubject,
   branch: TargetTypeRef,
   bindings: SourceStorageBindings,
+  rebind: RustSourceErrorEffectSelection,
 ): readonly RustStoredFutureValue[] | undefined {
   const { records, sourceStorage: storage, typeDefinitions: definitions, ast } = walk.context;
   const sources = storage.storageProducersFor(subject, bindings);
@@ -59,7 +59,6 @@ export function rustStoredFutureValues(
     !sources.producers.some(producer => producer.subject.node === boundary.exposure))) return undefined;
   if (sources.producers.length === 0) return undefined;
   const selected: RustStoredFutureValue[] = [];
-  const rebind = createRustSourceErrorEffectSelection(walk);
   for (const source of sources.producers) {
     if (source.subject.kind !== "value" || source.subject.projection.length !== 0) return undefined;
     const producer = source.subject.node;
@@ -73,8 +72,11 @@ export function rustStoredFutureValues(
       const original = futureForProducer(walk, producer, leaf.carrier);
       const owner = sourceEnclosingCallable(producer, ast);
       if (original === undefined || owner === undefined) return undefined;
+      const generics = walk.context.callableValues.nativeStorage.genericBindingsFor(owner, source.bindings);
+      if (generics.kind !== "resolved") return undefined;
       const substitution = rebind.bindingsFor(node, owner, [leaf.carrier,
-        ...(original.errorCarrier === undefined ? [] : [original.errorCarrier])], source.bindings);
+        ...(original.errorCarrier === undefined ? [] : [original.errorCarrier])],
+        { storageBindings: source.bindings, genericBindings: generics.bindings });
       if (substitution === undefined) return undefined;
       const outputCarrier = substitution.substitute(original.outputCarrier);
       const awaitedConversion = substituteFutureConversion(original.awaitedConversion, substitution, definitions);
@@ -141,8 +143,8 @@ function futureForProducer(walk: RustFactWalk, producer: Node, branch: TargetTyp
     if (implementations.kind !== "resolved" || !implementations.exact ||
       !implementations.nodes.some(declaration => records.asyncFunction.get(declaration) !== undefined)) return undefined;
     infallible = implementations.nodes.every(declaration => {
-      const effects = records.errorEffects.get(declaration);
-      return records.asyncFunction.get(declaration) !== undefined && effects !== undefined && !rustErrorEffectsAreFallible(effects);
+      const effects = records.sourceCallEffects.get(declaration);
+      return records.asyncFunction.get(declaration) !== undefined && effects?.awaiting === "infallible";
     });
   }
   const selected = records.futureValue.get(producer) ??

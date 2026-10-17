@@ -40,6 +40,7 @@ export function analyzeRustConstructionEffects(
     layers.push({ definition: owner, constructor, fields, statements: statements.slice(inherited && constructor !== undefined ? 1 : 0) });
   }
   const readiness = analyzeRustConstructionReadiness({ ast: input.ast, definition, layers,
+    isNativeNode: input.isNativeNode,
     fields: layers.flatMap(layer => layer.fields),
     selectedField(node) {
       const semantics = input.semantics.forNode(node);

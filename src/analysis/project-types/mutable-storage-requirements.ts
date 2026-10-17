@@ -83,11 +83,12 @@ export function collectRustMutableProjectStorageRequirements(
     }
   };
   const visit = (sourceFile: SourceFile, node: Node): void => {
+    if (!context.isNativeNode(node)) return;
     collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);
     const address = selectRustAddressOfSourceOperation(node, sourceFact, sourceFact);
-    if (address?.storageDeclaration !== undefined && rustProjectObjectField(address.storageDeclaration, ast) !== undefined) {
+    if (address?.storageDeclaration !== undefined && rustProjectObjectField(address.storageDeclaration, projectTypes) !== undefined) {
       const definition = projectTypes.definitionContainingDeclaration(address.storageDeclaration);
       if (definition?.kind === "class") referenceDeclarations.add(definition.declaration);
     }

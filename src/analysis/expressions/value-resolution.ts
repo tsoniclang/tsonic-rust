@@ -31,6 +31,7 @@ import {
   KindVoidExpression,
   Node_Expression,
   sourceIntegerLiteralValue,
+  sourceExpressionResultDisposition,
 } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNumericLiteralIsFinite } from "../numeric/literal-admission.js";
@@ -423,23 +424,28 @@ export function resolveExpressionCarrierUncached(
         rustResolutionContext(walk, expression),
         walk.operationOptions,
       );
-      if (expected === undefined && !isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
+      if (expected === undefined) {
         const probe = createRustCarrierProbe(walk);
         const left = resolveExpressionCarrier(probe, whenTrue, sourceFile, undefined);
         const right = resolveExpressionCarrier(probe, whenFalse, sourceFile, undefined);
-        if (left !== undefined && right !== undefined) {
-          semanticCarrier = resolveRustBranchUnion(expression, [
-            { expression: whenTrue, carrier: left }, { expression: whenFalse, carrier: right },
-          ], rustResolutionContext(walk, expression), walk.operationOptions) ?? semanticCarrier;
+        const nonnumericBranches = left !== undefined && right !== undefined &&
+          !isRustNumericCarrier(rustOptionElementCarrier(left) ?? left) &&
+          !isRustNumericCarrier(rustOptionElementCarrier(right) ?? right);
+        if (left !== undefined && right !== undefined &&
+          (!isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier) || nonnumericBranches)) {
+          semanticCarrier = sourceExpressionResultDisposition(walk.context.ast, expression).kind === "discarded" &&
+              rustTargetTypeRefEquals(left, right)
+            ? left
+            : resolveRustBranchUnion(expression, [
+              { expression: whenTrue, carrier: left }, { expression: whenFalse, carrier: right },
+            ], rustResolutionContext(walk, expression), walk.operationOptions) ?? semanticCarrier;
         }
-      }
-      if (expected === undefined && isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
-        const probe = createRustCarrierProbe(walk);
-        const left = sourceIntegerLiteralValue(walk.context.ast, whenTrue) === undefined
-          ? resolveExpressionCarrier(probe, whenTrue, sourceFile, undefined) : undefined;
-        const right = sourceIntegerLiteralValue(walk.context.ast, whenFalse) === undefined
-          ? resolveExpressionCarrier(probe, whenFalse, sourceFile, undefined) : undefined;
-        semanticCarrier = selectRustConditionalNumericCarrier(whenTrue, whenFalse, left, right, walk.context.literalValues) ?? semanticCarrier;
+        if (isRustNumericCarrier(rustOptionElementCarrier(semanticCarrier) ?? semanticCarrier)) {
+          const numericLeft = sourceIntegerLiteralValue(walk.context.ast, whenTrue) === undefined ? left : undefined;
+          const numericRight = sourceIntegerLiteralValue(walk.context.ast, whenFalse) === undefined ? right : undefined;
+          semanticCarrier = selectRustConditionalNumericCarrier(whenTrue, whenFalse, numericLeft, numericRight,
+            walk.context.literalValues) ?? semanticCarrier;
+        }
       }
       const trueCarrier = resolveExpressionCarrier(walk, whenTrue, sourceFile, semanticCarrier);
       const falseCarrier = resolveExpressionCarrier(walk, whenFalse, sourceFile, semanticCarrier ?? trueCarrier);

@@ -1,5 +1,5 @@
 import type { Node } from "@tsonic/tsts";
-import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageSubject } from "@tsonic/target-api/analysis";
+import { defaultSourceStorageLimits, type SourceStorageBindings, type SourceStorageProjection, type SourceStorageSubject } from "@tsonic/target-api/analysis";
 import { Node_Initializer, sourceLexicalEnvironment, sourceNodeIdentity, type SourceLexicalEnvironment } from "@tsonic/target-api/source";
 import type { RustSourcePolicyContext } from "../model/context.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
@@ -23,6 +23,7 @@ export function createRustRetainedEnvironmentQueries(
   const environments = new Map<Node, RustRetainedEnvironmentSelection>();
   const suspended = new Map<Node, readonly Node[] | undefined>();
   const lexical = new Map<Node, LexicalSelection>();
+  let opaqueInvocations: ReadonlySet<Node> | undefined;
   let remaining = Number.isSafeInteger(maximumSteps) && maximumSteps > 0 ? maximumSteps : 0;
   const step = (): boolean => remaining > 0 && --remaining >= 0;
   const unresolved = (reason = "Retained native environments require exact declaration-owned storage within the finite source work budget.") =>
@@ -82,6 +83,60 @@ export function createRustRetainedEnvironmentQueries(
       const visited = new Map<SourceStorageSubject, Set<SourceStorageBindings>>();
       const retain = (subject: SourceStorageSubject, bindings: SourceStorageBindings): boolean => {
         const pending = [{ subject, bindings }];
+        const components = (subject: SourceStorageSubject, bindings: SourceStorageBindings): boolean => {
+          if (!step()) return false;
+          if (opaqueInvocations === undefined) {
+            const invocations = new Set<Node>();
+            for (const boundary of storage.boundaries) {
+              if (!step()) return false;
+              if (boundary.kind === "opaque-invocation") invocations.add(boundary.invocation);
+            }
+            opaqueInvocations = invocations;
+          }
+          if (opaqueInvocations.has(subject.node)) return true;
+          const selected = storage.typeFor(subject);
+          if (selected.kind === "unresolved") return false;
+          const semantics = input.source.semantics.forFile(selected.sourceFile);
+          const types = semantics.types;
+          const type = types.nonNullableType(selected.type);
+          if (type === undefined) return false;
+          if (types.isNullish(type) || types.isNever(type) || types.isVoidLike(type) ||
+            types.isStringLike(type) || types.isNumberLike(type) || types.isBooleanLike(type) ||
+            types.isBigIntLike(type) || types.isSymbolLike(type) || types.callSignatures(type).length !== 0) return true;
+          if (types.isAny(type) || types.isUnknown(type)) return false;
+          const projections: SourceStorageProjection[] = [];
+          if (types.isTuple(type)) {
+            for (const [index, element] of types.tupleElementInfos(type).entries()) {
+              if (!step()) return false;
+              if (element.elementKind === "required" || element.elementKind === "optional")
+                projections.push({ kind: "tuple-element", index });
+            }
+          } else if (types.isArrayLike(type)) projections.push({ kind: "array-element" });
+          else {
+            const members = types.structuralMembers(type, type);
+            if (members.kind !== "available") return false;
+            for (const member of members.members) {
+              if (!step()) return false;
+              if (member.kind !== "present" || member.source.read !== "method" && member.source.read !== "property") continue;
+              for (const declaration of member.source.declarations) {
+                if (!step()) return false;
+                projections.push({ kind: member.source.read === "method" ? "method-value" : "member", declaration });
+              }
+            }
+          }
+          for (const projection of projections) {
+            if (!step()) return false;
+            const child = storage.subject(subject.node, subject.kind, [...subject.projection, projection]);
+            if (child.kind === "unresolved") return false;
+            const values = storage.storageProducersFor(child.subject, bindings);
+            if (values.kind === "unresolved") return false;
+            for (const producer of values.producers) {
+              if (!step()) return false;
+              pending.push({ subject: producer.subject, bindings: producer.bindings });
+            }
+          }
+          return true;
+        };
         while (pending.length !== 0) {
           if (!step()) return false;
           const { subject, bindings } = pending.pop()!;
@@ -97,7 +152,10 @@ export function createRustRetainedEnvironmentQueries(
               if (candidates.has(origin.node)) retained.add(origin.node);
               continue;
             }
-            if (origin.kind !== "value" || origin.projection.length !== 0 || ast.body(origin.node) === undefined) continue;
+            if (origin.kind !== "value" || origin.projection.length !== 0 || ast.body(origin.node) === undefined) {
+              if (!components(origin, bindings)) return false;
+              continue;
+            }
             const captures = lexicalFor(origin.node);
             if (captures.kind === "unresolved") return false;
             for (const capture of captures.captures) {
@@ -110,9 +168,8 @@ export function createRustRetainedEnvironmentQueries(
         }
         return true;
       };
-      if (!retain(subject.subject, bindings.bindings)) return unresolved();
       for (const producer of producers.producers) {
-        if (!step()) return unresolved();
+        if (!step() || !retain(producer.subject, producer.bindings)) return unresolved();
         const node = producer.subject.node;
         if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 || !ast.is.IsCallExpression(node)) continue;
         const semantics = input.source.semantics.forNode(node);

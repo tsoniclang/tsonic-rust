@@ -25,6 +25,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
   readonly navigation: SourceProgramNavigation;
   readonly semantics: SourceProgramSemantics;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly projectTypes: RustProjectTypePolicy;
   readonly isStoredField: (declaration: Node) => boolean;
   readonly deferredFields: ReadonlySet<Node>;
@@ -41,6 +42,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
   let visited = 0;
   while (pending.length > 0) {
     const node = pending.pop()!;
+    if (!input.isNativeNode(node)) continue;
     if (++visited > 4_194_304) {
       issues.push({ node, reason: "Rust receiver capture analysis exceeds its finite node budget." });
       break;
@@ -86,7 +88,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
             : input.ast.is.IsElementAccessExpression(access) ? semantics.operations.elementAccess(access) : undefined;
           const declaration = member?.selectedDeclaration;
           if (declaration === undefined || !input.isStoredField(declaration) ||
-            rustProjectObjectField(declaration, input.ast) === undefined) continue;
+            rustProjectObjectField(declaration, input.projectTypes) === undefined) continue;
           selectedFields.push({ declaration, reference, access });
         }
         if (selectedFields.length !== receiver.references.length) {
@@ -118,7 +120,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
       const selected = input.projectTypes.memberImplementation(concrete, declaration);
       const implementation = selected.kind === "resolved" ? selected.implementation.declaration : undefined;
       if (implementation === undefined || !input.isStoredField(implementation) ||
-        rustProjectObjectField(implementation, input.ast) === undefined) continue;
+        rustProjectObjectField(implementation, input.projectTypes) === undefined) continue;
       if (!fields.has(implementation)) { fields.add(implementation); demanded.push(implementation); }
       const connected = new Set([...(related.get(declaration) ?? [declaration]), ...(related.get(implementation) ?? [implementation])]);
       for (const field of connected) related.set(field, connected);

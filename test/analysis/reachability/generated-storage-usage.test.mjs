@@ -47,7 +47,7 @@ test("emitted array elements and class-view signatures reify exact types without
   const ast = { ...fakeAstReader([sourceFile]), forEachChild: (current, visit) => {
     if (current === sourceFile) visit(node);
   } };
-  const input = { ast, sourceFiles: [sourceFile], declarations: [],
+  const input = { ast, sourceFiles: [sourceFile], nativeNodes: [sourceFile, node], declarations: [],
     projectTypes: { definitions: classes, isPolymorphic: () => false, definitionForDeclaration: () => undefined,
       definitionForCarrier: carrier => classes.find(definition => rustTargetTypeRefEquals(definition.carrier, carrier)) },
     classValues: { instanceViews: [], instanceViewFor: () => undefined },

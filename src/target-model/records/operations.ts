@@ -474,6 +474,9 @@ export type RustTargetOperationFact =
       readonly kind: "source-enum-member";
       readonly operationId: string;
       readonly name: string;
+      readonly enumRepresentation:
+        | { readonly kind: "integer"; readonly integerWidth: 32 | 64 }
+        | { readonly kind: "literal-union" };
       readonly resultCarrier: TargetTypeRef;
     }
   | {

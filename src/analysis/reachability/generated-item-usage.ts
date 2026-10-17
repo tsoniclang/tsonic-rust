@@ -37,6 +37,7 @@ import type {
 import { createRustGeneratedItemUsageState } from "./generated-item-usage-state.js";
 
 export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput): RustGeneratedItemUsage {
+  const nativeNodes = new Set(input.nativeNodes);
   const {
     seal,
     markProjectTypeUsed,
@@ -497,6 +498,7 @@ export function analyzeRustGeneratedItemUsage(input: RustGeneratedItemUsageInput
     while (pending.length > 0) {
       const entry = pending.pop()!;
       const node = entry.node;
+      if (!nativeNodes.has(node)) continue;
       const insideTypeAlias = entry.insideTypeAlias ||
         input.ast.kindName(node) === "KindTypeAliasDeclaration";
       if (!insideTypeAlias && !declarationNames.has(node) &&

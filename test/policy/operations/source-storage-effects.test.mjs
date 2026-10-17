@@ -379,8 +379,10 @@ test("the real Rust target session wires the same freeze alias query into its co
     assert.equal(runtime.kind, "resolved");
     const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, runtime.plan.activeCrates);
     assert.equal(dispatch.kind, "resolved");
-    context = createRustAnalysisContext(request.input, request.providerSemantics,
+    const created = createRustAnalysisContext(request.input, request.providerSemantics,
       request.jsEnabled, request.rootPublishesLibrary, dispatch.plan);
+    assert.equal(created.kind, "resolved", "the actual source storage domain is complete");
+    context = created.value;
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
   } });
   assert.equal(result.diagnostics.length, 0, result.diagnostics.map(value => value.message).join("\n"));

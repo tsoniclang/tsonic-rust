@@ -9,7 +9,7 @@ import { rustCallableProtocol, rustProgramErrorTargetType } from "../../target-m
 import { rustOnlyTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
-import { selectRustPhysicalProgramErrorOwner } from "../program/error-types.js";
+import { selectRustPhysicalProgramErrorOwner } from "../errors/error-types.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
 import type { RustNativeStoragePlan } from "./native-storage.js";
@@ -29,6 +29,7 @@ export function analyzeRustRetainedCallableInputs(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly storage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
   readonly components: RustSourcePackageComponentClassifications;
@@ -53,7 +54,7 @@ export function analyzeRustRetainedCallableInputs(input: {
   };
   const failure = budget.run(() => {
     if (owned.size === 0) return;
-    for (const node of input.storage.nodes) {
+    for (const node of input.nativeNodes) {
       budget.step();
       const operation = input.records.targetOperation.get(node);
       if (operation?.kind !== "typed-location") continue;

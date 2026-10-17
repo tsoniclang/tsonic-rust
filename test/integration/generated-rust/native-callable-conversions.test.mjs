@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { realpathSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve, join } from "node:path";
+import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "../../helpers/native-closure-producers.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -16,12 +17,260 @@ import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { nativeFallibleAdapterFixture } from "../../helpers/physical-callable-adapters.mjs";
 import { finalizeRustSourceStyle } from "../../../dist/backend/target-ast/normalization/source-style.js";
 import { printRustSourceFile } from "../../helpers/printed-rust-source.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const workspace = dirname(realpathSync(resolve(repository, "../tsonic")));
 const runtime = resolve(workspace, "rust-runtime/crates/tsonic_rust_runtime");
 const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
 const integer = rustSourcePrimitiveTargetType("int32");
+
+test("source adapters retain their actual environment with native allocation, invocation and error identity parity",
+  { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: [],
+      target: { id: "rust", options: { outputType: "lib", crateName: "retained_adapter_cost" } },
+      files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+export function adapt(callback: () => int32): (first: int32) => int32 {
+  const widened: (first: int32) => int32 = callback;
+  return widened;
+}
+export function forward(left: () => int32, right: () => int32): (first: int32) => int32 {
+  const fromLeft = adapt(left);
+  const fromRight = adapt(right);
+  return fromRight;
+}
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+    assert.equal(result.artifacts.length > 0, true, "the actual source program produces native artifacts");
+    const root = writeGeneratedProject("retained-adapter-cost", result.artifacts);
+    mkdirSync(join(root, "tests"), { recursive: true });
+    const path = join(root, "tests/cost.rs");
+    writeFileSync(path, `
+use retained_adapter_cost::index;
+use tsonic_rust_runtime as rt;
+use rt::CallableImplementation;
+${nativeOwnershipCostSupport}
+
+#[derive(Debug, PartialEq, Eq)]
+struct BorrowedFailure<'region>(&'region i32);
+
+struct Input<'region> {
+    value: &'region i32,
+    calls: &'region Cell<usize>,
+    fail: bool,
+}
+
+impl<'region> rt::CallableImplementation<()> for Input<'region> {
+    type Output = Result<i32, BorrowedFailure<'region>>;
+
+    fn invoke(&self, (): ()) -> Self::Output {
+        self.calls.set(self.calls.get() + 1);
+        if self.fail { Err(BorrowedFailure(self.value)) } else { Ok(*self.value) }
+    }
+}
+
+fn direct<'region>(input: Input<'region>) -> rt::Callable<'region, (i32,), Result<i32, BorrowedFailure<'region>>> {
+    rt::Callable::new(move |(_unused,): (i32,)| input.invoke(()))
+}
+
+fn direct_forward<'region>(left: Input<'region>, right: Input<'region>)
+    -> rt::Callable<'region, (i32,), Result<i32, BorrowedFailure<'region>>> {
+    let from_left = direct(left);
+    let from_right = direct(right);
+    drop(from_left);
+    from_right
+}
+
+#[test]
+fn one_required_adapter_never_acquires_a_return_wrapper() {
+    let value = 31;
+    let actual_calls = Cell::new(0);
+    let expected_calls = Cell::new(0);
+    for fail in [false, true] {
+        actual_calls.set(0);
+        expected_calls.set(0);
+        let (compiled, actual) = measure(|| index::adapt(Input { value: &value, calls: &actual_calls, fail }));
+        let (handwritten, expected) = measure(|| direct(Input { value: &value, calls: &expected_calls, fail }));
+        assert_eq!(actual, expected);
+        assert_eq!(actual.allocations, 1);
+        println!("adapt fail={fail}: actual={actual:?}, handwritten={expected:?}");
+        assert_eq!(actual_calls.get(), 0);
+        assert_eq!(expected_calls.get(), 0);
+        let (actual_result, actual_cost) = measure(|| compiled.call((7,)));
+        let (expected_result, expected_cost) = measure(|| handwritten.call((7,)));
+        assert_eq!(actual_result, expected_result);
+        if let Err(error) = actual_result { assert!(core::ptr::eq(error.0, &value)); }
+        assert_eq!(actual_calls.get(), 1);
+        assert_eq!(expected_calls.get(), 1);
+        assert_eq!(actual_cost, expected_cost);
+        assert_eq!(actual_cost, Cost::default());
+        let (_, actual_drop) = measure(|| drop(compiled));
+        let (_, expected_drop) = measure(|| drop(handwritten));
+        assert_eq!(actual_drop, expected_drop);
+        assert_eq!(actual_drop.deallocations, 1);
+    }
+}
+
+#[test]
+fn forwarding_retains_only_the_actual_right_native_error() {
+    let left_value = 11;
+    let right_value = 43;
+    let left_calls = Cell::new(0);
+    let right_calls = Cell::new(0);
+    let baseline_left = Cell::new(0);
+    let baseline_right = Cell::new(0);
+    for fail in [false, true] {
+        right_calls.set(0);
+        baseline_right.set(0);
+        let (compiled, actual) = measure(|| index::forward(
+            Input { value: &left_value, calls: &left_calls, fail: true },
+            Input { value: &right_value, calls: &right_calls, fail },
+        ));
+        let (handwritten, expected) = measure(|| direct_forward(
+            Input { value: &left_value, calls: &baseline_left, fail: true },
+            Input { value: &right_value, calls: &baseline_right, fail },
+        ));
+        assert_eq!(actual, expected);
+        assert_eq!(actual.allocations, 2);
+        assert_eq!(actual.deallocations, 1);
+        println!("forward fail={fail}: actual={actual:?}, handwritten={expected:?}");
+        let (actual_result, actual_cost) = measure(|| compiled.call((5,)));
+        let (expected_result, expected_cost) = measure(|| handwritten.call((5,)));
+        assert_eq!(actual_result, expected_result);
+        if let Err(error) = actual_result { assert!(core::ptr::eq(error.0, &right_value)); }
+        assert_eq!(left_calls.get(), 0);
+        assert_eq!(baseline_left.get(), 0);
+        assert_eq!(right_calls.get(), 1);
+        assert_eq!(baseline_right.get(), 1);
+        assert_eq!(actual_cost, expected_cost);
+        assert_eq!(actual_cost, Cost::default());
+        let (_, actual_drop) = measure(|| drop(compiled));
+        let (_, expected_drop) = measure(|| drop(handwritten));
+        assert_eq!(actual_drop, expected_drop);
+        assert_eq!(actual_drop.deallocations, 1);
+    }
+}
+`);
+    execFileSync("rustfmt", ["--edition", "2024", path], { cwd: root, timeout: 30_000 });
+    runCargo(root, ["generate-lockfile", "--offline"]);
+    runCargo(root, ["fmt", "--all", "--check"]);
+    runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
+    runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+    const execution = runCargo(root, ["test", "--locked", "--offline", "--", "--nocapture"]);
+    process.stdout.write(execution.stdout);
+  });
+
+test("authored callable results use their actual copied or borrowed return environment", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: [],
+    target: { id: "rust", options: { outputType: "lib", crateName: "returned_capture_lifetime" } },
+    files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+export function copied<Region extends Life>(value: Ref<int32, Region>): () => int32 {
+  const owned = load(value);
+  return (): int32 => owned;
+}
+export function borrowed<Region extends Life>(value: Ref<int32, Region>): () => int32 {
+  return (): int32 => load(value);
+}
+export function aliased<Region extends Life>(value: Ref<int32, Region>): () => int32 {
+  const owned = load(value);
+  const callback: () => int32 = (): int32 => owned;
+  const result = callback;
+  return ((result satisfies (() => int32)));
+}
+export function branches<Region extends Life>(left: Ref<int32, Region>, right: Ref<int32, Region>, selected: boolean): () => int32 {
+  const first = load(left);
+  const second = load(right);
+  return selected ? (): int32 => first : (): int32 => second;
+}
+export function mixed<Region extends Life>(value: Ref<int32, Region>, selected: boolean): () => int32 {
+  const owned = load(value);
+  return selected ? (): int32 => owned : (): int32 => load(value);
+}
+` } });
+  assert.equal(result.diagnostics.length, 0,
+    result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`).join("\n"));
+  assert.equal(result.artifacts.length > 0, true, "exact copied and borrowed source results are admitted");
+  const root = writeGeneratedProject("returned-capture-lifetime", result.artifacts);
+  mkdirSync(join(root, "tests"), { recursive: true });
+  const path = join(root, "tests/lifetimes.rs");
+  const controls = `
+use returned_capture_lifetime::index;
+
+#[test]
+fn copied_payload_outlives_the_original_input_loan() {
+    let callback;
+    {
+        let value = 17;
+        callback = index::copied(&value);
+    }
+    assert_eq!(callback.call(()), Ok(17));
+    assert_eq!(callback.call(()), Ok(17));
+}
+
+#[test]
+fn a_real_borrow_retains_the_input_region() {
+    let value = 23;
+    let callback = index::borrowed(&value);
+    assert_eq!(callback.call(()), Ok(23));
+    assert_eq!(callback.call(()), Ok(23));
+}
+
+#[test]
+fn immutable_aliases_wrappers_and_result_branches_keep_the_real_copied_environment() {
+    let alias;
+    let left;
+    let right;
+    {
+        let first = 29;
+        let second = 31;
+        alias = index::aliased(&first);
+        left = index::branches(&first, &second, true);
+        right = index::branches(&first, &second, false);
+    }
+    assert_eq!(alias.call(()), Ok(29));
+    assert_eq!(left.call(()), Ok(29));
+    assert_eq!(right.call(()), Ok(31));
+}
+
+#[test]
+fn an_actual_borrow_in_either_result_branch_keeps_its_region() {
+    let value = 37;
+    assert_eq!(index::mixed(&value, true).call(()), Ok(37));
+    assert_eq!(index::mixed(&value, false).call(()), Ok(37));
+}
+`;
+  writeFileSync(path, controls);
+  execFileSync("rustfmt", ["--edition", "2024", path], { cwd: root, timeout: 30_000 });
+  runCargo(root, ["generate-lockfile", "--offline"]);
+  runCargo(root, ["fmt", "--all", "--check"]);
+  runCargo(root, ["check", "--all-targets", "--locked", "--offline"]);
+  runCargo(root, ["clippy", "--all-targets", "--locked", "--offline", "--", "-D", "warnings"]);
+  runCargo(root, ["test", "--locked", "--offline"]);
+  for (const [name, inverse] of [
+    ["borrowed", `
+fn illegal_escape<'region>(value: &'region i32)
+    -> tsonic_rust_runtime::Callable<'static, (), Result<i32, core::convert::Infallible>> {
+    index::borrowed(value)
+}
+`],
+    ["mixed", `
+fn illegal_mixed_escape<'region>(value: &'region i32)
+    -> tsonic_rust_runtime::Callable<'static, (), Result<i32, core::convert::Infallible>> {
+    index::mixed(value, true)
+}
+`],
+  ]) {
+    writeFileSync(path, `${controls}${inverse}`);
+    assert.throws(() => runCargo(root, ["check", "--all-targets", "--locked", "--offline"]),
+      /(?:borrowed data escapes|lifetime may not live long enough|must outlive.*static)/u,
+      `${name}: an actual input loan cannot be promoted to static or escape its native region`);
+  }
+});
 
 test("checked adapters retain all error sources and match handwritten native allocation costs", { timeout: 300_000 }, () => {
   const fixture = nativeFallibleAdapterFixture();

@@ -72,6 +72,8 @@ import { selectTsonicMemoryFieldBinding, selectTsonicMemoryRecordBinding } from 
 import { applyFlowReadLane } from "./flow-read.js";
 import { resolveNativeProviderCallableArguments } from "../operations/provider/calls/native-callables.js";
 import { selectRustUnionVariantByCheckedType } from "./union-context.js";
+import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export function resolveExpressionCarrier(
   walk: RustFactWalk,
@@ -83,6 +85,32 @@ export function resolveExpressionCarrier(
 ): TargetTypeRef | undefined {
   walk.context.records.assertOpen();
   if (walk.rejectedExpressions.has(expression)) return undefined;
+  const { ast } = walk.context;
+  const names = ast.is.IsObjectLiteralExpression(expression)
+    ? ast.as.AsObjectLiteralExpression(expression)?.Properties?.Nodes.flatMap(member => {
+        const name = member === undefined ? undefined : ast.name(member);
+        return name === undefined ? [] : [name];
+      }) ?? []
+    : ast.is.IsElementAccessExpression(expression)
+      ? [ast.as.AsElementAccessExpression(expression)?.ArgumentExpression].filter((name): name is Node => name !== undefined)
+      : [];
+  let rejectedName = false;
+  for (const name of names) {
+    const selectedName = walk.context.semanticsFor(name).propertyNames.get(name);
+    if (selectedName === undefined) {
+      if (ast.is.IsComputedPropertyName(name)) failTargetAnalysisInvariant("tsonic-rust",
+        "A native computed field requires its completed checked property-name selection.", name);
+      continue;
+    }
+    const issue = rustNativePropertyNameIssue(name, selectedName);
+    if (issue === undefined) continue;
+    if (!walk.rejectedExpressions.has(name)) appendRustDiagnostic(walk, issue.code, issue.message, name, []);
+    rejectedName = true;
+  }
+  if (rejectedName) {
+    walk.rejectedExpressions.add(expression);
+    return undefined;
+  }
   const records = walk.context.records;
   const contextualExpected = rustExpressionResolutionExpectation(
     walk,
@@ -574,9 +602,10 @@ function applyOptionLane(
       if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
         recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, reconciliation);
-        projected = reconciliationTarget;
+        projected = reconciliation.kind === "call-scoped-lifetime"
+          ? reconciliation.fact.selectedCarrier : reconciliation.fact.targetCarrier;
         if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
-          recordRustConversionSelection(walk.context.records, walk.context.requiredRecords, expression, reconciliationTarget);
+          recordRustConversionSelection(walk.context.records, walk.context.requiredRecords, expression, projected);
         }
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated") {

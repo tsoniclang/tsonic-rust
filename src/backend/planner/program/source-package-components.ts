@@ -12,7 +12,7 @@ import {
 } from "../names/source-output-identities.js";
 import type {
   RustSourceFileOutputIdentity,
-} from "../names/source-output-identities.js";
+} from "../../../target-model/names/source-output-identities.js";
 import type {
   RustSourcePackageFacadePlan,
 } from "./source-package-facades.js";

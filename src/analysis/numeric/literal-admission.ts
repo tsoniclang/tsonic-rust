@@ -41,6 +41,7 @@ export function analyzeRustNumericLiteralAdmission(
   ast: AstReader,
   sourceFiles: readonly SourceFile[],
   literalValues: SourceLiteralIndex,
+  isNativeNode: (node: Node) => boolean,
 ): readonly TargetDiagnostic[] {
   const diagnostics: TargetDiagnostic[] = [];
   const pending: Node[] = [];
@@ -51,6 +52,7 @@ export function analyzeRustNumericLiteralAdmission(
     pending.push(sourceFile);
     while (pending.length > 0) {
       const node = pending.pop()!;
+      if (!isNativeNode(node)) continue;
       const kind = ast.kindName(node);
       if (kind === KindNumericLiteral) {
         if (!rustNumericLiteralIsFinite(literalValues.literalValue.get(node))) {

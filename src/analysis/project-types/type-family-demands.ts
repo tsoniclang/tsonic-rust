@@ -172,6 +172,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
     for (const child of rustTargetTypeChildren(carrier)) visitCarrier(child, node, demand);
   };
   const seed = (node: Node): void => {
+    if (!walk.context.isNativeNode(node)) return;
     visitCall(node, empty);
     ast.forEachChild(node, child => { if (child !== undefined) seed(child); });
   };
@@ -179,6 +180,7 @@ export function realizeRustSourceTypeFamilyDemands(walk: RustFactWalk, files: re
   for (let index = 0; index < tasks.length && !rejected; index++) {
     const task = tasks[index]!;
     const visit = (node: Node): void => {
+      if (!walk.context.isNativeNode(node)) return;
       if (node !== task.declaration && createsGenericScope(ast.kindName(node))) return;
       const carrier = records.runtimeCarrier.get(node)?.carrier;
       if (carrier !== undefined) visitCarrier(carrier, node, task.context);

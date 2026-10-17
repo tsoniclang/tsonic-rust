@@ -63,8 +63,12 @@ export function resolveRustIndexedRecordLiteral(
     }
     if (kind !== "KindPropertyAssignment" && kind !== "KindShorthandPropertyAssignment") return undefined;
     const name = walk.context.ast.name(property);
-    if (name === undefined || walk.context.ast.is.IsComputedPropertyName(name)) return undefined;
-    const sourceName = walk.context.ast.text(name);
+    if (name === undefined) return undefined;
+    const selected = walk.context.ast.is.IsComputedPropertyName(name) || walk.context.ast.is.IsNumericLiteral(name)
+      ? walk.context.semanticsFor(property).propertyNames.get(name) : undefined;
+    const sourceName = walk.context.ast.is.IsComputedPropertyName(name) || walk.context.ast.is.IsNumericLiteral(name)
+      ? selected?.kind === "resolved" ? selected.name : undefined : walk.context.ast.text(name);
+    if (sourceName === undefined) return undefined;
     const initializer = ObjectLiteralProperty_Value(walk.context.ast, property);
     if (initializer === undefined || resolveExpressionCarrier(walk, initializer, sourceFile, value) === undefined) return undefined;
     contributions.push({ kind: "property", property, sourceName, expression: initializer });

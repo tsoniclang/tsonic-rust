@@ -34,7 +34,9 @@ await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /fn read<'Region>\(capture: &'Region i32\) -> js_abi::JsPromise<'Region, i32, rt::TsonicError>/u);
+  assert.match(source, /fn read_native<'Region>\(capture: &'Region i32\) -> i32/u,
+    "the eager native prefix preserves the real borrowed input");
+  assert.match(source, /JsPromise<i32>/u, "the completed copied payload needs no fictitious storage lifetime");
   assert.doesNotMatch(source, /transmute|Box<dyn|Location/u);
   validateGeneratedProject("retained-lexical-native-loan", result.artifacts, { run: true });
 });
@@ -49,8 +51,8 @@ mod retained_lexical_cost {
     use super::*;
     ${nativeOwnershipCostSupport(directory)}
 
-    fn handwritten(value: String) -> js_abi::JsPromise<'static, String, rt::TsonicError> {
-        js_abi::JsPromise::from_infallible_factory(move || async move { value })
+    fn handwritten(value: String) -> js_abi::JsPromise<String> {
+        js_abi::JsPromise::resolved(value)
     }
 
     #[test]

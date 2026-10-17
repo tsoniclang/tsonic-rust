@@ -2,13 +2,30 @@ import type { Node } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustSourceParameterAbi } from "../../policy/ownership/source-callable-abi.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustCallableTargetType } from "../../target-model/types/carriers/callables.js";
+import { rustCallableTargetType, rustCallableProtocol, rustCallableInputProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../target-model/types/carriers/generic-callables.js";
 import { rustCallableOrigin } from "../../policy/types/callables/callable-origins.js";
 import { resolveRustCallableEnvironment, bindRustCallableEnvironment } from "../../policy/types/resolution/callable-environments.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { rustHigherRankedNativeFunctionCarrier } from "./higher-ranked-function.js";
 import { rustResolutionContext } from "../program/walk.js";
+import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
+import { rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
+
+export function rustSourceClosureValueCarrier(
+  walk: RustFactWalk, declaration: Node, selected: TargetTypeRef, captures?: readonly TargetTypeRef[],
+): TargetTypeRef | undefined {
+  const context = rustResolutionContext(walk, declaration, "value");
+  const protocol = rustCallableProtocol(selected);
+  const construction = rustCallableInputProtocol(selected) === undefined ? selected : protocol === undefined ? undefined
+    : rustCallableTargetType(protocol.parameters, protocol.result, undefined, protocol.error);
+  const storage = resolveRustCallableStorageCarrier(construction, context, walk.operationOptions, new Set());
+  const stored = rustCallableProtocol(storage);
+  if (storage === undefined || stored?.lifetime === undefined) return storage;
+  const environment = captures ?? resolveRustCallableEnvironment(declaration, context, walk.operationOptions, new Set());
+  const lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(declaration, environment, walk);
+  return lifetime === undefined ? undefined : rustCallableTargetType(stored.parameters, stored.result, lifetime, stored.error);
+}
 
 export function rustSourceFunctionValueCarrier(
   walk: RustFactWalk, declaration: Node, parameters: readonly RustSourceParameterAbi[], result: TargetTypeRef,

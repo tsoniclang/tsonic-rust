@@ -8,6 +8,7 @@ import type {
 import type {
   SourceDeclaredHeritageEdge,
   SourceProgramNavigation,
+  SourceFileSemantics,
 } from "@tsonic/target-api/source";
 import type { RustExternalProjectBase } from "../../../target-model/types/external-project-types.js";
 import type { RustNamePlan } from "../../../target-model/names/model.js";
@@ -24,6 +25,8 @@ export interface RustProjectTypePolicyHost {
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourceNodes: readonly Node[];
+  readonly isNativeNode: (node: Node) => boolean;
+  semanticsFor(node: Node): SourceFileSemantics;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly thrownClassDeclarations: ReadonlySet<Node>;
   readonly sourceCreatedErrorOrigins: readonly Node[];

@@ -1,5 +1,27 @@
 import { createRustProgramRecordBuilder } from "../../dist/analysis/program/records/create.js";
 import assert from "node:assert/strict";
+import { sourceNodesOutsideErasedSubtrees, sourceCallableDefinitionIsDiscarded } from "@tsonic/target-api/source";
+
+export function rustNativeFixtureNodes(program) {
+  const ast = program.source.ast;
+  const nodes = [];
+  const pending = [...program.sourceFiles].reverse();
+  const visited = new Set();
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    assert.equal(visited.has(node), false, "the actual fixture source domain is finite and unique");
+    visited.add(node);
+    nodes.push(node);
+    const children = [];
+    ast.forEachChild(node, child => { if (child !== undefined) children.push(child); });
+    pending.push(...children.reverse());
+  }
+  const participation = sourceNodesOutsideErasedSubtrees(ast, nodes, node =>
+    program.records.nativeParticipation.get(node) === "erased" ||
+    (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) && sourceCallableDefinitionIsDiscarded(node, ast));
+  assert.equal(participation.kind, "resolved", "the same actual fixture participation has one complete native domain");
+  return participation.nodes;
+}
 
 function inheritedRecordFixture(family, subject, fact) {
   assert.equal(fact !== undefined, true, family + ": the actual producer supplied the complete inherited fact");

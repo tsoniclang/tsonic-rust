@@ -11,7 +11,7 @@ import type {
   RustArtifactSnapshot,
 } from "./index.js";
 import type { RustPlanningContext } from "../context.js";
-import type { RustSourceFileOutputIdentity } from "../names/source-output-identities.js";
+import type { RustSourceFileOutputIdentity } from "../../../target-model/names/source-output-identities.js";
 import {
   rustSourceFileContractCandidate,
 } from "./source-file-contract.js";

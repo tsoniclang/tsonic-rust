@@ -1,10 +1,7 @@
 import { rustDeriveAttributes, rustHiddenAttribute } from "../../../target-ast/syntax/attributes.js";
-import { carrierOf } from "../classes/planning.js";
-import { diagnosticInput, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
+import { diagnosticInput, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredFieldDeadCodeDisposition, rustGeneratedProjectInterfaceFieldDeadCodeDisposition, rustProjectInterfaceDeadCodeDisposition } from "../../program/reachability-directives.js";
-import { isRustIntegerCarrier, isRustStringCarrier, rustCarrierSupportsClone } from "../../../../target-model/types/index.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
-import { Node_Type } from "@tsonic/target-api/source";
+import { failRustPlannerInvariant, missingFactDiagnostic } from "../../diagnostics.js";
 import { rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
 import { rustProjectGenerics, rustProjectStateType, rustProjectStateMarker } from "../../objects/polymorphism/names.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
@@ -19,38 +16,16 @@ import { rustProjectStateIdentityImplementation } from "../../objects/project-id
 
 export function planInterfaceDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input.program.source;
-  const definition = context.input.program.projectTypes.definitionForDeclaration(node);
-  const interfaceName = context.input.program.names.nameForDeclaration(node) ?? "";
-  if (!isValidRustIdentifier(interfaceName)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record",
-      "Interface names must be valid Rust identifiers.",
-    ));
-    return undefined;
-  }
+  const admitted = context.input.program.nativeDeclarations.get(node);
+  if (admitted?.kind !== "interface") return failRustPlannerInvariant(
+    "Record-interface emission requires its sealed native declaration admission.", node);
+  const { definition, name: interfaceName } = admitted;
   const exported = ast.hasModifierKind(node, "export");
   const publiclyReachable = rustProjectTypeHasPublicImplementationAbi(context, interfaceName);
   const storageVisibility = rustProjectImplementationVisibility(publiclyReachable);
   const interfaceVisibility = exported || publiclyReachable
     ? "public" as const
     : "crate" as const;
-  if (ast.extendsHeritageElements(node).length > 0) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record",
-      "Interface inheritance is not supported by the Rust target.",
-    ));
-    return undefined;
-  }
-  if (definition?.kind !== "interface") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record-definition",
-      "Interface declaration has no exact project-type definition.",
-    ));
-    return undefined;
-  }
   const generics = rustProjectGenerics(definition, context);
   const interfaceType = rustTypeFromCarrierInContext(context.input.program.projectTypes.openCarrier(definition), context);
   const stateType = rustProjectStateType(
@@ -66,124 +41,55 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     return undefined;
   }
   const stateMarker = rustProjectStateMarker(definition, context);
-  const layout = context.input.program.projectTypes.objectLayoutForDefinition(definition);
-  if (layout?.kind !== "interface") {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record-layout",
-      "Interface declaration has no deterministic Rust project-object layout.",
-    ));
-    return undefined;
-  }
-  if (layout.indexSignatures.length > 1 ||
-    (layout.indexSignatures.length === 1 && layout.fields.length > 0)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.record-index-layout",
-      "Rust index-backed interfaces require exactly one index signature and no separately stored property signatures.",
-    ));
-    return undefined;
-  }
   const fields: PlannedProjectObjectField[] = [];
   let indexField: RustStructField | undefined;
-  for (const member of ast.members(node)) {
-    if (member === undefined) {
+  if (admitted.index !== undefined) {
+    const keyType = rustTypeFromCarrierInContext(admitted.index.keyCarrier, context);
+    const valueType = rustTypeFromCarrierInContext(admitted.index.valueCarrier, context);
+    if (keyType === undefined || valueType === undefined) {
       context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.record-member",
-        "Interface declaration contains an undefined member slot.",
+        diagnosticInput(context, admitted.index.declaration),
+        "rust.backend.record-index-carrier",
+        "An admitted record index requires its renderable native key and value carriers.",
       ));
       return undefined;
     }
-    if (ast.kindName(member) === "KindIndexSignature") {
-      const indexLayout = layout.indexSignatures.find((index) =>
-        index.declaration === member);
-      const keyCarrier = indexLayout === undefined
-        ? undefined
-        : carrierOf(context, indexLayout.keyParameter) ??
-          carrierOf(context, Node_Type(ast, indexLayout.keyParameter));
-      const valueCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
-      const keyType = rustTypeFromCarrierInContext(keyCarrier, context);
-      const valueType = rustTypeFromCarrierInContext(valueCarrier, context);
-      const targetName = context.input.program.projectTypes.fieldStorageName(definition, member);
-      if (indexLayout === undefined || keyCarrier === undefined || valueCarrier === undefined ||
-        keyType === undefined || valueType === undefined || targetName === undefined ||
-        (!isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) ||
-        !rustCarrierSupportsClone(valueCarrier, context.input.program.typeDefinitions)) {
-        context.diagnostics.push(unsupportedConstructDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.record-index-carrier",
-          "Rust index-backed interfaces require a closed string/integer key, a cloneable value, and deterministic generated storage.",
-        ));
-        return undefined;
-      }
-      indexField = {
-        name: targetName,
-        type: {
-          kind: "named",
-          path: "std::collections::HashMap",
-          genericArguments: [
-            { kind: "type", type: keyType },
-            { kind: "type", type: valueType },
-          ],
-        },
-        visibility: storageVisibility,
-      };
-      continue;
-    }
-    if (ast.kindName(member) !== "KindPropertySignature") {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, member),
+    indexField = {
+      name: admitted.index.targetName,
+      type: {
+        kind: "named",
+        path: "std::collections::HashMap",
+        genericArguments: [
+          { kind: "type", type: keyType },
+          { kind: "type", type: valueType },
+        ],
+      },
+      visibility: storageVisibility,
+    };
+  }
+  for (const field of admitted.fields) {
+    const fieldType = rustTypeFromCarrierInContext(field.carrier, context);
+    if (fieldType === undefined) {
+      context.diagnostics.push(missingFactDiagnostic(
+        diagnosticInput(context, field.declaration),
         "rust.backend.record",
-        "Record interfaces support only property signatures.",
-      ));
-      return undefined;
-    }
-    const fieldName = context.input.program.projectTypes.fieldStorageName(definition, member) ?? "";
-    const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
-    const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
-    if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.record",
-        `Record field '${fieldName}' has no supported Rust carrier fact.`,
-      ));
-      return undefined;
-    }
-    const layoutField = layout.fields.find((field) => field.declaration === member);
-    if (layoutField === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.record-field-layout",
-        `Record field '${fieldName}' has no exact project-object storage slot.`,
+        `Record field '${field.targetName}' has no renderable native carrier.`,
       ));
       return undefined;
     }
     fields.push({
-      declaration: member,
-      sourceName: layoutField.sourceName,
-      targetName: fieldName,
-      storageIndex: layoutField.storageIndex,
-      carrier: fieldCarrier,
+      ...field,
       type: fieldType,
       storageType: fieldType,
       visibility: storageVisibility,
     });
-  }
-  if (fields.length !== layout.fields.length) {
-    return undefined;
   }
   const representation = context.input.program.objectRepresentations.representationFor(definition);
   const stateCarrier = representation === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation);
   if (representation === undefined || representation.kind !== "value" && stateCarrier === undefined) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.interface-representation",
-      "Project interface has no exact Rust object representation.",
-    ));
-    return undefined;
+    return failRustPlannerInvariant("An admitted record interface lost its native object representation.", node);
   }
   if (representation.kind !== "value") context.usedAliases?.add("rt");
   const interfaceAttributes = structAttributes(interfaceName) ?? [];

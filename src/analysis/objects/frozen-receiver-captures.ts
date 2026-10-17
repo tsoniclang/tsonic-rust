@@ -19,6 +19,7 @@ export interface RustFrozenReceiverCapturePlan {
 export function analyzeRustFrozenReceiverCaptures(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
   readonly projectTypes: RustProjectTypePolicy;
   readonly views: readonly RustProjectStructuralView[];
@@ -54,6 +55,7 @@ export function analyzeRustFrozenReceiverCaptures(input: {
   for (const sourceFile of input.sourceFiles) enqueue(sourceFile);
   while (pending.length !== 0) {
     const node = pending.pop()!;
+    if (!input.isNativeNode(node)) continue;
     const operation = input.records.targetOperation.get(node);
     if (operation?.kind === "provider-operation" && operation.abi.target.form === "call" &&
       operation.abi.target.path === "tsonic_rust_runtime::freeze_object") {

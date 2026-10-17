@@ -6,6 +6,9 @@ import { rustCallableProtocol, rustNativeCallableProtocol } from "../../target-m
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import type { RustCallableActivation, RustCallableOwnershipPlan } from "./ownership-plan.js";
+import type { RustClassFrameInstantiation } from "../../policy/types/resolution/model.js";
+import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
+import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 
 export type RustCallableOwnershipCarrierSelection =
   | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
@@ -17,7 +20,7 @@ export function selectRustCallableOwnershipCarrier(input: {
   readonly subject: SourceStorageSubject;
   readonly logicalCarrier: TargetTypeRef;
   readonly environmentFor: (activation: RustCallableActivation) => readonly TargetTypeRef[] | undefined;
-  readonly instanceFor: (declaration: RustCallableActivation["ownerDeclaration"]) => TargetTypeRef | undefined;
+  readonly classFrameFor: (declaration: RustCallableActivation["ownerDeclaration"]) => RustClassFrameInstantiation | undefined;
 }): RustCallableOwnershipCarrierSelection {
   const generic = rustGenericCallableValue(input.logicalCarrier);
   const protocol = rustCallableProtocol(input.logicalCarrier) ?? rustNativeCallableProtocol(input.logicalCarrier) ??
@@ -37,12 +40,20 @@ export function selectRustCallableOwnershipCarrier(input: {
     previous.owner.origin.declarationIdentity !== origin.declarationIdentity))
     return Object.freeze({ kind: "unresolved", reason: "A callable cannot silently change its physical activation owner." });
   const environment = input.environmentFor(selection.activation);
-  const instance = selection.activation.kind === "class" ? input.instanceFor(selection.activation.ownerDeclaration) : undefined;
+  const classFrame = selection.activation.kind === "class" ? input.classFrameFor(selection.activation.ownerDeclaration) : undefined;
   const owner = selection.activation.kind === "lexical" ? { kind: "lexical" as const, origin }
-    : instance === undefined ? undefined : { kind: "class" as const, origin, instance };
-  const selected = environment === undefined || owner === undefined ? undefined
-    : rustFrameCallableTargetType(protocol.parameters, protocol.result, owner, environment);
+    : classFrame === undefined ? undefined : { kind: "class" as const, origin, instance: classFrame.instance };
+  const template = environment === undefined || owner === undefined ? undefined
+    : rustFrameCallableTargetType(classFrame?.parameters ?? protocol.parameters,
+      classFrame?.result ?? protocol.result, owner, environment);
+  const selected = template === undefined || classFrame === undefined ? template
+    : substituteRustTargetGenerics(template, classFrame.bindings.types, classFrame.bindings.lifetimes, classFrame.bindings.consts);
   if (selected === undefined)
     return Object.freeze({ kind: "unresolved", reason: "Callable frame storage has no exact owner, signature or captured type environment." });
+  const selectedProtocol = rustCallableProtocol(selected);
+  if (selectedProtocol === undefined || selectedProtocol.parameters.length !== protocol.parameters.length ||
+    !selectedProtocol.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, protocol.parameters[index])) ||
+    !rustTargetTypeRefEquals(selectedProtocol.result, protocol.result))
+    return Object.freeze({ kind: "unresolved", reason: "Callable frame instantiation differs from its exact checked invocation signature." });
   return Object.freeze({ kind: "selected", carrier: selected });
 }

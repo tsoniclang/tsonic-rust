@@ -105,7 +105,7 @@ export function rustNativeCallableOperand(
   node: Node,
   input: {
     readonly records: RustProgramRecords;
-    readonly storage: RustNativeStoragePlan;
+    readonly storage: Pick<RustNativeStoragePlan, "operandFor">;
     readonly producers: RustNativeCallableProducerPlan;
     readonly definitions: RustTypeDefinitions;
   },

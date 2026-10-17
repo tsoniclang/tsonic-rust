@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import { BinaryExpression_Right, Node_Expression, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { analyzeRustBorrowedElementLocals, type RustBorrowedElementLocal } from "./borrowed-element-locals.js";
@@ -24,13 +24,13 @@ export interface RustBorrowedElementReads {
 
 export function analyzeRustBorrowedElementReads(
   ast: AstReader,
-  files: readonly SourceFile[],
+  nativeNodes: readonly Node[],
   records: RustProgramRecords,
   navigation: SourceProgramNavigation,
 ): RustBorrowedElementReads {
   const reads = new WeakMap<Node, RustBorrowedElementRead>();
   const indexedReads = new WeakMap<Node, RustBorrowedElementRead>();
-  const locals = analyzeRustBorrowedElementLocals(ast, files, records, navigation);
+  const locals = analyzeRustBorrowedElementLocals(ast, nativeNodes, records, navigation);
   const select = (consumer: Node, read: RustBorrowedElementRead): void => {
     reads.set(consumer, read);
     indexedReads.set(read.element, read);
@@ -61,10 +61,9 @@ export function analyzeRustBorrowedElementReads(
         }
       }
     }
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  files.forEach(visit);
-  const forIteration = analyzeRustBorrowedIterationBindings(ast, files, records, navigation);
+  nativeNodes.forEach(visit);
+  const forIteration = analyzeRustBorrowedIterationBindings(ast, nativeNodes, records, navigation);
   return Object.freeze({ forExpression: (node: Node) => reads.get(node),
     forRead: (node: Node) => indexedReads.get(node), ...locals, forIteration });
 }

@@ -14,7 +14,7 @@ export interface RustGenericCallableBindingContext {
   readonly physical: RustGenericCallablePhysicalPlan;
 }
 
-function bindParameters(
+export function rustGenericCallablePhysicalBindings(
   parameters: readonly RustTargetGenericArgument[], arguments_: readonly RustTargetGenericArgument[],
 ): RustTargetGenericBindings | undefined {
   const selected: RustTargetGenericParameter[] = [];
@@ -39,7 +39,7 @@ export function rustGenericCallableMemberBindings(
   const environment = input.physical.environmentFor(implementation);
   if (parameters === undefined || environment === undefined || parameters.length !== definition.signature.typeParameters.length ||
     parameters.some(parameter => parameter.kind !== "type")) return undefined;
-  const selected = bindParameters(environment.parameters, member.arguments);
+  const selected = rustGenericCallablePhysicalBindings(environment.parameters, member.arguments);
   if (selected === undefined) return undefined;
   const types = new Map(implementation.substitutions);
   for (const [index, parameter] of parameters.entries()) {
@@ -62,7 +62,7 @@ export function rustGenericCallableInvocationBindings(
   const value = rustGenericCallableValue(carrier);
   const arguments_ = physical.argumentsFor(carrier);
   if (value === undefined || arguments_ === undefined || physical.definitionFor(carrier) !== definition) return undefined;
-  return bindParameters([...rustTypeGenericArguments(definition.signature.environmentParameters), ...definition.parameters,
+  return rustGenericCallablePhysicalBindings([...rustTypeGenericArguments(definition.signature.environmentParameters), ...definition.parameters,
     ...rustTypeGenericArguments(definition.signature.typeParameters)],
   [...rustTypeGenericArguments(value.environment), ...arguments_, ...methodArguments]);
 }

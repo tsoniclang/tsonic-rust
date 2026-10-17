@@ -137,6 +137,7 @@ export function fakeCompileInput({
   const sourceFacts = { getFact: () => undefined };
   const semanticsForFile = (sourceFile) => ({
     sourceFile,
+    propertyNames: Object.freeze({ entries: Object.freeze([]), issues: Object.freeze([]), get: () => undefined }),
     getAuthoredTypeFactSubjects: () => [],
     getSelectedFactSubjects: () => [],
     getTypeFactSubjects: () => [],

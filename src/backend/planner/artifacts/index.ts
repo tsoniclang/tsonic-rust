@@ -10,12 +10,6 @@ export type {
   RustArtifactFacet,
   RustArtifactSnapshot,
 } from "./contracts.js";
-export {
-  planRustSourceOutputIdentities,
-  rustModuleNameForSourcePath,
-} from "../names/source-output-identities.js";
 export type {
   RustSourceFileOutputIdentity,
-  RustSourceOutputIdentityPlan,
-  RustSourceOutputIdentityPlannerHost,
-} from "../names/source-output-identities.js";
+} from "../../../target-model/names/source-output-identities.js";

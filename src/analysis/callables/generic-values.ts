@@ -61,11 +61,13 @@ export interface RustGenericCallablePlan {
 export interface RustGenericCallableRegistry {
   readonly plan: RustGenericCallablePlan;
   initializePhysical(input: RustGenericCallablePhysicalInput): RustGenericCallablePhysicalConstruction;
+  publishPhysical(plan: RustGenericCallablePhysicalPlan): void;
 }
 
 export function createRustGenericCallablePlan(
   ast: AstReader, sourceFiles: readonly SourceFile[], records: RustProgramRecords, names: RustNamePlan,
   navigation: SourceProgramNavigation,
+  isNativeNode: (node: Node) => boolean,
   adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[] = [],
   closedSourceFiles: ReadonlySet<SourceFile> = new Set(),
 ): RustGenericCallableRegistry {
@@ -83,6 +85,7 @@ export function createRustGenericCallablePlan(
       : ast.is.IsFunctionDeclaration(node) ? records.runtimeCarrier.get(node)?.carrier : undefined;
   };
   const visit = (node: Node): void => {
+    if (!isNativeNode(node)) return;
     if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
       sourceCallableDefinitionIsDiscarded(node, ast)) return;
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
@@ -220,12 +223,18 @@ export function createRustGenericCallablePlan(
     },
     implementationFor: (declaration: Node) => implementations.get(declaration),
   });
+  let published = false;
   return Object.freeze({ plan,
     initializePhysical(input: RustGenericCallablePhysicalInput): RustGenericCallablePhysicalConstruction {
       if (physical !== undefined) throw new Error("A generic callable physical environment is initialized exactly once.");
       const construction = createRustGenericCallablePhysicalPlan(definitions, definitionFor, input);
       physical = construction.plan;
       return construction;
+    },
+    publishPhysical(selected: RustGenericCallablePhysicalPlan): void {
+      if (physical === undefined || published) throw new Error("Generic callable physical data publishes exactly once after construction.");
+      physical = selected;
+      published = true;
     },
   });
 }

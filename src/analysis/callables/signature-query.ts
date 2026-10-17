@@ -12,7 +12,7 @@ import { rustAsyncFunctionFactEquals, rustGeneratorFactEquals, rustSourceCallabl
 import { rustCallableTargetType, rustCallableProtocol, rustClosureProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustUnitTargetType } from "../../target-model/types/index.js";
 import { rustCallableInvocationResult } from "./results.js";
-import { recordCallableParameterSignatureFacts } from "./parameter-signature.js";
+import { recordCallableParameterInputFacts, recordCallableParameterSignatureFacts } from "./parameter-signature.js";
 import { recordRustParameterAbiSelection } from "../declarations/types-and-bindings.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { requireDenseSourceNodes } from "../expressions/records.js";
@@ -38,8 +38,15 @@ export interface RustCallableSignatureCompletion {
 
 export interface RustCallableSignatureState {
   active: boolean;
+  inputActive: boolean;
   readonly completed: Map<string, RustCallableSignatureCompletion>;
   readonly suspensions: Map<string, RustCallableSuspensionSelection>;
+}
+
+export function finalizeRustCallableParameterAbis(
+  walk: RustFactWalk, declaration: Node,
+): readonly RustSourceParameterAbiFact[] | undefined {
+  return recordCallableParameterInputFacts(walk, declaration);
 }
 
 function signatureRequestKey(request?: RustCallableSignatureRequest): string {
@@ -58,7 +65,7 @@ export function finalizeRustCallableSignature(
   if (cached !== undefined) return cached;
   if (state?.active) return undefined;
   if (state === undefined) {
-    state = { active: false, completed: new Map(), suspensions: new Map() };
+    state = { active: false, inputActive: false, completed: new Map(), suspensions: new Map() };
     walk.callableSignatures.set(declaration, state);
   }
   state.active = true;
@@ -70,6 +77,7 @@ export function finalizeRustCallableSignature(
       request.parameterAbis.length !== parameters.length) return undefined;
     let contextualResult = request?.contextualResult;
     if (request?.parameterAbis === undefined) {
+      if (finalizeRustCallableParameterAbis(walk, declaration) === undefined) return undefined;
       const contextual = recordCallableParameterSignatureFacts(walk, declaration);
       contextualResult ??= (rustCallableProtocol(contextual) ?? rustClosureProtocol(contextual))?.result;
     } else {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 
 
@@ -9,6 +10,8 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
+import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -16,6 +19,10 @@ import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
 
 function fixture(text, options = {}) {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": text }, ...options });
+  return analyzedFixture(program);
+}
+
+function analyzedFixture(program) {
   const ast = program.source.ast;
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
@@ -50,7 +57,7 @@ function assertChannels(actual, expected, localErrors = false) {
 
 for (const surfaces of [[], ["js"]]) {
   test(`captured generic producer errors bind concrete caller inputs (${surfaces[0] ?? "native"})`, () => {
-    const current = fixture(`
+    const current = analyzedFixture(analyzeRustErrorEffects(`
       type Identity = <Value>(value: Value) => Value;
       function make(callback: () => number): Identity {
         return <Value>(value: Value): Value => { callback(); return value; };
@@ -61,7 +68,7 @@ for (const surfaces of [[], ["js"]]) {
         return first<number>(7) === 7 && second<string>("native") === "native";
       }
       export function main(): boolean { return compare(() => 1, () => 2); }
-    `, { surfaces });
+    `, { surfaces }));
     const declaration = current.declaration("compare");
     const inputs = current.program.callableValues.native.inputsFor(declaration);
     assert.equal(inputs.length, 2);
@@ -74,17 +81,17 @@ for (const surfaces of [[], ["js"]]) {
     assert.equal(inputs.some(input => references.typeIdentities.includes(input.implementation.identity)), false,
       "callee-only C0/C1 parameters cannot escape in a nested producer reference");
     const invocation = current.calls("compare")[0];
-    const unresolved = createRustSourceErrorEffectSelection({ context: {
-      ast: current.ast, records: current.program.records, typeDefinitions: current.program.typeDefinitions,
-      sourceStorage: current.program.sourceStorage, callableValues: { ...current.program.callableValues,
-        nativeStorage: { ...current.program.callableValues.nativeStorage,
-          invocationInputFor: () => ({ kind: "unresolved", reason: "missing exact physical input" }) },
-      },
-    } });
+    const unresolved = createRustSourceErrorEffectSelection({ context: current.program });
     assert.equal(unresolved.register(effects.nativeErrors), true);
-    assert.equal(unresolved.bindingsFor(invocation, declaration,
-      effects.nativeErrors.map(source => source.errorType)) === undefined, true,
+    const bindings = unresolved.bindingsFor(invocation, declaration,
+      effects.nativeErrors.map(source => source.errorType));
+    assert.equal(bindings !== undefined, true, "the actual logical activation is completed before physical payload admission");
+    const requiredInputs = { kind: "tuple", elements: inputs.map(input => input.implementation) };
+    assert.equal(bindings.complete(requiredInputs, { ...current.program.callableValues.nativeStorage,
+      invocationInputFor: () => ({ kind: "unresolved", reason: "missing exact physical input" }) }) === undefined, true,
     "a concrete origin alone cannot replace missing physical ABI evidence");
+    assert.equal(bindings.complete(requiredInputs, current.program.callableValues.nativeStorage) !== undefined, true,
+      "the same actual native input payloads are admitted by their completed private construction owner");
   });
 }
 
@@ -129,27 +136,37 @@ test("pure source bodies stay pure while abstract input invocation carries its e
   assert.equal(current.program.records.fallible.get(current.declaration("invoke")) !== undefined, true);
 });
 
-test("two callbacks retain independent invocation and await errors alongside a local throw", () => {
-  const current = fixture(`
-    export async function pair(left: () => Promise<number>, right: () => Promise<number>, fail: boolean): Promise<number> {
-      const first = left(); const second = right();
-      const total = await first + await second;
-      if (fail) throw new Error("local");
-      return total;
+for (const surfaces of [[], ["js"]]) {
+  test(`two callbacks retain independent invocation and await errors alongside a local throw (${surfaces[0] ?? "native"})`, () => {
+    const current = fixture(`
+      export async function pair(left: () => Promise<number>, right: () => Promise<number>, fail: boolean): Promise<number> {
+        const first = left(); const second = right();
+        const total = await first + await second;
+        if (fail) throw new Error("local");
+        return total;
+      }
+    `, { surfaces });
+    const channels = current.program.callableValues.native.calls.flatMap(call => [
+      { identity: call.invocationErrorSource, errorType: call.invocationError },
+      ...call.awaitErrors.map((errorType, index) => ({ identity: call.awaitErrorSources[index], errorType })),
+    ]);
+    assert.equal(channels.length, 4, "both actual callbacks have invocation and deferred channels");
+    const expected = [...new Map(channels.map(channel => [channel.identity, channel])).values()];
+    assert.equal(expected.length, surfaces.length === 0 ? 4 : 3,
+      "native producer errors stay distinct; only the canonical JS rejection is shared");
+    if (surfaces.length !== 0) {
+      const rejection = expected.find(channel => channel.identity === rustJsRejectionErrorIdentity);
+      assert.equal(rejection !== undefined && rustTargetTypeRefEquals(rejection.errorType, rustJsValueTargetType()), true,
+        "the shared await channel is precisely the canonical JsValue reason");
     }
-  `);
-  const expected = current.program.callableValues.native.calls.flatMap(call => [
-    { identity: call.invocationErrorSource, errorType: call.invocationError },
-    ...call.awaitErrors.map((errorType, index) => ({ identity: call.awaitErrorSources[index], errorType })),
-  ]);
-  assert.equal(expected.length, 4);
-  assertChannels(current.callable("pair"), expected, true);
-  for (const name of ["left", "right"]) {
-    const call = current.calls(name)[0];
-    const native = current.program.callableValues.native.callFor(call);
-    assertChannels(current.effects(call), [{ identity: native.invocationErrorSource, errorType: native.invocationError }]);
-  }
-});
+    assertChannels(current.callable("pair"), expected, true);
+    for (const name of ["left", "right"]) {
+      const call = current.calls(name)[0];
+      const native = current.program.callableValues.native.callFor(call);
+      assertChannels(current.effects(call), [{ identity: native.invocationErrorSource, errorType: native.invocationError }]);
+    }
+  });
+}
 
 test("catch suppresses escaping native errors without losing try and finally region evidence", () => {
   const current = fixture(`
@@ -168,16 +185,26 @@ test("catch suppresses escaping native errors without losing try and finally reg
 });
 
 test("nested source functions propagate captures only when invoked", () => {
-  const current = fixture(`
+  const current = analyzedFixture(analyzeRustErrorEffects(`
     export function dormant(callback: () => number): number {
       function hidden(): number { return callback(); } return 1;
     }
     export function active(callback: () => number): number {
       function inner(): number { return callback(); } return inner();
     }
-  `);
+  `));
   assertChannels(current.callable("dormant"), []);
-  assert.equal(current.callable("hidden").nativeErrors.length, 1);
+  const hidden = current.declaration("hidden");
+  assert.equal(current.program.records.nativeParticipation.get(hidden), "erased", "the actual unused lexical body is not native work");
+  assert.equal(current.program.records.errorEffects.get(hidden) === undefined, true,
+    "the erased native body has no fabricated native error region");
+  const callback = current.calls("callback").find(call => current.ast.body(hidden) === current.ast.parent(current.ast.parent(call)));
+  assert.equal(callback !== undefined, true, "the original checked unused callback invocation remains in the complete source");
+  const subject = current.program.sourceStorage.subjectFor(Node_Expression(current.ast, callback));
+  assert.equal(subject.kind, "resolved", "the erased invocation retains its exact checked source-storage subject");
+  assert.equal(current.program.sourceStorage.typeFor(subject.subject).kind, "resolved",
+    "native erasure never deletes the checked callback type evidence");
+  assert.equal(current.callable("inner").nativeErrors.length, 1, "the actually invoked lexical body keeps its exact native channel");
   assertChannels(current.callable("active"), current.callable("inner").nativeErrors);
 });
 
@@ -232,12 +259,11 @@ test("call edges rebind two same-signature formals to physical caller inputs wit
 });
 
 test("source error rebinding rejects unknown identities, mutated carriers and unselected inputs", () => {
-  const current = fixture(`
+  const current = analyzedFixture(analyzeRustErrorEffects(`
     export function invoke(callback: () => number): number { return callback(); }
     export function forward(callback: () => number): number { const output = invoke(callback); return output; }
-  `);
-  const selection = createRustSourceErrorEffectSelection({ context: { ast: current.ast, records: current.program.records,
-    callableValues: current.program.callableValues } });
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
   const select = (node, declaration, kind, effects) => selection.edgeFor(declaration, kind, effects,
     selection.bindingsFor(node, declaration, effects.nativeErrors.map(error => error.errorType)));
   const effects = current.callable("invoke");
@@ -255,40 +281,134 @@ test("source error rebinding rejects unknown identities, mutated carriers and un
     "an unselected invocation cannot supply another declaration's input binding");
 });
 
-test("source async invocation remains pure while exact rebound errors belong to awaiting", () => {
-  const current = fixture(`
-    export async function invoke(callback: () => Promise<number>): Promise<number> { return await callback(); }
-    export async function forward(callback: () => Promise<number>): Promise<number> {
-      const pending = invoke(callback); return await pending;
-    }
-  `);
-  const call = current.initializer("pending");
-  assertChannels(current.effects(call), []);
-  const selected = current.program.records.sourceErrorEffects.get(call);
-  const awaited = selected?.edges.find(edge => edge.kind === "await");
-  assert.equal(awaited !== undefined, true);
-  assert.equal(awaited.effects.nativeErrors.length, 2);
-  assertChannels(current.callable("forward"), awaited.effects.nativeErrors);
+test("completed source rejection channels keep their identity before physical publication", () => {
+  const current = analyzedFixture(analyzeRustErrorEffects(`
+    export function value(): number { return 7; }
+    export function forward(): number { const output = value(); return output; }
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const declaration = current.declaration("value");
+  const source = { identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() };
+  const effects = { localErrors: false, nativeErrors: [source] };
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [source.errorType]);
+  assert.equal(bindings !== undefined, true, "the exact checked source invocation is ready");
+  const edge = selection.edgeFor(declaration, "await", effects, bindings);
+  assert.equal(edge !== undefined, true, "the source channel is selected without physical readers");
+  assert.equal(edge.nativeErrors.length, 1, "one source channel remains one channel");
+  const target = edge.nativeErrors[0].target;
+  assert.equal(target.identity, rustJsRejectionErrorIdentity, "a completed canonical channel cannot become a pending identity");
+  assert.equal(rustTargetTypeRefEquals(target.errorType, source.errorType), true, "the exact source payload is retained");
+  const completed = selection.complete(target, {
+    invocationInputFor: () => assert.fail("a closed source channel has no physical invocation dependency"),
+    boundSubjectFor: () => assert.fail("a closed source channel has no physical storage dependency"),
+  });
+  assert.equal(completed === target, true, "late physical completion does not replace an already completed source channel");
 });
 
-test("a synchronously returned input future transports its deferred error into the caller physical identity", () => {
-  const current = fixture(`
-    export function retain(callback: () => Promise<number>): Promise<number> { return callback(); }
-    export async function invoke(callback: () => Promise<number>): Promise<number> {
-      const future = retain(callback); return await future;
-    }
-  `);
-  const callee = current.program.callableValues.native.inputsFor(current.declaration("retain"))[0];
-  const caller = current.program.callableValues.native.inputsFor(current.declaration("invoke"))[0];
-  const effects = current.callable("invoke");
-  assert.equal(effects.localErrors, false);
-  assert.equal(effects.nativeErrors.length, 2, "invocation and deferred errors are independent channels");
-  assert.equal(effects.nativeErrors.every(source => source.errorType.kind === "associated-type" &&
-    source.errorType.owner.identity === caller.implementation.identity), true,
-    "no callee physical binder may escape across a selected source return");
-  assert.equal(effects.nativeErrors.every(source => source.errorType.trait.id === callee.protocol.trait.id), true,
-    "selected return transport preserves the callee protocol instead of rebranding it");
+test("a pending source channel stays deferred even when its payload is already closed", () => {
+  const current = analyzedFixture(analyzeRustErrorEffects(`
+    export function value(): number { return 7; }
+    export function forward(): number { const output = value(); return output; }
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const declaration = current.declaration("value");
+  const source = { identity: "test/pending-source-channel", errorType: rustJsValueTargetType() };
+  let completions = 0;
+  assert.equal(selection.pending(source, () => {
+    completions++;
+    return { identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() };
+  }), true, "the original source owns its unresolved identity");
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [source.errorType]);
+  const edge = selection.edgeFor(declaration, "await", { localErrors: false, nativeErrors: [source] }, bindings);
+  assert.equal(edge !== undefined, true, "pending source rebinding is represented explicitly");
+  const target = edge.nativeErrors[0].target;
+  assert.equal(target.identity.startsWith("pending-native-error:"), true, "a closed payload alone cannot complete its pending source");
+  assert.equal(completions, 0, "the source phase cannot read the pending physical channel");
+  const completed = selection.complete(target, {
+    invocationInputFor: () => assert.fail("this pending identity has no physical input dependency"),
+    boundSubjectFor: () => assert.fail("this pending identity has no physical storage dependency"),
+  });
+  assert.equal(completed?.identity, rustJsRejectionErrorIdentity, "the original completion supplies the final identity");
+  assert.equal(completions, 1, "one pending source is completed once");
 });
+
+test("source rebinding retains pending generic payloads until their physical completion", () => {
+  const current = analyzedFixture(analyzeRustErrorEffects(`
+    export function invoke(callback: () => number): number { return callback(); }
+    export function forward(callback: () => number): number { const output = invoke(callback); return output; }
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const declaration = current.declaration("invoke");
+  const effects = current.callable("invoke");
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration,
+    effects.nativeErrors.map(error => error.errorType));
+  const edge = selection.edgeFor(declaration, "invoke", effects, bindings);
+  assert.equal(edge !== undefined, true, "the actual selected callback channel can be rebound");
+  assert.equal(edge.nativeErrors.length, 1, "the real formal channel is preserved");
+  const target = edge.nativeErrors[0].target;
+  assert.equal(rustTargetGenericReferences(target.errorType).typeIdentities.length > 0, true,
+    "the caller's physical native parameter remains explicit");
+  assert.equal(target.identity.startsWith("pending-native-error:"), true,
+    "an open physical payload cannot be mistaken for a completed closed channel");
+  const completed = selection.complete(target, current.program.callableValues.nativeStorage);
+  assert.equal(completed !== undefined, true, "the same completed physical owner supplies the payload");
+  assert.equal(rustTargetTypeRefEquals(completed.errorType, target.errorType), true,
+    "completion preserves the actual caller-bound payload");
+});
+
+for (const surfaces of [[], ["js"]]) {
+  test(`source async invocation remains pure while exact rebound errors belong to awaiting (${surfaces[0] ?? "native"})`, () => {
+    const current = fixture(`
+      export async function invoke(callback: () => Promise<number>): Promise<number> { return await callback(); }
+      export async function forward(callback: () => Promise<number>): Promise<number> {
+        const pending = invoke(callback); return await pending;
+      }
+    `, { surfaces });
+    const call = current.initializer("pending");
+    assertChannels(current.effects(call), []);
+    const selected = current.program.records.sourceErrorEffects.get(call);
+    const awaited = selected?.edges.find(edge => edge.kind === "await");
+    assert.equal(awaited !== undefined, true);
+    assert.equal(awaited.effects.nativeErrors.length, surfaces.length === 0 ? 2 : 1,
+      "the public JS await owns its canonical rejection, while a native future keeps its exact rebound channels");
+    if (surfaces.length !== 0) {
+      assert.equal(awaited.effects.nativeErrors[0].identity === rustJsRejectionErrorIdentity &&
+        rustTargetTypeRefEquals(awaited.effects.nativeErrors[0].errorType, rustJsValueTargetType()), true,
+      "no native invocation channel leaks as a second public JS rejection");
+    }
+    assertChannels(current.callable("forward"), awaited.effects.nativeErrors);
+  });
+}
+
+for (const surfaces of [[], ["js"]]) {
+  test(`a synchronously returned input future transports its deferred error into the caller physical identity (${surfaces[0] ?? "native"})`, () => {
+    const current = fixture(`
+      export function retain(callback: () => Promise<number>): Promise<number> { return callback(); }
+      export async function invoke(callback: () => Promise<number>): Promise<number> {
+        const future = retain(callback); return await future;
+      }
+    `, { surfaces });
+    const callee = current.program.callableValues.native.inputsFor(current.declaration("retain"))[0];
+    const caller = current.program.callableValues.native.inputsFor(current.declaration("invoke"))[0];
+    const effects = current.callable("invoke");
+    assert.equal(effects.localErrors, false);
+    assert.equal(effects.nativeErrors.length, 2, "invocation and deferred errors are independent channels");
+    const nativeErrors = surfaces.length === 0 ? effects.nativeErrors
+      : effects.nativeErrors.filter(source => source.identity !== rustJsRejectionErrorIdentity);
+    assert.equal(nativeErrors.length, surfaces.length === 0 ? 2 : 1,
+      "the JS public rejection does not erase the exact caller-bound invocation error");
+    assert.equal(nativeErrors.every(source => source.errorType.kind === "associated-type" &&
+      source.errorType.owner.identity === caller.implementation.identity), true,
+      "no callee physical binder may escape across a selected source return");
+    assert.equal(nativeErrors.every(source => source.errorType.trait.id === callee.protocol.trait.id), true,
+      "selected return transport preserves the callee protocol instead of rebranding it");
+    if (surfaces.length !== 0) {
+      const rejection = effects.nativeErrors.find(source => source.identity === rustJsRejectionErrorIdentity);
+      assert.equal(rejection !== undefined && rustTargetTypeRefEquals(rejection.errorType, rustJsValueTargetType()), true,
+        "only the deferred JS reason uses the canonical physical rejection");
+    }
+  });
+}
 
 test("selected source generic arguments substitute callee protocol environments at the error owner", () => {
   const current = fixture(`

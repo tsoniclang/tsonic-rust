@@ -106,7 +106,7 @@ export function selectedMemberReceiverCarrier(
       : undefined;
     const declaration = sourceUnion.declaration ?? (declaredType === undefined ? undefined :
       context.currentSemantics.types.aliasApplication(declaredType)?.declaration);
-    const declaredCarrier = declaration === undefined ? undefined : options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    const declaredCarrier = declaration === undefined ? undefined : options.sourceTypes.carrierForDeclaration(declaration);
     const templateCarrier = rustOptionElementCarrier(declaredCarrier) ?? declaredCarrier;
     const template = templateCarrier === undefined ? undefined : options.sourceTypes.sourceUnionForCarrier(templateCarrier);
     if (declaredType !== undefined && declaration !== undefined && template !== undefined) {
@@ -516,9 +516,9 @@ export function normalizeSelectedOperationInputCarrier(
   const optionElement = rustOptionElementCarrier(expected);
   if (optionElement === undefined || direct === undefined ||
     rustTargetTypeRefEquals(direct, expected)) {
-    if (direct !== undefined && expected !== undefined &&
-      selectRustValueCarrierReconciliation(direct, expected, options.projectTypes, context.typeDefinitions).kind === "conversion") {
-      return expected;
+    if (direct !== undefined && expected !== undefined) {
+      const selected = selectRustValueCarrierReconciliation(direct, expected, options.projectTypes, context.typeDefinitions);
+      if (selected.kind === "conversion") return selected.fact.targetCarrier;
     }
     return direct;
   }

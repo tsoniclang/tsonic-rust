@@ -39,7 +39,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { selectRustValueCarrierReconciliation } from "../../policy/types/resolution/value-carrier-reconciliation.js";
-import { recordRustValueCarrierReconciliation } from "../conversions/value-carrier-queries.js";
+import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import type { Node, SourceFile } from "@tsonic/tsts";
 import type { RustFactWalk } from "../program/walk.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
@@ -49,6 +49,15 @@ import { resolveProviderRecordLiteral } from "./provider-records.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { resolveRustClosedRecordLiteral } from "./closed-records.js";
+import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
+
+function recordPropertySourceName(walk: RustFactWalk, name: Node | undefined): string | undefined {
+  if (name === undefined) return undefined;
+  const { ast } = walk.context;
+  if (!ast.is.IsComputedPropertyName(name) && !ast.is.IsNumericLiteral(name)) return ast.text(name);
+  const selected = walk.context.semanticsFor(name).propertyNames.get(name);
+  return selected?.kind === "resolved" ? selected.name : undefined;
+}
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
@@ -189,6 +198,7 @@ export function resolveRecordLiteralCarrier(
     const carrier = setCarrierFact(walk, expression, selectedExpected);
     if (carrier !== undefined && contextualReconciliation !== undefined) {
       recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, contextualReconciliation);
+      return rustEffectiveValueCarrier(walk.context.records, expression);
     }
     return carrier;
   }
@@ -230,8 +240,8 @@ export function resolveRecordLiteralCarrier(
       return undefined;
     }
     const nameNode = ast.name(property);
-    const fieldName = nameNode === undefined ? "" : ast.text(nameNode);
-    if (fieldName.length === 0 || explicitPropertiesByName.has(fieldName)) {
+    const fieldName = recordPropertySourceName(walk, nameNode);
+    if (fieldName === undefined || explicitPropertiesByName.has(fieldName)) {
       return undefined;
     }
     explicitPropertiesByName.set(fieldName, property);
@@ -446,6 +456,15 @@ export function resolveRecordLiteralCarrier(
       if (spreadExpression === undefined || sourceCarrier === undefined ||
         sourceValueCarrier === undefined || sourceShape === undefined) {
         return undefined;
+      }
+      if (sourceShape.storage === "structural-object") {
+        const subject = walk.context.sourceStorage.subjectFor(spreadExpression);
+        if (subject.kind === "unresolved") return undefined;
+        const selected = walk.context.sourceStorage.typeFor(subject.subject);
+        if (selected.kind === "unresolved") return undefined;
+        const sourceType = walk.context.source.semantics.forFile(selected.sourceFile).types.nonNullableType(selected.type);
+        if (sourceType === undefined || !retainRustStructuralInstantiation(sourceType,
+          sourceValueCarrier, sourceValueCarrier, rustResolutionContext(walk, spreadExpression), walk.operationOptions)) return undefined;
       }
       const spreadFields: {
         readonly sourceName: string;
@@ -666,13 +685,23 @@ export function resolveRecordLiteralCarrier(
         }
         const storedMethod = rustStructuralMethodStorageCarrier(resultCarrier, targetField.carrier, targetField.presence);
         const methodCarrier = targetField.presence === "optional" ? rustOptionElementCarrier(storedMethod) : storedMethod;
-        if (methodCarrier === undefined || resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
+        if (methodCarrier === undefined) return undefined;
+        const selectedMethodCarrier = resolveFunctionExpressionCarrier(walk, property, sourceFile, methodCarrier, {
           leadingParameters: [{ kind: "this", carrier: resultCarrier }],
           preserveSourceParameterForms: true,
           selectedMethodDeclaration: selectedDeclaration,
           sourceCarrier: selectedCallableCarrier,
-        }) === undefined) {
+        });
+        if (selectedMethodCarrier === undefined) return undefined;
+        const methodReconciliation = selectRustValueCarrierReconciliation(
+          selectedMethodCarrier, methodCarrier, walk.context.projectTypes, walk.context.typeDefinitions,
+        );
+        if (methodReconciliation.kind === "incompatible") {
           return undefined;
+        }
+        if (methodReconciliation.kind !== "identity") {
+          recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords,
+            property, methodReconciliation);
         }
         contributions.push({
           kind: "structural-method",
@@ -720,7 +749,8 @@ export function resolveRecordLiteralCarrier(
       continue;
     }
     const nameNode = ast.name(property);
-    const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+    const sourceName = recordPropertySourceName(walk, nameNode);
+    if (sourceName === undefined) return undefined;
     const initializer = ObjectLiteralProperty_Value(ast, property);
     const initializerKind = initializer === undefined ? "" : ast.kindName(initializer);
     if (initializer !== undefined &&
@@ -889,6 +919,7 @@ export function resolveRecordLiteralCarrier(
       expression,
       contextualReconciliation,
     );
+    return rustEffectiveValueCarrier(walk.context.records, expression);
   }
   return finalizedCarrier;
 }

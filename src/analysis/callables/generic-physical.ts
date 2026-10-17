@@ -15,6 +15,7 @@ import type { RustNativeStorageSelection } from "./native-storage.js";
 import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "./generic-values.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
+import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 
 export interface RustGenericCallablePhysicalMember {
   readonly implementation: RustGenericCallableImplementation;
@@ -57,6 +58,9 @@ export interface RustGenericCallablePhysicalConstruction {
   readonly plan: RustGenericCallablePhysicalPlan;
   readonly carrierFor: RustGenericCallablePhysicalCarrierSelector;
   closeAdmission(): void;
+  prepare(carrier: TargetTypeRef): void;
+  prepareConversion(source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined;
+  closeKeys(): RustGenericCallablePhysicalPlan;
   publish(): void;
 }
 
@@ -64,7 +68,7 @@ export interface RustGenericCallablePhysicalInput {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
   readonly captures: RustNativeCaptureConstruction;
-  readonly native: RustNativeCallableInputPlan;
+  readonly native: Pick<RustNativeCallableInputPlan, "inputs">;
   readonly boundSubjectFor: (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings) => RustNativeStorageSelection;
 }
 
@@ -79,10 +83,14 @@ export function createRustGenericCallablePhysicalPlan(
   const environments = new Map<RustGenericCallableImplementation, RustGenericCallableEnvironment | undefined>();
   const activeEnvironments = new Set<RustGenericCallableImplementation>();
   const definitions = new Map<string, RustGenericCallablePhysicalDefinition>();
+  const ownedDomains = new Map<string, RustGenericCallableDefinition>();
   let inventory: readonly RustGenericCallablePhysicalDefinition[] | undefined;
   let published = false;
+  let closedKeys: RustGenericCallablePhysicalPlan | undefined;
+  let closedSelection: ((carrier: TargetTypeRef, required: boolean) => RustGenericCallablePhysicalSelection | undefined) | undefined;
   let openCarriers: Map<string, RustGenericCallablePhysicalSelection> | undefined = new Map();
   const selectedCarriers: ReadonlyMap<string, RustGenericCallablePhysicalSelection> = openCarriers;
+  const conversions = new Map<string, Map<string, RustGenericCallablePhysicalConversion | undefined>>();
   const nativeInputs = new Map(input.native.inputs.map(value => [value.implementation.identity, value]));
   const sourceFiles = new Set(input.storage.nodes.filter(node => input.ast.is.IsSourceFile(node)).map(node => input.ast.getFileName(input.ast.getSourceFile(node))));
   const usedNames = new Set(families.flatMap(family => [family.targetName,
@@ -114,10 +122,12 @@ export function createRustGenericCallablePhysicalPlan(
       activeEnvironments.delete(implementation);
     }
   };
-  const select = (carrier: TargetTypeRef, mode: "admit" | "link" | "inspect"): RustGenericCallablePhysicalSelection | undefined => {
+  const select = (carrier: TargetTypeRef, mode: "admit" | "prepare" | "link" | "inspect"): RustGenericCallablePhysicalSelection | undefined => {
+    if (closedSelection !== undefined) return closedSelection(carrier, mode !== "inspect");
     const value = rustGenericCallableValue(carrier);
     const family = value === undefined ? undefined : familyFor(carrier);
     if (value === undefined || family === undefined) return undefined;
+    ownedDomains.set(closedMetadataKey([value.origin, value.signature]), family);
     const cacheKey = closedMetadataKey(carrier);
     const cached = selectedCarriers.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -175,8 +185,42 @@ export function createRustGenericCallablePhysicalPlan(
       definitions.set(identity, definition);
     }
     const result = Object.freeze({ definition, arguments: snapshotClosedMetadata(actuals) });
-    if (mode === "admit") openCarriers?.set(cacheKey, result);
+    if (mode === "admit" || mode === "prepare") openCarriers?.set(cacheKey, result);
     return result;
+  };
+  const prepareConversion = (source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined => {
+    if (closedKeys !== undefined) throw new Error("Generic callable conversions are prepared only before key closure.");
+    const sourceKey = closedMetadataKey(source);
+    const targetKey = closedMetadataKey(target);
+    const existing = conversions.get(sourceKey);
+    if (existing?.has(targetKey)) return existing.get(targetKey);
+    const selected = selectConversion(source, target);
+    if (selected === undefined && inventory === undefined) return undefined;
+    const targets = existing ?? new Map<string, RustGenericCallablePhysicalConversion | undefined>();
+    targets.set(targetKey, selected);
+    conversions.set(sourceKey, targets);
+    return selected;
+  };
+  const selectConversion = (source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined => {
+    if (!rustGenericCallableSignaturesMatch(source, target)) return undefined;
+    const from = select(source, "prepare");
+    const into = select(target, "prepare");
+    if (from === undefined || into === undefined || from.definition.familyIdentity !== into.definition.familyIdentity) return undefined;
+    if (from.definition === into.definition && closedMetadataEquals(from.arguments, into.arguments))
+      return Object.freeze({ kind: "identity" as const });
+    const sourceValue = rustGenericCallableValue(source)!;
+    const targetValue = rustGenericCallableValue(target)!;
+    const argumentsFor = (value: typeof sourceValue, index: number): readonly RustTargetGenericArgument[] =>
+      value.physical?.members[index]!.arguments.map(argument => value.physical!.arguments[argument]!) ?? [];
+    const transitions: { readonly source: RustGenericCallablePhysicalMember; readonly target: RustGenericCallablePhysicalMember }[] = [];
+    for (const [index, member] of from.definition.members.entries()) {
+      const arguments_ = argumentsFor(sourceValue, index);
+      const candidate = into.definition.members.find((other, otherIndex) => other.implementation === member.implementation &&
+        closedMetadataEquals(arguments_, argumentsFor(targetValue, otherIndex)));
+      if (candidate === undefined) return undefined;
+      transitions.push(Object.freeze({ source: member, target: candidate }));
+    }
+    return Object.freeze({ kind: "variants" as const, members: Object.freeze(transitions) });
   };
   const plan: RustGenericCallablePhysicalPlan = Object.freeze({
     definitions(): readonly RustGenericCallablePhysicalDefinition[] {
@@ -187,31 +231,14 @@ export function createRustGenericCallablePhysicalPlan(
     definitionFor: (carrier: TargetTypeRef) => select(carrier, "link")?.definition,
     argumentsFor: (carrier: TargetTypeRef) => select(carrier, "link")?.arguments,
     existingSelectionFor: (carrier: TargetTypeRef) => select(carrier, "inspect"),
-    conversionFor(source: TargetTypeRef, target: TargetTypeRef): RustGenericCallablePhysicalConversion | undefined {
-      if (!rustGenericCallableSignaturesMatch(source, target)) return undefined;
-      const from = select(source, "link");
-      const into = select(target, "link");
-      if (from === undefined || into === undefined || from.definition.familyIdentity !== into.definition.familyIdentity) return undefined;
-      if (from.definition === into.definition && closedMetadataEquals(from.arguments, into.arguments))
-        return Object.freeze({ kind: "identity" as const });
-      const sourceValue = rustGenericCallableValue(source)!;
-      const targetValue = rustGenericCallableValue(target)!;
-      const argumentsFor = (value: typeof sourceValue, index: number): readonly RustTargetGenericArgument[] =>
-        value.physical?.members[index]!.arguments.map(argument => value.physical!.arguments[argument]!) ?? [];
-      const transitions: { readonly source: RustGenericCallablePhysicalMember; readonly target: RustGenericCallablePhysicalMember }[] = [];
-      for (const [index, member] of from.definition.members.entries()) {
-        const arguments_ = argumentsFor(sourceValue, index);
-        const candidate = into.definition.members.find((other, otherIndex) => other.implementation === member.implementation &&
-          closedMetadataEquals(arguments_, argumentsFor(targetValue, otherIndex)));
-        if (candidate === undefined) return undefined;
-        transitions.push(Object.freeze({ source: member, target: candidate }));
-      }
-      return Object.freeze({ kind: "variants" as const, members: Object.freeze(transitions) });
-    },
+    conversionFor: (source: TargetTypeRef, target: TargetTypeRef) => closedKeys === undefined
+      ? prepareConversion(source, target) : closedKeys.conversionFor(source, target),
   });
   return Object.freeze({
     plan,
     carrierFor(carrier: TargetTypeRef, ownerFileName: string, producers: readonly SourceStorageProducer[]) {
+      if (closedKeys !== undefined) (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
+        "Generic callable physical construction cannot run after key closure.");
       const value = rustGenericCallableValue(carrier);
       const family = value === undefined ? undefined : familyFor(carrier);
       if (value === undefined || family === undefined || producers.length === 0) return undefined;
@@ -259,17 +286,69 @@ export function createRustGenericCallablePhysicalPlan(
       const selected = [...members.values()];
       const physicalOwner = selected.length === 1 ? selected[0]!.origin.fileName : ownerFileName;
       const result = rustGenericCallableCarrier({ ...value, physical: { ownerFileName: physicalOwner, members: selected, arguments: arguments_ } });
-      return select(result, "admit") === undefined ? undefined : Object.freeze({ carrier: result, inputs: Object.freeze([...selectedInputs]) });
+      return select(result, inventory === undefined ? "admit" : "prepare") === undefined ? undefined
+        : Object.freeze({ carrier: result, inputs: Object.freeze([...selectedInputs]) });
     },
     closeAdmission(): void {
       if (inventory !== undefined) throw new Error("Generic callable physical family admission closes exactly once.");
       for (const family of families) for (const implementation of family.implementations) constructEnvironment(implementation, true);
       for (const definition of [...definitions.values()]) select(definition.carrier, "admit");
       inventory = Object.freeze([...definitions.values()]);
+    },
+    prepare(carrier: TargetTypeRef): void {
+      if (inventory === undefined || closedKeys !== undefined)
+        throw new Error("Generic callable keys are prepared after family admission and before key closure.");
+      const visited = new Set<TargetTypeRef>();
+      const visit = (current: TargetTypeRef): void => {
+        if (visited.has(current)) return;
+        visited.add(current);
+        if (rustGenericCallableValue(current) !== undefined) select(current, "prepare");
+        for (const child of rustTargetTypeChildren(current)) visit(child);
+      };
+      visit(carrier);
+    },
+    prepareConversion,
+    closeKeys(): RustGenericCallablePhysicalPlan {
+      if (inventory === undefined || closedKeys !== undefined)
+        throw new Error("Generic callable physical keys close exactly once after family admission.");
+      for (const definition of inventory) prepareConversion(definition.carrier, definition.carrier);
+      const read = (carrier: TargetTypeRef, required: boolean): RustGenericCallablePhysicalSelection | undefined => {
+        const selected = selectedCarriers.get(closedMetadataKey(carrier));
+        const value = selected === undefined && required ? rustGenericCallableValue(carrier) : undefined;
+        const family = value === undefined ? undefined : ownedDomains.get(closedMetadataKey([value.origin, value.signature]));
+        if (family !== undefined && value?.physical !== undefined && sourceFiles.has(value.physical.ownerFileName) &&
+          value.physical.members.every(member => {
+          const implementation = byOrigin.get(closedMetadataKey(member.origin));
+          const environment = implementation === undefined ? undefined : environments.get(implementation);
+          return implementation !== undefined && family.implementations.includes(implementation) && environment !== undefined &&
+            (value.physical!.members.length !== 1 || value.physical!.ownerFileName === implementation.sourceFileName) &&
+            environment.parameters.length === member.arguments.length &&
+            environment.parameters.every((parameter, index) =>
+              parameter.kind === value.physical!.arguments[member.arguments[index]!]!.kind);
+        }))
+          (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
+            "A physical generic callable key was not prepared before publication; its selected contextual root is missing.");
+        return selected;
+      };
+      const finalInventory = inventory;
+      closedSelection = read;
+      closedKeys = Object.freeze({
+        definitions: () => finalInventory,
+        environmentFor,
+        definitionFor: (carrier: TargetTypeRef) => read(carrier, true)?.definition,
+        argumentsFor: (carrier: TargetTypeRef) => read(carrier, true)?.arguments,
+        existingSelectionFor: (carrier: TargetTypeRef) => read(carrier, false),
+        conversionFor(source: TargetTypeRef, target: TargetTypeRef) {
+          if (read(source, true) === undefined || read(target, true) === undefined) return undefined;
+          return conversions.get(closedMetadataKey(source))?.get(closedMetadataKey(target));
+        },
+      });
       openCarriers = undefined;
+      return closedKeys;
     },
     publish(): void {
-      if (inventory === undefined) throw new Error("Generic callable physical families publish only after their admission closes.");
+      if (closedKeys === undefined) throw new Error("Generic callable physical families publish only after their keys close.");
+      if (published) throw new Error("Generic callable physical families publish exactly once.");
       published = true;
     },
   });

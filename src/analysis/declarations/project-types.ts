@@ -29,13 +29,14 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustCapturedFieldStorageFact } from "../../target-model/records/receiver-captures.js";
 import { rustSourceTypeDeclarations } from "../../policy/types/model/source-declarations.js";
 import { closeRustSuspendedStorage } from "../../policy/types/storage/suspended-storage.js";
-import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
+import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
   walk.context.records.assertOpen();
   const { ast } = walk.context;
   for (const sourceFile of sourceFiles) {
-    for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, ast, walk.context.isNativeNode)) {
       if (ast.kindName(statement) !== "KindClassDeclaration" && ast.kindName(statement) !== "KindClassExpression") {
         continue;
       }
@@ -76,6 +77,18 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
   for (const member of members) {
     const memberKind = ast.kindName(member);
     if (sourceClassFieldIsTypeOnly(ast, member)) continue;
+    const name = ast.name(member);
+    const selectedName = name === undefined ? undefined : walk.context.semanticsFor(member).propertyNames.get(name);
+    if (name !== undefined && selectedName === undefined && ast.is.IsComputedPropertyName(name)) {
+      failTargetAnalysisInvariant("tsonic-rust", "A native computed field requires its completed checked property-name selection.", name);
+    }
+    if (name !== undefined && selectedName !== undefined) {
+      const issue = rustNativePropertyNameIssue(name, selectedName);
+      if (issue !== undefined) {
+        if (!walk.rejectedExpressions.has(name)) appendRustDiagnostic(walk, issue.code, issue.message, name, []);
+        continue;
+      }
+    }
     if (memberKind === KindClassStaticBlockDeclaration) {
       continue;
     }
@@ -84,8 +97,7 @@ export function recordClassSignatureFacts(walk: RustFactWalk, declaration: Node)
         ? walk.context.records.runtimeCarrier.get(member)?.carrier
         : resolveRustTargetTypeRef(member, rustResolutionContext(walk, member), walk.operationOptions);
       if (fieldCarrier !== undefined) {
-        const storage = closeRustSuspendedStorage(fieldCarrier, [classCarrier],
-          rustEnclosingStorageContract(member, ast, walk.context.sourceLifetimes), "field");
+        const storage = closeRustSuspendedStorage(fieldCarrier, "field");
         if (storage === undefined) {
           appendRustDiagnostic(walk, "RUST_FIELD_STORAGE_LIFETIME_NOT_CLOSED",
             "The field's suspended storage has no exact enclosing native lifetime contract.", member,

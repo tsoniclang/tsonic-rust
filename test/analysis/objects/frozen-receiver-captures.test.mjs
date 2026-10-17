@@ -41,6 +41,7 @@ function fixture({
       kindName: name => name.private ? "KindPrivateIdentifier" : "KindIdentifier",
     },
     sourceFiles: [root],
+    isNativeNode: node => node === root || root.children.includes(node),
     records: createRustRecordFixture({objectReferenceView: { get: (node) => {
     return node.view;
 } },

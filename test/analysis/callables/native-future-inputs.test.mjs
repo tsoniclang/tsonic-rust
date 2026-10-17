@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { Node_Initializer } from "@tsonic/target-api/source";
 
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
@@ -10,6 +11,14 @@ import { closedUnionCallbackCompletionSource } from "../../../../tsonic/test/fix
 
 function fixture(text) {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  return storageFixture(program);
+}
+
+function constructionFixture(text) {
+  return storageFixture(analyzeRustErrorEffects(text, { surfaces: [] }));
+}
+
+function storageFixture(program) {
   const ast = program.source.ast;
   const nodes = [];
   const walk = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) walk(child); }); };
@@ -91,7 +100,7 @@ test("the original callback completion reader retains its exact Future payload a
 });
 
 test("native Future input substitution preserves the caller implementation across generic forwarded source calls", () => {
-  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+  const current = constructionFixture(`import type { int32 } from "@tsonic/core/types.js";
     export function retain<Value>(value: Promise<Value>): Promise<Value> { return value; }
     export function forward(value: Promise<int32>): Promise<int32> { const selected = retain(value); return selected; }`);
   const owner = current.declaration("forward");

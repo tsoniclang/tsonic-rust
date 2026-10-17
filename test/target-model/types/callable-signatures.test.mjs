@@ -129,6 +129,28 @@ test("class frame owners preserve exact native instances and body-only generic s
   assert.equal(rustTargetTypeRefEquals(selected, rustFrameCallableTargetType([number], number, owner)), false);
 });
 
+test("one class-frame template substitutes owner, invocation and captured environment together", () => {
+  const element = parameter("Element");
+  const captured = parameter("Captured");
+  const instance = rustSourceTypeCarrier(owner.origin.fileName, "Value", "object", [{ kind: "type", type: element }]);
+  const template = rustFrameCallableTargetType([element], captured, { kind: "class", origin: owner.origin, instance }, [captured]);
+  const original = rustFrameCallableValue(template);
+  const actual = substituteRustTargetTypeParameters(template, new Map([[element.identity, string], [captured.identity, number]]));
+  const value = rustFrameCallableValue(actual);
+  assert.equal(value !== undefined, true, "the full existing class-frame template has one valid instantiation");
+  assert.equal(value.signature.environmentParameters.length, original.signature.environmentParameters.length,
+    "closing actual arguments never creates a new environment-binder shape");
+  assert.equal(value.environment.length, 2, "owner and captured body generics are both retained");
+  assert.equal(rustTargetTypeRefEquals(value.environment[0], string), true, "the actual receiver argument is substituted");
+  assert.equal(rustTargetTypeRefEquals(value.environment[1], number), true, "the actual independent capture is substituted");
+  const protocol = rustFrameCallableProtocol(actual);
+  assert.equal(rustTargetTypeRefEquals(protocol.parameters[0], string), true, "the invocation input uses the same actual receiver binding");
+  assert.equal(rustTargetTypeRefEquals(protocol.result, number), true, "the result uses the same actual captured binding");
+  const wrong = substituteRustTargetTypeParameters(template, new Map([[element.identity, number], [captured.identity, string]]));
+  assert.equal(rustTargetTypeRefEquals(actual, wrong), false, "equal arity cannot exchange receiver and captured identities");
+  assert.equal(rustTargetTypeRefEquals(template, actual), false, "the unbound template cannot masquerade as a concrete native frame");
+});
+
 test("class frame owners reject malformed, foreign and obsolete identity metadata without getter execution", () => {
   const instance = rustSourceTypeCarrier(owner.origin.fileName, "Owner", "object");
   const valid = { kind: "class", origin: owner.origin, instance };

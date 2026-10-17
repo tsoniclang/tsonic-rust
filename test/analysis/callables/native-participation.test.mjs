@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { requireRustRecord } from "../../../dist/analysis/program/records/required-records.js";
 
 function checkedFunctions(text) {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  const { program, source } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const { ast } = program.source;
   const declarations = [];
   const visit = node => {
@@ -15,7 +17,7 @@ function checkedFunctions(text) {
   };
   for (const file of program.sourceFiles) visit(file);
   const named = name => declarations.filter(node => ast.text(ast.name(node)) === name);
-  return { program, ast, declarations, named };
+  return { program, source, ast, declarations, named };
 }
 
 test("native named-function placement retains exact overload bodies and checked lexical uses", () => {
@@ -72,7 +74,8 @@ function placementInputs() {
     parent: node => parents.get(node),
     body: node => bodies.has(node) ? {} : undefined,
     kindName: node => functionSet.has(node) ? "KindFunctionDeclaration" : node === file ? "KindSourceFile" : "KindBlock",
-    is: { IsFunctionDeclaration: node => functionSet.has(node), IsSourceFile: node => node === file },
+    is: { IsFunctionDeclaration: node => functionSet.has(node), IsSourceFile: node => node === file,
+      IsArrowFunction: () => false, IsFunctionExpression: () => false },
     forEachChild() { throw new Error("native participation must use the existing finite source domain"); },
   }, {});
   let implementationReads = 0;
@@ -95,7 +98,7 @@ test("native placement closes one finite declaration domain and does not inspect
   const current = placementInputs();
   const builder = createRustProgramRecordBuilder();
   const requiredRecords = [];
-  analyzeRustNativeParticipation({ ast: current.ast.proxy, nodes: current.nodes, navigation: current.navigation.proxy,
+  analyzeRustNativeParticipation({ ast: current.ast.proxy, storage: { nodes: current.nodes, failureReason: () => undefined }, navigation: current.navigation.proxy,
     producer: builder.nativeParticipations, requiredRecords });
   const records = builder.seal(requiredRecords);
   assert.equal(requiredRecords.length, 7);
@@ -111,6 +114,26 @@ test("native placement closes one finite declaration domain and does not inspect
   assert.equal(records.nativeParticipation.get(current.nodes[0]) === undefined, true, "non-callable nodes stay absent");
   assert.equal(records.nativeParticipation.get({}) === undefined, true);
   assert.throws(() => builder.nativeParticipations.selected(current.outer, "body"), /after analysis is sealed/u);
+});
+
+test("an exhausted actual checked source domain publishes no partial native participation", () => {
+  const current = checkedFunctions("export function run(): number { return 3; }");
+  const storage = createSourceStorageQuery(createTargetSourceProgram(current.source), current.program.sourceFiles, {
+    maximumNodes: 1, maximumEdges: 262144, maximumSubjectRows: 1048576,
+    maximumTransportRows: 4194304, maximumSteps: 33554432,
+  });
+  assert.equal(storage.failureReason() !== undefined, true, "the real checked transport exhausts its tiny node budget");
+  const builder = createRustProgramRecordBuilder();
+  const requiredRecords = [];
+  const forbidden = new Proxy({}, { get() { throw new Error("partial source classification is forbidden"); } });
+  const participation = analyzeRustNativeParticipation({ ast: forbidden, storage, navigation: forbidden,
+    producer: builder.nativeParticipations, requiredRecords });
+  assert.equal(participation.kind, "unresolved", "a parent-closed prefix cannot become a complete native domain");
+  assert.equal(participation.reason, storage.failureReason(), "the original finite budget reason is preserved");
+  assert.equal(requiredRecords.length, 0, "no native requirement is created from the truncated domain");
+  for (const declaration of current.declarations)
+    assert.equal(builder.nativeParticipation.get(declaration) === undefined, true, "no partial declaration is published");
+  assert.equal(Object.hasOwn(participation, "nodes"), false, "an unresolved result cannot expose partial native nodes");
 });
 
 test("native participation has one strict producer and preserves inherited plan isolation", () => {

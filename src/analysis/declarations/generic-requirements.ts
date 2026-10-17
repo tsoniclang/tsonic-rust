@@ -5,7 +5,7 @@ import {
   type RequirementContractState,
 } from "./generic-requirement-contract.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import { type RustOptionalStorageRequirement } from "./type-projections.js";
 import { collectRustCallableDeclarations } from "./generic-reference-uses.js";
 import { type RustAssociatedTypeRequirement } from "./associated-requirements.js";
@@ -27,7 +27,7 @@ import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustCarrierSupportsTrait } from "../../target-model/types/index.js";
+import { rustCarrierSupportsTrait, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
@@ -41,8 +41,11 @@ import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
+import type { RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
@@ -90,7 +93,7 @@ export type AnalyzeRustDeclarationGenericRequirementsResult =
 
 export function analyzeRustDeclarationGenericRequirements(
   source: TargetSourceProgram,
-  sourceFiles: readonly SourceFile[],
+  nativeNodes: readonly Node[],
   records: RustAnalysisRecords,
   names: RustNamePlan,
   sourceLifetimes: RustLifetimeIndex,
@@ -107,6 +110,8 @@ export function analyzeRustDeclarationGenericRequirements(
   errorRegions: RustAnalyzedErrorRegions,
   promiseBodies: RustPromiseBodies,
   nativeStorage: RustNativeStoragePlan,
+  classValues: RustClassValuePlan,
+  errorTypes: RustErrorTypeContext,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -128,7 +133,7 @@ export function analyzeRustDeclarationGenericRequirements(
     }
     return references.has(node);
   };
-  const declarations = collectRustCallableDeclarations(ast, sourceFiles);
+  const declarations = collectRustCallableDeclarations(ast, nativeNodes);
   const declarationById = new Map<string, Node>();
   const idByDeclaration = new WeakMap<Node, string>();
   const bodyIdByDeclaration = new WeakMap<Node, string>();
@@ -175,7 +180,7 @@ export function analyzeRustDeclarationGenericRequirements(
       ? implementation.implementation.declaration
       : declaration;
   };
-  const closure = resolveTargetContractFixedPoint<RequirementContractState>({
+  const closure = resolveTargetContractFixedPoint<RequirementContractState, readonly TargetDiagnostic[]>({
     roots: [...declarationById.keys()],
     evaluate(id, context) {
       const declaration = declarationById.get(id);
@@ -198,7 +203,9 @@ export function analyzeRustDeclarationGenericRequirements(
         genericCallables,
         nativeCallables,
         nativeStorage,
+        classValues,
         errorRegions,
+        errorTypes,
         frameCallables,
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],
@@ -222,12 +229,11 @@ export function analyzeRustDeclarationGenericRequirements(
           return candidateId === undefined ? undefined : context.get(candidateId);
         },
       });
-      if (result.kind === "rejected" && result.promiseStorage === true) {
-        diagnostics.push(diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
-          rustSuspendingPromiseBorrowReason, promiseBodies.objects.get(declaration) ?? declaration));
-      }
       return result.kind === "rejected"
-        ? result
+        ? { kind: "rejected", reason: result.reason, cause: Object.freeze(result.promiseStorage === true
+            ? (promiseBodies.objects.get(declaration) ?? [declaration]).map(demand =>
+              diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", rustSuspendingPromiseBorrowReason, demand))
+            : [diagnostic("RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED", result.reason, declaration)]) }
         : {
             kind: "resolved",
             revision: {
@@ -242,15 +248,20 @@ export function analyzeRustDeclarationGenericRequirements(
     maximumEvaluations: Math.max(64, maximumEvaluations),
   });
   if (closure.kind === "rejected") {
+    const storageDemands = new Set<NonNullable<TargetDiagnostic["sourceNode"]>>();
+    for (const failure of closure.failures) {
+      for (const issue of failure.cause ?? [diagnostic("RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED",
+        failure.reason, failure.contractId === undefined ? undefined : declarationById.get(failure.contractId))]) {
+        if (issue.code === "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN" && issue.sourceNode !== undefined) {
+          if (storageDemands.has(issue.sourceNode)) continue;
+          storageDemands.add(issue.sourceNode);
+        }
+        diagnostics.push(issue);
+      }
+    }
     return {
       kind: "rejected",
-      diagnostics: Object.freeze(diagnostics.length > 0 ? diagnostics : [diagnostic(
-        "RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED",
-        closure.reason,
-        closure.contractId === undefined
-          ? undefined
-          : declarationById.get(closure.contractId),
-      )]),
+      diagnostics: Object.freeze(diagnostics),
     };
   }
   const contractByDeclaration = new WeakMap<Node, RequirementContractState>();
@@ -300,10 +311,25 @@ export function analyzeRustDeclarationGenericRequirements(
   });
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
-  for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
-    ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
-    ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {
-    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor, definitions);
+  const shapeEvidence: RustStaticRequirementEvidence = { lifetimeContract: undefined, genericCallables,
+    frameCallables, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records };
+  const sourceScopes = new Map<string, Node | undefined>();
+  for (const sourceFile of source.sourceFiles) {
+    const fileName = ast.getFileName(sourceFile);
+    sourceScopes.set(fileName, sourceScopes.has(fileName) && sourceScopes.get(fileName) !== sourceFile ? undefined : sourceFile);
+  }
+  const shapeInputs = [...shapes.definitions.map(definition => ({
+    carrier: definition.carrier, sourceFileName: definition.ownerFileName,
+  })), ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers.map(carrier => ({
+    carrier, sourceFileName: rustSourceUnionCarrierValue(carrier)?.fileName,
+  }))), ...typeFamilies.implementations().map(implementation => ({
+    carrier: { kind: "tuple" as const, elements: [implementation.owner, implementation.output] },
+    sourceFileName: implementation.sourceFileName,
+  }))];
+  for (const { carrier, sourceFileName } of shapeInputs) {
+    const sourceScope = sourceFileName === undefined ? undefined : sourceScopes.get(sourceFileName);
+    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor,
+      shapeEvidence, definitions, [], errorTypes, sourceScope);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",
     )]) };
@@ -312,7 +338,7 @@ export function analyzeRustDeclarationGenericRequirements(
   for (const view of structuralViews) {
     const uses = rustStructuralViewRequirementUses(view);
     const contract = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [view.sourceCarrier, view.targetCarrier] },
-      projectTypes, typeFamilies, index.contractFor, definitions, uses);
+      projectTypes, typeFamilies, index.contractFor, shapeEvidence, definitions, uses, errorTypes, view.declaration);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_STRUCTURAL_VIEW_GENERIC_CONTRACT_NOT_PROVEN",
       "A selected structural implementation has no exact generic or associated-output requirements.", view.declaration,

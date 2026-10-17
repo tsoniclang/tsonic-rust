@@ -53,6 +53,6 @@ await main();
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.doesNotMatch(source, /\.then\(|\.then_async\(/);
-  assert.match(source, /JsPromise<'static, \(\), rt::TsonicError>/);
+  assert.match(source, /JsPromise<\(\)>/);
   validateGeneratedProject("promise-storage", result.artifacts, { run: true });
 });

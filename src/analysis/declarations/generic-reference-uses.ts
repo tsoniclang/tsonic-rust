@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
@@ -44,16 +44,8 @@ export function isRustReturnedValue(node: Node, declaration: Node, ast: AstReade
   }
 }
 
-export function collectRustCallableDeclarations(ast: AstReader, sourceFiles: readonly SourceFile[]): readonly Node[] {
-  const result: Node[] = [];
-  const visit = (node: Node): void => {
-    if (isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node)) result.push(node);
-    ast.forEachChild(node, child => {
-      if (child !== undefined) visit(child);
-    });
-  };
-  for (const sourceFile of sourceFiles) visit(sourceFile);
-  return Object.freeze(result);
+export function collectRustCallableDeclarations(ast: AstReader, nativeNodes: readonly Node[]): readonly Node[] {
+  return Object.freeze(nativeNodes.filter(node => isRustIndependentCallable(ast, node) || isRustGenericTypeDeclaration(ast, node)));
 }
 
 export function isRustGenericTypeDeclaration(ast: AstReader, node: Node): boolean {

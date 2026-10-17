@@ -7,7 +7,6 @@ import {
 } from "@tsonic/target-api/source";
 
 import { appendRustDiagnostic, rustOperationContext } from "../program/walk.js";
-import { collectDescendantsOfKind } from "../operations/inputs.js";
 import { isRustProgramErrorCarrier } from "../../target-model/types/index.js";
 import { selectRustProgramErrorConversion } from "../../target-model/conversions/program-error.js";
 import { resolveExpressionCarrier } from "../expressions/carriers.js";
@@ -22,56 +21,46 @@ import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.
 import { selectRustSourceValueConversion } from "../../policy/conversions/selection.js";
 import { rustFutureValueForStoredBranch } from "./future-storage.js";
 import { requireRustRecord } from "../program/records/required-records.js";
+import type { RustSourceErrorEffectSelection } from "./source-error-effects.js";
 
-export function recordResourceManagementFacts(
-  walk: RustFactWalk,
-  sourceFiles: readonly SourceFile[],
-): void {
+export function recordResourceManagementFacts(walk: RustFactWalk): void {
   walk.context.records.assertOpen();
   const { ast } = walk.context;
-  for (const sourceFile of sourceFiles) {
-    for (const declaration of collectDescendantsOfKind(walk, sourceFile, KindVariableDeclaration)) {
-      const declarationKind = ast.variableDeclarationKind(declaration);
-      if (declarationKind !== "using" && declarationKind !== "await using") {
-        continue;
-      }
-      requireRustRecord(walk.context.requiredRecords, "resourceManagement", declaration,
-        declarationKind, "recordResourceManagementFacts");
-      const selected = walk.context.records.resourceManagementPlans.select(
+  for (const declaration of walk.context.nativeNodes) {
+    if (ast.kindName(declaration) !== KindVariableDeclaration) continue;
+    const declarationKind = ast.variableDeclarationKind(declaration);
+    if (declarationKind !== "using" && declarationKind !== "await using") continue;
+    requireRustRecord(walk.context.requiredRecords, "resourceManagement", declaration,
+      declarationKind, "recordResourceManagementFacts");
+    const selected = walk.context.records.resourceManagementPlans.select(
+      declaration,
+      rustOperationContext(walk, declaration),
+      walk.operationOptions,
+      (method) => {
+        const selfMode = walk.context.records.selfMode.get(method);
+        if (selfMode === undefined) return undefined;
+        return {
+          selfMode,
+          async: walk.context.records.asyncFunction.get(method) !== undefined,
+          fallible: walk.context.records.fallible.get(method) !== undefined,
+        };
+      },
+    );
+    if (selected.kind === "rejected") {
+      appendRustDiagnostic(
+        walk,
+        "RUST_RESOURCE_MANAGEMENT_NOT_PROVEN",
+        selected.reason,
         declaration,
-        rustOperationContext(walk, declaration),
-        walk.operationOptions,
-        (method) => {
-          const selfMode = walk.context.records.selfMode.get(method);
-          if (selfMode === undefined) {
-            return undefined;
-          }
-          return {
-            selfMode,
-            async: walk.context.records.asyncFunction.get(method) !== undefined,
-            fallible: walk.context.records.fallible.get(method) !== undefined,
-          };
-        },
+        ["target.capability=rust.resource-management.selected-disposer"],
       );
-      if (selected.kind === "rejected") {
-        appendRustDiagnostic(
-          walk,
-          "RUST_RESOURCE_MANAGEMENT_NOT_PROVEN",
-          selected.reason,
-          declaration,
-          ["target.capability=rust.resource-management.selected-disposer"],
-        );
-        continue;
-      }
-      walk.context.generatedDeclarationUses.record(
-        declaration,
-        selected.projectDisposerDeclarations,
-      );
+      continue;
     }
+    walk.context.generatedDeclarationUses.record(declaration, selected.projectDisposerDeclarations);
   }
 }
 
-export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly SourceFile[]): void {
+export function recordFutureValueFacts(walk: RustFactWalk, sourceErrors: RustSourceErrorEffectSelection): void {
   walk.context.records.assertOpen();
   const resolve = (node: Node): RustFutureValueFact | undefined => walk.context.records.futureValues.resolve(node, () => {
     const transport = (operand: Node | undefined): RustFutureValueFact | undefined => {
@@ -96,7 +85,7 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       ? walk.context.records.sourceCallEffects.get(node)
       : undefined;
     let fact = operation?.kind === "source-call"
-      ? rustFutureValueForStoredBranch(walk, node, operation.resultCarrier)
+      ? rustFutureValueForStoredBranch(walk, node, operation.resultCarrier, sourceErrors)
       : rustFutureValueForOperation(operation, effects, walk.context.typeDefinitions);
     if (fact === undefined) {
       const kind = walk.context.ast.kindName(node);
@@ -135,34 +124,25 @@ export function recordFutureValueFacts(walk: RustFactWalk, sourceFiles: readonly
       "future-value", "recordFutureValueFacts");
     return fact;
   });
-  for (const sourceFile of sourceFiles) {
-    const visit = (node: Node): void => {
-      resolve(node);
-      walk.context.ast.forEachChild(node, (child) => {
-        if (child !== undefined) {
-          visit(child);
-        }
-      });
-      if (walk.context.ast.kindName(node) !== "KindAwaitExpression") return;
-      const operand = Node_Expression(walk.context.ast, node);
-      const operation = walk.context.records.targetOperation.get(node);
-      const carrier = rustEffectiveValueCarrier(walk.context.records, operand);
-      if (operand === undefined || operation?.kind !== "await-op" || carrier === undefined) return;
-      const knownFuture = resolve(operand);
-      requireRustRecord(walk.context.requiredRecords, "awaitValue", node,
-        "await", "recordFutureValueFacts");
-      const awaiting = walk.context.records.awaitValues.finalize(node, carrier, operation.resultCarrier, leaf =>
-        knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)
-          ? knownFuture : rustFutureValueForStoredBranch(walk, operand, leaf) ?? rustFutureValueForSourceStorage(leaf),
-      (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions));
-      if (awaiting === undefined) {
-        appendRustDiagnostic(walk, "RUST_AWAIT_VALUE_CONTRACT_NOT_PROVEN",
-          "Await requires a closed native branch selection with exact future effects and result conversions.", node,
-          ["target.capability=rust.async.await-value"]);
-        return;
-      }
-    };
-    visit(sourceFile);
+  for (const node of walk.context.nativeNodes) resolve(node);
+  for (const node of walk.context.nativeNodes) {
+    if (walk.context.ast.kindName(node) !== "KindAwaitExpression") continue;
+    const operand = Node_Expression(walk.context.ast, node);
+    const operation = walk.context.records.targetOperation.get(node);
+    const carrier = rustEffectiveValueCarrier(walk.context.records, operand);
+    if (operand === undefined || operation?.kind !== "await-op" || carrier === undefined) continue;
+    const knownFuture = resolve(operand);
+    requireRustRecord(walk.context.requiredRecords, "awaitValue", node,
+      "await", "recordFutureValueFacts");
+    const awaiting = walk.context.records.awaitValues.finalize(node, carrier, operation.resultCarrier, leaf =>
+      knownFuture !== undefined && rustFutureValueMatchesCarrier(knownFuture, leaf, walk.context.typeDefinitions)
+        ? knownFuture : rustFutureValueForStoredBranch(walk, operand, leaf, sourceErrors) ?? rustFutureValueForSourceStorage(leaf),
+    (source, target) => selectRustSourceValueConversion(source, target, walk.context.typeDefinitions));
+    if (awaiting === undefined) {
+      appendRustDiagnostic(walk, "RUST_AWAIT_VALUE_CONTRACT_NOT_PROVEN",
+        "Await requires a closed native branch selection with exact future effects and result conversions.", node,
+        ["target.capability=rust.async.await-value"]);
+    }
   }
 }
 

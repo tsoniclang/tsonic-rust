@@ -10,7 +10,6 @@ import { rustNamedTargetType } from "../../target-model/types/carriers/native.js
 import { rustTypeGenericArguments } from "../../target-model/types/generic-arguments.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustErrorEffectsAreFallible } from "../errors/error-effects.js";
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 
 export interface RustNativeOutwardResults {
@@ -50,9 +49,9 @@ export function createRustNativeOutwardResults(input: {
             input.definitions);
         }
         const error = input.producers.errorFor(declaration, mode === "body" ? "body" : 0);
-        const effects = input.records.errorEffects.get(declaration);
+        const effects = input.records.sourceCallEffects.get(declaration);
         if (error === undefined || effects === undefined) return undefined;
-        const output = rustErrorEffectsAreFallible(effects)
+        const output = effects.awaiting === "fallible"
           ? rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([physical, error])) : physical;
         return rustNativeFutureOutputType({ identity: `${producer.identity}:return:0`, output, captures: producer.environment });
       }

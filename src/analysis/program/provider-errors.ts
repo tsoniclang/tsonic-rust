@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -30,8 +30,7 @@ export function collectRustDeclaredProviderErrorCarriers(
 }
 
 export function analyzeRustProviderErrorCarriers(
-  ast: AstReader,
-  sourceFiles: readonly SourceFile[],
+  nativeNodes: readonly Node[],
   records: RustProgramRecords,
   binaryHooks: readonly RustBinaryHookPlan[],
 ): readonly TargetTypeRef[] {
@@ -72,15 +71,8 @@ export function analyzeRustProviderErrorCarriers(
         add(disposalTarget.abi.effects.errorCarrier);
       }
     }
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
   };
-  for (const sourceFile of sourceFiles) {
-    visit(sourceFile);
-  }
+  for (const node of nativeNodes) visit(node);
   for (const epilogue of binaryHooks) {
     if (epilogue.errorBoundary === "provider-native") {
       add(epilogue.errorCarrier);

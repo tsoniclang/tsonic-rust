@@ -30,9 +30,14 @@ export function selectRustJsPromiseConstructor(
   };
 }
 
+export function isRustJsPromiseContinuation(request: Pick<JsOperationRequest, "ownerName" | "operationKind" | "memberName">): boolean {
+  return request.operationKind === "call" && (request.ownerName === "Promise" &&
+    (request.memberName === "then" || request.memberName === "catch") ||
+    request.ownerName === "PromiseLike" && request.memberName === "then");
+}
+
 export function selectRustJsPromiseContinuation(request: JsOperationRequest): JsOperationSelection | undefined {
-  if (request.ownerName !== "Promise" || request.operationKind !== "call" ||
-    request.memberName !== "then" && request.memberName !== "catch") return undefined;
+  if (!isRustJsPromiseContinuation(request)) return undefined;
   const input = rustJsPromiseOutputTargetType(request.receiverCarrier);
   const arguments_ = request.argumentCarriers ?? [];
   const callback = rustCallableProtocol(arguments_[0]) ?? rustClosureProtocol(arguments_[0]);

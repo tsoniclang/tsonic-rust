@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceBindingScope, sourceBindingIterationScope } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
@@ -9,7 +9,7 @@ export interface RustCaptureStoragePlan {
 
 export function analyzeRustCaptureStorage(input: {
   readonly ast: AstReader;
-  readonly sourceFiles: readonly SourceFile[];
+  readonly nativeNodes: readonly Node[];
   readonly records: RustProgramRecords;
 }): RustCaptureStoragePlan {
   const scopes = new Map<Node, Node[]>();
@@ -32,9 +32,8 @@ export function analyzeRustCaptureStorage(input: {
       declarations.push(node);
       iterations.set(fact.iterationScope, declarations);
     }
-    input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  input.sourceFiles.forEach(visit);
+  input.nativeNodes.forEach(visit);
   const empty: readonly Node[] = Object.freeze([]);
   const selected = new Map([...scopes].map(([scope, declarations]) => [scope, Object.freeze(declarations)]));
   const selectedIterations = new Map([...iterations].map(([scope, declarations]) => [scope, Object.freeze(declarations)]));

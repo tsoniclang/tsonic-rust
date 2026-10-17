@@ -451,11 +451,15 @@ export function resolveRustCheckedPropertyAccess(
         ? undefined
         : rustSourceTypeCarrier(enumFileName, enumName, "enum");
       if (memberName.length > 0 && resultCarrier !== undefined) {
+        const definition = context.typeDefinitions.sourceEnumDefinition(resultCarrier);
+        if (definition === undefined) return rejectSelectedOperation(request.expression, context,
+          "RUST_ENUM_DECLARATION_NOT_CLOSED", "Selected enum member requires its completed emitted native declaration.");
         const operationId = sourceOperationId(context, declaration, "enum-member");
         return acceptRustMemberOperation(request, "property", {
           kind: "source-enum-member",
           operationId,
           name: memberName,
+          enumRepresentation: { kind: "integer", integerWidth: definition.integerWidth },
           resultCarrier,
         }, context, options, {
           sourceExpression: request.expression,

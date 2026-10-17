@@ -3,6 +3,7 @@ import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import type { RustRecordFamily } from "../../../target-model/records/program.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../target-model/types/carriers/callables.js";
 import { selectRustCopiedMethods } from "../../objects/copied-methods.js";
 import type { RustFactWalk } from "../walk.js";
 import { appendRustDiagnostic } from "../walk.js";
@@ -35,15 +36,21 @@ export function createRustReceiverIndependentMethodProducer(
           continue;
         }
         for (const method of selection.implementations.get(identity) ?? []) {
+          const operation = walk.context.records.targetOperation.get(method.node);
+          const retained = operation?.kind === "closure" ? rustCallableProtocol(operation.resultCarrier) : undefined;
+          const protocol = rustCallableProtocol(method.carrier);
+          const carrier = protocol === undefined ? method.carrier : retained?.lifetime === undefined
+            ? failTargetAnalysisInvariant("tsonic-rust", "A receiver-independent method requires its admitted closure retention lifetime.")
+            : rustCallableTargetType(protocol.parameters, protocol.result, retained.lifetime, protocol.error);
           requireRustRecord(walk.context.requiredRecords, "receiverIndependentMethod", method.node,
             "copied-method", "receiverIndependentMethods.finalize");
           const pending = candidates.get(method.node);
           const existing = pending ?? family.reader.get(method.node)?.carrier;
-          if (existing !== undefined && !rustTargetTypeRefEquals(existing, method.carrier)) {
+          if (existing !== undefined && !rustTargetTypeRefEquals(existing, carrier)) {
             failTargetAnalysisInvariant("tsonic-rust",
               "Conflicting Rust semantic plan 'tsonic.rust.receiverIndependentMethod' for one exact source subject.");
           }
-          if (pending === undefined) candidates.set(method.node, existing ?? method.carrier);
+          if (pending === undefined) candidates.set(method.node, existing ?? carrier);
         }
       }
       for (const [node, carrier] of candidates) family.writer.set(node, Object.freeze({ carrier }));

@@ -2,12 +2,14 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import { fieldFactKey, structFactKey } from "@tsonic/tsts";
 import type { Node } from "@tsonic/tsts";
 import { Node_Initializer } from "@tsonic/target-api/source";
+import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 
 import { rustStructuralObjectCarrierValue } from "../../target-model/types/index.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import { appendRustDiagnostic, rustResolutionContext } from "../program/walk.js";
 import type { RustFactWalk } from "../program/walk.js";
+import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js";
 
 export function recordRustValueStructDeclaration(walk: RustFactWalk, node: Node): boolean {
   const { ast, records } = walk.context;
@@ -19,6 +21,21 @@ export function recordRustValueStructDeclaration(walk: RustFactWalk, node: Node)
   const arguments_ = call?.Arguments?.Nodes;
   const shape = arguments_?.length === 1 ? ast.as.AsObjectLiteralExpression(arguments_[0]) : undefined;
   const properties = shape?.Properties?.Nodes;
+  for (const property of properties ?? []) {
+    if (property === undefined) continue;
+    const name = ast.name(property);
+    if (name === undefined) continue;
+    const selected = walk.context.semanticsFor(property).propertyNames.get(name);
+    if (selected === undefined) {
+      if (ast.is.IsComputedPropertyName(name)) failTargetAnalysisInvariant("tsonic-rust",
+        "A native computed struct field requires its completed checked property-name selection.", name);
+      continue;
+    }
+    const issue = rustNativePropertyNameIssue(name, selected);
+    if (issue === undefined) continue;
+    if (!walk.rejectedExpressions.has(name)) appendRustDiagnostic(walk, issue.code, issue.message, name, []);
+    return true;
+  }
   const selectedFields = properties?.map(property => property === undefined || !ast.is.IsPropertyAssignment(property)
     ? undefined : walk.context.source.sourceFacts.getFact(property, fieldFactKey) ?? walk.context.source.sourceFacts.getFact(Node_Initializer(ast, property), fieldFactKey));
   if (initializer === undefined || walk.context.source.sourceFacts.getFact(initializer, structFactKey) === undefined || source.valueType !== true ||

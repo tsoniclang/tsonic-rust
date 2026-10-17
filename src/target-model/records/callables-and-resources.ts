@@ -63,7 +63,7 @@ export interface RustPromiseBodyDeclaration {
 
 export interface RustPromiseBodies {
   readonly declarations: ReadonlyMap<Node, RustPromiseBodyDeclaration>;
-  readonly objects: ReadonlyMap<Node, Node>;
+  readonly objects: ReadonlyMap<Node, readonly Node[]>;
   readonly pinnedInvocations: ReadonlyMap<Node, ReadonlyMap<string, ReadonlySet<Node>>>;
 }
 

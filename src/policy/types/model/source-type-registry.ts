@@ -9,6 +9,7 @@ import type {
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import type { RustSourceTypeFamilyRegistry } from "../../../target-model/types/type-families.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
 
 export interface RustSourceEnumVariant {
   readonly name: string;
@@ -80,12 +81,12 @@ export interface RustStructuralInstantiation {
 
 export interface RustSourceTypeRegistry extends RustTypeDefinitions {
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
-  registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
+  registerSourceFile(sourceFile: SourceFile, ast: AstReader, isNativeNode: (node: Node) => boolean): void;
   registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
   registerRepresentationAlias(declaration: Node, carrier: TargetTypeRef): boolean;
-  carrierForDeclaration(declaration: Node, ast: AstReader): TargetTypeRef | undefined;
+  carrierForDeclaration(declaration: Node): TargetTypeRef | undefined;
   declarationForCarrier(carrier: TargetTypeRef): Node | undefined;
-  propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader): readonly string[] | undefined;
+  propertyKeysForCarrier(carrier: TargetTypeRef, ast: AstReader, semanticsFor: (node: Node) => SourceFileSemantics): readonly string[] | undefined;
   enumVariantsForDeclaration(declaration: Node): readonly RustSourceEnumVariant[] | undefined;
   enumVariantForLiteral(carrier: TargetTypeRef, literal: string): RustSourceEnumVariant | undefined;
   registerStructuralObject(shape: RustSourceObjectShape, template?: TargetTypeRef): boolean;

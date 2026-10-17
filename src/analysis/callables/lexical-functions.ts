@@ -1,4 +1,4 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import { createSourceSingleInvocationQuery, forEachSourceImmediateEvaluationChild, Node_Initializer, sourceDeclarationIsModuleScoped,
   sourceLexicalEnvironment, sourceLexicalFunctionValueCreation, sourceLexicalFunctionValueOrder,
   type TargetSourceProgram } from "@tsonic/target-api/source";
@@ -57,24 +57,21 @@ const maximumLexicalCaptureSteps = 4_194_304;
 
 export function createRustLexicalFunctionEnvironmentPlan(
   source: TargetSourceProgram,
-  sourceFiles: readonly SourceFile[],
+  nativeNodes: readonly Node[],
   records: RustProgramRecords,
   runtimeValueUses: RustRuntimeValueUsePlan,
   sourceCallables: RustSourceCallableQueries,
 ): RustLexicalFunctionEnvironmentPlan {
   const { ast, navigation } = source;
   const declarations: Node[] = [];
-  const pending: Node[] = [...sourceFiles];
   let steps = 0;
-  while (pending.length > 0) {
+  for (const node of nativeNodes) {
     if (++steps > maximumLexicalCaptureSteps) return exhausted();
-    const node = pending.pop()!;
     if (ast.is.IsFunctionDeclaration(node) && !sourceDeclarationIsModuleScoped(node, ast) && ast.body(node) !== undefined ||
       sourceCallables.directLexicalBinding(node) !== undefined) {
       declarations.push(node);
       if (declarations.length > maximumLexicalFunctions) return exhausted();
     }
-    ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
   }
   const captures = new Map<Node, Map<Node, RustLexicalFunctionCapture>>();
   const declarationSet = new Set(declarations);

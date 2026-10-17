@@ -24,7 +24,8 @@ import {
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
 import { appendRustDiagnostic, rustOperationContext, rustResolutionContext } from "../program/walk.js";
-import { applySelectedProjectSourceCall, applySelectedSourceCallArguments, setCarrierFact } from "../operations/project-calls.js";
+import { applySelectedProjectSourceCall, prepareSelectedSourceCallArguments, recordSelectedSourceCallArguments,
+  setCarrierFact } from "../operations/project-calls.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { prepareRustDeferredCheckedCall } from "../operations/provider/index.js";
 import { recordRustComputedCallEvaluation } from "../operations/computed-members.js";
@@ -682,15 +683,17 @@ function applySelectedRuntimeCallableCall(
   const finalizedParameters = parameters as readonly NonNullable<
     typeof parameters[number]
   >[];
-  if (!applySelectedSourceCallArguments(
+  const runtimeValue = selectedSignature.sourceStructuralMethod === undefined && selectedSignature.sourceConstructorCarrier === undefined;
+  const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
+  if (runtimeValue && calleeCarrier === undefined) return undefined;
+  const arguments_ = prepareSelectedSourceCallArguments(
     walk,
     callArguments as readonly Node[],
     sourceFile,
     finalizedParameters,
     bindings,
-  )) {
-    return undefined;
-  }
+  );
+  if (arguments_ === undefined) return undefined;
   const resultCarrier = rustSourceCallResultWithInputLifetimes(callable.result,
     finalizedParameters.map(parameter => parameter.parameterCarrier), bindings,
     rustSourceCallArgumentCarriers(expression, walk.context.ast, walk.context.records));
@@ -701,8 +704,7 @@ function applySelectedRuntimeCallableCall(
       expression, ["target.capability=rust.source-call.result-storage"]);
     return undefined;
   }
-  const runtimeValue = selectedSignature.sourceStructuralMethod === undefined && selectedSignature.sourceConstructorCarrier === undefined;
-  const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
+  let selectedOptional: Extract<ReturnType<typeof selectRustOptionalCallResult>, { readonly kind: "resolved" }>["fact"];
   if (runtimeValue) {
     const source = walk.context.semantics(sourceFile).operations.call(expression);
     if (source === undefined || calleeCarrier === undefined) return undefined;
@@ -718,13 +720,9 @@ function applySelectedRuntimeCallableCall(
         expression, ["target.capability=rust.optional-call.exact-callee"]);
       return undefined;
     }
-    if (optionalResult.fact !== undefined) {
-      requireRustRecord(walk.context.requiredRecords, "optionalChain", expression, optionalResult.fact.operationKind, "analysis/expressions/references.ts");
-      walk.context.records.optionalChains.guard(expression, optionalResult.fact.guard,
-        optionalResult.fact.operationKind, optionalResult.fact);
-    }
+    selectedOptional = optionalResult.fact;
   }
-  const optionalCall = walk.context.records.optionalChain.get(expression);
+  const optionalCall = selectedOptional ?? walk.context.records.optionalChain.get(expression);
   if (optionalCall !== undefined &&
     (!rustTargetTypeRefEquals(optionalCall.innerResultCarrier, resultCarrier) ||
       optionalCall.operationKind !== "method")) {
@@ -773,6 +771,25 @@ function applySelectedRuntimeCallableCall(
         storageIndex: structuralMethod.storageIndex,
         callableCarrier: carrier,
       };
+  if (target.form === "callable" && optionalCall === undefined) {
+    const projection = calleeCarrier === undefined ? undefined : walk.context.records.flowReadProjections.resolve(
+      walk.context.requiredRecords, callee, calleeCarrier, carrier, walk.context.projectTypes, walk.context.typeDefinitions);
+    if (projection === undefined || projection.kind === "incompatible") {
+      appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
+        "The runtime callee cannot project to its exact checked callable carrier.", callee,
+        ["target.capability=rust.source-call.runtime-callable-value"]);
+      return undefined;
+    }
+  } else if (target.form === "constructor-value" &&
+    resolveExpressionCarrier(walk, callee, sourceFile, target.receiverCarrier) === undefined) return undefined;
+  const completed = setCarrierFact(walk, expression, finalResultCarrier);
+  if (completed === undefined) return undefined;
+  recordSelectedSourceCallArguments(walk, arguments_);
+  if (selectedOptional !== undefined) {
+    requireRustRecord(walk.context.requiredRecords, "optionalChain", expression, selectedOptional.operationKind, "analysis/expressions/references.ts");
+    walk.context.records.optionalChains.guard(expression, selectedOptional.guard,
+      selectedOptional.operationKind, selectedOptional);
+  }
   requireRustRecord(walk.context.requiredRecords, "selectedOperation", expression, "source-call", "applySelectedRuntimeCallableCall");
   walk.context.records.selectedOperations.project(
     expression,
@@ -792,21 +809,5 @@ function applySelectedRuntimeCallableCall(
       targetGenericArguments: finalized.targetGenericArguments,
     }),
   });
-  if (target.form === "callable") {
-    const resolved = calleeCarrier;
-    if (optionalCall === undefined) {
-      const projection = resolved === undefined ? undefined : walk.context.records.flowReadProjections.resolve(walk.context.requiredRecords, callee,
-        resolved, carrier, walk.context.projectTypes, walk.context.typeDefinitions,
-      );
-      if (projection === undefined || projection.kind === "incompatible") {
-        appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
-          "The runtime callee cannot project to its exact checked callable carrier.", callee,
-          ["target.capability=rust.source-call.runtime-callable-value"]);
-        return undefined;
-      }
-    }
-  } else if (target.form === "constructor-value") {
-    resolveExpressionCarrier(walk, callee, sourceFile, target.receiverCarrier);
-  }
-  return setCarrierFact(walk, expression, finalResultCarrier);
+  return completed;
 }

@@ -71,7 +71,7 @@ test("binding defaults select the projected native context once before sealing n
             return admitsDefault ? value : undefined;
           },
         });
-        assert.equal(recorded, admitsDefault);
+        assert.equal(recorded.kind, admitsDefault ? "recorded" : "unresolved", "the exact recorded versus missing-proof outcome is preserved");
         assert.equal(resolutions, 1, "one contextual initializer resolution");
         const projection = records.bindingProjection.get(binding);
         assert.equal(projection !== undefined, admitsDefault, "rejected defaults cannot publish projection facts");
@@ -107,7 +107,7 @@ test("pure-absence binding defaults infer one present initializer without an abs
           return admitsDefault ? value : undefined;
         },
       });
-      assert.equal(recorded, admitsDefault);
+      assert.equal(recorded.kind, admitsDefault ? "recorded" : "unresolved", "the exact recorded versus missing-proof outcome is preserved");
       assert.equal(resolutions, 1);
       const projection = records.bindingProjection.get(binding);
       assert.equal(projection !== undefined, admitsDefault);
@@ -231,7 +231,7 @@ test("fixed-array destructuring retains exact remainder carriers and native slic
     const remainder = rustFixedArrayTargetType(element, integer(length - 1n));
     assert.equal(recordRustBindingPatternFacts(pattern, sourceCarrier, {
       ast, records, requiredRecords, setCarrier: (subject, carrier) => carriers.set(subject, carrier),
-    }), true);
+    }).kind, "recorded", "the same exact fixed-array binding is recorded");
     assert.deepEqual(carriers.get(firstName), element);
     assert.deepEqual(carriers.get(restName), remainder);
     assert.deepEqual(records.bindingProjection.get(rest), {

@@ -19,7 +19,7 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
-import { expressionCarrier, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
+import { requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import {
   KindSpreadAssignment,
   ObjectLiteralProperty_Value,
@@ -44,6 +44,14 @@ import type { RustTargetOperationFact } from "../../../target-model/records/oper
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 
 import { planRustClosedRecordLiteral } from "./closed-records.js";
+
+function recordContributionSourceName(name: Node | undefined, context: RustPlanContext): string | undefined {
+  if (name === undefined) return undefined;
+  const { ast, propertyNames } = context.input.program.source;
+  if (!ast.is.IsComputedPropertyName(name) && !ast.is.IsNumericLiteral(name)) return ast.text(name);
+  const selected = propertyNames.get(name);
+  return selected?.kind === "resolved" ? selected.name : undefined;
+}
 
 export function planRecordLiteral(node: Node, context: RustPlanContext): RustExpr | undefined {
   const fact = rustOperationFact(node, context);
@@ -142,7 +150,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
   for (const [contributionIndex, contribution] of fact.contributions.entries()) {
     if (contribution.kind === "property") {
       const nameNode = ast.name(contribution.property);
-      const sourceName = nameNode === undefined ? "" : ast.text(nameNode);
+      const sourceName = recordContributionSourceName(nameNode, context);
       const initializer = ObjectLiteralProperty_Value(ast, contribution.property);
       const planned = initializer === undefined ? undefined : planExpression(initializer, context);
       if (sourceName !== contribution.sourceName || planned === undefined) {
@@ -165,7 +173,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     }
     if (contribution.kind === "structural-method") {
       const sourceNameNode = ast.name(contribution.property);
-      const sourceName = sourceNameNode === undefined ? "" : ast.text(sourceNameNode);
+      const sourceName = recordContributionSourceName(sourceNameNode, context);
       const planned = planExpression(contribution.expression, context);
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);
@@ -173,18 +181,16 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         field?.method !== true) {
         return undefined;
       }
-      const independent = context.input.program.records.receiverIndependentMethod.get(contribution.expression);
-      const storageCarrier = independent?.carrier ?? context.input.program.structuralShapes.field(
-        fact.resultCarrier, field.storageIndex,
-      )?.methodStorageCarrier;
+      const physicalField = context.input.program.structuralShapes.field(fact.resultCarrier, field.storageIndex);
+      const storageCarrier = physicalField?.methodStorageCarrier;
       const rawStorageCarrier = field.presence === "optional"
         ? rustOptionElementCarrier(storageCarrier)
         : storageCarrier;
-      if (rawStorageCarrier === undefined ||
-        !rustTargetTypeRefEquals(
-          independent?.carrier ?? expressionCarrier(contribution.expression, context),
-          rawStorageCarrier,
-        )) {
+      const construction = physicalField?.methodConstructions?.find(selected => selected.object === node &&
+        selected.property === contribution.property && selected.expression === contribution.expression &&
+        selected.storageIndex === contribution.targetStorageIndex);
+      if (rawStorageCarrier === undefined || construction === undefined ||
+        !rustTargetTypeRefEquals(construction.destinationCarrier, rawStorageCarrier)) {
         return undefined;
       }
       const bindingName = allocateRustSyntheticName(
@@ -205,7 +211,7 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
     }
     if (contribution.kind === "accessor") {
       const sourceNameNode = ast.name(contribution.property);
-      const sourceName = sourceNameNode === undefined ? "" : ast.text(sourceNameNode);
+      const sourceName = recordContributionSourceName(sourceNameNode, context);
       const planned = planExpression(contribution.property, context);
       const field = fact.fields.find((candidate) =>
         candidate.storageIndex === contribution.targetStorageIndex);

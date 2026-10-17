@@ -1,9 +1,10 @@
-import { createRustRecordFixture } from "./records.mjs";
+import { createRustRecordFixture, rustNativeFixtureNodes } from "./records.mjs";
 import assert from "node:assert/strict";
 import { nativeClosureProducerFixture, nativeClosureProducerFailurePackage } from "./native-closure-producers.mjs";
 
 
-import { createRustErrorRegionCatalog } from "../../dist/backend/planner/program/error-regions.js";
+import { createRustPlanningContext } from "../../dist/backend/planner/context.js";
+import { analyzeRustErrorRegions } from "../../dist/analysis/errors/regions.js";
 import { rustNamedTargetType } from "../../dist/target-model/types/carriers/native.js";
 import { rustCallableTargetType } from "../../dist/target-model/types/carriers/callables.js";
 import { selectRustCallableConversion } from "../../dist/target-model/conversions/callable.js";
@@ -28,9 +29,18 @@ export function create(): (value: int32) => int64 {
   const conversion = selectRustCallableConversion(source, target, selectRustExactIntegerConversion, current.program.typeDefinitions);
   assert.equal(conversion !== undefined, true, "checked integer adaptation selected");
   const records = current.program.records;
-  const program = { ...current.program, records: createRustRecordFixture({
-contextualValueConversion: { get: (node) => node === current.node ? { conversion } : records.contextualValueConversion.get(node) }}, records) };
-  current.context.input = { program, errorRegions: createRustErrorRegionCatalog(program) };
+  const selectedRecords = createRustRecordFixture({ contextualValueConversion: { get: node => node === current.node
+    ? { sourceCarrier: source, targetCarrier: target, conversion } : records.contextualValueConversion.get(node) } }, records);
+  const nativeNodes = new Set(rustNativeFixtureNodes(current.program));
+  const regions = analyzeRustErrorRegions({ ast: current.program.source.ast, sourceFiles: current.program.sourceFiles,
+    isNativeNode: node => nativeNodes.has(node), records: selectedRecords, names: current.program.names,
+    components: current.program.sourcePackageComponents, producers: current.program.callableValues.nativeProducers,
+    definitions: current.program.typeDefinitions, callables: current.program.callableValues,
+    promiseBodies: current.program.promiseBodies });
+  assert.equal(regions.kind, "resolved", "the exact constructed adapter inputs publish their required native error joins");
+  const program = { ...current.program, records: selectedRecords,
+    errorRegions: { ...regions.value, initialization: current.program.errorRegions.initialization } };
+  current.context.input = createRustPlanningContext(program);
   const expression = current.plan();
   assert.equal(expression !== undefined, true, "physical fallible producer plans");
   return { ...current, program, source, target, conversion, expression,

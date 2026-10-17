@@ -5,7 +5,7 @@ import test from "node:test";
 import { fakeAstReader } from "../../../helpers/fake-compile-input.mjs";
 import { analyzeRustSourcePackageComponents, selectRustSourcePackageComponentIdentities } from "../../../../dist/analysis/program/source-package-components.js";
 import { planRustSourcePackageErrors, resolveRustSourcePackageErrorBoundary, resolveRustPhysicalProgramErrorBoundary } from "../../../../dist/backend/planner/program/source-package-errors.js";
-import { selectRustPhysicalProgramErrorOwner } from "../../../../dist/analysis/program/error-types.js";
+import { selectRustPhysicalProgramErrorOwner } from "../../../../dist/analysis/errors/error-types.js";
 import { planRustProgramErrorModule } from "../../../../dist/backend/planner/program/errors.js";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph } from "../../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 import { compileRust } from "../../../helpers/rust-session.mjs";
@@ -34,7 +34,7 @@ function classify(dependencies, errors, views = []) {
   context.sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(
     context.sourcePackages, context.ast, context.sourceFiles,
   );
-  const classified = analyzeRustSourcePackageComponents(context, "bin");
+  const classified = analyzeRustSourcePackageComponents(context, "bin", subject => context.records.errorEffects.get(subject));
   assert.equal(classified.kind, "resolved");
   context.sourcePackageComponents = classified.plan;
   const components = classified.plan.components.map(component => ({

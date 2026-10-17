@@ -14,6 +14,7 @@ type RustTypeOnlyDeclaration = Exclude<ReturnType<RustProgramRecords["typeOnlyDe
 
 export interface RustTypeOnlyDeclarationProducer {
   readonly records: RustProgramRecords["typeOnlyDeclaration"];
+  statement(walk: RustFactWalk, statement: Node): RustTypeOnlyDeclaration | undefined;
   finalize(walk: RustFactWalk, files: readonly SourceFile[]): void;
   representationAliases(walk: RustFactWalk, files: readonly SourceFile[]): void;
 }
@@ -32,25 +33,34 @@ export function createRustTypeOnlyDeclarationProducer(
       "Conflicting Rust semantic plan 'tsonic.rust.typeOnlyDeclaration' for one exact source subject.");
     if (existing === undefined) family.writer.set(subject, { reason });
   };
+  const finalizeStatement = (walk: RustFactWalk, statement: Node, families: ReadonlySet<Node>): RustTypeOnlyDeclaration | undefined => {
+    if (finalizedStatements.has(statement)) return family.reader.get(statement);
+    const reason = selectRustTypeOnlyDeclaration(walk, statement, families);
+    if (reason === undefined) return family.reader.get(statement);
+    requireRustRecord(walk.context.requiredRecords, "typeOnlyDeclaration", statement, reason, "typeOnlyDeclarations.finalize");
+    recordReason(statement, reason);
+    if (reason === "ambient") for (const declaration of rustAmbientVariableDeclarations(walk, statement)) {
+      checkRustAmbientVariableUses(walk, declaration);
+      requireRustRecord(walk.context.requiredRecords, "typeOnlyDeclaration", declaration, reason, "typeOnlyDeclarations.finalize");
+      recordReason(declaration, reason);
+    }
+    finalizedStatements.add(statement);
+    return family.reader.get(statement);
+  };
   return Object.freeze({
     records: family.reader,
+    statement(walk: RustFactWalk, statement: Node): RustTypeOnlyDeclaration | undefined {
+      assertOpen();
+      return walk.context.ast.is.IsVariableStatement(statement)
+        ? finalizeStatement(walk, statement, new Set()) : family.reader.get(statement);
+    },
     finalize(walk: RustFactWalk, files: readonly SourceFile[]): void {
       assertOpen();
       const families = new Set(walk.context.typeFamilies.families().flatMap(selected =>
         selected.kind === "conditional" ? [selected.declaration] : []));
       for (const file of files) for (const statement of walk.context.ast.statements(file)) {
         if (statement === undefined) throw new Error("Type-only declaration analysis received an incomplete checked source file.");
-        if (finalizedStatements.has(statement)) continue;
-        const reason = selectRustTypeOnlyDeclaration(walk, statement, families);
-        if (reason === undefined) continue;
-        requireRustRecord(walk.context.requiredRecords, "typeOnlyDeclaration", statement, reason, "typeOnlyDeclarations.finalize");
-        recordReason(statement, reason);
-        if (reason === "ambient") for (const declaration of rustAmbientVariableDeclarations(walk, statement)) {
-          checkRustAmbientVariableUses(walk, declaration);
-          requireRustRecord(walk.context.requiredRecords, "typeOnlyDeclaration", declaration, reason, "typeOnlyDeclarations.finalize");
-          recordReason(declaration, reason);
-        }
-        finalizedStatements.add(statement);
+        finalizeStatement(walk, statement, families);
       }
     },
     representationAliases(walk: RustFactWalk, files: readonly SourceFile[]): void {
@@ -59,7 +69,7 @@ export function createRustTypeOnlyDeclarationProducer(
       const visiting = new Set<Node>();
       const visited = new Set<Node>();
       const rejected = new Set<Node>();
-      for (const file of files) for (const declaration of rustSourceTypeDeclarations(file, ast)) visit(declaration);
+      for (const file of files) for (const declaration of rustSourceTypeDeclarations(file, ast, walk.context.isNativeNode)) visit(declaration);
 
       function visit(declaration: Node): boolean {
         if (rejected.has(declaration)) return false;

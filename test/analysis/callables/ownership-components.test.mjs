@@ -7,6 +7,13 @@ import {
   createRustCallableOwnershipComponentQueries, defaultRustCallableOwnershipLimits,
 } from "../../../dist/analysis/callables/ownership-components.js";
 import { analyzeRustReceiverFieldCaptures } from "../../../dist/analysis/project-types/receiver-captures.js";
+import { createRustProjectTypePolicy } from "../../../dist/analysis/project-types/type-policy.js";
+import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
+import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
+import { analyzeRustLifetimes } from "../../../dist/analysis/declarations/lifetimes.js";
+import { rustProjectGenericParameters } from "../../../dist/policy/types/project/project-generic-contract.js";
 import { createRustCallableOwnershipRegistry } from "../../../dist/analysis/callables/ownership-plan.js";
 import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership-carriers.js";
 import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
@@ -48,11 +55,41 @@ function fixture(text, options = {}) {
     source.ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
   }
   const storage = createSourceStorageQuery(source, [file]);
+  const builder = createRustProgramRecordBuilder();
+  const participation = analyzeRustNativeParticipation({ ast: source.ast, storage,
+    navigation: source.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
+  assert.equal(participation.kind, "resolved", "the checked fixture has its actual complete native domain");
+  const nativeNodes = new Set(participation.nodes);
+  const isNativeNode = node => nativeNodes.has(node);
+  const names = createRustNamePlan({ ast: source.ast, sourceFiles: [file], isNativeNode,
+    semanticsFor: source.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
+  assert.equal(names.diagnostics.length, 0, "the checked fixture has exact native names");
+  const lifetimes = analyzeRustLifetimes({ source, ast: source.ast, sourceFiles: [file], records: builder,
+    names, isNativeNode, semanticsFor: source.semantics.forNode,
+    referencedDeclaration: node => source.navigation.sourceReferenceFor(node)?.declaration });
+  assert.equal(lifetimes.diagnostics.length, 0, "the checked fixture has exact native generic lifetime contracts");
+  assert.equal(lifetimes.index !== undefined, true, "the canonical source lifetime owner completes before project layout");
+  const projectTypes = createRustProjectTypePolicy({ ast: source.ast, navigation: source.navigation,
+    names, sourceFiles: [file], sourceNodes: participation.nodes, isNativeNode,
+    semanticsFor: source.semantics.forNode, sourceLifetimes: lifetimes.index,
+    collectImplicitInterfaces: () => [], thrownClassDeclarations: new Set(), sourceCreatedErrorOrigins: [],
+    normalizeCarrier: carrier => carrier, isRepresentationAlias: () => false,
+    genericParametersFor: declaration => rustProjectGenericParameters(declaration,
+      { ast: source.ast, sourceLifetimes: lifetimes.index, semanticsFor: source.semantics.forNode }),
+    externallyExtensible: declaration => source.navigation.declarationUseSummary(declaration).exported,
+    targetNameForCallable: declaration => rustProjectCallableTargetName(declaration,
+      { ast: source.ast, names, semanticsFor: source.semantics.forNode }),
+    sourcePackageComponentForFile: () => "ownership-fixture",
+    resolveSelectedType() { assert.fail("this fixture has no generic heritage arguments"); },
+    resolveExternalHeritage() { assert.fail("this fixture has no external heritage"); },
+  }, () => {});
+  assert.equal(projectTypes.issues.length, 0, "the actual project/layout owner closes the fixture's declarations");
   const receiverCaptures = analyzeRustReceiverFieldCaptures({ ast: source.ast,
+    isNativeNode,
     navigation: source.navigation, semantics: source.semantics, sourceFiles: [file],
-    projectTypes: { definitions: [], definitionContainingDeclaration: () => undefined },
+    projectTypes,
     isStoredField: declaration => source.ast.is.IsPropertyDeclaration(declaration) || sourceParameterIsProperty(source.ast, declaration), deferredFields: new Set() });
-  const input = { storage, receiverCaptures, ...options };
+  const input = { storage, nativeNodes: participation.nodes, receiverCaptures, ...options };
   const named = (name, kind) => nodes.filter(node => source.ast.kindName(node) === kind &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
   return { source, nodes, storage, receiverCaptures, input, named,

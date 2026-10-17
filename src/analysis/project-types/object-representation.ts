@@ -54,6 +54,7 @@ export interface RustObjectRepresentationAnalysisInput {
   readonly semantics: SourceProgramSemantics;
   readonly projectTypes: RustProjectTypePolicy;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly valueWrites: ReadonlySet<Node>;
   readonly hasPromotedStorage: (declaration: Node) => boolean;
   readonly hasMutableStorageUse: (declaration: Node) => boolean;
@@ -223,6 +224,7 @@ function projectReceiverEscapes(
 ): boolean {
   let escapes = false;
   const visit = (node: Node, nestedCallable: boolean): void => {
+    if (!input.isNativeNode(node)) return;
     if (escapes) return;
     const kind = input.ast.kindName(node);
     if (kind === "KindThisExpression" || kind === "KindThisKeyword") {
@@ -250,6 +252,7 @@ function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInpu
   const origins = new Map<RustProjectTypeDefinition, SourceExpressionValueFlowSummary[]>();
   const escapingSuspendedMethods = new Set<Node>();
   const visit = (node: Node): void => {
+    if (!input.isNativeNode(node)) return;
     if (input.ast.is.IsCallExpression(node)) {
       const semantics = input.semantics.forNode(node);
       const call = semantics.operations.call(node);

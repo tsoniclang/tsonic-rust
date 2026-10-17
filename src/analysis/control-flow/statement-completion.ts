@@ -25,11 +25,12 @@ import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
 import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { rustSwitchComparisonMatches } from "../operations/contracts/switch.js";
 import type { RustProjectFlowReadSelectionIndex } from "./project-flow-read-selections.js";
-import { validateRustDisposalLifecycle } from "../resources/disposal-lifecycle.js";
+import { validateRustDisposalLifecycle } from "./resource-lifecycle.js";
 
 export interface RustStatementCompletionInput {
   readonly source: TargetSourceProgram;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   readonly typeDefinitions: RustTypeDefinitions;
@@ -75,6 +76,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       reject(owner, "RUST_STATEMENT_SEQUENCE_NOT_PROVEN", "A runtime control body requires its exact checked source statement.");
       return;
     }
+    if (!input.isNativeNode(node)) return;
     if (supportedStatements.has(ast.kindName(node))) admitted.add(node);
     else if (records.nativeUnreachable.get(node) !== true && records.compileTimeSource.get(node) === undefined &&
       records.nativeParticipation.get(node) !== "erased") reject(node, "RUST_STATEMENT_NOT_SUPPORTED", "The Rust target does not support this runtime statement.");
@@ -284,6 +286,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
   const visited = new Set<Node>();
   while (pending.length > 0) {
     const node = pending.pop()!;
+    if (!input.isNativeNode(node)) continue;
     if (visited.has(node)) continue;
     visited.add(node);
     const kind = ast.kindName(node);

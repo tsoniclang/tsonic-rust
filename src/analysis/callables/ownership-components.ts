@@ -67,6 +67,7 @@ type Owner = { readonly kind: "lexical" | "class"; readonly declaration: Node; r
 
 export function createRustCallableOwnershipComponentQueries(input: {
   readonly storage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly receiverCaptures: RustReceiverFieldCaptureQueries;
   readonly isRuntimeUse?: (use: SourceDeclarationUse, declaration: Node) => boolean;
   readonly limits?: RustCallableOwnershipLimits;
@@ -228,7 +229,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
     return false;
   };
   const pending: Vertex[] = [];
-  for (const node of sourceNodes) {
+  for (const node of input.nativeNodes) {
     if (!account()) return result();
     const receiver = unwrap(node);
     const owner = receiver === undefined ? undefined : receiverOwner(receiver);
@@ -390,7 +391,7 @@ export function createRustCallableOwnershipComponentQueries(input: {
   }
   const closed = graphComponents(affinityVertices, affinity);
   if (closed === undefined) return result();
-  for (const node of sourceNodes) {
+  for (const node of input.nativeNodes) {
     if (!account()) return result();
     const info = accessInfo(node);
     const declaration = info?.selectedDeclaration;

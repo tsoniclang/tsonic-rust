@@ -19,9 +19,11 @@ function fixture(text) {
     assert.equal(references.kind, "resolved");
     const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, references.plan.activeCrates);
     assert.equal(dispatch.kind, "resolved");
-    const context = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
+    const created = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
       request.rootPublishesLibrary, dispatch.plan);
-    analyzeRustProgram(context);
+    assert.equal(created.kind, "resolved", "the checked context is complete before the fallibility worklist");
+    const context = created.value;
+    analyzeRustProgram(context, request.configuration.outputType);
     program = { ...context, records: context.records.seal(context.requiredRecords) };
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
   } });
@@ -42,9 +44,10 @@ function fixture(text) {
     const records = createRustProgramRecordBuilder(program.typeDefinitions, parent);
     const diagnostics = [];
     const context = { ...program, source, ast, records, diagnostics, requiredRecords: [] };
-    recordFallibilityFacts({ context, resolving: new Set(), rejectedExpressions: new WeakSet(),
+    const fallibility = recordFallibilityFacts({ context, resolving: new Set(), rejectedExpressions: new WeakSet(),
       preparedCallbackCalls: new Map(), objectLiteralMethodExpressions: new Set(), objectLiteralMethodSpreadExpressions: new Set() },
     program.sourceFiles, maximumWork);
+    fallibility?.complete();
     return { records, diagnostics };
   };
   return { program, declarations, run };

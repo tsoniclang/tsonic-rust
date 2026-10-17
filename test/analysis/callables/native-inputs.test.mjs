@@ -1,12 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { nullishNeverSource } from "../../../../tsonic/test/fixtures/nullish-never.mjs";
 
 function analyze(text) {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  return inspect(program);
+}
+
+function analyzeConstruction(text) {
+  let program;
+  const { result } = compileRust({ surfaces: [], files: { "index.ts": text }, compileTarget(request) {
+    program = analyzeRustCheckedContext(request);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: program.diagnostics };
+  } });
+  assert.deepEqual(result.diagnostics.map(diagnostic => `${diagnostic.code}: ${diagnostic.message}`), []);
+  return inspect(program);
+}
+
+function inspect(program) {
   const ast = program.source.ast;
   const declarations = new Map();
   const visit = node => {
@@ -19,7 +34,7 @@ function analyze(text) {
 }
 
 test("native callable inputs preserve two equal-signature formals and alias correspondence", () => {
-  const { program, ast, declarations, native } = analyze(`
+  const { program, ast, declarations, native } = analyzeConstruction(`
     export function choose(left: () => number, right: () => number): () => number {
       const first = left; const second = right; return first;
     }
@@ -47,7 +62,7 @@ test("native callable inputs preserve two equal-signature formals and alias corr
 });
 
 test("native callable inputs retain both parameter mutation alternatives without guessing one implementation", () => {
-  const { ast, declarations, native } = analyze(`
+  const { ast, declarations, native } = analyzeConstruction(`
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
     }

@@ -89,7 +89,7 @@ export function resolveProjectSourceCarrier(
       return selectedContext === undefined ? undefined
         : resolveProjectCallableInterface(declaration, selectedType, selectedContext, options, resolving);
     }
-    const carrier = options.sourceTypes.carrierForDeclaration(declaration, context.ast);
+    const carrier = options.sourceTypes.carrierForDeclaration(declaration);
     if (carrier === undefined && context.ast.is.IsTypeAliasDeclaration(declaration)) {
       const typeNode = Node_Type(context.ast, declaration);
       const instance = selectedType ?? context.semanticsFor(declaration).declarations.declaredType(declaration);

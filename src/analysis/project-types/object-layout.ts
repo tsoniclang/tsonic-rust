@@ -1,7 +1,9 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceClassFieldIsTypeOnly, sourceMemberOwner, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import { sourceClassFieldIsTypeOnly, sourceObjectMemberDeclarations, sourceParameterIsProperty } from "@tsonic/target-api/source";
+import type { SourceFileSemantics } from "@tsonic/target-api/source";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import type { RustProjectObjectField, RustProjectObjectIndexSignature, RustProjectObjectLayout } from "../../target-model/types/project-types.js";
+import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
 
 export interface RustProjectStaticFieldStorage {
   readonly declaration: Node;
@@ -12,6 +14,7 @@ export interface RustProjectStaticFieldStorage {
 export function rustProjectObjectLayout(
   declaration: Node,
   ast: AstReader,
+  semanticsFor: (node: Node) => SourceFileSemantics,
 ): RustProjectObjectLayout | undefined {
   const kind = ast.kindName(declaration);
   const objectKind = kind === "KindClassDeclaration" || kind === "KindClassExpression"
@@ -50,17 +53,22 @@ export function rustProjectObjectLayout(
     }
     const nameNode = ast.name(member);
     if (nameNode === undefined) return undefined;
-    switch (ast.kindName(nameNode)) {
+    const nameKind = ast.kindName(nameNode);
+    switch (nameKind) {
       case "KindIdentifier":
       case "KindPrivateIdentifier":
       case "KindStringLiteral":
       case "KindNumericLiteral":
+      case "KindComputedPropertyName":
         break;
       default:
         return undefined;
     }
-    const sourceName = ast.text(nameNode);
-    if (sourceName.length === 0 || seen.has(sourceName)) {
+    const selected = nameKind === "KindComputedPropertyName" || nameKind === "KindNumericLiteral"
+      ? semanticsFor(member).propertyNames.get(nameNode) : undefined;
+    const sourceName = nameKind === "KindComputedPropertyName" || nameKind === "KindNumericLiteral"
+      ? selected?.kind === "resolved" ? selected.name : undefined : ast.text(nameNode);
+    if (sourceName === undefined || seen.has(sourceName)) {
       return undefined;
     }
     seen.add(sourceName);
@@ -77,22 +85,22 @@ export function rustProjectObjectLayout(
 
 export function rustProjectObjectField(
   declaration: Node,
-  ast: AstReader,
+  projectTypes: Pick<RustProjectTypePolicy, "definitionContainingDeclaration" | "objectLayoutForDefinition">,
 ): RustProjectObjectField | undefined {
-  const owner = sourceMemberOwner(ast, declaration);
+  const owner = projectTypes.definitionContainingDeclaration(declaration);
   return owner === undefined
     ? undefined
-    : rustProjectObjectLayout(owner, ast)?.fields.find((field) => field.declaration === declaration);
+    : projectTypes.objectLayoutForDefinition(owner)?.fields.find((field) => field.declaration === declaration);
 }
 
 export function rustProjectObjectIndexSignature(
   declaration: Node,
-  ast: AstReader,
+  projectTypes: Pick<RustProjectTypePolicy, "definitionContainingDeclaration" | "objectLayoutForDefinition">,
 ): RustProjectObjectIndexSignature | undefined {
-  const owner = ast.parent(declaration);
+  const owner = projectTypes.definitionContainingDeclaration(declaration);
   return owner === undefined
     ? undefined
-    : rustProjectObjectLayout(owner, ast)?.indexSignatures.find((index) =>
+    : projectTypes.objectLayoutForDefinition(owner)?.indexSignatures.find((index) =>
         index.declaration === declaration);
 }
 

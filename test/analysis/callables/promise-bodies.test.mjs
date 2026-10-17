@@ -87,7 +87,9 @@ export const marker = 0;`);
   assert.equal(issues.length, 1);
   const call = current.calls.find(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === "read");
   assert.equal(issues[0].sourceNode === call, true);
-  assert.equal(current.context.promiseBodies.plan.objects.get(current.named("read")) === issues[0].sourceNode, true);
+  const demands = current.context.promiseBodies.plan.objects.get(current.named("read"));
+  assert.equal(demands?.length === 1 && demands[0] === issues[0].sourceNode, true,
+    "the single actual object demand retains its exact checked call identity");
   assert.equal(current.program === undefined && current.result.artifacts.length === 0, true);
 });
 
@@ -106,6 +108,63 @@ export async function outer<Region extends Life>(value: Ref<int32, Region>, pend
   assert.equal(current.calls.some(node => current.context.records.targetOperation.get(node).asyncBody?.declaration === current.named("read")), true);
   assert.equal(current.program === undefined && current.result.artifacts.length === 0, true);
 });
+
+for (const [name, body] of [
+  ["read", "await pending; return load(value);"],
+  ["readFirst", "const copied = load(value); await pending; return copied;"],
+]) {
+  for (const demand of ["stored", "passed", "first-class", "public", "cross-component"]) {
+    test(`${name} refuses precisely its genuine ${demand} object demands`, () => {
+      const declaration = `${demand === "public" || demand === "cross-component" ? "export " : ""}async function ${name}<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> { ${body} }`;
+      const use = demand === "stored" ? `const stored = ${name}(value, pending); return await stored;`
+        : demand === "passed" ? `return await settle(${name}(value, pending));`
+          : demand === "first-class" ? "return await selected(value, pending);"
+            : `return await ${name}(value, pending);`;
+      const root = `${header}\n${demand === "cross-component" ? `import { ${name} } from "@acme/read";` : declaration}
+${demand === "first-class" ? `export const selected = ${name};` : ""}
+async function settle(pending: Promise<int32>): Promise<int32> { return await pending; }
+async function outer<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  ${use}
+}
+export const marker = 0;`;
+      const files = demand === "cross-component" ? { "index.ts": root,
+        "node_modules/@acme/read/package.json": JSON.stringify({ name: "@acme/read", version: "1.0.0", type: "module", exports: { ".": "./index.ts" } }),
+        "node_modules/@acme/read/index.ts": `${header}\n${declaration}` } : { "index.ts": root };
+      const current = analyze(root, { files, ...(demand === "cross-component" ? {
+        sourcePackages: sourcePackageGraphFixture(["index.ts"], { "@acme/read": { files: ["index.ts"], dependencies: [] } }),
+      } : {}) });
+      const selected = current.named(name);
+      assert.equal(selected !== undefined, true, "the actual generic borrowed body was analyzed");
+      const demands = current.context.promiseBodies.plan.objects.get(selected);
+      assert.equal(demands !== undefined && demands.length > 0, true, "the actual object facet has recorded source demands");
+      const issues = current.result.diagnostics.filter(issue => issue.code === "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN");
+      assert.equal(issues.length, demands.length, "every object demand, and no guessed declaration, receives its refusal");
+      for (const node of demands) assert.equal(issues.filter(issue => issue.sourceNode === node).length, 1,
+        "each refusal retains the identical recorded source demand node");
+      assert.equal(issues.every(issue => issue.message === "A suspending JS Promise body cannot retain a borrowed value across a pending point; its task requires owned storage."), true,
+        "the native object-factory restriction is precise");
+      assert.equal(current.program === undefined && current.result.artifacts.length === 0, true,
+        "a rejected object facet is never published or rendered");
+    });
+  }
+  test(`${name} keeps the original immutable lexical alias as the same native body`, () => {
+    const current = analyze(`${header}
+async function ${name}<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> { ${body} }
+async function outer<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  const selected = ${name}; return await selected(value, pending);
+}
+export const marker = 0;`);
+    assert.equal(current.result.diagnostics.length, 0,
+      JSON.stringify(current.result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    const declaration = current.named(name);
+    assert.equal(declaration !== undefined, true, "the original generic borrowed body remains analyzed");
+    assert.equal(current.context.promiseBodies.plan.objects.has(declaration), false,
+      "a proved same-component lexical alias does not create a Promise object demand");
+    const call = current.calls.find(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === "selected");
+    assert.equal(call !== undefined && current.context.records.targetOperation.get(call)?.asyncBody?.declaration === declaration, true,
+      "the original alias still calls the exact native body, not a factory or dynamic wrapper");
+  });
+}
 
 function lower(text) {
   const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": text } });

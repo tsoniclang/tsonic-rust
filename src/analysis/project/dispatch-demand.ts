@@ -14,6 +14,7 @@ export function analyzeRustDispatchContextDemand(
   sourceFiles: readonly SourceFile[],
   records: RustProgramRecords,
   components: RustSourcePackageComponentClassifications,
+  isNativeNode: (node: Node) => boolean,
   catalog: RustDispatchContextCatalog,
 ): AnalyzeRustDispatchContextResult<RustDispatchContextDemandPlan> {
   const demand = new Map<string, Set<string>>();
@@ -23,6 +24,7 @@ export function analyzeRustDispatchContextDemand(
     const pending: Node[] = [sourceFile];
     while (pending.length > 0) {
       const node = pending.pop()!;
+      if (!isNativeNode(node)) continue;
       const operation = records.targetOperation.get(node);
       if (operation?.kind === "provider-operation") {
         for (const input of operation.abi.dispatchInputs) {

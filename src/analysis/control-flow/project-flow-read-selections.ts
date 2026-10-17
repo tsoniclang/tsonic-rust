@@ -33,10 +33,12 @@ const noProjectFlowReads: readonly Node[] = Object.freeze([]);
 export function analyzeRustProjectFlowReadSelections(input: {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
 }): RustProjectFlowReadSelectionIndex {
   const readsByDeclaration = new Map<Node, RustReadsBySourceFile>();
   const visit = (node: Node, sourceFile: SourceFile, scope: Node): void => {
+    if (!input.isNativeNode(node)) return;
     const binding = input.records.sourceBinding.get(node);
     const flow = input.records.flowReadProjection.get(node);
     if (binding !== undefined && flow?.kind === "project-downcast") {

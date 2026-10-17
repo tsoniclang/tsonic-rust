@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceNodeIdentity, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analysis/callables/generic-dispatch.js";
@@ -77,22 +78,30 @@ function compileObserved(options) {
   return { result, analyzed, inventory };
 }
 
-function construction(text, wrapCaptures = captures => captures) {
+function construction(text, wrapCaptures = captures => captures, wrapRecords = records => records) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const registry = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation);
+  const records = wrapRecords(program.records);
+  const participation = sourceNodesOutsideErasedSubtrees(source.ast, storage.nodes,
+    node => program.records.nativeParticipation.get(node) === "erased");
+  assert.equal(participation.kind, "resolved", "the checked family domain has complete native participation");
+  const nativeNodes = participation.nodes;
+  const nativeNodeSet = new Set(nativeNodes);
+  const registry = createRustGenericCallablePlan(source.ast, program.sourceFiles, records, program.names, source.navigation,
+    node => nativeNodeSet.has(node));
   let physical;
-  const input = { ast: source.ast, storage, records: program.records, definitions: program.typeDefinitions,
+  const input = { ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, producers) => physical.carrierFor(carrier, ownerFileName, producers) };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
-  const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
+  const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {
       const selected = queries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
+  producers.selectConstructionErrors(new Map());
   const queries = createRustNativeStorageQueries({ ...input, native, producers });
   const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
   physical = registry.initializePhysical({ ...input, native, captures,
@@ -100,7 +109,7 @@ function construction(text, wrapCaptures = captures => captures) {
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
   const implementations = registry.plan.definitions.flatMap(definition => definition.implementations);
-  return { physical, queries, declaration, implementations, captures };
+  return { physical, queries, declaration, implementations, captures, ast: source.ast, storage, program };
 }
 
 function countedCaptures(state) {
@@ -124,6 +133,9 @@ function checkedContext(source, target) {
     context = analyzeRustCheckedContext(request);
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
   } });
+  assert.equal(context !== undefined, true, "the checked source reaches the actual callable construction owner");
+  assert.equal(context.diagnostics.length, 0, context.diagnostics.map(issue =>
+    `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
   return context;
 }
 
@@ -241,11 +253,9 @@ test("two backend plans over a published program read completed callable stores 
   assert.equal(joined !== undefined, true, "the joined family is admitted before closure");
   const late = concreteKey(joined.carrier);
   const unstored = () => {
-    const first = generic.physical.argumentsFor(late);
-    const second = generic.physical.argumentsFor(late);
-    assert.equal(sameMetadata(second, first), true, "repeated late-key reads link the same arguments");
-    assert.equal(generic.physical.definitionFor(late) === joined && first !== second, true,
-      "a key outside admission and closure preparation links on every read and is never stored");
+    assert.equal(generic.physical.existingSelectionFor(late) === undefined, true, "a fabricated unprepared key remains absent");
+    assert.equal(invariantCode(() => generic.physical.argumentsFor(late)), "TSONIC_INTERNAL_PLANNER_INVARIANT",
+      "required unprepared keys fail without computing or storing a selection");
   };
   const before = snapshot();
   assert.equal(before.environments.every(environment => environment !== undefined), true);
@@ -298,7 +308,7 @@ test("a family first requested by an invocation-storage request is admitted afte
   assert.equal(physical.definitions() === inventory, true, "re-reading invocation storage after closure admits nothing");
 });
 
-test("published physical reads return stored keys, link late keys without storing them, and fail only required reads of an unrooted shape", () => {
+test("published physical reads return stored keys and reject required unprepared keys without selection", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
   const physical = program.callableValues.generic.physical;
   const inventory = physical.definitions();
@@ -312,10 +322,10 @@ test("published physical reads return stored keys, link late keys without storin
   }
   assert.equal(physical.conversionFor(joined.carrier, joined.carrier)?.kind, "identity");
   const late = concreteKey(joined.carrier);
-  const linked = physical.argumentsFor(late);
-  assert.equal(sameMetadata(physical.argumentsFor(late), linked), true, "repeated late-key reads link the same arguments");
-  assert.equal(physical.definitionFor(late) === joined && physical.argumentsFor(late) !== linked, true,
-    "a late key links to its existing family on every read and is not stored");
+  for (const read of [() => physical.argumentsFor(late), () => physical.definitionFor(late)]) {
+    assert.equal(invariantCode(read), "TSONIC_INTERNAL_PLANNER_INVARIANT", "unprepared required keys do not recompute their selection");
+  }
+  assert.equal(physical.existingSelectionFor(late) === undefined, true, "a missing optional key is not admitted by a read");
   const value = rustGenericCallableValue(joined.carrier);
   const reordered = reorderedKey(joined.carrier);
   for (const read of [() => physical.definitionFor(reordered), () => physical.argumentsFor(reordered),
@@ -346,6 +356,30 @@ test("before closure, a required read of a physical shape construction never adm
   assert.equal(current.physical.plan.existingSelectionFor(reordered) === undefined, true, "the failed reads admitted no family");
 });
 
+test("published physical ownership preserves logical origins, signatures, members and source-file boundaries", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
+  const physical = program.callableValues.generic.physical;
+  const joined = physical.definitions().find(definition => definition.members.length === 2);
+  assert.equal(joined !== undefined, true, "the fixture owns a joined physical family");
+  const value = rustGenericCallableValue(joined.carrier);
+  const foreignKeys = [
+    ["logical origin", rustGenericCallableCarrier({ ...value, origin: { ...value.origin, declarationIdentity: "foreign" } })],
+    ["signature", rustGenericCallableCarrier({ ...value, signature: { ...value.signature, result: float64 } })],
+    ["source owner", rustGenericCallableCarrier({ ...value, physical: { ...value.physical, ownerFileName: "/foreign.rs" } })],
+    ["member origin", rustGenericCallableCarrier({ ...value, physical: { ...value.physical,
+      members: value.physical.members.map(member => ({ ...member, origin: { ...member.origin, declarationIdentity: "foreign" } })) } })],
+  ];
+  for (const [label, carrier] of foreignKeys) {
+    for (const [reader, read] of [["definitionFor", () => physical.definitionFor(carrier)],
+      ["argumentsFor", () => physical.argumentsFor(carrier)], ["existingSelectionFor", () => physical.existingSelectionFor(carrier)],
+      ["conversionFor source", () => physical.conversionFor(carrier, joined.carrier)],
+      ["conversionFor target", () => physical.conversionFor(joined.carrier, carrier)]]) {
+      assert.equal(read() === undefined, true, `${label}: ${reader} leaves a foreign or inconsistent key absent`);
+    }
+  }
+  assert.equal(physical.definitionFor(joined.carrier) === joined, true, "foreign queries never change the owned selection");
+});
+
 test("a logical carrier whose family was never admitted stays absent in every reader", () => {
   const current = construction(`export function make(): <Value>(value: Value) => Value { return <Value>(value: Value): Value => value; }`);
   const [implementation] = current.implementations;
@@ -355,8 +389,8 @@ test("a logical carrier whose family was never admitted stays absent in every re
   current.physical.closeAdmission();
   assert.equal(current.physical.plan.definitions().length === 0 && current.physical.plan.environmentFor(implementation) !== undefined, true,
     "the family has a completed environment and no admitted shape");
+  const physical = current.physical.closeKeys();
   current.physical.publish();
-  const physical = current.physical.plan;
   for (const [name, read] of [["definitionFor", () => physical.definitionFor(logical)], ["argumentsFor", () => physical.argumentsFor(logical)],
     ["existingSelectionFor", () => physical.existingSelectionFor(logical)], ["conversionFor", () => physical.conversionFor(logical, logical)]]) {
     assert.equal(invariantCode(read) === undefined && read() === undefined, true, `${name}: a logical carrier is not a physical storage key`);
@@ -384,14 +418,23 @@ test("closure prepares the canonical self-carrier of every admitted family", () 
   const inventory = current.physical.plan.definitions();
   assert.equal(inventory.length > 0 && inventory.every(definition => definition.parameters.length > 0), true,
     "admission selects concrete physical arguments, never the canonical parameters");
+  const lateKeys = [];
   for (const definition of inventory) {
     const prepared = current.physical.plan.argumentsFor(definition.carrier);
     assert.equal(sameMetadata(prepared, definition.parameters), true, `${definition.targetName}: the canonical key links the family's own parameters`);
     assert.equal(current.physical.plan.argumentsFor(definition.carrier) === prepared, true,
       `${definition.targetName}: the canonical key read after closure is the one stored at closure`);
     const late = concreteKey(definition.carrier);
-    assert.equal(current.physical.plan.argumentsFor(late) !== current.physical.plan.argumentsFor(late), true,
-      `${definition.targetName}: a key neither admitted nor prepared is not stored after closure`);
+    current.physical.prepare(late);
+    lateKeys.push(late);
+  }
+  const published = current.physical.closeKeys();
+  current.physical.publish();
+  for (const late of lateKeys) {
+    const selected = published.argumentsFor(late);
+    assert.equal(selected !== undefined, true, "explicit key preparation links the admitted physical family");
+    assert.equal(published.argumentsFor(late) === selected, true,
+      "actual prepared keys are stable lookups after publication");
   }
 });
 
@@ -402,7 +445,14 @@ test("the planner phase label starts at publication, after the callable seal and
   const value = rustGenericCallableValue(joined.carrier);
   const reordered = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: [...value.physical.members].reverse() } });
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "closed, not sealed");
-  assert.equal(context.callableValues.seal() === context.callableValues.selected, true);
+  const components = analyzeRustSourcePackageComponents(context, "lib", subject => context.records.errorEffects.get(subject));
+  assert.equal(components.kind, "resolved", "the existing component owner completes before publication");
+  context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
+    records: context.records, physical, producers: context.callableValues.nativeProducers,
+    definitions: context.typeDefinitions, components: components.plan });
+  const published = context.callableValues.seal();
+  assert.equal(published !== context.callableValues.selected, true, "publication does not expose the analysis construction view");
+  assert.equal(context.callableValues.seal() === published, true, "repeated seals read the same completed publication");
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "sealed, not published");
   context.callableValues.publish();
   assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_PLANNER_INVARIANT", "published");
@@ -472,6 +522,7 @@ test("a family requested after admission closes fails as an internal invariant o
   assert.throws(() => current.queries.returnFor(make), failure =>
     failure.diagnostic?.code === "TSONIC_INTERNAL_ANALYSIS_INVARIANT" && /admission closed/u.test(failure.message));
   assert.equal(current.physical.plan.definitions() === inventory, true);
+  current.physical.closeKeys();
   current.physical.publish();
   assert.throws(() => current.queries.returnFor(make), failure => failure.diagnostic?.code === "TSONIC_INTERNAL_PLANNER_INVARIANT");
   assert.throws(() => current.physical.closeAdmission(), /exactly once/u);
@@ -507,6 +558,55 @@ test("an open environment failure is retried, and a later success is retained on
   assert.equal(current.queries.returnFor(make).kind, "selected");
   assert.equal(state.selections === 3 && current.physical.plan.environmentFor(implementation) === environment, true,
     "a completed environment is retained and not selected again");
+});
+
+test("an open physical conversion retries an unfinished environment instead of retaining its provisional absence", () => {
+  const state = { selections: 0, ready: false };
+  const current = construction(`export function make(): <Value>(value: Value) => Value {
+    return <Value>(value: Value): Value => value;
+  }`, countedCaptures(state));
+  const [implementation] = current.implementations;
+  assert.equal(implementation !== undefined && current.implementations.length === 1, true, "one actual source implementation");
+  const value = rustGenericCallableValue(implementation.carrier);
+  const carrier = rustGenericCallableCarrier({ ...value, physical: { ownerFileName: implementation.sourceFileName,
+    members: [{ origin: { fileName: implementation.sourceFileName,
+      declarationIdentity: sourceNodeIdentity(current.ast, implementation.declaration) }, arguments: [] }], arguments: [] } });
+  const early = current.physical.plan;
+  assert.equal(early.conversionFor(carrier, carrier) === undefined, true, "unfinished capture evidence is absent while open");
+  assert.equal(state.selections, 0, "a conversion read does not construct a capture environment");
+  state.ready = true;
+  const completed = current.queries.returnFor(current.declaration("make"));
+  assert.equal(completed.kind, "selected", completed.reason);
+  assert.equal(sameMetadata(completed.carrier, carrier), true, "the completed actual producer selects the identical physical key");
+  const conversion = early.conversionFor(carrier, carrier);
+  assert.equal(conversion?.kind, "identity", "the same open query observes the now-complete producer environment");
+  current.physical.closeAdmission();
+  current.physical.closeKeys();
+  current.physical.publish();
+  assert.equal(early.conversionFor(carrier, carrier) === conversion, true, "the captured reader uses the final prepared conversion");
+  assert.equal(state.selections, 1, "completion does not select the capture again");
+});
+
+test("private logical leaf construction retries unfinished source evidence and retains only the completed carrier", () => {
+  const state = { hidden: undefined };
+  const current = construction("export function read(value: number): number { return value; }", undefined,
+    records => Object.freeze({ ...records, sourceParameterAbi: Object.freeze({
+      get: node => node === state.hidden ? undefined : records.sourceParameterAbi.get(node),
+    }) }));
+  const parameter = current.ast.parameters(current.declaration("read"))[0];
+  const subject = current.storage.subject(parameter, "input");
+  assert.equal(subject.kind, "resolved", "the actual formal has its canonical private source-storage subject");
+  state.hidden = parameter;
+  assert.equal(current.queries.logicalCarrierFor(subject.subject, current.storage.emptyBindings) === undefined, true,
+    "unfinished source ABI evidence has no derived logical leaf");
+  state.hidden = undefined;
+  const completed = current.queries.logicalCarrierFor(subject.subject, current.storage.emptyBindings);
+  assert.equal(completed !== undefined && sameMetadata(completed,
+    current.program.records.sourceParameterAbi.get(parameter).parameterCarrier), true, "the identical query reads the actual completed ABI");
+  assert.equal(current.queries.logicalCarrierFor(subject.subject, current.storage.emptyBindings) === completed, true,
+    "completed derived evidence is retained once in the private construction owner");
+  assert.equal("logicalCarrierFor" in current.program.callableValues.nativeStorage, false,
+    "the logical construction reader is not a published native-storage service");
 });
 
 test("a required environment refusal settled at closure is final", () => {

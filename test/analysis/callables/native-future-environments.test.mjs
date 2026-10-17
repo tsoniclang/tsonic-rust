@@ -5,6 +5,8 @@ import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { createRustNativeFutureInputPlan } from "../../../dist/analysis/callables/native-future-inputs.js";
+import { createRustLexicalFunctionEnvironmentPlan } from "../../../dist/analysis/callables/lexical-functions.js";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 
 
@@ -15,10 +17,12 @@ const sourceText = `import type { int32 } from "@tsonic/core/types.js";
   }`;
 
 function fixture(text = sourceText) {
-  const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
-  const source = createTargetSourceProgram(checked);
-  const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const program = analyzeRustErrorEffects(text, { surfaces: [] });
+  const source = program.source;
+  const storage = program.sourceStorage;
   const ast = source.ast;
+  const lexicalFunctions = createRustLexicalFunctionEnvironmentPlan(source, program.nativeNodes, program.records,
+    program.runtimeValueUses, program.sourceCallables);
   const bindings = new Map();
   const bindingsFor = declaration => {
     if (bindings.has(declaration)) return bindings.get(declaration);
@@ -28,8 +32,8 @@ function fixture(text = sourceText) {
     bindings.set(declaration, result);
     return result;
   };
-  const input = { ast, storage, records: program.records, definitions: program.typeDefinitions,
-    lexicalFunctions: program.lexicalFunctions, bindingsFor };
+  const input = { ast, storage, nativeNodes: program.nativeNodes, records: program.records, definitions: program.typeDefinitions,
+    lexicalFunctions, bindingsFor };
   const outer = storage.nodes.find(node => ast.is.IsFunctionDeclaration(node));
   const closure = storage.nodes.find(node => ast.is.IsArrowFunction(node));
   assert.equal(outer !== undefined && closure !== undefined, true, "source declarations exist");
@@ -93,7 +97,7 @@ test("Future capture discovery preserves unresolved checked provenance instead o
 
 test("Future capture environments reject malformed carrier facts and foreign capture references", () => {
   const current = fixture();
-  const capture = current.program.lexicalFunctions.forDeclaration(current.closure).captures[0];
+  const capture = current.input.lexicalFunctions.forDeclaration(current.closure).captures[0];
   const malformed = createRustNativeFutureInputPlan({ ...current.input, records: createRustRecordFixture({
 runtimeCarrier: { get: (node) => {
     return (node === capture.declaration || node === capture.reference)
@@ -101,7 +105,7 @@ runtimeCarrier: { get: (node) => {
 } }}, current.input.records) });
   rejected(malformed.forDeclaration(current.closure), /valid finalized carrier/u);
   const other = fixture();
-  const foreignCapture = other.program.lexicalFunctions.forDeclaration(other.closure).captures[0];
+  const foreignCapture = other.input.lexicalFunctions.forDeclaration(other.closure).captures[0];
   const foreign = createRustNativeFutureInputPlan({ ...current.input, lexicalFunctions: {
     ...current.input.lexicalFunctions,
     forDeclaration(node) {
@@ -134,18 +138,29 @@ test("owned bodyless callable contracts retain environments without requiring an
     export function declared(value: int32): int32 { return value; }
   ` } });
   const ast = program.source.ast;
-  const storage = createSourceStorageQuery(createTargetSourceProgram(checked), program.sourceFiles);
+  const source = createTargetSourceProgram(checked);
+  const storage = createSourceStorageQuery(source, program.sourceFiles);
   const declarations = storage.nodes.filter(node => ast.body(node) === undefined &&
     (ast.is.IsFunctionDeclaration(node) || ast.is.IsMethodDeclaration(node) || ast.is.IsMethodSignatureDeclaration(node)));
   assert.equal(declarations.length, 7);
   for (const declaration of declarations) {
     const name = ast.text(ast.name(declaration));
-    const environment = program.callableValues.nativeStorage.futureEnvironmentFor(declaration);
+    let nativeDeclaration = declaration;
+    if (program.records.nativeParticipation.get(declaration) === "erased") {
+      const implementation = source.navigation.callableImplementation(declaration);
+      assert.equal(implementation.kind, "resolved", `${name}: an erased overload has its actual checked implementation`);
+      nativeDeclaration = implementation.implementation.declaration;
+      assert.equal(nativeDeclaration !== declaration && ast.body(nativeDeclaration) !== undefined, true,
+        `${name}: the native contract belongs to the concrete implementation, not its erased overload`);
+      assert.equal(program.records.nativeParticipation.get(nativeDeclaration) === "erased", false,
+        `${name}: the checked implementation is actually admitted`);
+    }
+    const environment = program.callableValues.nativeStorage.futureEnvironmentFor(nativeDeclaration);
     assert.equal(environment.kind, "resolved", `${name}: ${environment.reason ?? "owned declaration"}`);
     assert.equal(environment.captures.length, 0);
     assert.equal(environment.inputs.length, name === "future" ? 1 : 0, name);
     if (!ast.is.IsMethodSignatureDeclaration(declaration) && name !== "future") {
-      for (const parameter of ast.parameters(declaration)) {
+      for (const parameter of ast.parameters(nativeDeclaration)) {
         const abi = program.records.sourceParameterAbi.get(parameter);
         assert.equal(abi !== undefined, true, name);
         const physical = program.callableValues.nativeStorage.parameterFor(parameter);

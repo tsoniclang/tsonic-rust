@@ -1,7 +1,7 @@
 import { rustDeriveAttributes, rustListAttribute, rustWordAttribute } from "../../../target-ast/syntax/attributes.js";
-import { diagnosticInput, isUpperSnakeName, isValidRustIdentifier, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
+import { isUpperSnakeName, rustProjectTypeHasPublicImplementationAbi } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition, rustAuthoredVariantDeadCodeDisposition, rustGeneratedEnumDiscriminantDeadCodeDisposition } from "../../program/reachability-directives.js";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant } from "../../diagnostics.js";
 import { rustLintAttributes } from "../../../target-ast/normalization/lint-policy.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustItem } from "../../../target-ast/syntax/nodes.js";
@@ -10,60 +10,18 @@ import type { RustPlanContext } from "../../program/plan-context.js";
 
 export function planEnumDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input.program.source;
-  const enumName = context.input.program.names.nameForDeclaration(node) ?? "";
-  if (!isValidRustIdentifier(enumName)) {
-    context.diagnostics.push(unsupportedConstructDiagnostic(
-      diagnosticInput(context, node),
-      "rust.backend.enum",
-      "Enum names must be valid Rust identifiers.",
-    ));
-    return undefined;
-  }
-  const variants: { declaration: Node; name: string; discriminant?: string }[] = [];
-  const discriminants = new Map<number, string>();
-  let hasDuplicateDiscriminant = false;
-  for (const member of ast.members(node)) {
-    if (member === undefined) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, node),
-        "rust.backend.enum-member",
-        "Enum declaration contains an undefined member slot.",
-      ));
-      return undefined;
-    }
-    const memberName = context.input.program.names.nameForDeclaration(member) ?? "";
-    if (!isValidRustIdentifier(memberName)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.enum",
-        "Enum member names must be valid Rust identifiers.",
-      ));
-      return undefined;
-    }
-    const constant = context.input.program.enumMemberConstants.forMember(member);
-    const value = constant?.value;
-    if (typeof value !== "number" || !Number.isInteger(value)) {
-      context.diagnostics.push(missingFactDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.enum",
-        "Enum members require integer constants evaluated by TSTS.",
-      ));
-      return undefined;
-    }
-    const previousMember = discriminants.get(value);
-    if (previousMember !== undefined) {
-      hasDuplicateDiscriminant = true;
-    } else {
-      discriminants.set(value, memberName);
-    }
-    variants.push({ declaration: member, name: memberName, discriminant: String(value) });
-  }
+  const admitted = context.input.program.nativeDeclarations.get(node);
+  if (admitted?.kind !== "enum") return failRustPlannerInvariant(
+    "Enum emission requires its sealed native declaration admission.", node);
+  const enumName = admitted.name;
+  const variants = admitted.variants;
+  const integerType = admitted.integerWidth === 32 ? "i32" : "i64";
   const visibility = ast.hasModifierKind(node, "export") ||
       rustProjectTypeHasPublicImplementationAbi(context, enumName)
     ? "public" as const
     : "crate" as const;
   const deadCode = rustAuthoredDeadCodeDisposition(context, node);
-  if (hasDuplicateDiscriminant) {
+  if (admitted.representation === "constants") {
     const enumType = { kind: "named" as const, path: enumName };
     const discriminantDeadCode = rustGeneratedEnumDiscriminantDeadCodeDisposition(
       context,
@@ -78,7 +36,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
       generics: emptyRustGenerics,
       fields: [{
         name: "value",
-        type: { kind: "primitive", name: "i64" },
+        type: { kind: "primitive", name: integerType },
         visibility: "private",
         ...(discriminantDeadCode === undefined
           ? {}
@@ -109,7 +67,7 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
             path: "Self",
             fields: [{
               name: "value",
-              value: { kind: "int-literal" as const, text: variant.discriminant! },
+              value: { kind: "int-literal" as const, text: variant.discriminant },
             }],
           },
         };
@@ -122,7 +80,8 @@ export function planEnumDeclaration(node: Node, context: RustPlanContext): reado
     name: enumName,
     visibility,
     ...(deadCode === undefined ? {} : { deadCode }),
-    attrs: [...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"])],
+    attrs: [rustListAttribute("repr", [rustWordAttribute(integerType)]),
+      ...rustDeriveAttributes(["Clone", "Copy", "Debug", "PartialEq"])],
     variants: variants.map((variant) => {
       const variantDeadCode = rustAuthoredVariantDeadCodeDisposition(
         context,

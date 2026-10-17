@@ -1,8 +1,9 @@
 import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 import { rustValueCarrierBeforeContextualConversion } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustNativeCallableOperand, rustNativeCallablePhysicalSource } from "../../../dist/analysis/callables/native-conversions.js";
@@ -10,9 +11,19 @@ import { rustCallableConversionPhysical, rustCallablePhysicalSignature } from ".
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinReference } from "../../../dist/target-model/types/native-error-joins.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 
 function fixture(text) {
   const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: [], files: { "index.ts": text } });
+  return inspectFixture(program, requiredRecords);
+}
+
+function constructionFixture(text) {
+  const program = analyzeRustErrorEffects(text, { surfaces: [] });
+  return inspectFixture(program, program.requiredRecords);
+}
+
+function inspectFixture(program, requiredRecords) {
   const { ast } = program.source;
   const declarations = new Map();
   const visit = node => {
@@ -182,7 +193,12 @@ test("source-produced stored and returned adapters select the canonical physical
     ["returned", current.input.storage.returnFor(current.declaration("create"))],
   ]) {
     assert.equal(selected.kind, "selected", `${label}: ${selected.reason ?? "exact physical storage"}`);
-    assert.equal(rustTargetTypeRefEquals(selected.carrier, expected.carrier), true, label);
+    const destination = label === "returned"
+      ? current.program.records.sourceCallableReturn.get(current.declaration("create"))?.returnCarrier : fact.targetCarrier;
+    const retained = rustCallableConversionPhysical({ ...fact.conversion, target: destination }, source.signature,
+      fileName, current.program.typeDefinitions);
+    assert.equal(retained !== undefined, true, `${label}: exact native destination contract`);
+    assert.equal(rustTargetTypeRefEquals(selected.carrier, retained.carrier), true, label);
     assert.equal(selected.inputs.length, 0, "a concrete adapter is not a formal implementation");
   }
 });
@@ -205,6 +221,18 @@ function adaptation(current, name) {
   return { source, expected };
 }
 
+function returnedAdaptation(current, owner, adaptation) {
+  const destination = current.program.records.sourceCallableReturn.get(owner)?.returnCarrier;
+  const protocol = rustCallableProtocol(destination);
+  assert.equal(protocol?.lifetime !== undefined, true, "the actual retained return has a selected environment lifetime");
+  const result = rustCallableConversionPhysical({ ...adaptation.expected.logical, target: destination },
+    adaptation.source.signature, current.ast.getFileName(current.ast.getSourceFile(owner)), current.program.typeDefinitions);
+  assert.equal(result !== undefined, true, "the same physical conversion owner closes the actual retained destination");
+  assert.equal(rustTargetTypeRefEquals(result.error, adaptation.expected.error), true,
+    "retention preserves the exact native input error identity");
+  return result;
+}
+
 test("ordered source-produced adapters retain the preceding physical signature at every read", () => {
   const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
     export function create(): (first: int32, second: int32) => int32 {
@@ -223,7 +251,9 @@ test("ordered source-produced adapters retain the preceding physical signature a
     "second operand is the first adapter, never the original zero-argument producer");
   const returned = current.input.storage.returnFor(current.declaration("create"));
   assert.equal(returned.kind, "selected", returned.reason);
-  assert.equal(rustTargetTypeRefEquals(returned.carrier, two.expected.carrier), true);
+  assert.equal(rustTargetTypeRefEquals(returned.carrier,
+    returnedAdaptation(current, current.declaration("create"), two).carrier), true,
+    "the returned adapter preserves its actual destination lifetime and complete physical signature");
 });
 
 test("source-produced adapter chains preserve earlier checked numeric conversion errors", () => {
@@ -261,7 +291,8 @@ test("source-produced formal adapters retain their exact input dependency and as
   assert.equal(rustTargetTypeRefEquals(two.expected.error, one.source.signature.error), true);
   const returned = current.input.storage.returnFor(owner);
   assert.equal(returned.kind, "selected", returned.reason);
-  assert.equal(rustTargetTypeRefEquals(returned.carrier, two.expected.carrier), true);
+  assert.equal(rustTargetTypeRefEquals(returned.carrier, returnedAdaptation(current, owner, two).carrier), true,
+    "the returned formal adapter preserves its actual destination lifetime and complete physical signature");
   assert.equal(returned.inputs.length, 1);
   assert.equal(returned.inputs[0] === inputs[1], true, "physical adapter preserves only its actual formal dependency");
 });
@@ -278,6 +309,21 @@ test("returned adapters preserve exact invocation bindings through forwarded sou
       return fromRight;
     }
   `);
+  const adapted = current.program.records.runtimeCarrier.get(current.declaration("widened"))?.carrier;
+  const adaptedInput = current.initializer("widened");
+  const conversion = current.program.records.contextualValueConversion.get(adaptedInput);
+  assert.equal(conversion?.conversion.kind, "callable-adapter", "the required argument adapter is retained");
+  assert.equal(rustTargetTypeRefEquals(adapted, conversion.targetCarrier), true,
+    "binding storage publishes the selected exact destination, not its annotation's placeholder");
+  const returns = [];
+  const visit = node => {
+    if (current.ast.is.IsReturnStatement(node)) returns.push(Node_Expression(current.ast, node));
+    current.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(current.declaration("adapt"));
+  assert.equal(returns.length, 1, "one original returned adapter value");
+  assert.equal(current.program.records.contextualValueConversion.get(returns[0]) === undefined, true,
+    "an already adapted return does not acquire a lifetime-only adapter");
   const inputs = current.program.callableValues.native.inputsFor(current.declaration("forward"));
   for (const [index, name] of ["fromLeft", "fromRight"].entries()) {
     const selected = current.input.storage.valueFor(current.declaration(name));
@@ -290,4 +336,63 @@ test("returned adapters preserve exact invocation bindings through forwarded sou
     assert.equal(rustTargetTypeRefEquals(physical.error.owner, inputs[index].implementation), true,
       `${name}: error projection uses the activated caller input`);
   }
+});
+
+test("captured native inputs bind through their actual lexical invocation without rebinding the outer declaration", () => {
+  const current = constructionFixture(`import type { int32 } from "@tsonic/core/types.js";
+    export function outer(left: () => int32, right: () => int32): int32 {
+      function inner(): int32 { return right(); }
+      function unrelated(): int32 { return left(); }
+      const result = inner();
+      return result;
+    }
+  `);
+  const owner = current.declaration("outer");
+  const inner = current.declaration("inner");
+  const inputs = current.program.callableValues.native.inputsFor(owner);
+  const captured = current.program.callableValues.native.capturesFor(inner);
+  assert.equal(inputs.length, 2, "both equal-signature outer inputs retain exact physical identities");
+  assert.equal(captured.length, 1, "the actual inner body captures only right");
+  assert.equal(captured[0] === inputs[1], true, "captured correspondence is the exact original right formal");
+  const invocation = current.initializer("result");
+  const selected = current.input.storage.invocationInputFor(inputs[1], invocation, owner);
+  assert.equal(selected.kind, "selected", selected.reason ?? "the exact captured input is selected");
+  assert.equal(selected.carrier === inputs[1].implementation, true, "the outer native input is retained, not a new inner binder");
+  assert.equal(selected.inputs.length, 1, "one actual captured dependency");
+  assert.equal(selected.inputs[0] === inputs[1], true, "the physical input identity is unchanged");
+  const origins = current.input.storage.invocationOriginsFor(inputs[1], invocation, owner);
+  assert.equal(origins.kind, "resolved", origins.reason ?? "checked capture transport");
+  assert.equal(origins.subjects.length, 1, "one exact captured source origin");
+  assert.equal(origins.subjects[0] === inputs[1].subject, true, "the capture and source transport share one subject");
+  const wrong = current.input.storage.invocationInputFor(inputs[0], invocation, owner);
+  assert.equal(wrong.kind, "unresolved", "an unrelated equal-signature outer input is not a capture");
+  assert.equal(current.input.storage.invocationOriginsFor(inputs[0], invocation, owner).kind, "unresolved",
+    "origin lookup applies the same exact callee/capture admission");
+  assert.equal(current.input.storage.invocationInputFor(inputs[1], {}, owner).kind, "unresolved",
+    "foreign invocation identity is never inspected or guessed");
+});
+
+test("returned native adapters retain the actual borrowed result environment without a static substitution", () => {
+  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+    import type { Life, Ref } from "@tsonic/rust/types.js";
+    export function adapt<Region extends Life>(callback: () => Ref<int32, Region>): (unused: int32) => Ref<int32, Region> {
+      const adapted: (unused: int32) => Ref<int32, Region> = callback;
+      return adapted;
+    }
+  `);
+  const owner = current.declaration("adapt");
+  const selected = adaptation(current, "adapted");
+  const logical = current.program.records.sourceCallableReturn.get(owner)?.returnCarrier;
+  const lifetime = rustCallableProtocol(logical)?.lifetime;
+  assert.equal(lifetime !== undefined && lifetime.kind !== "placeholder" && lifetime.kind !== "static", true,
+    "the actual retained native result keeps its authored borrowed environment");
+  const returned = current.input.storage.returnFor(owner);
+  assert.equal(returned.kind, "selected", returned.reason ?? "exact retained native adapter");
+  const expected = returnedAdaptation(current, owner, selected);
+  assert.equal(rustTargetTypeRefEquals(returned.carrier, expected.carrier), true,
+    "native retention preserves the complete physical result, error and lifetime contract");
+  const inputs = current.program.callableValues.native.inputsFor(owner);
+  assert.equal(inputs.length, 1, "the exact borrowed callback input remains explicit");
+  assert.equal(returned.inputs.length, 1, "one actual retained native dependency");
+  assert.equal(returned.inputs[0] === inputs[0], true, "retention does not introduce a replacement input or adapter owner");
 });
