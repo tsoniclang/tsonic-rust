@@ -54,20 +54,30 @@ test("static retention distinguishes known owned storage, borrowed storage and a
     assert.equal(selected(carrier).kind, "unresolved", label);
 });
 
-test("function pointer lifetime variance matches the separate native HRTB and free-lifetime controls", () => {
+test("function pointer type outlives bounds retain every free lifetime and exclude inner HRTB binders", () => {
   const boundLifetime = { kind: "bound", binderIdentity: "signature", identity: "signature:call", name: "call" };
   const boundReference = borrowed(boundLifetime);
   const higherRanked = { kind: "function-pointer", args: [boundReference], result: boundReference,
     lifetimeBinder: { identity: "signature", parameters: [{ lifetime: boundLifetime, outlives: [] }] } };
   assert.equal(selected(higherRanked).kind, "supported", "HRTB binder is not captured storage");
   assert.equal(selected({ kind: "function-pointer", args: [borrowed(scopedLifetime)], result: unit }).kind,
-    "supported", "free input-only lifetime is contravariant");
+    "unsatisfied", "an explicit native function type retains its free input lifetime");
   assert.equal(selected({ kind: "function-pointer", args: [], result: borrowed(scopedLifetime) }).kind,
     "unsatisfied", "free output lifetime remains a native requirement");
   assert.equal(selected({ kind: "function-pointer", args: [borrowed(scopedLifetime)], result: borrowed(scopedLifetime) }).kind,
     "unsatisfied", "a free output is not made bound by input use");
   assert.equal(selected({ kind: "function-pointer", args: [], result: borrowed(staticLifetime) }).kind,
     "supported", "static output positive");
+  const callable = { kind: "function-pointer", args: [parameter], result: unit };
+  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: [] }] }), callable,
+    families, emptyRustTypeDefinitions, undefined).kind, "unsatisfied", "fn(T) still requires the actual T static bound");
+  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: ["static"] }] }), callable,
+    families, emptyRustTypeDefinitions, undefined).kind, "supported", "T static is sufficient for the exact fn(T) type");
+  const higherRankedGeneric = { ...higherRanked, args: [{ ...boundReference, referent: parameter }], result: unit };
+  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: [] }] }), higherRankedGeneric,
+    families, emptyRustTypeDefinitions, undefined).kind, "unsatisfied", "an inner lifetime binder does not bind free T");
+  assert.equal(rustFinalContractSupportsStatic(contract({ typeParameters: [{ ...parameter, requirements: ["static"] }] }), higherRankedGeneric,
+    families, emptyRustTypeDefinitions, undefined).kind, "supported", "the exact HRTB fn type retains the proven free T bound");
 });
 
 test("native trait-object static storage preserves free signature and principal lifetime obligations", () => {

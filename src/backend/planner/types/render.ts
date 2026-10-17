@@ -45,7 +45,7 @@ import { rustOptionalStorageTypeArguments } from "./type-projections.js";
 import { bindRustCallableInputLifetimes } from "../../../target-model/types/carriers/callable-input-lifetimes.js";
 import { rustCallableInputAbsenceWitness } from "../../../target-model/types/carriers/callable-input-witness.js";
 import {
-  rustBuiltInCarrierRenderPaths,
+  rustBuiltInCarrierDefinitions,
   rustCallableTargetId,
   rustCallableInputTargetId,
   rustFixedArrayCarrierValue,
@@ -166,7 +166,7 @@ export function rustTypeFromCarrier(
       const owner = rustProgramErrorOwner(carrier);
       return owner === undefined ? undefined : resolveSourceTypePath?.programErrorType?.(owner);
     }
-    const path = rustBuiltInCarrierRenderPaths[carrier.id];
+    const path = rustBuiltInCarrierDefinitions[carrier.id]?.renderPath;
     if (path === undefined) {
       return undefined;
     }
@@ -673,7 +673,7 @@ export function rustUnionTypePathInContext(carrier: TargetTypeRef, context: Rust
   const union = rustSourceUnionCarrierValue(carrier);
   const path = union !== undefined
     ? union.origin === "generated" ? rustStructuralTypePathInContext(carrier, context) : rustSourceTypePathInContext(union, context)
-    : carrier.kind === "target-named" && rustRuntimeUnionContract(carrier) !== undefined ? rustBuiltInCarrierRenderPaths[carrier.id] : undefined;
+    : carrier.kind === "target-named" && rustRuntimeUnionContract(carrier) !== undefined ? rustBuiltInCarrierDefinitions[carrier.id]?.renderPath : undefined;
   if (path !== undefined) registerAliasFromPath(context, path);
   return path;
 }

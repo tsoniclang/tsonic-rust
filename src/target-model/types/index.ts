@@ -261,8 +261,9 @@ export type {
 } from "./carriers/source-types.js";
 export {
   isRustBuiltInTargetCarrierId,
-  rustBuiltInCarrierRenderPaths,
+  rustBuiltInCarrierDefinitions,
 } from "./carriers/built-ins.js";
+export type { RustBuiltInCarrierDefinition } from "./carriers/built-ins.js";
 export {
   inferRustTargetGenericBindings,
   inferRustTargetTypeParameterBindings,
