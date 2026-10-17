@@ -16,14 +16,17 @@ import { rustSourceErrorTargetType } from "../../../../dist/target-model/types/c
 function classify(dependencies, errors, views = []) {
   const names = Object.keys(dependencies);
   const definitions = errors.map(name => ({ fileName: `/${name}/index.ts`, sourceName: `${name}Failure`, declaration: {} }));
+  const sourceFiles = names.map(name => ({ fileName: `/${name}/index.ts` }));
+  const nativeNodes = new Set(sourceFiles);
   const context = {
     sourcePackages: {
       rootPackageId: "root",
       packages: names.map(name => ({ id: name, componentId: name, sourceFiles: [`/${name}/index.ts`] })),
       components: names.map(name => ({ id: name, dependencies: dependencies[name] })),
     },
-    sourceFiles: names.map(name => ({ fileName: `/${name}/index.ts` })),
-    ast: { ...fakeAstReader(), kindName: () => "KindSourceFile" },
+    sourceFiles,
+    isNativeNode: node => nativeNodes.has(node),
+    ast: { ...fakeAstReader(sourceFiles), kindName: () => "KindSourceFile" },
     callableValues: { generic: { definitions: [], definitionFor: () => undefined,
       physical: { definitions: () => [], existingSelectionFor: () => undefined } } },
     errorStorageDemands: { nativeConstructors: [], retainedBoundaries: [], storageFor: () => ({ kind: "readonly" }) },
