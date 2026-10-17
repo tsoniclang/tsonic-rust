@@ -9,6 +9,7 @@ import type { RustNativeCapturePlan } from "../callables/native-captures.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } from "../../target-model/types/carriers/source-numeric.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
@@ -23,8 +24,7 @@ import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-
 import { rustClassConstructorContract } from "../../target-model/types/carriers/class-constructors.js";
 import { rustProgramErrorOwner } from "../../target-model/types/carriers/program-errors.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
-import { inferRustTargetGenericBindings, type RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
-import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
 import { rustGenericCallablePhysicalBindings } from "../callables/generic-bindings.js";
 import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -46,6 +46,7 @@ export interface RustStaticRequirementEvidence {
   readonly frameCallables: RustFrameCallablePlan | undefined;
   readonly nativeCaptures: RustNativeCapturePlan | undefined;
   readonly classValues: RustClassValuePlan | undefined;
+  readonly objectRepresentations: RustObjectRepresentationPlan | undefined;
   readonly structuralShapes: RustStructuralShapePlan | undefined;
   readonly projectTypes: RustProjectTypePolicy | undefined;
   readonly records: Pick<RustProgramRecords, "runtimeCarrier"> | undefined;
@@ -237,28 +238,21 @@ function classifyStaticCarrier(
       ...environment.captures.map(capture => visit(apply(capture.carrier, bindings), variance, bound)),
       ...environment.staticFields.map(field => visit(apply(field.carrier, bindings), variance, bound))]);
   };
-  const sourceObject = (carrier: TargetTypeRef, variance: Variance, bound: ReadonlySet<string>, alternatives: boolean): RustCarrierRequirementSelection => {
+  const sourceObject = (carrier: TargetTypeRef, variance: Variance, bound: ReadonlySet<string>, wrapper: boolean): RustCarrierRequirementSelection => {
     const project = evidence?.projectTypes;
     const source = rustSourceTypeCarrierValue(carrier);
     const definition = project?.definitionForCarrier(carrier);
     const layout = definition === undefined ? undefined : project?.objectLayoutForDefinition(definition);
     if (project === undefined || source === undefined || definition === undefined || layout === undefined || layout.indexSignatures.length !== 0)
       return unresolved("A source object requires its complete physical field and index-storage layout.");
-    if (alternatives && project.isPolymorphic(definition)) {
-      const concreteClasses = project.concreteClassesFor(definition);
-      if (concreteClasses.length === 0) return unresolved("A native polymorphic object requires its actual admitted storage alternatives.");
-      return every(concreteClasses.map(concrete => {
-        const open = project.openCarrier(concrete);
-        const relationship = project.relationship(open, definition);
-        const references = rustTargetGenericReferences(open);
-        const bindings = relationship.kind !== "related" ? undefined : inferRustTargetGenericBindings(relationship.targetType, carrier,
-          { typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
-            constIdentities: new Set(references.constIdentities) });
-        if (bindings === undefined || bindings.types.size !== references.typeIdentities.length ||
-          bindings.lifetimes.size !== references.lifetimeIdentities.length || bindings.consts.size !== references.constIdentities.length)
-          return unresolved("A native object alternative requires its exact closed instance arguments.");
-        return sourceObject(apply(open, bindings), variance, bound, false);
-      }));
+    if (wrapper && project.isPolymorphic(definition)) {
+      const representation = evidence?.objectRepresentations?.representationFor(definition);
+      const open = rustSourceTypeCarrierValue(project.openCarrier(definition));
+      const bindings = open === undefined ? undefined : rustGenericCallablePhysicalBindings(open.genericArguments, source.genericArguments);
+      if (representation?.kind !== "open-hierarchy" || representation.dispatchObjectLifetime === undefined || bindings === undefined)
+        return unresolved("A native polymorphic wrapper requires its selected dispatch-object lifetime and exact arguments.");
+      const selectedLifetime = bindings.lifetimes.get(rustLifetimeKey(representation.dispatchObjectLifetime)) ?? representation.dispatchObjectLifetime;
+      return every([lifetime(selectedLifetime, variance, bound), argumentsFor(source.genericArguments, "invariant", bound)]);
     }
     const bases = project.directSupertypes(carrier);
     if (bases === undefined) return unresolved("A native object requires its exact physical base layout.");
