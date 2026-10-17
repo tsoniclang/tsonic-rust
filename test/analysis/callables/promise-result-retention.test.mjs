@@ -131,6 +131,72 @@ async function run(): Promise<boolean> {
   const stored = keep([make(7), 3], Promise.resolve(undefined));
   return await stored === 10;
 }`],
+  ["changed-layout-structural-method", `
+function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+async function keep(api: { aaa: number; read(): number }, pending: Promise<void>): Promise<number> {
+  await pending; return api.aaa + api.read();
+}
+async function run(): Promise<boolean> {
+  const original = make(7); const copied = { aaa: 3, ...original };
+  const stored = keep(copied, Promise.resolve(undefined));
+  return await stored === 10;
+}`],
+  ["aliased-changed-layout-structural-method", `
+function make<Value>(value: Value): { read(): Value } { return { read(): Value { return value; } }; }
+async function keep(api: { aaa: number; read(): number }, pending: Promise<void>): Promise<number> {
+  await pending; return api.aaa + api.read();
+}
+async function run(): Promise<boolean> {
+  const original = make(7); const first = original; const alias = first;
+  const copied = { aaa: 3, ...alias };
+  const stored = keep(copied, Promise.resolve(undefined));
+  return await stored === 10;
+}`],
+  ["repeated-changed-layout-structural-method", `
+function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+async function keep(api: { aaa: number; bbb: number; read(): number }, pending: Promise<void>): Promise<number> {
+  await pending; return api.aaa + api.bbb + api.read();
+}
+async function run(): Promise<boolean> {
+  const original = make(7); const first = { aaa: 3, ...original }; const copied = { bbb: 5, ...first };
+  const stored = keep(copied, Promise.resolve(undefined));
+  return await stored === 15;
+}`],
+  ["multiple-changed-layout-structural-methods", `
+function makeRead(value: number): { read(): number } { return { read(): number { return value; } }; }
+function makeOther(value: number): { other(): number } { return { other(): number { return value; } }; }
+async function keep(api: { aaa: number; read(): number; other(): number }, pending: Promise<void>): Promise<number> {
+  await pending; return api.aaa + api.read() + api.other();
+}
+async function run(): Promise<boolean> {
+  const original = makeRead(7); const other = makeOther(11); const copied = { aaa: 3, ...original, ...other };
+  const stored = keep(copied, Promise.resolve(undefined));
+  return await stored === 21;
+}`],
+  ["nested-generic-changed-layout-structural-method", `
+function make<Value>(value: Value): { read(): Value } { return { read(): Value { return value; } }; }
+function copy<Actual>(value: Actual) { const original = make(value); const alias = original; return { aaa: 3, ...alias }; }
+async function keep(api: { inner: { aaa: number; read(): number } }, pending: Promise<void>): Promise<number> {
+  await pending; return api.inner.aaa + api.inner.read();
+}
+async function run(): Promise<boolean> {
+  const stored = keep({ inner: copy(7) }, Promise.resolve(undefined));
+  return await stored === 10;
+}`],
+  ["immediate-borrowed-changed-layout-structural-method", `
+import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load, ref } from "@tsonic/rust/lang.js";
+function make<Region extends Life>(value: Ref<int32, Region>): { read(): int32 } {
+  return { read(): int32 { return load(value); } };
+}
+async function keep(api: { aaa: number; read(): int32 }, pending: Promise<void>): Promise<int32> {
+  await pending; return api.read();
+}
+async function run(): Promise<boolean> {
+  const value = 7 as int32; const original = make(ref(value)); const copied = { aaa: 3, ...original };
+  return await keep(copied, Promise.resolve(undefined)) === 7;
+}`],
 ];
 
 for (const [name, source] of cases) {
@@ -237,6 +303,28 @@ const pendingRead = `async function read<Region extends Life>(value: Ref<int32, 
   await pending;
   return load(value);
 }`;
+
+test("changed-layout method transport cannot erase a real pending captured native lease", () => {
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `${borrowedHeader}
+function make<Region extends Life>(value: Ref<int32, Region>): { read(): int32 } {
+  return { read(): int32 { return load(value); } };
+}
+async function keep(api: { aaa: number; read(): int32 }, pending: Promise<void>): Promise<int32> {
+  await pending; return api.read();
+}
+async function escaped<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<void> {
+  const original = make(value); const copied = { aaa: 3, ...original };
+  keep(copied, pending);
+  const stored = keep(copied, pending);
+  await stored;
+}
+export const marker = 0;
+` } });
+  assertRejectedAsyncSource(compilation, [0, 1].flatMap(occurrence => [
+    { code: "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES", kind: "KindCallExpression", text: "keep(copied, pending)", occurrence },
+    { code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text: "keep(copied, pending)", occurrence },
+  ]));
+});
 
 for (const [name, source, calls] of [
   ["discarded", `${pendingRead}
