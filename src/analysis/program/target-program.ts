@@ -326,6 +326,7 @@ export function analyzeRustTargetProgram(
   const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
+    nativeStorage: context.callableValues.nativeStorage,
     capturesFor, invocationTransfersCapture: owner => {
       const selected = lexicalFunctions.forDeclaration(owner);
       return selected?.kind !== "resolved" || !selected.valueObserved && selected.singleInvocation;

@@ -40,6 +40,15 @@ test("ownership creates graphs only for the canonical required native body domai
       capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
       isOwnedOperationResult: () => false, limits: { maximumPoints: 8 } });
     assert.equal(selected.kind, required ? "rejected" : "resolved", "only a required body consumes its CFG budget");
+    if (selected.kind === "resolved") {
+      for (const [declaration, graph] of selected.flow.graphs) {
+        assert.equal(graph.declaration === declaration, true, "the original checked graph retains its exact declaration");
+        assert.equal(selected.flow.liveness.has(declaration), true, "the original graph's completed liveness is retained");
+        assert.equal(graph.points.every(point => point.source === undefined ||
+          graph.sourcePoints.get(point.source)?.includes(point.id) === true), true,
+          "the original source occurrence index retains every exact point");
+      }
+    }
     if (required) assert.equal(selected.diagnostics[0]?.code, "RUST_OWNERSHIP_FLOW_UNRESOLVED",
       "required native graph failures retain the exact owner diagnostic");
     assert.equal(storage.nodes.length > participation.nodes.length, !required,

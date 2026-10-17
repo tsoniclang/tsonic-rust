@@ -2,17 +2,16 @@ import { rustValueBlock } from "../../target-ast/syntax/value-block.js";
 import type { Node } from "@tsonic/tsts";
 import type { RustExpr, RustStmt } from "../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import type { RustBorrowedElementRead } from "../../../analysis/program/borrowed-element-reads.js";
+import type { RustBorrowedElementExpressionRead, RustBorrowedElementRead } from "../../../analysis/program/borrowed-element-reads.js";
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planExpression } from "./entry.js";
 import { planRustSharedReceiver } from "./typed-locations.js";
 import { rustStringTargetType } from "../../../target-model/types/index.js";
 import type { RustBorrowedElementLocal } from "../../../analysis/program/borrowed-element-locals.js";
-import { rustBorrowedStringAppend } from "../../../analysis/program/borrowed-element-purity.js";
 
 export function planRustBorrowedElementRead(
   node: Node,
-  read: RustBorrowedElementRead,
+  read: RustBorrowedElementExpressionRead,
   context: RustPlanContext,
   planRead: (node: Node, context: RustPlanContext) => RustExpr | undefined,
 ): RustExpr | undefined {
@@ -21,11 +20,10 @@ export function planRustBorrowedElementRead(
   const bindings = borrowedElementBindings(read, elementName, context);
   if (bindings === undefined) return undefined;
   const overrides = new Map(context.expressionOverrides ?? []);
-  const append = rustBorrowedStringAppend(node, context.input.program.source.ast, context.input.program.records);
   overrides.set(read.receiver, {
-    expression: append ? { kind: "reference", expr: { kind: "path", path: elementName } }
+    expression: read.valueForm === "shared-reference" ? { kind: "reference", expr: { kind: "path", path: elementName } }
       : { kind: "dereference", pointer: { kind: "path", path: elementName } },
-    carrier: rustStringTargetType(), valueForm: append ? "shared-reference" : "storage",
+    carrier: rustStringTargetType(), valueForm: read.valueForm,
   });
   const body = planRead(node, { ...context, expressionOverrides: overrides });
   return body === undefined ? undefined : rustValueBlock(bindings, body);

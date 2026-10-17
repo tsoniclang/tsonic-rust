@@ -21,6 +21,8 @@ export function read(values: string[]): number { return parseInt(${expression}, 
     assert.equal(call !== undefined, true);
     const selected = program.borrowedElementReads.forExpression(call);
     assert.equal(selected !== undefined, true);
+    assert.equal(selected.valueForm, "storage", "provider source input form is selected before publication");
+    assert.equal(Object.isFrozen(selected), true, "selected expression read is immutable");
     assert.equal(program.borrowedElementReads.forRead(selected.element) === selected, true);
     const operation = program.records.targetOperation.get(call);
     assert.equal(operation.abi.sourceArguments[0].carrier.kind, "reference");

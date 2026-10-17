@@ -1,6 +1,6 @@
 import type { Node } from "@tsonic/tsts";
 import { analyzeSourceLiveness, createSourceControlFlow, type SourceFlowLimits,
-  type SourceStorageQueries } from "@tsonic/target-api/analysis";
+  type SourceControlFlowGraph, type SourceFlowLivenessSelection, type SourceStorageQueries } from "@tsonic/target-api/analysis";
 import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand,
   type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
@@ -9,6 +9,8 @@ import type { RustClosureCaptureFact } from "../../target-model/records/operatio
 export interface RustOwnershipFlow {
   readonly movingReads: ReadonlySet<Node>;
   readonly captureTransfers: ReadonlyMap<Node, ReadonlySet<Node>>;
+  readonly graphs: ReadonlyMap<Node, SourceControlFlowGraph>;
+  readonly liveness: ReadonlyMap<Node, Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }>>;
 }
 
 export interface RustOwnershipFlowInput {
@@ -32,6 +34,8 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const { ast } = source;
   const movingReads = new Set<Node>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
+  const graphs = new Map<Node, SourceControlFlowGraph>();
+  const livenessByDeclaration = new Map<Node, Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }>>();
   for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
     const selected = createSourceControlFlow(source, declaration, { limits: input.limits });
@@ -43,6 +47,8 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     }] };
     if (selected.kind !== "resolved") throw new Error("Resolved ownership liveness requires its source graph.");
     const graph = selected.graph;
+    graphs.set(declaration, graph);
+    livenessByDeclaration.set(declaration, liveness);
     const awaitedReads = new Set<Node>();
     for (const point of graph.points) if (point.operation.kind === "read" && point.source !== undefined &&
       liveness.reachable.has(point.id) && sourceEnclosingCallable(point.source, ast) === declaration &&
@@ -88,7 +94,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
       if (receiver !== undefined && movingReads.has(receiver)) movingReads.add(node);
     }
   }
-  return { kind: "resolved", flow: Object.freeze({ movingReads, captureTransfers }) };
+  return { kind: "resolved", flow: Object.freeze({ movingReads, captureTransfers, graphs, liveness: livenessByDeclaration }) };
 }
 
 function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput, awaitedReads: ReadonlySet<Node>): boolean {

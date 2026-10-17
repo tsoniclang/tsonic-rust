@@ -57,6 +57,7 @@ test("indexed string append selects one immutable borrowed read for emission and
   assert.ok(element);
   const selected = program.borrowedElementReads.forExpression(append);
   assert.ok(selected);
+  assert.equal(selected.valueForm, "shared-reference", "append reference form is selected before publication");
   assert.equal(selected.element === element, true);
   assert.equal(program.borrowedElementReads.forRead(element) === selected, true);
   assert.ok(Object.isFrozen(selected));

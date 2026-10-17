@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { projectRustCompilerModule } from "../../../../dist/providers/native/projection/declarations.js";
 import { rustCompilerProviderProtocolVersion } from "../../../../dist/providers/native/model/model.js";
+import { selectRustCompilerResultLoans } from "../../../../dist/providers/native/model/normalization/functions.js";
 
 const dependency = { alias: "example", packageId: "example 1", packageName: "example", packageVersion: "1",
   crateName: "example", targetCrateName: "example", manifestPath: "/example/Cargo.toml",
@@ -11,10 +12,14 @@ const identity = name => ({ itemId: `example::${name}`, canonicalPath: ["example
 const scalar = { kind: "primitive", name: "u64" };
 
 function declaration(name) {
-  return { id: name, name, kind: "struct", canonicalPath: ["example", name], targetPath: ["example", name],
+  const exported = { id: name, name, kind: "struct", canonicalPath: ["example", name], targetPath: ["example", name],
     genericParameters: [], associatedConstants: [], unsupportedMembers: [], traits: { implementations: [] },
     fields: [{ id: `${name}::field`, name: "count", type: scalar }],
-    methods: [{ identity: identity(`${name}::visit`), name: "visit", receiver: { kind: "shared" },
+    methods: [{ identity: identity(`${name}::visit`), name: "visit", receiver: { kind: "shared",
+      lifetime: { kind: "elided", ownerIdentity: identity(`${name}::visit`).itemId, position: "parameter:0" },
+      type: { kind: "reference", mutable: false,
+        lifetime: { kind: "elided", ownerIdentity: identity(`${name}::visit`).itemId, position: "parameter:0" },
+        target: { kind: "self", owner: identity(name) } } },
       parameters: [{ name: "visitor", type: { kind: "generic", name: "F", identity: identity(`${name}::F`) } }],
       result: { kind: "unit" }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false, typeRequirements: [],
       genericParameters: [{ kind: "type", name: "F", identity: identity(`${name}::F`), outlives: [], maybeSized: false,
@@ -22,6 +27,8 @@ function declaration(name) {
           path: "core::ops::function::Fn", genericArguments: [{ kind: "type", type: { kind: "tuple", elements: [scalar] } }],
           associatedConstraints: [{ kind: "equality", identity: identity("Output"), name: "Output", genericArguments: [], type: scalar }] } }] }] }],
   };
+  for (const method of exported.methods) method.resultLoans = selectRustCompilerResultLoans(method);
+  return exported;
 }
 
 function project(exports, materialization) {

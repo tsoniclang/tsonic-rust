@@ -27,6 +27,7 @@ async function fixture() {
     definitions: emptyRustTypeDefinitions,
     genericRequirements: { supportsClone: () => true },
     genericCallables: { definitionFor: () => undefined },
+    nativeStorage: { subjectFor: () => { throw new Error("This fixture has no native capture demand."); } },
     capturesFor: () => undefined,
     invocationTransfersCapture: () => false,
   };

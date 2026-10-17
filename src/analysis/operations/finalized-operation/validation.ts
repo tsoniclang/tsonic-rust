@@ -2,6 +2,8 @@ import { emptyRustTypeDefinitions } from "../../../target-model/types/source-uni
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 import { carrierAfterMode, finalizedConversionIsValid, isRustFinalizedArrayInput, isRustFinalizedConstantInput, isRustFinalizedDispatchContextInput, isRustFinalizedSliceInput, isRustFinalizedTaggedArrayInput, rustFinalizedTargetInputMayMutateSource } from "./conversions.js";
 import { closedMetadataEquals, isClosedMetadata } from "../../../target-model/metadata/closed-data.js";
+import { isRustNativeResultLoanContract } from "../../../target-model/operations/result-loans.js";
+import { rustFinalizedSourceInputs } from "./conversions.js";
 import { createInputFactory, finalizeTargetInputs } from "./inputs.js";
 import { rustRestSequenceForm } from "../../../target-model/operations/rest-assembly.js";
 import { isRustFallibleErrorBoundary, isRustOperationErrorBoundary } from "../../../target-model/operations/error-boundary.js";
@@ -30,6 +32,7 @@ export function validateRustFinalizedOperationAbi(
     return false;
   }
   const abi = candidate;
+  if (!nativeResultLoansMatchInputs(abi)) return false;
   if (abi.target.form === "receiver-method" && abi.target.emptyTestMethod !== undefined && (
     abi.result.kind !== "sync" || abi.sourceReceiver.kind !== "receiver" ||
     !rustLengthEmptinessContractIsValid({ target: abi.target, operationKind: abi.operationKind,
@@ -348,14 +351,46 @@ function isOperationResult(value: unknown): value is RustFinalizedOperationResul
     return false;
   }
   if (value.kind === "sync") {
-    return hasExactKeys(value, ["kind", "rawCarrier", "conversion", "carrier"]) &&
+    return hasExactKeys(value, ["kind", "rawCarrier", "conversion", "carrier",
+      ...(Object.prototype.hasOwnProperty.call(value, "resultLoans") ? ["resultLoans"] : [])]) &&
+      (!Object.prototype.hasOwnProperty.call(value, "resultLoans") || isNativeResultLoans(value.resultLoans)) &&
       isRustTargetTypeRef(value.rawCarrier) && isFinalizedConversion(value.conversion) &&
       isRustTargetTypeRef(value.carrier);
   }
   return value.kind === "async" && hasExactKeys(value, [
     "kind", "futureCarrier", "awaitedRawCarrier", "awaitedConversion", "awaitedCarrier",
-  ]) && isRustTargetTypeRef(value.futureCarrier) && isRustTargetTypeRef(value.awaitedRawCarrier) &&
+    ...(Object.prototype.hasOwnProperty.call(value, "resultLoans") ? ["resultLoans"] : []),
+  ]) && (!Object.prototype.hasOwnProperty.call(value, "resultLoans") || isNativeResultLoans(value.resultLoans)) &&
+    isRustTargetTypeRef(value.futureCarrier) && isRustTargetTypeRef(value.awaitedRawCarrier) &&
     isFinalizedConversion(value.awaitedConversion) && isRustTargetTypeRef(value.awaitedCarrier);
+}
+
+function isNativeResultLoans(value: unknown): value is NonNullable<RustFinalizedOperationResult["resultLoans"]> {
+  return isRecord(value) && hasExactKeys(value, ["contract", "loans"]) &&
+    isRustNativeResultLoanContract(value.contract) && Array.isArray(value.loans) &&
+    value.loans.every(loan => isRecord(loan) && hasExactKeys(loan, ["loan", "origins"]) &&
+      isRecord(loan.loan) && Array.isArray(loan.origins) && loan.origins.every(origin =>
+        isRecord(origin) && hasExactKeys(origin, ["origin", "input"]) && isRecord(origin.origin) && isSourceInput(origin.input)));
+}
+
+function nativeResultLoansMatchInputs(abi: RustFinalizedOperationAbi): boolean {
+  const selected = abi.result.resultLoans;
+  if (selected === undefined) return true;
+  if (selected.loans.length !== selected.contract.loans.length) return false;
+  const inputs = rustFinalizedSourceInputs(abi);
+  return selected.loans.every((selectedLoan, index) => {
+    const loan = selected.contract.loans[index];
+    if (loan !== selectedLoan.loan) return false;
+    const expected = loan.origins.flatMap(origin => inputs.filter(input => input.source.kind === origin.input.kind &&
+      (input.source.kind === "receiver" || origin.input.kind === "argument" &&
+        input.source.sourceIndex === origin.input.sourceIndex)).map(input => ({ origin, input })));
+    return expected.length === selectedLoan.origins.length &&
+      loan.origins.every(origin => expected.some(selected => selected.origin === origin)) &&
+      selectedLoan.origins.every((selected, index) => selected.origin === expected[index]?.origin &&
+        selected.input === expected[index]?.input && (selected.origin.kind !== "borrow" ||
+          (selected.origin.mutable ? selected.input.mode === "mut-ref"
+            : selected.input.mode === "ref" || selected.input.mode === "mut-ref")));
+  });
 }
 
 function isEffects(value: unknown): value is RustFinalizedOperationAbi["effects"] {
