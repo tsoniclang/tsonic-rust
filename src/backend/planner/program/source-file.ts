@@ -50,6 +50,8 @@ import {
   isValidRustIdentifier,
   rustSourceItemIsPubliclyReachable,
   rustRuntimeAliasUseItems,
+  requireRustEmissionContext,
+  rustContextForEmission,
 } from "./plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "./reachability-directives.js";
 import type { RustPlanContext } from "./plan-context.js";
@@ -128,6 +130,7 @@ export function planRustSourceFile(
   diagnoseRustSafetyApplications(sourceFile, input, diagnostics);
   const usedAliases = new Set<string>();
   const baseContext: RustPlanContext = {
+    emissionContext: undefined,
     input,
     sourceFile,
     sourcePackageComponentId,
@@ -264,8 +267,9 @@ function planModuleItems(
   }
   const errorBoundary = region.boundary;
   const fallible = errorBoundary !== undefined;
+  const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
   const initializationContext: RustPlanContext = {
-    ...context,
+    ...(emissionContext === undefined ? context : rustContextForEmission(context, emissionContext)),
     syntheticNames,
     controlFlow: { nextLoopId: 0 },
     functionReturnType: { kind: "unit" },
@@ -639,6 +643,7 @@ function planTopLevelVariableStatement(
         binding.name,
         binding.value === undefined && visibility === "public",
         context,
+        requireRustEmissionContext(context, binding.callableDeclaration, "native-body", binding.callableDeclaration),
       );
       if (item === undefined) {
         return undefined;

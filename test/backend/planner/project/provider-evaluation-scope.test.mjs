@@ -32,6 +32,9 @@ export function observed(source: string, fail: boolean): boolean {
   program.sourceFiles.forEach(visit);
   assert.equal(operations.length, 1);
   const { node, fact } = operations[0];
+  const emissionContext = program.physicalEmissionContexts.operands.find(operand => operand.origin.kind === "call-input" &&
+    operand.origin.operationNode === node && operand.origin.operation === fact)?.context;
+  assert.equal(emissionContext !== undefined, true, "the actual selected operation retains its original body context");
   const receiver = Node_Expression(ast, Node_Expression(ast, node));
   const selected = program.records.sourceParameterAbi.get(receiver);
   assert.equal(selected.mode, "ref");
@@ -41,7 +44,7 @@ sourceParameterAbi: { get: (subject) => {
     return subject === receiver ? parameter : program.records.sourceParameterAbi.get(subject);
 } }}, program.records);
     return planRustProviderEvaluationScope({ input: { program: { ...program, records } },
-      sourceFile: ast.getSourceFile(node), diagnostics: [] }, fact, node, receiver, ast.arguments(node),
+      emissionContext, sourceFile: ast.getSourceFile(node), diagnostics: [] }, fact, node, receiver, ast.arguments(node),
     () => ({ kind: "path", path: "snapshot" }), () => undefined);
   };
   assert.equal(plan(selected).kind, "none");
@@ -77,6 +80,9 @@ export function observed(): number { return target(first(), second()); }
   program.sourceFiles.forEach(visit);
   assert.equal(node !== undefined, true, "checked call supplies the original occurrence identities");
   const argumentsList = ast.arguments(node);
+  const owner = program.physicalEmissionContexts.contexts.find(context => context.role === "native-body" &&
+    ast.name(context.declaration) !== undefined && ast.text(ast.name(context.declaration)) === "observed");
+  assert.equal(owner !== undefined, true, "the synthetic scheduling control forwards the actual checked body context");
   const number = { kind: "source-primitive", name: "float64" };
   for (const [label, carrier, expression, expectedDiscard] of [
     ["unit", { kind: "tuple", elements: [] }, { kind: "call", path: "fixture::unit", args: [] }, "unit"],
@@ -93,7 +99,8 @@ export function observed(): number { return target(first(), second()); }
     assert.equal(occurrence !== undefined, true, `${label}: exact original source slots are admitted before rendering`);
     const physicalEmissionContexts = Object.freeze({ ...program.physicalEmissionContexts,
       sourceFor: (subject, operation) => subject === node && operation === fact ? occurrence : undefined });
-    const context = { input: { program: { ...program, physicalEmissionContexts } }, sourceFile: ast.getSourceFile(node), diagnostics: [],
+    const context = { input: { program: { ...program, physicalEmissionContexts } }, emissionContext: owner,
+      sourceFile: ast.getSourceFile(node), diagnostics: [],
       expressionOverrides: new Map([[argumentsList[0], { expression, carrier, valueForm: "value" }],
         [argumentsList[1], { expression: { kind: "call", path: "fixture::value", args: [] }, carrier: number, valueForm: "value" }]]) };
     const selected = planRustProviderEvaluationScope(context, fact, node, undefined, argumentsList, planExpression, () => undefined);

@@ -10,6 +10,8 @@ import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callable
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustPhysicalEmissionContexts } from "../../../dist/analysis/program/physical-emission-contexts.js";
 import { analyzeRustInitializationErrors } from "../../../dist/analysis/errors/initialization.js";
+import { requireRustEmissionContext, rustContextForEmission } from "../../../dist/backend/planner/program/plan-context.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const genericSource = `
 type Identity = <Value>(value: Value) => Value;
@@ -56,6 +58,32 @@ import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
 import type { NativePointer, int32 } from "@tsonic/core/types.js";
 export function readNative(pointer: NativePointer<int32>): int32 {
   return unsafecontext(loadnativeptr(pointer));
+}
+`;
+
+const finiteEmissionSource = `
+import type { int32 } from "@tsonic/core/types.js";
+class Base {
+  text: string = "ready";
+  constructor(value: string = "ready") { this.text = value; }
+  identity<Value>(value: Value): Value { return value; }
+  get present(): boolean { return this.text.includes("ready"); }
+  set present(value: boolean) { this.text = value ? "ready" : "empty"; }
+}
+class Derived extends Base {
+  constructor(value: string = "ready") { super(value); }
+  identity<Other>(value: Other): Other { return value; }
+}
+function openCall<Value>(receiver: Base, value: Value): Value { return receiver.identity<Value>(value); }
+function relay<Other>(receiver: Base, value: Other): Other { return openCall<Other>(receiver, value); }
+function apply<Value>(value: Value, callback: (value: Value) => Value): Value { return callback(value); }
+export function nativeInput(value: number): number { return apply(value, current => current); }
+export function numberCall(receiver: Base, value: int32): int32 { return relay<int32>(receiver, value); }
+export function stringCall(receiver: Base, value: string): string { return relay<string>(receiver, value); }
+export function create(): boolean {
+  const value = new Derived();
+  value.present = true;
+  return value.present;
 }
 `;
 
@@ -567,6 +595,62 @@ process.stdout.write("R14_INSTRUMENTED_PHASE_PROOF " + JSON.stringify(compiled.r
 });
 
 for (const surfaces of [[], ["js"]]) {
+  test(`finite specialized and concrete body contexts preserve original selecting identities (${surfaces[0] ?? "native"})`, () => {
+    const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
+      files: { "index.ts": finiteEmissionSource } }).result;
+    assert.equal(compiled.diagnostics.length, 0, compiled.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+    const program = compiled.program;
+    const prepared = program.physicalEmissionContexts;
+    const counts = new Map();
+    for (const context of prepared.contexts) {
+      counts.set(context.role, (counts.get(context.role) ?? 0) + 1);
+      assert.equal(context.role === context.use.role, true, "finite role retains the original shared use role");
+      assert.equal(prepared.contextForOwner(context.use.subject, context.role) === context, true,
+        "the original selecting owner reads the same context and use");
+      assert.equal(prepared.contextForOwner({ ...context.use.subject }, context.role) === undefined, true,
+        "a copied owner never recovers a selected native context");
+      assert.equal(prepared.contextForOwner({}, context.role) === undefined, true, "foreign owners stay absent");
+      const metadata = { input: { program }, emissionContext: undefined };
+      const original = requireRustEmissionContext(metadata, context.use.subject, context.role, context.declaration);
+      const rendering = rustContextForEmission(metadata, original);
+      assert.equal(rendering.emissionContext === context && rendering.emissionContext.use === context.use, true,
+        "renderer transport preserves the exact original use");
+      assert.equal(rendering.typeParameterSubstitutions === context.bindings.types &&
+        rendering.lifetimeSubstitutions === context.bindings.lifetimes, true,
+      "renderer transport forwards the same immutable maps, not another binder");
+      assert.equal(typeof context.bindings.types.set === "undefined" && typeof context.bindings.lifetimes.set === "undefined" &&
+        typeof context.bindings.consts.set === "undefined", true, "no mutable binding builder is exposed");
+    }
+    for (const role of ["native-body", "specialized-body", "project-body", "constructor", "constructor-layer"])
+      assert.equal((counts.get(role) ?? 0) > 0, true, role + ": actual emitted route is nonempty");
+    for (const body of program.projectMethodDispatch.bodies) {
+      const context = prepared.contextForOwner(body, "project-body");
+      assert.equal(context !== undefined && context.declaration === body.declaration, true,
+        "every selected concrete native body has complete pre-seal coverage");
+      assert.equal(program.projectMethodDispatch.bodyFor(body.concrete, body.declaration, body.contractVariant) === body, true,
+        "concrete body reader retains the original selected row");
+      assert.equal(program.projectMethodDispatch.bodyFor({ ...body.concrete }, body.declaration, body.contractVariant) === undefined, true,
+        "a copied concrete definition never selects a body");
+      if (body.contractVariant !== undefined) assert.equal(
+        program.projectMethodDispatch.bodyFor(body.concrete, body.declaration, { ...body.contractVariant }) === undefined, true,
+      "a copied contract variant never selects by equal arguments");
+      for (const [identity, value] of body.bindings.types)
+        assert.equal(rustTargetTypeRefEquals(context.bindings.types.get(identity), value), true,
+          identity + ": selected concrete binding survives unchanged");
+    }
+    let specialized = 0;
+    for (const producer of program.callableValues.nativeProducers.producers)
+      for (const variant of program.sourceCallableSpecializations.variantsForCallable(producer.declaration)) {
+        const context = prepared.contextForOwner(variant, "specialized-body");
+        assert.equal(context !== undefined && context.use.subject === variant, true, "the actual finite source variant owns its body context");
+        for (const [index, identity] of variant.sourceTypeParameterIdentities.entries())
+          assert.equal(rustTargetTypeRefEquals(context.bindings.types.get(identity), variant.targetTypeArguments[index]), true,
+            identity + ": actual finite replacement, not an identity binding or another variant");
+        specialized++;
+      }
+    assert.equal(specialized > 1, true, "both real native finite replacements are exercised");
+    assert.equal(compiled.artifacts.some(artifact => artifact.path.endsWith(".rs")), true, "ordinary uninstrumented planning emits source");
+  });
   test(`actual helper, body, member and native-input contexts share one immutable binding (${surfaces[0] ?? "native"})`, () => {
     const program = actual(genericSource, surfaces);
     const prepared = program.physicalEmissionContexts;
@@ -742,6 +826,8 @@ export function ordinary(value: number): number { const stored = value; return s
     for (const context of prepared.contexts) {
       assert.equal(prepared.contextFor(context.use) === context, true, "exact canonical context key");
       assert.equal(prepared.contextFor({ ...context.use }) === undefined, true, "copied context key is foreign");
+      assert.equal(prepared.contextForOwner(context.use.subject, context.role) === context, true, "same original selecting owner and finite role");
+      assert.equal(prepared.contextForOwner({ ...context.use.subject }, context.role) === undefined, true, "copied original owner is foreign");
     }
     for (const operand of prepared.operands) {
       assert.equal(prepared.operandFor(operand.use) === operand, true, "exact canonical operand key");
@@ -776,9 +862,23 @@ function verifyRequiredMissingOperand(program, observations) {
   const original = observations.preparations.find(preparation => preparation.requests.some(request => request.use === operand.context.use));
   assert.equal(original !== undefined, true, "the operand retains its actual complete preparation input");
   const owner = original.requests.find(request => request.use === operand.context.use);
+  const duplicate = prepareRustEmissionContextRequests(original.input, [owner, { ...owner,
+    use: targetUseSiteRef(owner.use.subject, owner.role, owner.use.enclosingContract + ":duplicate") }]);
+  assert.equal(duplicate.kind, "rejected", "duplicate original owner/role coverage is rejected before sealing");
+  assert.equal(duplicate.diagnostics.some(issue => issue.message ===
+    "One original emitted owner and role requires exactly one selected physical context."), true,
+  "equal-looking native context keys do not hide duplicate selecting ownership");
+  const missing = prepareRustPhysicalEmissionContexts({ ...original.input,
+    nativeProducers: { ...original.input.nativeProducers,
+      producers: original.input.nativeProducers.producers.filter(producer => producer.declaration !== owner.declaration) } });
+  assert.equal(missing.kind, "rejected", "missing required source body coverage is rejected before publication");
+  assert.equal(missing.diagnostics.some(issue => issue.code === "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED" &&
+    issue.message === "An emitted callable demand requires its original selected body context before publication."), true,
+  "a required actual body never falls back to metadata or an enclosing context");
   const result = prepareRustEmissionContextRequests({ ...original.input, sourceOccurrences: [],
     nativeStorage: { ...original.input.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
-  [{ use: targetUseSiteRef(operand.node, "missing-control", "actual-native-owner"), declaration: operand.context.declaration,
+  [{ use: targetUseSiteRef(operand.node, "native-body", "actual-native-owner"), role: "native-body", specialization: owner.specialization,
+    declaration: operand.context.declaration,
     bindings: operand.context.bindings, returnDestination: operand.context.returnDestination, error: operand.context.error,
     source: owner.source,
     demands: [Object.freeze({ kind: "value", subject: operand.node, owner: operand.context.declaration,

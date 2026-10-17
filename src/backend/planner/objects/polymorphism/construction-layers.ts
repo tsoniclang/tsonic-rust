@@ -6,11 +6,11 @@ import type { RustConstructionBody } from "../../declarations/classes/constructi
 import { planExpression, planRustSelectedSourceCallArguments } from "../../expressions/index.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
-import { diagnosticInput, type RustPlanContext } from "../../program/plan-context.js";
+import { diagnosticInput, requireRustEmissionContext, rustContextForEmission, type RustPlanContext } from "../../program/plan-context.js";
 import { planStatementSequence } from "../../statements/index.js";
 import { planRustExternalProjectInitialization } from "./external-construction.js";
 import { planRustImplicitConstructorParameters } from "./construction-parameters.js";
-import { projectTypeSubstitutions, projectLifetimeSubstitutions, type ProjectClassStateLayer } from "./model.js";
+import type { ProjectClassStateLayer } from "./model.js";
 
 export function planRustConstructionLayers(
   plan: RustProjectConstructionPlan,
@@ -26,27 +26,19 @@ export function planRustConstructionLayers(
     const layer = plan.layers[index];
     const storage = layers[index];
     if (layer === undefined || storage?.definition !== layer.definition) return undefined;
-    const selectedContext: RustPlanContext = { ...context, sourceFile: layer.definition.sourceFile,
-      typeParameterSubstitutions: new Map([...context.typeParameterSubstitutions ?? [],
-        ...projectTypeSubstitutions(layer.definition, storage.carrier)]),
-      lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],
-        ...projectLifetimeSubstitutions(layer.definition, storage.carrier)]),
-    };
+    const selectedContext = rustContextForEmission({ ...context, sourceFile: layer.definition.sourceFile },
+      requireRustEmissionContext(context, layer, "constructor-layer", layer.constructor ?? layer.definition.declaration));
     const label = !plan.layerHasEarlyReturn(layer.definition) ? undefined
       : { id: controlFlow.nextLoopId++, label: allocateRustSyntheticName(syntheticNames, "constructor_layer") };
-    const layerContext = construction.contextForLayer(selectedContext, label);
+    const layerContext = construction.contextForLayer(selectedContext, layer, label);
     const prelude = planRustCallableParameterPrelude(parameterPlan, layerContext, planExpression);
     if (prelude === undefined) return undefined;
     const statements: RustStmt[] = [...prelude];
     if (index > 0) {
       const base = plan.layers[index - 1]!;
       const baseStorage = layers[index - 1]!;
-      const baseContext: RustPlanContext = { ...context,
-        typeParameterSubstitutions: new Map([...context.typeParameterSubstitutions ?? [],
-          ...projectTypeSubstitutions(base.definition, baseStorage.carrier)]),
-        lifetimeSubstitutions: new Map([...context.lifetimeSubstitutions ?? [],
-          ...projectLifetimeSubstitutions(base.definition, baseStorage.carrier)]),
-      };
+      const baseContext = rustContextForEmission(context, requireRustEmissionContext(context, base, "constructor-layer",
+        base.constructor ?? base.definition.declaration));
       const baseParameters = base.constructor === undefined
         ? planRustImplicitConstructorParameters(base.signature, baseStorage.carrier, baseContext)
         : planRustCallableParameters(base.constructor, baseContext, syntheticNames);

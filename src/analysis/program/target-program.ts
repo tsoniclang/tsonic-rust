@@ -366,7 +366,10 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
+  const sourceCallableSpecializations = context.sourceCallableSpecializations.seal();
+  const projectMethodDispatch = context.projectMethodDispatch.seal();
   const callableValues = context.callableValues.seal({
+    sourceCallableSpecializations, projectMethodDispatch, lexicalFunctions,
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
     errorRegions: completedErrorRegions, initialization: initializationErrors.value,
     constructions: context.projectTypes.definitions.flatMap(definition => {
@@ -406,11 +409,11 @@ export function analyzeRustTargetProgram(
     projectTypes,
     errorTransport: errorTransport.value,
     objectRepresentations,
-    projectMethodDispatch: context.projectMethodDispatch.seal(),
+    projectMethodDispatch,
     projectConstructions,
     projectMethodProperties: context.projectMethodProperties.seal(),
     projectFieldDispatch: context.projectFieldDispatch.seal(),
-    sourceCallableSpecializations: context.sourceCallableSpecializations.seal(),
+    sourceCallableSpecializations,
     callableValues: callableValues.value,
     callableOwnership: context.callableOwnership.seal(),
     sourceLifetimes: context.sourceLifetimes,
