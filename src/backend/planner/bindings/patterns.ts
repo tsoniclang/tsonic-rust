@@ -10,7 +10,7 @@ import {
 } from "@tsonic/target-api/source";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 
-import type { RustBindingProjectionFact } from "../../../target-model/records/value-projections.js";
+import type { RustBindingProjectionFact, RustBindingValueProjectionFact } from "../../../target-model/records/value-projections.js";
 import {
   isRustCopyCarrier,
   isRustJsArrayCarrier,
@@ -87,6 +87,7 @@ export function planRustBindingPattern(
       ));
       return undefined;
     }
+    if (!("bindingCarrier" in fact)) continue;
     const projected = planRustBindingProjection(source, fact, element, context);
     const normalized = projected === undefined
       ? undefined
@@ -171,7 +172,7 @@ export function planRustBindingPattern(
 
 export function planRustBindingProjection(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -246,7 +247,7 @@ export function planRustBindingProjection(
 
 function planObjectRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -293,7 +294,7 @@ function planObjectRest(
 
 function planTupleRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -324,7 +325,7 @@ function planTupleRest(
 
 function planArrayRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -364,7 +365,7 @@ function planArrayRest(
 
 function planVecRest(
   source: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {
@@ -397,7 +398,7 @@ function planVecRest(
 
 export function normalizeRustBindingValue(
   value: RustExpr,
-  fact: RustBindingProjectionFact,
+  fact: RustBindingValueProjectionFact,
   element: Node,
   initializer: Node | undefined,
   context: RustPlanContext,
@@ -423,7 +424,7 @@ export function normalizeRustBindingValue(
 
 function ownedProjection(
   value: RustExpr,
-  carrier: RustBindingProjectionFact["projectedCarrier"],
+  carrier: RustBindingValueProjectionFact["projectedCarrier"],
   node: Node,
   context: RustPlanContext,
 ): RustExpr | undefined {

@@ -116,6 +116,13 @@ function classifyModuleInitialization(
             "Top-level variable declaration has no finalized Rust module-binding fact.",
           );
         }
+        const name = input.ast.name(declaration);
+        const nameKind = name === undefined ? undefined : input.ast.kindName(name);
+        const pattern = nameKind === "KindObjectBindingPattern" || nameKind === "KindArrayBindingPattern";
+        if (pattern !== (binding.storage === "module-pattern")) {
+          return unresolved(declaration,
+            "Top-level binding pattern requires its finalized ordered root and leaf module-binding evidence.");
+        }
         if (binding.storage === "native-callable" && binding.value !== undefined) {
           const storage = input.records.moduleCallableStorage.get(declaration);
           if (storage === undefined) return unresolved(declaration,

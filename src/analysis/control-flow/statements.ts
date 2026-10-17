@@ -195,6 +195,7 @@ function recordVariableDeclarationListFacts(
       const name = Node_Name(walk.context.ast, declaration);
       const nameKind = name === undefined ? "" : walk.context.ast.kindName(name);
       if (name !== undefined && (nameKind === KindArrayBindingPattern || nameKind === KindObjectBindingPattern) &&
+        (!moduleLevel || walk.context.records.moduleBinding.get(declaration)?.storage !== "module-pattern") &&
         !recordBindingPatternFacts(walk, name, effective)) {
         appendRustDiagnostic(
           walk,

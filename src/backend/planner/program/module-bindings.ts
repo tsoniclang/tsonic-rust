@@ -206,7 +206,7 @@ function planModuleBindingPattern(
   for (const step of binding.steps) {
     const source = sources.get(step.source);
     const projection = context.input.program.records.bindingProjection.get(step.declaration);
-    if (source === undefined || projection === undefined) return failRustPlannerInvariant(
+    if (source === undefined || projection === undefined || !("bindingCarrier" in projection)) return failRustPlannerInvariant(
       "Module binding pattern has no sealed ordered projection source.", step.declaration);
     const projected = planRustBindingProjection(source, projection, step.declaration, context);
     const normalized = projected === undefined ? undefined :

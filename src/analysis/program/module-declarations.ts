@@ -2,6 +2,7 @@ import type { Node, SourceFile } from "@tsonic/tsts";
 import {
   KindVariableDeclaration,
   KindVariableStatement,
+  Node_Initializer,
   Node_Type,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
@@ -31,6 +32,7 @@ function recordDeclaration(walk: RustFactWalk, declaration: Node): void {
   const declarationKind = ast.variableDeclarationKind(declaration);
   if (declarationKind !== "const" && declarationKind !== "let" && declarationKind !== "var") return;
   const carrier = resolveTypeNodeCarrier(walk, Node_Type(ast, declaration));
-  if (carrier === undefined || setCarrierFact(walk, declaration, carrier) === undefined) return;
+  if (carrier === undefined || Node_Initializer(ast, declaration) !== undefined ||
+    setCarrierFact(walk, declaration, carrier) === undefined) return;
   records.moduleBindings.value(walk, declaration, declarationKind, carrier);
 }

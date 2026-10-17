@@ -54,7 +54,7 @@ export function createRustModuleBindingProducer(
         for (const step of binding.steps) {
           if (step.kind !== "binding") continue;
           const projection = walk.context.records.bindingProjection.get(step.declaration);
-          if (projection === undefined) return;
+          if (projection === undefined || !("bindingCarrier" in projection)) return;
           selections.push({ declaration: step.declaration, binding: Object.freeze({
             declarationKind: kind, storage: "module-cell", initialization: "value", valueCarrier: projection.bindingCarrier,
           }) });

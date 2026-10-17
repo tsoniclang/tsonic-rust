@@ -21,7 +21,7 @@ export function selectRustCopiedMethods(
   const visit = (node: Node): void => {
     if (!walk.context.isNativeNode(node)) return;
     const binding = walk.context.records.bindingProjection.get(node);
-    if (binding?.projection.kind === "object-rest") {
+    if (binding !== undefined && "bindingCarrier" in binding && binding.projection.kind === "object-rest") {
       const shape = rustStructuralObjectCarrierValue(binding.sourceCarrier);
       for (const field of binding.projection.fields) {
         if (shape?.fields[field.sourceStorageIndex]?.method === true) {

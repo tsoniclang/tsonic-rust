@@ -74,3 +74,40 @@ test("changed or inherited module pattern requests cannot publish partial transa
   assert.equal(child.moduleBinding.get(second) === undefined, true, "a conflicting root cannot leak a fresh leaf");
   assert.equal(parent.moduleBinding.get(second) === undefined, true, "parent remains immutable");
 });
+
+test("array omissions retain checked identity without manufacturing a projected value", () => {
+  const parent = createRustProgramRecordBuilder();
+  const required = [];
+  const subject = {};
+  const source = { kind: "tuple", elements: [integer] };
+  parent.bindingProjections.omitted(required, subject, source);
+  const selected = parent.bindingProjection.get(subject);
+  assert.equal(selected?.projection.kind, "omitted", "one existing projection family owns the omission");
+  assert.equal(selected.sourceCarrier === source, true, "the original aggregate carrier is retained");
+  for (const field of ["projectedCarrier", "storageCarrier", "bindingCarrier", "normalization"]) {
+    assert.equal(field in selected, false, `${field}: no runtime value exists for a hole`);
+  }
+  assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.projection), true, "sealed immutable no-value evidence");
+  const invalidRoot = {};
+  parent.moduleBindings.value(patternRequest(parent, invalidRoot, [subject]), invalidRoot, "let", integer);
+  assert.equal(parent.moduleBinding.get(invalidRoot) === undefined, true, "an omission cannot stand in for a runtime leaf projection");
+  assert.equal(parent.moduleBinding.get(subject) === undefined, true, "no runtime module leaf is fabricated");
+  assert.equal(required.some(entry => entry.family === "bindingProjection" && entry.subject === subject), true,
+    "the exact original omitted element is a required record subject");
+  assert.throws(() => parent.bindingProjections.omitted(required, subject, source), /Duplicate Rust semantic plan/u);
+  const sealed = parent.seal(required);
+  const child = createRustProgramRecordBuilder(undefined, sealed);
+  child.bindingProjections.omitted([], subject, { ...source, elements: [...source.elements] });
+  assert.equal(child.bindingProjection.get(subject) === selected, true, "inherited omission identity remains canonical");
+  for (const change of [
+    builder => builder.bindingProjections.omitted([], subject, { kind: "tuple", elements: [wider] }),
+    builder => builder.bindingProjections.resolve([], subject, source, integer, { kind: "tuple-element", index: 0 }),
+  ]) {
+    const conflicting = createRustProgramRecordBuilder(undefined, sealed);
+    assert.throws(() => change(conflicting), /Conflicting Rust semantic plan/u);
+    assert.equal(conflicting.bindingProjection.get(subject) === selected, true, "conflicting value/evidence cannot replace a hole");
+  }
+  assert.equal(child.bindingProjection.get({}) === undefined, true, "a lookalike subject does not inherit an omission");
+  child.seal([]);
+  assert.throws(() => child.bindingProjections.omitted([], {}, source), /after analysis is sealed/u);
+});
