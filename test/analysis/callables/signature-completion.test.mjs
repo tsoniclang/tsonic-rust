@@ -13,7 +13,7 @@ import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/a
 import { resolveRustCallableEnvironment } from "../../../dist/policy/types/resolution/callable-environments.js";
 import { resolveReferencedDeclarationType } from "../../../dist/policy/types/resolution/tuples.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
   const { context, walk } = analyzeRustOperations(`
@@ -387,11 +387,12 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
     ["arrow", "const owner = (value: boolean): boolean => value; export function step(): typeof owner { return owner; }"],
     ["parenthesized alias", "function owner(value: boolean): boolean { return value; } const alias = (owner); export function step(): typeof owner { return (alias); }"],
   ]) test(`${surface} ${name} callable return retains the function value rather than its result annotation`, () => {
-    const { context } = analyzeRustOperations(source, { surfaces });
-    const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
-      context.ast.text(context.ast.name(node)) === "step");
+    const { program } = analyzeRust({ files: { "index.ts": source }, surfaces });
+    const ast = program.source.ast;
+    const declaration = program.sourceFiles.flatMap(file => ast.statements(file)).find(node =>
+      ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "step");
     assert.equal(declaration !== undefined, true, name + ": actual returned function owner");
-    const returned = context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
+    const returned = program.records.sourceCallableReturn.get(declaration)?.returnCarrier;
     assert.equal(returned !== undefined, true, name + ": actual completed retained result");
     const signature = rustCallableProtocol(returned);
     assert.equal(signature !== undefined, true, name + ": return is a callable, not bool");
@@ -450,10 +451,10 @@ for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
   });
 
   test(`${surface} a wrong callable signature remains a checked source rejection`, () => {
-    const { result } = compileRust({ surfaces, files: { "index.ts":
-      "function owner(value: number): number { return value; } export function step(): (value: boolean) => boolean { return owner; }" } });
-    assert.equal(result.diagnostics.some(issue => issue.code === "TS2322"), true, "the incompatible native callable is not admitted");
-    assert.equal(result.artifacts.length, 0, "no program is emitted for the wrong signature");
+    assert.throws(() => compileRust({ surfaces, files: { "index.ts":
+      "function owner(value: number): number { return value; } export function step(): (value: boolean) => boolean { return owner; }" } }),
+    /error TS2322: Type '\(value: number\) => number' is not assignable to type '\(value: boolean\) => boolean'/u,
+    "the source checker rejects the exact incompatible signature before target analysis or emission");
   });
 }
 

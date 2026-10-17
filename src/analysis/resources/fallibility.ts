@@ -397,7 +397,7 @@ function collectFallibilityFacts(
           budget.expansion(carrierWork, replacementWork);
         }
         const bindings = source.nativeErrors.length === 0 ? undefined : selectSourceErrors.bindingsFor(
-          invocation, declaration, source.nativeErrors.map(error => error.errorType));
+          invocation, declaration, source.nativeErrors.map(effect => ({ kind: "source-effect" as const, effect })));
         const edge = selectSourceErrors.edgeFor(declaration, kind, source, bindings);
         if (edge === undefined) {
           appendRustDiagnostic(walk, "RUST_NATIVE_ERROR_REBINDING_MISSING",

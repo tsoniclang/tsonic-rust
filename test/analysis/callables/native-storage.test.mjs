@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
@@ -421,7 +422,10 @@ test("physical selection rejects ambiguous mutation alternatives and seals concr
   let context;
   const { result } = compileRust({ surfaces: [], files: { "index.ts": source }, compileTarget(request) {
     context = analyzeRustCheckedContext(request);
-    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+    assert.equal(context.source === request.input.source, true, "the private selector uses the identical checked source identities");
+    const analysis = analyzeRustTargetProgram(request);
+    assert.equal(analysis.kind, "rejected", "the actual target rejects ambiguous storage before program publication");
+    return analysis;
   } });
   assert.equal(context !== undefined, true, "the actual private storage construction owns this checked source");
   assert.deepEqual(result.diagnostics.map(issue => ({ code: issue.code, message: issue.message })), Array.from({ length: 2 }, () => ({
