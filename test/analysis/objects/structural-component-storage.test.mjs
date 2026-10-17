@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { createRustStructuralShapePlan, createRustStructuralShapePlanRegistry } from "../../../dist/analysis/objects/structural-shape-plan.js";
 import { rustStructuralObjectTargetType } from "../../../dist/target-model/types/index.js";
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
@@ -7,6 +10,7 @@ import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/targ
 import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 
 test("structural storage unifies exact component contracts without erasing other differences", () => {
   const primitive = name => ({ kind: "source-primitive", name });
@@ -255,5 +259,258 @@ test("physical method witnesses reject mismatched complete signatures before pub
       `${label}: failed admission publishes no partially replaced field`);
     assert.equal(builder.field(shape, 0).methodConstructions === undefined, true,
       `${label}: failed admission publishes no construction evidence`);
+  }
+});
+
+function checkedStructuralMethods(source, label) {
+  let context;
+  let sourceTypes;
+  compileRust({ surfaces: [], files: { "index.ts": source }, compileTarget(request) {
+    context = analyzeRustCheckedContext(request, originalContext => {
+      const originalValues = originalContext.callableValues;
+      const callableValues = Object.freeze(Object.defineProperties({}, {
+        ...Object.getOwnPropertyDescriptors(originalValues),
+        initialize: { value(input) {
+          sourceTypes = input.sourceTypes;
+          return originalValues.initialize(input);
+        }, enumerable: true },
+      }));
+      return Object.defineProperties({}, {
+        ...Object.getOwnPropertyDescriptors(originalContext),
+        callableValues: { value: callableValues, enumerable: true },
+      });
+    });
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+  } });
+  assert.equal(context !== undefined && sourceTypes !== undefined, true, `${label}: checked physical construction is reached`);
+  assert.equal(context.diagnostics.length, 0, `${label}: ${context.diagnostics.map(issue =>
+    `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048)}`);
+  const { ast, records, sourceStorage: storage, structuralShapes } = context;
+  const selected = context.callableValues.selected;
+  assert.equal(selected.issues.length, 0, `${label}: ${selected.issues.map(issue => issue.message).join("\n").slice(0, 2048)}`);
+  const nodes = new Set(storage.nodes);
+  const literals = storage.nodes.flatMap(node => {
+    const operation = records.targetOperation.get(node);
+    return operation?.kind === "record-literal" && operation.storage === "structural-object" ? [{ node, operation }] : [];
+  });
+  const originals = literals.flatMap(({ node, operation }) => operation.contributions.flatMap(contribution =>
+    contribution.kind === "structural-method" ? [{ object: node, property: contribution.property,
+      expression: contribution.expression, storageIndex: contribution.targetStorageIndex }] : []));
+  assert.equal(originals.length > 0, true, `${label}: actual original method constructions are present`);
+  const witnessedFields = [];
+  const transports = [];
+  for (const { node, operation } of literals) {
+    for (const described of operation.fields.filter(field => field.method === true)) {
+      const field = structuralShapes.field(operation.resultCarrier, described.storageIndex);
+      assert.equal(field?.method === true && field.methodConstructions?.length > 0, true,
+        `${label}: every method field has completed construction evidence`);
+      const carrier = field.presence === "optional" ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier;
+      const protocol = rustCallableProtocol(carrier);
+      assert.equal(protocol !== undefined, true, `${label}: the final method storage has a native protocol`);
+      const logical = rustCallableProtocol(field.presence === "optional" ? rustOptionElementCarrier(field.carrier) : field.carrier);
+      assert.equal(logical !== undefined && rustTargetTypeRefEquals(protocol.result, logical.result), true,
+        `${label}: every actual generic result matches its own checked logical field contract`);
+      assert.equal(Object.isFrozen(field) && Object.isFrozen(field.methodConstructions), true,
+        `${label}: the final method field and its construction vector are frozen`);
+      assert.equal(structuralShapes.field(operation.resultCarrier, described.storageIndex) === field, true,
+        `${label}: completed field lookup has stable identity`);
+      for (const witness of field.methodConstructions) {
+        const original = originals.find(original => original.object === witness.object && original.property === witness.property &&
+          original.expression === witness.expression);
+        assert.equal(original !== undefined, true, `${label}: witnesses preserve all three original contribution identities`);
+        assert.equal(nodes.has(witness.object) && nodes.has(witness.property) && nodes.has(witness.expression), true,
+          `${label}: foreign source identities never become construction evidence`);
+        const element = storage.source.semantics.forNode(witness.property).operations.objectLiteralElement(witness.property);
+        assert.equal(element?.element === witness.property && element.objectLiteral === witness.object &&
+          ast.parent(witness.property) === witness.object, true,
+          `${label}: the checked original property owns its exact method expression`);
+        assert.equal(Object.isFrozen(witness), true, `${label}: every original construction witness is frozen`);
+        assert.equal(witness.storageIndex, described.storageIndex, `${label}: construction carries the actual destination index`);
+        assert.equal(rustTargetTypeRefEquals(witness.destinationCarrier, carrier), true,
+          `${label}: construction and field have the same complete final destination`);
+        const physical = rustCallablePhysicalSignature(witness.physicalCarrier);
+        assert.equal(physical !== undefined && physical.parameters.length === protocol.parameters.length &&
+          physical.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, protocol.parameters[index])) &&
+          rustTargetTypeRefEquals(physical.result, protocol.result) && rustTargetTypeRefEquals(physical.error, protocol.error), true,
+        `${label}: original native input, result and error match the exact final destination`);
+      }
+      witnessedFields.push({ node, operation, described, field, protocol });
+    }
+    for (const contribution of operation.contributions.filter(contribution => contribution.kind === "spread")) {
+      const methods = contribution.fields.filter(field => field.method === true);
+      if (methods.length === 0) continue;
+      const source = storage.subjectFor(contribution.expression);
+      assert.equal(source.kind, "resolved", `${label}: spread uses its actual checked storage subject`);
+      const typed = storage.typeFor(source.subject);
+      assert.equal(typed.kind, "resolved", `${label}: spread has its exact checked source type`);
+      const type = storage.source.semantics.forFile(typed.sourceFile).types.nonNullableType(typed.type);
+      const sourceShape = sourceTypes.structuralObjectForType(type, contribution.sourceValueCarrier);
+      assert.equal(sourceShape !== undefined, true, `${label}: source shape follows the canonical checked type and actual carrier`);
+      const owner = sourceEnclosingCallable(node, ast);
+      const bindings = owner === undefined ? storage.emptyBindings : selected.native.bindingsFor(owner);
+      assert.equal(bindings !== undefined, true, `${label}: the actual lexical activation is retained`);
+      for (const transport of methods) {
+        const sourceField = sourceShape.fields[transport.sourceStorageIndex];
+        assert.equal(sourceField?.method === true && sourceField.storageIndex === transport.sourceStorageIndex &&
+          rustTargetTypeRefEquals(sourceField.resultCarrier, transport.carrier), true,
+        `${label}: source field and explicit spread correspondence agree exactly`);
+        const targetField = structuralShapes.field(operation.resultCarrier, transport.targetStorageIndex);
+        assert.equal(targetField?.method === true, true, `${label}: transport selects the actual destination method field`);
+        const producerNodes = new Set();
+        for (const declaration of sourceField.declarations) {
+          const projected = storage.subject(source.subject.node, source.subject.kind,
+            [...source.subject.projection, { kind: "method-value", declaration }]);
+          assert.equal(projected.kind, "resolved", `${label}: the canonical source method declaration is projected`);
+          const producers = storage.storageProducersFor(projected.subject, bindings);
+          assert.equal(producers.kind, "complete", `${label}: all actual method producers are admitted`);
+          assert.equal(producers.producers.length > 0, true, `${label}: the actual method producer set is nonempty`);
+          for (const producer of producers.producers) {
+            producerNodes.add(producer.subject.node);
+            const creationOwner = sourceEnclosingCallable(ast.parent(producer.subject.node), ast);
+            const actual = selected.nativeStorage.genericBindingsFor(creationOwner ?? producer.subject.node, producer.bindings);
+            assert.equal(actual.kind, "resolved", `${label}: each producer has its own required actual creation bindings`);
+            const witnesses = targetField.methodConstructions.filter(witness => witness.expression === producer.subject.node);
+            assert.equal(witnesses.length > 0, true, `${label}: every producer keeps its original expression at the destination`);
+            for (const witness of witnesses) {
+              assert.equal(witness.object !== node && witness.expression !== contribution.expression &&
+                witness.property !== contribution.expression, true, `${label}: no target spread or alias becomes a fabricated closure`);
+              assert.equal(witness.storageIndex, transport.targetStorageIndex,
+                `${label}: transport uses targetStorageIndex rather than the source index`);
+            }
+          }
+        }
+        transports.push({ node, targetCarrier: operation.resultCarrier, contribution, sourceField, transport, targetField, producerNodes });
+      }
+    }
+  }
+  return { context, originals, witnessedFields, transports };
+}
+
+const methodStorageSources = [
+  ["direct", `function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+export function run(): number { const original = make(7); return original.read(); }`],
+  ["prefix index remap", `function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+export function run(): number { const original = make(7); const copied = { aaa: 3, ...original }; return copied.aaa + copied.read(); }`],
+  ["different layout without index remap", `function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+export function run(): number { const original = make(7); const copied = { ...original, zzz: 3 }; return copied.zzz + copied.read(); }`],
+  ["immutable aliases", `function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+export function run(): number { const original = make(7); const first = original; const alias = first; const copied = { aaa: 3, ...alias }; return copied.aaa + copied.read(); }`],
+  ["repeated spreads", `function make(value: number): { read(): number } { return { read(): number { return value; } }; }
+export function run(): number { const original = make(7); const first = { aaa: 3, ...original }; const copied = { bbb: 5, ...first }; return copied.aaa + copied.bbb + copied.read(); }`],
+  ["multiple sources", `function makeRead(value: number): { read(): number } { return { read(): number { return value; } }; }
+function makeOther(value: number): { other(): number } { return { other(): number { return value; } }; }
+export function run(): number { const left = makeRead(7); const right = makeOther(11); const copied = { aaa: 3, ...left, ...right }; return copied.aaa + copied.read() + copied.other(); }`],
+  ["two generic bindings", `function make<Value>(value: Value): { read(): Value } { return { read(): Value { return value; } }; }
+export function run(): boolean { const numeric = { aaa: 3, ...make(7) }; const textual = { aaa: 3, ...make("value") }; return numeric.read() === 7 && textual.read() === "value"; }`],
+  ["nested generic bindings", `function make<Value>(value: Value): { read(): Value } { return { read(): Value { return value; } }; }
+function copy<Actual>(value: Actual) { const original = make(value); const alias = original; return { aaa: 3, ...alias }; }
+export function run(): number { const nested = { inner: copy(7) }; return nested.inner.aaa + nested.inner.read(); }`],
+  ["all same ABI alternatives", `function makeLeft(value: number): { read(): number } { return { read(): number { return value; } }; }
+function makeRight(value: number): { read(): number } { return { read(): number { return value; } }; }
+export function choose(flag: boolean): number { const original = flag ? makeLeft(7) : makeRight(11); const copied = { aaa: 3, ...original }; return copied.aaa + copied.read(); }
+export function run(): boolean { return choose(true) === 10 && choose(false) === 14; }`],
+];
+
+for (const [label, source] of methodStorageSources) {
+  test(`physical method construction transport preserves every checked source for ${label}`, () => {
+    const { originals, transports } = checkedStructuralMethods(source, label);
+    assert.equal(originals.length > 0, true, `${label}: original source provenance remains present`);
+    if (label === "direct") assert.equal(transports.length, 0, "direct: control has no spread transport");
+    else assert.equal(transports.length > 0, true, `${label}: actual checked spreads are exercised`);
+    if (label === "prefix index remap") assert.equal(transports.some(({ transport }) =>
+      transport.sourceStorageIndex !== transport.targetStorageIndex), true,
+    "prefix index remap: the actual source and destination field indices differ");
+    if (label === "different layout without index remap") assert.equal(transports.some(({ contribution, transport, targetCarrier }) =>
+      transport.sourceStorageIndex === transport.targetStorageIndex &&
+      !rustTargetTypeRefEquals(contribution.sourceValueCarrier, targetCarrier)), true,
+    "different layout without index remap: transport is not conditional on an index offset");
+    if (label === "repeated spreads") assert.equal(transports.length >= 2, true,
+      "repeated spreads: every intermediate contribution retains original construction evidence");
+    if (label === "multiple sources") {
+      const expressions = new Set(transports.flatMap(transport => [...transport.producerNodes]));
+      assert.equal(expressions.size, 2, "multiple sources: neither method is replaced by the first producer");
+    }
+    if (label === "two generic bindings") {
+      assert.equal(transports.length, 2, "two generic bindings: both actual destination instances are present");
+      const fields = transports.map(({ targetField }) => {
+        const carrier = targetField.presence === "optional" ? rustOptionElementCarrier(targetField.methodStorageCarrier)
+          : targetField.methodStorageCarrier;
+        return rustCallableProtocol(carrier);
+      });
+      assert.equal(rustTargetTypeRefEquals(fields[0].result, fields[1].result), false,
+        "two generic bindings: the same source declaration retains distinct actual native result types");
+      assert.equal(transports[0].targetField.methodConstructions.some(left =>
+        transports[1].targetField.methodConstructions.some(right => left.expression === right.expression)), true,
+      "two generic bindings: the comparison exercises one source method, not unrelated source declarations");
+    }
+    if (label === "all same ABI alternatives") assert.equal(transports.some(({ producerNodes }) => producerNodes.size === 2), true,
+      "all same ABI alternatives: the complete actual producer set is retained despite equal signatures");
+  });
+}
+
+test("transported physical method witnesses preserve actual borrowed captures without static promotion", () => {
+  const label = "borrowed remapped method";
+  const { transports } = checkedStructuralMethods(`import type { int32 } from "@tsonic/core/types.js";
+import type { Life, Ref } from "@tsonic/rust/types.js";
+import { load } from "@tsonic/rust/lang.js";
+function make<Region extends Life>(value: Ref<int32, Region>): { read(): int32 } { return { read(): int32 { return load(value); } }; }
+export function read<Region extends Life>(value: Ref<int32, Region>): int32 {
+  const original = make(value); const copied = { aaa: 3, ...original }; return copied.read();
+}`, label);
+  assert.equal(transports.length, 1, `${label}: the actual borrowed source has one remapped destination`);
+  const field = transports[0].targetField;
+  const protocol = rustCallableProtocol(field.methodStorageCarrier);
+  assert.equal(protocol.lifetime !== undefined && protocol.lifetime.kind !== "static", true,
+    `${label}: the native destination preserves the actual nonstatic captured environment`);
+});
+
+test("transported method construction evidence never matches a foreign or missing source identity", () => {
+  const source = methodStorageSources.find(([label]) => label === "prefix index remap")[1];
+  const local = checkedStructuralMethods(source, "local source");
+  const foreign = checkedStructuralMethods(source, "foreign source");
+  const field = local.transports[0].targetField;
+  for (const original of foreign.originals) {
+    assert.equal(field.methodConstructions.some(witness => witness.expression === original.expression ||
+      witness.object === original.object || witness.property === original.property), false,
+    "foreign source: equal source text and native carrier do not manufacture checked construction identity");
+    assert.equal(local.context.callableValues.selected.nativeStorage.genericBindingsFor(original.expression,
+      local.context.sourceStorage.emptyBindings).kind, "unresolved",
+    "foreign source: an unowned source declaration cannot supply native construction bindings");
+  }
+  const missing = Object.freeze({});
+  assert.equal(field.methodConstructions.some(witness => witness.expression === missing || witness.object === missing ||
+    witness.property === missing), false, "missing source: no default construction fills absent checked evidence");
+});
+
+test("a remapped physical method rejects its old source index without partially publishing destination fields", () => {
+  const integer = { kind: "source-primitive", name: "int32" };
+  const lifetime = { kind: "static" };
+  const infallible = { kind: "target-named", id: "rust.core.Infallible" };
+  const shape = rustStructuralObjectTargetType("/destination.ts", [
+    { sourceName: "aaa", type: integer, presence: "required", readonly: false },
+    { sourceName: "read", type: rustCallableTargetType([], integer, lifetime), presence: "required", readonly: false, method: true },
+  ]);
+  const builder = createRustStructuralShapePlanRegistry();
+  builder.initialize([{ carrier: shape }], [], () => "source", []);
+  builder.initializeUnions([]);
+  const definition = builder.definitions[0];
+  const originalFields = definition.fields;
+  const protocol = rustCallableProtocol(originalFields[1].methodStorageCarrier);
+  const destinationCarrier = rustCallableTargetType(protocol.parameters, protocol.result, protocol.lifetime, infallible);
+  const physicalCarrier = rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [
+    { kind: "lifetime", lifetime },
+    { kind: "type", type: { kind: "tuple", elements: protocol.parameters } },
+    { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
+      { kind: "type", type: protocol.result }, { kind: "type", type: infallible },
+    ]) },
+  ]);
+  const constructions = [{ object: {}, property: {}, expression: {}, storageIndex: 0, physicalCarrier, destinationCarrier }];
+  assert.throws(() => builder.finalizeMethodStorage(new Map([[definition, new Map([[1,
+    { carrier: destinationCarrier, constructions },
+  ]])]])), /Structural method construction requires its exact destination field/u);
+  for (const [index, field] of originalFields.entries()) {
+    assert.equal(builder.field(shape, index) === field, true, `remapped index: destination field ${index} is unchanged`);
+    assert.equal(builder.field(shape, index).methodConstructions === undefined, true,
+      `remapped index: invalid source index publishes no partial construction for field ${index}`);
   }
 });
