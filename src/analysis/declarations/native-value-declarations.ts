@@ -169,6 +169,7 @@ export function publishRustNativeInterfaceDeclaration(
   prepared: RustPreparedNativeInterfaceDeclaration,
   input: RustNativeValueDeclarationInput,
 ): RustNativeDeclarationAdmission {
+  const { index: preparedIndex, ...declarationFields } = prepared;
   const declaration = prepared.definition.declaration;
   const nativeTypes = nativeTypeInputForDeclaration(declaration, input);
   const fields: RustNativeInterfaceField[] = [];
@@ -178,13 +179,13 @@ export function publishRustNativeInterfaceDeclaration(
     fields.push(Object.freeze({ ...field, nativeCarrier: native.carrier }));
   }
   let index: RustNativeInterfaceDeclaration["index"];
-  if (prepared.index !== undefined) {
-    const key = selectRustNativeTypeCarrier(prepared.index.keyCarrier, nativeTypes, "general");
-    const value = selectRustNativeTypeCarrier(prepared.index.valueCarrier, nativeTypes, "general");
-    if (key.kind === "rejected") return reject(input.ast.parameters(prepared.index.declaration)[0] ?? prepared.index.declaration,
+  if (preparedIndex !== undefined) {
+    const key = selectRustNativeTypeCarrier(preparedIndex.keyCarrier, nativeTypes, "general");
+    const value = selectRustNativeTypeCarrier(preparedIndex.valueCarrier, nativeTypes, "general");
+    if (key.kind === "rejected") return reject(input.ast.parameters(preparedIndex.declaration)[0] ?? preparedIndex.declaration,
       "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", key.reason);
-    if (value.kind === "rejected") return reject(prepared.index.declaration, "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", value.reason);
-    index = Object.freeze({ ...prepared.index, nativeKeyCarrier: key.carrier, nativeValueCarrier: value.carrier });
+    if (value.kind === "rejected") return reject(preparedIndex.declaration, "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", value.reason);
+    index = Object.freeze({ ...preparedIndex, nativeKeyCarrier: key.carrier, nativeValueCarrier: value.carrier });
   }
   const native = selectRustNativeTypeCarrier(input.projectTypes.openCarrier(prepared.definition), nativeTypes, "general");
   if (native.kind === "rejected") return reject(declaration,
@@ -195,7 +196,7 @@ export function publishRustNativeInterfaceDeclaration(
   const state = selectRustNativeTypeCarrier(stateCarrier, nativeTypes, "general");
   if (state.kind === "rejected") return reject(declaration,
     "RUST_INTERFACE_NATIVE_TYPE_NOT_REPRESENTABLE", state.reason);
-  return { kind: "accepted", form: Object.freeze({ ...prepared,
+  return { kind: "accepted", form: Object.freeze({ ...declarationFields,
     nativeCarrier: native.carrier, nativeStateCarrier: state.carrier,
     fields: Object.freeze(fields), ...(index === undefined ? {} : { index }) }) };
 }

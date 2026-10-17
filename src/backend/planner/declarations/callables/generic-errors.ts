@@ -39,7 +39,7 @@ export function planRustGenericCallableErrors(
       const source = errors[channel];
       if (source === undefined) continue;
       const errorType = rustTypeFromSelectedNativeCarrierInContext(source.nativeType, context);
-      rendered[channel] = { identity: source.identity, variant: source.variant, errorType };
+      rendered[channel] = { identity: source.identity, errorType };
     }
     selections.set(member, Object.freeze({ effects: errors.effects, ...rendered }));
   }

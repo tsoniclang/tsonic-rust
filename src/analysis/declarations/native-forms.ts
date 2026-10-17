@@ -163,7 +163,7 @@ export function prepareRustNativeDeclarationForms(input: RustNativeObjectDeclara
   }
   const get = (declaration: Node) => forms.get(declaration);
   let completed = false;
-  return { kind: "resolved", forms: Object.freeze({ get, complete(finalInput: Parameters<RustPreparedNativeDeclarationForms["complete"]>[0]) {
+  return { kind: "resolved", forms: Object.freeze({ get, complete(finalInput: Parameters<RustPreparedNativeDeclarationForms["complete"]>[0]): AnalyzeRustNativeDeclarationFormsResult {
     if (completed) failTargetAnalysisInvariant("tsonic-rust", "Native declaration forms may be completed only once.");
     completed = true;
     const published = new WeakMap<Node, RustNativeDeclarationForm>();

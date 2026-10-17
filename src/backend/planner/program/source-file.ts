@@ -258,7 +258,9 @@ function planModuleItems(
   }
   const asynchronous = context.input.program.errorRegions.initialization.moduleFor(context.sourceFile)?.asynchronous === true;
   const emissionContext = context.input.program.physicalEmissionContexts.contextForOwner(context.sourceFile, "module-initializer");
-  if (emissionContext === undefined) failRustPlannerInvariant("Module initializer requires its original sealed physical context.", context.sourceFile);
+  if (emissionContext === undefined || emissionContext.error.kind !== "region")
+    failRustPlannerInvariant("Module initializer requires its original sealed physical context and error region.", context.sourceFile);
+  const errorRegion = emissionContext.error.region;
   const selectedContext = rustContextForEmission(context, emissionContext);
   const region = planRustErrorRegion(context.sourceFile, selectedContext);
   if (region === undefined) {
