@@ -263,6 +263,7 @@ function collectRustTargetGenericReferences(
         const callable = rustGenericCallableValue(value);
         if (callable !== undefined) {
           callable.environment.forEach(argument => visitType(argument, bound));
+          callable.retainedEnvironment.forEach(argument => visitType(argument, bound));
           if (callable.physical !== undefined) visitArguments(callable.physical.arguments, bound);
           return;
         }

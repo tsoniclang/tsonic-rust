@@ -30,7 +30,7 @@ import { selectRustProjectUnionMapping } from "../project/project-union-mappings
 import { selectRustProjectTypeTestPlan } from "../../operations/operators/type-tests.js";
 
 export type RustValueCarrierReconciliation =
-  | { readonly kind: "identity" }
+  | { readonly kind: "identity"; readonly selectedCarrier: TargetTypeRef }
   | {
       readonly kind: "call-scoped-lifetime";
       readonly fact: RustCallScopedLifetimeReconciliationFact;
@@ -167,7 +167,7 @@ export function selectRustValueCarrierReconciliation(
       sourceCallable.lifetime, targetCallable.error);
   }
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
-    return { kind: "identity" };
+    return { kind: "identity", selectedCarrier: targetCarrier };
   }
   if (rustGenericCallableSignaturesMatch(sourceCarrier, targetCarrier)) {
     return { kind: "conversion", fact: { sourceCarrier, targetCarrier,

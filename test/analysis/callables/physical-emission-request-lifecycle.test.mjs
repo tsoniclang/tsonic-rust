@@ -5,6 +5,7 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { boolCarrier } from "../../helpers/rust-session.mjs";
 import { createRustPhysicalCallableLifecycle } from "../../../dist/analysis/callables/physical-lifecycle.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
@@ -34,18 +35,24 @@ export const invoked = expose()(true);
 
 function checkedSource(text, options = { surfaces: [] }) {
   let input;
+  let errorInputs;
   const context = analyzeRustErrorEffects(text, options, current => {
     const original = current.callableValues;
     const callableValues = Object.create(original, {
       initialize: { value(selected) { input = selected; return original.initialize(selected); } },
+      preparePhysicalStorage: { value(components, effectsFor) {
+        errorInputs = { components, effectsFor };
+        return original.preparePhysicalStorage(components, effectsFor);
+      } },
     });
     return { ...current, callableValues };
   });
   assert.equal(input !== undefined, true, "the real program lifecycle supplies its private construction inputs");
-  return { context, input };
+  assert.equal(errorInputs !== undefined, true, "the same completed source classification supplies the physical constructor ABI");
+  return { context, input, errorInputs };
 }
 
-function physicalConstruction(checked, { unavailableReturns = new Set(), constructionErrorsReady = true } = {}) {
+function physicalConstruction(checked, { unavailableReturns = new Set(), unavailableErrors = new Set(), constructionErrorsReady = true } = {}) {
   const { context, input } = checked;
   const { ast, records, sourceStorage } = context;
   const native = context.callableValues.native;
@@ -53,12 +60,26 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
   let queries;
   let physical;
   const producers = createRustNativeCallableProducerPlan({ ast, nodes: input.nativeNodes, records, native,
+    structuralShapes: context.structuralShapes,
     definitions: context.typeDefinitions, returnCarrierFor(node) {
       if (unavailableReturns.has(node)) return undefined;
       const selected = queries.prepareReturn(node);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  if (constructionErrorsReady) producers.selectConstructionErrors(new Map());
+  if (constructionErrorsReady) {
+    const errors = new Map();
+    const { components, effectsFor } = checked.errorInputs;
+    for (const producer of producers.producers) {
+      if (unavailableErrors.has(producer.declaration)) continue;
+      const intrinsic = producers.errorFor(producer.declaration, "invoke");
+      const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, {
+        ast, components, producers, definitions: context.typeDefinitions,
+        records: { ...records, errorEffects: { get: effectsFor } },
+      }, producer.declaration);
+      if (selected !== undefined) errors.set(producer.declaration, selected);
+    }
+    producers.selectConstructionErrors(errors);
+  }
   queries = createRustNativeStorageQueries({ ast, nativeNodes: input.nativeNodes, storage: sourceStorage, records,
     definitions: context.typeDefinitions, native, producers, generic,
     physicalCarrierFor: (carrier, fileName, subject, bindings, selected) =>
@@ -68,6 +89,7 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
   const captures = createRustNativeCapturePlan({ records, storage: sourceStorage, nativeStorage: queries });
   physical = createRustGenericCallablePhysicalPlan(generic.definitions, generic.definitionFor, {
     ast, lifetimes: input.lifetimes, storage: sourceStorage, captures, native, boundSubjectFor: queries.boundSubjectFor,
+    genericBindingsFor: queries.genericBindingsFor,
   });
   const storage = finalizeRustNativeParameterStorage({ ast, storage: sourceStorage, nativeNodes: input.nativeNodes, records }, queries);
   const occurrences = prepareRustProviderSourceOccurrences({ ast, records, nodes: input.nativeNodes,
@@ -82,7 +104,7 @@ function completeLifecycle(input, physical) {
   return lifecycle.complete(physical);
 }
 
-function fixture({ missingResult = false, pendingErrors = false, provider = false } = {}) {
+function fixture({ missingResult = false, missingError = false, pendingErrors = false, provider = false } = {}) {
   const checked = provider
     ? (checkedProviderContext ??= checkedSource(`${fixtureSource}
 export function inspect(value: string, word: string): boolean { return value.includes(word); }`, { surfaces: ["js"] }))
@@ -102,6 +124,7 @@ export function inspect(value: string, word: string): boolean { return value.inc
   assert.equal(invocationOperation?.kind === "source-call" && invocationOperation.target.form === "callable", true,
     "the invocation request belongs to an actual retained callable use, not a direct native function");
   const construction = physicalConstruction(checked, { constructionErrorsReady: !pendingErrors,
+    unavailableErrors: missingError ? new Set([owner]) : new Set(),
     unavailableReturns: missingResult ? new Set([owner]) : new Set() });
   const storage = construction.storage;
   const calls = [];
@@ -423,6 +446,7 @@ test("missing actual result and pending actual error selection are rejected as w
   for (const [label, options, reason] of [
     ["result", { missingResult: true }, "A required native callable producer has no completed exact invocation result."],
     ["errors", { pendingErrors: true }, "Native retained constructors require their completed source-error ABI selection."],
+    ["missing completed error", { missingError: true }, "A required native callable producer has no completed exact invocation error."],
   ]) {
     const current = fixture(options);
     const request = requiredOwner(current, label);

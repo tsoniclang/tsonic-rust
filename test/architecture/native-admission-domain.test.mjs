@@ -139,7 +139,9 @@ test("the native-domain owner refuses incomplete source storage before any callb
 test("discarded native callable rendering precedes every body and capture read", () => {
   const source = readFileSync(join(root, "src/backend/planner/expressions/callable.ts"), "utf8");
   const body = source.slice(source.indexOf("export function planRustCallableExpressionBody("));
-  assert.equal(body.indexOf("sourceCallableDefinitionIsDiscarded(node, ast)") >= 0 &&
-    body.indexOf("sourceCallableDefinitionIsDiscarded(node, ast)") < body.indexOf("const closureFact ="), true,
-  "the one shared source-use predicate reaches unit rendering before missing erased records");
+  assert.equal(body.indexOf('records.nativeParticipation.get(node) === "erased"') >= 0 &&
+    body.indexOf('records.nativeParticipation.get(node) === "erased"') < body.indexOf("const closureFact ="), true,
+  "the one published source-use decision reaches unit rendering before missing erased records");
+  assert.doesNotMatch(source, /sourceCallableDefinitionIsDiscarded/u,
+    "planning reads the admitted participation without reclassifying source use after sealing");
 });

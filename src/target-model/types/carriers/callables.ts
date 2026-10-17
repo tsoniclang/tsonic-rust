@@ -133,7 +133,8 @@ export function rustStructuralMethodStorageCarrier(
   if (generic !== undefined) {
     const protocol = rustGenericCallableProtocol(callableCarrier);
     const storage = protocol === undefined ? undefined : rustGenericCallableTargetType(
-      generic.signature.typeParameters, [receiverCarrier, ...protocol.parameters], protocol.result, generic.origin, generic.environment,
+      generic.signature.typeParameters, [receiverCarrier, ...protocol.parameters], protocol.result, generic.origin,
+      [...generic.environment, ...generic.retainedEnvironment],
     );
     return storage === undefined ? undefined : presence === "optional" ? rustOptionTargetType(storage) : storage;
   }

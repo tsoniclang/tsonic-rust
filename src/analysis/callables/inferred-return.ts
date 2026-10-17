@@ -160,7 +160,12 @@ function selectReturn(
           const selection = walk.context.source.navigation.sourceReferenceFor(expression);
           const reference = selection?.declaration;
           const parameter = reference === undefined ? undefined : records.sourceParameterAbi.get(reference);
-          if (parameter !== undefined) return parameter.valueCarrier;
+          if (parameter !== undefined) {
+            if (expected === undefined) return parameter.valueCarrier;
+            const sourceFile = ast.getSourceFile(expression);
+            return sourceFile === undefined ? undefined
+              : resolveExpressionCarrier(probe, expression, sourceFile, expected);
+          }
           if (reference !== undefined && ast.kindName(reference) === "KindParameter") return undefined;
           if (reference !== undefined && ast.is.IsFunctionDeclaration(reference)) {
             if (finalizeRustCallableSignature(probe, reference) === undefined) return undefined;

@@ -20,6 +20,10 @@ import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeOutwardResults } from "./native-outward-results.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
 import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
+import type { RustStructuralShapePlan } from "../objects/structural-shape-plan.js";
+import { rustStructuralGenericCarrier } from "../objects/structural-generic-carrier.js";
+import { rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustLifetimeKey, type RustLifetimeParameterContract } from "../../target-model/lifetimes/index.js";
 
 type RustRequiredNativeProducer = Extract<RustPhysicalCallableEmissionRequest, { readonly kind: "producer" }>;
 type RustNativeProducerPhysicalSelection =
@@ -31,6 +35,8 @@ export interface RustNativeCallableProducer {
   readonly identity: string;
   readonly fileName: string;
   readonly environment: readonly RustTargetGenericArgument[];
+  readonly parameterCarriers: readonly TargetTypeRef[] | undefined;
+  readonly inputLifetimeParameters: readonly RustLifetimeParameterContract[];
 }
 
 export interface RustNativeCallableProducerPlan {
@@ -57,6 +63,7 @@ export function createRustNativeCallableProducerPlan(input: {
   readonly records: RustProgramRecords;
   readonly native: Pick<RustNativeCallableInputPlan, "inputsFor" | "capturesFor">;
   readonly definitions: RustTypeDefinitions;
+  readonly structuralShapes: Pick<RustStructuralShapePlan, "definitionForCarrier">;
   readonly returnCarrierFor: (declaration: Node) => TargetTypeRef | undefined;
 }): RustNativeCallableProducerConstruction {
   const byDeclaration = new Map<Node, RustNativeCallableProducer>();
@@ -79,11 +86,41 @@ export function createRustNativeCallableProducerPlan(input: {
       const selected = inputs.find(value => value.subject.node === parameter && rustTargetTypeRefEquals(value.carrier, current));
       return selected?.implementation ?? current;
     });
+    const signature = operation?.kind === "closure" ? rustCallableProtocol(
+      input.records.receiverIndependentMethod.get(declaration)?.carrier ?? operation.resultCarrier) : undefined;
+    const leading = operation?.kind !== "closure" ? [] : input.records.receiverIndependentMethod.get(declaration) === undefined
+      ? operation.leadingParameters ?? [] : (operation.leadingParameters ?? []).filter(parameter => parameter.kind !== "this");
+    const sourceParameters = signature?.parameters ?? (parameters as readonly Node[]).map(parameter =>
+      input.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
+    let unresolvedInput = sourceParameters.some(parameter => parameter === undefined) || operation?.kind === "closure" &&
+      (sourceParameters.length !== leading.length + parameters.length + operation.ignoredParameterCarriers.length ||
+        leading.some((parameter, index) => !rustTargetTypeRefEquals(parameter.carrier, sourceParameters[index])));
+    const selectedParameters = sourceParameters.flatMap((parameter, index) => {
+      if (parameter === undefined) return [];
+      const sourceParameter = index < leading.length ? undefined : parameters[index - leading.length];
+      const selected = sourceParameter === undefined ? parameter : physicalInput(sourceParameter, parameter);
+      return [mapRustTargetTypes(selected, current => {
+        if (rustStructuralObjectCarrierValue(current) === undefined) return current;
+        const normalized = rustStructuralGenericCarrier(current).carrier;
+        const definition = input.structuralShapes.definitionForCarrier(normalized);
+        if (definition === undefined || !rustTargetTypeRefEquals(definition.carrier, normalized)) {
+          unresolvedInput = true;
+          return current;
+        }
+        return definition.carrier;
+      })];
+    });
+    const parameterCarriers = unresolvedInput ? undefined : Object.freeze(selectedParameters);
+    const sourceLifetimes = new Set(rustTargetGenericReferences({ kind: "tuple",
+      elements: sourceParameters.flatMap(parameter => parameter === undefined ? [] : [parameter]),
+    }).lifetimes.map(rustLifetimeKey));
+    const inputLifetimeParameters: readonly RustLifetimeParameterContract[] = Object.freeze(
+      rustTargetGenericReferences({ kind: "tuple", elements: selectedParameters }).lifetimes.flatMap(lifetime =>
+        lifetime.kind !== "parameter" || sourceLifetimes.has(rustLifetimeKey(lifetime)) ? [] : [Object.freeze({
+          kind: "lifetime" as const, declaration, sourceName: lifetime.name, lifetime, outlives: Object.freeze([]),
+        })]));
     const carriers = [result.returnCarrier,
-      ...(parameters as readonly Node[]).flatMap(parameter => {
-        const carrier = input.records.sourceParameterAbi.get(parameter)?.parameterCarrier;
-        return carrier === undefined ? [] : [physicalInput(parameter, carrier)];
-      }),
+      ...selectedParameters,
       ...[...captures?.captures ?? [], ...captures?.receiverFields ?? [], ...captures?.receivers ?? []].map(capture => capture.carrier),
       ...[...input.native.inputsFor(declaration), ...input.native.capturesFor(declaration)].flatMap(selected =>
         [selected.implementation, selected.trait]),
@@ -96,7 +133,8 @@ export function createRustNativeCallableProducerPlan(input: {
       ...references.typeParameters.map(type => ({ kind: "type" as const, type })),
       ...references.constParameters.map(value => ({ kind: "const" as const, value })),
     ]);
-    const producer = Object.freeze({ declaration, identity: `${fileName}:${identity}`, fileName, environment });
+    const producer = Object.freeze({ declaration, identity: `${fileName}:${identity}`, fileName, environment,
+      parameterCarriers, inputLifetimeParameters });
     if (byIdentity.has(producer.identity)) throw new Error("Native callable producer identity must be unique.");
     byDeclaration.set(declaration, producer);
     byIdentity.set(producer.identity, producer);
@@ -144,7 +182,7 @@ export function createRustNativeCallableProducerPlan(input: {
     if (retained && constructionErrors === undefined) return Object.freeze({ kind: "pending",
       reason: "Native retained constructors require their completed source-error ABI selection." });
     const intrinsic = errorFor(declaration, "invoke");
-    const error = retained && constructionErrors?.has(declaration) ? constructionErrors.get(declaration) : intrinsic;
+    const error = retained ? constructionErrors?.get(declaration) : intrinsic;
     if (error === undefined) return unresolved("A required native callable producer has no completed exact invocation error.");
     const operation = input.records.targetOperation.get(declaration);
     const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(
@@ -158,6 +196,8 @@ export function createRustNativeCallableProducerPlan(input: {
       !expectedParameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, signature.parameters[index])) ||
       !rustTargetTypeRefEquals(expectedResult, signature.result))
       return unresolved("A required native callable producer does not match its exact source parameter and result ABI.");
+    if (producer.parameterCarriers === undefined || producer.parameterCarriers.length !== signature.parameters.length)
+      return unresolved("A required native callable producer has no exact completed physical input correspondence.");
     const key = `${producer.identity}:${closedMetadataKey(carrier)}`;
     if (resolving.has(key) || resolving.size >= 128)
       return unresolved("A required native callable producer exceeds its bounded physical result selection.");
@@ -168,7 +208,7 @@ export function createRustNativeCallableProducerPlan(input: {
     if (resultCarrier === undefined) return unresolved("A required native callable producer has no completed exact invocation result.");
     if (retained && signature.lifetime === undefined)
       return unresolved("A required retained native callable producer has no exact construction lifetime.");
-    const arguments_: TargetTypeRef = { kind: "tuple", elements: signature.parameters };
+    const arguments_: TargetTypeRef = { kind: "tuple", elements: producer.parameterCarriers };
     const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([resultCarrier, error]));
     const physical = retained
       ? rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [rustLifetimeGenericArgument(signature.lifetime!),

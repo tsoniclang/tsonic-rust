@@ -1,4 +1,5 @@
 import { requireRustRecord } from "../program/records/required-records.js";
+import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
 import { rustGenericCallableProtocol, rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { finalizeProjectSourceGenericArguments } from "../operations/project-call-generics.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
@@ -691,6 +692,11 @@ function applySelectedRuntimeCallableCall(
   const runtimeValue = selectedSignature.sourceStructuralMethod === undefined && selectedSignature.sourceConstructorCarrier === undefined;
   const calleeCarrier = runtimeValue ? resolveExpressionCarrier(walk, callee, sourceFile, carrier) : undefined;
   if (runtimeValue && calleeCarrier === undefined) return undefined;
+  const genericInvocation = rustGenericCallableValue(carrier);
+  const signatureOnly = carrier.kind === "target-named" && rustCallableProtocol(carrier)?.lifetime?.kind === "placeholder" ||
+    genericInvocation !== undefined && genericInvocation.physical === undefined && genericInvocation.retainedEnvironment.length === 0;
+  const invocationCarrier = signatureOnly && calleeCarrier !== undefined && rustCallableInvocationSignaturesMatch(calleeCarrier, carrier)
+    ? calleeCarrier : carrier;
   const arguments_ = prepareSelectedSourceCallArguments(
     walk,
     callArguments as readonly Node[],
@@ -769,7 +775,7 @@ function applySelectedRuntimeCallableCall(
   >["target"] = selectedSignature.sourceConstructorCarrier !== undefined
     ? { form: "constructor-value", receiverCarrier: selectedSignature.sourceConstructorCarrier, callableCarrier: carrier }
     : structuralMethod === undefined
-    ? { form: "callable", carrier }
+    ? { form: "callable", carrier: invocationCarrier }
     : {
         form: "structural-method",
         receiverCarrier: structuralMethod.receiverCarrier,
@@ -778,7 +784,7 @@ function applySelectedRuntimeCallableCall(
       };
   if (target.form === "callable" && optionalCall === undefined) {
     const projection = calleeCarrier === undefined ? undefined : walk.context.records.flowReadProjections.resolve(
-      walk.context.requiredRecords, callee, calleeCarrier, carrier, walk.context.projectTypes, walk.context.typeDefinitions);
+      walk.context.requiredRecords, callee, calleeCarrier, invocationCarrier, walk.context.projectTypes, walk.context.typeDefinitions);
     if (projection === undefined || projection.kind === "incompatible") {
       appendRustDiagnostic(walk, "RUST_RUNTIME_CALLABLE_VALUE_CONFLICT",
         "The runtime callee cannot project to its exact checked callable carrier.", callee,

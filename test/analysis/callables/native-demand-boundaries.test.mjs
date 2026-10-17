@@ -9,10 +9,71 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
+import { planCallableExpression, planRustCallableExpressionBody } from "../../../dist/backend/planner/expressions/callable.js";
 
 const surfaces = [["native", []], ["js", ["js"]]];
 
+test("erased callable rendering reads its sole sealed participation before native body and capture facts", () => {
+  const declaration = {};
+  const forbidden = new Proxy({}, { get() { assert.fail("an erased callable cannot inspect native body or source navigation"); } });
+  const context = { input: { program: { source: { ast: forbidden }, records: {
+    nativeParticipation: { get: node => node === declaration ? "erased" : undefined },
+    closureCapture: forbidden, targetOperation: forbidden,
+  } } } };
+  for (const planner of [planCallableExpression, planRustCallableExpressionBody]) {
+    const planned = planner(declaration, context);
+    assert.equal(planned?.kind === "tuple-literal" && planned.elements.length === 0, true,
+      "both callable entry points consume the same exact sealed erasure without reading missing native evidence");
+  }
+});
+
 for (const [surface, selected] of surfaces) {
+  for (const [form, lambda] of [
+    ["arrow", '(key: string): number => { const value = { [key]: 7 }; return value[key]; }'],
+    ["function expression", 'function(key: string): number { const value = { [key]: 7 }; return value[key]; }'],
+  ]) {
+    for (const use of ["direct", "immutable alias"]) {
+      test(`unused stored ${form} native participation follows its complete ${use} source uses (${surface})`, () => {
+        const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+export function run(): number {
+  const ignored = ${lambda};
+  ${use === "immutable alias" ? "const alias = ignored; alias;" : "ignored;"}
+  return 3;
+}` } });
+        assert.equal(result.diagnostics.length, 0,
+          "a checked stored definition with only discarded reads adds no native computed-key or callable-body obligation");
+        assert.equal(result.program !== undefined && result.plan !== undefined, true, "the whole accepted program is published");
+        const ast = result.program.source.ast;
+        const pending = [...result.program.sourceFiles];
+        let declaration;
+        while (pending.length !== 0) {
+          const node = pending.pop();
+          if (ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) declaration = node;
+          ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+        }
+        assert.equal(declaration !== undefined, true, "the original checked callable definition remains present");
+        assert.equal(result.program.records.nativeParticipation.get(declaration), "erased", "one analysis owner admits exact callable erasure");
+        assert.equal(result.program.records.closureCapture.get(declaration) === undefined, true, "an erased body has no fabricated captures");
+        assert.equal(result.program.records.targetOperation.get(declaration) === undefined, true, "an erased body has no fabricated operation");
+        assert.doesNotMatch(rustSourceText(result), /Callable::new|callable_arguments|\[key\]/u,
+          "a discarded stored definition introduces neither native callable allocation nor its unreachable dynamic field");
+      });
+    }
+    test(`invoking a stored ${form} retains its real native body even when the result is discarded (${surface})`, () => {
+      const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+export function run(): number {
+  const invoked = ${lambda};
+  const alias = invoked;
+  alias("value");
+  return 3;
+}` } });
+      assert.equal(result.diagnostics.some(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN"), true,
+        "an actual call reaches the original precise unsupported nonconstant-key owner");
+      assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+        "discarding the call result never erases the invoked body's real obligation");
+    });
+  }
+
   for (const generic of [false, true]) {
     test(`class-frame invocation and owner arguments use the same exact instantiation (${surface}, ${generic ? "generic" : "concrete"})`, () => {
       const { program } = analyzeRust({ surfaces: selected, files: { "index.ts": `

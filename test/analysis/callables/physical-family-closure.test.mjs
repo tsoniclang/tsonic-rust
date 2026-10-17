@@ -10,6 +10,7 @@ import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analys
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustGenericCallableCarrier, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
@@ -102,10 +103,18 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
       const selected = queries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  producers.selectConstructionErrors(new Map());
+  const errors = new Map();
+  for (const producer of producers.producers) {
+    const intrinsic = producers.errorFor(producer.declaration, "invoke");
+    const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, { ast: source.ast,
+      records, components: program.sourcePackageComponents, producers, definitions: program.typeDefinitions }, producer.declaration);
+    if (selected !== undefined) errors.set(producer.declaration, selected);
+  }
+  producers.selectConstructionErrors(errors);
   const queries = createRustNativeStorageQueries({ ...input, native, producers });
   const captures = wrapCaptures(createRustNativeCapturePlan({ ...input, nativeStorage: queries }));
   physical = registry.initializePhysical({ ...input, native, captures,
+    genericBindingsFor: (declaration, bindings) => queries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const declaration = name => storage.nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
@@ -628,7 +637,8 @@ test("published physical reads return stored keys and reject required unprepared
     assert.equal(invariantCode(read), "TSONIC_INTERNAL_PLANNER_INVARIANT", "a required read of a valid unrooted shape after publication is a planner invariant");
   }
   assert.equal(physical.existingSelectionFor(reordered) === undefined, true, "an optional read of a valid unrooted shape stays absent");
-  const logical = rustGenericCallableCarrier({ origin: value.origin, signature: value.signature, environment: value.environment });
+  const logical = rustGenericCallableCarrier({ origin: value.origin, signature: value.signature,
+    environment: value.environment, retainedEnvironment: value.retainedEnvironment });
   assert.equal(physical.definitionFor(logical) === undefined, true, "a logical carrier is not a physical storage key");
   const foreign = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: value.physical.members.map(member =>
     ({ ...member, origin: { ...member.origin, declarationIdentity: "foreign" } })) } });

@@ -191,7 +191,8 @@ export function finalizeTargetInputs(
     }
     case "index": {
       const receiver = input.receiver(operationKind === "index-set" ? "mut-ref" : "ref");
-      const index = input.argument(0, "value", form.indexConversion);
+      const index = form.constantIndex === undefined ? input.argument(0, "value", form.indexConversion)
+        : constants([{ kind: "integer", value: form.constantIndex }])[0];
       if (operationKind === "index-set") {
         const value = input.argument(1, "value");
         return receiver === undefined || index === undefined || value === undefined || sourceArgumentCount !== 2

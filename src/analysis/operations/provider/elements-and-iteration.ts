@@ -7,8 +7,12 @@ import {
 } from "../../../policy/identities/selected-source.js";
 import {
   isRustCopyCarrier,
+  isRustJsArrayCarrier,
   isRustJsArrayLikeCarrier,
   isRustStringCarrier,
+  rustJsArrayLikeElementTargetType,
+  rustOptionTargetType,
+  rustAbsenceTargetType,
 } from "../../../target-model/types/index.js";
 import {
   KindArrayLiteralExpression,
@@ -258,6 +262,43 @@ export function resolveRustCheckedElementAccess(
     : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice"
       ? receiverCarrier.referent
       : undefined;
+  const ordinal = request.sourceSelectedElementIndex;
+  const jsArrayElement = isRustJsArrayCarrier(receiverCarrier) ? rustJsArrayLikeElementTargetType(receiverCarrier) : undefined;
+  if (ordinal !== undefined && Number.isSafeInteger(ordinal) && ordinal >= 0 &&
+    (nativeArrayReceiver !== undefined || jsArrayElement !== undefined)) {
+    if (jsArrayElement !== undefined && !options.jsEnabled)
+      return rejectSelectedOperation(request.expression, context, "RUST_JS_SURFACE_REQUIRED",
+        "The selected physical JavaScript array index requires the explicit JavaScript surface.");
+    const sourceIndex = selectedValueCarrier(request.argument, request.sourceArgumentType, context, options);
+    const element = nativeArrayReceiver?.element ?? jsArrayElement;
+    if (sourceIndex === undefined || element === undefined)
+      return rejectSelectedOperation(request.expression, context, "RUST_TUPLE_INDEX_NOT_PROVEN",
+        "Checked tuple indexing requires its exact original key carrier and selected physical element.");
+    const template: RustProviderOperationTemplate = {
+      kind: "provider-operation", operationKind: "indexer",
+      operationId: `tsonic.rust.${nativeArrayReceiver === undefined ? "js" : "native"}.tuple-array.index`,
+      target: nativeArrayReceiver === undefined
+        ? { form: "receiver-method", name: "get_number", argOrder: [],
+            trailingArguments: [{ kind: "float64", value: ordinal }] }
+        : { form: "index", constantIndex: ordinal },
+      parameterCarriers: [], evaluationOnlySourceArgumentIndexes: [0],
+      resultCarrier: nativeArrayReceiver === undefined ? rustOptionTargetType(element) : element,
+      ...(nativeArrayReceiver === undefined ? {
+        sourceResultCarrier: element, sourceAbsenceCarrier: rustAbsenceTargetType(),
+        borrowedIndexOperation: { method: "borrow_number_element", evaluation: "pure" as const },
+        indexedLocationMethod: "element_location",
+      } : {}),
+      evaluation: "pure", isAsync: false, isFallible: false, errorBoundary: "none",
+      ...((request.accessMode === "read" || request.accessMode === "read-write") && !isRustCopyCarrier(element)
+        ? { carrierRequirements: [{ carrier: element, requirement: "clone" as const }] } : {}),
+    };
+    const fact = finalizeProviderOperationFromSubjects(template, request.receiver, [request.argument], context, options,
+      selectedReceiverCarrier, [sourceIndex]);
+    if (fact === undefined)
+      return rejectSelectedOperation(request.expression, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE",
+        "Checked tuple indexing cannot finalize its exact once-evaluated key and physical array operation.");
+    return acceptRustMemberOperation(request, "indexer", fact, context, options, elementProvenance(request));
+  }
   const nativeIndexIdentity = sourceProfileIdentity?.profile === "native" ? sourceProfileIdentity
     : receiverCarrier?.kind === "reference" && receiverCarrier.referent.kind === "slice" ? jsIdentity : undefined;
   if (nativeIndexIdentity !== undefined &&

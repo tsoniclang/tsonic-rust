@@ -9,7 +9,9 @@ import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callab
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
+import { rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
@@ -23,6 +25,59 @@ import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
+
+for (const [label, source, lifetimeKind] of [
+  ["owned", `export function make(value: string): () => string {
+    return function read(): string { return value; };
+  }`, "static"],
+  ["borrowed", `import type { int32 } from "@tsonic/core/types.js";
+  import type { Life, Ref } from "@tsonic/rust/types.js";
+  import { load } from "@tsonic/rust/lang.js";
+  export function make<Region extends Life>(value: Ref<int32, Region>): () => int32 {
+    return function read(): int32 { return load(value); };
+  }`, "parameter"],
+]) test(`named ${label} callable self evidence is finalized before its first runtime publication`, () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": source } });
+  const { ast } = program.source;
+  const pending = [...program.sourceFiles];
+  let expression;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    if (ast.is.IsFunctionExpression(node)) expression = node;
+    ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  assert.equal(expression !== undefined, true, `${label}: the original named expression is checked`);
+  const name = ast.name(expression);
+  const carrier = program.records.runtimeCarrier.get(expression)?.carrier;
+  const recursive = program.records.runtimeCarrier.get(name)?.carrier;
+  assert.equal(rustCallableProtocol(carrier)?.lifetime?.kind, lifetimeKind,
+    `${label}: source retention is proved rather than left as a placeholder or guessed static`);
+  assert.equal(carrier !== undefined && rustTargetTypeRefEquals(carrier, recursive), true,
+    `${label}: the self binding and final value have identical invocation, error and retained lifetime evidence`);
+});
+
+test("a named generic body retains the same actual free environment before and after self publication", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+  export function make<Value>(seed: Value): <Result>(result: Result) => Result {
+    return function read<Result>(result: Result): Result { void seed; return result; };
+  }` } });
+  const { ast } = program.source;
+  const pending = [...program.sourceFiles];
+  let expression;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    if (ast.is.IsFunctionExpression(node)) expression = node;
+    ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  assert.equal(expression !== undefined, true, "the actual named generic producer is checked");
+  const carrier = program.records.runtimeCarrier.get(expression)?.carrier;
+  const recursive = program.records.runtimeCarrier.get(ast.name(expression))?.carrier;
+  const value = rustGenericCallableValue(carrier);
+  assert.equal(value !== undefined && value.environment.length === 0 && value.retainedEnvironment.length === 1, true,
+    "a body-only source binding cannot become a free invocation binding or disappear");
+  assert.equal(carrier !== undefined && rustTargetTypeRefEquals(carrier, recursive), true,
+    "self and final publication retain the identical complete invocation and body environment");
+});
 
 function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
@@ -50,12 +105,20 @@ function fixture(text, options = {}) {
       const selected = queries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  producers.selectConstructionErrors(new Map());
+  const errors = new Map();
+  for (const producer of producers.producers) {
+    const intrinsic = producers.errorFor(producer.declaration, "invoke");
+    const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, { ast: source.ast,
+      records: program.records, components: program.sourcePackageComponents, producers, definitions: program.typeDefinitions }, producer.declaration);
+    if (selected !== undefined) errors.set(producer.declaration, selected);
+  }
+  producers.selectConstructionErrors(errors);
   input.producers = producers;
   const guardedQueries = Proxy.revocable(createRustNativeStorageQueries({ ...input, native }), {});
   const queries = guardedQueries.proxy;
   const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries });
   physical = genericRegistry.initializePhysical({ ...input, native, captures,
+    genericBindingsFor: (declaration, bindings) => queries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const plan = finalizeRustNativeParameterStorage(input, queries);
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&

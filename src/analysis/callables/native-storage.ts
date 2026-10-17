@@ -5,11 +5,13 @@ import type { RustProgramRecords } from "../../target-model/records/program.js";
 
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeOutlives } from "../../target-model/lifetimes/index.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { instantiateRustSourceUnionPayloads } from "../../target-model/types/source-union-definitions.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustCallableInvocationSignaturesMatch } from "../../target-model/conversions/callable-input.js";
 import { rustCallableConversionPhysical } from "../../target-model/conversions/callable-physical.js";
 import { substituteRustCallableConversion } from "../../target-model/conversions/substitution.js";
@@ -19,7 +21,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import { isRustAbsenceCarrier } from "../../target-model/types/carriers/native.js";
 import { isRustNativeFutureCarrier } from "../../target-model/types/carriers/primitives.js";
 import { rustUnionAlternatives } from "../../target-model/types/union-relations.js";
-import { rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustCallableTargetId, rustSourceUnionCarrierValue, rustStructuralObjectCarrierValue } from "../../target-model/types/carriers/source-types.js";
 import { instantiateRustRuntimeUnionPayloads } from "../../target-model/types/carriers/runtime-unions.js";
 import { rustTargetGenericBindingsForArguments } from "../../target-model/types/generic-arguments.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -49,6 +51,8 @@ import { rustSourceStorageProjectedCarrier, type RustValueDomainCarrierHost } fr
 import { selectRustSourceCallableInvocationBindings } from "./native-storage-generics.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
+import { rustStructuralMethodConstructionFor } from "./structural-method-storage.js";
+import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 
 export type RustNativeStorageSelection =
   | { readonly kind: "identity"; readonly carrier: TargetTypeRef;
@@ -307,6 +311,12 @@ export function createRustNativeStorageQueries(input: {
         const referent = visit(current.referent, selectedSubject, bindings, depth + 1, permitsAbsence, position);
         return referent === undefined ? undefined : referent === current.referent ? current : Object.freeze({ ...current, referent });
       }
+      if (rustFrameCallableValue(current) !== undefined) {
+        const logical = logicalCarrierFor(selectedSubject, bindings);
+        const selected = logical === undefined ? undefined : rustPhysicalPayloadFor(logical, logical, current, input.definitions);
+        return selected !== undefined && rustTargetTypeRefEquals(selected, current) ? current
+          : fail("Native frame storage requires its exact selected source activation, instance and invocation binding.");
+      }
       if (isRustNativeFutureCarrier(current)) {
         const origins = input.storage.boundValueFrontierFor(selectedSubject, bindings, [], position);
         if (origins.kind === "unresolved") return fail(origins.reason);
@@ -332,6 +342,8 @@ export function createRustNativeStorageQueries(input: {
         if (boundaryFailure !== undefined) return fail(boundaryFailure);
         const selected = input.storage.boundValueFrontierFor(selectedSubject, bindings, boundaries, position);
         if (selected.kind === "unresolved") return fail(selected.reason);
+        const destinationLifetime = rustCallableProtocol(current)?.lifetime;
+        const contract = rustEnclosingStorageContract(selectedSubject.node, input.ast, input.lifetimes);
         let physical: TargetTypeRef | undefined;
         for (const frontier of selected.frontier) {
           if (!step(depth)) return undefined;
@@ -375,12 +387,25 @@ export function createRustNativeStorageQueries(input: {
               const { types, lifetimes, consts } = generics.bindings;
               const boundCarrier = originCarrier === undefined ? undefined
                 : callableValueCarrier(substituteRustTargetGenerics(originCarrier, types, lifetimes, consts));
+              const construction = rustStructuralMethodConstructionFor(origin.node, input);
+              if (construction.kind === "unresolved") return fail(construction.reason);
               const produced = originCarrier === undefined || boundCarrier === undefined || !rustCallableInvocationSignaturesMatch(current, boundCarrier)
-                ? undefined : input.producers.physicalFor(origin.node, originCarrier);
+                ? undefined : construction.kind === "selected" ? construction.carrier : input.producers.physicalFor(origin.node, originCarrier);
               candidatePhysical = produced === undefined ? undefined : substituteRustTargetGenerics(produced, types, lifetimes, consts);
             }
             if (candidatePhysical === undefined)
               return fail("Native callable storage has a producer without a sealed physical implementation.");
+          }
+          if (candidatePhysical.kind === "target-named" && candidatePhysical.id === rustCallableTargetId &&
+            destinationLifetime !== undefined && destinationLifetime.kind !== "placeholder") {
+            const sourceLifetime = candidatePhysical.genericArguments?.[0];
+            if (sourceLifetime?.kind !== "lifetime" ||
+              !rustLifetimeOutlives(sourceLifetime.lifetime, destinationLifetime, contract))
+              return fail("Native callable storage cannot retain a producer beyond its selected destination lifetime.");
+            candidatePhysical = Object.freeze({ ...candidatePhysical, genericArguments: Object.freeze([
+              Object.freeze({ kind: "lifetime" as const, lifetime: destinationLifetime }),
+              ...candidatePhysical.genericArguments!.slice(1),
+            ]) });
           }
           if (physical !== undefined && !rustTargetTypeRefEquals(physical, candidatePhysical))
             return fail("Native callable storage has distinct physical input alternatives requiring a sealed join.");

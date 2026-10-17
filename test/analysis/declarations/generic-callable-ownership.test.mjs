@@ -160,6 +160,7 @@ closureCapture: { get: (node) => {
       sourceFiles: files, isNativeNode, projectTypes };
     const receiverStorage = analyzeRustReceiverStorage(receiverInput);
     const objectRepresentations = createRustObjectRepresentationPlan({ ...receiverInput, receiverStorage,
+      sourceStorage,
       valueWrites: new Set(), hasPromotedStorage: () => false, hasMutableStorageUse: () => false });
     const structuralShapes = createRustStructuralShapePlanRegistry();
     structuralShapes.initialize(sourceTypes.structuralObjects(), sourceTypes.structuralFieldImplementations(),

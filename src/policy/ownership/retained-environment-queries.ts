@@ -75,7 +75,7 @@ export function createRustRetainedEnvironmentQueries(
       if (selected === undefined) return unresolved();
       selected.forEach(parameter => retained.add(parameter));
     } else {
-      const subject = storage.subject(declaration, "return");
+      const subject = storage.subject(declaration, ast.is.IsConstructorDeclaration(declaration) ? "receiver" : "return");
       const bindings = storage.bindingsForDeclaration(declaration);
       if (subject.kind !== "resolved" || bindings.kind !== "resolved") return unresolved();
       const producers = storage.storageProducersFor(subject.subject, bindings.bindings);

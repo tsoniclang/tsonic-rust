@@ -153,7 +153,7 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
   if (storage === undefined) return undefined;
   if (!context.input.program.callableValues.genericDispatch.requiredFor(definition)) return storage;
   const signatureCarrier = rustGenericCallableCarrier({ origin: definition.origin, signature: definition.signature,
-    environment: definition.signature.environmentParameters,
+    environment: definition.signature.environmentParameters, retainedEnvironment: [],
   });
   const protocol = rustGenericCallableProtocol(signatureCarrier);
   const errors = planRustGenericCallableErrors(definition, context);

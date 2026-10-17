@@ -420,7 +420,10 @@ export function acceptSelectedCall(
   if (sourceReceiver !== undefined && receiver === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_RECEIVER_CARRIER_MISSING", `Selected call '${callIdentity.sourceName}' has no closed Rust receiver evaluation.`);
   }
-  const fact = finalizeProviderOperationFact(instantiatedTemplate, sourceArguments.carriers, receiver,
+  const fact = finalizeProviderOperationFact({
+    ...instantiatedTemplate,
+    parameterCarriers: sourceArguments.parameterCarriers,
+  }, sourceArguments.carriers, receiver,
     context.typeDefinitions, spreadIndexes.length === 0 ? undefined : spreadIndexes, resolutionOptions.dispatchContextInputFor);
   if (fact === undefined) {
     return rejectSelectedOperation(request.source.call, context, "RUST_SELECTED_OPERATION_ABI_INCOMPLETE", `Selected call '${callIdentity.sourceName}' cannot finalize one total Rust operation ABI.`);
@@ -540,6 +543,7 @@ type SelectedCallSourceCarriers =
   | {
       readonly kind: "resolved";
       readonly carriers: readonly TargetTypeRef[];
+      readonly parameterCarriers: readonly (TargetTypeRef | undefined)[] | undefined;
       readonly reconciliations: readonly {
         readonly sourceIndex: number;
         readonly reconciliation: RustAppliedValueCarrierReconciliation;
@@ -567,10 +571,12 @@ function selectedCallSourceCarriers(
     readonly sourceIndex: number;
     readonly reconciliation: RustAppliedValueCarrierReconciliation;
   }[] = [];
+  const selectedFormalCarriers = new Map<number, TargetTypeRef>();
   const actual = request.source.sourceArguments.map((sourceArgument, index) => {
     const argument = sourceArgument.expression;
     const targetExpected = selectedCallArgumentTargetCarrier(fact.target, index);
     const expected = targetExpected ?? declaredBySourceIndex.get(index);
+    let selectedFormal = expected;
     const resolved = selectedSourceValueCarrier(sourceArgument, context, options);
     if (context.ast.is.IsSpreadElement(argument)) {
       if (!selectedRestSequenceIsClosed(request, index, resolved, fact.target)) {
@@ -627,16 +633,34 @@ function selectedCallSourceCarriers(
           sourceCarrier: effective, targetCarrier: expected, conversion,
         } };
       }
-      if (reconciliation.kind === "call-scoped-lifetime" ||
+      if (reconciliation.kind === "identity") {
+        effective = reconciliation.selectedCarrier;
+        selectedFormal = reconciliation.selectedCarrier;
+      } else if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
         if (reconciliation.kind === "call-scoped-lifetime" ||
           reconciliation.kind === "project-upcast" || targetExpected === undefined) {
           reconciliations.push({ sourceIndex: index, reconciliation });
           effective = reconciliation.kind === "call-scoped-lifetime"
             ? reconciliation.fact.selectedCarrier : reconciliation.fact.targetCarrier;
+          selectedFormal = effective;
         }
       } else if (reconciliation.kind === "incompatible") {
         incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };
+      }
+    }
+    if (targetExpected === undefined && selectedFormal !== undefined) {
+      for (const binding of request.source.sourceArgumentBindings) {
+        if (binding.sourceArgumentIndex !== index || binding.sourceForm !== "value") continue;
+        const formal = declared?.[binding.sourceParameterIndex];
+        const prior = selectedFormalCarriers.get(binding.sourceParameterIndex);
+        if (formal === undefined || prior !== undefined &&
+          !rustTargetTypeRefEquals(prior, selectedFormal)) {
+          incompatibility ??= { kind: "incompatible", sourceIndex: index,
+            actual: selectedFormal, expected: prior ?? formal };
+          continue;
+        }
+        selectedFormalCarriers.set(binding.sourceParameterIndex, selectedFormal);
       }
     }
     return effective ?? expected;
@@ -650,6 +674,9 @@ function selectedCallSourceCarriers(
   const resolved = {
     kind: "resolved" as const,
     carriers: actual as TargetTypeRef[],
+    parameterCarriers: declared === undefined ? undefined
+      : Object.freeze(declared.map((carrier, index) =>
+          selectedFormalCarriers.get(index) ?? carrier)),
     reconciliations,
   };
   if (fact.target.form === "call-str-slice" || fact.target.form === "free-call-str-slice") {

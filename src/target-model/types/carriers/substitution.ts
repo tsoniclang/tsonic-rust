@@ -404,6 +404,8 @@ function substituteCarrierParts(
         signature: substituteCallableSignatureLifetimes(callable.signature, lifetimeSubstitutions),
         environment: callable.environment.map(argument => substituteChild(
           argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
+        retainedEnvironment: callable.retainedEnvironment.map(argument => substituteChild(
+          argument, substitutions, lifetimeSubstitutions, constSubstitutions, normalize)),
         ...(callable.physical === undefined ? {} : { physical: { ...callable.physical,
           arguments: substituteGenericArguments(callable.physical.arguments, substitutions,
             lifetimeSubstitutions, constSubstitutions, normalize, substituteChild),

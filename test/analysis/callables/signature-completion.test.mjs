@@ -16,6 +16,7 @@ import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { selectedRustCheckedCallInputCarrier } from "../../../dist/analysis/operations/provider/calls/input-contract.js";
 import { selectRustClosedCallableInputs } from "../../../dist/analysis/callables/contextual-inputs.js";
+import { createRustSourceCallableAbiResolver } from "../../../dist/policy/ownership/source-callable-abi.js";
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
   const { context, walk } = analyzeRustOperations(`
@@ -99,6 +100,30 @@ function inputFixture(source, select = (ast, node) => ast.is.IsFunctionDeclarati
   return { current, declaration, parameters, original: context.records,
     complete: current => callableSignatures.finalizeRustCallableParameterAbis(current, declaration) };
 }
+
+test("an unfinished retained input does not poison its later completed intrinsic ABI", () => {
+  const { context, walk } = analyzeRustOperations(`
+export function step(callback: (value: number) => number): () => number {
+  return (): number => callback(3);
+}`, { surfaces: [] });
+  const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node));
+  const parameter = context.ast.parameters(declaration)[0];
+  assert.equal(parameter !== undefined, true, "the actual captured formal is checked");
+  const resolver = createRustSourceCallableAbiResolver({
+    isNativeCallableExpression: node => walk.context.records.nativeParticipation.get(node) !== "erased",
+    parameterAbiFor: () => undefined,
+  });
+  const selected = rustResolutionContext(walk, parameter);
+  const unfinished = { ...selected, retainedEnvironments: { ...selected.retainedEnvironments,
+    environmentFor: () => ({ kind: "unresolved", reason: "the actual retained owner is not ready" }),
+  } };
+  assert.equal(resolver.resolveParameterAbi(parameter, unfinished, walk.operationOptions) === undefined, true,
+    "the unfinished intrinsic input remains unavailable");
+  const complete = resolver.resolveParameterAbi(parameter, selected, walk.operationOptions);
+  assert.equal(complete !== undefined, true, "the same resolver can consume the completed retained evidence");
+  assert.equal(resolver.resolveParameterAbi(parameter, unfinished, walk.operationOptions) === complete, true,
+    "only the exact successfully completed intrinsic input is cached");
+});
 
 for (const [name, source, select, forms] of [
   ["declaration", "export function step(value: number): number { return value; }", undefined, ["required"]],
