@@ -221,6 +221,63 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, computed: 
     assertArray(program, initializers, "wideLiteral", "int64");
   });
 
+  test(`C130 ${lane}: every inferred nonnumeric and absence fallback refuses an inexact canonical integer`, () => {
+    for (const literal of ["9007199254740993", "-9007199254740993", "1e100"]) {
+      for (const other of ['"text"', "undefined", "true"]) {
+        for (const expression of [`[${other}, ${literal}]`, `[${literal}, ${other}]`,
+          `[signed, ${other}, ${literal}]`, `[${literal}, ${other}, signed]`,
+          `[${other}, signed, ${literal}]`, `[signed, ${other}, ${literal}, 0.5]`]) {
+          const files = { "index.ts": header +
+            `export function inspect(signed: int32) { const values = ${expression}; return values; }` };
+          const { result, source } = compileRust({ surfaces, files });
+          const issues = result.diagnostics.filter(issue => issue.category === "error");
+          assert.equal(issues.length, 1, `${expression}: one owning exactness refusal before another union path`);
+          assert.equal(issues[0].code, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", `${expression}: the same aggregate owner`);
+          assert.equal(issues[0].message,
+            "An inferred numeric union requires an exact canonical carrier for every authored integer literal.");
+          assert.deepEqual(issues[0].evidence, [], "no invented integer cap, scalar conversion or fallback witness");
+          const range = source.ast.authoredRange(issues[0].sourceNode);
+          assert.equal(range.kind === "authored" && range.start === files["index.ts"].indexOf(expression) &&
+            range.end === range.start + expression.length, true, `${expression}: the exact original array span`);
+          assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+            `${expression}: no partial program, plan or native output`);
+        }
+      }
+    }
+  });
+
+  test(`C130 ${lane}: exact heterogeneous arms and actual native floating destinations retain their existing admission`, () => {
+    const literalForms = ["9007199254740992", "9007199254740994", (1n << 200n).toString(),
+      `0x${(1n << 200n).toString(16)}`, "0.1", "-0"];
+    const declarations = literalForms.flatMap((literal, index) => [
+      `const exact${index} = ["text", ${literal}];`,
+      `const reverse${index} = [${literal}, "text"];`,
+      `const absent${index} = [undefined, ${literal}];`,
+      `const absentReverse${index} = [${literal}, undefined];`,
+    ]).join("\n");
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
+function accept(values: (string | number)[]): void { }
+export function inspect(wide: int64, computed: number): void {
+  ${declarations}
+  const explicit: (string | number)[] = ["text", 9007199254740993];
+  const argument = ["text", 9007199254740993]; accept(argument);
+  const fixedFloat = ["text", computed];
+  const exactWide = [wide, 9007199254740993];
+  const explicitScalar: number[] = [9007199254740993];
+}
+` } });
+    const initializers = bindings(program);
+    for (const name of [...literalForms.flatMap((_, index) =>
+      [`exact${index}`, `reverse${index}`, `absent${index}`, `absentReverse${index}`]),
+    "explicit", "argument", "fixedFloat"]) {
+      const fact = program.records.targetOperation.get(initializers.get(name));
+      assert.equal(fact?.kind === "array-literal" && fact.contributions.length === 2, true,
+        `${name}: the existing complete native heterogeneous construction is still admitted`);
+    }
+    assertArray(program, initializers, "exactWide", "int64");
+    assertArray(program, initializers, "explicitScalar", "float64");
+  });
+
   test(`C130 ${lane}: genuine checked float32 and int64 unions retain their baseline native admission`, () => {
     for (const expression of ["[narrow, wide]", "[wide, narrow]"]) {
       const { program, source } = analyzeRust({ surfaces, files: { "index.ts": header +

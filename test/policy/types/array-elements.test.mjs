@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectRustInferredNumericArrayElement } from "../../../dist/policy/types/collections/array-elements.js";
-import { rustSourcePrimitiveTargetType, rustSourceUnionTargetType } from "../../../dist/target-model/types/index.js";
+import { rustAbsenceTargetType, rustSourcePrimitiveTargetType, rustSourceUnionTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 const primitive = rustSourcePrimitiveTargetType;
 const fixed = name => ({ carrier: primitive(name), literal: undefined });
@@ -165,4 +165,47 @@ test("C130 repeated native peers retain bounded native-domain selection and comp
     [...incompatible, authored(5n, -1n)], []);
   assert.equal(fractional.kind === "resolved" && fractional.carrier.name === "float64", true,
     "a real fractional contribution still selects the existing native float carrier");
+});
+
+test("C130 every inferred nonnumeric and absence fallback proves its canonical integer arm", () => {
+  const text = { carrier: rustStringTargetType(), literal: undefined };
+  const absent = { carrier: rustAbsenceTargetType(), literal: undefined };
+  const negative = authored(9007199254740993n, 0n, -9007199254740993n);
+  negative.literal.numeric.token.negative = true;
+  negative.literal.number = -Number(9007199254740993n);
+  for (const other of [text, absent, fixed("bool")]) {
+    for (const literal of [authored(9007199254740993n, 0n, 9007199254740993n), negative, authored(1n, 100n)]) {
+      for (const rows of [[other, literal], [literal, other], [fixed("int32"), other, literal],
+        [literal, other, fixed("int32")], [other, fixed("int32"), literal],
+        [fixed("int64"), other, literal], [fixed("int32"), other, literal, authored(5n, -1n)]]) {
+        const selection = selectRustInferredNumericArrayElement(undefined, rows, []);
+        assert.equal(selection.kind === "rejected" && selection.reason ===
+          "An inferred numeric union requires an exact canonical carrier for every authored integer literal.", true,
+        "an unrelated native arm, repetition or actual fraction cannot bypass canonical integer exactness");
+      }
+    }
+    const negativeZero = authored(0n, 0n, 0n);
+    negativeZero.literal.numeric.token.negative = true;
+    negativeZero.literal.number = -0;
+    for (const literal of [authored(9007199254740992n, 0n, 9007199254740992n),
+      authored(9007199254740994n, 0n, 9007199254740994n), authored(1n << 200n, 0n),
+      authored(1n, -1n), negativeZero, fixed("float64")]) {
+      for (const rows of [[other, literal], [literal, other]]) {
+        assert.equal(selectRustInferredNumericArrayElement(undefined, rows, []).kind, "unavailable",
+          "exact canonical integers, true fractions, signed zero and computed floats retain their existing union owner");
+      }
+    }
+  }
+  const explicit = rustSourceUnionTargetType("/src/index.ts", "ExplicitTextAndNumber", [], "generated", {
+    kind: "physical", types: [text.carrier, primitive("float64")],
+  });
+  const inexact = authored(9007199254740993n, 0n, 9007199254740993n);
+  assert.equal(selectRustInferredNumericArrayElement(explicit, [text, inexact], [explicit, explicit]).kind,
+    "unavailable", "an agreeing actual native union destination owns literal rounding, without a guessed arm or new carrier");
+  const wide = selectRustInferredNumericArrayElement(primitive("float64"), [fixed("int64"), inexact], [explicit]);
+  assert.equal(wide.kind === "resolved" && wide.carrier.name === "int64", true,
+    "the existing homogeneous exact native integer decision remains ahead of generic fallback transport");
+  assert.equal(selectRustInferredNumericArrayElement(explicit, [text, inexact],
+    [explicit, primitive("float64")]).kind, "rejected",
+  "conflicting uses cannot select the first explicit destination to hide failed exact inference");
 });

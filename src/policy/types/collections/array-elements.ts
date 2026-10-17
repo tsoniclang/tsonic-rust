@@ -29,10 +29,12 @@ export function selectRustInferredNumericArrayElement(
     literal: literal?.numeric?.kind === "authored" || literal?.numeric === undefined && literal?.integer !== undefined
       ? literal : undefined }));
   const peers = constraints.filter(contribution => contribution.literal === undefined);
-  if (constraints.some(contribution => !isRustNumericCarrier(contribution.carrier))) return unavailable;
+  const allNumeric = constraints.every(contribution => isRustNumericCarrier(contribution.carrier));
   const destination = demands[0];
+  const consistentDestination = destination !== undefined &&
+    demands.every(demand => rustTargetTypeRefEquals(demand, destination));
   if (destination !== undefined && isRustNumericCarrier(destination) &&
-    demands.every(demand => rustTargetTypeRefEquals(demand, destination)) &&
+    consistentDestination &&
     peers.every(peer => numericConversion(peer.carrier, destination, "explicit-storage"))) {
     return { kind: "resolved", carrier: destination };
   }
@@ -45,13 +47,14 @@ export function selectRustInferredNumericArrayElement(
     peers.every(peer => rustTargetTypeRefEquals(peer.carrier, homogeneous)) && accepts(homogeneous)) {
     return { kind: "resolved", carrier: homogeneous };
   }
+  if (consistentDestination && !isRustNumericCarrier(destination)) return unavailable;
   const unresolved: RustInferredNumericArrayElementSelection = constraints.some(({ carrier, literal }) =>
     flexibleInteger(literal) && literal?.numeric?.kind === "authored" && isRustNumericCarrier(carrier) &&
     (carrier.name === "float32" || carrier.name === "float64") &&
     !sourceNumericLiteralIsExactlyRepresentableAsBinaryFloat(literal.numeric.token, carrier.name))
     ? { kind: "rejected", reason: "An inferred numeric union requires an exact canonical carrier for every authored integer literal." }
     : unavailable;
-  if (!isRustNumericCarrier(sourceElement)) return unresolved;
+  if (!allNumeric || !isRustNumericCarrier(sourceElement)) return unresolved;
   const integerCarriers = new Map<string, TargetTypeRef>();
   for (const { carrier } of peers) {
     if (isRustIntegerCarrier(carrier)) integerCarriers.set(carrier.name, carrier);
