@@ -3,7 +3,7 @@ import test from "node:test";
 import { artifactText, compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
-import { moduleBindingPatternFiles } from "../../../../tsonic/test/fixtures/module-binding-patterns.mjs";
+import { moduleBindingPatternFiles, moduleBindingPublicationPrograms } from "../../../../tsonic/test/fixtures/module-binding-patterns.mjs";
 
 const nativeCounterpart = `
 #[derive(Clone)]
@@ -77,4 +77,17 @@ export function run(): number { return value; }
     assert.equal(result.program === undefined && result.plan === undefined, true, "invalid projection cannot be sealed");
     assert.equal(result.artifacts.length, 0, "no partial native artifact is emitted");
   });
+
+  for (const [index, program] of moduleBindingPublicationPrograms.entries()) {
+    test(`module publication preserves ${program.name} on ${surface}`, { timeout: 300_000 }, () => {
+      const { result } = compileRust({ surfaces, files: program.files,
+        target: { id: "rust", options: { outputType: "bin" } } });
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 4096));
+      assert.equal(result.program !== undefined && result.plan !== undefined, true,
+        "every valid source root has one complete native publication before the seal");
+      assert.equal(validateGeneratedProject(`module-binding-publication-${index}-${surface}`,
+        result.artifacts, { run: true }).status, 0, "actual generated Rust preserves native module evaluation");
+    });
+  }
 }

@@ -68,7 +68,7 @@ import { rustSourceCallArgumentCarriers, rustSourceCallResultWithInputLifetimes 
 import { retainRustSelectedSourceCallResultStorage } from "../../policy/types/resolution/call-results.js";
 import { callableRestElement } from "../callables/adapters.js";
 import { rustCallableInvocationResult } from "../callables/results.js";
-import { resolveRustModulePatternBinding } from "../module-initialization/binding-patterns.js";
+import { resolveRustModuleBindingValue } from "../program/module-declarations.js";
 
 export function resolveIdentifierCarrier(
   walk: RustFactWalk,
@@ -100,8 +100,10 @@ export function resolveIdentifierCarrier(
       sourceBindingCapturedBeforeInitialization(declaration, ast, walk.context.source.navigation)) {
       recordCallableValueSignatureForDeclaration(walk, declaration);
     }
-    if (declarationKind === KindBindingElement && sourceDeclarationIsModuleScoped(declaration, ast)) {
-      const carrier = resolveRustModulePatternBinding(walk, declaration);
+    if ((declarationKind === KindBindingElement || declarationKind === KindVariableDeclaration) &&
+      sourceDeclarationIsModuleScoped(declaration, ast)) {
+      const carrier = resolveRustModuleBindingValue(walk, declaration);
+      if (carrier !== undefined) recordProjectSourceBinding(walk, identifier);
       return carrier === undefined ? undefined : setCarrierFact(walk, identifier, carrier);
     }
     const declarationCarrier = walk.context.records.runtimeCarrier.get(declaration);

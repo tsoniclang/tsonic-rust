@@ -1,16 +1,49 @@
 import type { Node, SourceFile } from "@tsonic/tsts";
 import {
+  KindArrayBindingPattern,
+  KindBindingElement,
+  KindObjectBindingPattern,
   KindVariableDeclaration,
   KindVariableStatement,
   Node_Initializer,
   Node_Type,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
+  sourceDeclarationIsModuleScoped,
 } from "@tsonic/target-api/source";
 
 import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustFactWalk } from "./walk.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { recordVariableStatementFacts } from "../control-flow/statements.js";
+
+export function resolveRustModuleBindingValue(
+  walk: RustFactWalk,
+  declaration: Node,
+): TargetTypeRef | undefined {
+  const { ast, records } = walk.context;
+  let root: Node | undefined = declaration;
+  while (root !== undefined && ast.kindName(root) !== KindVariableDeclaration) {
+    const kind = ast.kindName(root);
+    if (kind !== KindBindingElement && kind !== KindArrayBindingPattern && kind !== KindObjectBindingPattern) return undefined;
+    root = ast.parent(root);
+  }
+  if (root === undefined || !sourceDeclarationIsModuleScoped(root, ast) || !walk.context.isNativeNode(root) ||
+    walk.rejectedExpressions.has(root)) return undefined;
+  if (records.moduleBinding.get(root) === undefined && !walk.resolving.has(root)) {
+    const declarationList = ast.parent(root);
+    const statement = declarationList === undefined ? undefined : ast.parent(declarationList);
+    const sourceFile = ast.getSourceFile(root);
+    if (statement === undefined || sourceFile === undefined || ast.kindName(statement) !== KindVariableStatement) return undefined;
+    recordVariableStatementFacts(walk, statement, sourceFile, root);
+  }
+  const binding = records.moduleBinding.get(declaration);
+  if (binding?.storage === "native-callable") return binding.value?.carrier;
+  if (binding?.storage === "module-cell" || binding?.storage === "native-const") return binding.valueCarrier;
+  const projected = walk.resolving.has(root) ? records.bindingProjection.get(declaration) : undefined;
+  return projected !== undefined && "bindingCarrier" in projected ? projected.bindingCarrier : undefined;
+}
 
 export function recordRustModuleValueDeclarations(walk: RustFactWalk, sourceFile: SourceFile): void {
   const { ast, records } = walk.context;

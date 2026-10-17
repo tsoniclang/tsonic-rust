@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
+import { createRustCarrierProbe } from "../../../../dist/analysis/program/carrier-probe.js";
+import { recordVariableStatementFacts } from "../../../../dist/analysis/control-flow/statements.js";
+import { resolveRustModuleBindingValue } from "../../../../dist/analysis/program/module-declarations.js";
+import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.mjs";
 
 const integer = Object.freeze({ kind: "source-primitive", name: "int32" });
 const wider = Object.freeze({ kind: "source-primitive", name: "int64" });
@@ -111,3 +115,59 @@ test("array omissions retain checked identity without manufacturing a projected 
   child.seal([]);
   assert.throws(() => child.bindingProjections.omitted([], {}, source), /after analysis is sealed/u);
 });
+
+for (const abrupt of [false, true]) {
+  test(`one requested module root restores its caller after ${abrupt ? "an abrupt" : "a normal"} admission`, () => {
+    const input = analyzeRustOperations("export const first: number = 1, second: number = 2;", { surfaces: [] });
+    const { ast } = input.context;
+    const declarations = input.context.sourceStorage.nodes.filter(node => ast.is.IsVariableDeclaration(node));
+    assert.equal(declarations.length, 2, "the actual checked statement has two original roots");
+    const root = declarations[1];
+    const statement = ast.parent(ast.parent(root));
+    const sourceFile = ast.getSourceFile(root);
+    const current = createRustCarrierProbe(input.walk);
+    const caller = {};
+    const generator = {};
+    const marker = new Error("root admission witness");
+    let entered = 0;
+    const walk = { ...current, currentCallableDeclaration: caller, currentGeneratorDeclaration: generator,
+      context: { ...current.context, records: { ...current.context.records,
+        typeOnlyDeclarations: { ...current.context.records.typeOnlyDeclarations, statement: () => undefined },
+        compileTimeSource: { get(node) {
+          assert.equal(node === root, true, "a requested root never replays its sibling");
+          assert.equal(walk.resolving.has(root), true, "the canonical root producer owns the in-flight state");
+          assert.equal(walk.currentCallableDeclaration === undefined && walk.currentGeneratorDeclaration === undefined,
+            true, "module initialization is not analyzed in its caller's callable environment");
+          entered++;
+          if (abrupt) throw marker;
+          return true;
+        } },
+      } } };
+    const admit = () => recordVariableStatementFacts(walk, statement, sourceFile, root);
+    if (abrupt) assert.throws(admit, error => error === marker, "the original abrupt failure is preserved");
+    else admit();
+    assert.equal(entered, 1, "the exact requested root enters once");
+    assert.equal(walk.currentCallableDeclaration === caller && walk.currentGeneratorDeclaration === generator,
+      true, "both original caller identities are restored");
+    assert.equal(walk.resolving.has(root), false, "normal and abrupt exits both close the root's in-flight state");
+  });
+}
+
+for (const state of ["in-flight", "rejected"]) {
+  test(`a ${state} module root cannot replace its missing physical value with a logical annotation`, () => {
+    const input = analyzeRustOperations("export const value: number = 1;", { surfaces: [] });
+    const root = input.context.sourceStorage.nodes.find(node => input.context.ast.is.IsVariableDeclaration(node));
+    assert.equal(root !== undefined, true, "the original annotated module declaration is checked");
+    const current = createRustCarrierProbe(input.walk);
+    const records = createRustProgramRecordBuilder(input.context.typeDefinitions);
+    const walk = { ...current, context: { ...current.context, records } };
+    if (state === "in-flight") walk.resolving.add(root);
+    else walk.rejectedExpressions.add(root);
+    assert.equal(resolveRustModuleBindingValue(walk, root) === undefined, true,
+      "a declaration without a completed native value stays unresolved");
+    assert.equal(records.runtimeCarrier.get(root) === undefined && records.moduleBinding.get(root) === undefined,
+      true, "the logical annotation cannot fabricate final native runtime storage");
+    assert.equal(walk.resolving.has(root), state === "in-flight", "a dependent query does not change its producer's root state");
+    assert.equal(walk.rejectedExpressions.has(root), state === "rejected", "the original terminal rejection stays authoritative");
+  });
+}
