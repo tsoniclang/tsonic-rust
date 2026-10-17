@@ -105,12 +105,10 @@ export function recordVariableStatementFacts(
   walk: RustFactWalk,
   statement: Node,
   sourceFile: SourceFile,
-  requestedDeclaration?: Node,
 ): void {
   if (walk.context.records.typeOnlyDeclarations.statement(walk, statement) !== undefined) return;
-  const moduleLevel = walk.context.ast.kindName(walk.context.ast.parent(statement)) === "KindSourceFile";
   const declarationList = VariableStatement_DeclarationList(walk.context.ast, statement);
-  recordVariableDeclarationListFacts(walk, declarationList, statement, sourceFile, moduleLevel, requestedDeclaration);
+  recordVariableDeclarationListFacts(walk, declarationList, statement, sourceFile);
 }
 
 function recordVariableDeclarationListFacts(
@@ -118,8 +116,6 @@ function recordVariableDeclarationListFacts(
   declarationList: Node | undefined,
   owner: Node,
   sourceFile: SourceFile,
-  moduleLevel: boolean,
-  requestedDeclaration?: Node,
 ): void {
   const declarationSlots = VariableDeclarationList_Declarations(
     walk.context.ast,
@@ -138,28 +134,44 @@ function recordVariableDeclarationListFacts(
     return;
   }
   for (const declaration of declarationSlots as readonly Node[]) {
-    if (requestedDeclaration !== undefined && declaration !== requestedDeclaration) continue;
-    if (!moduleLevel) {
-      recordVariableDeclarationFacts(walk, declaration, owner, sourceFile, moduleLevel);
-      continue;
-    }
-    if (walk.resolving.has(declaration)) continue;
-    const previousCallable = walk.currentCallableDeclaration;
-    const previousGenerator = walk.currentGeneratorDeclaration;
-    walk.resolving.add(declaration);
-    walk.currentCallableDeclaration = undefined;
-    walk.currentGeneratorDeclaration = undefined;
-    try {
-      recordVariableDeclarationFacts(walk, declaration, owner, sourceFile, moduleLevel);
-    } finally {
-      walk.currentCallableDeclaration = previousCallable;
-      walk.currentGeneratorDeclaration = previousGenerator;
-      walk.resolving.delete(declaration);
-    }
+    recordVariableDeclarationFacts(walk, declaration, sourceFile);
   }
 }
 
-function recordVariableDeclarationFacts(
+export function recordVariableDeclarationFacts(
+  walk: RustFactWalk,
+  declaration: Node,
+  sourceFile: SourceFile,
+): void {
+  const { ast } = walk.context;
+  const declarationList = ast.parent(declaration);
+  const owner = declarationList === undefined ? undefined : ast.parent(declarationList);
+  if (ast.kindName(declaration) !== KindVariableDeclaration || declarationList === undefined || owner === undefined ||
+    ast.kindName(declarationList) !== KindVariableDeclarationList) {
+    failTargetAnalysisInvariant("tsonic-rust", "Variable admission requires its exact checked declaration owner.", declaration);
+  }
+  const moduleLevel = ast.kindName(owner) === KindVariableStatement &&
+    ast.kindName(ast.parent(owner)) === "KindSourceFile";
+  if (!moduleLevel) {
+    recordVariableDeclarationValueFacts(walk, declaration, owner, sourceFile, false);
+    return;
+  }
+  if (walk.resolving.has(declaration) || walk.rejectedExpressions.has(declaration)) return;
+  const previousCallable = walk.currentCallableDeclaration;
+  const previousGenerator = walk.currentGeneratorDeclaration;
+  walk.resolving.add(declaration);
+  walk.currentCallableDeclaration = undefined;
+  walk.currentGeneratorDeclaration = undefined;
+  try {
+    recordVariableDeclarationValueFacts(walk, declaration, owner, sourceFile, true);
+  } finally {
+    walk.currentCallableDeclaration = previousCallable;
+    walk.currentGeneratorDeclaration = previousGenerator;
+    walk.resolving.delete(declaration);
+  }
+}
+
+function recordVariableDeclarationValueFacts(
   walk: RustFactWalk,
   declaration: Node,
   owner: Node,
@@ -467,7 +479,7 @@ export function recordStatementFacts(
     const initializer = ForStatement_Initializer(walk.context.ast, statement);
     if (initializer !== undefined) {
       if (walk.context.ast.kindName(initializer) === KindVariableDeclarationList) {
-        recordVariableDeclarationListFacts(walk, initializer, statement, sourceFile, false);
+        recordVariableDeclarationListFacts(walk, initializer, statement, sourceFile);
       } else resolveExpressionCarrier(walk, initializer, sourceFile, undefined);
     }
     const condition = ForStatement_Condition(walk.context.ast, statement);

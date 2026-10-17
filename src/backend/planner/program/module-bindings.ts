@@ -189,7 +189,6 @@ export function planTopLevelVariableStatement(
   }
   return { items, initialization };
 }
-
 function planModuleBindingPattern(
   declaration: Node,
   binding: Extract<RustModuleBindingFact, { readonly storage: "module-pattern" }>,

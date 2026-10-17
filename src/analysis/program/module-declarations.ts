@@ -16,7 +16,7 @@ import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
 import { setCarrierFact } from "../operations/project-calls.js";
 import type { RustFactWalk } from "./walk.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { recordVariableStatementFacts } from "../control-flow/statements.js";
+import { recordVariableDeclarationFacts } from "../control-flow/statements.js";
 
 export function resolveRustModuleBindingValue(
   walk: RustFactWalk,
@@ -36,7 +36,8 @@ export function resolveRustModuleBindingValue(
     const statement = declarationList === undefined ? undefined : ast.parent(declarationList);
     const sourceFile = ast.getSourceFile(root);
     if (statement === undefined || sourceFile === undefined || ast.kindName(statement) !== KindVariableStatement) return undefined;
-    recordVariableStatementFacts(walk, statement, sourceFile, root);
+    if (records.typeOnlyDeclarations.statement(walk, statement) !== undefined) return undefined;
+    recordVariableDeclarationFacts(walk, root, sourceFile);
   }
   const binding = records.moduleBinding.get(declaration);
   if (binding?.storage === "native-callable") return binding.value?.carrier;

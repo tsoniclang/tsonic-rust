@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustProgramRecordBuilder } from "../../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../../dist/analysis/program/carrier-probe.js";
-import { recordVariableStatementFacts } from "../../../../dist/analysis/control-flow/statements.js";
+import { recordVariableDeclarationFacts } from "../../../../dist/analysis/control-flow/statements.js";
 import { resolveRustModuleBindingValue } from "../../../../dist/analysis/program/module-declarations.js";
 import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.mjs";
 
@@ -123,7 +123,6 @@ for (const abrupt of [false, true]) {
     const declarations = input.context.sourceStorage.nodes.filter(node => ast.is.IsVariableDeclaration(node));
     assert.equal(declarations.length, 2, "the actual checked statement has two original roots");
     const root = declarations[1];
-    const statement = ast.parent(ast.parent(root));
     const sourceFile = ast.getSourceFile(root);
     const current = createRustCarrierProbe(input.walk);
     const caller = {};
@@ -132,7 +131,6 @@ for (const abrupt of [false, true]) {
     let entered = 0;
     const walk = { ...current, currentCallableDeclaration: caller, currentGeneratorDeclaration: generator,
       context: { ...current.context, records: { ...current.context.records,
-        typeOnlyDeclarations: { ...current.context.records.typeOnlyDeclarations, statement: () => undefined },
         compileTimeSource: { get(node) {
           assert.equal(node === root, true, "a requested root never replays its sibling");
           assert.equal(walk.resolving.has(root), true, "the canonical root producer owns the in-flight state");
@@ -143,7 +141,7 @@ for (const abrupt of [false, true]) {
           return true;
         } },
       } } };
-    const admit = () => recordVariableStatementFacts(walk, statement, sourceFile, root);
+    const admit = () => recordVariableDeclarationFacts(walk, root, sourceFile);
     if (abrupt) assert.throws(admit, error => error === marker, "the original abrupt failure is preserved");
     else admit();
     assert.equal(entered, 1, "the exact requested root enters once");
@@ -152,6 +150,30 @@ for (const abrupt of [false, true]) {
     assert.equal(walk.resolving.has(root), false, "normal and abrupt exits both close the root's in-flight state");
   });
 }
+
+test("a top-level loop initializer retains its lexical declaration context", () => {
+  const input = analyzeRustOperations("for (let index = 0; index < 2; index++) {}", { surfaces: [] });
+  const { ast } = input.context;
+  const root = input.context.sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node));
+  assert.equal(root !== undefined, true, "the actual loop initializer declaration exists");
+  const current = createRustCarrierProbe(input.walk);
+  const caller = {};
+  const generator = {};
+  let entered = 0;
+  const walk = { ...current, currentCallableDeclaration: caller, currentGeneratorDeclaration: generator,
+    context: { ...current.context, records: { ...current.context.records,
+      compileTimeSource: { get(node) {
+        assert.equal(node === root, true, "the original loop initializer is admitted directly");
+        assert.equal(walk.currentCallableDeclaration === caller && walk.currentGeneratorDeclaration === generator,
+          true, "a top-level loop does not turn its lexical initializer into module initialization");
+        assert.equal(walk.resolving.has(root), false, "a lexical loop binding does not enter module root admission");
+        entered++;
+        return true;
+      } },
+    } } };
+  recordVariableDeclarationFacts(walk, root, ast.getSourceFile(root));
+  assert.equal(entered, 1, "the same per-declaration primitive admits the lexical initializer once");
+});
 
 for (const state of ["in-flight", "rejected"]) {
   test(`a ${state} module root cannot replace its missing physical value with a logical annotation`, () => {
