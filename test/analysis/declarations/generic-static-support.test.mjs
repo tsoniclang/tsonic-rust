@@ -5,12 +5,13 @@ import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/sourc
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 
 const parameter = Object.freeze({ kind: "type-parameter", identity: "source:Value", name: "Value" });
-const number = Object.freeze({ kind: "primitive", name: "f64" });
+const number = Object.freeze({ kind: "source-primitive", name: "float64" });
 const families = Object.freeze({ implementation: () => undefined });
 const bound = requirements => Object.freeze({ identity: parameter.identity, name: parameter.name, requirements });
 const contract = fields => Object.freeze({ declaration: Object.freeze({}), typeParameters: [], capturedTypeParameters: [],
   nativeInputs: [], associatedTypes: [], projectProjections: [], optionalStorage: [], ...fields });
-const supports = (selected, carrier, registry = families) => rustFinalContractSupportsStatic(selected, carrier, registry, emptyRustTypeDefinitions);
+const supports = (selected, carrier, registry = families) =>
+  rustFinalContractSupportsStatic(selected, carrier, registry, emptyRustTypeDefinitions, undefined).kind === "supported";
 
 test("final static support reads an existing bound and never infers a missing or unknown one", () => {
   const missing = contract({ typeParameters: [bound([])] });

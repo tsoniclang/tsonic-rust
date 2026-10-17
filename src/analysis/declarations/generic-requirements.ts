@@ -43,6 +43,9 @@ import { rustStructuralViewRequirementUses } from "./structural-view-requirement
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
+import type { RustNativeCapturePlan } from "../callables/native-captures.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustSuspendingPromiseBorrowReason } from "../callables/suspension-storage.js";
 
 export type RustGenericRequirement = "clone" | "default" | "static" | "source-numeric" | "number-predicate" | "js-rejection";
@@ -107,6 +110,8 @@ export function analyzeRustDeclarationGenericRequirements(
   errorRegions: RustAnalyzedErrorRegions,
   promiseBodies: RustPromiseBodies,
   nativeStorage: RustNativeStoragePlan,
+  nativeCaptures: RustNativeCapturePlan,
+  classValues: RustClassValuePlan,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -198,6 +203,8 @@ export function analyzeRustDeclarationGenericRequirements(
         genericCallables,
         nativeCallables,
         nativeStorage,
+        nativeCaptures,
+        classValues,
         errorRegions,
         frameCallables,
         structuralShapes: shapes,
@@ -300,10 +307,12 @@ export function analyzeRustDeclarationGenericRequirements(
   });
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
+  const shapeEvidence: RustStaticRequirementEvidence = { lifetimeContract: undefined, genericCallables,
+    frameCallables, nativeCaptures, classValues, structuralShapes: shapes, projectTypes, records };
   for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
     ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
     ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {
-    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor, definitions);
+    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor, shapeEvidence, definitions);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",
     )]) };
@@ -312,7 +321,7 @@ export function analyzeRustDeclarationGenericRequirements(
   for (const view of structuralViews) {
     const uses = rustStructuralViewRequirementUses(view);
     const contract = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [view.sourceCarrier, view.targetCarrier] },
-      projectTypes, typeFamilies, index.contractFor, definitions, uses);
+      projectTypes, typeFamilies, index.contractFor, shapeEvidence, definitions, uses);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_STRUCTURAL_VIEW_GENERIC_CONTRACT_NOT_PROVEN",
       "A selected structural implementation has no exact generic or associated-output requirements.", view.declaration,

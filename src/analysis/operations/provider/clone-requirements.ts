@@ -25,7 +25,7 @@ export function canRequireSourceClone(
   const storage = createRustOptionalStorageCollector(parameters, parameters, requirements);
   if (!storage.collect(carrier)) return false;
   const classify = (type: TargetTypeRef, required: readonly RustGenericRequirement[]): boolean =>
-    classifyCarrierRequirements(type, required, parameters, requirements, associated.require, context.typeDefinitions);
+    classifyCarrierRequirements(type, required, parameters, requirements, associated.require, context.typeDefinitions, undefined).kind === "supported";
   const associated = createRustAssociatedRequirementCollector(parameters, families, classify, () => false);
   return associated.collect(carrier) && classify(carrier, ["clone"]);
 }

@@ -33,6 +33,12 @@ import { rustFinalContractSupportsStatic } from "../declarations/generic-carrier
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
 import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
+import type { RustNativeCaptureConstruction, RustNativeCapturePlan, RustNativeCaptureSelection } from "./native-captures.js";
+import type { RustFrameCallablePlan } from "./frame-values.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustGenericCallablePlan } from "./generic-values.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 
 interface RustStructuralMethodDestination {
   readonly carrier: TargetTypeRef;
@@ -57,6 +63,9 @@ export function createRustStructuralMethodStorage(input: {
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lifetimes: RustLifetimeIndex;
   readonly retainedEnvironments: RustRetainedEnvironmentQueries;
+  readonly nativeCaptures: Pick<RustNativeCaptureConstruction, "require">;
+  readonly genericCallables: RustGenericCallablePlan;
+  readonly projectTypes: RustProjectTypePolicy;
 }): {
   prepareConstructors(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
@@ -64,7 +73,8 @@ export function createRustStructuralMethodStorage(input: {
   complete(errors: Pick<RustErrorRegionRecords, "producerError">): readonly RustSourceCallableSpecializationIssue[];
   validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): readonly RustSourceCallableSpecializationIssue[];
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">, frames: RustFrameCallablePlan,
+    nativeCaptures: RustNativeCapturePlan, classValues: RustClassValuePlan): readonly RustSourceCallableSpecializationIssue[];
 } {
   const { ast, records, sourceStorage, structuralShapes } = input;
   const canonical = new Map(structuralShapes.definitions.map(definition =>
@@ -164,7 +174,8 @@ export function createRustStructuralMethodStorage(input: {
   }
   let complete = false;
   const producerErrors = new Map<import("../../target-model/types/carriers/producer-errors.js").RustProducerErrorReference, TargetTypeRef>();
-  const retainedRequirements: { readonly declaration: Node; readonly captures: readonly TargetTypeRef[] }[] = [];
+  const retainedRequirements: { readonly declaration: Node; readonly bindings: RustTargetGenericBindings | undefined;
+    physicalCaptures: RustNativeCaptureSelection | undefined }[] = [];
   let retentionValidated = false;
   return Object.freeze({
     prepareConstructors(components: RustSourcePackageComponentClassifications,
@@ -288,7 +299,7 @@ export function createRustStructuralMethodStorage(input: {
             protocol.lifetime, rustEnclosingStorageContract(subject.node, ast, input.lifetimes))) {
             if (protocol.lifetime.kind !== "static" || !captureCarriers.some(rustHasOpenOwnedStorage))
               return reject(subject.node, "Structural method storage requires the actual captured lifetime to outlive its selected destination.");
-            retainedRequirements.push(Object.freeze({ declaration: subject.node, captures: Object.freeze(captureCarriers) }));
+            retainedRequirements.push({ declaration: subject.node, bindings: bound?.bindings, physicalCaptures: undefined });
           }
           let carrier = rustCallableTargetType(source.signature.parameters, source.signature.result,
             protocol.lifetime, source.signature.error);
@@ -370,6 +381,8 @@ export function createRustStructuralMethodStorage(input: {
         }
       }
       structuralShapes.finalizeMethodStorage(selections);
+      for (const requirement of retainedRequirements)
+        requirement.physicalCaptures = input.nativeCaptures.require(requirement.declaration);
       complete = true;
       return Object.freeze([]);
     },
@@ -381,16 +394,26 @@ export function createRustStructuralMethodStorage(input: {
       }
     },
     validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-      families: Pick<RustSourceTypeFamilyRegistry, "implementation">) {
+      families: Pick<RustSourceTypeFamilyRegistry, "implementation">, frames: RustFrameCallablePlan,
+      nativeCaptures: RustNativeCapturePlan, classValues: RustClassValuePlan) {
       if (!complete || retentionValidated) throw new Error("Structural retention validates once against the completed declaration requirements.");
       const issues: RustSourceCallableSpecializationIssue[] = [];
       for (const requirement of retainedRequirements) {
         const owner = sourceEnclosingCallable(ast.parent(requirement.declaration), ast);
         const contract = owner === undefined ? undefined : requirements.contractFor(owner, true);
-        if (contract === undefined || !requirement.captures.every(carrier =>
-          rustFinalContractSupportsStatic(contract, carrier, families, input.typeDefinitions)))
-          issues.push({ subject: requirement.declaration,
-            message: "Structural method retention is not proven by its actual final native generic contract." });
+        const physical = requirement.physicalCaptures;
+        if (contract === undefined || physical === undefined || physical.kind === "unresolved") {
+          issues.push({ subject: requirement.declaration, message: physical?.kind === "unresolved" ? physical.reason
+            : "Structural method retention requires its completed physical captures and actual final native generic contract." });
+          continue;
+        }
+        const captures = [...physical.captures, ...physical.receiverFields, ...physical.receivers].map(carrier =>
+          requirement.bindings === undefined ? carrier : substituteRustTargetGenerics(carrier,
+            requirement.bindings.types, requirement.bindings.lifetimes, requirement.bindings.consts));
+        const selected = rustFinalContractSupportsStatic(contract, { kind: "tuple", elements: captures }, families, input.typeDefinitions,
+          { lifetimeContract: input.lifetimes.contractFor(owner), genericCallables: input.genericCallables,
+            frameCallables: frames, nativeCaptures, classValues, structuralShapes, projectTypes: input.projectTypes, records });
+        if (selected.kind !== "supported") issues.push({ subject: requirement.declaration, message: selected.reason });
       }
       retentionValidated = issues.length === 0;
       return Object.freeze(issues);

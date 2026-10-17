@@ -12,9 +12,6 @@ export function rustLifetimeOutlives(
   if (rustLifetimesEqual(source, target) || source.kind === "static") {
     return true;
   }
-  if (target.kind === "static") {
-    return false;
-  }
   const edges = new Map(contract.parameters.flatMap((parameter) =>
     parameter.kind === "lifetime"
       ? [[rustLifetimeKey(parameter.lifetime), parameter.outlives] as const]
