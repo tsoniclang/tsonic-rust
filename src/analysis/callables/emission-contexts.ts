@@ -83,11 +83,12 @@ export interface RustPhysicalEmissionOperandPreparation extends Omit<RustPhysica
 }
 
 export interface RustCallableEmissionContextPreparation extends
-  Omit<RustCallableEmissionContexts, "contexts" | "operands" | "contextFor" | "contextForOwner" | "operandFor"> {
+  Omit<RustCallableEmissionContexts, "contexts" | "operands" | "contextFor" | "contextForOwner" | "bodyContextFor" | "operandFor"> {
   readonly contexts: readonly RustPhysicalEmissionContextPreparation[];
   readonly operands: readonly RustPhysicalEmissionOperandPreparation[];
   contextFor(use: TargetUseSiteRef): RustPhysicalEmissionContextPreparation | undefined;
   contextForOwner(subject: object, role: RustPhysicalEmissionRole): RustPhysicalEmissionContextPreparation | undefined;
+  bodyContextFor(enclosingUse: TargetUseSiteRef, declaration: Node): RustPhysicalEmissionContextPreparation | undefined;
   operandFor(use: TargetUseSiteRef): RustPhysicalEmissionOperandPreparation | undefined;
 }
 
