@@ -184,7 +184,8 @@ export function constructed(value: NoClone): NoClone {
 export function duplicated(value: NoClone): [NoClone, NoClone] { return [value, value]; }` },
   }).result;
   assert.equal(refused.diagnostics.some(diagnostic => diagnostic.code === "RUST_VALUE_READ_OWNERSHIP_UNAVAILABLE"), true,
-    "a real duplicated owned NoClone read remains rejected at its analysis owner");
+    "a real duplicated owned NoClone read remains rejected at its analysis owner: " +
+      refused.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
   assert.equal(refused.artifacts.length, 0, "unavailable owned snapshots produce no partial native output");
   const directory = writeGeneratedProject("borrowed-no-clone-environments", result.artifacts);
   mkdirSync(join(directory, "tests"), { recursive: true });

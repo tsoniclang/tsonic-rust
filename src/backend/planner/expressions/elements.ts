@@ -13,7 +13,7 @@ import {
 } from "@tsonic/target-api/source";
 import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { planExpression } from "./entry.js";
-import { planRustValueRead } from "./typed-locations.js";
+import { planRustValueRead, requireRustReadOwnership } from "./typed-locations.js";
 import { planRustSourceIndexRead } from "../objects/indexed-records.js";
 import { requireProviderArgumentPassingFacts } from "./calls/arguments.js";
 
@@ -184,7 +184,8 @@ function planIndexedProjection(
   const planned = planExpression(receiverNode, context);
   if (planned === undefined) return undefined;
   const receiver = planned;
-  const borrowed = receiver !== planned || expressionCarrier(receiverNode, context)?.kind === "reference" ||
+  const borrowed = requireRustReadOwnership(receiverNode, context).value.kind === "borrow" ||
+    expressionCarrier(receiverNode, context)?.kind === "reference" ||
     context.expressionOverrides?.get(receiverNode)?.valueForm === "shared-reference";
   const read = (owner: RustExpr): RustExpr => borrowed
     ? planRustValueRead(node, project(owner, true), context) : project(owner, false);
@@ -193,7 +194,7 @@ function planIndexedProjection(
   if (effect === undefined) return undefined;
   const effects = context.input.program.sourceNavigation.expressionEffects(receiverNode);
   const indexEffects = context.input.program.sourceNavigation.expressionEffects(indexNode);
-  const selected: RustExpr = receiver === planned ? receiver : { kind: "reference", expr: receiver };
+  const selected: RustExpr = borrowed ? { kind: "reference", expr: receiver } : receiver;
   if (!effects.invokes && !effects.mutates && !effects.suspends && !effects.mayThrow &&
     !indexEffects.invokes && !indexEffects.mutates && !indexEffects.suspends && !indexEffects.mayThrow) {
     return read({ kind: "evaluate-then", effect, discard: "value", value: selected });

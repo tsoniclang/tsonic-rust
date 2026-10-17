@@ -278,7 +278,7 @@ function selectBorrowedWrite(
   const captured = objectRepresentations.receiverCaptures.isCaptured(field.declaration);
   if (captured) {
     const storage = validatedRustCapturedFieldStorageFact(field.declaration, input);
-    if (storage === undefined || !rustTargetTypeRefEquals(storage.valueCarrier, field.resultCarrier)) return undefined;
+    if (storage?.storage.kind !== "shared" || !rustTargetTypeRefEquals(storage.valueCarrier, field.resultCarrier)) return undefined;
   } else if (records.capturedFieldStorage.get(field.declaration) !== undefined) return undefined;
   if (!(captured && parentKind === "value") &&
     parentKind !== "shared-mutable" && parentKind !== "shared-immutable") return undefined;

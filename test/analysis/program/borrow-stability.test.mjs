@@ -169,10 +169,10 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
       IsIdentifier: node => receivers.includes(node) || useNodes.includes(node),
       IsPostfixUnaryExpression: node => updates.includes(node),
       IsElementAccessExpression: node => updates.some(update => update.operand === node),
+      IsVariableDeclarationList: () => false,
     }, as: {
       AsPostfixUnaryExpression: node => ({ Operand: node.operand }),
       AsElementAccessExpression: node => ({ Expression: node.receiver }),
-      IsVariableDeclarationList: () => false,
     }, parent: node => useNodes.includes(node) ? { kindName: "KindExpressionStatement" } : undefined,
     forEachChild: (node, visit) => (node.children ?? (node.operand === undefined
       ? node.receiver === undefined ? [] : [node.receiver] : [node.operand])).forEach(visit) },

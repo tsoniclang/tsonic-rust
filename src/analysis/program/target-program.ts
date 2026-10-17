@@ -244,11 +244,13 @@ export function analyzeRustTargetProgram(
     },
     canMoveStoredField: (field) => {
       const selected = records.targetOperation.get(field);
-      if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
-        selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
-      const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
-      if (definition === undefined ||
-        objectRepresentations.representationFor(definition)?.kind !== "value") return false;
+      if (selected?.kind !== "tuple-index" && selected?.kind !== "fixed-index") {
+        if (selected?.kind !== "source-field" || selected.storage !== "project-object" ||
+          selected.valueSemantics.kind !== "stored" || selected.dispatch !== undefined) return false;
+        const definition = context.projectTypes.definitionForCarrier(selected.receiverCarrier);
+        if (definition === undefined ||
+          objectRepresentations.representationFor(definition)?.kind !== "value") return false;
+      }
       const semantics = context.semanticsFor(field).operations;
       const access = semantics.propertyAccess(field) ?? semantics.elementAccess(field);
       if (access === undefined || records.runtimeCarrier.get(access.receiver.expression)?.carrier.kind === "reference") return false;

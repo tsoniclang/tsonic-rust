@@ -4,6 +4,7 @@ import test from "node:test";
 import { analyzeRust, acmeVectorsPackage } from "../../helpers/rust-session.mjs";
 import { selectRustProviderMutableInputs } from "../../../dist/analysis/storage/provider-mutable-inputs.js";
 import { analyzeRustNativeInputs } from "../../../dist/analysis/ownership/native-places.js";
+import { collectMutableInputs } from "../../../dist/backend/planner/project/provider-mutable-inputs.js";
 
 
 function selectMutableInputs(node, operation, contextUse, input) {
@@ -61,6 +62,39 @@ test("native mutable admission is sealed and retains exact operation and source-
   }
   const first = current.calls[0];
   assert.equal(current.program.providerMutableInputs.forOperation({}, first.proof.operation, first.proof.contextUse) === undefined, true);
+});
+
+test("mutable rendering consumes the admitted storage choice without repeating source place classification", () => {
+  const { program, calls } = fixture();
+  for (const { node, proof } of calls) {
+    const queried = [];
+    const context = { emissionContext: proof.context, input: { program: {
+      providerMutableInputs: { forOperation(operationNode, operation, contextUse) {
+        queried.push([operationNode, operation, contextUse]);
+        assert.equal(operationNode === node && operation === proof.operation && contextUse === proof.contextUse,
+          true, "the renderer reads the exact original operation/context tuple");
+        return proof;
+      } },
+      source: { ast: new Proxy({}, { get() { throw new Error("Storage rendering reclassified the source AST."); } }) },
+      records: new Proxy({}, { get() { throw new Error("Storage rendering reselected a native place record."); } }),
+    } } };
+    const selected = collectMutableInputs(context, proof.operation, node,
+      () => { throw new Error("A direct/project/owned place classification must not render or probe another expression."); });
+    assert.equal(queried.length, 1, "one pure sealed proof lookup per operation");
+    assert.equal(selected.size, proof.inputs.length, "every admitted native mutable input is retained");
+    for (const input of proof.inputs) {
+      const rendered = selected.get(input.key);
+      assert.equal(rendered.node === input.node && rendered.inputs.length === 1 && rendered.inputs[0] === input.input,
+        true, "the original source input identity survives lowering");
+      assert.equal(rendered.kind, input.place.storage.kind, "only the producer's storage choice is rendered");
+      if (rendered.kind === "project-field") {
+        assert.equal(rendered.receiverNode === input.place.storage.receiverNode &&
+          rendered.storagePath === input.place.storage.storagePath, true, "the exact physical member path is not reconstructed");
+      }
+    }
+    assert.equal(program.providerMutableInputs.forOperation(node, proof.operation, proof.contextUse) === proof, true,
+      "rendering cannot mutate or replace producer evidence");
+  }
 });
 
 test("missing direct roots and selected field paths cannot publish mutable admission", () => {

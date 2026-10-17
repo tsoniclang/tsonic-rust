@@ -21,6 +21,7 @@ import type { RustNativeStoragePlan, RustNativeStorageSelection } from "../calla
 import type { RustLexicalFunctionQueries } from "../callables/lexical-functions.js";
 import { rustRetainedCallableStorage } from "../callables/results.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
+import { rustTargetOperationIsDirectLocation } from "../operations/target-operation.js";
 
 export interface RustCaptureReadRequirement {
   readonly owner: Node;
@@ -177,7 +178,8 @@ export function analyzeRustReadOwnership(input: {
     const parent = ast.parent(node);
     const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);
     storageReads.set(node, inherited ?? Object.freeze({ storage: ast.is.IsIdentifier(node) && records.sourceBinding.get(node) !== undefined ||
-      implicitProperty || ast.is.IsElementAccessExpression(node) ||
+      implicitProperty || rustTargetOperationIsDirectLocation(operation) ||
+      operation?.kind === "source-static-field" || records.nativeArrayStorage.get(node)?.kind === "element" ||
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       operation?.kind === "source-field" && operation.valueSemantics.kind === "stored",
       binding: records.sourceBinding.get(node)?.sourceDeclaration }));
@@ -252,7 +254,8 @@ export function analyzeRustReadOwnership(input: {
       const clone = rustCarrierSupportsClone(physicalValueCarrier, input.definitions) || declaration !== undefined &&
         input.genericRequirements.supportsClone(declaration, physicalValueCarrier);
       const use = uses.get(node);
-      const borrowed = use?.mode === "mutable" ? "mutable" : use?.mode === "shared" &&
+      const borrowed = use?.mode === "mutable" ? "mutable" :
+        (use?.mode === "shared" || use?.mode === "projection" && !movingReads.has(node)) &&
         use.later.every((later, index) => index < use.laterStart || !input.borrowEffectsInput.isNativeNode(later) ||
           borrowRelationships.get(node)?.has(later)) ? "shared" : undefined;
       const storageRead = sourceStorageRead.storage;
@@ -266,14 +269,14 @@ export function analyzeRustReadOwnership(input: {
       const conversion = records.contextualValueConversion.get(node);
       const conversionBorrows = conversion !== undefined &&
         rustContextualRuntimeConversionContract(conversion.conversion, input.definitions)?.sourceMode === "ref";
-      const projectBorrows = records.projectDowncast.get(node) !== undefined;
+      const projectBorrows = records.projectDowncast.get(node) !== undefined || records.projectUpcast.get(node) !== undefined;
       const constructsContainer = records.optionProjection.get(node)?.kind === "some";
       const sourceRead = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
         transfer: !borrowedCapture && (movingReads.has(node) || !storageRead), borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
           ? "shared" : constructsContainer ? undefined : borrowed });
       const formation = selectRustValueReadOwnership({ copy: sourceCopy, clone: sourceClone,
-        transfer: !borrowedCapture && (movingReads.has(node) || !storageRead),
-        borrowed: storageRead ? sourceRead?.kind === "borrow" ? sourceRead.mutable ? "mutable" : "shared" : undefined : undefined });
+        transfer: !borrowedCapture && (movingReads.has(node) || !storageRead) }) ??
+        (sourceRead?.kind === "borrow" ? sourceRead : undefined);
       const operation = records.targetOperation.get(node);
       const binding = records.sourceBinding.get(node);
       const module = binding === undefined ? undefined : records.moduleBinding.get(binding.sourceDeclaration);

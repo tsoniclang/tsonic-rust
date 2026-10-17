@@ -112,9 +112,9 @@ export function planRustIdentifierValue(
       return access === "value" ? { kind: "owned-string-from-borrowed-str", expression: value } : value;
     }
     if (access !== "value") return referent ?? { kind: "dereference", pointer: value };
-    return requireRustReadOwnership(node, context).snapshot?.kind === "copy"
-      ? referent ?? { kind: "dereference", pointer: value }
-      : cloneRustExpression(referent ?? value);
+    const source = referent ?? { kind: "dereference" as const, pointer: value };
+    const read = requireRustReadOwnership(node, context).source;
+    return read.kind === "clone" ? cloneRustExpression(source) : source;
   }
   return access === "value" ? planRustValueRead(node, value, context) : value;
 }
@@ -168,8 +168,8 @@ export function planRustSharedReceiver(
   later?: Node,
 ): RustExpr {
   const value = expression;
-  if (later !== undefined && !requireRustReadOwnership(node, context).borrowedAcross.has(later) &&
-    requireRustReadOwnership(node, context).value.kind === "borrow") {
+  const read = requireRustReadOwnership(node, context);
+  if (later !== undefined && !read.borrowedAcross.has(later) && read.value.kind === "borrow") {
     return failRustPlannerInvariant("A shared receiver lost its selected source evaluation-order borrow.", node);
   }
   const override = context.expressionOverrides?.get(node);
@@ -179,10 +179,10 @@ export function planRustSharedReceiver(
   const captured = rustCapturedBinding(node, context);
   if (captured?.storage === "value" && captured.borrowed !== undefined) {
     return captured.borrowed === "shared"
-      ? captured.expression.kind === "reference" ? { kind: "reference", expr: value } : value
-      : { kind: "reference", expr: { kind: "dereference", pointer: value } };
+      ? captured.expression
+      : { kind: "reference", expr: { kind: "dereference", pointer: captured.expression } };
   }
-  if (context.input.program.ownership.reads.get(node)?.sharedReference === true) return value;
+  if (read.sharedReference) return value;
   const kind = context.input.program.source.ast.kindName(node);
   return override === undefined &&
       (kind === "KindThisExpression" || kind === "KindThisKeyword")

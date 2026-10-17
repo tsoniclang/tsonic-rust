@@ -6,7 +6,7 @@ import type { RustFinalizedSourceInput } from "../../target-model/records/finali
 import type { RustComputedMemberFact } from "../../target-model/records/operation-selections.js";
 
 export interface RustReadUse {
-  readonly mode: "value" | "shared" | "mutable" | "move";
+  readonly mode: "value" | "shared" | "mutable" | "move" | "projection";
   readonly later: readonly Node[];
   readonly laterStart: number;
   readonly stableAcrossEffects: boolean;
@@ -95,7 +95,12 @@ export function selectRustOperationReadUses(ast: AstReader, node: Node, input: {
     const key = ElementAccessExpression_ArgumentExpression(ast, node);
     select(receiver, "shared", key === undefined ? [] : [key], 0, true);
     select(key, "shared");
+  } else if (operation?.kind === "tuple-index" || operation?.kind === "fixed-index") {
+    const key = ElementAccessExpression_ArgumentExpression(ast, node);
+    select(receiver, "projection", key === undefined ? [] : [key], 0, true);
   } else if (operation?.kind === "source-field") select(receiver, "shared");
+  else if (operation?.kind === "source-accessor" && operation.receiver.kind === "instance")
+    select(receiver, operation.accessMode === "read" ? "shared" : "mutable");
   for (const argument of input.address?.arguments ?? []) {
     if (argument.input === "raw-ref" || argument.input === "raw-owner-ref") select(argument.expression, "shared");
   }

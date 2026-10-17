@@ -41,7 +41,7 @@ import {
 } from "../objects/project-objects.js";
 import { rustErrorFieldBorrowNeedsSnapshot, rustErrorFieldHasGuardedBorrow } from "../expressions/error-field-borrows.js";
 import { rustProviderInputBorrowMode } from "../../../analysis/storage/provider-borrows.js";
-import { collectMutableInputs, mutableRootsAreDisjoint, noSourceExpressionEffects,
+import { collectMutableInputs, noSourceExpressionEffects,
   providerMutableStorageEffects, type MutableProviderInput } from "./provider-mutable-inputs.js";
 
 export interface RustFinalizedInputPlanOverrides {
@@ -84,14 +84,10 @@ export function planRustProviderEvaluationScope(
   const mutableInputs = collectMutableInputs(
     context,
     fact,
-    receiverNode,
-    argumentNodes,
+    operationNode,
     planExpression,
   );
   if (mutableInputs === undefined) {
-    return { kind: "failed" };
-  }
-  if (!mutableRootsAreDisjoint(operationNode, fact, mutableInputs, context)) {
     return { kind: "failed" };
   }
   const sourceSlots = sourceRuntimeSlots(context.input.program.physicalEmissionContexts, operationNode, fact);
