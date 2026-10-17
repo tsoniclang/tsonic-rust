@@ -429,7 +429,8 @@ export function ordinary(value: number): number { const stored = value; return s
       assert.equal(prepared.sourceFor(occurrence.node, occurrence.operation) === occurrence, true, "original operation occurrence lookup");
       assert.equal(prepared.sourceFor(occurrence.node, { ...occurrence.operation }) === undefined, true, "copied provider fact is foreign");
       for (const slot of occurrence.slots) assert.equal(prepared.operands.some(operand => operand.origin.kind !== "call-input" &&
-        operand.origin.evaluation.kind === "provider-source" && operand.origin.evaluation.slot === slot && operand.node === slot.node), true,
+        operand.origin.evaluation.kind === "provider-source" && operand.origin.evaluation.slot === slot &&
+        operand.node === slot.node && operand.use.subject === slot), true,
       "provider-source uses carry their original slot, never a node-only inference");
       for (const { input, slot } of occurrence.inputs) {
         assert.equal(occurrence.slots.includes(slot), true, "call inputs retain the admitted original source slot");

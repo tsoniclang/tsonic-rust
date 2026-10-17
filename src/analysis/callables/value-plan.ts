@@ -372,7 +372,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       }
       emissionRequests = requests.value;
       physicalLifecycle = createRustPhysicalCallableLifecycle({ ast: input.ast, records: input.records,
-        sourceStorage: input.sourceStorage, requests: emissionRequests, typeDefinitions: input.typeDefinitions,
+        sourceStorage: input.sourceStorage, requests: emissionRequests, sourceOccurrences, typeDefinitions: input.typeDefinitions,
         lexicalFunctions: input.lexicalFunctions, structuralShapes: input.structuralShapes,
         nativeStorage, nativeProducers, adapterFlows: flows });
       const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.nativeNodes,
