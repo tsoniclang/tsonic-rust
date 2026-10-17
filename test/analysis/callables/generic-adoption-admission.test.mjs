@@ -6,6 +6,241 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const code = "TSONIC_GENERIC_ASYNC_ADOPTION_UNSUPPORTED";
 const identity = "async function identity<Value>(value: Value) { return value; }";
+
+const nativeEntryCases = [
+  [
+    "sync-forEach-capture",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    [0].forEach(() => { resolve(value); });\n  });\n}"
+  ],
+  [
+    "deferred-then-capture",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    void Promise.resolve(0).then(() => { resolve(value); });\n  });\n}"
+  ],
+  [
+    "deferred-catch-capture",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    void Promise.reject<void>(new Error(\"seed\")).catch(() => { resolve(value); });\n  });\n}"
+  ],
+  [
+    "deferred-finally-capture",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    void Promise.resolve(0).finally(() => { resolve(value); });\n  });\n}"
+  ],
+  [
+    "deferred-PromiseLike-capture",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    const pending: PromiseLike<number> = Promise.resolve(0);\n    void pending.then(() => { resolve(value); });\n  });\n}"
+  ],
+  [
+    "native-direct-resolver",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => { [value].forEach(resolve); });\n}"
+  ],
+  [
+    "native-callback-parameter",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => { [value].forEach(actual => { resolve(actual); }); });\n}"
+  ],
+  [
+    "aliased-callback-and-resolver",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    const done = resolve;\n    const callback = (): void => { done(value); };\n    const alias = callback;\n    [0].forEach(alias);\n  });\n}"
+  ],
+  [
+    "finite-returned-callback",
+    "function delivery<Part>(done: (value: Part) => void, value: Part): () => void {\n  return () => { done(value); };\n}\nfunction wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => { [0].forEach(delivery(resolve, value)); });\n}"
+  ],
+  [
+    "source-helper-to-native-entry",
+    "function invoke(callback: () => void): void { [0].forEach(callback); }\nfunction wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => { invoke(() => { resolve(value); }); });\n}"
+  ],
+  [
+    "two-native-levels",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    [0].forEach(() => { void Promise.resolve(0).then(() => { resolve(value); }); });\n  });\n}"
+  ],
+  [
+    "native-source-recursive-SCC",
+    "function deliver<Part>(done: (value: Part) => void, value: Part, depth: number): void {\n  if (depth === 0) { done(value); return; }\n  [0].forEach(() => { deliver(done, value, depth - 1); });\n}\nfunction wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => { deliver(resolve, value, 2); });\n}"
+  ],
+  [
+    "finite-callback-alternatives",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    const first = (): void => { resolve(value); };\n    const second = (): void => { resolve(value); };\n    const callback = value === value ? first : second;\n    [0].forEach(callback);\n  });\n}"
+  ],
+  [
+    "both-native-then-ports",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    const callback = (): void => { resolve(value); };\n    void Promise.resolve(0).then(callback, callback);\n  });\n}"
+  ]
+];
+
+nativeEntryCases.push(...[
+  [
+    "map-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].map(actual => { resolve(actual); return 0; }); }); }"
+  ],
+  [
+    "filter-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].filter(actual => { resolve(actual); return true; }); }); }"
+  ],
+  [
+    "some-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].some(actual => { resolve(actual); return true; }); }); }"
+  ],
+  [
+    "every-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].every(actual => { resolve(actual); return true; }); }); }"
+  ],
+  [
+    "find-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].find(actual => { resolve(actual); return true; }); }); }"
+  ],
+  [
+    "findLast-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].findLast(actual => { resolve(actual); return true; }); }); }"
+  ],
+  [
+    "findIndex-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].findIndex(actual => { resolve(actual); return true; }); }); }"
+  ],
+  [
+    "findLastIndex-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].findLastIndex(actual => { resolve(actual); return true; }); }); }"
+  ],
+  [
+    "reduce-element-not-accumulator",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value].reduce((accumulator, actual) => { resolve(actual); return accumulator; }, 0); }); }"
+  ],
+  [
+    "sort-two-element-inputs",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { [value, value].sort((left, right) => { resolve(left); resolve(right); return 0; }); }); }"
+  ],
+  [
+    "Array-from-actual-input0-mapper1",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { Array.from([value], actual => { resolve(actual); return 0; }); }); }"
+  ],
+  [
+    "readonly-array-element",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values: ReadonlyArray<Value> = [value]; values.forEach(actual => { resolve(actual); }); }); }"
+  ],
+  [
+    "Map-native-input-type-bound",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values = new Map<number, Value>([[0, value]]); values.forEach(actual => { resolve(actual); }); }); }"
+  ],
+  [
+    "ReadonlyMap-native-input-type-bound",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values: ReadonlyMap<number, Value> = new Map<number, Value>([[0, value]]); values.forEach(actual => { resolve(actual); }); }); }"
+  ],
+  [
+    "Set-native-input-type-bound",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values = new Set<Value>([value]); values.forEach(actual => { resolve(actual); }); }); }"
+  ],
+  [
+    "ReadonlySet-native-input-type-bound",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values: ReadonlySet<Value> = new Set<Value>([value]); values.forEach(actual => { resolve(actual); }); }); }"
+  ],
+  [
+    "TypedArray-captured-generic-resolver",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { new Int32Array([0, 1]).sort((left, right) => { void left; void right; resolve(value); return 0; }); }); }"
+  ],
+  [
+    "optional-absent-fulfilled",
+    "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { void Promise.reject<number>(new Error(\"seed\")).then(undefined, () => { resolve(value); }); }); }"
+  ]
+]);
+
+nativeEntryCases.push(...[
+  [
+    "deferred-captured-payload-location",
+    "function wrap<Value>(value: Value): Promise<Value | number> {\n  return new Promise<Value | number>(resolve => {\n    let selected: Value | number = 7;\n    void Promise.resolve(0).then(() => { resolve(selected); });\n    selected = value;\n  });\n}"
+  ],
+  [
+    "deferred-captured-resolver-location",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    let done: (actual: Value) => void = actual => { void actual; };\n    void Promise.resolve(0).then(() => { done(value); });\n    done = resolve;\n  });\n}"
+  ],
+  [
+    "native-callback-actual-default",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    const values: (Value | undefined)[] = [undefined];\n    values.forEach((actual = value) => { resolve(actual); });\n  });\n}"
+  ],
+  [
+    "stored-pending-native-entry",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  const pending = new Promise<Value>(resolve => {\n    const saved = (): void => { resolve(value); };\n    void Promise.resolve(0).then(saved);\n  });\n  return pending;\n}"
+  ]
+]);
+
+nativeEntryCases.push(...[
+  [
+    "generic-native-callback-checked-input-bound",
+    "function wrap<Value>(value: Value): Promise<Value> {\n  return new Promise<Value>(resolve => {\n    function deliver<Actual extends Value>(actual: Actual): void { resolve(actual); }\n    [value].forEach(deliver);\n  });\n}"
+  ]
+]);
+
+for (const [name, declarations] of nativeEntryCases) {
+  test("Rust native callback entry keeps exact generic adoption: " + name, () => {
+    const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": declarations +
+      "\nexport function reject(promised: Promise<number>): void { void wrap(promised); }" } });
+    rejected(compilation, "wrap(promised)", "KindCallExpression", "wrap");
+  });
+}
+
+test("Rust native callback ordinary matrix executes every retained entry under one real loop owner", { timeout: 300_000 }, () => {
+  const files = Object.fromEntries(nativeEntryCases.map(([name, declarations], index) =>
+    [`case${index}.ts`, declarations + "\nexport async function run(): Promise<number> { return await wrap(7); }"]));
+  const sourceText = nativeEntryCases.map((entry, index) => `import { run as run${index} } from "./case${index}.js";`).join("\n") +
+    "\n" + nativeEntryCases.map((entry, index) => `console.log(await run${index}());`).join("\n");
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_entries" } },
+    files: { ...files, "index.ts": sourceText } });
+  assert.equal(result.diagnostics.length, 0,
+    JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+  const output = validateGeneratedProject("native-callback-entry-matrix", result.artifacts, { run: true }).stdout;
+  assert.deepEqual(output.trim().split(/\r?\n/u), nativeEntryCases.map(() => "7"),
+    "every synchronous/deferred/aliased/helper/recursive entry preserves the ordinary native payload");
+});
+
+const nativeEntryInverses = [
+  [
+    "non-resolving-native-observer",
+    "function wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => {\n    [0].forEach(() => { void value; });\n    resolve(7);\n  });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ],
+  [
+    "non-resolving-deferred-observer",
+    "function wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => {\n    void Promise.resolve(0).then(() => { void value; });\n    resolve(7);\n  });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ],
+  [
+    "same-helper-ordinary-and-resolver-correlated",
+    "function deliver<Part>(callback: (value: Part) => void, value: Part): void {\n  [0].forEach(() => { callback(value); });\n}\nfunction wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => {\n    const observe = (actual: Value): void => { void actual; };\n    deliver(observe, value);\n    deliver(resolve, 7);\n  });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ],
+  [
+    "same-helper-ordinary-and-resolver-correlated-reversed",
+    "function deliver<Part>(callback: (value: Part) => void, value: Part): void {\n  [0].forEach(() => { callback(value); });\n}\nfunction wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => {\n    const observe = (actual: Value): void => { void actual; };\n    deliver(resolve, 7);\n    deliver(observe, value);\n  });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ],
+  [
+    "same-source-two-created-callbacks",
+    "function make<Part>(callback: (value: Part) => void, value: Part): () => void {\n  return () => { callback(value); };\n}\nfunction wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => {\n    const first = make((actual: Value): void => { void actual; }, value);\n    const second = make(resolve, 7);\n    [0].forEach(first);\n    [0].forEach(second);\n  });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ],
+  [
+    "callback-signature-alone-does-not-prove-resolver",
+    "function wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => {\n    const observer = (actual: Value): void => { void actual; };\n    [value].forEach(observer);\n    resolve(7);\n  });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ]
+];
+nativeEntryInverses.push(...[
+  [
+    "reduce-accumulator-remains-number",
+    "function wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => { [value].reduce((accumulator, actual) => { void actual; resolve(accumulator); return accumulator; }, 7); });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ],
+  [
+    "sort-callback-never-resolves-captured-Value",
+    "function wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => { [1, 2].sort((left, right) => { void value; resolve(left + right + 4); return 0; }); });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ],
+  [
+    "Array-from-mapper-is-not-iterable-Value",
+    "function wrap<Value>(value: Value): Promise<number> {\n  return new Promise<number>(resolve => { Array.from([0], actual => { void value; resolve(actual + 7); return 0; }); });\n}\nconsole.log(await wrap(Promise.resolve(5)));\n"
+  ]
+]);
+for (const [name, sourceText] of nativeEntryInverses) {
+  test("Rust native callback non-adoption inverse: " + name, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: ["js"],
+      target: { id: "rust", options: { outputType: "bin", crateName: "native_callback_inverse" } },
+      files: { "index.ts": sourceText } });
+    assert.equal(result.diagnostics.length, 0,
+      JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    const output = validateGeneratedProject("native-callback-inverse-" + name, result.artifacts, { run: true }).stdout;
+    assert.equal(output.trim(), "7", "only the actual resolver's same-activation payload is adopted");
+  });
+}
 function sourcePosition(ast, node, finish = false) {
   const bytes = Buffer.from(ast.getSourceText(ast.getSourceFile(node)));
   const leading = /^[\t\n\v\f\r ]*/u.exec(bytes.subarray(ast.pos(node), ast.end(node)).toString("utf8"))[0];
