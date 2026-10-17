@@ -100,10 +100,12 @@ export function inspect(value: string, word: string): boolean { return value.inc
   const calls = [];
   const outcomes = new Map();
   let open = true;
-  const observe = (role, node, select) => {
+  const observe = (role, node, select, lookup) => {
     assert.equal(open, true, `${role}: physical storage construction is open`);
+    const previous = lookup(node);
     const selection = outcomes.get(role) ?? select(node);
-    calls.push({ role, node, selection });
+    if (previous.kind === "unresolved") calls.push({ role, node, selection });
+    else assert.equal(selection === previous, true, `${role}: repeated preparation preserves the identical materialized result`);
     return selection;
   };
   const nativeStorage = Object.freeze({
@@ -113,10 +115,13 @@ export function inspect(value: string, word: string): boolean { return value.inc
     futureEnvironmentFor: storage.futureEnvironmentFor,
     parameterFor: storage.parameterFor,
     returnFor: storage.returnFor,
-    prepareReturn: node => observe("return", node, storage.prepareReturn),
-    valueFor: node => observe("value", node, storage.valueFor),
-    operandFor: node => observe("operand", node, storage.operandFor),
-    invocationCallableFor: node => observe("invocation", node, storage.invocationCallableFor),
+    prepareReturn: node => observe("return", node, storage.prepareReturn, storage.returnFor),
+    prepareValue: node => observe("value", node, storage.prepareValue, storage.valueFor),
+    prepareOperand: node => observe("operand", node, storage.prepareOperand, storage.operandFor),
+    prepareInvocation: node => observe("invocation", node, storage.prepareInvocation, storage.invocationCallableFor),
+    valueFor: storage.valueFor,
+    operandFor: storage.operandFor,
+    invocationCallableFor: storage.invocationCallableFor,
     subjectFor: storage.subjectFor,
     boundSubjectFor: storage.boundSubjectFor,
     invocationReturnFor: storage.invocationReturnFor,
@@ -204,6 +209,34 @@ test("all four required runtime roles materialize the exact original checked sub
       `${request.kind}: early and final views never create a second cache or replay the selector`);
   }
   assert.equal(current.calls.length, requests.length, "all repeated view reads leave exactly the four real required selections");
+});
+
+test("earlier actual metadata preparation and lifecycle publication share one selection without admitting cached-only roles", () => {
+  const current = fixture();
+  const request = current.request("value", current.declaration);
+  const input = current.input([request]);
+  assert.equal(input.nativeStorage.valueFor(current.declaration).kind, "unresolved", "a read before preparation does not select storage");
+  assert.equal(current.calls.length, 0, "the superseded computing read form performs no analysis");
+  const selected = input.nativeStorage.prepareValue(current.declaration);
+  const metadataOnly = input.nativeStorage.prepareValue(current.operand);
+  assert.equal(selected.kind !== "unresolved" && metadataOnly.kind !== "unresolved", true,
+    "both existing checked metadata questions complete at their actual construction owner");
+  const count = current.calls.length;
+  const lifecycle = createRustPhysicalCallableLifecycle(input);
+  assert.equal(lifecycle.prepared.valueFor(current.declaration) === selected, true,
+    "the requested early reader sees the identical already prepared data");
+  assert.equal(lifecycle.prepared.valueFor(current.operand).kind, "unresolved",
+    "an attempted metadata key is not an actual emitted runtime-role request");
+  current.physical.closeAdmission();
+  const result = lifecycle.complete(current.physical);
+  assert.equal(result.kind, "resolved", "one canonical preparation supplies the finished lifecycle");
+  assert.equal(current.calls.length, count, "completion does not repeat either successful metadata selection");
+  assert.equal(result.value.nativeStorage.valueFor(current.declaration) === selected, true,
+    "terminal publication keeps the original completed data object");
+  assert.equal(result.value.nativeStorage.valueFor(current.operand).kind, "unresolved",
+    "publication does not infer a runtime demand from successful cached metadata");
+  for (const name of ["prepareValue", "prepareOperand", "prepareInvocation", "prepareReturn"])
+    assert.equal(name in result.value.nativeStorage, false, `${name}: construction is not published`);
 });
 
 test("distinct actual contexts retain one canonical subject selection without rebinding", () => {
@@ -514,6 +547,18 @@ test("the removed node-inventory API is rejected rather than accepted as a hidde
   assert.equal(current.calls.length, 0, "removed-form rejection precedes every storage query");
 });
 
+test("the retired implicit-computation construction input is rejected before any role is selected", () => {
+  const current = fixture();
+  const input = current.input([]);
+  const { prepareValue, prepareOperand, prepareInvocation, ...retired } = input.nativeStorage;
+  assert.equal([prepareValue, prepareOperand, prepareInvocation].every(value => typeof value === "function"), true,
+    "the current construction contract supplies every explicit preparation owner");
+  assert.throws(() => createRustPhysicalCallableLifecycle({ ...input, nativeStorage: retired }),
+    /requires explicit construction preparation for every runtime selection role/u,
+    "read-only or superseded inputs cannot reopen analysis through a lookup");
+  assert.equal(current.calls.length, 0, "removed construction input rejection precedes all runtime selection");
+});
+
 test("required stored native Futures retain their original physical producer through aliases and return", () => {
   const checked = checkedSource(`
 export async function first(): Promise<boolean> { return true; }
@@ -616,9 +661,9 @@ export function compare(): boolean {
     sourceStorage: context.sourceStorage, requests: Object.freeze(uses), sourceOccurrences: construction.sourceOccurrences,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: checked.input.lexicalFunctions,
     structuralShapes: context.structuralShapes, adapterFlows: Object.freeze([]), nativeProducers: construction.producers,
-    nativeStorage: Object.freeze({ ...construction.storage, valueFor(node) {
+    nativeStorage: Object.freeze({ ...construction.storage, prepareValue(node) {
       earlySelections.push(node);
-      return construction.storage.valueFor(node);
+      return construction.storage.prepareValue(node);
     } }) });
   const expectedSubjects = new Set(uses.map(use => use.subject));
   assert.equal(earlySelections.length, expectedSubjects.size, "every required generic value is selected exactly once before family admission closes");

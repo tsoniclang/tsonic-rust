@@ -407,6 +407,48 @@ for (const [label, source] of [
     "the missing class premise has its exact owning selection reason");
 });
 
+test("actual value and operand preparation retain only completed data and pure readers never reselect", () => {
+  let ready = false;
+  let subject;
+  let reads = 0;
+  const current = construction("export function keep(value: number): number { const stored = value; return stored; }",
+    undefined, records => Object.freeze({ ...records, runtimeCarrier: Object.freeze({ get(node) {
+      if (node !== subject) return records.runtimeCarrier.get(node);
+      reads += 1;
+      return ready ? records.runtimeCarrier.get(node) : undefined;
+    } }) }), storage => {
+      subject = storage.nodes.find(node => storage.source.ast.is.IsVariableDeclaration(node) &&
+        storage.source.ast.text(storage.source.ast.name(node)) === "stored");
+      return storage;
+    });
+  assert.equal(subject !== undefined, true, "the question is the identical existing checked native binding");
+  const before = reads;
+  assert.equal(current.queries.valueFor(subject).kind, "unresolved", "an unprepared value lookup is unavailable, not a selector");
+  assert.equal(current.queries.operandFor(subject).kind, "unresolved", "an unprepared operand lookup is unavailable, not a selector");
+  assert.equal(reads, before, "pure absence reads never inspect source facts");
+  assert.equal(current.queries.prepareValue(subject).kind, "unresolved", "unfinished actual value evidence is not cached as success");
+  assert.equal(current.queries.prepareOperand(subject).kind, "unresolved", "unfinished actual operand evidence is not cached as success");
+  ready = true;
+  const value = current.queries.prepareValue(subject);
+  const operand = current.queries.prepareOperand(subject);
+  assert.equal(value.kind !== "unresolved" && operand.kind !== "unresolved", true,
+    "the actual completed evidence remains selectable after the earlier pending result");
+  const completedReads = reads;
+  current.physical.closeAdmission();
+  current.physical.closeKeys();
+  current.physical.publish();
+  for (let repetition = 0; repetition < 3; repetition += 1) {
+    assert.equal(current.queries.prepareValue(subject) === value, true, "known value preparation returns the same completed object");
+    assert.equal(current.queries.prepareOperand(subject) === operand, true, "known operand preparation returns the same completed object");
+    assert.equal(current.queries.valueFor(subject) === value, true, "value lookup reads the canonical completed object");
+    assert.equal(current.queries.operandFor(subject) === operand, true, "operand lookup reads the canonical completed object");
+  }
+  assert.equal(reads, completedReads, "neither repeated preparation nor any post-publication read performs source selection");
+  assert.equal(Object.isFrozen(value) && Object.isFrozen(operand), true, "only immutable selection data survives completion");
+  assert.equal(current.queries.valueFor({}).kind, "unresolved", "foreign value lookup remains absent without source inspection");
+  assert.equal(current.queries.operandFor({}).kind, "unresolved", "foreign operand lookup remains absent without source inspection");
+});
+
 test("nested generic captures retain their original source selections rather than only the outer native member", () => {
   const observations = [];
   const current = construction(`
@@ -713,7 +755,9 @@ test("published callable plans expose no construction capability", () => {
   const { program } = analyzeRust({ surfaces: [], files: { "index.ts": joinedLibrary } });
   const { generic, nativeCaptures } = program.callableValues;
   for (const [owner, names] of [[generic, ["initializePhysical"]], [generic.physical, ["carrierFor", "closeAdmission", "publish"]],
-    [nativeCaptures, ["require", "complete"]], [program.callableValues, ["finalizeSelected", "initialize", "seal", "publish"]]]) {
+    [nativeCaptures, ["require", "complete"]],
+    [program.callableValues.nativeStorage, ["prepareValue", "prepareOperand", "prepareInvocation", "prepareReturn"]],
+    [program.callableValues, ["finalizeSelected", "initialize", "seal", "publish"]]]) {
     assert.equal(Object.isFrozen(owner), true);
     for (const name of names) assert.equal(name in owner, false, name);
   }

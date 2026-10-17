@@ -192,7 +192,7 @@ test("callback Future physical storage reuses canonical protocol completion incl
     assert.equal(arguments_ !== undefined, true);
     const signature = rustNativeCallableInputPhysicalSignature(call.input, arguments_, current.context.typeDefinitions);
     assert.equal(signature !== undefined, true);
-    const physical = nativeStorage.valueFor(call.node);
+    const physical = nativeStorage.prepareValue(call.node);
     assert.equal(physical.kind, "selected", physical.reason ?? "exact invocation storage");
     assert.equal(rustTargetTypeRefEquals(physical.carrier, signature.result), true, "one protocol output owner");
     assert.equal(rustNativeCallableInputPhysicalSignature(call.input,

@@ -12,7 +12,6 @@ import type { RustPhysicalCallableFlowApplication, RustPhysicalCallableFlowAppli
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
 import { rustGenericCallableConversionMatches, type RustGenericCallableConversion }
   from "../../target-model/conversions/generic-callable.js";
-import { rustCallableProtocol } from "../../target-model/types/carriers/callables.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import { rustPhysicalPayloadFor } from "../../target-model/types/physical-payloads.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -81,6 +80,9 @@ const unpreparedStorage: RustNativeStorageSelection = Object.freeze({ kind: "unr
 export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableLifecycleInput): RustPhysicalCallableLifecycle {
   if (!Array.isArray(input.requests)) throw new Error("Physical callable storage requires its complete selecting-owner request vector.");
   if (!Array.isArray(input.sourceOccurrences)) throw new Error("Physical callable storage requires its original selected source occurrence vector.");
+  if (typeof input.nativeStorage.prepareValue !== "function" || typeof input.nativeStorage.prepareOperand !== "function" ||
+    typeof input.nativeStorage.prepareInvocation !== "function")
+    throw new Error("Physical callable storage requires explicit construction preparation for every runtime selection role.");
   const { ast, records, nativeStorage: queries } = input;
   const diagnostics: TargetDiagnostic[] = [];
   const sourceNodes = new Map<object, Node>(input.sourceStorage.nodes.map(node => [node, node]));
@@ -141,15 +143,15 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       context.bindings !== request.bindings)
       reject(request.subject, "A required physical callable use has no exact selecting-owner contract and original binding identity.");
   }
-  const values = new Map<Node, RustNativeStorageSelection>();
-  const operands = new Map<Node, RustNativeStorageSelection>();
-  const invocations = new Map<Node, RustNativeStorageSelection>();
+  const requestedValues = new Set(input.requests.filter(request => request.kind === "value").map(request => request.subject));
+  const requestedOperands = new Set(input.requests.filter(request => request.kind === "operand").map(request => request.subject));
+  const requestedInvocations = new Set(input.requests.filter(request => request.kind === "invocation").map(request => request.subject));
   const requestedReturns = new Set(input.requests.filter(request => request.kind === "return").map(request => request.subject));
   const prepared = Object.freeze({
-    valueFor: (node: Node) => values.get(node) ?? unpreparedStorage,
-    operandFor: (node: Node) => operands.get(node) ?? unpreparedStorage,
+    valueFor: (node: Node) => requestedValues.has(node) ? queries.valueFor(node) : unpreparedStorage,
+    operandFor: (node: Node) => requestedOperands.has(node) ? queries.operandFor(node) : unpreparedStorage,
     returnFor: (node: Node) => requestedReturns.has(node) ? queries.returnFor(node) : unpreparedStorage,
-    invocationCallableFor: (node: Node) => invocations.get(node) ?? unpreparedStorage,
+    invocationCallableFor: (node: Node) => requestedInvocations.has(node) ? queries.invocationCallableFor(node) : unpreparedStorage,
   });
   const producerRequests = Object.freeze(input.requests.filter((request): request is
     Extract<RustPhysicalCallableEmissionRequest, { readonly kind: "producer" }> => request.kind === "producer"));
@@ -168,19 +170,11 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   };
   const value = (node: Node): RustNativeStorageSelection => {
     if (!storageReady && !requiresFamilyAdmission(rustEffectiveValueCarrier(records, node))) return unpreparedStorage;
-    const existing = values.get(node);
-    if (existing !== undefined) return existing;
-    const selection = queries.valueFor(node);
-    values.set(node, selection);
-    return selection;
+    return queries.prepareValue(node);
   };
   const operand = (node: Node): RustNativeStorageSelection => {
     if (!storageReady && !requiresFamilyAdmission(rustValueCarrierBeforeContextualConversion(records, node))) return unpreparedStorage;
-    const existing = operands.get(node);
-    if (existing !== undefined) return existing;
-    const selection = queries.operandFor(node);
-    operands.set(node, selection);
-    return selection;
+    return queries.prepareOperand(node);
   };
   const returned = (node: Node): RustNativeStorageSelection => {
     if (!storageReady && !requiresFamilyAdmission(records.sourceCallableReturn.get(node)?.returnCarrier)) return unpreparedStorage;
@@ -192,18 +186,10 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       case "operand": return operand(request.subject);
       case "return": return returned(request.subject);
       case "invocation": {
-        const existing = invocations.get(request.subject);
-        if (existing !== undefined) return existing;
         const operation = records.targetOperation.get(request.subject);
         const storage = rustSourceCallCallableStorageCarrier(operation, input.structuralShapes);
         if (!storageReady && rustGenericCallableValue(storage) === undefined) return unpreparedStorage;
-        const selection = operation?.kind === "source-call" && operation.target.form === "structural-method" &&
-          input.structuralShapes.field(operation.target.receiverCarrier, operation.target.storageIndex)?.nativeMethod !== true &&
-          rustCallableProtocol(storage) !== undefined && storage !== undefined
-          ? Object.freeze({ kind: "identity" as const, carrier: storage, sources: Object.freeze([]) })
-          : queries.invocationCallableFor(request.subject);
-        invocations.set(request.subject, selection);
-        return selection;
+        return queries.prepareInvocation(request.subject);
       }
       case "type": return undefined;
       case "producer": return undefined;
@@ -226,7 +212,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         destination = inheritedDestination(parent);
       } else if (ast.is.IsVariableDeclaration(parent) && Node_Initializer(ast, parent) === node) {
         if (input.lexicalFunctions.forDeclaration(node) === undefined) {
-          const selected = values.get(parent);
+          const selected = prepared.valueFor(parent);
           if (selected?.kind === "selected") destination = selected.carrier;
         }
       } else {
@@ -243,8 +229,6 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     destinations.set(node, destination);
     return destination;
   };
-  const requestedValues = new Set(input.requests.filter(request => request.kind === "value").map(request => request.subject));
-  const requestedOperands = new Set(input.requests.filter(request => request.kind === "operand").map(request => request.subject));
   for (const flow of input.adapterFlows) flows.push({ node: flow.subject, conversion: flow.conversion });
   for (const flow of flows) if (!requestedValues.has(flow.node) || !requestedOperands.has(flow.node))
     reject(flow.node, "A required generic callable flow has no exact selected value and operand use requests.");
@@ -262,14 +246,17 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       }
       if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
       for (const flow of flows) inheritedDestination(flow.node);
-      for (const node of values.keys()) inheritedDestination(node);
+      for (const node of requestedValues) inheritedDestination(node);
       const finalizedProducers = input.nativeProducers.seal(producerRequests);
       if (finalizedProducers.kind === "rejected") return rejectedTargetStage(finalizedProducers.diagnostics);
       const nativeProducers = finalizedProducers.value;
       for (const request of input.requests) if (request.kind === "type") physical.prepare(request.carrier);
-      for (const selections of [values, operands, invocations]) for (const selection of selections.values()) {
-        if (selection.kind !== "unresolved") physical.prepare(selection.carrier);
-      }
+      for (const [subjects, selectionFor] of [[requestedValues, prepared.valueFor],
+        [requestedOperands, prepared.operandFor], [requestedInvocations, prepared.invocationCallableFor]] as const)
+        for (const node of subjects) {
+          const selection = selectionFor(node);
+          if (selection.kind !== "unresolved") physical.prepare(selection.carrier);
+        }
       for (const owner of requestedReturns) {
         const selection = prepared.returnFor(owner);
         if (selection.kind !== "unresolved") physical.prepare(selection.carrier);
@@ -286,7 +273,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       }
       for (const [node, destination] of destinations) {
         if (destination === undefined) continue;
-        const selected = values.get(node);
+        const selected = prepared.valueFor(node);
         const logical = rustEffectiveValueCarrier(records, node);
         if (selected === undefined || selected.kind === "unresolved" || logical === undefined) continue;
         const visited = new Set<TargetTypeRef>();
@@ -307,8 +294,8 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
         closedMetadataKey([conversion, destination]);
       const selectApplication = (node: Node, conversion: RustGenericCallableConversion,
         demanded: TargetTypeRef | undefined): RustPhysicalCallableFlowApplication => {
-        const source = operands.get(node)!;
-        const selected = demanded === undefined ? values.get(node)! : { kind: "identity" as const, carrier: demanded };
+        const source = prepared.operandFor(node);
+        const selected = demanded === undefined ? prepared.valueFor(node) : { kind: "identity" as const, carrier: demanded };
         if (source.kind === "unresolved" || selected.kind === "unresolved") return unavailable;
         const logical = rustEffectiveValueCarrier(records, node);
         const destination = logical === undefined ? undefined
