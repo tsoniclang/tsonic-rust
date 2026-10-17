@@ -89,6 +89,7 @@ function classifyModuleInitialization(
   sourceFile: SourceFile,
   classValues: RustClassValuePlan,
 ): RustModuleInitializationRequirement {
+  let required = false;
   for (const statement of input.ast.statements(sourceFile)) {
     if (statement === undefined) {
       return unresolved(sourceFile, "Source file contains an undefined top-level statement slot.");
@@ -108,6 +109,12 @@ function classifyModuleInitialization(
       }
       for (const declaration of variables) {
         if (input.records.compileTimeSource.get(declaration)) continue;
+        const name = input.ast.name(declaration);
+        const nameKind = name === undefined ? undefined : input.ast.kindName(name);
+        if (nameKind === "KindObjectBindingPattern" || nameKind === "KindArrayBindingPattern") {
+          return unresolved(declaration,
+            "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.");
+        }
         const binding = input.records.moduleBinding.get(declaration);
         if (binding === undefined) {
           return unresolved(
@@ -119,17 +126,17 @@ function classifyModuleInitialization(
           const storage = input.records.moduleCallableStorage.get(declaration);
           if (storage === undefined) return unresolved(declaration,
             "Module callable values require their finalized native storage selection.");
-          if (storage.kind === "stored") return { kind: "required" };
+          if (storage.kind === "stored") required = true;
         }
         if (binding.storage === "module-cell") {
-          return { kind: "required" };
+          required = true;
         }
       }
       continue;
     }
     if (kind === "KindClassDeclaration") {
       const environment = classValues.forDeclaration(statement)?.environment;
-      if (environment !== undefined && (environment.evaluatedConstructorValue || environment.staticFields.length > 0)) return { kind: "required" };
+      if (environment !== undefined && (environment.evaluatedConstructorValue || environment.staticFields.length > 0)) required = true;
       for (const member of input.ast.members(statement)) {
         if (member === undefined) {
           return unresolved(statement, "Class declaration contains an undefined member slot.");
@@ -140,13 +147,14 @@ function classifyModuleInitialization(
             input.ast,
             input.projectTypes.memberSlotName(member, "static"),
           ) !== undefined) {
-          return { kind: "required" };
+          required = true;
         }
       }
       continue;
     }
     if (kind === KindExportAssignment) {
-      return { kind: "required" };
+      required = true;
+      continue;
     }
     if (kind === "KindExpressionStatement") {
       const expression = Node_Expression(input.ast, statement);
@@ -163,9 +171,9 @@ function classifyModuleInitialization(
         continue;
       }
     }
-    return { kind: "required" };
+    required = true;
   }
-  return { kind: "not-required" };
+  return { kind: required ? "required" : "not-required" };
 }
 
 function variableDeclarations(

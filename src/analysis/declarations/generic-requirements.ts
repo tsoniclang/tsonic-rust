@@ -180,7 +180,7 @@ export function analyzeRustDeclarationGenericRequirements(
       ? implementation.implementation.declaration
       : declaration;
   };
-  const closure = resolveTargetContractFixedPoint<RequirementContractState>({
+  const closure = resolveTargetContractFixedPoint<RequirementContractState, readonly TargetDiagnostic[]>({
     roots: [...declarationById.keys()],
     evaluate(id, context) {
       const declaration = declarationById.get(id);
@@ -229,14 +229,11 @@ export function analyzeRustDeclarationGenericRequirements(
           return candidateId === undefined ? undefined : context.get(candidateId);
         },
       });
-      if (result.kind === "rejected" && result.promiseStorage === true) {
-        for (const demand of promiseBodies.objects.get(declaration) ?? [declaration]) {
-          diagnostics.push(diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN",
-            rustSuspendingPromiseBorrowReason, demand));
-        }
-      }
       return result.kind === "rejected"
-        ? result
+        ? { kind: "rejected", reason: result.reason, cause: Object.freeze(result.promiseStorage === true
+            ? (promiseBodies.objects.get(declaration) ?? [declaration]).map(demand =>
+              diagnostic("RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", rustSuspendingPromiseBorrowReason, demand))
+            : [diagnostic("RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED", result.reason, declaration)]) }
         : {
             kind: "resolved",
             revision: {
@@ -251,15 +248,20 @@ export function analyzeRustDeclarationGenericRequirements(
     maximumEvaluations: Math.max(64, maximumEvaluations),
   });
   if (closure.kind === "rejected") {
+    const storageDemands = new Set<NonNullable<TargetDiagnostic["sourceNode"]>>();
+    for (const failure of closure.failures) {
+      for (const issue of failure.cause ?? [diagnostic("RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED",
+        failure.reason, failure.contractId === undefined ? undefined : declarationById.get(failure.contractId))]) {
+        if (issue.code === "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN" && issue.sourceNode !== undefined) {
+          if (storageDemands.has(issue.sourceNode)) continue;
+          storageDemands.add(issue.sourceNode);
+        }
+        diagnostics.push(issue);
+      }
+    }
     return {
       kind: "rejected",
-      diagnostics: Object.freeze(diagnostics.length > 0 ? diagnostics : [diagnostic(
-        "RUST_CALLABLE_CONTRACT_CLOSURE_REJECTED",
-        closure.reason,
-        closure.contractId === undefined
-          ? undefined
-          : declarationById.get(closure.contractId),
-      )]),
+      diagnostics: Object.freeze(diagnostics),
     };
   }
   const contractByDeclaration = new WeakMap<Node, RequirementContractState>();

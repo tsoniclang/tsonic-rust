@@ -61,7 +61,7 @@ import {
   rustUnitTargetType,
 } from "../../../../target-model/types/index.js";
 import { selectJsArrayConstruction } from "./array-construction.js";
-import { selectRustJsPromiseContinuation } from "./promises.js";
+import { isRustJsPromiseContinuation, selectRustJsPromiseContinuation } from "./promises.js";
 import { jsArgumentCarrierMatchScore } from "./argument-matching.js";
 import { jsOperationRows } from "./rows.js";
 import { rustTargetTypeRefEquals } from "../../../../target-model/types/equality.js";
@@ -279,7 +279,7 @@ function selectJsSurfaceOperationForDemand(
   definitions: RustTypeDefinitions,
   demand: JsSelectionDemand,
 ): JsOperationSelection | undefined {
-  if (request.ownerName === "Promise" && (request.memberName === "then" || request.memberName === "catch")) {
+  if (isRustJsPromiseContinuation(request)) {
     return selectRustJsPromiseContinuation(request);
   }
   const numberArrayUnion = selectRustNumberArrayUnionOperation(request, definitions);

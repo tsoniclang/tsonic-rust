@@ -6,7 +6,7 @@ import type { RustCaptureReadOwnership, RustOwnershipRecords, RustReadOwnershipF
 import type { RustAnalysisRecords } from "../program/records/model.js";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone, rustLocationTargetType } from "../../target-model/types/index.js";
+import { isRustCopyCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustLocationTargetType } from "../../target-model/types/index.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
 import type { RustOwnershipFlow } from "./flow.js";
@@ -142,6 +142,10 @@ export function analyzeRustReadOwnership(input: {
         transfer: flow.movingReads.has(node) || !storageRead, borrowed: conversionBorrows || projectBorrows || projection !== undefined && value?.kind !== "move"
           ? "shared" : constructsContainer ? undefined : borrowed });
       const operation = records.targetOperation.get(node);
+      const binding = records.sourceBinding.get(node);
+      const module = binding === undefined ? undefined : records.moduleBinding.get(binding.sourceDeclaration);
+      const staticStringView = sourceRead?.kind === "borrow" && !sourceRead.mutable &&
+        module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier);
       if ((value === undefined || sourceRead === undefined) && storageRead &&
         (records.sourceBinding.get(node) !== undefined || operation?.kind === "source-field" && operation.accessMode === "read")) {
         return { kind: "rejected", diagnostics: [{
@@ -155,7 +159,7 @@ export function analyzeRustReadOwnership(input: {
         stablePlace: borrowEffects.stableBindings.has(node),
         readsStorage: storageRead,
         pure: borrowEffects.pureValues.has(node),
-        sharedReference: sourceRead.kind === "borrow" && operation?.kind === "reference-operation" &&
+        sharedReference: staticStringView || sourceRead.kind === "borrow" && operation?.kind === "reference-operation" &&
           operation.operation === "load" && !operation.operandCarrier.mutable,
         borrowedAcross: borrowRelationships.get(node) ?? new Set<Node>(),
       }));

@@ -14,7 +14,6 @@ import {
   KindIdentifier,
   KindArrayBindingPattern,
   KindNewExpression,
-  KindNumericLiteral,
   KindObjectBindingPattern,
   KindOmittedExpression,
   KindPostfixUnaryExpression,
@@ -25,6 +24,7 @@ import {
   KindVariableDeclaration,
   Node_Expression,
   Node_Name,
+  type SourceLiteralValue,
 } from "@tsonic/target-api/source";
 import {
   isRustJsArrayCarrier,
@@ -60,7 +60,9 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 
 import { rustBorrowedSequenceElementCandidates, selectRustBorrowedSequenceInput } from "./borrowed-sequences.js";
 import { rustMemberAccessReceiver } from "../../target-model/syntax/expressions.js";
-import { resolveRustArrayElementStorage } from "../expressions/array-storage.js";
+import { collectRustArrayElementStorageDemands } from "../expressions/array-storage.js";
+import { selectRustInferredNumericArrayElement } from "../../policy/types/collections/array-elements.js";
+import { selectRustArrayElementStorage } from "../../policy/types/collections/array-storage.js";
 
 export function recordSelectedOperationInputs(
   walk: RustFactWalk,
@@ -336,8 +338,10 @@ export function resolveArrayLiteralCarrier(
     return setCarrierFact(walk, expression, expected);
   }
   if (expectedElement === undefined) {
-    expectedElement = inferArrayLiteralElement(walk, expression, sourceFile, presentElements, selected);
-    if (expectedElement !== undefined) expectedElement = resolveRustArrayElementStorage(walk, expression, expectedElement);
+    const demands = collectRustArrayElementStorageDemands(walk, expression);
+    expectedElement = inferArrayLiteralElement(walk, expression, sourceFile, presentElements, selected, demands);
+    if (expectedElement !== undefined) expectedElement = selectRustArrayElementStorage(
+      expectedElement, demands, walk.context.typeDefinitions);
   }
   if (expectedElement === undefined) {
     return undefined;
@@ -393,6 +397,7 @@ function inferArrayLiteralElement(
   sourceFile: SourceFile,
   elements: readonly Node[],
   selected: TargetTypeRef | undefined,
+  demands: readonly TargetTypeRef[],
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
   const types = walk.context.semanticsFor(expression).types;
@@ -404,8 +409,7 @@ function inferArrayLiteralElement(
     return selectedElement;
   }
   const probe = createRustCarrierProbe(walk);
-  const rows: { readonly type: Type; readonly carrier: TargetTypeRef }[] = [];
-  let first: TargetTypeRef | undefined;
+  const rows: { readonly type: Type; readonly carrier: TargetTypeRef; readonly literal: SourceLiteralValue | undefined }[] = [];
   for (const element of elements) {
     const spread = ast.is.IsSpreadElement(element);
     const operand = spread ? Node_Expression(ast, element) : element;
@@ -417,31 +421,41 @@ function inferArrayLiteralElement(
       const source = types.expressionType(operand);
       const type = source === undefined ? undefined : types.typeArguments(source)[0] ?? sourceElement;
       if (type === undefined) return undefined;
-      first ??= candidates[0];
-      for (const carrier of candidates) rows.push({ type, carrier });
+      for (const carrier of candidates) rows.push({ type, carrier, literal: undefined });
       continue;
     }
-    const literalContext = first !== undefined && isRustNumericCarrier(first) &&
-      (ast.kindName(operand) === KindNumericLiteral || ast.is.IsBigIntLiteral(operand)) ? first : undefined;
-    const issueStart = probe.context.diagnostics.length;
-    const value = resolveExpressionCarrier(probe, operand, sourceFile, literalContext);
-    if (value === undefined && literalContext !== undefined) {
-      for (const issue of probe.context.diagnostics.slice(issueStart)) {
-        appendRustDiagnostic(walk, issue.code, issue.message, issue.sourceNode, issue.evidence ?? []);
-      }
-      return undefined;
-    }
-    const carrier = value;
+    const carrier = resolveExpressionCarrier(probe, operand, sourceFile, undefined);
     const source = types.expressionType(operand);
     const elementType = source === undefined ? undefined : spread ? types.typeArguments(source)[0] : source;
     const type = elementType === undefined ? undefined : types.literalBaseType(elementType);
     if (carrier === undefined || type === undefined) return undefined;
-    first ??= carrier;
-    rows.push({ type, carrier });
+    rows.push({ type, carrier, literal: walk.context.literalValues.literalValue.get(operand) });
   }
+  const numeric = selectRustInferredNumericArrayElement(selectedElement, rows, demands);
+  if (numeric.kind === "resolved") return numeric.carrier;
+  if (numeric.kind === "rejected") {
+    appendRustDiagnostic(walk, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", numeric.reason, expression, []);
+    return undefined;
+  }
+  const first = rows[0]?.carrier;
   if (rows.every(row => rustTargetTypeRefEquals(first, row.carrier))) return first;
   if (sourceElement === undefined) return undefined;
+  const refuseElement = (): undefined => {
+    if (rows.every(row => isRustNumericCarrier(row.carrier))) {
+      appendRustDiagnostic(walk, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH",
+        "Array literal requires one exact native element carrier for every checked source contribution.", expression, []);
+    }
+    return undefined;
+  };
   const members = types.isUnion(sourceElement) ? types.unionOrIntersectionTypes(sourceElement) : [sourceElement];
+  const numericRows = rows.every(row => isRustNumericCarrier(row.carrier));
+  if (numericRows && rows.some(row => !members.some(member => {
+    const base = types.literalBaseType(member);
+    return base !== undefined && sourceBoundTypeRelationship(
+      row.type, base, walk.context.semanticsFor(expression), () => undefined,
+    ) === "identity";
+  }))) return refuseElement();
+  const unionMembers: Type[] = [];
   const carriers: TargetTypeRef[] = [];
   for (const member of members) {
     const base = types.literalBaseType(member);
@@ -449,14 +463,23 @@ function inferArrayLiteralElement(
       row.type, base, walk.context.semanticsFor(expression), () => undefined,
     ) === "identity");
     const carrier = matches[0]?.carrier;
-    if (carrier === undefined || matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return undefined;
-    carriers.push(carrier);
+    if (carrier === undefined) return refuseElement();
+    if (numericRows) {
+      for (const match of matches) {
+        unionMembers.push(member);
+        carriers.push(match.carrier);
+      }
+    } else {
+      if (matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return refuseElement();
+      unionMembers.push(member);
+      carriers.push(carrier);
+    }
   }
-  return resolveRustSourceUnionCarrier(carriers, values => resolveRustUnionValueCarrier(
-    values, walk.operationOptions, () => resolveRustInferredUnion(
-      sourceElement, members, carriers, rustResolutionContext(walk, expression), walk.operationOptions,
-    ),
-  ));
+  const inferred = (): TargetTypeRef | undefined => resolveRustInferredUnion(
+    sourceElement, unionMembers, carriers, rustResolutionContext(walk, expression), walk.operationOptions,
+  );
+  return resolveRustSourceUnionCarrier(carriers, values =>
+    resolveRustUnionValueCarrier(values, walk.operationOptions, inferred)) ?? refuseElement();
 }
 
 function resolveArrayElementCarrier(

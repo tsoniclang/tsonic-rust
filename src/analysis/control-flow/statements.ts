@@ -44,8 +44,10 @@ import {
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
   sourceIntegerInduction,
+  sourceDeclarationHasOnlyTypeUses,
+  sourceTransparentExpressionOperand,
 } from "@tsonic/target-api/source";
-import { rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
+import { isRustBoolCarrier, isRustNumericCarrier, isRustStringCarrier, rustOptionElementCarrier, rustProgramErrorTargetType } from "../../target-model/types/index.js";
 import { rustGenericCallableValueOwner } from "../../policy/types/callables/callable-origins.js";
 import { rustSwitchCarrierSupportsEquality, selectRustSwitchComparison } from "../../policy/operations/control-flow/switch.js";
 
@@ -131,6 +133,7 @@ function recordVariableDeclarationListFacts(
   }
   for (const declaration of declarationSlots as readonly Node[]) {
     if (walk.context.records.compileTimeSource.get(declaration)) continue;
+    const diagnosticsBefore = walk.context.diagnostics.length;
     recordCallableValueSignatureForDeclaration(walk, declaration);
     const nativeCallable = moduleLevel
       ? walk.context.records.moduleBinding.get(declaration)
@@ -205,8 +208,37 @@ function recordVariableDeclarationListFacts(
       if (moduleLevel && (declarationKind === "const" || declarationKind === "let" || declarationKind === "var")) {
         walk.context.records.moduleBindings.value(walk, declaration, declarationKind, effective);
       }
+      if (moduleLevel && declarationKind === "const" && initializer !== undefined &&
+        initializerCarrier !== undefined && rustTargetTypeRefEquals(effective, initializerCarrier) &&
+        walk.context.diagnostics.length === diagnosticsBefore &&
+        sourceDeclarationHasOnlyTypeUses(walk.context.source.navigation.declarationUseSummary(declaration)) &&
+        rustMetadataInitializerIsHarmless(walk, initializer, effective)) {
+        requireRustRecord(walk.context.requiredRecords, "compileTimeSource", declaration,
+          "admitted metadata-only constant", "recordVariableDeclarationListFacts");
+        walk.context.records.compileTimeSources.erase(declaration);
+      }
     }
   }
+}
+
+function rustMetadataInitializerIsHarmless(walk: RustFactWalk, initializer: Node, carrier: TargetTypeRef): boolean {
+  const effects = walk.context.source.navigation.expressionEffects(initializer);
+  if (effects.invokes || effects.mutates || effects.suspends || effects.mayThrow) return false;
+  let expression = initializer;
+  for (;;) {
+    const selected = walk.context.records.runtimeCarrier.get(expression)?.carrier;
+    if (selected === undefined || !rustTargetTypeRefEquals(selected, carrier)) return false;
+    const operand = sourceTransparentExpressionOperand(walk.context.ast, expression);
+    if (operand === undefined) break;
+    expression = operand;
+  }
+  const literal = walk.context.literalValues.literalValue.get(expression);
+  if (literal === undefined) return false;
+  if (literal.form === "string" || literal.form === "template") return !/[\uD800-\uDFFF]/u.test(literal.text) && (isRustStringCarrier(carrier) ||
+      carrier.kind === "source-primitive" && carrier.name === "char");
+  if (literal.form === "true" || literal.form === "false") return isRustBoolCarrier(carrier);
+  return isRustNumericCarrier(carrier) && (literal.form === "bigint" && literal.integer !== undefined ||
+    (literal.form === "numeric" || literal.form === "prefix-unary") && literal.numeric !== undefined);
 }
 
 export function recordExportAssignmentFacts(

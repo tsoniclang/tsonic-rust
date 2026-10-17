@@ -61,11 +61,13 @@ test("module initialization consumes the same sealed callable storage decision",
   const sourceFile = {};
   const statement = {};
   const declaration = {};
+  const name = {};
   for (const [storage, expected] of [[{ kind: "inline" }, "not-required"],
     [{ kind: "stored" }, "required"], [undefined, "unresolved"]]) {
     const plan = createRustModuleInitializationPlan({
       ast: { statements() { return [statement]; },
-        kindName(node) { return node === statement ? "KindVariableStatement" : "KindVariableDeclaration"; },
+        kindName(node) { return node === statement ? "KindVariableStatement" : node === declaration ? "KindVariableDeclaration" : "KindIdentifier"; },
+        name(node) { return node === declaration ? name : undefined; },
         forEachChild(node, visit) { if (node === statement) visit(declaration); } },
       sourceFiles: [sourceFile],
       source: { navigation: { moduleDependencies() { return []; } } },
@@ -84,3 +86,89 @@ moduleCallableStorage: { get: (node) => {
     assert.equal(plan.minimumFoundation(), expected === "required" ? "std" : "core");
   }
 });
+
+function modulePatternPlan(kind, { erased = false, prefix = "none", prefixFirst = true, sameStatement = false } = {}) {
+  const sourceFile = { kind: "KindSourceFile" };
+  const statement = { kind: "KindVariableStatement" };
+  const declaration = { kind: "KindVariableDeclaration" };
+  const name = { kind };
+  const earlierDeclaration = { kind: "KindVariableDeclaration" };
+  const earlierName = { kind: "KindIdentifier" };
+  const expression = { kind: "KindCallExpression" };
+  const member = { kind: "KindClassStaticBlockDeclaration" };
+  const earlierStatement = { kind: prefix === "expression" ? "KindExpressionStatement"
+    : prefix === "export" ? "KindExportAssignment"
+      : prefix === "class-environment" || prefix === "static-class-field" ? "KindClassDeclaration" : "KindVariableStatement" };
+  const bindings = new Map([
+    [declaration, { storage: "module-cell" }],
+    [earlierDeclaration, prefix === "stored-callable" ? { storage: "native-callable", value: { carrier: source } }
+      : { storage: "module-cell" }],
+  ]);
+  const statements = prefix === "none" || sameStatement ? [statement]
+    : prefixFirst ? [earlierStatement, statement] : [statement, earlierStatement];
+  const plan = createRustModuleInitializationPlan({
+    ast: {
+      statements: () => statements,
+      kindName: node => node?.kind,
+      name: node => node === declaration ? name : node === earlierDeclaration ? earlierName : undefined,
+      members: node => node === earlierStatement && prefix === "static-class-field" ? [member] : [],
+      forEachChild(node, visit) {
+        if (node === statement) {
+          if (sameStatement) visit(earlierDeclaration);
+          visit(declaration);
+        } else if (node === earlierStatement) visit(earlierDeclaration);
+      },
+      is: { IsExpressionStatement: node => node === earlierStatement && prefix === "expression" },
+      as: { AsExpressionStatement: node => node === earlierStatement ? { Expression: expression } : undefined },
+    },
+    sourceFiles: [sourceFile],
+    source: { navigation: { moduleDependencies: () => [] } },
+    records: createRustRecordFixture({
+      moduleBinding: { get: node => bindings.get(node) },
+      moduleCallableStorage: { get: node => node === earlierDeclaration ? { kind: "stored" } : undefined },
+      compileTimeSource: { get: node => erased && node === declaration },
+    }),
+    projectTypes: { memberSlotName: () => undefined },
+    safetyApplications: { operationForExpression: () => undefined },
+  }, { forDeclaration: node => node === earlierStatement && prefix === "class-environment"
+    ? { environment: { evaluatedConstructorValue: true, staticFields: [] } } : undefined },
+  { outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
+  return { requirement: plan.requirementFor(sourceFile), declaration, name, bindings, plan };
+}
+
+for (const kind of ["KindObjectBindingPattern", "KindArrayBindingPattern"]) {
+  for (const prefix of ["none", "module-cell", "stored-callable", "class-environment", "static-class-field", "expression", "export"]) {
+    for (const prefixFirst of prefix === "none" ? [true] : [true, false]) {
+      test(`module admission refuses ${kind} ${prefixFirst ? "after" : "before"} ${prefix} initialization`, () => {
+        const selected = modulePatternPlan(kind, { prefix, prefixFirst });
+        assert.equal(selected.requirement.kind, "unresolved", "a present binding fact does not prove module-pattern storage");
+        assert.equal(selected.requirement.node === selected.declaration, true, "the exact unsupported declaration owns the refusal");
+        assert.equal(selected.requirement.reason,
+          "Top-level binding patterns require Rust module-pattern storage, which is not supported yet.",
+          "the existing error owner receives a truthful capability reason, not a fabricated missing fact");
+        assert.equal(selected.bindings.has(selected.declaration), true, "the actual module-binding evidence remains present");
+        assert.equal(selected.name.kind, kind, "classification does not replace the original checked pattern");
+      });
+    }
+  }
+  test(`module admission sees ${kind} after a required binding in the same statement`, () => {
+    const selected = modulePatternPlan(kind, { prefix: "module-cell", sameStatement: true });
+    assert.equal(selected.requirement.kind, "unresolved", "every declaration in the one statement is classified");
+    assert.equal(selected.requirement.node === selected.declaration, true, "a prior required declaration cannot hide the later pattern");
+  });
+  for (const prefix of ["none", "expression"]) {
+    test(`module admission preserves erased ${kind} with ${prefix} initialization`, () => {
+      const selected = modulePatternPlan(kind, { erased: true, prefix });
+      assert.equal(selected.requirement.kind, prefix === "none" ? "not-required" : "required", "existing compile-time erasure precedes the storage requirement");
+      assert.equal(selected.plan.minimumFoundation(), prefix === "none" ? "core" : "std", "ordinary runtime work keeps its foundation");
+    });
+  }
+}
+
+for (const prefix of ["none", "module-cell", "stored-callable", "class-environment", "static-class-field", "expression", "export"]) {
+  test(`module admission preserves a plain identifier with ${prefix} initialization`, () => {
+    const selected = modulePatternPlan("KindIdentifier", { prefix });
+    assert.equal(selected.requirement.kind, "required", "ordinary selected module cells remain supported");
+    assert.equal(selected.plan.minimumFoundation(), "std", "the required module foundation is unchanged");
+  });
+}

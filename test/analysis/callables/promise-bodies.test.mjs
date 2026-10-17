@@ -118,9 +118,10 @@ for (const [name, body] of [
       const declaration = `${demand === "public" || demand === "cross-component" ? "export " : ""}async function ${name}<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> { ${body} }`;
       const use = demand === "stored" ? `const stored = ${name}(value, pending); return await stored;`
         : demand === "passed" ? `return await settle(${name}(value, pending));`
-          : demand === "first-class" ? `const selected = ${name}; return await selected(value, pending);`
+          : demand === "first-class" ? "return await selected(value, pending);"
             : `return await ${name}(value, pending);`;
       const root = `${header}\n${demand === "cross-component" ? `import { ${name} } from "@acme/read";` : declaration}
+${demand === "first-class" ? `export const selected = ${name};` : ""}
 async function settle(pending: Promise<int32>): Promise<int32> { return await pending; }
 async function outer<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
   ${use}
@@ -146,6 +147,23 @@ export const marker = 0;`;
         "a rejected object facet is never published or rendered");
     });
   }
+  test(`${name} keeps the original immutable lexical alias as the same native body`, () => {
+    const current = analyze(`${header}
+async function ${name}<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> { ${body} }
+async function outer<Region extends Life>(value: Ref<int32, Region>, pending: Promise<void>): Promise<int32> {
+  const selected = ${name}; return await selected(value, pending);
+}
+export const marker = 0;`);
+    assert.equal(current.result.diagnostics.length, 0,
+      JSON.stringify(current.result.diagnostics.map(({ code, message }) => ({ code, message }))));
+    const declaration = current.named(name);
+    assert.equal(declaration !== undefined, true, "the original generic borrowed body remains analyzed");
+    assert.equal(current.context.promiseBodies.plan.objects.has(declaration), false,
+      "a proved same-component lexical alias does not create a Promise object demand");
+    const call = current.calls.find(node => current.context.ast.text(Node_Expression(current.context.ast, node)) === "selected");
+    assert.equal(call !== undefined && current.context.records.targetOperation.get(call)?.asyncBody?.declaration === declaration, true,
+      "the original alias still calls the exact native body, not a factory or dynamic wrapper");
+  });
 }
 
 function lower(text) {
