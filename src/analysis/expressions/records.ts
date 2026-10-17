@@ -2,7 +2,6 @@ import { requireRustRecord } from "../program/records/required-records.js";
 import {
   KindFunctionExpression,
   KindSpreadAssignment,
-  Node_Type,
   ObjectLiteralProperty_Value,
   SpreadAssignment_Expression,
   sourceObjectLiteralDestinationMember,
@@ -30,10 +29,7 @@ import { resolveExpressionCarrier } from "./carriers.js";
 import { resolveFunctionExpressionCarrier } from "../callables/closures.js";
 import { resolveObjectLiteralMethodCarrier, resolveProjectMethodPropertyCarrier, resolveRustRecordShape } from "../objects/record-shapes.js";
 import { resolveRustIndexedRecordContract, resolveRustIndexedRecordLiteral } from "../objects/indexed-records.js";
-import { selectRustUnionVariantByCheckedType } from "./union-context.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
-import { resolveTypeNodeCarrier } from "../declarations/types-and-bindings.js";
-import { rustProjectInstanceContracts } from "../project-types/type-policy.js";
 
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { selectSourceObjectLiteralAccessors } from "@tsonic/target-api/source";
@@ -49,6 +45,7 @@ import { resolveProviderRecordLiteral } from "./provider-records.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { resolveRustClosedRecordLiteral } from "./closed-records.js";
+import { selectRustRecordLiteralFields } from "../objects/record-literal-fields.js";
 import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
 
 function recordPropertySourceName(walk: RustFactWalk, name: Node | undefined): string | undefined {
@@ -246,191 +243,14 @@ export function resolveRecordLiteralCarrier(
     }
     explicitPropertiesByName.set(fieldName, property);
   }
-  const sourceValue = rustSourceTypeCarrierValue(selectedExpected);
-  const unionValue = rustSourceUnionCarrierValue(selectedExpected);
-  const structuralExpected = rustStructuralObjectCarrierValue(selectedExpected);
-  let resultCarrier: TargetTypeRef;
-  let storage: "project-object" | "structural-object";
-  let selectedFields: readonly {
-    readonly implementationDeclaration?: Node;
-    readonly contractDeclarations: readonly Node[];
-    readonly sourceName: string;
-    readonly storageIndex: number;
-    readonly carrier: TargetTypeRef;
-    readonly presence: "required" | "optional";
-    readonly readonly: boolean;
-    readonly accessor?: {
-      readonly getter: true;
-      readonly setter: boolean;
-    };
-    readonly method?: true;
-  }[];
-  let selectedMethodDeclarations: readonly Node[] = [];
-  if (sourceValue?.shape === "object") {
-    const definition = walk.context.projectTypes.definitionForCarrier(selectedExpected);
-    const contracts = definition === undefined
-      ? undefined
-      : rustProjectInstanceContracts(
-          walk.context.projectTypes,
-          definition,
-          selectedExpected,
-        );
-    if (definition?.kind !== "interface" || contracts === undefined) {
-      return undefined;
-    }
-    const contractFields = contracts.flatMap((contract) => {
-      const layout = walk.context.projectTypes.objectLayoutForDefinition(contract.definition);
-      if (layout?.kind !== "interface") {
-        return [undefined];
-      }
-      return layout.fields.map((field) => {
-        const implementationDeclaration = projectRecordMemberImplementation(
-          walk,
-          definition,
-          field.declaration,
-        );
-        const declared = walk.context.records.runtimeCarrier.get(field.declaration)?.carrier ??
-          resolveTypeNodeCarrier(walk, Node_Type(walk.context.ast, field.declaration));
-        const carrier = declared === undefined
-          ? undefined
-          : walk.context.projectTypes.instantiateMemberCarrier(
-              field.declaration,
-              selectedExpected,
-              declared,
-            );
-        return carrier === undefined || implementationDeclaration === undefined
-          ? undefined
-          : {
-              contractDeclaration: field.declaration,
-              implementationDeclaration,
-              sourceName: field.sourceName,
-              carrier,
-              presence: field.presence,
-              readonly: ast.hasModifierKind(field.declaration, "readonly"),
-            };
-      });
-    });
-    if (contractFields.some((field) => field === undefined)) {
-      return undefined;
-    }
-    const projectFields: {
-      readonly implementationDeclaration: Node;
-      readonly contractDeclarations: Node[];
-      readonly sourceName: string;
-      readonly storageIndex: number;
-      readonly carrier: TargetTypeRef;
-      readonly presence: "required" | "optional";
-      readonly readonly: boolean;
-    }[] = [];
-    for (const field of contractFields as readonly {
-      readonly contractDeclaration: Node;
-      readonly implementationDeclaration: Node;
-      readonly sourceName: string;
-      readonly carrier: TargetTypeRef;
-      readonly presence: "required" | "optional";
-      readonly readonly: boolean;
-    }[]) {
-      const existing = projectFields.find((candidate) =>
-        candidate.implementationDeclaration === field.implementationDeclaration);
-      if (existing !== undefined) {
-        if (!rustTargetTypeRefEquals(existing.carrier, field.carrier) || existing.presence !== field.presence) {
-          return undefined;
-        }
-        existing.contractDeclarations.push(field.contractDeclaration);
-        continue;
-      }
-      projectFields.push({
-        implementationDeclaration: field.implementationDeclaration,
-        contractDeclarations: [field.contractDeclaration],
-        sourceName: field.sourceName,
-        storageIndex: projectFields.length,
-        carrier: field.carrier,
-        presence: field.presence,
-        readonly: field.readonly,
-      });
-    }
-    resultCarrier = selectedExpected;
-    storage = "project-object";
-    selectedMethodDeclarations = contracts.flatMap((contract) =>
-      ast.members(contract.definition.declaration).filter((member): member is Node =>
-        member !== undefined && ast.kindName(member) === "KindMethodSignature"));
-    selectedFields = projectFields as readonly {
-      readonly implementationDeclaration: Node;
-      readonly contractDeclarations: readonly Node[];
-      readonly sourceName: string;
-      readonly storageIndex: number;
-      readonly carrier: TargetTypeRef;
-      readonly presence: "required" | "optional";
-      readonly readonly: boolean;
-      readonly accessor?: {
-        readonly getter: true;
-        readonly setter: boolean;
-      };
-    }[];
-  } else {
-    let structuralCarrier = structuralExpected === undefined ? undefined : selectedExpected;
-    let structuralValue = structuralExpected;
-    if (unionValue !== undefined) {
-      const sourceUnion = walk.sourceTypes.sourceUnionForCarrier(selectedExpected);
-      const selectedVariant = sourceUnion === undefined
-        ? undefined
-        : selectRustUnionVariantByCheckedType(walk, expression, sourceUnion);
-      if (selectedVariant === undefined) {
-        return undefined;
-      }
-      structuralCarrier = selectedVariant.carrier;
-      structuralValue = rustStructuralObjectCarrierValue(structuralCarrier);
-    }
-    if (structuralCarrier === undefined || structuralValue === undefined) {
-      return undefined;
-    }
-    resultCarrier = structuralCarrier;
-    storage = "structural-object";
-    const structuralShape = walk.sourceTypes.structuralObjectForCarrier(structuralCarrier);
-    if (structuralShape === undefined ||
-      structuralShape.fields.length !== structuralValue.fields.length) {
-      return undefined;
-    }
-    const selectedAccessorMembers = accessorSelection.kind === "resolved"
-      ? accessorSelection.members
-      : [];
-    const structuralFields = structuralValue.fields.map((field, storageIndex) => {
-      const sourceField = structuralShape.fields[storageIndex];
-      const matchingAccessors = selectedAccessorMembers.filter((accessor) =>
-        accessor.sourceName === field.sourceName
-      );
-      const accessor = matchingAccessors[0];
-      if (sourceField === undefined || sourceField.sourceName !== field.sourceName ||
-        sourceField.storageIndex !== storageIndex ||
-        !rustTargetTypeRefEquals(sourceField.resultCarrier, field.type) ||
-        sourceField.presence !== field.presence || sourceField.readonly !== field.readonly ||
-        sourceField.accessor?.setter !== field.accessor?.setter ||
-        sourceField.method !== field.method || matchingAccessors.length > 1 ||
-        (accessor !== undefined && (
-          field.method === true || accessor.getter === undefined ||
-          accessor.sourceSelectedDeclarations.length === 0 ||
-          accessor.sourceSelectedDeclarations.some((declaration) =>
-            !sourceField.declarations.includes(declaration)) ||
-          !field.readonly && accessor.setter === undefined
-        ))) {
-        return undefined;
-      }
-      return {
-        contractDeclarations: sourceField.declarations,
-        sourceName: field.sourceName,
-        storageIndex,
-        carrier: field.type,
-        presence: field.presence,
-        readonly: field.readonly,
-        ...(field.accessor === undefined ? {} : { accessor: field.accessor }),
-        ...(field.method === true ? { method: true as const } : {}),
-      };
-    });
-    if (structuralFields.some((field) => field === undefined)) {
-      return undefined;
-    }
-    selectedFields = structuralFields as typeof selectedFields;
-  }
+  const selectedLayout = selectRustRecordLiteralFields(
+    walk,
+    expression,
+    selectedExpected,
+    accessorSelection.kind === "resolved" ? accessorSelection.members : [],
+  );
+  if (selectedLayout === undefined) return undefined;
+  const { resultCarrier, storage, fields: selectedFields, methodDeclarations: selectedMethodDeclarations } = selectedLayout;
   const selectedFieldByName = new Map(selectedFields.map((field) => [field.sourceName, field]));
   if (selectedFieldByName.size !== selectedFields.length) {
     return undefined;
@@ -545,7 +365,7 @@ export function resolveRecordLiteralCarrier(
     }
     const propertySemantics = walk.context.semanticsFor(property);
     const selectedElement = propertySemantics.operations.objectLiteralElement(property);
-    const selectedObjectDeclaration = sourceValue?.shape === "object"
+    const selectedObjectDeclaration = storage === "project-object"
       ? walk.context.projectTypes.definitionForCarrier(selectedExpected)?.declaration : undefined;
     const selectedObjectType = selectedObjectDeclaration === undefined ? undefined
       : walk.context.semanticsFor(selectedObjectDeclaration).declarations.declaredType(selectedObjectDeclaration);

@@ -396,9 +396,7 @@ export function analyzeRustPromiseResults(input: {
     completionFor(call, selected) {
       const declaration = input.source.semantics.forNode(call).declarations.signatureDeclaration(selected.selectedSignature);
       if (declaration === undefined) return unresolved(call, "Async result-use requires its exact checked source signature.");
-      const operation = input.records.targetOperation.get(call);
-      const carrier = operation?.kind === "source-call" && operation.asyncBody !== undefined
-        ? operation.asyncBody.logicalResultCarrier : rustEffectiveValueCarrier(input.records, call);
+      const carrier = rustEffectiveValueCarrier(input.records, call);
       const selection = rustAwaitSelection(carrier, input.definitions);
       if (selection === undefined) return unresolved(call, "Async result-use requires its completed native completion carrier.");
       const futures = rustAwaitSelectionLeaves(selection).flatMap(leaf => leaf.future === undefined ? [] : [leaf.future]);

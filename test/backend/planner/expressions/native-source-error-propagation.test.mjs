@@ -6,6 +6,8 @@ import { planRustSourceErrorPropagation } from "../../../../dist/backend/planner
 import { planRustNativeErrorJoin } from "../../../../dist/backend/planner/types/native-error-joins.js";
 import { rustNativeFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
 import { nativeProducerFixture } from "../../../helpers/native-producer-bridges.mjs";
+import { analyzeRustErrorRegions } from "../../../../dist/analysis/errors/regions.js";
+import { createRustErrorRegionCatalog } from "../../../../dist/backend/planner/program/error-regions.js";
 
 function fixture(joined = false) {
   const carrier = { kind: "source-primitive", name: "int32" };
@@ -24,11 +26,33 @@ function fixture(joined = false) {
   context.syntheticNames = { reserved: new Set(), nextSuffixByBase: new Map() };
   context.diagnostics = [];
   context.sourceFile = {};
-  context.input.program.source = { ast: {
+  const ast = {
     getSourceFile: () => context.sourceFile, getFileName: () => "/index.ts", getSourceText: () => "",
     kindName: () => "KindCallExpression", pos: () => 0, end: () => 0,
-  } };
-  context.input.program.records = createRustRecordFixture({errorEffects: { get: (selected) => selected === declaration ? sourceEffects : undefined }});
+    forEachChild: (selected, visit) => {
+      if (selected === context.sourceFile) { visit(declaration); visit(node); }
+    },
+  };
+  context.input.program.source = { ast };
+  context.input.program.sourceFiles = [context.sourceFile];
+  const records = createRustRecordFixture({
+    errorEffects: { get: selected => selected === declaration ? sourceEffects : undefined },
+    sourceErrorEffects: { get: selected => selected === node ? { edges: [edge] } : undefined },
+  });
+  context.input.program.records = records;
+  const regions = analyzeRustErrorRegions({ ast, sourceFiles: [context.sourceFile], isNativeNode: () => true,
+    records, definitions: context.input.program.typeDefinitions, producers: { producers: [] },
+    names: { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined,
+      callableValueNameForDeclaration: () => undefined },
+    callables: { native: { inputs: [] }, nativeGenericProducers: { errorAritiesFor: () => [] } },
+    promiseBodies: { objects: new Set() },
+  });
+  assert.equal(regions.kind, "resolved", "the actual source edge and physical payloads pass the canonical pre-seal selector");
+  const selected = regions.value.sourceFor(edge);
+  assert.equal(selected?.channels.length === 1 && selected.channels[0].sourceIdentity === source.identity &&
+    selected.channels[0].targetIdentity === target.identity, true, "the sealed source-to-caller error identity is exact");
+  context.input.program.errorRegions = regions.value;
+  context.input.errorRegions = createRustErrorRegionCatalog(context.input.program);
   return { context, node, edge, expression: { kind: "call", path: "invoke", args: [] } };
 }
 
