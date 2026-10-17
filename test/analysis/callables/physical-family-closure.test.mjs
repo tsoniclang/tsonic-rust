@@ -226,11 +226,11 @@ test("equal native members retain every original source producer and selecting b
   const activationObservations = [];
   const current = construction(`
     type Identity = <Value>(value: Value) => Value;
-    function make(callback: () => number): Identity {
-      return <Value>(value: Value): Value => { callback(); return value; };
+    function make(first: number, second: number): Identity {
+      return <Value>(value: Value): Value => first > second ? value : value;
     }
-    export function choose(callback: () => number, select: boolean): Identity {
-      const left = make(callback); const right = make(callback); return select ? left : right;
+    export function choose(leftFirst: number, leftSecond: number, rightFirst: number, rightSecond: number, select: boolean): Identity {
+      const left = make(leftFirst, leftSecond); const right = make(rightFirst, rightSecond); return select ? left : right;
     }
   `, undefined, undefined, storage => Object.freeze({ ...storage,
     storageProducersFor(subject, bindings) {
@@ -261,7 +261,22 @@ test("equal native members retain every original source producer and selecting b
   assert.equal(original !== undefined, true, "the relation retains its exact selecting query subject and owned bindings");
   assert.equal(source.producers.every(row => original.selection.producers.includes(row.producer)), true,
     "every row is the original checked producer object rather than a reconstructed source origin");
+  const formalSubjects = current.ast.parameters(current.declaration("make")).map(parameter => current.storage.subject(parameter, "input"));
+  const actualSubjects = current.ast.parameters(owner).slice(0, 4).map(parameter => current.storage.subject(parameter, "input"));
+  assert.equal([...formalSubjects, ...actualSubjects].every(subject => subject.kind === "resolved"), true,
+    "all source formal and actual inputs retain their original checked subject identities");
+  const actualPairs = new Set();
   for (const row of source.producers) {
+    const selectedInputs = formalSubjects.map(subject => current.storage.boundOriginsFor(subject.subject, row.producer.bindings));
+    assert.equal(selectedInputs.every(selection => selection.kind === "resolved"), true,
+      "every input in one original alternative is queried with that identical actual source binding token");
+    const selectedPair = selectedInputs.map(selection => actualSubjects.findIndex(subject => selection.subjects.includes(subject.subject)));
+    assert.equal(selectedPair[0] === 0 && selectedPair[1] === 1 || selectedPair[0] === 2 && selectedPair[1] === 3, true,
+      "the two equal-native alternatives keep their original input pairs without a Cartesian product");
+    assert.equal(selectedInputs.every((selection, index) => actualSubjects.filter(subject => selection.subjects.includes(subject.subject)).length === 1 &&
+      selection.subjects.includes(actualSubjects[selectedPair[index]].subject)), true,
+    "a native member shared by both alternatives never merges their distinct source inputs");
+    actualPairs.add(selectedPair.join(":"));
     const generic = current.queries.genericBindingsFor(current.declaration("make"), row.producer.bindings);
     assert.equal(generic.kind, "resolved", "the actual producer creation selects its completed native substitutions");
     assert.equal(generic.sourceActivations.kind, "resolved", "the same selector retains its original source activation rows");
@@ -282,6 +297,8 @@ test("equal native members retain every original source producer and selecting b
         Object.isFrozen(view) && !("set" in view) && !("delete" in view) && !("clear" in view))), true,
     "published activation substitutions expose only the existing canonical immutable map views");
   }
+  assert.equal(actualPairs.has("0:1") && actualPairs.has("2:3") && actualPairs.size === 2, true,
+    "both original source alternatives survive despite identical native representations and substitutions");
   assert.equal(Object.isFrozen(selected.sources) && Object.isFrozen(source) && Object.isFrozen(source.producers) &&
     source.producers.every(Object.isFrozen), true, "source selection and forward correspondences publish as immutable data");
   const before = selected.sources;
