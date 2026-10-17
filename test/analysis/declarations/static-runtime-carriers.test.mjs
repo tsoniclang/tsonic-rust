@@ -280,26 +280,19 @@ export function inspect<Region extends Life>(loan: Ref<int32, Region>) {
       name.startsWith("borrowed") ? "unsatisfied" : "supported", `${name}: only its exact physical binding decides static retention`);
 });
 
-test("input-only function pointers, RegExp retention and a generated class factory retain actual native storage without extra cost", { timeout: 300_000 }, () => {
+test("input-only function pointers and RegExp retention match actual native storage and costs", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
     outputType: "lib", crateName: "static_runtime_generated",
   } }, files: { "index.ts": `
 import { allocateptr, loadptr } from "@tsonic/core/lang.js";
-import type { FunctionPointer, Pointer, int32 } from "@tsonic/core/types.js";
+import type { FunctionPointer, Pointer } from "@tsonic/core/types.js";
 export function retainInput<Value>(value: FunctionPointer<[Value], void>): Pointer<FunctionPointer<[Value], void>> {
   return allocateptr(value);
 }
 export function retainPattern(value: RegExp): Pointer<RegExp> { return allocateptr(value); }
-function patternFactory(value: RegExp) {
-  return new class Pattern {
-    matches(text: string): boolean { return value.test(text); }
-  }();
-}
 export function verify(): void {
   const pattern = loadptr(retainPattern(new RegExp("^a+$")));
-  const first = patternFactory(pattern);
-  const second = patternFactory(new RegExp("^b+$"));
-  if (!first.matches("aaa") || first.matches("bbb") || !second.matches("bbb")) throw new Error("factory identity");
+  if (!pattern.test("aaa") || pattern.test("bbb")) throw new Error("retained pattern");
 }
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
@@ -342,4 +335,21 @@ fn actual_generated_calls_and_locations_match_native_costs() {
   assert.equal(formatted.status, 0, "the handwritten control formats independently of generated artifacts");
   const native = { path: "tests/static_cost.rs", text: formatted.stdout };
   validateGeneratedProject("static-runtime-generated", [...result.artifacts, native]);
+});
+
+test("generated RegExp class factories retain both actual native environments", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
+    outputType: "bin", crateName: "static_regexp_factory",
+  } }, files: { "index.ts": `
+function patternFactory(value: RegExp) {
+  return new class Pattern {
+    matches(text: string): boolean { return value.test(text); }
+  }();
+}
+const first = patternFactory(new RegExp("^a+$"));
+const second = patternFactory(new RegExp("^b+$"));
+if (!first.matches("aaa") || first.matches("bbb") || !second.matches("bbb")) throw new Error("factory identity");
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  validateGeneratedProject("static-regexp-factory", result.artifacts, { run: true });
 });
