@@ -1,6 +1,7 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
-import type { SourceProgramNavigation } from "@tsonic/target-api/source";
+import type { SourceProgramNavigation, SourceProgramSemantics } from "@tsonic/target-api/source";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
@@ -53,8 +54,16 @@ import type { RustDeclarationGenericRequirementIndex } from "../declarations/gen
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
+import type { RustCallableEmissionContexts } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
+import type { RustStatementCompletionIndex } from "../../target-model/records/statement-completion.js";
+import type { RustProjectConstructionPlan } from "../project-types/construction-plan.js";
+import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
+import { prepareRustProviderSourceOccurrences } from "../operations/provider-source-inputs.js";
+import { prepareRustPhysicalEmissionContexts } from "../program/physical-emission-contexts.js";
 
 export interface RustCallableValuePlan {
+  readonly emissionContexts: RustCallableEmissionContexts;
   readonly generic: RustGenericCallablePlan;
   readonly suspended: RustSuspendedCallablePlan;
   readonly frames: RustFrameCallablePlan;
@@ -71,10 +80,20 @@ export interface RustCallableValuePlan {
   readonly flowApplications: RustPhysicalCallableFlowApplications;
 }
 
-export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications"> & {
+export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications" | "emissionContexts"> & {
   readonly native: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
 };
+
+export interface RustCallableValueSealInput {
+  readonly semantics: SourceProgramSemantics;
+  readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
+  readonly genericErrors: RustGenericCallableErrorIndex;
+  readonly errorRegions: Pick<RustErrorRegionRecords, "get" | "sourceFor">;
+  readonly initialization: RustInitializationErrorRecords;
+  readonly statementCompletions: Pick<RustStatementCompletionIndex, "setterFor">;
+  readonly constructions: readonly RustProjectConstructionPlan[];
+}
 
 export interface RustCallableValuePlanInput {
   readonly ast: AstReader;
@@ -119,7 +138,7 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
     families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
     errorTypes: RustErrorTypeContext): readonly RustSourceCallableSpecializationIssue[];
-  seal(): RustCallableValuePlan;
+  seal(input: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan>;
   publish(): void;
 }
 
@@ -132,7 +151,7 @@ interface RustCallableValueLifecycle {
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
     families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
     errorTypes: RustErrorTypeContext): readonly RustSourceCallableSpecializationIssue[];
-  seal(): RustCallableValuePlan;
+  seal(input: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan>;
   publish(): void;
 }
 
@@ -176,7 +195,7 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
         throw new Error("Generic callable completions finalize exactly once from their owned physical family and producer plans.");
       completions = createRustGenericCallableCompletionPlan(input);
     },
-    seal: () => requireLifecycle().seal(),
+    seal: (input: RustCallableValueSealInput) => requireLifecycle().seal(input),
     finalizeStructuralStorage: (errors: Pick<RustErrorRegionRecords, "producerError">) => requireLifecycle().finalizeStructuralStorage(errors),
     validateStructuralRetention: (requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
@@ -287,7 +306,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
   const captures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
     nativeStorage: nativeStorageQueries });
-  const physical = genericRegistry.initializePhysical({ ast: input.ast, storage: input.sourceStorage, captures, native,
+  const physical = genericRegistry.initializePhysical({ ast: input.ast, lifetimes: input.lifetimes,
+    storage: input.sourceStorage, captures, native,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
   let parameterStorage: RustNativeStoragePlan | undefined;
@@ -304,6 +324,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   let structuralMethodStorage: ReturnType<typeof createRustStructuralMethodStorage> | undefined;
   let selectedPlan: RustCallableValueSelection | undefined;
   let publishedPlan: RustCallableValuePlan | undefined;
+  let sealResult: TargetStageResult<RustCallableValuePlan> | undefined;
   return Object.freeze({
     construction,
     preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
@@ -365,18 +386,37 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         throw new Error("Structural retention requires completed physical field selection.");
       return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, classValues, errorTypes);
     },
-    seal(): RustCallableValuePlan {
-      if (publishedPlan !== undefined) return publishedPlan;
+    seal(late: RustCallableValueSealInput): TargetStageResult<RustCallableValuePlan> {
+      if (sealResult !== undefined) return sealResult;
       if (physicalLifecycle === undefined || selectedPlan === undefined)
         throw new Error("Physical callable publication requires completed source-selected families and effects.");
-      const publication = physicalLifecycle.complete(physical);
+      const sourceOccurrences = prepareRustProviderSourceOccurrences({ ast: input.ast, nodes: input.nativeNodes,
+        records: input.records, semantics: late.semantics, statementCompletions: late.statementCompletions });
+      if (sourceOccurrences.kind === "rejected") {
+        sealResult = rejectedTargetStage(sourceOccurrences.diagnostics);
+        return sealResult;
+      }
+      const publication = physicalLifecycle.complete(physical, sourceOccurrences.value);
+      const emission = prepareRustPhysicalEmissionContexts({ ...late, ast: input.ast, sourceFiles: input.sourceFiles,
+        nativeNodes: input.nativeNodes, isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
+        projectTypes: input.projectTypes,
+        generic, frames: selectedPlan.frames, suspended: selectedPlan.suspended, native,
+        nativeStorage: publication.nativeStorage, nativeProducers: publication.nativeProducers,
+        genericCompletions: completions(), sourceOccurrences: sourceOccurrences.value });
+      if (emission.kind === "rejected") {
+        sealResult = rejectedTargetStage(emission.diagnostics);
+        return sealResult;
+      }
+      for (const carrier of emission.value.physicalOperands) physical.prepare(carrier);
       const finalPhysical = physical.closeKeys();
       genericRegistry.publishPhysical(finalPhysical);
       const nativeInputs: RustCallableValuePlan["native"] = Object.freeze({ inputs: native.inputs,
         protocols: native.protocols, calls: native.calls, callFor: native.callFor, inputsFor: native.inputsFor,
         capturesFor: native.capturesFor, protocolForSourceItem: native.protocolForSourceItem });
-      publishedPlan = Object.freeze({ ...selectedPlan, ...publication, native: nativeInputs });
-      return publishedPlan;
+      publishedPlan = Object.freeze({ ...selectedPlan, ...publication, native: nativeInputs,
+        emissionContexts: emission.value.contexts });
+      sealResult = resolvedTargetStage(publishedPlan);
+      return sealResult;
     },
     publish(): void {
       if (publishedPlan === undefined) throw new Error("Callable values publish only after their physical applications seal.");

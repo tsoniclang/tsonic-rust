@@ -16,11 +16,15 @@ import type { RustGenericCallableDefinition, RustGenericCallableImplementation }
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
+import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import { rustGenericCallableMemberBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
 
 export interface RustGenericCallablePhysicalMember {
   readonly implementation: RustGenericCallableImplementation;
   readonly variantName: string;
   readonly arguments: readonly RustTargetGenericArgument[];
+  readonly bindings: RustTargetGenericBindings | undefined;
 }
 
 export interface RustGenericCallablePhysicalDefinition extends RustGenericCallableDefinition {
@@ -66,6 +70,7 @@ export interface RustGenericCallablePhysicalConstruction {
 
 export interface RustGenericCallablePhysicalInput {
   readonly ast: AstReader;
+  readonly lifetimes: RustLifetimeIndex;
   readonly storage: SourceStorageQueries;
   readonly captures: RustNativeCaptureConstruction;
   readonly native: Pick<RustNativeCallableInputPlan, "inputs">;
@@ -115,7 +120,9 @@ export function createRustGenericCallablePhysicalPlan(
     try {
       const capture = required ? input.captures.require(implementation.declaration)
         : input.captures.forDeclaration(implementation.declaration);
-      const result = rustGenericCallableEnvironment(implementation, capture);
+      const selected = rustGenericCallableEnvironment(implementation, capture);
+      const result = selected === undefined ? undefined : Object.freeze({ ...selected,
+        substitutions: snapshotRustCallableBindings(selected.substitutions) });
       if (result !== undefined || required) environments.set(implementation, result);
       return result;
     } finally {
@@ -144,7 +151,7 @@ export function createRustGenericCallablePhysicalPlan(
           ? { kind: "lifetime", lifetime: { kind: "parameter", identity, name: `physical${index}` } }
           : { kind: "const", value: { kind: "parameter", identity, name: `PhysicalConst${index}` } };
     });
-    const selected: RustGenericCallablePhysicalMember[] = [];
+    const selected: Omit<RustGenericCallablePhysicalMember, "bindings">[] = [];
     const variantNames = new Set<string>();
     for (const member of members) {
       if (member.origin === undefined) return undefined;
@@ -171,13 +178,17 @@ export function createRustGenericCallablePhysicalPlan(
       if (mode === "link") failTargetAnalysisInvariant("tsonic-rust",
         "A physical generic callable shape was read before construction admitted its family; its selected source root is missing.");
       const suffix = createHash("sha256").update(identity).digest("hex").slice(0, 12);
+      const admitted = Object.freeze(selected.map(member => Object.freeze({ ...member,
+        bindings: rustGenericCallableMemberBindings(family, member,
+          { ast: input.ast, sourceLifetimes: input.lifetimes, physical: { environmentFor } }),
+      })));
       definition = Object.freeze({ ...family, identity, familyIdentity: family.identity, ownerFileName,
         copy: selected.every(member => member.implementation.storage === "value"),
         targetName: allocateRustGeneratedName(usedNames, `GenericCallable${suffix}`),
         ...(family.nativeFutureDispatchName === undefined ? {} : {
           nativeFutureDispatchName: allocateRustGeneratedName(usedNames, `CallableFuture${suffix}`) }),
         implementations: Object.freeze(selected.map(member => member.implementation)),
-        parameters: snapshotClosedMetadata(parameters), members: Object.freeze(selected),
+        parameters: snapshotClosedMetadata(parameters), members: admitted,
         carrier: rustGenericCallableCarrier({ origin: family.origin, signature: family.signature,
           environment: family.signature.environmentParameters,
           physical: { ownerFileName, members, arguments: parameters } }),

@@ -27,6 +27,8 @@ import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustNativeCallableProducerConstruction, RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustSuspendedCallablePlan } from "./suspended-values.js";
+import { rustPhysicalEmissionOperationCarriers, rustPhysicalEmissionRecordCarriers } from "./emission-contexts.js";
+import type { RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
 
 export type RustPhysicalCallableStorage = Pick<RustNativeStoragePlan,
   "issues" | "parameterFor" | "futureEnvironmentFor" | "returnFor" | "valueFor" | "operandFor" |
@@ -39,7 +41,8 @@ export interface RustPhysicalCallablePublication {
 }
 
 export interface RustPhysicalCallableLifecycle {
-  complete(physical: RustGenericCallablePhysicalConstruction): RustPhysicalCallablePublication;
+  complete(physical: RustGenericCallablePhysicalConstruction,
+    sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[]): RustPhysicalCallablePublication;
 }
 
 interface RustPhysicalCallableLifecycleInput {
@@ -125,7 +128,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     if (records.sourceCallableReturn.get(node) !== undefined) {
       returned(node);
     }
-    if (records.runtimeCarrier.get(node) !== undefined || records.contextualValueConversion.get(node) !== undefined) {
+    if (rustPhysicalEmissionRecordCarriers(records, node).length !== 0) {
       value(node);
       operand(node);
     }
@@ -165,6 +168,8 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     const suspended = input.suspended.implementationFor(node);
     if (suspended !== undefined) requestProducer(node, suspended.carrier);
   }
+  for (const definition of input.generic.definitions) for (const implementation of definition.implementations)
+    requestProducer(implementation.declaration, implementation.carrier);
   const inheritedDestination = (node: Node): TargetTypeRef | undefined => {
     if (destinations.has(node)) return destinations.get(node);
     const parent = ast.parent(node);
@@ -199,9 +204,16 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
   }
   let complete = false;
   return Object.freeze({
-    complete(physical: RustGenericCallablePhysicalConstruction): RustPhysicalCallablePublication {
+    complete(physical: RustGenericCallablePhysicalConstruction,
+      sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[]): RustPhysicalCallablePublication {
       if (complete) throw new Error("Physical callable storage and applications complete exactly once.");
       storageReady = true;
+      for (const occurrence of sourceOccurrences) for (const carrier of rustPhysicalEmissionOperationCarriers(occurrence.operation.abi)) physical.prepare(carrier);
+      for (const occurrence of sourceOccurrences) for (const slot of occurrence.slots) {
+        value(slot.node);
+        operand(slot.node);
+        physical.prepare(slot.source.row.carrier);
+      }
       for (const node of returnRoots) returned(node);
       for (const node of valueRoots) value(node);
       for (const node of operandRoots) operand(node);
@@ -219,7 +231,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       const nativeProducers = input.nativeProducers.seal(producerRequests);
       for (const node of input.nativeNodes) {
         const parameter = records.sourceParameterAbi.get(node);
-        for (const carrier of [records.runtimeCarrier.get(node)?.carrier, records.sourceCallableReturn.get(node)?.returnCarrier,
+        for (const carrier of [...rustPhysicalEmissionRecordCarriers(records, node), records.sourceCallableReturn.get(node)?.returnCarrier,
           parameter?.valueCarrier, parameter?.parameterCarrier]) {
           if (carrier !== undefined) physical.prepare(carrier);
         }

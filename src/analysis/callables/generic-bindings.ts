@@ -7,6 +7,7 @@ import { substituteRustTargetGenerics } from "../../target-model/types/carriers/
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 import type { RustGenericCallableDefinition } from "./generic-values.js";
 import type { RustGenericCallablePhysicalDefinition, RustGenericCallablePhysicalMember, RustGenericCallablePhysicalPlan } from "./generic-physical.js";
+import { snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 
 export interface RustGenericCallableBindingContext {
   readonly ast: AstReader;
@@ -31,7 +32,11 @@ export function rustGenericCallablePhysicalBindings(
 }
 
 export function rustGenericCallableMemberBindings(
-  definition: RustGenericCallableDefinition, member: RustGenericCallablePhysicalMember, input: RustGenericCallableBindingContext,
+  definition: RustGenericCallableDefinition,
+  member: Pick<RustGenericCallablePhysicalMember, "implementation" | "arguments">,
+  input: Pick<RustGenericCallableBindingContext, "ast" | "sourceLifetimes"> & {
+    readonly physical: Pick<RustGenericCallablePhysicalPlan, "environmentFor">;
+  },
 ): RustTargetGenericBindings | undefined {
   const implementation = member.implementation;
   const contract = input.sourceLifetimes.contractFor(implementation.declaration);
@@ -52,7 +57,30 @@ export function rustGenericCallableMemberBindings(
     [identity, selected.lifetimes.get(rustLifetimeKey(lifetime)) ?? lifetime]));
   const consts = new Map([...environment.substitutions.consts].map(([identity, value]) =>
     [identity, value.kind === "parameter" ? selected.consts.get(value.identity) ?? value : value]));
-  return Object.freeze({ types, lifetimes, consts });
+  return snapshotRustCallableBindings({ types, lifetimes, consts });
+}
+
+export function snapshotRustCallableBindings(bindings: RustTargetGenericBindings): RustTargetGenericBindings {
+  return Object.freeze({ types: readonlyMap(bindings.types), lifetimes: readonlyMap(bindings.lifetimes),
+    consts: readonlyMap(bindings.consts) });
+}
+
+function readonlyMap<Key, Value>(entries: ReadonlyMap<Key, Value>): ReadonlyMap<Key, Value> {
+  const values = new Map([...entries].map(([key, value]) => [key, snapshotClosedMetadata(value)]));
+  const view: ReadonlyMap<Key, Value> = Object.freeze({
+    size: values.size,
+    get: (key: Key) => values.get(key),
+    has: (key: Key) => values.has(key),
+    entries: () => values.entries(),
+    keys: () => values.keys(),
+    values: () => values.values(),
+    [Symbol.iterator]: () => values[Symbol.iterator](),
+    [Symbol.toStringTag]: "ReadonlyMap",
+    forEach(callback: (value: Value, key: Key, map: ReadonlyMap<Key, Value>) => void, thisArg?: unknown) {
+      values.forEach((value, key) => callback.call(thisArg, value, key, view));
+    },
+  });
+  return view;
 }
 
 export function rustGenericCallableInvocationBindings(
@@ -76,7 +104,7 @@ export function rustGenericCallableMemberInvocationBindings(
 ): RustTargetGenericBindings | undefined {
   if (!definition.members.includes(member)) return undefined;
   const invocation = rustGenericCallableInvocationBindings(definition, carrier, methodArguments, input.physical);
-  const source = rustGenericCallableMemberBindings(definition, member, input);
+  const source = member.bindings;
   if (invocation === undefined || source === undefined) return undefined;
   return Object.freeze({
     types: new Map([...source.types].map(([identity, type]) => [identity,

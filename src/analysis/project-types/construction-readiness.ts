@@ -31,6 +31,7 @@ export interface RustConstructionPoint {
 }
 
 export interface RustConstructionPointQueries {
+  readonly points: readonly RustConstructionPoint[];
   readonly expressions: readonly RustConstructionExpression[];
   readonly completesNormally: boolean;
   layerCompletes(definition: RustProjectTypeDefinition): boolean;
@@ -38,6 +39,7 @@ export interface RustConstructionPointQueries {
   mutatesUnpublishedField(declaration: Node): boolean;
   pointFor(node: Node): RustConstructionPoint | undefined;
   expressionsWithin(node: Node): readonly RustConstructionExpression[];
+  returnLayerFor(node: Node): RustProjectTypeDefinition | undefined;
 }
 
 export interface RustConstructionReadinessField {
@@ -80,6 +82,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   const declarations = new Set(input.fields.map(field => field.declaration));
   const layerCompletion = new Map<RustProjectTypeDefinition, boolean>();
   const layerEarlyReturn = new Set<RustProjectTypeDefinition>();
+  const returnLayers = new Map<Node, RustProjectTypeDefinition>();
+  let currentLayer: RustProjectTypeDefinition | undefined;
   let earlyReturns = 0;
   let visited = 0;
   let publishesReceiver = false;
@@ -402,7 +406,10 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     const state = enter(node, initial, [node]);
     const after = expression(node, state, depth + 1);
     if (kind === "KindReturnStatement") {
-      if (Node_Expression(input.ast, node) === undefined) earlyReturns += 1;
+      if (Node_Expression(input.ast, node) === undefined) {
+        earlyReturns += 1;
+        if (currentLayer !== undefined) returnLayers.set(node, currentLayer);
+      }
       return { ...fallthrough(), returned: [after] };
     }
     if (kind === "KindThrowStatement") return { ...fallthrough(), thrown: [after] };
@@ -417,6 +424,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   let state: ConstructionState = Object.freeze({ initialized: absenceFields, possiblyInitialized: absenceFields, published: false });
   let completesNormally = true;
   for (const layer of input.layers) {
+    currentLayer = layer.definition;
     const previousReturns = earlyReturns;
     for (const field of layer.fields) {
       if (field.initializer !== undefined) {
@@ -443,6 +451,7 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
   const indexedExpressions = new Map<Node, RustConstructionExpression>();
   for (const entries of expressions.values()) for (const entry of entries) indexedExpressions.set(entry.node, entry);
   return Object.freeze({ issues: Object.freeze(issues), publishesReceiver, mutatesPublishedFields, completesNormally,
+    points: Object.freeze([...points.values()]),
     deferredCaptureFields: Object.freeze([...deferredCaptureFields]),
     publishedFieldWrites: Object.freeze([...publishedFieldWrites]),
     layerCompletes: (definition: RustProjectTypeDefinition) => layerCompletion.get(definition) === true,
@@ -450,7 +459,8 @@ export function analyzeRustConstructionReadiness(input: RustConstructionReadines
     mutatesUnpublishedField: (declaration: Node) => unpublishedFieldWrites.has(declaration),
     expressions: Object.freeze([...indexedExpressions.values()]),
     pointFor: (node: Node) => points.get(node),
-    expressionsWithin: (node: Node) => expressions.get(node) ?? emptyExpressions });
+    expressionsWithin: (node: Node) => expressions.get(node) ?? emptyExpressions,
+    returnLayerFor: (node: Node) => returnLayers.get(node) });
 }
 
 const emptyExpressions: readonly RustConstructionExpression[] = Object.freeze([]);

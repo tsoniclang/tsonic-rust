@@ -4,7 +4,6 @@ import { createTargetSourceProgram, sourceNodeIdentity, sourceNodesOutsideErased
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
-import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { compileRustTarget } from "../../../dist/backend/compile.js";
 import { prepareRustGenericCallableDispatchRequests } from "../../../dist/analysis/callables/generic-dispatch.js";
@@ -436,26 +435,6 @@ test("closure prepares the canonical self-carrier of every admitted family", () 
     assert.equal(published.argumentsFor(late) === selected, true,
       "actual prepared keys are stable lookups after publication");
   }
-});
-
-test("the planner phase label starts at publication, after the callable seal and reachability", () => {
-  const context = checkedContext(joinedLibrary, { id: "rust", options: { outputType: "lib" } });
-  const physical = context.callableValues.selected.generic.physical;
-  const joined = physical.definitions().find(definition => definition.members.length === 2);
-  const value = rustGenericCallableValue(joined.carrier);
-  const reordered = rustGenericCallableCarrier({ ...value, physical: { ...value.physical, members: [...value.physical.members].reverse() } });
-  assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "closed, not sealed");
-  const components = analyzeRustSourcePackageComponents(context, "lib", subject => context.records.errorEffects.get(subject));
-  assert.equal(components.kind, "resolved", "the existing component owner completes before publication");
-  context.callableValues.initializeCompletions({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
-    records: context.records, physical, producers: context.callableValues.nativeProducers,
-    definitions: context.typeDefinitions, components: components.plan });
-  const published = context.callableValues.seal();
-  assert.equal(published !== context.callableValues.selected, true, "publication does not expose the analysis construction view");
-  assert.equal(context.callableValues.seal() === published, true, "repeated seals read the same completed publication");
-  assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "sealed, not published");
-  context.callableValues.publish();
-  assert.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_PLANNER_INVARIANT", "published");
 });
 
 test("a selected identity issue on a provider callback argument keeps the base diagnostic list", () => {

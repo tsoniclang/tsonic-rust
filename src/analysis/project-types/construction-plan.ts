@@ -6,10 +6,13 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { isRustOptionCarrier, isRustAbsenceCarrier } from "../../target-model/types/index.js";
 import { rustInheritedProjectConstructor, type RustProjectConstructorSignature, type RustProjectTypeDefinition,
   type RustProjectTypePolicy } from "./type-policy.js";
-import type { RustReceiverFieldAliasQueries } from "./receiver-field-aliases.js";
-import type { RustReceiverFieldCaptureQueries } from "./receiver-captures.js";
+import type { RustObjectRepresentationPlan } from "./object-representation.js";
+import type { RustFrameCallableDefinition, RustFrameCallablePlan } from "../callables/frame-values.js";
+import { validatedRustCapturedFieldStorageFact } from "../storage/receiver-captures.js";
+import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { analyzeRustConstructionReadiness, type RustConstructionPointQueries } from "./construction-readiness.js";
+import { analyzeRustConstructionReadiness, type RustConstructionExpression, type RustConstructionPoint,
+  type RustConstructionPointQueries } from "./construction-readiness.js";
 import { selectRustExternalInitialization, type RustExternalInitialization } from "./external-initialization.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 
@@ -36,6 +39,27 @@ export interface RustConstructionIssue {
   readonly reason: string;
 }
 
+export type RustConstructionProjection =
+  | { readonly kind: "fixed-self"; readonly expression: RustConstructionExpression }
+  | { readonly kind: "local"; readonly expression: RustConstructionExpression; readonly declaration: Node;
+      readonly storage: "value" | "frame" | "captured" }
+  | { readonly kind: "receiver"; readonly expression: RustConstructionExpression; readonly node: Node;
+      readonly carrier: TargetTypeRef; readonly projection: "identity" | "polymorphic" };
+
+export interface RustConstructionPreparationSelection {
+  readonly point: RustConstructionPoint;
+  readonly layer: RustConstructionLayer;
+  readonly retainsFrame: boolean;
+  readonly projections: readonly RustConstructionProjection[];
+}
+
+export interface RustConstructionEmissionPlan {
+  readonly frame: RustFrameCallableDefinition | undefined;
+  readonly exposure: { readonly declaration: Node; readonly expression: Node; readonly carrier: TargetTypeRef } | undefined;
+  readonly issues: readonly RustConstructionIssue[];
+  preparationFor(node: Node): RustConstructionPreparationSelection | undefined;
+}
+
 export interface RustProjectConstructionPlan extends RustConstructionPointQueries {
   readonly definition: RustProjectTypeDefinition;
   readonly layers: readonly RustConstructionLayer[];
@@ -43,6 +67,7 @@ export interface RustProjectConstructionPlan extends RustConstructionPointQuerie
   readonly issues: readonly RustConstructionIssue[];
   readonly publishesReceiver: boolean;
   readonly mutatesPublishedFields: boolean;
+  readonly emission: RustConstructionEmissionPlan;
 }
 
 export interface RustProjectConstructionQueries {
@@ -57,8 +82,8 @@ export interface RustConstructionAnalysisInput {
   readonly records: RustProgramRecords;
   readonly typeDefinitions: RustTypeDefinitions;
   readonly projectTypes: RustProjectTypePolicy;
-  readonly receiverFieldAliases: RustReceiverFieldAliasQueries;
-  readonly receiverCaptures: RustReceiverFieldCaptureQueries;
+  readonly objectRepresentations: RustObjectRepresentationPlan;
+  readonly frames: RustFrameCallablePlan;
   mayThrow(node: Node): boolean;
 }
 
@@ -114,7 +139,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
         }));
         for (const field of input.projectTypes.objectLayoutForDefinition(owner)?.fields ?? []) {
           if (input.ast.hasModifierKind(field.declaration, "abstract") ||
-            input.receiverFieldAliases.aliasFor(field.declaration) !== undefined) continue;
+            input.objectRepresentations.aliasFor(field.declaration) !== undefined) continue;
           const carrier = input.records.runtimeCarrier.get(field.declaration)?.carrier;
           const initializer = sourceParameterIsProperty(input.ast, field.declaration)
             ? input.ast.name(field.declaration) : Node_Initializer(input.ast, field.declaration);
@@ -143,7 +168,7 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
         }
       }
     }
-    const physicalDeclaration = input.receiverCaptures.storageDeclaration;
+    const physicalDeclaration = input.objectRepresentations.receiverCaptures.storageDeclaration;
     const logicalFields = layers.flatMap(layer => layer.fields);
     const fields = Object.freeze(logicalFields.filter(field => physicalDeclaration(field.declaration) === field.declaration));
     const physicalFields = new Map(fields.map(field => [field.declaration, field]));
@@ -173,8 +198,10 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
       unreachable: node => input.records.nativeUnreachable.get(node) === true,
       mayThrow: input.mayThrow,
     });
-    plans.set(definition, Object.freeze({ definition, layers: Object.freeze(layers), fields,
+    const emission = prepareRustConstructionEmission(input, definition, layers, fields, readiness);
+    plans.set(definition, Object.freeze({ definition, layers: Object.freeze(layers), fields, emission,
       issues: Object.freeze([...issues, ...readiness.issues]), pointFor: readiness.pointFor,
+      points: readiness.points, returnLayerFor: readiness.returnLayerFor,
       expressions: readiness.expressions,
       completesNormally: readiness.completesNormally, layerCompletes: readiness.layerCompletes,
       layerHasEarlyReturn: readiness.layerHasEarlyReturn,
@@ -185,4 +212,101 @@ export function analyzeRustProjectConstructions(input: RustConstructionAnalysisI
   return Object.freeze({ forDefinition: (definition: RustProjectTypeDefinition) => plans.get(definition),
     externalInitializationForCall: (call: Node) => externalInitializations.get(call),
     ownsExternalArgument: (argument: Node) => ownedExternalArguments.has(argument) });
+}
+
+function prepareRustConstructionEmission(input: RustConstructionAnalysisInput, definition: RustProjectTypeDefinition,
+  layers: readonly RustConstructionLayer[], fields: readonly RustConstructionField[], readiness: RustConstructionPointQueries): RustConstructionEmissionPlan {
+  const frame = input.frames.definitionForOwner(definition.declaration);
+  const exposure = frame?.storage.kind === "standalone" ? frame.constructionExposure : undefined;
+  const issues: RustConstructionIssue[] = [];
+  const issue = (node: Node, reason: string): void => {
+    if (!issues.some(value => value.node === node && value.reason === reason)) issues.push(Object.freeze({ node, reason }));
+  };
+  const fieldsByDeclaration = new Map(fields.map(field => [field.declaration, field]));
+  const capturedStorage = new Map(fields.map(field => [field.declaration,
+    validatedRustCapturedFieldStorageFact(field.declaration, input)]));
+  const frameCarrier = frame?.entries[0]?.implementations[0]?.carrier;
+  const frameValue = rustFrameCallableValue(frameCarrier);
+  const frameEntry = frameCarrier === undefined ? undefined : input.frames.entryFor(frameCarrier);
+  let selectedExposure: RustConstructionEmissionPlan["exposure"];
+  if (exposure !== undefined) {
+    const point = readiness.pointFor(exposure.expression);
+    const exactFrame = frameCarrier !== undefined && input.frames.definitionFor(frameCarrier) === frame &&
+      frameEntry !== undefined && frame.entries.includes(frameEntry) && frameValue !== undefined &&
+      frameValue.environment.length === frameEntry.environmentIndexes.length &&
+      frame.environmentParameters.every((_parameter, index) => frameEntry.environmentIndexes.includes(index));
+    if (!exactFrame || point === undefined || fieldsByDeclaration.get(exposure.declaration)?.initializer !== exposure.expression ||
+      frame!.bindings.some(binding => !fieldsByDeclaration.has(binding.declaration) ||
+        binding.initialization !== "deferred" && !point.initializedFields.includes(binding.declaration))) {
+      issue(exposure.expression, "A retained constructor callback requires initialized native frame storage.");
+    } else selectedExposure = Object.freeze({ ...exposure, carrier: frameCarrier! });
+  }
+  const root = input.projectTypes.openCarrier(definition);
+  const retainedNodes = new Set<Node>();
+  if (selectedExposure !== undefined) {
+    const pending = [selectedExposure.expression];
+    while (pending.length !== 0) {
+      const node = pending.pop()!;
+      if (retainedNodes.has(node)) continue;
+      retainedNodes.add(node);
+      input.ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+  }
+  const preparations = new Map<Node, RustConstructionPreparationSelection>();
+  for (const point of readiness.points) {
+    const owner = point.node === definition.declaration ? definition : input.projectTypes.definitionContainingDeclaration(point.node);
+    const layer = layers.find(selected => selected.definition === owner);
+    if (layer === undefined) {
+      issue(point.node, "A construction point has no exact selected native source layer.");
+      continue;
+    }
+    const retainsFrame = selectedExposure !== undefined &&
+      (point.initializedFields.includes(selectedExposure.declaration) || retainedNodes.has(point.node));
+    const projections: RustConstructionProjection[] = [];
+    for (const expression of readiness.expressionsWithin(point.node)) {
+      const fixedSelf = expression.kind === "capture" ? input.objectRepresentations.receiverCaptures.fixedSelfForReference(expression.node) : undefined;
+      if (fixedSelf !== undefined) {
+        if (expression.declaration !== fixedSelf.declaration) issue(expression.node, "A fixed field self lost its exact construction declaration.");
+        else projections.push(Object.freeze({ kind: "fixed-self", expression }));
+        continue;
+      }
+      if ((expression.kind === "field" || expression.kind === "capture") && !point.published && !point.publishBefore) {
+        const declaration = expression.declaration;
+        const field = declaration === undefined ? undefined : fieldsByDeclaration.get(declaration);
+        if (field === undefined) {
+          issue(expression.node, "Sealed construction field has no matching physical local slot.");
+          continue;
+        }
+        const binding = input.frames.bindingFor(field.declaration);
+        const captured = capturedStorage.get(field.declaration);
+        if (expression.kind === "capture" && binding === undefined && captured === undefined) {
+          issue(expression.node, "A captured native field lost its exact physical owner contract.");
+          continue;
+        }
+        projections.push(Object.freeze({ kind: "local", expression, declaration: field.declaration,
+          storage: binding !== undefined ? "frame" : captured !== undefined ? "captured" : "value" }));
+      } else if (point.published || point.publishBefore) {
+        const receiver = expression.kind === "receiver" ? expression.node : expression.receiver;
+        if (receiver === undefined) {
+          issue(expression.node, "Sealed construction projection has no exact receiver node.");
+          continue;
+        }
+        const declaredCarrier = input.records.runtimeCarrier.get(receiver)?.carrier;
+        const carrier = declaredCarrier === undefined ? undefined : input.projectTypes.instantiateMemberCarrier(receiver, root, declaredCarrier);
+        const target = carrier === undefined ? undefined : input.projectTypes.definitionForCarrier(carrier);
+        const relation = target === undefined ? undefined : input.projectTypes.relationship(root, target);
+        if (carrier === undefined || target === undefined || relation?.kind !== "related" || !rustTargetTypeRefEquals(relation.targetType, carrier) ||
+          !rustTargetTypeRefEquals(root, carrier) && (!input.projectTypes.isPolymorphic(definition) || !input.projectTypes.isPolymorphic(target))) {
+          issue(receiver, carrier === undefined ? "Sealed construction receiver has no finalized native carrier."
+            : "Finalized construction receiver differs from its same-root native view.");
+          continue;
+        }
+        projections.push(Object.freeze({ kind: "receiver", expression, node: receiver, carrier,
+          projection: rustTargetTypeRefEquals(root, carrier) ? "identity" : "polymorphic" }));
+      }
+    }
+    preparations.set(point.node, Object.freeze({ point, layer, retainsFrame, projections: Object.freeze(projections) }));
+  }
+  return Object.freeze({ frame, exposure: selectedExposure, issues: Object.freeze(issues),
+    preparationFor: (node: Node) => preparations.get(node) });
 }

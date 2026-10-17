@@ -1,43 +1,14 @@
 import type { Node } from "@tsonic/tsts";
-import { rustFinalizedSourceInputs } from "../../../analysis/operations/finalized-operation/conversions.js";
-import type { RustTargetOperationFact } from "../../../target-model/records/operations.js";
-import { isRustAbsenceCarrier, isRustUnitCarrier } from "../../../target-model/types/index.js";
-import { providerSourceInputKey } from "../../../analysis/operations/provider-source-inputs.js";
+import type { RustCallableEmissionContexts, RustEmissionProviderOperation } from "../../../target-model/records/physical-emission-contexts.js";
 
 export function sourceRuntimeSlots(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
-  receiverNode: Node | undefined,
-  argumentNodes: readonly (Node | undefined)[],
-): readonly { readonly key: string; readonly node: Node; readonly evaluationOnly?: "unit" | "value" }[] | undefined {
-  const slots: { readonly key: string; readonly node: Node; readonly evaluationOnly?: "unit" | "value" }[] = [];
-  if (fact.abi.sourceReceiver.kind === "receiver") {
-    if (receiverNode === undefined) {
-      return undefined;
-    }
-    slots.push({ key: "receiver", node: receiverNode,
-      ...(fact.abi.sourceReceiver.disposition === "evaluation-only" ? {
-        evaluationOnly: isRustAbsenceCarrier(fact.abi.sourceReceiver.carrier) || isRustUnitCarrier(fact.abi.sourceReceiver.carrier)
-          ? "unit" as const : "value" as const,
-      } : {}),
-    });
-  }
-  for (const argument of fact.abi.sourceArguments) {
-    const node = argumentNodes[argument.sourceIndex];
-    if (node === undefined) {
-      return undefined;
-    }
-    slots.push({ key: `argument:${argument.sourceIndex}`, node,
-      ...(argument.disposition === "evaluation-only" ? {
-        evaluationOnly: isRustAbsenceCarrier(argument.carrier) || isRustUnitCarrier(argument.carrier)
-          ? "unit" as const : "value" as const,
-      } : {}),
-    });
-  }
-  return slots;
+  contexts: RustCallableEmissionContexts, node: Node, operation: RustEmissionProviderOperation,
+) {
+  return contexts.sourceFor(node, operation)?.slots;
 }
 
 export function providerTargetRuntimeSlotKeys(
-  fact: Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>,
-): readonly string[] {
-  return rustFinalizedSourceInputs(fact.abi).map(providerSourceInputKey);
+  contexts: RustCallableEmissionContexts, node: Node, operation: RustEmissionProviderOperation,
+): readonly string[] | undefined {
+  return contexts.sourceFor(node, operation)?.targetOrder;
 }

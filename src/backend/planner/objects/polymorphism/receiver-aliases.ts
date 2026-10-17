@@ -24,6 +24,14 @@ export function planRustReceiverAlias(
   if (!nativeRoot && rustTargetTypeRefEquals(receiverCarrier, resultCarrier)) return receiver;
   if (!context.input.program.projectTypes.isPolymorphic(receiverDefinition) ||
     !context.input.program.projectTypes.isPolymorphic(resultDefinition!)) return undefined;
+  return renderRustReceiverAlias(receiver, resultType, nativeRoot);
+}
+
+export function renderRustReceiverAlias(
+  receiver: RustExpr,
+  resultType: Extract<import("../../../target-ast/syntax/nodes.js").RustType, { readonly kind: "named" }>,
+  nativeRoot: boolean,
+): RustExpr {
   return { kind: "struct-literal", path: resultType.path, fields: [
     { name: rustProjectObjectIdentityField, value: cloneField(receiver, rustProjectObjectIdentityField) },
     { name: rustProjectObjectDispatchField, value: nativeRoot ? receiver : cloneExpression({

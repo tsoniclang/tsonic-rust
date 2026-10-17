@@ -2,7 +2,6 @@ import type { RustGenericCallablePhysicalDefinition } from "../../../../analysis
 import type { RustTargetGenericArgument } from "../../../../target-model/types/model.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustGenericParameter, RustGenerics, RustWherePredicate } from "../../../target-ast/syntax/nodes.js";
-import { rustGenericCallableMemberBindings } from "../../../../analysis/callables/generic-bindings.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import { closedMetadataKey } from "../../../../target-model/metadata/closed-data.js";
@@ -30,10 +29,7 @@ export function rustGenericCallableCapturePredicates(
 ): readonly RustWherePredicate[] | undefined {
   const predicates = new Map<string, RustWherePredicate>();
   for (const member of definition.members) {
-    const bindings = rustGenericCallableMemberBindings(definition, member, {
-      ast: context.input.program.source.ast, sourceLifetimes: context.input.program.sourceLifetimes,
-      physical: context.input.program.callableValues.generic.physical,
-    });
+    const bindings = member.bindings;
     const capture = context.input.program.callableValues.generic.physical.environmentFor(member.implementation);
     if (bindings === undefined || capture === undefined) return undefined;
     const memberContext = { ...context, typeParameterSubstitutions: bindings.types, lifetimeSubstitutions: bindings.lifetimes };

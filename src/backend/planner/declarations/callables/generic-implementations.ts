@@ -25,7 +25,6 @@ import { rustCallableCaptureStorageType } from "../../types/capture-storage.js";
 import { validateRustCapturedReceiverFields, validateRustCapturedReceivers } from "../../expressions/receiver-captures.js";
 import { rustCallablePayloadContext, rustCallablePayloadTypes } from "../../expressions/capture-payloads.js";
 import { rustGenericCallableEnvironmentGenerics, rustGenericCallableCapturePredicates } from "./generic-signatures.js";
-import { rustGenericCallableMemberBindings } from "../../../../analysis/callables/generic-bindings.js";
 import { rustGenericCallableStorageArguments } from "../../../../target-model/types/carriers/generic-callable-storage.js";
 import { planRustGenericCallableErrors } from "./generic-errors.js";
 
@@ -176,10 +175,7 @@ function planDefinition(definition: RustGenericCallablePhysicalDefinition, conte
     const implementation = member.implementation;
     const contract = context.input.program.declarationGenericRequirements.contractFor(implementation.declaration);
     const path = rustGenericCallableImplementationPath(implementation, implementation.functionName, context);
-    const bindings = rustGenericCallableMemberBindings(definition, member, {
-      ast: context.input.program.source.ast, sourceLifetimes: context.input.program.sourceLifetimes,
-      physical: context.input.program.callableValues.generic.physical,
-    });
+    const bindings = member.bindings;
     if (contract === undefined || path === undefined || bindings === undefined) return undefined;
     const substitutions = bindings.types;
     for (const parameter of [...contract.typeParameters, ...contract.capturedTypeParameters]) {
