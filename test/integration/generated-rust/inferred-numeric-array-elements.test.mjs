@@ -111,6 +111,12 @@ for (const surfaces of [[], ["js"]]) {
     for (index, value) in expected.iter().enumerate() { assert_eq!(actual.get(index).as_ref(), Some(value)); }
 }`;
     const initialize = artifactText(result, "src/lib.rs").includes("pub fn initialize()") ? "crate::initialize();" : "";
+    const checkedIndexResult = lane === "native" ? '.expect("native checked index succeeds")' : "";
+    for (const [name, valueType] of [["verify", "bool"], ["negativeZero", "f64"], ["nativeFloat32", "f32"]]) {
+      const expectedResultType = lane === "native" ? `Result<${valueType}, rt::TsonicError>` : valueType;
+      assert.equal(new RegExp(`fn ${name}\\([^)]*\\) -> ${expectedResultType}`, "u").test(generated), true,
+        `${name}: preserve the native checked-index result contract on the selected surface`);
+    }
     const handwritten = fractional.map(([name, , values], index) => {
       const entries = values.map(value => value === -7 ? "f64::from(signed)" : value === 4294967295 ? "f64::from(unsigned)" : "0.5_f64").join(", ");
       const construction = lane === "native" ? `vec![${entries}]` : `js_abi::JsArray::from_dense(vec![${entries}])`;
@@ -126,15 +132,15 @@ ${assertDense}
 #[test]
 fn exact_values_widths_signed_zero_and_source_order() {
     ${initialize}
-    assert!(verify());
+    assert!(verify()${checkedIndexResult});
     ${nativeObservations}
     assert_dense(wideExact(9_007_199_254_740_993_i64), &[9_007_199_254_740_993_i64, 1]);
     assert_dense(widePair(9_007_199_254_740_993_i64), &[9_007_199_254_740_993_i64, 9_007_199_254_740_993_i64]);
     assert_dense(literalBoundary(-7), &[-7.0_f64, 2_147_483_648.0_f64]);
     assert_dense(spreadValues(), &[1.0_f64, 0.5, 3.5, 2.0]);
     assert_dense(suffixValues(), &[0.5_f64, 3.5, 1.0, 2.0]);
-    assert_eq!(negativeZero(-7).to_bits(), (-0.0_f64).to_bits());
-    assert_eq!(nativeFloat32(1.5_f32).to_bits(), 0.1_f32.to_bits());
+    assert_eq!(negativeZero(-7)${checkedIndexResult}.to_bits(), (-0.0_f64).to_bits());
+    assert_eq!(nativeFloat32(1.5_f32)${checkedIndexResult}.to_bits(), 0.1_f32.to_bits());
     assert_dense(effectOrder(), &[-7.0_f64, 0.5, 4_294_967_295.0]);
     assert_eq!(effectTrace(), 123);
 }

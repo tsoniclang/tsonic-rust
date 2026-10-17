@@ -9,9 +9,11 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import {
   isRustVecCarrier,
+  rustFixedArrayCarrierValue,
   rustJsArrayLikeElementTargetType,
   rustSourcePrimitiveTargetType,
   rustSourceUnionTargetType,
+  rustTargetConstInteger,
 } from "../../../dist/target-model/types/index.js";
 
 const header = 'import type { FixedArray, float32, int32, int64, uint32 } from "@tsonic/core/types.js";\n';
@@ -88,6 +90,7 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
   const literalBoundary = [signed, 2147483648];
   const nativeFloat32 = [narrow, 0.1];
   const tuple: [int32, int32] = [signed, signed];
+  const heterogeneousTuple: [int32, string] = [signed, "tuple"];
   const fixed: FixedArray<int32, 2> = [signed, 1] as const;
   const empty: int32[] = [];
 }
@@ -99,7 +102,15 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
     }
     for (const name of ["signedLiteral", "parenthesized", "empty"]) assertArray(program, initializers, name, "int32");
     assertArray(program, initializers, "nativeFloat32", "float32");
-    assert.equal(program.records.targetOperation.get(initializers.get("tuple"))?.kind, "tuple-literal", "tuple keeps its own admission");
+    const tuple = initializers.get("tuple");
+    assert.equal(program.records.targetOperation.get(tuple)?.kind, "fixed-array-literal",
+      "homogeneous source tuple keeps its canonical native fixed-array admission");
+    const tupleCarrier = rustFixedArrayCarrierValue(program.records.runtimeCarrier.get(tuple)?.carrier);
+    assert.equal(tupleCarrier !== undefined && rustTargetConstInteger(tupleCarrier.length) === 2n &&
+      rustTargetTypeRefEquals(tupleCarrier.element, rustSourcePrimitiveTargetType("int32")), true,
+      "source tuple retains exactly two native integers without floating inference");
+    assert.equal(program.records.targetOperation.get(initializers.get("heterogeneousTuple"))?.kind, "tuple-literal",
+      "heterogeneous tuple keeps its distinct native tuple admission");
     const fixed = program.source.ast.as.AsAsExpression(initializers.get("fixed"))?.Expression;
     assert.equal(program.records.targetOperation.get(fixed)?.kind, "fixed-array-literal", "fixed array keeps its extent owner");
     const zero = program.source.ast.elements(initializers.get("negativeZero"))[1];
