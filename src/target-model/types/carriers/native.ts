@@ -109,6 +109,8 @@ export interface RustNamedTypeCarrierValue {
   readonly id: string;
   readonly path: string;
   readonly nativeErrorIdentity?: string;
+  readonly typeRequirements: readonly RustNamedTypeTraitRequirement[];
+  readonly nativeArgumentCount: number;
   readonly traits: RustNamedTypeTraitContract;
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly genericDefaults: readonly RustTargetGenericArgument[];
@@ -131,15 +133,37 @@ export function rustNamedTargetType(
   genericDefaults: readonly RustTargetGenericArgument[] = [],
   traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
   upcasts: readonly RustNamedTypeUpcast[] = [],
-  nativeErrorIdentity?: string,
+  nativeErrorIdentity: string | undefined,
+  typeRequirements: readonly RustNamedTypeTraitRequirement[],
+  nativeArgumentCount = genericArguments.length,
 ): TargetTypeRef {
+  if (!isDenseDataArray(typeRequirements)) throw new Error("A native named type requires explicit type requirements.");
   return {
     kind: "target-specific",
     target: "rust",
     name: rustNamedTypeCarrierName,
-    value: { id, path, traits, genericArguments, genericDefaults, upcasts,
+    value: { id, path, traits, genericArguments, genericDefaults, upcasts, nativeArgumentCount,
+      typeRequirements: canonicalNamedTypeRequirements(typeRequirements),
       ...(nativeErrorIdentity === undefined ? {} : { nativeErrorIdentity }) },
   };
+}
+
+export function rustNamedTypeRequirementsForArguments(
+  arguments_: readonly RustTargetGenericArgument[],
+  requirements: readonly { readonly identity: string; readonly traits: readonly RustTargetTraitRef[] }[],
+): readonly RustNamedTypeTraitRequirement[] | undefined {
+  const typeArguments = rustTargetGenericTypeArguments(arguments_);
+  const selected: RustNamedTypeTraitRequirement[] = [];
+  for (const requirement of requirements) {
+    let matched = false;
+    for (const [typeArgumentIndex, argument] of typeArguments.entries()) {
+      if (argument.kind !== "type-parameter" || argument.identity !== requirement.identity) continue;
+      matched = true;
+      for (const trait of requirement.traits) selected.push({ typeArgumentIndex, trait });
+    }
+    if (!matched) return undefined;
+  }
+  return Object.freeze(selected);
 }
 
 export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): RustNamedTypeCarrierValue | undefined {
@@ -158,14 +182,18 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     readonly genericDefaults?: unknown;
     readonly upcasts?: unknown;
     readonly nativeErrorIdentity?: unknown;
+    readonly typeRequirements?: unknown;
+    readonly nativeArgumentCount?: unknown;
   };
   if (!hasExactObjectKeys(value, ["id", "path", "traits", "genericArguments", "genericDefaults", "upcasts",
+      "typeRequirements", "nativeArgumentCount",
       ...(candidate.nativeErrorIdentity === undefined ? [] : ["nativeErrorIdentity"])]) ||
     candidate.nativeErrorIdentity !== undefined &&
       (typeof candidate.nativeErrorIdentity !== "string" || candidate.nativeErrorIdentity.length === 0) ||
     typeof candidate.id !== "string" || candidate.id.length === 0 ||
     typeof candidate.path !== "string" || candidate.path.length === 0 ||
     !isRustNamedTypeTraitContract(candidate.traits) ||
+    !isCanonicalNamedTypeRequirements(candidate.typeRequirements) ||
     !isDenseDataArray(candidate.genericArguments) ||
     candidate.genericArguments.some((argument) => !isRustNamedGenericArgument(argument)) ||
     !isDenseDataArray(candidate.genericDefaults) ||
@@ -178,6 +206,8 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
   if (upcasts.some((upcast, index) => upcasts.slice(0, index).some((previous) =>
     rustTargetTypeRefEquals(previous.target, upcast.target)))) return undefined;
   const genericArguments = candidate.genericArguments as readonly RustTargetGenericArgument[];
+  if (typeof candidate.nativeArgumentCount !== "number" || !Number.isSafeInteger(candidate.nativeArgumentCount) ||
+    candidate.nativeArgumentCount < 0 || candidate.nativeArgumentCount > genericArguments.length) return undefined;
   const genericDefaults = candidate.genericDefaults as readonly RustTargetGenericArgument[];
   const defaultOffset = genericArguments.length - genericDefaults.length;
   if (defaultOffset < 0 || genericDefaults.some((argument, index) =>
@@ -185,7 +215,8 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     return undefined;
   }
   const typeArguments = rustTargetGenericTypeArguments(genericArguments);
-  if (candidate.traits.implementations.some((implementation) =>
+  if (candidate.typeRequirements.some(requirement => requirement.typeArgumentIndex >= typeArguments.length) ||
+    candidate.traits.implementations.some((implementation) =>
     implementation.requirements.some((requirement) => requirement.typeArgumentIndex >= typeArguments.length))) {
     return undefined;
   }
@@ -193,6 +224,8 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     id: candidate.id,
     path: candidate.path,
     traits: candidate.traits,
+    typeRequirements: candidate.typeRequirements,
+    nativeArgumentCount: candidate.nativeArgumentCount,
     genericArguments,
     genericDefaults,
     upcasts,
@@ -264,27 +297,8 @@ export function isRustNamedTypeTraitContract(value: unknown): value is RustNamed
       return false;
     }
     const selected = implementation as Partial<RustNamedTypeTraitImplementation>;
-    if (!isRustNamedTraitRef(selected.trait) || !isDenseDataArray(selected.requirements)) {
+    if (!isRustNamedTraitRef(selected.trait) || !isCanonicalNamedTypeRequirements(selected.requirements)) {
       return false;
-    }
-    let previousRequirementIdentity: string | undefined;
-    for (const [index, requirement] of selected.requirements.entries()) {
-      if (typeof requirement !== "object" || requirement === null || Array.isArray(requirement) ||
-        !hasExactObjectKeys(requirement, ["trait", "typeArgumentIndex"])) {
-        return false;
-      }
-      const condition = requirement as Partial<RustNamedTypeTraitRequirement>;
-      if (!Number.isSafeInteger(condition.typeArgumentIndex) || condition.typeArgumentIndex! < 0 ||
-        !isRustNamedTraitRef(condition.trait)) {
-        return false;
-      }
-      const identity = rustNamedTraitRequirementKey(condition as RustNamedTypeTraitRequirement);
-      if (previousRequirementIdentity !== undefined && previousRequirementIdentity >= identity) {
-        return false;
-      }
-      if (selected.requirements.slice(0, index).some(previous => previous.typeArgumentIndex === condition.typeArgumentIndex &&
-        rustNativeTraitRefEquals(previous.trait, condition.trait!))) return false;
-      previousRequirementIdentity = identity;
     }
     const identity = rustNamedTraitImplementationKey(selected as RustNamedTypeTraitImplementation);
     if (previousIdentity !== undefined && previousIdentity >= identity) {
@@ -330,17 +344,41 @@ export function rustNamedTypeTraitContract(
 ): RustNamedTypeTraitContract {
   const compare = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
   const selected = implementations.map(implementation => Object.freeze({ trait: implementation.trait,
-    requirements: Object.freeze([...new Map(implementation.requirements.map(requirement =>
-      [rustNamedTraitRequirementKey(requirement), requirement] as const)).entries()]
-      .sort(([left], [right]) => compare(left, right)).map(([, requirement]) => requirement)
-      .filter((requirement, index, all) => !all.slice(0, index).some(previous =>
-        previous.typeArgumentIndex === requirement.typeArgumentIndex && rustNativeTraitRefEquals(previous.trait, requirement.trait)))),
+    requirements: canonicalNamedTypeRequirements(implementation.requirements),
   }));
   return Object.freeze({ implementations: Object.freeze([...new Map(selected.map(implementation =>
     [rustNamedTraitImplementationKey(implementation), implementation] as const)).entries()]
     .sort(([left], [right]) => compare(left, right)).map(([, implementation]) => implementation)
     .filter((implementation, index, all) => !all.slice(0, index).some(previous =>
       rustNamedTraitImplementationEquals(previous, implementation)))) });
+}
+
+function canonicalNamedTypeRequirements(
+  requirements: readonly RustNamedTypeTraitRequirement[],
+): readonly RustNamedTypeTraitRequirement[] {
+  return Object.freeze([...new Map(requirements.map(requirement => [rustNamedTraitRequirementKey(requirement), requirement] as const)).entries()]
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0).map(([, requirement]) => requirement)
+    .filter((requirement, index, all) => !all.slice(0, index).some(previous =>
+      previous.typeArgumentIndex === requirement.typeArgumentIndex && rustNativeTraitRefEquals(previous.trait, requirement.trait)))
+    .map(requirement => Object.freeze({ typeArgumentIndex: requirement.typeArgumentIndex, trait: requirement.trait })));
+}
+
+function isCanonicalNamedTypeRequirements(value: unknown): value is readonly RustNamedTypeTraitRequirement[] {
+  if (!isDenseDataArray(value)) return false;
+  const requirements = value as readonly RustNamedTypeTraitRequirement[];
+  let previousIdentity: string | undefined;
+  for (const [index, requirement] of requirements.entries()) {
+    if (typeof requirement !== "object" || requirement === null || Array.isArray(requirement) ||
+      !hasExactObjectKeys(requirement, ["trait", "typeArgumentIndex"])) return false;
+    const condition = requirement as Partial<RustNamedTypeTraitRequirement>;
+    if (!Number.isSafeInteger(condition.typeArgumentIndex) || condition.typeArgumentIndex! < 0 ||
+      !isRustNamedTraitRef(condition.trait)) return false;
+    const identity = rustNamedTraitRequirementKey(condition as RustNamedTypeTraitRequirement);
+    if (previousIdentity !== undefined && previousIdentity >= identity || requirements.slice(0, index).some(previous =>
+      previous.typeArgumentIndex === condition.typeArgumentIndex && rustNativeTraitRefEquals(previous.trait, condition.trait!))) return false;
+    previousIdentity = identity;
+  }
+  return true;
 }
 
 function rustNamedTraitImplementationEquals(left: RustNamedTypeTraitImplementation, right: RustNamedTypeTraitImplementation): boolean {

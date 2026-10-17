@@ -296,6 +296,7 @@ function collectRustTargetGenericReferences(
           visitArguments(named.genericArguments, bound);
           metadataDepth += 1;
           visitArguments(named.genericDefaults, bound);
+          if (scope === "metadata") named.typeRequirements.forEach(requirement => visitType(requirement.trait, bound));
           if (scope === "metadata") named.traits.implementations.forEach(implementation => {
             visitType(implementation.trait, bound);
             implementation.requirements.forEach(requirement => visitType(requirement.trait, bound));

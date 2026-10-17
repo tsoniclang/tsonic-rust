@@ -143,5 +143,5 @@ export function rustNativeCallableProtocolResult(
         : rustNativeCompletionFutureType({ identity: `${protocol.identity}:future:${future.ordinal}`,
           output: future.output, error: error(`AwaitError${future.ordinal}`), captures }), definitions);
   return completion === undefined ? undefined : rustNamedTargetType(`${protocol.identity}:result`, "Result",
-    rustTypeGenericArguments([completion, error("InvocationError")]));
+    rustTypeGenericArguments([completion, error("InvocationError")]), [], undefined, [], undefined, []);
 }

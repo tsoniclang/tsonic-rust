@@ -41,7 +41,7 @@ test("an immediate native completion uses its exact nameable Ready output withou
 test("canonical opaque carrier rendering preserves an explicitly empty capture set", () => {
   const carrier = rustNativeCompletionFutureType({ identity: "source:future", captures: [],
     output: rustSourcePrimitiveTargetType("int32"),
-    error: rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []),
+    error: rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", [], [], undefined, [], undefined, []),
   });
   const rendered = rustTypeFromCarrier(carrier);
   assert.equal(rendered !== undefined, true);

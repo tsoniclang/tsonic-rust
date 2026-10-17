@@ -12,7 +12,7 @@ import { selectRustExactIntegerConversion } from "../../dist/target-model/conver
 import { planRustCallableConversion } from "../../dist/backend/planner/expressions/callable-conversions.js";
 
 export function nativeFallibleAdapterFixture() {
-  const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure");
+  const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", [], [], undefined, [], undefined, []);
   const current = nativeClosureProducerFixture({
     packages: [nativeClosureProducerFailurePackage(failure, { path: "original", result: "int64",
       parameters: [{ name: "value", type: "int32" }] })],

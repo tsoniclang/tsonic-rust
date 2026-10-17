@@ -183,8 +183,8 @@ test("physical method installation completes canonical and already indexed borro
     { kind: "type", type: { kind: "tuple", elements: protocol.parameters } },
     { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
       { kind: "type", type: protocol.result }, { kind: "type", type: infallible },
-    ]) },
-  ]);
+    ], [], undefined, [], undefined, []) },
+  ], [], undefined, [], undefined, []);
   builder.finalizeMethodStorage(new Map([[definition, new Map([[0,
     { carrier: destinationCarrier, constructions: [{ object, property, expression, storageIndex: 0,
       physicalCarrier, destinationCarrier }] },
@@ -234,8 +234,8 @@ test("physical method witnesses reject mismatched complete signatures before pub
     { kind: "type", type: { kind: "tuple", elements: parameters } },
     { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
       { kind: "type", type: result }, { kind: "type", type: error },
-    ]) },
-  ]);
+    ], [], undefined, [], undefined, []) },
+  ], [], undefined, [], undefined, []);
   for (const label of ["input", "result", "error", "logical source", "destination", "field index"]) {
     const builder = createRustStructuralShapePlanRegistry();
     builder.initialize([{ carrier: shape }], [], () => "source", [], []);
@@ -522,8 +522,8 @@ test("a remapped physical method rejects its old source index without partially 
     { kind: "type", type: { kind: "tuple", elements: protocol.parameters } },
     { kind: "type", type: rustNamedTargetType("rust.core.Result", "Result", [
       { kind: "type", type: protocol.result }, { kind: "type", type: infallible },
-    ]) },
-  ]);
+    ], [], undefined, [], undefined, []) },
+  ], [], undefined, [], undefined, []);
   const constructions = [{ object: {}, property: {}, expression: {}, storageIndex: 0, physicalCarrier, destinationCarrier }];
   assert.throws(() => builder.finalizeMethodStorage(new Map([[definition, new Map([[1,
     { carrier: destinationCarrier, constructions },

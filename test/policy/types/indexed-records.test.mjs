@@ -38,10 +38,10 @@ test("indexed record carriers retain exact key, value and native contracts", () 
 });
 
 test("native equality uses exact PartialEq contracts, not record or wrapper names", () => {
-  const without = rustNamedTargetType("fixture.Value", "fixture::Value");
+  const without = rustNamedTargetType("fixture.Value", "fixture::Value", [], [], undefined, [], undefined, []);
   const comparable = rustNamedTargetType("fixture.Value", "fixture::Value", [], [], {
     implementations: [{ trait: { kind: "trait-ref", id: "core::cmp::PartialEq", path: "core::cmp::PartialEq", genericArguments: [], associatedConstraints: [] }, requirements: [] }],
-  });
+  }, [], undefined, []);
   assert.equal(selectRustBinaryOperator("===", without, without), undefined);
   assert.equal(selectRustBinaryOperator("===", comparable, without), undefined);
   assert.equal(selectRustBinaryOperator("===", comparable, comparable)?.rustOperator, "==");

@@ -132,7 +132,7 @@ test("closed native joins and actual union variants retain all physical payload 
   const borrowedJoin = rustNativeErrorJoinTargetType("/source.ts", [number, borrowed(scopedLifetime)]);
   assert.equal(selected(owned).kind, "supported", "all actual owned join fields");
   assert.equal(selected(borrowedJoin).kind, "unsatisfied", "borrowed join alternative");
-  assert.equal(selected(rustNamedTargetType("native:Box", "Box", [{ kind: "type", type: borrowed(scopedLifetime) }])).kind,
+  assert.equal(selected(rustNamedTargetType("native:Box", "Box", [{ kind: "type", type: borrowed(scopedLifetime) }], [], undefined, [], undefined, [])).kind,
     "unsatisfied", "actual native generic field bound");
 });
 

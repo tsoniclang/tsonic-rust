@@ -137,6 +137,7 @@ export {
   rustMoveOnlyNamedTypeTraits,
   rustNamedTargetType,
   rustNamedTypeCarrierValue,
+  rustNamedTypeRequirementsForArguments,
   rustNeverTargetType,
   rustAbsenceTargetType,
   rustSourcePrimitiveTargetType,

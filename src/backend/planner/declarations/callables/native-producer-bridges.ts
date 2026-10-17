@@ -195,6 +195,7 @@ export function planRustNativeProducerBridge(
       }, context.input.program.typeDefinitions);
     return completion === undefined ? undefined : rustTypeFromCarrierInContext(rustNamedTargetType(
       "rust.core.Result", "Result", rustTypeGenericArguments([bindOutputs(completion), error]),
+      [], undefined, [], undefined, [],
     ), context, captures === undefined ? "general" : "return");
   }
 

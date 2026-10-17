@@ -3,8 +3,9 @@ import test from "node:test";
 import { analyzeRust, artifactText, compileRust, acmeTestingPackage } from "../../helpers/rust-session.mjs";
 import { selectRustNativeTypeCarrier, selectRustNativeCallTypeCarrier, rustNativeSourceTypePath, rustNativeStructuralTypePath } from "../../../dist/policy/types/model/native-type-selection.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
-import { rustNamedTargetType, rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
-import { rustTypeFromCarrier } from "../../../dist/backend/planner/types/render.js";
+import { rustNamedTargetType, rustNamedTypeCarrierValue, rustNamedTypeRequirementsForArguments }
+  from "../../../dist/target-model/types/carriers/native.js";
+import { rustTypeFromCarrier, rustTypeFromSelectedNativeCarrier } from "../../../dist/backend/planner/types/render.js";
 import { printRustType } from "../../../dist/print/source/types.js";
 import { compoundTypeFamilyOwnerFiles } from "../../fixtures/compound-type-family-owners.mjs";
 import { rustRuntimeErrorTargetType, rustRuntimeErrorTypeIdentity } from "../../../dist/target-model/operations/error-boundary.js";
@@ -15,6 +16,11 @@ import { nativeDeclarationSelectionInput } from "../../helpers/native-type-selec
 import { rustProducerErrorTargetType } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustNativeErrorJoinTargetType } from "../../../dist/target-model/types/native-error-joins.js";
 import { selectRustNativeTypeItemNames } from "../../../dist/analysis/names/source-output-identities.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { closedMetadataKey, snapshotClosedMetadata } from "../../../dist/target-model/metadata/closed-data.js";
+import { rustTargetGenericReferences, rustTargetCaptureArguments } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { substituteRustTargetGenerics } from "../../../dist/target-model/types/carriers/substitution.js";
+import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 
@@ -198,8 +204,8 @@ test("one native selector enforces position and retains the exact callable lifet
 });
 
 test("selected native error identity never infects ordinary native name equality", () => {
-  const plain = rustNamedTargetType("native.Ordinary", "native::Ordinary");
-  const selected = rustNamedTargetType("native.Error", "native::Error", [], [], undefined, [], "native:error-owner");
+  const plain = rustNamedTargetType("native.Ordinary", "native::Ordinary", [], [], undefined, [], undefined, []);
+  const selected = rustNamedTargetType("native.Error", "native::Error", [], [], undefined, [], "native:error-owner", []);
   const ordinarySyntax = rustTypeFromCarrier(plain);
   const errorSyntax = rustTypeFromCarrier(selected);
   assert.equal(Object.hasOwn(ordinarySyntax, "identity"), false, "ordinary names retain existing equality semantics");
@@ -209,6 +215,123 @@ test("selected native error identity never infects ordinary native name equality
     "the actual canonical runtime error producer supplies its own authoritative identity");
   assert.equal(rustTypeFromCarrier(runtime).identity, rustRuntimeErrorTypeIdentity,
     "runtime error provenance survives native selection and syntax without inferring identity from an arbitrary id");
+});
+
+test("the native position owner selects APIT absence and exact RPIT capture evidence once", () => {
+  const parameter = { kind: "type-parameter", identity: "future:Value", name: "Value" };
+  const lifetime = { kind: "parameter", identity: "future:region", name: "region" };
+  const pending = { kind: "impl-trait", id: "future:exact", bounds: [{ kind: "trait-ref", id: "core::future::Future",
+    path: "core::future::Future", genericArguments: [], associatedConstraints: [{ kind: "equality",
+      identity: "core::future::Future::Output", name: "Output", genericArguments: [], type: parameter }] }],
+    outlives: [lifetime], captures: [{ kind: "type", type: parameter }, { kind: "lifetime", lifetime }] };
+  for (const [label, carrier] of [["direct", pending], ["nested", rustNamedTargetType("native.Container", "native::Container",
+    [{ kind: "type", type: pending }], [], undefined, [], undefined, [])]]) {
+    for (const position of ["parameter", "return"]) {
+      const selected = selectRustNativeTypeCarrier(carrier, selectionInput(), position);
+      assert.equal(selected.kind, "resolved", `${label}:${position}: the actual native signature remains representable`);
+      const native = label === "direct" ? selected.carrier : rustNamedTypeCarrierValue(selected.carrier).genericArguments[0].type;
+      assert.equal(Object.hasOwn(native, "captures"), position === "return", `${label}:${position}: one owner selects native capture syntax`);
+      assert.equal(native.outlives[0].identity, lifetime.identity, `${label}:${position}: outlives identity is never discarded`);
+      assert.equal(native.outlives[0].name, lifetime.name, `${label}:${position}: the selected native lifetime is unchanged`);
+      if (position === "return") assert.equal(native.captures.length, 2, `${label}: exact type and lifetime captures survive`);
+    }
+    assert.equal(selectRustNativeTypeCarrier(carrier, selectionInput(), "general").kind, "rejected",
+      `${label}: an anonymous native field remains unsupported`);
+  }
+  assert.equal(pending.captures.length, 2, "the source capture contract is never mutated by position selection");
+  const malformedCapture = { ...pending, captures: [{ kind: "type", type: pending }] };
+  assert.equal(selectRustNativeTypeCarrier(malformedCapture, selectionInput(), "parameter").kind, "rejected",
+    "APIT syntax omission cannot hide an invalid anonymous precise capture argument");
+});
+
+test("native syntax default elision preserves full semantic arguments and indexed obligations", () => {
+  const boolean = { kind: "source-primitive", name: "bool" };
+  const clone = { kind: "trait-ref", id: "core::clone::Clone", path: "core::clone::Clone",
+    genericArguments: [], associatedConstraints: [] };
+  const arguments_ = [{ kind: "type", type: integer }, { kind: "type", type: boolean }];
+  const defaults = [{ kind: "type", type: boolean }];
+  const requirements = [{ typeArgumentIndex: 1, trait: clone }];
+  const source = rustNamedTargetType("native.Container", "native::Container", arguments_, defaults,
+    undefined, [], undefined, requirements);
+  const selected = selectRustNativeTypeCarrier(source, selectionInput(), "general");
+  assert.equal(selected.kind, "resolved", "the actual defaulted native type is selected");
+  const native = rustNamedTypeCarrierValue(selected.carrier);
+  assert.equal(native.genericArguments.length, 2, "default omission never drops full semantic arguments");
+  assert.equal(native.genericDefaults.length, 1, "the authoritative default evidence remains present");
+  assert.equal(native.typeRequirements.length, 1, "the independent native TYPE obligation survives selection");
+  assert.equal(native.typeRequirements[0].typeArgumentIndex, 1, "proof indexes are never shifted to fit the printed prefix");
+  assert.equal(native.nativeArgumentCount, 1, "the canonical policy selects the exact native syntax prefix once");
+  assert.equal(isRustTargetTypeRef(selected.carrier), true, "the full selected native metadata remains valid");
+  assert.equal(printRustType(rustTypeFromSelectedNativeCarrier(selected.carrier)), "native::Container<i32>",
+    "syntax consumes the prefix without repeating the default comparison");
+  assert.equal(rustTargetTypeRefEquals(source, selected.carrier), true, "prefix count does not alter semantic native type equality");
+  assert.equal(closedMetadataKey(source) === closedMetadataKey(selected.carrier), false,
+    "physical closed data retains the exact selected prefix");
+  const snapshot = snapshotClosedMetadata(selected.carrier);
+  assert.equal(Object.isFrozen(snapshot.value.typeRequirements), true, "selected TYPE obligations remain immutable");
+  for (const count of [-1, 1.5, 3, Number.NaN]) {
+    assert.equal(isRustTargetTypeRef({ ...selected.carrier, value: { ...native, nativeArgumentCount: count } }), false,
+      `${String(count)}: malformed native syntax prefix is rejected`);
+  }
+  for (const field of ["typeRequirements", "nativeArgumentCount"]) {
+    const legacy = { ...native };
+    delete legacy[field];
+    assert.equal(isRustTargetTypeRef({ ...selected.carrier, value: legacy }), false, `${field}: old serialized shapes are refused`);
+  }
+  assert.equal(isRustTargetTypeRef({ ...selected.carrier, value: { ...native,
+    typeRequirements: [{ typeArgumentIndex: 2, trait: clone }] } }), false,
+    "an index outside the full TYPE argument list cannot be admitted");
+  assert.throws(() => rustNamedTargetType("native.Legacy", "native::Legacy"), /requires explicit type requirements/u,
+    "the removed constructor form cannot silently manufacture empty proof");
+});
+
+test("native TYPE obligation geometry uses original identities and every exact TYPE slot", () => {
+  const first = { kind: "type-parameter", identity: "native:First", name: "Same" };
+  const second = { kind: "type-parameter", identity: "native:Second", name: "Same" };
+  const trait = { kind: "trait-ref", id: "native:Trait", path: "native::Trait",
+    genericArguments: [{ kind: "type", type: second }], associatedConstraints: [{ kind: "equality",
+      identity: "native:Trait::Output", name: "Output", genericArguments: [], type: first }] };
+  const arguments_ = [{ kind: "lifetime", lifetime: { kind: "static" } }, { kind: "type", type: second },
+    { kind: "const", value: { kind: "integer", value: "9" } }, { kind: "type", type: first }, { kind: "type", type: first }];
+  const selected = rustNamedTypeRequirementsForArguments(arguments_, [{ identity: first.identity, traits: [trait] }]);
+  assert.equal(selected !== undefined, true, "original native parameter identity has exact argument positions");
+  assert.equal(selected.length, 2, "every repeated exact slot retains its independent native obligation");
+  assert.equal(selected[0].typeArgumentIndex, 1, "TYPE indexes exclude lifetime and const positions");
+  assert.equal(selected[1].typeArgumentIndex, 2, "the repeated TYPE slot is not dropped or guessed as the first");
+  assert.equal(selected.every(requirement => requirement.trait === trait), true,
+    "geometry does not change native trait arguments, associated equalities or their owning identities");
+  assert.equal(rustNamedTypeRequirementsForArguments(arguments_, [{ identity: "foreign:First", traits: [trait] }]) === undefined, true,
+    "equal authored parameter spelling cannot admit a foreign identity");
+  assert.equal(rustNamedTypeRequirementsForArguments([{ kind: "type", type: integer }],
+    [{ identity: first.identity, traits: [trait] }]) === undefined, true,
+    "concrete instantiations cannot recover an erased declaration identity");
+});
+
+test("native TYPE obligations retain full metadata without manufacturing physical captures", () => {
+  const parameter = { kind: "type-parameter", identity: "native:Value", name: "Value" };
+  const lifetime = { kind: "parameter", identity: "native:bound", name: "bound" };
+  const associated = { kind: "type-parameter", identity: "native:Associated", name: "Associated" };
+  const trait = { kind: "trait-ref", id: "native:Project", path: "native::Project",
+    genericArguments: [{ kind: "lifetime", lifetime }], associatedConstraints: [{
+      kind: "equality", identity: "native:Project::Output", name: "Output", genericArguments: [], type: associated,
+    }] };
+  const source = rustNamedTargetType("native:Constrained", "native::Constrained", [{ kind: "type", type: parameter }],
+    [], undefined, [], undefined, [{ typeArgumentIndex: 0, trait }]);
+  const physical = rustTargetGenericReferences(source);
+  assert.deepEqual(physical.typeIdentities, [parameter.identity], "bound-only associated metadata adds no physical generic capture");
+  assert.deepEqual(physical.lifetimeIdentities, [], "bound-only lifetime evidence is not stored data");
+  assert.equal(rustTargetCaptureArguments([{ kind: "type", type: source }]).length, 1, "only the actual argument is captured");
+  const metadata = rustTargetGenericReferences(source, "metadata");
+  assert.equal(metadata.typeIdentities.includes(associated.identity), true, "associated TYPE evidence remains available to admission");
+  assert.equal(metadata.lifetimeIdentities.includes(rustLifetimeKey(lifetime)), true, "exact metadata lifetime identity remains present");
+  const substituted = rustNamedTypeCarrierValue(substituteRustTargetGenerics(source,
+    new Map([[parameter.identity, integer], [associated.identity, integer]]),
+    new Map([[rustLifetimeKey(lifetime), { kind: "static" }]])));
+  assert.equal(substituted.typeRequirements.length, 1, "the full independent TYPE obligation survives substitution");
+  assert.equal(substituted.typeRequirements[0].typeArgumentIndex, 0, "the original full TYPE index is stable");
+  assert.equal(substituted.typeRequirements[0].trait.genericArguments[0].lifetime.kind, "static", "native bound lifetime substitution is exact");
+  assert.equal(substituted.typeRequirements[0].trait.associatedConstraints[0].type === integer, true,
+    "native associated equality substitution is exact");
 });
 
 test("native producer and join selection retain semantic cycle guards across fresh carrier instances", () => {

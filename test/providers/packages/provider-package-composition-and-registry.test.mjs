@@ -471,6 +471,8 @@ test("provider type relations remain target-owned and require closed Rust paths"
         genericArguments: [],
         genericDefaults: [],
         upcasts: [],
+        typeRequirements: [],
+        nativeArgumentCount: 0,
       },
     },
     providerPackageId: "acme-validation",

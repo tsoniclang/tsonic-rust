@@ -12,7 +12,7 @@ import { nativeFallibleAdapterFixture } from "../../../helpers/physical-callable
 import { Node_Initializer } from "@tsonic/target-api/source";
 import { planRustNativeInputInvocation, planRustNativeProtocolInvocation } from "../../../../dist/backend/planner/expressions/calls/native-input.js";
 
-const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
+const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", [], [], undefined, [], undefined, []);
 const integer = rustSourcePrimitiveTargetType("int32");
 
 for (const retained of [false, true]) {

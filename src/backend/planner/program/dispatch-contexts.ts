@@ -20,7 +20,8 @@ export function planRustDispatchContextRoots(
   const demand = program.dispatchContextDemand.forComponent(domain.componentId);
   if (demand === undefined) return invalid("A source-package component has no sealed dispatch demand.");
   const error = rustNamedTargetType(domain.errorTypeIdentity, domain.errorDomain === "runtime"
-    ? "tsonic_rust_runtime::TsonicError" : `crate::${programModuleName}::TsonicError`);
+    ? "tsonic_rust_runtime::TsonicError" : `crate::${programModuleName}::TsonicError`,
+    [], [], undefined, [], domain.errorTypeIdentity, []);
   const items: RustItem[] = [];
   const usedAliases = new Set<string>();
   for (const [index, id] of demand.rootContextIds.entries()) {

@@ -27,7 +27,6 @@ import { selectRustOptionalStorageTypeArguments } from "../../../analysis/declar
 import { rustCallableInputAbsenceWitness } from "../../../target-model/types/carriers/callable-input-witness.js";
 import {
   rustBuiltInCarrierDefinitions,
-  rustCallableInputTargetId,
   rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue,
   rustPrimitiveTypeName,
@@ -86,7 +85,7 @@ export function rustTypeFromSelectedNativeCarrierInContext(
   return rendered;
 }
 
-function rustTypeFromSelectedNativeCarrier(carrier: TargetTypeRef): RustType {
+export function rustTypeFromSelectedNativeCarrier(carrier: TargetTypeRef): RustType {
   if (isRustNeverCarrier(carrier)) return { kind: "never" };
   if (carrier.kind === "source-primitive") {
     const name = rustPrimitiveTypeName(carrier.name);
@@ -97,7 +96,7 @@ function rustTypeFromSelectedNativeCarrier(carrier: TargetTypeRef): RustType {
   if (carrier.kind === "target-named" && carrier.id === rustStrTargetId) return { kind: "str" };
   const named = rustNamedTypeCarrierValue(carrier);
   if (named !== undefined) {
-    const genericArguments = selectedNativeGenericArguments(named.genericArguments);
+    const genericArguments = selectedNativeGenericArguments(named.genericArguments.slice(0, named.nativeArgumentCount));
     return { kind: "named", path: named.path,
       ...(named.nativeErrorIdentity === undefined ? {} : { identity: named.nativeErrorIdentity }),
       ...(genericArguments.length === 0 ? {} : { genericArguments }) };
@@ -136,7 +135,7 @@ function rustTypeFromSelectedNativeCarrier(carrier: TargetTypeRef): RustType {
     case "impl-trait": return { kind: "impl-trait",
       bounds: carrier.bounds.map(reference => ({ kind: "trait-type", reference: selectedNativeTrait(reference) })),
       outlives: carrier.outlives.map(rustLifetimeToAst),
-      ...(carrier.id === rustCallableInputTargetId ? {} : { captures: selectedNativeGenericArguments(carrier.captures) }) };
+      ...(carrier.captures === undefined ? {} : { captures: selectedNativeGenericArguments(carrier.captures) }) };
     case "associated-type": {
       const genericArguments = selectedNativeGenericArguments(carrier.genericArguments);
       return { kind: "qualified", owner: rustTypeFromSelectedNativeCarrier(carrier.owner),

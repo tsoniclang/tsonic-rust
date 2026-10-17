@@ -26,7 +26,7 @@ export function forward(value: number): number { return selected(value); }
   const operandExpression = source.ast.arguments(node)[0];
   const scalar = { kind: "source-primitive", name: "int32" };
   const result = rustNamedTargetType("fixture.Result", "core::result::Result",
-    [{ kind: "type", type: scalar }, { kind: "type", type: scalar }]);
+    [{ kind: "type", type: scalar }, { kind: "type", type: scalar }], [], undefined, [], undefined, []);
   const fact = Object.freeze({ kind: "native-propagation", operationId: "tsonic.rust.propagate",
     callableDeclaration, callableReturnCarrier: result, operandExpression,
     operandCarrier: result, operandErrorCarrier: scalar, resultErrorCarrier: scalar, resultCarrier: scalar });

@@ -6,8 +6,8 @@ import { rustFutureTargetId } from "./carriers/primitives.js";
 import { rustJsPromiseTargetId } from "./carriers/source-types.js";
 import { rustNamedTargetType } from "./carriers/native.js";
 import { rustTypeGenericArguments } from "./generic-arguments.js";
-import { closedMetadataKey, snapshotClosedMetadata } from "../metadata/closed-data.js";
-import { isRustTargetTypeRef } from "./equality.js";
+import { closedMetadataKey, isDenseDataArray, snapshotClosedMetadata } from "../metadata/closed-data.js";
+import { isRustTargetGenericArgument, isRustTargetTypeRef } from "./equality.js";
 import { instantiateRustRuntimeUnionPayloads } from "./carriers/runtime-unions.js";
 import { rustSourceUnionCarrierValue } from "./carriers/source-types.js";
 
@@ -78,7 +78,7 @@ export function rustNativeCompletionFutureType(input: {
   readonly captures: readonly RustTargetGenericArgument[];
 }): TargetTypeRef {
   return rustNativeFutureOutputType({ ...input, output: rustNamedTargetType("rust.core.Result", "Result",
-    rustTypeGenericArguments([input.output, input.error])) });
+    rustTypeGenericArguments([input.output, input.error]), [], undefined, [], undefined, []) });
 }
 
 export function rustNativeFutureOutputType(input: {
@@ -87,8 +87,11 @@ export function rustNativeFutureOutputType(input: {
   readonly captures: readonly RustTargetGenericArgument[];
   readonly ready?: boolean;
 }): TargetTypeRef {
+  if (!isDenseDataArray(input.captures) || !input.captures.every(isRustTargetGenericArgument)) {
+    throw new Error("A source native Future requires explicit exact capture evidence.");
+  }
   if (input.ready === true) return rustNamedTargetType("rust.core.future.Ready", "core::future::Ready",
-    rustTypeGenericArguments([input.output]));
+    rustTypeGenericArguments([input.output]), [], undefined, [], undefined, []);
   return snapshotClosedMetadata({ kind: "impl-trait", id: input.identity,
     bounds: [{ kind: "trait-ref", id: "rust.core.Future", path: "core::future::Future",
       genericArguments: [], associatedConstraints: [{ kind: "equality", identity: "rust.core.Future.Output",

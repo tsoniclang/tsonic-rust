@@ -775,7 +775,7 @@ function walkTargetCarrier(
       return;
     case "impl-trait":
       for (const bound of carrier.bounds) walkTargetCarrier(bound, visit);
-      for (const capture of carrier.captures) {
+      for (const capture of carrier.captures ?? []) {
         if (capture.kind === "type") walkTargetCarrier(capture.type, visit);
       }
       return;

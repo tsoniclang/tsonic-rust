@@ -1,4 +1,5 @@
 import type {
+  RustNamedTypeTraitRequirement,
   RustProgramErrorOwner,
   RustTargetAssociatedConstraint,
   RustTargetGenericArgument,
@@ -121,6 +122,7 @@ export function selectRustNativeTypeCarrier(
   };
   const argumentsFor = (
     arguments_: readonly RustTargetGenericArgument[] | undefined,
+    nativePosition: RustNativeTypePosition,
   ): readonly RustTargetGenericArgument[] | undefined => {
     const selected: RustTargetGenericArgument[] = [];
     for (const argument of arguments_ ?? []) {
@@ -128,29 +130,29 @@ export function selectRustNativeTypeCarrier(
         selected.push(argument);
         continue;
       }
-      const type = select(argument.type, "general");
+      const type = select(argument.type, nativePosition);
       if (type === undefined) return undefined;
       selected.push({ kind: "type", type });
     }
     return selected;
   };
-  const traitFor = (trait: RustTargetTraitRef): RustTargetTraitRef | undefined => {
+  const traitFor = (trait: RustTargetTraitRef, nativePosition: RustNativeTypePosition): RustTargetTraitRef | undefined => {
     const path = trait.sourceItem === undefined ? trait.path : input.pathFor(trait.sourceItem);
     if (path === undefined) return reject(trait, "Native trait requires its exact selected source item path.");
-    const genericArguments = argumentsFor(trait.genericArguments);
+    const genericArguments = argumentsFor(trait.genericArguments, "general");
     if (genericArguments === undefined) return undefined;
     const associatedConstraints: RustTargetAssociatedConstraint[] = [];
     for (const constraint of trait.associatedConstraints) {
-      const arguments_ = argumentsFor(constraint.genericArguments);
+      const arguments_ = argumentsFor(constraint.genericArguments, "general");
       if (arguments_ === undefined) return undefined;
       if (constraint.kind === "equality") {
-        const type = select(constraint.type, "general");
+        const type = select(constraint.type, nativePosition);
         if (type === undefined) return undefined;
         associatedConstraints.push({ ...constraint, genericArguments: arguments_, type });
       } else {
         const traits: RustTargetTraitRef[] = [];
         for (const bound of constraint.traits) {
-          const selected = traitFor(bound);
+          const selected = traitFor(bound, nativePosition);
           if (selected === undefined) return undefined;
           traits.push(selected);
         }
@@ -160,10 +162,11 @@ export function selectRustNativeTypeCarrier(
     return { kind: "trait-ref", id: trait.id, path, genericArguments, associatedConstraints,
       ...(trait.lifetimeBinder === undefined ? {} : { lifetimeBinder: trait.lifetimeBinder }) };
   };
-  const replacement = (source: TargetTypeRef, selected: TargetTypeRef | undefined): TargetTypeRef | undefined => {
+  const replacement = (source: TargetTypeRef, selected: TargetTypeRef | undefined,
+    nativePosition: RustNativeTypePosition): TargetTypeRef | undefined => {
     if (selected === undefined) return reject(source, "Native type requires its completed physical representation and identity.");
     if (selected === source) return reject(source, "Native type representation did not resolve its source carrier.");
-    return select(selected, "general");
+    return select(selected, nativePosition);
   };
   const select = (type: TargetTypeRef, nativePosition: RustNativeTypePosition): TargetTypeRef | undefined => {
     if (active.has(type)) return reject(type, "Native type representation contains an unresolved recursive selection.");
@@ -176,7 +179,7 @@ export function selectRustNativeTypeCarrier(
           return reject(type, "Native producer error selection requires bounded acyclic physical evidence.");
         }
         resolvingProducerErrors.add(key);
-        try { return replacement(type, input.producerErrorCarrier(producer)); }
+        try { return replacement(type, input.producerErrorCarrier(producer), nativePosition); }
         finally { resolvingProducerErrors.delete(key); }
       }
       const joined = rustNativeErrorJoinReference(type);
@@ -186,29 +189,29 @@ export function selectRustNativeTypeCarrier(
           return reject(type, "Native error-join selection requires bounded acyclic physical evidence.");
         }
         resolvingErrorJoins.add(key);
-        try { return replacement(type, input.nativeErrorJoinCarrier(joined)); }
+        try { return replacement(type, input.nativeErrorJoinCarrier(joined), nativePosition); }
         finally { resolvingErrorJoins.delete(key); }
       }
       if (isRustNeverCarrier(type)) return nativePosition === "return" ? type
-        : rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible");
+        : rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", [], [], undefined, [], undefined, []);
       if (isRustAbsenceCarrier(type)) return rustUnitTargetType();
       if (type.kind === "source-primitive") return rustPrimitiveTypeName(type.name) === undefined
         ? reject(type, "Source primitive has no selected native Rust type.") : type;
       if (type.kind === "target-named") {
         if (type.id === rustStringTargetId || type.id === rustStrTargetId) return type;
-        if (type.id === rustCallableTargetId || type.id === rustCallableInputTargetId) return callableFor(type);
+        if (type.id === rustCallableTargetId || type.id === rustCallableInputTargetId) return callableFor(type, nativePosition);
         if (type.id === rustProgramErrorTargetId) {
           const owner = rustProgramErrorOwner(type);
           return owner === undefined ? reject(type, "Program error requires its exact physical owner.")
-            : replacement(type, input.programErrorCarrier(owner));
+            : replacement(type, input.programErrorCarrier(owner), nativePosition);
         }
         const path = rustBuiltInCarrierDefinitions[type.id]?.renderPath;
         if (path === undefined) return reject(type, "Target carrier has no canonical native type declaration.");
         const genericArguments = argumentsFor(type.id === rustJsPromiseTargetId
           ? type.genericArguments?.map(argument => argument.kind === "type" && isRustNeverCarrier(argument.type)
             ? { kind: "type", type: rustUnitTargetType() } : argument)
-          : type.genericArguments);
-        return genericArguments === undefined ? undefined : rustNamedTargetType(type.id, path, genericArguments);
+          : type.genericArguments, nativePosition);
+        return genericArguments === undefined ? undefined : rustNamedTargetType(type.id, path, genericArguments, [], undefined, [], undefined, []);
       }
       if (type.kind === "type-parameter") {
         const name = input.typeParameterNames?.get(type.identity) ?? type.name;
@@ -223,7 +226,7 @@ export function selectRustNativeTypeCarrier(
       if (type.kind === "slice" || type.kind === "array") {
         const element = select(type.element, nativePosition);
         return element === undefined ? undefined : type.kind === "slice" ? { ...type, element }
-          : rustNamedTargetType("rust.alloc.Vec", "Vec", [{ kind: "type", type: element }]);
+          : rustNamedTargetType("rust.alloc.Vec", "Vec", [{ kind: "type", type: element }], [], undefined, [], undefined, []);
       }
       if (type.kind === "pointer") {
         if (type.mutability !== "const" && type.mutability !== "mut") return reject(type,
@@ -257,18 +260,25 @@ export function selectRustNativeTypeCarrier(
       }
       const named = rustNamedTypeCarrierValue(type);
       if (named !== undefined) {
-        let count = named.genericArguments.length;
-        const defaultOffset = count - named.genericDefaults.length;
+        const genericArguments = argumentsFor(named.genericArguments, nativePosition);
+        const genericDefaults = argumentsFor(named.genericDefaults, "general");
+        if (genericArguments === undefined || genericDefaults === undefined) return undefined;
+        const typeRequirements: RustNamedTypeTraitRequirement[] = [];
+        for (const requirement of named.typeRequirements) {
+          const trait = traitFor(requirement.trait, "general");
+          if (trait === undefined) return undefined;
+          typeRequirements.push({ ...requirement, trait });
+        }
+        let count = genericArguments.length;
+        const defaultOffset = count - genericDefaults.length;
         while (count > defaultOffset && rustTargetGenericArgumentEquals(
-          named.genericArguments[count - 1], named.genericDefaults[count - 1 - defaultOffset])) count -= 1;
-        const genericArguments = argumentsFor(named.genericArguments.slice(0, count));
-        return genericArguments === undefined ? undefined
-          : rustNamedTargetType(named.id, named.path, genericArguments, [], named.traits, named.upcasts,
-            named.nativeErrorIdentity);
+          genericArguments[count - 1], genericDefaults[count - 1 - defaultOffset])) count -= 1;
+        return rustNamedTargetType(named.id, named.path, genericArguments, genericDefaults, named.traits, named.upcasts,
+          named.nativeErrorIdentity, typeRequirements, count);
       }
       if (rustStructuralObjectCarrierValue(type) !== undefined || rustGenericCallableValue(type) !== undefined ||
         rustFrameCallableValue(type) !== undefined || rustClassConstructorInstance(type) !== undefined) {
-        return replacement(type, input.structuralCarrier(type));
+        return replacement(type, input.structuralCarrier(type), nativePosition);
       }
       const source = rustSourceTypeCarrierValue(type);
       if (source !== undefined) {
@@ -276,9 +286,9 @@ export function selectRustNativeTypeCarrier(
         const additional = input.additionalArgumentsFor(type);
         if (path === undefined || additional === undefined) return reject(type,
           "Source type requires its selected native path and complete generic storage arguments.");
-        const genericArguments = argumentsFor([...source.genericArguments, ...additional]);
+        const genericArguments = argumentsFor([...source.genericArguments, ...additional], nativePosition);
         return genericArguments === undefined ? undefined
-          : rustNamedTargetType(closedMetadataKey([source.fileName, source.typeName]), path, genericArguments);
+          : rustNamedTargetType(closedMetadataKey([source.fileName, source.typeName]), path, genericArguments, [], undefined, [], undefined, []);
       }
       const union = rustSourceUnionCarrierValue(type);
       if (union !== undefined) {
@@ -287,20 +297,20 @@ export function selectRustNativeTypeCarrier(
         const arguments_ = rustSourceUnionPayloadArguments(type, input.typeDefinitions);
         if (path === undefined || arguments_ === undefined) return reject(type,
           "Source union requires its selected native path and exact physical payload arguments.");
-        const genericArguments = argumentsFor(arguments_);
+        const genericArguments = argumentsFor(arguments_, nativePosition);
         return genericArguments === undefined ? undefined
-          : rustNamedTargetType(closedMetadataKey([union.origin, union.fileName, union.typeName]), path, genericArguments);
+          : rustNamedTargetType(closedMetadataKey([union.origin, union.fileName, union.typeName]), path, genericArguments, [], undefined, [], undefined, []);
       }
       if (type.kind === "trait-ref") {
         if ((type.lifetimeBinder?.parameters.length ?? 0) !== 0) return reject(type,
           "A standalone native trait type cannot carry a higher-ranked binder.");
-        return traitFor(type);
+        return traitFor(type, nativePosition);
       }
       if (type.kind === "trait-object") {
-        const principal = traitFor(type.principal);
+        const principal = traitFor(type.principal, "general");
         const autoTraits: RustTargetTraitRef[] = [];
         for (const trait of type.autoTraits) {
-          const selected = traitFor(trait);
+          const selected = traitFor(trait, "general");
           if (selected === undefined) return undefined;
           autoTraits.push(selected);
         }
@@ -309,17 +319,22 @@ export function selectRustNativeTypeCarrier(
       if (type.kind === "impl-trait") {
         const bounds: RustTargetTraitRef[] = [];
         for (const bound of type.bounds) {
-          const selected = traitFor(bound);
+          const selected = traitFor(bound, nativePosition);
           if (selected === undefined) return undefined;
           bounds.push(selected);
         }
-        const captures = argumentsFor(type.captures);
-        return captures === undefined ? undefined : { ...type, bounds, captures };
+        const captures = type.captures === undefined ? undefined : argumentsFor(type.captures, "general");
+        if (nativeArgumentsContainOpaque(captures)) return reject(type,
+          "A native precise capture clause cannot contain an anonymous implementation type.");
+        return type.captures !== undefined && captures === undefined ? undefined : {
+          kind: "impl-trait", id: type.id, bounds, outlives: type.outlives,
+          ...(nativePosition === "parameter" || captures === undefined ? {} : { captures }),
+        };
       }
       if (type.kind === "associated-type") {
         const owner = select(type.owner, "general");
-        const trait = type.trait === undefined ? undefined : traitFor(type.trait);
-        const genericArguments = argumentsFor(type.genericArguments);
+        const trait = type.trait === undefined ? undefined : traitFor(type.trait, "general");
+        const genericArguments = argumentsFor(type.genericArguments, "general");
         if (owner === undefined || type.trait !== undefined && trait === undefined || genericArguments === undefined) return undefined;
         if ((trait?.lifetimeBinder?.parameters.length ?? 0) !== 0) return reject(type,
           "A qualified native associated type requires an unbound trait owner.");
@@ -328,7 +343,8 @@ export function selectRustNativeTypeCarrier(
       return reject(type, "Carrier has no completed native Rust type representation.");
     } finally { active.delete(type); }
   };
-  const callableFor = (type: Extract<TargetTypeRef, { readonly kind: "target-named" }>): TargetTypeRef | undefined => {
+  const callableFor = (type: Extract<TargetTypeRef, { readonly kind: "target-named" }>,
+    nativePosition: RustNativeTypePosition): TargetTypeRef | undefined => {
     const lifetime = type.id === rustCallableTargetId ? type.genericArguments?.[0] : undefined;
     if (type.id === rustCallableTargetId && lifetime?.kind !== "lifetime") return reject(type,
       "Stored native callable requires its exact storage lifetime.");
@@ -349,16 +365,17 @@ export function selectRustNativeTypeCarrier(
         path: "rt::CallableImplementation", genericArguments: [{ kind: "type", type: selectedParameters }],
         associatedConstraints: [{ kind: "equality", identity: `${rustCallableInputTargetId}.Output`, name: "Output",
           genericArguments: [], type: rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult",
-            [{ kind: "type", type: selectedResult }]) }], lifetimeBinder: signature.binder }], outlives: [], captures: [] };
+            [{ kind: "type", type: selectedResult }], [], undefined, [], undefined, []) }], lifetimeBinder: signature.binder }], outlives: [],
+        ...(nativePosition === "parameter" ? {} : { captures: [] }) };
     }
     const selectedError = error === undefined || packageResult ? undefined : select(error, "general");
     if (lifetime?.kind !== "lifetime" || !packageResult && selectedError === undefined) return reject(type,
       "Stored native callable has no exact selected error representation.");
     const resultType = packageResult ? rustNamedTargetType("rust.runtime.TsonicResult", "rt::TsonicResult",
-      [{ kind: "type", type: selectedResult }]) : rustNamedTargetType("rust.core.Result", "Result",
-      [{ kind: "type", type: selectedResult }, { kind: "type", type: selectedError! }]);
+      [{ kind: "type", type: selectedResult }], [], undefined, [], undefined, []) : rustNamedTargetType("rust.core.Result", "Result",
+      [{ kind: "type", type: selectedResult }, { kind: "type", type: selectedError! }], [], undefined, [], undefined, []);
     return rustNamedTargetType(rustCallableTargetId, "rt::Callable", [lifetime,
-      { kind: "type", type: selectedParameters }, { kind: "type", type: resultType }]);
+      { kind: "type", type: selectedParameters }, { kind: "type", type: resultType }], [], undefined, [], undefined, []);
   };
   const selected = select(carrier, position);
   if (selected === undefined) return rejection ?? { kind: "rejected", subject: carrier,
@@ -502,7 +519,7 @@ export function rustNativeTypeSelectionInput(context: RustNativeTypeInputContext
     programErrorCarrier: owner => {
       const boundary = context.programErrorBoundaryFor(owner);
       return boundary === undefined ? undefined : rustNamedTargetType(boundary.errorTypeIdentity, boundary.errorTypePath,
-        [], [], undefined, [], boundary.errorTypeIdentity);
+        [], [], undefined, [], boundary.errorTypeIdentity, []);
     },
     producerErrorCarrier: reference => context.errorRegions.producerError(reference),
     nativeErrorJoinCarrier: reference => {
@@ -512,7 +529,7 @@ export function rustNativeTypeSelectionInput(context: RustNativeTypeInputContext
       const identity = rustNativeErrorJoinIdentity(reference.fileName, reference.errors.length);
       return path === undefined ? undefined : rustNamedTargetType(identity, path,
         reference.errors.map(type => ({ kind: "type", type })), [], undefined, [],
-        identity);
+        identity, []);
     },
     structuralCarrier: carrier => {
       if (rustFrameCallableValue(carrier) !== undefined) return rustNativeFrameCallableCarriers(carrier, context)?.root;
@@ -527,7 +544,7 @@ export function rustNativeTypeSelectionInput(context: RustNativeTypeInputContext
           : nativeItemPath(context, definition.ownerFileName, definition.targetName, true);
         return path === undefined || arguments_ === undefined ? undefined
           : rustNamedTargetType(closedMetadataKey(carrier), path,
-            rustGenericCallableStorageArguments(generic.environment, arguments_));
+            rustGenericCallableStorageArguments(generic.environment, arguments_), [], undefined, [], undefined, []);
       }
       const union = rustSourceUnionCarrierValue(carrier);
       const structural = union?.origin === "generated" ? undefined : context.structuralShapes.definitionForCarrier(carrier);
@@ -540,10 +557,10 @@ export function rustNativeTypeSelectionInput(context: RustNativeTypeInputContext
         externalModuleName: context.externalStructuralShapeModuleByFileName.get(definition.ownerFileName),
         externalCrate: context.externalCrateNameByFileName.get(definition.ownerFileName), currentCrate: context.crateName,
         currentModuleName: context.moduleName, structuralShapesModuleName: context.structuralShapesModuleName });
-      const state = rustNamedTargetType(closedMetadataKey(carrier), path, arguments_);
+      const state = rustNamedTargetType(closedMetadataKey(carrier), path, arguments_, [], undefined, [], undefined, []);
       return union?.origin === "generated" || rustStructuralObjectCarrierValue(carrier)?.representation === "value" ||
         structural?.dispatchName !== undefined ? state
-        : rustNamedTargetType("rust.runtime.ObjectHandle", "rt::ObjectHandle", [{ kind: "type", type: state }]);
+        : rustNamedTargetType("rust.runtime.ObjectHandle", "rt::ObjectHandle", [{ kind: "type", type: state }], [], undefined, [], undefined, []);
     },
   };
 }
@@ -582,7 +599,8 @@ export function rustNativeProjectGeneratedCarrier(
     source.genericArguments.length !== definition.genericParameters.length ||
     definition.genericParameters.some((parameter, index) => source.genericArguments[index]?.kind !== parameter.kind) ||
     source.genericArguments.some(argument => argument.kind !== "type" && argument.kind !== "lifetime")) return undefined;
-  return rustNamedTargetType(closedMetadataKey([source.fileName, targetName]), path, [...source.genericArguments, ...arguments_]);
+  return rustNamedTargetType(closedMetadataKey([source.fileName, targetName]), path, [...source.genericArguments, ...arguments_],
+    [], undefined, [], undefined, []);
 }
 
 export function rustNativeClassEnvironmentCarrier(
@@ -602,9 +620,10 @@ export function rustNativeClassEnvironmentCarrier(
     if (argument === undefined) return undefined;
     selected.push(argument);
   }
-  const state = rustNamedTargetType(closedMetadataKey([source.fileName, environment.typeName]), path, [...selected, ...additional]);
+  const state = rustNamedTargetType(closedMetadataKey([source.fileName, environment.typeName]), path, [...selected, ...additional],
+    [], undefined, [], undefined, []);
   return !handle || environment.storage === "value" ? state
-    : rustNamedTargetType("rust.alloc.rc.Rc", "alloc::rc::Rc", [{ kind: "type", type: state }]);
+    : rustNamedTargetType("rust.alloc.rc.Rc", "alloc::rc::Rc", [{ kind: "type", type: state }], [], undefined, [], undefined, []);
 }
 
 export function rustNativeObjectOwnerPaths(
@@ -644,7 +663,7 @@ export function rustNativeFrameCallableCarriers(
   if (path === undefined || entryPath === undefined) return undefined;
   let frame: TargetTypeRef;
   if (definition.storage.kind === "standalone") frame = rustNamedTargetType(closedMetadataKey([definition.ownerFileName,
-    definition.targetName]), path, arguments_);
+    definition.targetName]), path, arguments_, [], undefined, [], undefined, []);
   else {
     if (value.owner.kind !== "class") return undefined;
     const instance = value.owner.instance;
@@ -658,11 +677,13 @@ export function rustNativeFrameCallableCarriers(
     const paths = rustNativeObjectOwnerPaths(representation.kind);
     if (state === undefined || paths === undefined || environment?.instancesUseEnvironment === true && selectedEnvironment === undefined) return undefined;
     frame = rustNamedTargetType(paths.state, paths.state, [{ kind: "type", type: state },
-      ...(selectedEnvironment === undefined ? [] : [{ kind: "type" as const, type: selectedEnvironment }])]);
+      ...(selectedEnvironment === undefined ? [] : [{ kind: "type" as const, type: selectedEnvironment }])],
+      [], undefined, [], undefined, []);
   }
-  const selectedEntry = rustNamedTargetType(closedMetadataKey([definition.ownerFileName, entry.targetName]), entryPath, arguments_);
+  const selectedEntry = rustNamedTargetType(closedMetadataKey([definition.ownerFileName, entry.targetName]), entryPath, arguments_,
+    [], undefined, [], undefined, []);
   return { frame, entry: selectedEntry, root: rustNamedTargetType(
     entry.hasIndependent ? "rust.runtime.FrameCallableFamily" : "rust.runtime.FrameCallable",
     entry.hasIndependent ? "rt::FrameCallableFamily" : "rt::FrameCallable",
-    [{ kind: "type", type: frame }, { kind: "type", type: selectedEntry }]) };
+    [{ kind: "type", type: frame }, { kind: "type", type: selectedEntry }], [], undefined, [], undefined, []) };
 }

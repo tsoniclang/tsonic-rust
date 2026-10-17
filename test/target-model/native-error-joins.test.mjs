@@ -11,7 +11,7 @@ import { rustLifetimeKey } from "../../dist/target-model/lifetimes/index.js";
 import { rustInfallibleTargetId } from "../../dist/target-model/types/carriers/source-types.js";
 
 const file = "/errors.ts";
-const failure = rustNamedTargetType("fixture:Failure", "Failure");
+const failure = rustNamedTargetType("fixture:Failure", "Failure", [], [], undefined, [], undefined, []);
 const integer = { kind: "source-primitive", name: "int32" };
 
 test("semantic native error joins have one bounded immutable canonical selection", () => {
@@ -37,7 +37,7 @@ test("semantic error payload traversal preserves exact type lifetime and const d
   const count = { kind: "parameter", identity: "scope:Count", name: "Count" };
   const dependent = rustNamedTargetType("fixture:Borrowed", "Borrowed", [
     { kind: "type", type: parameter }, { kind: "lifetime", lifetime }, { kind: "const", value: count },
-  ]);
+  ], [], undefined, [], undefined, []);
   const joined = rustNativeErrorJoinTargetType(file, [dependent, failure]);
   const references = rustTargetGenericReferences(joined);
   assert.deepEqual(references.typeIdentities, [parameter.identity]);

@@ -222,6 +222,9 @@ export function validateCarrier(
       }
       return;
     case "impl-trait":
+      if (carrier.captures === undefined) {
+        fail(`${where} requires explicit source opaque capture evidence`);
+      }
       for (const [index, bound] of carrier.bounds.entries()) {
         validateCarrier(bound, definition, `${where}.bounds[${index}]`, fail, {
           allowUnsized: true,

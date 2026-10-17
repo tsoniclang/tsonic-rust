@@ -9,7 +9,7 @@ function fixture() {
   const file = fakeSourceFile({ statements: ["hook_context", "hook_argument"].map(text => ({ kindName: "KindIdentifier", text })) });
   const ast = { ...fakeAstReader([file]), forEachChild(node, visit) { for (const child of node.statements ?? []) visit(child); } };
   const component = { componentId: "root", root: true, programModuleName: "program" };
-  const groups = [{ input: { targetArgumentIndex: 1, empty: { owner: rustNamedTargetType("native.group", "native::Group"), method: "new" },
+  const groups = [{ input: { targetArgumentIndex: 1, empty: { owner: rustNamedTargetType("native.group", "native::Group", [], [], undefined, [], undefined, []), method: "new" },
     prepend: { path: "native::prepend" } }, components: [{ componentId: "root", children: [],
       accesses: [{ rootContextId: "context", projections: [] }] }] }];
   const program = { sourceFiles: [file], source: { ast }, configuration: { crateName: "probe" },

@@ -17,11 +17,11 @@ import { selectedNativeErrorBoundaries } from "../../../helpers/native-type-sele
 
 test("selected native error identity is semantic metadata, not an ordinary native name", () => {
   const argument = { kind: "type-parameter", identity: "value", name: "Value" };
-  const plain = rustNamedTargetType("selected.error", "native::Error", [{ kind: "type", type: argument }]);
+  const plain = rustNamedTargetType("selected.error", "native::Error", [{ kind: "type", type: argument }], [], undefined, [], undefined, []);
   const first = rustNamedTargetType("selected.error", "native::Error", [{ kind: "type", type: argument }],
-    [], undefined, [], "owner:first");
+    [], undefined, [], "owner:first", []);
   const second = rustNamedTargetType("selected.error", "native::Error", [{ kind: "type", type: argument }],
-    [], undefined, [], "owner:second");
+    [], undefined, [], "owner:second", []);
   assert.equal(isRustTargetTypeRef(first), true, "an authoritative nonempty native error identity is closed metadata");
   assert.equal(Object.hasOwn(rustNamedTypeCarrierValue(plain), "nativeErrorIdentity"), false,
     "ordinary named carriers do not acquire an error identity");

@@ -22,7 +22,7 @@ import { compileRust } from "../../helpers/rust-session.mjs";
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const workspace = dirname(realpathSync(resolve(repository, "../tsonic")));
 const runtime = resolve(workspace, "rust-runtime/crates/tsonic_rust_runtime");
-const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", []);
+const failure = rustNamedTargetType("fixture:ProducerFailure", "ProducerFailure", [], [], undefined, [], undefined, []);
 const integer = rustSourcePrimitiveTargetType("int32");
 
 test("source adapters retain their actual environment with native allocation, invocation and error identity parity",

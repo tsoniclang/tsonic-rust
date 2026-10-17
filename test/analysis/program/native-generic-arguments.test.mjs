@@ -102,9 +102,9 @@ test("late native argument publication keeps genuine inference, exact consts and
   const first = preparedContext("root", abi, arguments_, "/root/index.ts");
   const second = preparedContext("dependency", abi, arguments_, "/dependency/index.ts");
   const owners = new Map([
-    ["/root/index.ts", rustNamedTargetType("error:root", "rt::TsonicError", [], [], undefined, [], "error:root")],
+    ["/root/index.ts", rustNamedTargetType("error:root", "rt::TsonicError", [], [], undefined, [], "error:root", [])],
     ["/dependency/index.ts", rustNamedTargetType("error:dependency", "dependency::program::TsonicError",
-      [], [], undefined, [], "error:dependency")],
+      [], [], undefined, [], "error:dependency", [])],
   ]);
   const reads = [];
   const published = publishRustPhysicalEmissionContexts(preparation([first, second]), fileName => {

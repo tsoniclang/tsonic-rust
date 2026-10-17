@@ -51,7 +51,7 @@ test("a JS rejection requirement never guesses from an error name or package tra
 test("generic native provider evidence supplies the same exact rejection conversion obligation", () => {
   const native = trait => rustNamedTargetType("example.UnrelatedName", "example::UnrelatedName", [], [], {
     implementations: [{ trait, requirements: [] }],
-  });
+  }, [], undefined, []);
   assert.equal(accepts(native(obligation)), true);
   assert.equal(accepts(native({ ...obligation, genericArguments: [{ kind: "type", type: rustJsErrorTargetType() }] })), false);
   assert.equal(accepts(native({ ...obligation, path: "foreign::Into" })), false);

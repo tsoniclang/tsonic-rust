@@ -43,6 +43,9 @@ test("native trait contracts preserve exact conditional Copy and Clone semantics
     [{ kind: "type", type: { kind: "source-primitive", name: "int32" } }],
     [],
     traits,
+    [],
+    undefined,
+    [],
   )));
   assert.equal(rustNamedTypeCarrierValue(rustNamedTargetType(
     "acme.Cell",
@@ -50,6 +53,9 @@ test("native trait contracts preserve exact conditional Copy and Clone semantics
     [],
     [],
     traits,
+    [],
+    undefined,
+    [],
   )), undefined, "trait requirements cannot address a missing type argument");
 });
 
@@ -65,6 +71,7 @@ test("named carriers elide only an exact trailing Rust generic-default suffix", 
       "acme::Family",
       [int32, boolean, float64],
       [boolean, float64],
+      undefined, [], undefined, [],
     )),
     {
       kind: "named",
@@ -78,6 +85,7 @@ test("named carriers elide only an exact trailing Rust generic-default suffix", 
       "acme::Family",
       [int32, uint8, float64],
       [boolean, float64],
+      undefined, [], undefined, [],
     )),
     {
       kind: "named",
@@ -89,13 +97,16 @@ test("named carriers elide only an exact trailing Rust generic-default suffix", 
     },
   );
   assert.equal(rustNamedTypeCarrierValue({
-    ...rustNamedTargetType("acme.Invalid", "acme::Invalid", [int32]),
+    ...rustNamedTargetType("acme.Invalid", "acme::Invalid", [int32], [], undefined, [], undefined, []),
     value: {
       id: "acme.Invalid",
       path: "acme::Invalid",
       traits: { implementations: [] },
       genericArguments: [int32],
       genericDefaults: [boolean, float64],
+      typeRequirements: [],
+      nativeArgumentCount: 1,
+      upcasts: [],
     },
   }), undefined);
 });

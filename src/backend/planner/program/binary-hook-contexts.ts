@@ -109,7 +109,8 @@ export function planRustBinaryHookCallPlan(
     const errorPath = domain.errorDomain === "runtime" ? "tsonic_rust_runtime::TsonicError"
       : `${component.root ? input.program.configuration.crateName : component.crateName}::${component.programModuleName}::TsonicError`;
     const owner = rustTypeFromCarrier(mapRustTargetTypes(construction.owner,
-      carrier => isRustProgramErrorCarrier(carrier) ? rustNamedTargetType(domain.errorTypeIdentity, errorPath) : carrier));
+      carrier => isRustProgramErrorCarrier(carrier) ? rustNamedTargetType(domain.errorTypeIdentity, errorPath,
+        [], [], undefined, [], domain.errorTypeIdentity, []) : carrier));
     if (owner === undefined) return invalid("Binary context grouping has no exact renderable native empty constructor.");
     return { kind: "associated-call", owner, method: construction.method, args: [] };
   }

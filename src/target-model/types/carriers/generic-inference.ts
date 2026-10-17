@@ -345,6 +345,7 @@ export function inferRustTargetGenericBindings(
             match(trait, right.autoTraits[index]!, lifetimeContext));
       case "impl-trait":
         return right.kind === "impl-trait" && left.id === right.id &&
+          (left.captures === undefined) === (right.captures === undefined) &&
           left.bounds.length === right.bounds.length &&
           left.bounds.every((bound, index) =>
             match(bound, right.bounds[index]!, lifetimeContext)) &&
@@ -464,13 +465,16 @@ export function inferRustTargetGenericBindings(
           return leftNamed !== undefined && rightNamed !== undefined &&
             leftNamed.id === rightNamed.id &&
             leftNamed.path === rightNamed.path &&
+            leftNamed.nativeErrorIdentity === rightNamed.nativeErrorIdentity &&
             matchGenericArguments(
               leftNamed.genericArguments,
               rightNamed.genericArguments,
               (pattern, actual) => match(pattern, actual, lifetimeContext),
               (pattern, actual) => matchLifetime(pattern, actual, lifetimeContext),
               matchConst,
-            );
+            ) && leftNamed.typeRequirements.length === rightNamed.typeRequirements.length &&
+            leftNamed.typeRequirements.every(requirement => rightNamed.typeRequirements.some(other =>
+              requirement.typeArgumentIndex === other.typeArgumentIndex && match(requirement.trait, other.trait, lifetimeContext)));
         }
         const leftArray = rustFixedArrayCarrierValue(left);
         const rightArray = rustFixedArrayCarrierValue(right);

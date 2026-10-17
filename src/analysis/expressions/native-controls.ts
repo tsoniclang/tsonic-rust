@@ -51,7 +51,8 @@ export function resolveRustNativeControl(
       native.genericArguments.length === 1 && native.genericArguments[0]?.kind === "type" &&
       operands.length === 2 && carriers.every(carrier => rustTargetTypeRefEquals(carrier, element))) {
       const resultCarrier = rustNamedTargetType(native.id, native.path,
-        [{ kind: "type", type: element }], native.genericDefaults, native.traits, native.upcasts);
+        [{ kind: "type", type: element }], native.genericDefaults, native.traits, native.upcasts,
+        native.nativeErrorIdentity, native.typeRequirements, native.nativeArgumentCount);
       requireRustRecord(walk.context.requiredRecords, "targetOperation", expression, "native-range", "analysis/expressions/native-controls.ts");
       walk.context.records.targetOperations.source(expression, {
         kind: "native-range", operationId: "tsonic.rust.range",
