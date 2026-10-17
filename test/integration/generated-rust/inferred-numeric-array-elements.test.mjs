@@ -58,25 +58,35 @@ export function ${name}Equal(signed: int32, unsigned: uint32): boolean {
     const array = lane === "native" ? "Vec" : "js_abi::JsArray";
     const nativeType = { int32: "i32", uint32: "u32", float64: "f64" };
     const cases = physicalForms.map(([name, , names]) => {
-      const carrier = new RegExp(`fn ${name}\\([^)]*\\) -> ${array}<([^>]+)>`, "u").exec(generated)?.[1];
+      const carrier = new RegExp(`fn ${name}\\([^)]*\\) -> ${array}<([^\\n]+)>\\s*\\{`, "u").exec(generated)?.[1];
       assert.equal(carrier !== undefined, true, `${name}: native physical union array, never all-f64`);
-      const typeName = carrier.split("::").at(-1);
-      const body = new RegExp(`enum ${typeName}\\s*\\{([^}]+)\\}`, "u").exec(allGenerated)?.[1];
-      assert.equal(body !== undefined, true, `${name}: a real native enum owns the physical payloads`);
-      const variants = new Map([...body.matchAll(/(Variant\d+)\((i32|u32|f64)\)/gu)].map(match => [match[2], match[1]]));
+      const application = /^(.+)<([^<>]+)>$/u.exec(carrier);
+      assert.equal(application !== null, true, `${name}: the existing generated union has explicit native payload arguments`);
+      const enumPath = application[1];
+      const arguments_ = application[2].split(",").map(value => value.trim());
+      const typeName = enumPath.split("::").at(-1);
+      const declaration = new RegExp(`enum ${typeName}<([^>]+)>\\s*\\{([^}]+)\\}`, "u").exec(allGenerated);
+      assert.equal(declaration !== null, true, `${name}: a real native enum owns the physical payloads`);
+      const parameters = declaration[1].split(",").map(value => value.trim());
+      assert.equal(parameters.length, arguments_.length, `${name}: every generic payload has one actual native argument`);
+      const variants = new Map([...declaration[2].matchAll(/(Variant\d+)\(([^)]+)\)/gu)].map(match => {
+        const index = parameters.indexOf(match[2].trim());
+        assert.equal(index >= 0, true, `${name}: each variant stores its declared native payload parameter`);
+        return [arguments_[index], match[1]];
+      }));
       assert.equal(variants.size, names.length, `${name}: exact two or three physical arms`);
       for (const primitive of names) assert.equal(variants.has(nativeType[primitive]), true, `${name}: ${primitive} payload`);
-      const entries = names.map(primitive => `${carrier}::${variants.get(nativeType[primitive])}(${primitive === "int32"
+      const entries = names.map(primitive => `${enumPath}::${variants.get(nativeType[primitive])}(${primitive === "int32"
         ? "signed" : primitive === "uint32" ? "unsigned" : "1.0_f64"})`).join(", ");
       const resultType = `${array}<${carrier}>`;
       const constructor = lane === "native" ? `vec![${entries}]` : `js_abi::JsArray::from_dense(vec![${entries}])`;
       const value = lane === "native" ? "&value[index]" : '&value.get(index).expect("a constructed dense element exists")';
-      const arms = [...variants].map(([primitive, variant]) => `${carrier}::${variant}(payload) => ${primitive === "f64"
+      const arms = [...variants].map(([primitive, variant]) => `${enumPath}::${variant}(payload) => ${primitive === "f64"
         ? "*payload" : "f64::from(*payload)"}`).join(", ");
       const expected = names.map(primitive => primitive === "int32" ? "-1.0_f64" : primitive === "uint32" ? "4_294_967_295.0_f64" : "1.0_f64").join(", ");
       return `
-fn handwritten_${name}(signed: i32, unsigned: u32) -> ${resultType} { ${constructor} }
-fn check_${name}() {
+fn handwritten_${name.toLowerCase()}(signed: i32, unsigned: u32) -> ${resultType} { ${constructor} }
+fn check_${name.toLowerCase()}() {
     let value = ${name}(-1, u32::MAX);
     assert_eq!(value.len(), ${names.length});
     for (index, expected) in [${expected}].into_iter().enumerate() {
@@ -86,7 +96,7 @@ fn check_${name}() {
     assert!(${name}Equal(1, 1)${lane === "native" ? '.expect("checked source reads succeed")' : ""});
     for iteration in 0..1000 {
         let (actual, cost) = measure(|| ${name}(std::hint::black_box(-1), std::hint::black_box(u32::MAX)));
-        let (expected, expected_cost) = measure(|| handwritten_${name}(std::hint::black_box(-1), std::hint::black_box(u32::MAX)));
+        let (expected, expected_cost) = measure(|| handwritten_${name.toLowerCase()}(std::hint::black_box(-1), std::hint::black_box(u32::MAX)));
         assert_eq!(cost, expected_cost);
         assert_eq!(cost.allocations, ${lane === "native" ? 1 : 2});
         assert_eq!(cost.reallocations, 0);
@@ -104,7 +114,7 @@ ${cases}
 #[test]
 fn physical_values_cross_arm_number_equality_and_native_cost() {
     ${artifactText(result, "src/lib.rs").includes("pub fn initialize()") ? "crate::initialize();" : ""}
-    ${physicalForms.map(([name]) => `check_${name}();`).join("\n    ")}
+    ${physicalForms.map(([name]) => `check_${name.toLowerCase()}();`).join("\n    ")}
 }
 }
 `;
@@ -166,6 +176,9 @@ for (const [formName, form, names] of physicalForms.filter(([name]) => name !== 
         process.stdout.write(`C130 ${formName} ${operation}: PRESEAL ${issues.map(issue => issue.code).join(",")}\n`);
         return;
       }
+      const signature = /pub fn check\([^)]*\) -> (bool|Result<bool,[^\n]+>)\s*\{/u.exec(artifactText(result, "src/index.rs"));
+      assert.equal(signature !== null, true, "the native observer consumes the actual sealed bool or fallible-bool ABI");
+      const checkedResult = signature[1] === "bool" ? "" : '.expect("the admitted native number operation succeeds")';
       const proof = `
 #[cfg(test)]
 mod c130_native_operation_proof {
@@ -173,7 +186,7 @@ use super::*;
 #[test]
 fn exact_cross_arm_number_semantics() {
     ${artifactText(result, "src/lib.rs").includes("pub fn initialize()") ? "crate::initialize();" : ""}
-    assert!(check(${operation === "sort" ? "10, 2" : "1, 1"}));
+    assert!(check(${operation === "sort" ? "10, 2" : "1, 1"})${checkedResult});
 }
 }
 `;

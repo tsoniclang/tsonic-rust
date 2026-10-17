@@ -130,7 +130,7 @@ test("collapsed semantic unions index their exact authored arm without losing cl
     ({ ...variant, sourceTypes: [foreign] })) }), true, "another checker type receives its own complete relation");
   assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [foreign]), [0, 1]);
   assert.deepEqual(registry.sourceUnionVariantIndexesForTypes(carrier, [shared]), [0, 1]);
-  const otherCarrier = rustSourceUnionTargetType("/other.ts", "OtherUnion2", [], "generated",
+  const otherCarrier = rustSourceUnionTargetType("/other.ts", "Union2", [], "generated",
     { kind: "physical", types: [broadCarrier, float64Carrier] });
   assert.equal(registry.sourceUnionVariantIndexesForTypes(otherCarrier, [shared]), undefined,
     "the same primitive source type does not acquire a global native-carrier override");

@@ -200,6 +200,7 @@ export function inspect(narrow: float32, tiny: int8, byte: uint8, short: int16, 
   test(`C130 ${lane}: authored async, concise and nested returns retain their own array destination`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
 export async function asynchronous(): Promise<float32[]> { const asynchronousValues = [1, 2]; return asynchronousValues; }
+export async function asynchronousDirect(): Promise<float32[]> { return [1, 2]; }
 export const concise = (): float32[] => [1, 2];
 export function nested(): number[] {
   const callback = (): float32[] => { const innerValues = [1, 2]; return innerValues; };
@@ -215,6 +216,20 @@ export function nested(): number[] {
     const operation = program.records.targetOperation.get(body);
     assert.equal(operation?.kind === "array-literal" && operation.elementCarrier.name === "float32", true,
       "a concise arrow uses its nearest authored callable result, not the enclosing function");
+    let direct;
+    const { ast } = program.source;
+    const find = node => {
+      if (ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "asynchronousDirect") {
+        ast.forEachChild(ast.body(node), statement => {
+          const expression = ast.as.AsReturnStatement(statement)?.Expression;
+          if (expression !== undefined) direct = program.records.targetOperation.get(expression);
+        });
+      }
+      ast.forEachChild(node, child => { if (child !== undefined) find(child); });
+    };
+    for (const file of program.sourceFiles) find(file);
+    assert.equal(direct?.kind === "array-literal" && direct.elementCarrier.name === "float32", true,
+      "a directly returned array consumes the same native async output contract as an aliased return");
   });
 
   test(`C130 ${lane}: nonnumeric subtype reduction preserves final native admission`, () => {
