@@ -62,7 +62,10 @@ function input() {
     pos: node => node.position,
     end: node => node.position + 1,
     parent: node => node.file,
-    as: { AsBinaryExpression: node => node.binary },
+    as: {
+      AsArrowFunction: node => node.kindName === "KindArrowFunction" ? { Body: baseAst.body(node) } : undefined,
+      AsBinaryExpression: node => node.binary,
+    },
   };
   const records = createRustRecordFixture({runtimeCarrier: { get: (node) => {
     if (node.carrier !== undefined)
