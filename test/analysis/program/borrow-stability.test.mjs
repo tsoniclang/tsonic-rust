@@ -1,5 +1,5 @@
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
-import { createRustRecordFixture } from "../../helpers/records.mjs";
+import { createRustRecordFixture, rustNativeFixtureNodes } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right, Node_Expression } from "@tsonic/target-api/source";
@@ -135,7 +135,9 @@ targetOperation: { get: (node) => {
 });
 
 function analysisInput(program, sourceFacts, records = program.records) {
-  return { ast: program.source.ast, nodes: allNodes(program.source.ast, program.sourceFiles), sourceFacts, records, navigation: program.sourceNavigation,
+  const nodes = rustNativeFixtureNodes(program);
+  const nativeNodes = new Set(nodes);
+  return { ast: program.source.ast, nodes, isNativeNode: node => nativeNodes.has(node), sourceFacts, records, navigation: program.sourceNavigation,
     projectTypes: program.projectTypes, objectRepresentations: program.objectRepresentations,
     structuralShapes: program.structuralShapes, frozenDataWrites: program.frozenDataWrites };
 }
@@ -190,6 +192,8 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
     } },
   };
   input.nodes = allNodes(input.ast, [root]);
+  const nativeNodes = new Set(input.nodes);
+  input.isNativeNode = node => nativeNodes.has(node);
   return { input, receivers, summaries: () => summaries };
 }
 
@@ -428,7 +432,9 @@ export function indexed(values: string[]): number { return values[0].length; }
 
 test("borrow stability budgets are finite, bounded and reject cycles without AST diagnostics", () => {
   const root = { children: [{ children: [] }] };
+  const nativeNodes = new Set([root, ...root.children]);
   const input = {
+    isNativeNode: node => nativeNodes.has(node),
     nodes: [root, ...root.children], ast: { ...fakeAstReader(), is: { ...fakeAstReader().is,
       IsPrefixUnaryExpression: () => false, IsPostfixUnaryExpression: () => false },
       forEachChild: (node, visit) => node.children.forEach(visit) },
@@ -445,6 +451,37 @@ test("borrow stability budgets are finite, bounded and reject cycles without AST
   }
   root.children.push(root);
   assert.equal(analyze(input, 8).kind, "rejected", "cycle");
+});
+
+test("borrow stability uses the canonical erased domain without accepting missing native children", () => {
+  const { program, source } = analyzeRust({ surfaces: [], files: { "index.ts": `
+export function run(): number {
+  function unused(key: string): number { const value = { [key]: 1 }; return 0; }
+  return 42;
+}` } });
+  const input = analysisInput(program, createTargetSourceProgram(source).sourceFacts);
+  const checked = allNodes(program.source.ast, program.sourceFiles);
+  const erased = checked.find(node => program.records.nativeParticipation.get(node) === "erased");
+  const literal = input.nodes.find(node => program.source.ast.is.IsNumericLiteral(node) && program.source.ast.text(node) === "42");
+  assert.equal(erased !== undefined && literal !== undefined, true, "actual checked erased and admitted source identities exist");
+  assert.equal(input.nodes.includes(erased), false, "the native array is the exact completed canonical projection");
+  assert.equal(input.isNativeNode(erased), false, "only an explicitly erased source subtree is excluded");
+  const selected = analyze(input);
+  assert.equal(selected.kind, "resolved", "an erased raw AST child is not a missing native obligation");
+  assert.equal(selected.effects.pureValues.has(erased), false, "erasure is not a fabricated pure record");
+  assert.equal(selected.effects.nativeWrites.has(erased), false, "no erased native effect is published");
+  for (const [label, nodes] of [
+    ["missing native child", input.nodes.filter(node => node !== literal)],
+    ["duplicate native child", [...input.nodes, literal]],
+    ["foreign child", [...input.nodes, Object.freeze({ foreign: true })]],
+    ["erased source child", [...input.nodes, erased]],
+  ]) {
+    const rejected = analyze({ ...input, nodes });
+    assert.equal(rejected.kind, "rejected", label + ": invalid native domains are refused");
+    assert.equal(rejected.diagnostics.length, 1, label + ": one owning diagnostic");
+    assert.equal(rejected.diagnostics[0].code, "RUST_BORROW_STABILITY_BUDGET_INVALID", label + ": exact owner");
+    assert.equal(Object.hasOwn(rejected, "effects"), false, label + ": no partial effect plan");
+  }
 });
 
 test("native field borrowing consumes exact disjoint scalar writes but rejects opaque calls and stale field facts", () => {

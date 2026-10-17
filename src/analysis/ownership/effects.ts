@@ -32,6 +32,7 @@ export interface RustBorrowEffectsInput {
   readonly ast: AstReader;
   readonly sourceFacts: Pick<ReadonlySourceFactResolver, "getFact">;
   readonly nodes: readonly Node[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
   readonly projectTypes: RustTargetProgram["projectTypes"];
   readonly objectRepresentations: RustTargetProgram["objectRepresentations"];
@@ -59,6 +60,10 @@ export function analyzeRustBorrowEffects(
   if (!Number.isSafeInteger(maximumNodes) || maximumNodes < 1 || maximumNodes > maximumBorrowStabilityNodes) {
     return rejected("Rust borrow stability requires a positive finite node budget within its analysis bound.");
   }
+  const positions = new Map(input.nodes.map((node, index) => [node, index]));
+  if (positions.size !== input.nodes.length) return rejected("Rust borrow effects require unique checked source-node identities.");
+  if (input.nodes.some(node => !input.isNativeNode(node)))
+    return rejected("Rust borrow effects require their exact admitted native-node inventory.");
   const pure = new Set<Node>();
   const writes = new Map<Node, RustBorrowedFieldWrite>();
   const nativeWrites = new Map<Node, readonly Node[]>();
@@ -114,14 +119,13 @@ export function analyzeRustBorrowEffects(
     }
     if (stable) for (const use of summary.uses) if (input.ast.is.IsIdentifier(use.reference)) stableBindings.add(use.reference);
   }
-  const positions = new Map(input.nodes.map((node, index) => [node, index]));
-  if (positions.size !== input.nodes.length) return rejected("Rust borrow effects require unique checked source-node identities.");
   for (let index = input.nodes.length - 1; index >= 0 && !exhausted; index -= 1) {
     const node = input.nodes[index]!;
     if (!reserveTargets(1)) break;
     let invalid = false;
     input.ast.forEachChild(node, child => {
-      if (child !== undefined && (positions.get(child) === undefined || positions.get(child)! <= index)) invalid = true;
+      if (child !== undefined && input.isNativeNode(child) &&
+        (positions.get(child) === undefined || positions.get(child)! <= index)) invalid = true;
     });
     if (invalid) return rejected("Rust borrow effects require the canonical acyclic checked-node inventory.");
     selectStableBinding(node);

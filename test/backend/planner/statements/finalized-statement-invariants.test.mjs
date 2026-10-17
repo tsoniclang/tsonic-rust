@@ -3,7 +3,7 @@ import test from "node:test";
 import { BinaryExpression_Left, BinaryExpression_Right } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../../helpers/rust-session.mjs";
 import { analyzeRustOperations } from "../../../helpers/rust-operation-analysis.mjs";
-import { createRustRecordFixture } from "../../../helpers/records.mjs";
+import { createRustRecordFixture, rustNativeFixtureNodes } from "../../../helpers/records.mjs";
 import { createRustPlanningContext } from "../../../../dist/backend/planner/context.js";
 import { createRustSyntheticNameState } from "../../../../dist/backend/planner/names/synthetic.js";
 import { rustPackageFallibleBoundary } from "../../../../dist/backend/planner/program/fallible-boundaries.js";
@@ -110,7 +110,9 @@ function assertInvariant(run, context, message, subject) {
 }
 
 function admitStatements(program) {
+  const nativeNodes = new Set(rustNativeFixtureNodes(program));
   return analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.sourceFiles,
+    isNativeNode: node => nativeNodes.has(node),
     records: program.records, names: program.names, typeDefinitions: program.typeDefinitions,
     errorRegions: program.errorRegions, projectFlowReadSelections: program.projectFlowReadSelections });
 }

@@ -133,6 +133,9 @@ function checkedContext(source, target) {
     context = analyzeRustCheckedContext(request);
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
   } });
+  assert.equal(context !== undefined, true, "the checked source reaches the actual callable construction owner");
+  assert.equal(context.diagnostics.length, 0, context.diagnostics.map(issue =>
+    `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
   return context;
 }
 

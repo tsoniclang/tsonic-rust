@@ -302,6 +302,7 @@ export function analyzeRustTargetProgram(
   }
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
   const borrowEffectsInput = {
+    isNativeNode: context.isNativeNode,
     sourceFacts: context.source.sourceFacts,
     ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
@@ -341,6 +342,7 @@ export function analyzeRustTargetProgram(
   const projectFlowReadSelections = analyzeRustProjectFlowReadSelections({ ast: context.ast, sourceFiles: context.sourceFiles,
     isNativeNode: context.isNativeNode, records });
   const statementCompletions = analyzeRustStatementCompletions({ source: context.source, sourceFiles: context.sourceFiles,
+    isNativeNode: context.isNativeNode,
     records, names: context.names, typeDefinitions, errorRegions: completedErrorRegions, projectFlowReadSelections });
   if (statementCompletions.kind === "rejected") return rejectedTargetStage(statementCompletions.diagnostics);
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records,

@@ -1,5 +1,8 @@
 import { createCompilerSessionFromFiles, formatDiagnostics } from "@tsonic/tsts";
 import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
 import assert from "node:assert/strict";
@@ -11,6 +14,16 @@ import * as backendNames from "../../../dist/backend/planner/names/source-output
 function declarationNamed(source, name) {
   const file = source.getSourceFile("/src/index.ts");
   return source.ast.statements(file).find(node => source.ast.text(source.ast.name(node)) === name);
+}
+
+function nativeMembership(source, file) {
+  const storage = createSourceStorageQuery(source, [file]);
+  const builder = createRustProgramRecordBuilder();
+  const selected = analyzeRustNativeParticipation({ ast: source.ast, storage,
+    navigation: source.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
+  assert.equal(selected.kind, "resolved", "the checked name fixture has its complete canonical native domain");
+  const nativeNodes = new Set(selected.nodes);
+  return node => nativeNodes.has(node);
 }
 
 test("enum native representation and variants are selected before publication", () => {
@@ -144,6 +157,7 @@ class Entry {
   const source = createTargetSourceProgram(checked);
   const file = checked.getSourceFile("/project/index.ts");
   const names = createRustNamePlan({ ast: source.ast, sourceFiles: [file],
+    isNativeNode: nativeMembership(source, file),
     semanticsFor: source.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
   assert.equal(names.diagnostics.length, 0, "checked constant keys do not become authored identifier rejections");
   const declaration = source.ast.statements(file).find(node => source.ast.is.IsClassDeclaration(node));
@@ -172,6 +186,7 @@ class Entry {
   const source = createTargetSourceProgram(checked);
   const file = checked.getSourceFile("/project/index.ts");
   const names = createRustNamePlan({ ast: source.ast, sourceFiles: [file],
+    isNativeNode: nativeMembership(source, file),
     semanticsFor: source.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
   assert.equal(names.diagnostics.length, 0, "native numeric property keys do not become authored identifier failures");
   const declaration = source.ast.statements(file).find(node => source.ast.is.IsClassDeclaration(node));

@@ -4,6 +4,7 @@ import { analyzeRust, compileRust, artifactText, acmePlatformPackage, acmeTestin
 import { analyzeRustStatementCompletions } from "../../../dist/analysis/control-flow/statement-completion.js";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
+import { rustNativeFixtureNodes } from "../../helpers/records.mjs";
 
 const source = `
 export function run(flag: boolean): number {
@@ -28,7 +29,9 @@ function checked(text = source, options = {}) {
 }
 
 function select(program, records = program.records) {
+  const nativeNodes = new Set(rustNativeFixtureNodes(program));
   return analyzeRustStatementCompletions({ source: program.source, sourceFiles: program.sourceFiles, records,
+    isNativeNode: node => nativeNodes.has(node),
     names: program.names, typeDefinitions: program.typeDefinitions, errorRegions: program.errorRegions,
     projectFlowReadSelections: program.projectFlowReadSelections });
 }
@@ -70,6 +73,31 @@ test("admitted conditions and assignment identities are pure stable lookups", ()
   for (const name of ["conditionFor", "controlTargetsFor", "exitFor", "iterationFor", "setterFor", "assignmentFor", "projectTypeTestReadsFor"])
     assert.equal(index[name](foreign) === undefined, true, `${name}: foreign nodes have no invented decision`);
   assert.equal(index.admitted(foreign), false, "foreign statements are not admitted");
+});
+
+test("statement admission never visits a canonically erased callable subtree", () => {
+  const { program, nodes, ast } = checked(`export function run(): number {
+    function unused(key: string): number { const value = { [key]: 7 }; return 1; }
+    return 42;
+  }`);
+  const nativeNodes = new Set(rustNativeFixtureNodes(program));
+  const erased = nodes.filter(node => !nativeNodes.has(node));
+  assert.equal(erased.length > 0, true, "the real source retains its unused checked callable and body");
+  const records = Object.freeze(Object.fromEntries(Object.entries(program.records).map(([family, reader]) =>
+    [family, Object.freeze({ get(node) {
+      assert.equal(erased.includes(node), false, `${family}: no native record is read for an erased node`);
+      return reader.get(node);
+    } })])));
+  const result = select(program, records);
+  assert.equal(result.kind, "resolved", "the complete canonical native statement domain is admitted");
+  for (const node of erased) {
+    assert.equal(result.plan.admitted(node), false, ast.kindName(node) + ": no erased statement is published");
+    for (const name of ["conditionFor", "controlTargetsFor", "exitFor", "iterationFor", "setterFor", "assignmentFor", "projectTypeTestReadsFor"])
+      assert.equal(result.plan[name](node) === undefined, true, `${name}: no decision is invented for an erased node`);
+  }
+  const returned = nodes.find(node => nativeNodes.has(node) && ast.is.IsReturnStatement(node));
+  assert.equal(returned !== undefined && result.plan.admitted(returned), true,
+    "the real native return remains admitted, so this is not an empty-domain success");
 });
 
 test("loop guards use native Boolean carriers rather than if-only static folding", () => {
