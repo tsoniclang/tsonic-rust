@@ -587,7 +587,7 @@ function acceptRuntimeCallableCarrierCall(
   }
   const genericParameters = generic !== undefined
     ? sourceParameters.map(parameter => ({ kind: "type" as const, targetIdentity: parameter.identity, sourceName: parameter.name }))
-    : calleeCarrier.kind !== "closure" || calleeCarrier.lifetimeBinder === undefined ? []
+    : (calleeCarrier.kind !== "closure" && calleeCarrier.kind !== "function-pointer") || calleeCarrier.lifetimeBinder === undefined ? []
     : calleeCarrier.lifetimeBinder.parameters.map((parameter, index) => ({
         kind: "lifetime" as const,
         sourceName: request.source.sourceSelectedMethodTypeArguments![index]!.typeParameterName,

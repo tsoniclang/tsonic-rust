@@ -1,4 +1,5 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
 import {
   sourceNodesEqual,
   Node_Expression,
@@ -52,6 +53,7 @@ export interface RustObjectRepresentationAnalysisInput {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
   readonly semantics: SourceProgramSemantics;
+  readonly sourceStorage: SourceStorageQueries;
   readonly projectTypes: RustProjectTypePolicy;
   readonly sourceFiles: readonly SourceFile[];
   readonly isNativeNode: (node: Node) => boolean;
@@ -114,35 +116,30 @@ export function createRustObjectRepresentationPlan(
   const receiverCaptures = input.receiverStorage.captures;
   const { origins, escapingSuspendedMethods } = collectProjectObjectOrigins(input);
   const mutatingMethods = collectMutatingProjectMethods(input, receiverCaptures);
+  const sourceUses = projectObjectSourceUses(input);
   const representations = input.projectTypes.definitions.map((definition) => {
     const creationFlows = origins.get(definition) ?? [];
-    const promotedStorage = creationFlows.some((flow) =>
+    const uses = sourceUses.get(definition);
+    const promotedStorage = uses?.promoted === true || creationFlows.some((flow) =>
       flow.aliasDeclarations.some(input.hasPromotedStorage));
-    const mutable = promotedStorage || creationFlows.some(flow => flow.uses.some(use => use.role === "write" &&
+    const mutable = promotedStorage || uses?.mutated === true || creationFlows.some(flow => flow.uses.some(use => use.role === "write" &&
       use.throughMember && !writesCapturedField(use.reference, input, receiverCaptures))) ||
       input.receiverStorage.publishedFieldWrites(definition).some(declaration => !receiverCaptures.isCaptured(declaration)) || projectDefinitionIsMutable(
       definition,
       mutatingMethods,
       input, receiverCaptures,
     );
-    const identityObserved = creationFlows.some((flow) => flow.identityCompared);
+    const identityObserved = uses?.identityObserved === true || creationFlows.some((flow) => flow.identityCompared);
     const escapes = creationFlows.some((flow) => flow.escapes) ||
       projectReceiverEscapes(definition, input, escapingSuspendedMethods, receiverCaptures);
-    const exported = input.navigation.declarationUseSummary(
-      definition.declaration,
-    ).exported;
-    const hasIncompleteFlow = creationFlows.some((flow) =>
-      flow.hasUnclassifiedUse || flow.storedOutsideBinding ||
-      flow.aliasDeclarations.some(declaration => !hasStableLocalBinding(declaration, input)));
-    const aliasedMutableValue = mutable && creationFlows.some((flow) =>
-      flow.bindingAliased);
+    const hasIncompleteFlow = uses === undefined || uses.incomplete || uses.retained ||
+      projectReceiverEscapes(definition, input, escapingSuspendedMethods, receiverCaptures);
+    const aliasedMutableValue = mutable && (uses?.aliases === true || uses?.external === true ||
+      creationFlows.some(flow => flow.bindingAliased));
     const kind: RustObjectRepresentationKind = input.projectTypes.isPolymorphic(definition)
       ? "open-hierarchy"
-      : creationFlows.length > 0 &&
-            (definition.kind === "class" || interfaceHasOnlyLocalLiteralBindings(definition, creationFlows, input)) &&
-            !exported &&
+      : uses !== undefined &&
             !identityObserved &&
-            !escapes &&
             !hasIncompleteFlow &&
             !input.referenceDeclarations?.has(definition.declaration) &&
             !promotedStorage &&
@@ -179,25 +176,6 @@ export function createRustObjectRepresentationPlan(
         : "ref";
     },
   });
-}
-
-function hasStableLocalBinding(
-  declaration: Node,
-  input: RustObjectRepresentationAnalysisInput,
-): boolean {
-  if (input.navigation.declarationUseSummary(declaration).bindingWritten) return false;
-  let current = input.ast.parent(declaration);
-  while (current !== undefined) {
-    const kind = input.ast.kindName(current);
-    if (input.ast.is.IsFunctionDeclaration(current) ||
-      input.ast.is.IsFunctionExpression(current) ||
-      input.ast.is.IsArrowFunction(current) ||
-      input.ast.is.IsConstructorDeclaration(current) ||
-      kind === "KindMethodDeclaration" ||
-      kind === "KindGetAccessor" || kind === "KindSetAccessor") return true;
-    current = input.ast.parent(current);
-  }
-  return false;
 }
 
 function selectDispatchObjectLifetime(
@@ -296,24 +274,73 @@ function collectProjectObjectOrigins(input: RustObjectRepresentationAnalysisInpu
   return { origins, escapingSuspendedMethods };
 }
 
-function interfaceHasOnlyLocalLiteralBindings(
-  definition: RustProjectTypeDefinition,
-  flows: readonly SourceExpressionValueFlowSummary[],
-  input: RustObjectRepresentationAnalysisInput,
-): boolean {
-  const uses = input.navigation.declarationUses(definition.declaration);
-  return uses.length > 0 && uses.every(use => {
-    const type = input.ast.parent(use.reference);
-    const binding = input.ast.parent(type);
-    if (use.kind !== "type-only" || type === undefined || binding === undefined ||
-      !input.ast.is.IsTypeReferenceNode(type) || !input.ast.is.IsVariableDeclaration(binding)) return false;
-    const declaration = input.ast.as.AsVariableDeclaration(binding);
-    const initializer = declaration?.Initializer;
-    return declaration?.Type === type && initializer !== undefined &&
-      input.ast.is.IsObjectLiteralExpression(initializer) &&
-      !input.navigation.declarationUseSummary(binding).bindingWritten &&
-      flows.some(flow => flow.expression === initializer && flow.aliasDeclarations.includes(binding));
-  });
+function projectObjectSourceUses(input: RustObjectRepresentationAnalysisInput) {
+  const definitions = new Map<SourceStorageSubject, readonly RustProjectTypeDefinition[]>();
+  const uses = new Map<RustProjectTypeDefinition, {
+    identityObserved: boolean; mutated: boolean; promoted: boolean; incomplete: boolean;
+    retained: boolean; aliases: boolean; external: boolean;
+  }>();
+  const aliases = new Map<SourceStorageSubject, Set<Node>>();
+  const definitionFor = (subject: SourceStorageSubject): readonly RustProjectTypeDefinition[] => {
+    const previous = definitions.get(subject);
+    if (previous !== undefined) return previous;
+    const typed = input.sourceStorage.typeFor(subject);
+    if (typed.kind === "unresolved") return [];
+    const semantics = input.semantics.forFile(typed.sourceFile);
+    const type = semantics.types.nonNullableType(typed.type);
+    const symbol = type === undefined ? undefined : semantics.declarations.typeSymbol(type);
+    const selected = symbol === undefined ? [] : semantics.declarations.symbolDeclarations(symbol)
+      .flatMap(declaration => {
+        const definition = input.projectTypes.definitionForDeclaration(declaration);
+        return definition === undefined ? [] : [definition];
+      });
+    definitions.set(subject, selected);
+    return selected;
+  };
+  for (const subject of input.sourceStorage.subjects) {
+    if (!input.isNativeNode(subject.node)) continue;
+    const origins = input.sourceStorage.originSubjectsFor(subject);
+    const selected = new Set([...definitionFor(subject), ...(origins.kind === "unresolved" ? []
+      : origins.subjects.flatMap(definitionFor))]);
+    if (selected.size === 0) continue;
+    const flow = input.navigation.expressionValueFlow(subject.node);
+    const closed = input.sourceStorage.closedOriginsFor(subject);
+    const declaredAliases = flow.aliasDeclarations.filter(declaration => input.ast.is.IsVariableDeclaration(declaration));
+    let aliased = flow.bindingAliased;
+    if (origins.kind === "resolved") for (const origin of origins.subjects) {
+      const bindings = aliases.get(origin) ?? new Set<Node>();
+      aliases.set(origin, bindings);
+      for (const declaration of declaredAliases) bindings.add(declaration);
+      aliased ||= bindings.size > 1;
+    }
+    for (const definition of selected) {
+      const current = uses.get(definition) ?? { identityObserved: false, mutated: false, promoted: false,
+        incomplete: false, retained: false, aliases: false, external: false };
+      current.identityObserved ||= flow.identityCompared;
+      current.mutated ||= flow.memberWritten;
+      current.promoted ||= flow.aliasDeclarations.some(input.hasPromotedStorage);
+      current.incomplete ||= origins.kind === "unresolved" || closed.kind === "unresolved" ||
+        closed.kind === "open" && closed.boundaries.some(boundary => boundary.kind !== "external-input");
+      current.external ||= closed.kind === "open" && closed.boundaries.some(boundary => boundary.kind === "external-input");
+      current.retained ||= flow.captured || flow.yielded || flow.storedOutsideBinding;
+      current.aliases ||= aliased;
+      uses.set(definition, current);
+    }
+  }
+  for (const node of input.valueWrites) {
+    const owner = input.sourceStorage.mutationOwnerFor(node);
+    if (owner === undefined) continue;
+    const origins = input.sourceStorage.originSubjectsFor(owner);
+    for (const definition of new Set([...definitionFor(owner), ...(origins.kind === "unresolved" ? []
+      : origins.subjects.flatMap(definitionFor))])) {
+      const current = uses.get(definition);
+      if (current !== undefined) {
+        current.mutated = true;
+        current.incomplete ||= origins.kind === "unresolved";
+      }
+    }
+  }
+  return uses;
 }
 
 function collectMutatingProjectMethods(input: {

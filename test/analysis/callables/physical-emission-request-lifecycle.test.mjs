@@ -5,12 +5,14 @@ import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { boolCarrier } from "../../helpers/rust-session.mjs";
 import { createRustPhysicalCallableLifecycle } from "../../../dist/analysis/callables/physical-lifecycle.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { createRustGenericCallablePhysicalPlan } from "../../../dist/analysis/callables/generic-physical.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableInputTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustGenericCallableIdentitySources, prepareRustGenericCallableIdentityRequests,
@@ -28,22 +30,29 @@ export function zero(): boolean { return true; }
 export function expose(): typeof owner { return owner; }
 export function exposeZero(): typeof zero { return zero; }
 export const stored = owner(true);
+export const invoked = expose()(true);
 `;
 
 function checkedSource(text, options = { surfaces: [] }) {
   let input;
+  let errorInputs;
   const context = analyzeRustErrorEffects(text, options, current => {
     const original = current.callableValues;
     const callableValues = Object.create(original, {
       initialize: { value(selected) { input = selected; return original.initialize(selected); } },
+      preparePhysicalStorage: { value(components, effectsFor) {
+        errorInputs = { components, effectsFor };
+        return original.preparePhysicalStorage(components, effectsFor);
+      } },
     });
     return { ...current, callableValues };
   });
   assert.equal(input !== undefined, true, "the real program lifecycle supplies its private construction inputs");
-  return { context, input };
+  assert.equal(errorInputs !== undefined, true, "the same completed source classification supplies the physical constructor ABI");
+  return { context, input, errorInputs };
 }
 
-function physicalConstruction(checked, { unavailableReturns = new Set(), constructionErrorsReady = true } = {}) {
+function physicalConstruction(checked, { unavailableReturns = new Set(), unavailableErrors = new Set(), constructionErrorsReady = true } = {}) {
   const { context, input } = checked;
   const { ast, records, sourceStorage } = context;
   const native = context.callableValues.native;
@@ -51,12 +60,26 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
   let queries;
   let physical;
   const producers = createRustNativeCallableProducerPlan({ ast, nodes: input.nativeNodes, records, native,
+    structuralShapes: context.structuralShapes,
     definitions: context.typeDefinitions, returnCarrierFor(node) {
       if (unavailableReturns.has(node)) return undefined;
       const selected = queries.prepareReturn(node);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  if (constructionErrorsReady) producers.selectConstructionErrors(new Map());
+  if (constructionErrorsReady) {
+    const errors = new Map();
+    const { components, effectsFor } = checked.errorInputs;
+    for (const producer of producers.producers) {
+      if (unavailableErrors.has(producer.declaration)) continue;
+      const intrinsic = producers.errorFor(producer.declaration, "invoke");
+      const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, {
+        ast, components, producers, definitions: context.typeDefinitions,
+        records: { ...records, errorEffects: { get: effectsFor } },
+      }, producer.declaration);
+      if (selected !== undefined) errors.set(producer.declaration, selected);
+    }
+    producers.selectConstructionErrors(errors);
+  }
   queries = createRustNativeStorageQueries({ ast, nativeNodes: input.nativeNodes, storage: sourceStorage, records,
     definitions: context.typeDefinitions, native, producers, generic,
     physicalCarrierFor: (carrier, fileName, subject, bindings, selected) =>
@@ -65,7 +88,8 @@ function physicalConstruction(checked, { unavailableReturns = new Set(), constru
     carrierHost: input.carrierHost });
   const captures = createRustNativeCapturePlan({ records, storage: sourceStorage, nativeStorage: queries });
   physical = createRustGenericCallablePhysicalPlan(generic.definitions, generic.definitionFor, {
-    ast, storage: sourceStorage, captures, native, boundSubjectFor: queries.boundSubjectFor,
+    ast, lifetimes: input.lifetimes, storage: sourceStorage, captures, native, boundSubjectFor: queries.boundSubjectFor,
+    genericBindingsFor: queries.genericBindingsFor,
   });
   const storage = finalizeRustNativeParameterStorage({ ast, storage: sourceStorage, nativeNodes: input.nativeNodes, records }, queries);
   const occurrences = prepareRustProviderSourceOccurrences({ ast, records, nodes: input.nativeNodes,
@@ -80,7 +104,7 @@ function completeLifecycle(input, physical) {
   return lifecycle.complete(physical);
 }
 
-function fixture({ missingResult = false, pendingErrors = false, provider = false } = {}) {
+function fixture({ missingResult = false, missingError = false, pendingErrors = false, provider = false } = {}) {
   const checked = provider
     ? (checkedProviderContext ??= checkedSource(`${fixtureSource}
 export function inspect(value: string, word: string): boolean { return value.includes(word); }`, { surfaces: ["js"] }))
@@ -90,20 +114,28 @@ export function inspect(value: string, word: string): boolean { return value.inc
   const declaration = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "stored");
   const owner = sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "owner");
   const metadata = sourceStorage.nodes.find(node => ast.is.IsTypeAliasDeclaration(node));
-  const invocation = declaration === undefined ? undefined : ast.as.AsVariableDeclaration(declaration)?.Initializer;
+  const invoked = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "invoked");
+  const directInvocation = declaration === undefined ? undefined : ast.as.AsVariableDeclaration(declaration)?.Initializer;
+  const invocation = invoked === undefined ? undefined : ast.as.AsVariableDeclaration(invoked)?.Initializer;
   const operand = invocation === undefined ? undefined : ast.arguments(invocation)[0];
   assert.equal(declaration !== undefined && owner !== undefined && metadata !== undefined &&
     invocation !== undefined && operand !== undefined, true, "all request subjects are actual checked source nodes");
+  const invocationOperation = records.targetOperation.get(invocation);
+  assert.equal(invocationOperation?.kind === "source-call" && invocationOperation.target.form === "callable", true,
+    "the invocation request belongs to an actual retained callable use, not a direct native function");
   const construction = physicalConstruction(checked, { constructionErrorsReady: !pendingErrors,
+    unavailableErrors: missingError ? new Set([owner]) : new Set(),
     unavailableReturns: missingResult ? new Set([owner]) : new Set() });
   const storage = construction.storage;
   const calls = [];
   const outcomes = new Map();
   let open = true;
-  const observe = (role, node, select) => {
+  const observe = (role, node, select, lookup) => {
     assert.equal(open, true, `${role}: physical storage construction is open`);
+    const previous = lookup(node);
     const selection = outcomes.get(role) ?? select(node);
-    calls.push({ role, node, selection });
+    if (previous.kind === "unresolved") calls.push({ role, node, selection });
+    else assert.equal(selection === previous, true, `${role}: repeated preparation preserves the identical materialized result`);
     return selection;
   };
   const nativeStorage = Object.freeze({
@@ -113,10 +145,13 @@ export function inspect(value: string, word: string): boolean { return value.inc
     futureEnvironmentFor: storage.futureEnvironmentFor,
     parameterFor: storage.parameterFor,
     returnFor: storage.returnFor,
-    prepareReturn: node => observe("return", node, storage.prepareReturn),
-    valueFor: node => observe("value", node, storage.valueFor),
-    operandFor: node => observe("operand", node, storage.operandFor),
-    invocationCallableFor: node => observe("invocation", node, storage.invocationCallableFor),
+    prepareReturn: node => observe("return", node, storage.prepareReturn, storage.returnFor),
+    prepareValue: node => observe("value", node, storage.prepareValue, storage.valueFor),
+    prepareOperand: node => observe("operand", node, storage.prepareOperand, storage.operandFor),
+    prepareInvocation: node => observe("invocation", node, storage.prepareInvocation, storage.invocationCallableFor),
+    valueFor: storage.valueFor,
+    operandFor: storage.operandFor,
+    invocationCallableFor: storage.invocationCallableFor,
     subjectFor: storage.subjectFor,
     boundSubjectFor: storage.boundSubjectFor,
     invocationReturnFor: storage.invocationReturnFor,
@@ -152,7 +187,7 @@ export function inspect(value: string, word: string): boolean { return value.inc
     sourceOccurrences: construction.sourceOccurrences,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: constructionInput.lexicalFunctions,
     structuralShapes: context.structuralShapes, adapterFlows: Object.freeze([]), nativeStorage, nativeProducers });
-  return { ast, records, sourceStorage, declaration, owner, metadata, invocation, operand, calls, outcomes,
+  return { ast, records, sourceStorage, declaration, owner, metadata, invocation, directInvocation, operand, calls, outcomes,
     physical, request, input, sealedRequests: () => sealedRequests, close: () => { open = false; } };
 }
 
@@ -204,6 +239,47 @@ test("all four required runtime roles materialize the exact original checked sub
       `${request.kind}: early and final views never create a second cache or replay the selector`);
   }
   assert.equal(current.calls.length, requests.length, "all repeated view reads leave exactly the four real required selections");
+});
+
+test("an invented invocation-storage request for a direct native function is rejected rather than fabricated", () => {
+  const current = fixture();
+  const operation = current.records.targetOperation.get(current.directInvocation);
+  assert.equal(operation?.kind === "source-call" && operation.target.form === "function", true,
+    "the original owner(true) source retains its direct native ABI");
+  const result = completeLifecycle(current.input([current.request("invocation", current.directInvocation)]), current.physical);
+  assert.equal(result.kind, "rejected", "only actual callable storage roles can be required");
+  assert.equal("value" in result, false, "no fabricated or partial storage publication");
+  assert.equal(result.diagnostics.length === 1 && result.diagnostics[0].sourceNode === current.directInvocation &&
+    result.diagnostics[0].message === "Native callable invocation has no exact selected storage contract.", true,
+  "the precise original direct call and missing actual storage premise are preserved");
+});
+
+test("earlier actual metadata preparation and lifecycle publication share one selection without admitting cached-only roles", () => {
+  const current = fixture();
+  const request = current.request("value", current.declaration);
+  const input = current.input([request]);
+  assert.equal(input.nativeStorage.valueFor(current.declaration).kind, "unresolved", "a read before preparation does not select storage");
+  assert.equal(current.calls.length, 0, "the superseded computing read form performs no analysis");
+  const selected = input.nativeStorage.prepareValue(current.declaration);
+  const metadataOnly = input.nativeStorage.prepareValue(current.operand);
+  assert.equal(selected.kind !== "unresolved" && metadataOnly.kind !== "unresolved", true,
+    "both existing checked metadata questions complete at their actual construction owner");
+  const count = current.calls.length;
+  const lifecycle = createRustPhysicalCallableLifecycle(input);
+  assert.equal(lifecycle.prepared.valueFor(current.declaration) === selected, true,
+    "the requested early reader sees the identical already prepared data");
+  assert.equal(lifecycle.prepared.valueFor(current.operand).kind, "unresolved",
+    "an attempted metadata key is not an actual emitted runtime-role request");
+  current.physical.closeAdmission();
+  const result = lifecycle.complete(current.physical);
+  assert.equal(result.kind, "resolved", "one canonical preparation supplies the finished lifecycle");
+  assert.equal(current.calls.length, count, "completion does not repeat either successful metadata selection");
+  assert.equal(result.value.nativeStorage.valueFor(current.declaration) === selected, true,
+    "terminal publication keeps the original completed data object");
+  assert.equal(result.value.nativeStorage.valueFor(current.operand).kind, "unresolved",
+    "publication does not infer a runtime demand from successful cached metadata");
+  for (const name of ["prepareValue", "prepareOperand", "prepareInvocation", "prepareReturn"])
+    assert.equal(name in result.value.nativeStorage, false, `${name}: construction is not published`);
 });
 
 test("distinct actual contexts retain one canonical subject selection without rebinding", () => {
@@ -324,8 +400,8 @@ test("explicit producer requests retain every actual checked source corresponden
       result.value.nativeProducers.invocationResultFor(request.declaration)), true, "the actual completed result is retained");
     assert.equal(rustTargetTypeRefEquals(signature.error,
       result.value.nativeProducers.errorFor(request.declaration, "invoke")), true, "the exact native invocation error identity is retained");
-    assert.equal(physical.genericArguments?.[0]?.kind === "lifetime" &&
-      rustLifetimesEqual(physical.genericArguments[0].lifetime, logical.lifetime), true,
+    const lifetime = rustNamedTypeCarrierValue(physical)?.genericArguments?.[0];
+    assert.equal(lifetime?.kind === "lifetime" && rustLifetimesEqual(lifetime.lifetime, logical.lifetime), true,
     "the selected native construction lifetime is retained, never defaulted");
   }
   assert.equal(current.calls.length, 0, "producer correspondence never becomes a synthetic runtime storage request");
@@ -370,6 +446,7 @@ test("missing actual result and pending actual error selection are rejected as w
   for (const [label, options, reason] of [
     ["result", { missingResult: true }, "A required native callable producer has no completed exact invocation result."],
     ["errors", { pendingErrors: true }, "Native retained constructors require their completed source-error ABI selection."],
+    ["missing completed error", { missingError: true }, "A required native callable producer has no completed exact invocation error."],
   ]) {
     const current = fixture(options);
     const request = requiredOwner(current, label);
@@ -514,6 +591,18 @@ test("the removed node-inventory API is rejected rather than accepted as a hidde
   assert.equal(current.calls.length, 0, "removed-form rejection precedes every storage query");
 });
 
+test("the retired implicit-computation construction input is rejected before any role is selected", () => {
+  const current = fixture();
+  const input = current.input([]);
+  const { prepareValue, prepareOperand, prepareInvocation, ...retired } = input.nativeStorage;
+  assert.equal([prepareValue, prepareOperand, prepareInvocation].every(value => typeof value === "function"), true,
+    "the current construction contract supplies every explicit preparation owner");
+  assert.throws(() => createRustPhysicalCallableLifecycle({ ...input, nativeStorage: retired }),
+    /requires explicit construction preparation for every runtime selection role/u,
+    "read-only or superseded inputs cannot reopen analysis through a lookup");
+  assert.equal(current.calls.length, 0, "removed construction input rejection precedes all runtime selection");
+});
+
 test("required stored native Futures retain their original physical producer through aliases and return", () => {
   const checked = checkedSource(`
 export async function first(): Promise<boolean> { return true; }
@@ -616,9 +705,9 @@ export function compare(): boolean {
     sourceStorage: context.sourceStorage, requests: Object.freeze(uses), sourceOccurrences: construction.sourceOccurrences,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: checked.input.lexicalFunctions,
     structuralShapes: context.structuralShapes, adapterFlows: Object.freeze([]), nativeProducers: construction.producers,
-    nativeStorage: Object.freeze({ ...construction.storage, valueFor(node) {
+    nativeStorage: Object.freeze({ ...construction.storage, prepareValue(node) {
       earlySelections.push(node);
-      return construction.storage.valueFor(node);
+      return construction.storage.prepareValue(node);
     } }) });
   const expectedSubjects = new Set(uses.map(use => use.subject));
   assert.equal(earlySelections.length, expectedSubjects.size, "every required generic value is selected exactly once before family admission closes");

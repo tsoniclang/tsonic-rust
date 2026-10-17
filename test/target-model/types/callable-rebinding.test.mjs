@@ -54,7 +54,8 @@ test("generic and frame signature finalization retain body-only captured type bi
   assert.equal(rustTargetTypeRefEquals(protocol.parameters[0], int32), true);
   assert.equal(rustTargetTypeRefEquals(protocol.parameters[1], int64), true);
   assert.equal(rustTargetTypeRefEquals(protocol.result, bool), true);
-  assert.equal(rustGenericCallableValue(selected).environment.some(type => type.identity === captured.identity), true);
+  assert.equal(rustGenericCallableValue(selected).retainedEnvironment.some(type => type.identity === captured.identity), true);
+  assert.equal(rustGenericCallableValue(selected).environment.length, 0, "body-only storage is not an invocation parameter");
   const frame = rustFrameCallableTargetType([int32], int32, owner, [captured]);
   const rebound = rebindRustCallableCarrier(frame, [int64], bool);
   assert.equal(rustFrameCallableValue(rebound).environment.some(type => type.identity === captured.identity), true);

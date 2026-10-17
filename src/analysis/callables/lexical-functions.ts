@@ -232,7 +232,7 @@ export function finalizeRustLexicalFunctionQueries(
       if (carrier === undefined) continue;
       const selected = parameter !== undefined ? nativeStorage.parameterFor(node)
         : records.sourceCallableReturn.get(node) !== undefined ? nativeStorage.prepareReturn(node)
-        : nativeStorage.valueFor(node);
+        : nativeStorage.prepareValue(node);
       if (selected.kind === "unresolved") { failures.set(declaration, selected.reason); continue; }
       const generic = rustTargetGenericReferences(selected.carrier);
       for (const identity of [...generic.typeIdentities, ...generic.lifetimeIdentities]) {

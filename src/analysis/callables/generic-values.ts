@@ -12,7 +12,7 @@ import type { RustNamePlan } from "../../target-model/names/model.js";
 
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
 import type { RustSourceCallableSpecializationIssue } from "./specializations.js";
-import { sourceCallableDefinitionIsDiscarded, sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceDeclarationIsModuleScoped, type SourceProgramNavigation } from "@tsonic/target-api/source";
 import { isRustCopyCarrier } from "../../target-model/types/index.js";
 
 import { createRustGenericCallableFlowIndex } from "./generic-callable-flow.js";
@@ -86,8 +86,6 @@ export function createRustGenericCallablePlan(
   };
   const visit = (node: Node): void => {
     if (!isNativeNode(node)) return;
-    if ((ast.is.IsArrowFunction(node) || ast.is.IsFunctionExpression(node)) &&
-      sourceCallableDefinitionIsDiscarded(node, ast)) return;
     for (const name of [names.nameForDeclaration(node), names.functionNameForDeclaration(node), names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
     }
@@ -148,6 +146,9 @@ export function createRustGenericCallablePlan(
         if (argument.kind === "type-parameter") substitutions.set(argument.identity,
           value.signature.environmentParameters[index]!);
       }
+      const retainedIdentities = new Set(value.retainedEnvironment.flatMap(rustTargetTypeParameterIdentities));
+      const captureIdentities = new Set([...value.signature.environmentParameters.map(parameter => parameter.identity),
+        ...retainedIdentities]);
       const captures = capture?.captures.map(selected => Object.freeze({ ...selected,
         storageCarrier: snapshotClosedMetadata(substituteRustTargetTypeParameters(selected.carrier, substitutions)),
       }));
@@ -159,7 +160,7 @@ export function createRustGenericCallablePlan(
       }));
       if (sourceFileName.length === 0 || capture === undefined || captures === undefined || receiverFields === undefined || receivers === undefined ||
         capture.recursiveDeclaration !== undefined || [...captures, ...receiverFields, ...receivers].some(selected =>
-          rustTargetTypeParameterIdentities(selected.storageCarrier).some(identity => !value.signature.environmentParameters.some(parameter => parameter.identity === identity)))) {
+          rustTargetTypeParameterIdentities(selected.storageCarrier).some(identity => !captureIdentities.has(identity)))) {
         issues.push({ subject: node, message: "A generic callable environment has no exact closed capture contract; recursive or hidden existential captures are not erased." });
       } else {
         const creation = ast.is.IsFunctionDeclaration(node) && sourceDeclarationIsModuleScoped(node, ast)

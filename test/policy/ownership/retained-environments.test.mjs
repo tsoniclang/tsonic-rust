@@ -106,6 +106,44 @@ export function make<Value>(value: Value, unused: Value) { return wrap(value); }
   }
 });
 
+for (const stored of [false, true]) {
+  test(`constructor source retention follows its actual instance ${stored ? "stored" : "invoked-only"} callback`, () => {
+    const context = fixture(`
+class Box {
+  ${stored ? "readonly callback: () => number;" : "readonly value: number;"}
+  constructor(callback: () => number, unused: () => number) {
+    ${stored ? "this.callback = callback;" : "this.value = callback();"}
+  }
+}
+export function create(callback: () => number, unused: () => number): Box { return new Box(callback, unused); }
+`);
+    const declaration = context.sourceStorage.nodes.find(node => context.source.ast.is.IsConstructorDeclaration(node));
+    assert.equal(declaration !== undefined, true, "the actual checked constructor owns both formal inputs");
+    const parameters = context.source.ast.parameters(declaration);
+    const selected = context.queries.environmentFor(declaration);
+    assert.equal(selected.kind, stored ? "selected" : "none",
+      "constructor retention follows the native instance receiver rather than a nonexistent ordinary return value");
+    if (stored) {
+      assert.equal(selected.environment.parameters.length, 1, "only the actually stored callback is retained");
+      assert.equal(selected.environment.parameters[0] === parameters[0], true, "the original constructor formal owns the storage lifetime");
+      assert.equal(selected.environment.lifetime.kind, "parameter", "an actual stored callback is never promoted to static");
+    }
+    assert.equal(context.queries.environmentFor(declaration) === selected, true,
+      "one constructor-owned source selection is immutable and reused");
+    const callback = rustCallableTargetType([], { kind: "source-primitive", name: "float64" });
+    const closed = closeRustRetainedParameter(parameters[0], callback, { ...context, ast: context.source.ast,
+      retainedEnvironments: context.queries });
+    assert.equal(closed !== undefined, true, "the same complete source input contract closes before captured callbacks inspect it");
+    assert.equal(rustCallableProtocol(closed).lifetime === (stored ? selected.environment.lifetime : rustCallableProtocol(callback).lifetime), true,
+      "source retention changes only the stored input's actual environment, not a merely invoked callback");
+    const unavailable = { ...context, ast: context.source.ast, retainedEnvironments: {
+      ...context.queries, environmentFor: () => ({ kind: "unresolved", reason: "missing actual constructor instance storage" }),
+    } };
+    assert.equal(closeRustRetainedParameter(parameters[0], callback, unavailable) === undefined, true,
+      "a missing constructor storage proof remains unresolved rather than an infallible or static default");
+  });
+}
+
 test("returned source method traversal stays bounded and never invokes an accessor", () => {
   const source = `export function make<Value>(value: Value) { return { read(): Value { return value; } }; }`;
   const bounded = fixture(source, undefined, 2);

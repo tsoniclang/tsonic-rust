@@ -33,6 +33,7 @@ test("physical object analysis consumes the exact presealed receiver storage pla
   });
   const plan = createRustObjectRepresentationPlan({
     ast: {}, navigation: {}, semantics: {}, sourceFiles: [], projectTypes: { definitions: [] },
+    sourceStorage: { subjects: [] },
     isNativeNode: node => nativeNodes.has(node),
     receiverStorage, valueWrites: new Set(), hasPromotedStorage: () => false,
     hasMutableStorageUse: () => false,

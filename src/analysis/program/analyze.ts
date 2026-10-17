@@ -365,6 +365,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   );
   context.objectRepresentations.initialize({
     receiverStorage,
+    sourceStorage: context.sourceStorage,
     ast,
     navigation: context.source.navigation,
     semantics: context.source.semantics,

@@ -31,7 +31,7 @@ export function rebindRustCallableCarrier(
   }
   const generic = rustGenericCallableValue(carrier);
   if (generic !== undefined) return rustGenericCallableTargetType(options.typeParameters ?? generic.signature.typeParameters,
-    parameters, result, generic.origin, options.environment ?? generic.environment);
+    parameters, result, generic.origin, options.environment ?? [...generic.environment, ...generic.retainedEnvironment]);
   const frame = rustFrameCallableValue(carrier);
   if (frame !== undefined) {
     if (options.environment !== undefined || options.typeParameters !== undefined && options.typeParameters.length !== 0)

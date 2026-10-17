@@ -1,5 +1,7 @@
 import type { TargetTypeRef } from "../model.js";
-import { hasExactObjectKeys, snapshotClosedMetadata } from "../../metadata/closed-data.js";
+import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
+import { isRustTargetTypeRef } from "../equality.js";
+import { rustTargetGenericReferences } from "./generic-references.js";
 import {
   isRustCallableOrigin, isRustCallableSignatureBinding, rustCallableSignatureBinding, rustCallableSignatureProtocol,
   type RustCallableOrigin, type RustCallableSignature,
@@ -12,6 +14,7 @@ export interface RustGenericCallableValue {
   readonly origin: RustCallableOrigin;
   readonly signature: RustCallableSignature;
   readonly environment: readonly TargetTypeRef[];
+  readonly retainedEnvironment: readonly TargetTypeRef[];
   readonly physical?: RustGenericCallableStorage;
 }
 
@@ -22,9 +25,15 @@ export function rustGenericCallableTargetType(
   origin: RustCallableOrigin,
   environmentInputs: readonly TargetTypeRef[] = [],
 ): TargetTypeRef | undefined {
-  const binding = rustCallableSignatureBinding(typeParameters, parameters, result, environmentInputs);
-  return binding === undefined || !isRustCallableOrigin(origin) || typeParameters.length === 0 &&
-    rustNativeFutureCallableResult(result) === undefined ? undefined : rustGenericCallableCarrier({ origin, ...binding });
+  const binding = rustCallableSignatureBinding(typeParameters, parameters, result);
+  if (binding === undefined || !isRustCallableOrigin(origin) ||
+    !isDenseDataArray(environmentInputs) || !environmentInputs.every(isRustTargetTypeRef) ||
+    typeParameters.length === 0 && rustNativeFutureCallableResult(result) === undefined) return undefined;
+  const invocation = new Set([...typeParameters, ...binding.environment]
+    .flatMap(type => rustTargetGenericReferences(type).typeIdentities));
+  const retainedEnvironment = rustTargetGenericReferences({ kind: "tuple", elements: environmentInputs })
+    .typeParameters.filter(parameter => !invocation.has(parameter.identity));
+  return rustGenericCallableCarrier({ origin, ...binding, retainedEnvironment });
 }
 
 export function rustGenericCallableCarrier(value: RustGenericCallableValue): TargetTypeRef {
@@ -37,11 +46,12 @@ export function rustGenericCallableValue(carrier: TargetTypeRef | undefined): Ru
   if (carrier?.kind !== "target-specific" || carrier.target !== "rust" || carrier.name !== "generic-callable") return undefined;
   const value = carrier.value;
   if (typeof value !== "object" || value === null || Array.isArray(value) ||
-    !hasExactObjectKeys(value, ["environment", "signature", "origin",
+    !hasExactObjectKeys(value, ["environment", "retainedEnvironment", "signature", "origin",
       ...(Object.prototype.hasOwnProperty.call(value, "physical") ? ["physical"] : [])])) return undefined;
   const selected = value as Partial<RustGenericCallableValue>;
   const binding = { signature: selected.signature, environment: selected.environment };
   if (!isRustCallableOrigin(selected.origin) || !isRustCallableSignatureBinding(binding) ||
+    !isDenseDataArray(selected.retainedEnvironment) || !selected.retainedEnvironment.every(isRustTargetTypeRef) ||
     Object.prototype.hasOwnProperty.call(value, "physical") && !isRustGenericCallableStorage(selected.physical) ||
     binding.signature.typeParameters.length === 0 && rustNativeFutureCallableResult(binding.signature.result) === undefined) return undefined;
   return selected as RustGenericCallableValue;

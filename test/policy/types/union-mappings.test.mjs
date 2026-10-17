@@ -11,8 +11,11 @@ import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operati
 import { validateRustFinalizedOperationAbi } from "../../../dist/analysis/operations/finalized-operation/validation.js";
 import { validateValueConversion } from "../../../dist/providers/packages/validation/carriers.js";
 import { rustJsIntlGroupingTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
-import { fakeAstReader, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
+import { fakeCompileInput, fakeSourceFile, fakeStatement } from "../../helpers/fake-compile-input.mjs";
 import { visitConversionContract } from "../../../dist/analysis/reachability/generated-item-usage-helpers.js";
+import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 test("union mappings require complete exact coverage and reject forged or numeric-changing arms", () => {
   const integer = rustSourcePrimitiveTargetType("int64");
@@ -65,7 +68,15 @@ test("union mappings require complete exact coverage and reject forged or numeri
   assert.equal(validateRustFinalizedOperationAbi(abi), false);
   const node = fakeStatement({ kindName: "Identifier", pos: 0, end: 5 });
   const sourceFile = fakeSourceFile({ fileName: "/src/index.ts", text: "value", statements: [node] });
-  const context = { input: { program: { source: { ast: fakeAstReader([sourceFile]) }, typeDefinitions: definitions,
+  const fixture = fakeCompileInput({ sourceFiles: [sourceFile] });
+  const storage = createSourceStorageQuery(fixture.source, [sourceFile]);
+  const records = createRustRecordFixture();
+  assert.equal(storage.failureReason() === undefined, true, "the original union fixture has a complete checked source domain");
+  const native = createRustNativeCallableInputPlan({ ast: fixture.source.ast, storage, nativeNodes: storage.nodes,
+    records, definitions, sourcePackages: fixture.sourcePackages, usedNames: new Set() });
+  assert.equal(native.inputs.length === 0 && native.protocols.length === 0 && native.calls.length === 0, true,
+    "the actual union fixture has no native callable input or protocol");
+  const context = { input: { program: { source: fixture.source, typeDefinitions: definitions, records, callableValues: { native },
     names: { nameForSourceType: (_file, name) => name }, configuration: { edition: "2024" } } },
     sourceFile, diagnostics: [], moduleName: "index", moduleNameByFileName: new Map([["/src/index.ts", "index"]]),
     externalCrateNameByFileName: new Map() };

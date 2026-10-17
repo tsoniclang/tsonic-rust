@@ -74,7 +74,8 @@ export function prepareRustGenericCallableInvocation(
       if (effect[channel] !== "fallible") continue;
       const error = callableValues.nativeProducers.errorFor(declaration, channel === "invocation" ? "invoke" : 0);
       if (error === undefined) return undefined;
-      const bound = activation.kind === "unresolved" ? undefined : sourceErrors.bindingsFor(node, declaration, [error], {
+      const bound = activation.kind === "unresolved" ? undefined : sourceErrors.bindingsFor(node, declaration,
+        [{ kind: "carrier", carrier: error }], {
         storageBindings: activation.bindings, genericBindings: generics.bindings,
       });
       const errorType = bound?.substitute(error);

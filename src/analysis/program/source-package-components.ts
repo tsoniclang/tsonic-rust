@@ -348,7 +348,7 @@ export function validateRustGenericSourcePackageComponents(
       if (!context.isNativeNode(node)) return;
       if (IsTypeSyntaxNode(context.ast, node)) return;
       if (context.records.typeAliasDeclaration.get(node)?.kind === "erased") return;
-      inspectStorage(node, context.records.runtimeCarrier.get(node)?.carrier, () => nativeStorage.valueFor(node));
+      inspectStorage(node, context.records.runtimeCarrier.get(node)?.carrier, () => nativeStorage.prepareValue(node));
       inspectStorage(node, context.records.sourceCallableReturn.get(node)?.returnCarrier, () => nativeStorage.prepareReturn(node));
       const parameter = context.ast.is.IsParameterDeclaration(node)
         ? context.records.sourceParameterAbi.get(node)?.parameterCarrier : undefined;

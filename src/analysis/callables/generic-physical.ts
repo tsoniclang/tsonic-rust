@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries, SourceStorageSubject } from "@tsonic/target-api/analysis";
-import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { sourceEnclosingCallable, sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { closedMetadataEquals, closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
 import { rustGenericCallableSignaturesMatch } from "../../target-model/conversions/generic-callable.js";
@@ -11,15 +11,16 @@ import { failTargetAnalysisInvariant, failTargetPlannerInvariant } from "@tsonic
 import { rustGenericCallableEnvironment, type RustGenericCallableEnvironment } from "./generic-environments.js";
 import type { RustNativeCaptureConstruction } from "./native-captures.js";
 import type { RustNativeCallableInput, RustNativeCallableInputPlan } from "./native-inputs.js";
-import type { RustNativeStorageSelection } from "./native-storage.js";
+import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustGenericCallableDefinition, RustGenericCallableImplementation } from "./generic-values.js";
-import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
+import { substituteRustTargetGenericArgument, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { allocateRustGeneratedName } from "../../target-model/names/generated.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustGenericCallableMemberBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
 import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
+import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 
 export interface RustGenericCallablePhysicalMember {
   readonly implementation: RustGenericCallableImplementation;
@@ -77,6 +78,7 @@ export interface RustGenericCallablePhysicalInput {
   readonly captures: RustNativeCaptureConstruction;
   readonly native: Pick<RustNativeCallableInputPlan, "inputs">;
   readonly boundSubjectFor: (subject: SourceStorageSubject, carrier: TargetTypeRef, bindings: SourceStorageBindings) => RustNativeStorageSelection;
+  readonly genericBindingsFor: RustNativeStoragePlan["genericBindingsFor"];
 }
 
 export function createRustGenericCallablePhysicalPlan(
@@ -193,6 +195,7 @@ export function createRustGenericCallablePhysicalPlan(
         parameters: snapshotClosedMetadata(parameters), members: admitted,
         carrier: rustGenericCallableCarrier({ origin: family.origin, signature: family.signature,
           environment: family.signature.environmentParameters,
+          retainedEnvironment: parameters.flatMap(argument => argument.kind === "type" ? [argument.type] : []),
           physical: { ownerFileName, members, arguments: parameters } }),
       });
       definitions.set(identity, definition);
@@ -265,6 +268,7 @@ export function createRustGenericCallablePhysicalPlan(
       const argumentIndexes = new Map<string, number>();
       const selectedInputs = new Set<RustNativeCallableInput>();
       const nestedSources: RustPhysicalCallableSourceSelection[] = [];
+      const retainedBindings = new Map<string, TargetTypeRef>();
       for (const producer of producers) {
         if (input.storage.boundOriginsFor(producer.subject, producer.bindings).kind === "unresolved") return undefined;
         if (producer.subject.projection.length !== 0) return undefined;
@@ -274,16 +278,31 @@ export function createRustGenericCallablePhysicalPlan(
         const original = implementation === undefined ? undefined : rustGenericCallableValue(implementation.carrier);
         if (implementation === undefined || environment === undefined || origin === undefined || original === undefined ||
           !family.implementations.includes(implementation) || original.environment.length !== value.environment.length) return undefined;
+        const owner = sourceEnclosingCallable(input.ast.parent(implementation.declaration), input.ast);
+        const bound = input.genericBindingsFor(owner ?? implementation.declaration, producer.bindings);
+        if (bound.kind === "unresolved") return undefined;
+        for (const retained of original.retainedEnvironment) {
+          const selected = substituteRustTargetTypeParameters(retained, bound.bindings.types);
+          retainedBindings.set(closedMetadataKey(selected), selected);
+        }
         const substitutions = new Map(original.environment.flatMap((argument, index): [string, TargetTypeRef][] =>
           argument.kind === "type-parameter" ? [[argument.identity, value.environment[index]!]] : []));
+        const retained = new Set([...original.environment, ...original.retainedEnvironment]
+          .flatMap(type => rustTargetGenericReferences(type).typeIdentities));
         const memberArguments: RustTargetGenericArgument[] = [];
         for (const argument of environment.arguments) {
           if (argument.kind !== "type" || argument.type.kind !== "type-parameter") {
-            memberArguments.push(argument);
+            memberArguments.push(substituteRustTargetGenericArgument(argument,
+              bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
             continue;
           }
           const selectedInput = nativeInputs.get(argument.type.identity);
-          if (selectedInput === undefined) return undefined;
+          if (selectedInput === undefined) {
+            if (!retained.has(argument.type.identity)) return undefined;
+            memberArguments.push(substituteRustTargetGenericArgument(argument,
+              bound.bindings.types, bound.bindings.lifetimes, bound.bindings.consts));
+            continue;
+          }
           const selected = input.boundSubjectFor(selectedInput.subject,
             substituteRustTargetTypeParameters(selectedInput.carrier, substitutions), producer.bindings);
           if (selected.kind === "unresolved") return undefined;
@@ -309,7 +328,8 @@ export function createRustGenericCallablePhysicalPlan(
       }
       const selected = [...members.values()].map(value => value.member);
       const physicalOwner = selected.length === 1 ? selected[0]!.origin.fileName : ownerFileName;
-      const result = rustGenericCallableCarrier({ ...value, physical: { ownerFileName: physicalOwner, members: selected, arguments: arguments_ } });
+      const result = rustGenericCallableCarrier({ ...value, retainedEnvironment: [...retainedBindings.values()],
+        physical: { ownerFileName: physicalOwner, members: selected, arguments: arguments_ } });
       const admitted = select(result, inventory === undefined ? "admit" : "prepare");
       if (admitted === undefined) return undefined;
       const sources: Extract<RustPhysicalCallableSourceSelection, { readonly kind: "complete" | "open" }>["producers"][number][] = [];

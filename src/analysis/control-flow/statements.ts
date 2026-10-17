@@ -160,6 +160,7 @@ function recordVariableDeclarationListFacts(
           "A native binding requires its authored type and finalized Rust storage carrier before initializer admission.",
           authoredType, ["target.capability=rust.native-binding-carrier"]);
       }
+      walk.rejectedExpressions.add(declaration);
       continue;
     }
     const predeclared = walk.context.records.runtimeCarrier.get(declaration)?.carrier;
@@ -182,6 +183,17 @@ function recordVariableDeclarationListFacts(
       appendRustDiagnostic(walk, "RUST_INITIALIZER_CARRIER_MISMATCH",
         "The initializer cannot be represented by the declaration's exact Rust carrier.", initializer,
         ["target.capability=rust.initializer-carrier"]);
+      walk.rejectedExpressions.add(declaration);
+      continue;
+    }
+    if (initializer !== undefined && (initializerCarrier === undefined || walk.rejectedExpressions.has(initializer))) {
+      if (!walk.rejectedExpressions.has(initializer) && !walk.rejectedExpressions.has(declaration)) {
+        appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
+          "A native binding requires an admitted source type and one finalized Rust value carrier.", declaration,
+          ["target.capability=rust.native-binding-carrier"]);
+      }
+      walk.rejectedExpressions.add(declaration);
+      continue;
     }
     const effective = initializer === undefined ? selected ?? predeclared
       : rustEffectiveValueCarrier(walk.context.records, initializer) ?? initializerCarrier ?? selected ?? predeclared;

@@ -1,4 +1,4 @@
-import type { RustLifetimeRef } from "./model.js";
+import type { RustLifetimeBinder, RustLifetimeParameterContract, RustLifetimeRef } from "./model.js";
 
 export function rustLifetimeKey(lifetime: RustLifetimeRef): string {
   switch (lifetime.kind) {
@@ -75,6 +75,39 @@ export function rustCallScopedElisionLifetime(
     kind: "call-scoped-elision",
     callIdentity,
     parameterIdentity,
+  });
+}
+
+export function rustFunctionValueLifetimeBinding(
+  declarationIdentity: string,
+  parameters: readonly RustLifetimeParameterContract[],
+): { readonly binder: RustLifetimeBinder; readonly substitutions: ReadonlyMap<string, RustLifetimeRef> } | undefined {
+  if (declarationIdentity.length === 0 || parameters.length === 0 ||
+    parameters.some(parameter => parameter.lifetime.kind !== "parameter") ||
+    new Set(parameters.map(parameter => rustLifetimeKey(parameter.lifetime))).size !== parameters.length) return undefined;
+  const binderIdentity = `function-value-lifetime-binder\0${declarationIdentity}`;
+  const lifetimes = parameters.map((parameter, index) => ({
+    parameter,
+    bound: Object.freeze({
+      kind: "bound" as const,
+      binderIdentity,
+      identity: `${binderIdentity}\0${index}`,
+      name: parameter.lifetime.name,
+    }),
+  }));
+  const substitutions = new Map<string, RustLifetimeRef>(lifetimes.map(({ parameter, bound }) => [
+    rustLifetimeKey(parameter.lifetime), bound,
+  ] as const));
+  return Object.freeze({
+    binder: Object.freeze({
+      identity: binderIdentity,
+      parameters: Object.freeze(lifetimes.map(({ parameter, bound }) => Object.freeze({
+        lifetime: bound,
+        outlives: Object.freeze(parameter.outlives.map(lifetime =>
+          lifetime.kind === "parameter" ? substitutions.get(rustLifetimeKey(lifetime)) ?? lifetime : lifetime)),
+      }))),
+    }),
+    substitutions,
   });
 }
 

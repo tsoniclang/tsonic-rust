@@ -43,6 +43,10 @@ import { retainRustCallableStructuralStorage } from "./structural-instantiations
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
 import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { rustRetainedValueLifetime } from "../../ownership/retained-environments.js";
+import { rustCallableInvocationSignaturesMatch } from "../../../target-model/conversions/callable-input.js";
+import { selectRustCallableConversion } from "../../../target-model/conversions/callable.js";
+import { rustEnclosingStorageContract, selectRustSuspendedStorageLifetime } from "../../ownership/suspended-storage.js";
+import type { RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -124,7 +128,8 @@ export function resolveRustCallableStorageCarrier(
         : carrier;
     }
   }
-  return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
+  if (carrier === undefined || subject === undefined) return carrier;
+  const selectedStorage = options.callableStorageCarrier(subject, carrier,
     (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),
     owner => {
       const receiver = context.sourceStorage.subject(owner, "receiver");
@@ -139,7 +144,7 @@ export function resolveRustCallableStorageCarrier(
       if (template === undefined) return undefined;
       const references = rustTargetGenericReferences(template);
       let instance: TargetTypeRef | undefined;
-      let selectedProtocol: ReturnType<typeof rustCallableProtocol>;
+      const selectedCarriers: TargetTypeRef[] = [];
       for (const producer of producers.producers) {
         const checkedTemplate = context.sourceStorage.typeFor(producer.subject);
         if (checkedTemplate.kind === "unresolved") return undefined;
@@ -147,11 +152,8 @@ export function resolveRustCallableStorageCarrier(
           currentSemantics: context.semanticsFor(producer.subject.node), sourceStorageSubject: undefined,
           sourceTypeParameterSubstitutions: new Map(), callableRepresentation: "signature" }, options, new Set());
         const templateProtocol = rustCallableProtocol(templateCarrier);
-        if (templateProtocol === undefined || selectedProtocol !== undefined &&
-          (selectedProtocol.parameters.length !== templateProtocol.parameters.length ||
-            !selectedProtocol.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, templateProtocol.parameters[index])) ||
-            !rustTargetTypeRefEquals(selectedProtocol.result, templateProtocol.result))) return undefined;
-        selectedProtocol = templateProtocol;
+        if (templateCarrier === undefined || templateProtocol === undefined) return undefined;
+        selectedCarriers.push(templateCarrier);
         const bound = context.sourceStorage.boundOriginsFor(receiver.subject, producer.bindings);
         if (bound.kind === "unresolved" || bound.subjects.length === 0) return undefined;
         for (const actual of bound.subjects) {
@@ -163,15 +165,50 @@ export function resolveRustCallableStorageCarrier(
           instance = carrier;
         }
       }
-      if (instance === undefined || selectedProtocol === undefined) return undefined;
+      if (instance === undefined || protocol === undefined || selectedCarriers.length === 0) return undefined;
       const bindings = inferRustTargetGenericBindings(template, instance, {
         typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
         constIdentities: new Set(references.constIdentities),
       });
       if (bindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(template,
         bindings.types, bindings.lifetimes, bindings.consts), instance)) return undefined;
-      return Object.freeze({ instance: template, parameters: selectedProtocol.parameters, result: selectedProtocol.result, bindings });
+      const destination = substituteRustTargetGenerics(carrier, bindings.types, bindings.lifetimes, bindings.consts);
+      for (const selected of selectedCarriers) {
+        const source = substituteRustTargetGenerics(selected, bindings.types, bindings.lifetimes, bindings.consts);
+        if (rustCallableInvocationSignaturesMatch(source, destination)) continue;
+        const conversion = selectRustCallableConversion(source, destination, () => undefined, context.typeDefinitions);
+        if (conversion === undefined || conversion.result.kind !== "identity" ||
+          conversion.parameters.some(parameter => parameter.kind !== "identity")) return undefined;
+      }
+      return Object.freeze({ instance: template, parameters: protocol.parameters, result: protocol.result, bindings });
     });
+  const selectedProtocol = rustCallableProtocol(selectedStorage);
+  if (selectedStorage === undefined || selectedProtocol?.lifetime?.kind !== "placeholder" ||
+    subject.kind !== "member" || subject.projection.length !== 0 || !context.ast.is.IsPropertyDeclaration(subject.node))
+    return selectedStorage;
+  const producers = context.sourceStorage.storageProducersFor(subject);
+  if (producers.kind !== "complete" || producers.producers.length === 0) return undefined;
+  const constructions: TargetTypeRef[] = [];
+  for (const producer of producers.producers) {
+    const original = producer.subject;
+    if (original.projection.length !== 0) return undefined;
+    let lifetime: RustLifetimeRef | undefined;
+    if (original.kind === "input" && context.ast.is.IsParameterDeclaration(original.node)) {
+      const declaration = context.ast.parent(original.node);
+      if (declaration === undefined || options.callableParameterCarriers(declaration) === undefined) return undefined;
+      lifetime = rustCallableProtocol(context.records.sourceParameterAbi.get(original.node)?.parameterCarrier)?.lifetime;
+    } else if (original.kind === "value" && context.ast.body(original.node) !== undefined) {
+      const environment = resolveRustCallableEnvironment(original.node, context, options, resolving);
+      lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(original.node, environment, { context });
+    }
+    if (lifetime === undefined) return undefined;
+    constructions.push(rustCallableTargetType(selectedProtocol.parameters, selectedProtocol.result, lifetime, selectedProtocol.error));
+  }
+  const contract = rustEnclosingStorageContract(subject.node, context.ast, context.sourceLifetimes);
+  const lifetime = selectRustSuspendedStorageLifetime(constructions, contract);
+  if (lifetime === undefined || lifetime.kind === "parameter" && !contract.parameters.some(parameter =>
+    parameter.kind === "lifetime" && parameter.lifetime.identity === lifetime.identity)) return undefined;
+  return rustCallableTargetType(selectedProtocol.parameters, selectedProtocol.result, lifetime, selectedProtocol.error);
 }
 
 function resolveRustCallableSignatureCarrier(
@@ -181,7 +218,8 @@ function resolveRustCallableSignatureCarrier(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const declaration = callable.result.declaration;
-  const retainedMethod = declaration !== undefined && context.ast.is.IsMethodDeclaration(declaration) &&
+  const retainedMethod = context.callableRepresentation !== "signature" &&
+    declaration !== undefined && context.ast.is.IsMethodDeclaration(declaration) &&
     context.ast.body(declaration) !== undefined;
   if (retainedMethod) {
     const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);

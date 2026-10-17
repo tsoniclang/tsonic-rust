@@ -4,6 +4,8 @@ import type { RustTargetGenericArgument, TargetTypeRef } from "../../../target-m
 import { asNode } from "../../identities/selected-source.js";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import { rustCallScopedElisionLifetime, rustLifetimeKey } from "../../../target-model/lifetimes/index.js";
+import { rustFunctionValueLifetimeBinding } from "../../../target-model/lifetimes/identity.js";
+import type { RustLifetimeParameterContract, RustLifetimeRef } from "../../../target-model/lifetimes/index.js";
 
 export function selectRustRuntimeCallableGenerics(
   request: RustCheckedCallSelectionInput,
@@ -11,21 +13,39 @@ export function selectRustRuntimeCallableGenerics(
   context: RustOperationPolicyContext,
 ): readonly RustTargetGenericArgument[] | undefined {
   const selected = request.source.sourceSelectedMethodTypeArguments ?? [];
-  const binder = carrier.kind === "closure" ? carrier.lifetimeBinder : undefined;
+  const binder = carrier.kind === "closure" || carrier.kind === "function-pointer" ? carrier.lifetimeBinder : undefined;
   if (binder === undefined) return selected.length === 0 ? [] : undefined;
   if (selected.length !== binder.parameters.length) return undefined;
+  const declaration = asNode(request.sourceSelectedDeclaration, context);
+  const contract = context.sourceLifetimes.contractFor(declaration);
+  if (contract === undefined || contract.declaration !== declaration) return undefined;
+  const parameters = contract.parameters.filter((parameter): parameter is RustLifetimeParameterContract => parameter.kind === "lifetime");
+  if (parameters.length !== selected.length || parameters.length !== contract.parameters.length) return undefined;
+  const declarationIdentity = declaration === undefined ? undefined : sourceNodeIdentity(context.ast, declaration);
+  const selectedBinder = contract.lifetimeBinder ?? (declarationIdentity === undefined ? undefined
+    : rustFunctionValueLifetimeBinding(declarationIdentity, parameters)?.binder);
+  if (selectedBinder === undefined || selectedBinder.identity !== binder.identity ||
+    selectedBinder.parameters.length !== binder.parameters.length || selectedBinder.parameters.some((parameter, index) => {
+      const actual = binder.parameters[index]!;
+      return rustLifetimeKey(parameter.lifetime) !== rustLifetimeKey(actual.lifetime) ||
+        !sameLifetimes(parameter.outlives, actual.outlives);
+    })) return undefined;
   const call = asNode(request.source.call, context);
   const identity = call === undefined ? undefined : sourceNodeIdentity(context.ast, call);
   if (identity === undefined) return undefined;
   const result = selected.map((argument, index): RustTargetGenericArgument | undefined => {
     const bound = binder.parameters[index]!.lifetime;
-    const parameters = context.currentSemantics.facts.typeSubjects(argument.typeParameter)
+    const expected = parameters[index]!;
+    if (argument.typeParameterName !== expected.sourceName) return undefined;
+    const actualParameters = context.currentSemantics.facts.typeSubjects(argument.typeParameter)
       .flatMap(subject => {
         const parameter = context.sourceLifetimes.parameterFor(asNode(subject, context));
         return parameter === undefined ? [] : [parameter];
       });
-    if (parameters.length === 0 || parameters.some(parameter => parameter.kind !== "lifetime" ||
-      rustLifetimeKey(parameter.lifetime) !== rustLifetimeKey(bound))) return undefined;
+    if (actualParameters.length === 0 || actualParameters.some(parameter => parameter.kind !== "lifetime" ||
+      parameter.declaration !== expected.declaration ||
+      rustLifetimeKey(parameter.lifetime) !== rustLifetimeKey(expected.lifetime) ||
+      !sameLifetimes(parameter.outlives, expected.outlives))) return undefined;
     const lifetime = argument.explicitTypeNode === undefined
       ? rustCallScopedElisionLifetime(identity, rustLifetimeKey(bound))
       : context.sourceLifetimes.resolve(argument.explicitTypeNode);
@@ -33,4 +53,9 @@ export function selectRustRuntimeCallableGenerics(
   });
   return result.some(argument => argument === undefined) ? undefined
     : result as readonly RustTargetGenericArgument[];
+}
+
+function sameLifetimes(left: readonly RustLifetimeRef[], right: readonly RustLifetimeRef[]): boolean {
+  return left.length === right.length && left.every((lifetime, index) =>
+    rustLifetimeKey(lifetime) === rustLifetimeKey(right[index]!));
 }

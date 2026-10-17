@@ -84,7 +84,7 @@ for (const surfaces of [[], ["js"]]) {
     const unresolved = createRustSourceErrorEffectSelection({ context: current.program });
     assert.equal(unresolved.register(effects.nativeErrors), true);
     const bindings = unresolved.bindingsFor(invocation, declaration,
-      effects.nativeErrors.map(source => source.errorType));
+      effects.nativeErrors.map(effect => ({ kind: "source-effect", effect })));
     assert.equal(bindings !== undefined, true, "the actual logical activation is completed before physical payload admission");
     const requiredInputs = { kind: "tuple", elements: inputs.map(input => input.implementation) };
     assert.equal(bindings.complete(requiredInputs, { ...current.program.callableValues.nativeStorage,
@@ -265,7 +265,7 @@ test("source error rebinding rejects unknown identities, mutated carriers and un
   `));
   const selection = createRustSourceErrorEffectSelection({ context: current.program });
   const select = (node, declaration, kind, effects) => selection.edgeFor(declaration, kind, effects,
-    selection.bindingsFor(node, declaration, effects.nativeErrors.map(error => error.errorType)));
+    selection.bindingsFor(node, declaration, effects.nativeErrors.map(effect => ({ kind: "source-effect", effect }))));
   const effects = current.callable("invoke");
   const declaration = current.declaration("invoke");
   const call = current.initializer("output");
@@ -290,7 +290,7 @@ test("completed source rejection channels keep their identity before physical pu
   const declaration = current.declaration("value");
   const source = { identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() };
   const effects = { localErrors: false, nativeErrors: [source] };
-  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [source.errorType]);
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [{ kind: "source-effect", effect: source }]);
   assert.equal(bindings !== undefined, true, "the exact checked source invocation is ready");
   const edge = selection.edgeFor(declaration, "await", effects, bindings);
   assert.equal(edge !== undefined, true, "the source channel is selected without physical readers");
@@ -318,7 +318,7 @@ test("a pending source channel stays deferred even when its payload is already c
     completions++;
     return { identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() };
   }), true, "the original source owns its unresolved identity");
-  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [source.errorType]);
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [{ kind: "source-effect", effect: source }]);
   const edge = selection.edgeFor(declaration, "await", { localErrors: false, nativeErrors: [source] }, bindings);
   assert.equal(edge !== undefined, true, "pending source rebinding is represented explicitly");
   const target = edge.nativeErrors[0].target;
@@ -332,6 +332,110 @@ test("a pending source channel stays deferred even when its payload is already c
   assert.equal(completions, 1, "one pending source is completed once");
 });
 
+function pendingProvenanceFixture() {
+  const current = analyzedFixture(analyzeRustErrorEffects(`
+    export function original(callback: () => number): number { return callback(); }
+    export function bridge(value: number): number { return value; }
+    export function outer(): number { const output = bridge(7); return output; }
+    export function scoped(callback: () => number): number { const retained = bridge(7); return retained + callback(); }
+  `));
+  const original = current.callable("original").nativeErrors[0];
+  const caller = current.callable("scoped").nativeErrors[0];
+  const originalInput = current.program.callableValues.native.inputsFor(current.declaration("original"))[0];
+  const callerInput = current.program.callableValues.native.inputsFor(current.declaration("scoped"))[0];
+  assert.equal(original !== undefined && caller !== undefined && originalInput !== undefined && callerInput !== undefined, true,
+    "the real checked native callbacks own both distinct formal error channels");
+  assert.equal(rustTargetGenericReferences(original.errorType, "metadata").typeIdentities.includes(originalInput.implementation.identity), true,
+    "the pending payload contains the actual original declaration's input identity");
+  assert.equal(originalInput.implementation.identity !== callerInput.implementation.identity, true,
+    "equal native signatures never merge callee and caller source inputs");
+  return { current, original, caller, callerInput, declaration: current.declaration("bridge"),
+    node: current.initializer("output"), scopedNode: current.initializer("retained") };
+}
+
+test("pending source provenance never substitutes for raw, mixed, nonpending or unregistered input evidence", () => {
+  const { current, original, declaration, node } = pendingProvenanceFixture();
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const source = { identity: "test/owned-pending-input", errorType: original.errorType };
+  assert.equal(selection.pending(source, () => ({ identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() })), true,
+    "only the actual pending owner admits the unresolved source identity");
+  const demand = { kind: "source-effect", effect: source };
+  assert.equal(selection.bindingsFor(node, declaration, [demand]) !== undefined, true,
+    "the owned pending channel can retain its foreign callee input until inner completion");
+  const nonpending = { identity: "test/registered-not-pending-input", errorType: original.errorType };
+  assert.equal(selection.register([nonpending]), true, "registration alone records no completion proof");
+  for (const [name, demands] of [
+    ["raw input", [{ kind: "carrier", carrier: original.errorType }]],
+    ["mixed raw input", [demand, { kind: "carrier", carrier: original.errorType }]],
+    ["mixed nested raw input", [demand, { kind: "carrier", carrier: { kind: "tuple", elements: [original.errorType] } }]],
+    ["mixed nonpending input", [demand, { kind: "source-effect", effect: original }]],
+    ["registered nonpending input", [{ kind: "source-effect", effect: nonpending }]],
+    ["unregistered identity", [{ kind: "source-effect", effect: { ...source, identity: "foreign/pending-input" } }]],
+    ["wrong selected carrier", [{ kind: "source-effect", effect: { ...source, errorType: rustJsValueTargetType() } }]],
+    ["removed carrier-only form", [original.errorType]],
+  ]) assert.equal(selection.bindingsFor(node, declaration, demands) === undefined, true,
+    name + ": every callee-input occurrence requires its own exact pending-source proof");
+});
+
+test("pending callee input completion discharges the original identity or remains unresolved", () => {
+  const { current, original, declaration, node } = pendingProvenanceFixture();
+  for (const outcome of ["unavailable", "undischarged", "completed"]) {
+    const selection = createRustSourceErrorEffectSelection({ context: current.program });
+    const source = { identity: "test/pending-input-" + outcome, errorType: original.errorType };
+    let completions = 0;
+    assert.equal(selection.pending(source, () => {
+      completions++;
+      return outcome === "unavailable" ? undefined : outcome === "undischarged" ? original
+        : { identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() };
+    }), true, outcome + ": genuine pending registration");
+    const bindings = selection.bindingsFor(node, declaration, [{ kind: "source-effect", effect: source }]);
+    assert.equal(bindings !== undefined, true, outcome + ": source provenance is ready independently of physical completion");
+    assert.equal(bindings.complete(original.errorType, current.program.callableValues.nativeStorage) === undefined, true,
+      outcome + ": a deferred callee identity is never a completed caller carrier");
+    const edge = selection.edgeFor(declaration, "invoke", { localErrors: false, nativeErrors: [source] }, bindings);
+    assert.equal(edge !== undefined && edge.nativeErrors.length === 1, true, outcome + ": one exact deferred edge");
+    const target = edge.nativeErrors[0].target;
+    assert.equal(completions, 0, outcome + ": the source phase cannot complete physical error payloads");
+    const completed = selection.complete(target, current.program.callableValues.nativeStorage);
+    if (outcome === "completed") {
+      assert.equal(completed?.identity, rustJsRejectionErrorIdentity, "actual inner completion supplies the canonical final channel");
+      assert.equal(rustTargetTypeRefEquals(completed.errorType, rustJsValueTargetType()), true,
+        "the final error carrier contains no retired callee input");
+      assert.equal(selection.complete(target, current.program.callableValues.nativeStorage) === completed, true,
+        "the same completed owner publishes the identical final result once");
+      assert.equal(selection.complete({ ...target, errorType: rustJsValueTargetType() },
+        current.program.callableValues.nativeStorage) === undefined, true,
+      "a successful cached completion never authorizes a different original source carrier");
+      assert.equal(selection.complete({ ...target, identity: "foreign/completed-input" },
+        current.program.callableValues.nativeStorage) === undefined, true,
+      "an equal-looking completed source cannot acquire another registered identity");
+      assert.equal(selection.complete(target, current.program.callableValues.nativeStorage) === completed, true,
+        "rejected foreign evidence cannot replace the original completed object");
+    } else assert.equal(completed === undefined, true, outcome + ": unfinished or still-foreign input evidence cannot publish success");
+    assert.equal(completions, 1, outcome + ": one original completion attempt");
+  }
+});
+
+test("pending inner completion preserves an actually admitted caller formal instead of requiring no free variables", () => {
+  const { current, original, caller, callerInput, declaration, scopedNode } = pendingProvenanceFixture();
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const source = { identity: "test/pending-to-admitted-caller", errorType: original.errorType };
+  assert.equal(selection.pending(source, () => caller), true, "the original pending owner completes into the actual caller scope");
+  const bindings = selection.bindingsFor(scopedNode, declaration, [{ kind: "source-effect", effect: source }]);
+  assert.equal(bindings !== undefined, true, "the caller's exact invocation admits the pending edge");
+  const edge = selection.edgeFor(declaration, "invoke", { localErrors: false, nativeErrors: [source] }, bindings);
+  assert.equal(edge !== undefined, true, "the pending channel is retained before final completion");
+  const completed = selection.complete(edge.nativeErrors[0].target, current.program.callableValues.nativeStorage);
+  assert.equal(completed !== undefined && rustTargetTypeRefEquals(completed.errorType, caller.errorType), true,
+    "a real caller-owned formal is not confused with the retired callee formal");
+  assert.equal(rustTargetGenericReferences(completed.errorType, "metadata").typeIdentities.includes(callerInput.implementation.identity), true,
+    "the actual scoped native input remains explicit");
+  const admitted = selection.bindingsFor(scopedNode, declaration, [{ kind: "carrier", carrier: caller.errorType }]);
+  assert.equal(admitted !== undefined && rustTargetTypeRefEquals(
+    admitted.complete(caller.errorType, current.program.callableValues.nativeStorage), caller.errorType), true,
+  "a caller-admitted raw formal never needs pending provenance or a fabricated concrete payload");
+});
+
 test("source rebinding retains pending generic payloads until their physical completion", () => {
   const current = analyzedFixture(analyzeRustErrorEffects(`
     export function invoke(callback: () => number): number { return callback(); }
@@ -341,7 +445,7 @@ test("source rebinding retains pending generic payloads until their physical com
   const declaration = current.declaration("invoke");
   const effects = current.callable("invoke");
   const bindings = selection.bindingsFor(current.initializer("output"), declaration,
-    effects.nativeErrors.map(error => error.errorType));
+    effects.nativeErrors.map(effect => ({ kind: "source-effect", effect })));
   const edge = selection.edgeFor(declaration, "invoke", effects, bindings);
   assert.equal(edge !== undefined, true, "the actual selected callback channel can be rebound");
   assert.equal(edge.nativeErrors.length, 1, "the real formal channel is preserved");

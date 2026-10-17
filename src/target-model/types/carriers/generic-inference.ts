@@ -381,6 +381,9 @@ export function inferRustTargetGenericBindings(
           return leftCallable !== undefined && rightCallable !== undefined &&
             closedMetadataEquals(leftCallable.origin, rightCallable.origin) &&
             matchCallableEnvironment(leftCallable, rightCallable, lifetimeContext) &&
+            leftCallable.retainedEnvironment.length === rightCallable.retainedEnvironment.length &&
+            leftCallable.retainedEnvironment.every((argument, index) =>
+              match(argument, rightCallable.retainedEnvironment[index]!, lifetimeContext)) &&
             (leftCallable.physical === undefined || rightCallable.physical === undefined
               ? leftCallable.physical === rightCallable.physical
               : leftCallable.physical.ownerFileName === rightCallable.physical.ownerFileName &&

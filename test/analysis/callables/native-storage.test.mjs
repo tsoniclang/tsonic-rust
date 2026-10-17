@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
+import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { createRustNativeCallableProducerPlan } from "../../../dist/analysis/callables/native-producers.js";
+import { normalizeRustErrorType } from "../../../dist/analysis/errors/error-types.js";
 import { createRustGenericCallablePlan } from "../../../dist/analysis/callables/generic-values.js";
+import { rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
@@ -15,10 +19,65 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 
 
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
-import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustCallableProtocol, rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustStructuralObjectCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
+
+for (const [label, source, lifetimeKind] of [
+  ["owned", `export function make(value: string): () => string {
+    return function read(): string { return value; };
+  }`, "static"],
+  ["borrowed", `import type { int32 } from "@tsonic/core/types.js";
+  import type { Life, Ref } from "@tsonic/rust/types.js";
+  import { load } from "@tsonic/rust/lang.js";
+  export function make<Region extends Life>(value: Ref<int32, Region>): () => int32 {
+    return function read(): int32 { return load(value); };
+  }`, "parameter"],
+]) test(`named ${label} callable self evidence is finalized before its first runtime publication`, () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": source } });
+  const { ast } = program.source;
+  const pending = [...program.sourceFiles];
+  let expression;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    if (ast.is.IsFunctionExpression(node)) expression = node;
+    ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  assert.equal(expression !== undefined, true, `${label}: the original named expression is checked`);
+  const name = ast.name(expression);
+  const carrier = program.records.runtimeCarrier.get(expression)?.carrier;
+  const recursive = program.records.runtimeCarrier.get(name)?.carrier;
+  assert.equal(rustCallableProtocol(carrier)?.lifetime?.kind, lifetimeKind,
+    `${label}: source retention is proved rather than left as a placeholder or guessed static`);
+  assert.equal(carrier !== undefined && rustTargetTypeRefEquals(carrier, recursive), true,
+    `${label}: the self binding and final value have identical invocation, error and retained lifetime evidence`);
+});
+
+test("a named generic body retains the same actual free environment before and after self publication", () => {
+  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": `
+  export function make<Value>(seed: Value): <Result>(result: Result) => Result {
+    return function read<Result>(result: Result): Result { void seed; return result; };
+  }` } });
+  const { ast } = program.source;
+  const pending = [...program.sourceFiles];
+  let expression;
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    if (ast.is.IsFunctionExpression(node)) expression = node;
+    ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  assert.equal(expression !== undefined, true, "the actual named generic producer is checked");
+  const carrier = program.records.runtimeCarrier.get(expression)?.carrier;
+  const recursive = program.records.runtimeCarrier.get(ast.name(expression))?.carrier;
+  const value = rustGenericCallableValue(carrier);
+  assert.equal(value !== undefined && value.environment.length === 0 && value.retainedEnvironment.length === 1, true,
+    "a body-only source binding cannot become a free invocation binding or disappear");
+  assert.equal(carrier !== undefined && rustTargetTypeRefEquals(carrier, recursive), true,
+    "self and final publication retain the identical complete invocation and body environment");
+});
 
 function fixture(text, options = {}) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text }, ...options });
@@ -46,12 +105,20 @@ function fixture(text, options = {}) {
       const selected = queries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
-  producers.selectConstructionErrors(new Map());
+  const errors = new Map();
+  for (const producer of producers.producers) {
+    const intrinsic = producers.errorFor(producer.declaration, "invoke");
+    const selected = intrinsic === undefined ? undefined : normalizeRustErrorType(intrinsic, { ast: source.ast,
+      records: program.records, components: program.sourcePackageComponents, producers, definitions: program.typeDefinitions }, producer.declaration);
+    if (selected !== undefined) errors.set(producer.declaration, selected);
+  }
+  producers.selectConstructionErrors(errors);
   input.producers = producers;
   const guardedQueries = Proxy.revocable(createRustNativeStorageQueries({ ...input, native }), {});
   const queries = guardedQueries.proxy;
   const captures = createRustNativeCapturePlan({ ...input, nativeStorage: queries });
   physical = genericRegistry.initializePhysical({ ...input, native, captures,
+    genericBindingsFor: (declaration, bindings) => queries.genericBindingsFor(declaration, bindings),
     boundSubjectFor: (subject, carrier, bindings) => queries.boundSubjectFor(subject, carrier, bindings) });
   const plan = finalizeRustNativeParameterStorage(input, queries);
   const declaration = name => storage.nodes.find(node => source.ast.name(node) !== undefined &&
@@ -67,6 +134,57 @@ function fixture(text, options = {}) {
   return { program, source, storage, input, native, plan, declaration, initializer, exactSubject,
     revokeSource: guardedAst.revoke, revokeQueries: guardedQueries.revoke };
 }
+
+const familyNativeInputSource = `
+interface Stored<Value> { payload: Value; }
+type Storage<Value> = Value extends Stored<infer Inner> ? Inner : Value;
+function invoke<Value>(callback: (value: Storage<Value>) => number, value: Storage<Value>): number {
+  return callback(value);
+}
+export function step(): number {
+  const numeric = invoke<number>(value => value, 7);
+  const logical = invoke<boolean>(value => value ? 1 : 0, true);
+  return numeric + logical;
+}
+`;
+
+test("native invocation storage consumes the selected formal's normalized source-family ABI on each actual call", () => {
+  const current = fixture(familyNativeInputSource);
+  const owner = current.declaration("invoke");
+  const input = current.native.inputsFor(owner)[0];
+  assert.equal(input !== undefined, true, "the original generic formal has one canonical native input");
+  for (const [name, primitive] of [["numeric", "float64"], ["logical", "bool"]]) {
+    const invocation = current.initializer(name);
+    const operation = current.program.records.targetOperation.get(invocation);
+    const selected = current.plan.invocationInputFor(input, invocation);
+    assert.equal(selected.kind, "selected", `${name}: ${selected.reason ?? "exact normalized native storage"}`);
+    assert.equal(selected.carrier.kind, "reference", `${name}: the original nonretaining native input stays borrowed`);
+    const physical = rustCallablePhysicalSignature(selected.carrier.referent);
+    assert.equal(physical?.parameters[0]?.kind === "source-primitive" && physical.parameters[0].name === primitive, true,
+      `${name}: the actual selected formal is normalized before strict source-producer correspondence`);
+    assert.equal(operation?.kind === "source-call" && operation.parameters[0].form ===
+      current.program.records.sourceParameterAbi.get(input.subject.node).form, true,
+    `${name}: the checked original formal and omission form are unchanged`);
+  }
+});
+
+test("native normalized formal selection rejects missing and mismatched actual parameter plans", () => {
+  const current = fixture(familyNativeInputSource);
+  const input = current.native.inputsFor(current.declaration("invoke"))[0];
+  const invocation = current.initializer("numeric");
+  const original = current.program.records.targetOperation.get(invocation);
+  for (const [label, parameters] of [
+    ["missing", []],
+    ["wrong-form", [{ ...original.parameters[0], form: "rest" }, ...original.parameters.slice(1)]],
+  ]) {
+    const records = createRustRecordFixture({ targetOperation: {
+      get: node => node === invocation ? { ...original, parameters } : current.program.records.targetOperation.get(node),
+    } }, current.program.records);
+    const plan = createRustNativeStorageQueries({ ...current.input, records, native: current.native });
+    const selected = plan.invocationInputFor(input, invocation);
+    assert.equal(selected.kind, "unresolved", `${label}: a required checked formal cannot use its raw template instead`);
+  }
+});
 
 test("finalized formal ABI storage is a stable owned lookup without caller carrier arbitration", () => {
   const current = fixture("export function read(value: number): number { return value; }");
@@ -114,6 +232,43 @@ test("physical return preparation publishes one exact selection without recomput
   assert.equal(current.plan.prepareReturn({}).kind, "unresolved", "a foreign request is rejected before source inspection");
 });
 
+test("all runtime storage roles publish one prepared selection and pure readers never inspect source", () => {
+  const current = fixture(`
+    export function invoke(callback: () => number): number {
+      const result = callback();
+      return result;
+    }
+  `);
+  const owner = current.declaration("invoke");
+  const declaration = current.declaration("result");
+  const invocation = current.initializer("result");
+  const roles = [
+    ["value", declaration, "prepareValue", "valueFor"],
+    ["operand", declaration, "prepareOperand", "operandFor"],
+    ["invocation", invocation, "prepareInvocation", "invocationCallableFor"],
+    ["return", owner, "prepareReturn", "returnFor"],
+  ];
+  const prepared = roles.map(([role, node, prepare, lookup]) => {
+    assert.equal(current.plan[lookup](node).kind, "unresolved", `${role} is not prepared by a pure lookup`);
+    const selected = current.plan[prepare](node);
+    assert.equal(selected.kind !== "unresolved", true, selected.reason ?? `${role} has actual native storage`);
+    assert.equal(Object.isFrozen(selected), true, `${role} publishes immutable data`);
+    assert.equal(current.plan[lookup](node) === selected, true, `${role} returns its identical prepared selection`);
+    assert.equal(prepare in current.program.callableValues.nativeStorage, false, `${role} construction is never published`);
+    return selected;
+  });
+  current.revokeSource();
+  current.revokeQueries();
+  for (const [index, [role, node, prepare, lookup]] of roles.entries()) {
+    assert.equal(current.plan[lookup](node) === prepared[index], true, `${role} lookup does not inspect revoked source`);
+    assert.equal(current.plan[prepare](node) === prepared[index], true, `${role} preparation never selects twice`);
+    for (const foreign of [{}, { ...node }]) {
+      assert.equal(current.plan[lookup](foreign).kind, "unresolved", `${role} lookup rejects foreign identity`);
+      assert.equal(current.plan[prepare](foreign).kind, "unresolved", `${role} construction rejects foreign identity before inspection`);
+    }
+  }
+});
+
 test("closed native generic queries validate ownership without manufacturing unused activations", () => {
   const current = fixture("export function closed(): number { return 7; }");
   const declaration = current.declaration("closed");
@@ -145,8 +300,8 @@ test("physical forwarding preserves distinct equal-signature inputs through alia
   assert.equal(inputs.length, 2);
   assert.equal(inputs[0].implementation !== inputs[1].implementation, true);
   for (const [index, name] of ["first", "second"].entries()) {
-    selected(current.plan.valueFor(current.declaration(name)), inputs[index].implementation, name);
-    selected(current.plan.valueFor(current.initializer(name)), inputs[index].implementation, `${name} expression`);
+    selected(current.plan.prepareValue(current.declaration(name)), inputs[index].implementation, name);
+    selected(current.plan.prepareValue(current.initializer(name)), inputs[index].implementation, `${name} expression`);
   }
   selected(current.plan.prepareReturn(owner), inputs[0].implementation, "annotated return retains physical input");
 });
@@ -168,7 +323,7 @@ test("physical forwarding crosses package calls without a recipient error or con
   const owner = current.declaration("pair");
   const inputs = current.native.inputsFor(owner);
   for (const [index, name] of ["first", "second"].entries()) {
-    selected(current.plan.valueFor(current.declaration(name)), inputs[index].implementation, name);
+    selected(current.plan.prepareValue(current.declaration(name)), inputs[index].implementation, name);
     selected(current.plan.invocationReturnFor(current.declaration("forwarded"), current.initializer(name)),
       inputs[index].implementation, `${name} exact invocation substitution`);
     const targetInput = current.native.inputsFor(current.declaration("forwarded"))[0];
@@ -247,7 +402,7 @@ test("physical captured forwarding retains outer inputs without mistaking a new 
   const owner = current.declaration("capture");
   const inputs = current.native.inputsFor(owner);
   const closure = current.storage.nodes.find(node => current.source.ast.is.IsArrowFunction(node));
-  selected(current.plan.valueFor(current.declaration("captured")), inputs[1].implementation, "captured exact outer input");
+  selected(current.plan.prepareValue(current.declaration("captured")), inputs[1].implementation, "captured exact outer input");
   selected(current.plan.prepareReturn(closure), inputs[1].implementation, "nested return retains capture binding");
   const outward = current.plan.prepareReturn(owner);
   assert.equal(outward.kind, "selected", "concrete closure retains a sealed producer-owned signature");
@@ -271,7 +426,7 @@ test("physical member and array reads use exact projected owner identities", () 
   for (const [index, name] of ["first", "second", "element"].entries()) {
     const input = inputs.find(value => value.subject.node === parameters[index]);
     assert.equal(input !== undefined, true, `${name} has exact projected input`);
-    selected(current.plan.valueFor(current.declaration(name)), input.implementation, name);
+    selected(current.plan.prepareValue(current.declaration(name)), input.implementation, name);
     const subject = current.exactSubject(current.initializer(name));
     const carrier = current.program.records.runtimeCarrier.get(current.declaration(name)).carrier;
     selected(current.plan.subjectFor(subject, carrier, owner), input.implementation, `${name} public subject query`);
@@ -290,7 +445,7 @@ test("physical selection preserves optional topology and borrowed parameter life
   `);
   const owner = current.declaration("maybe");
   const input = current.native.inputsFor(owner)[0];
-  for (const value of [current.plan.prepareReturn(owner), current.plan.valueFor(current.declaration("optional"))]) {
+  for (const value of [current.plan.prepareReturn(owner), current.plan.prepareValue(current.declaration("optional"))]) {
     assert.equal(value.kind, "selected", value.reason);
     assert.equal(rustOptionElementCarrier(value.carrier) === input.implementation, true);
     assert.equal(value.carrier.kind, input.carrier.kind, "native option topology retained");
@@ -345,7 +500,7 @@ test("physical generic callable forwarding retains its quantified contract", () 
   const input = current.native.inputsFor(owner)[0];
   assert.equal(input.protocol.signature.typeParameters.length, 1);
   selected(current.plan.prepareReturn(owner), input.implementation, "quantified identity preserved");
-  selected(current.plan.valueFor(current.declaration("alias")), input.implementation, "generic alias physical identity");
+  selected(current.plan.prepareValue(current.declaration("alias")), input.implementation, "generic alias physical identity");
 });
 
 test("concrete quantified producers retain the existing sealed family through aliases and returns", () => {
@@ -358,7 +513,7 @@ test("concrete quantified producers retain the existing sealed family through al
     }
   `);
   for (const value of [current.plan.prepareReturn(current.declaration("make")),
-    current.plan.valueFor(current.declaration("original")), current.plan.valueFor(current.declaration("alias"))]) {
+    current.plan.prepareValue(current.declaration("original")), current.plan.prepareValue(current.declaration("alias"))]) {
     assert.equal(value.kind, "selected", value.reason);
     const definition = current.input.generic.physical.definitionFor(value.carrier);
     const implementation = current.input.generic.implementationFor(current.initializer("original"));
@@ -373,15 +528,34 @@ test("concrete quantified producers retain the existing sealed family through al
 });
 
 test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", () => {
-  const current = fixture(`
+  const source = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
     }
     export function create(): () => number { return () => 7; }
     export function concrete(): () => number { const supplied = create(); return supplied; }
-  `);
+  `;
+  let context;
+  const { result } = compileRust({ surfaces: [], files: { "index.ts": source }, compileTarget(request) {
+    context = analyzeRustCheckedContext(request);
+    assert.equal(context.source === request.input.source, true, "the private selector uses the identical checked source identities");
+    const analysis = analyzeRustTargetProgram(request);
+    assert.equal(analysis.kind, "rejected", "the actual target rejects ambiguous storage before program publication");
+    return analysis;
+  } });
+  assert.equal(context !== undefined, true, "the actual private storage construction owns this checked source");
+  assert.deepEqual(result.diagnostics.map(issue => ({ code: issue.code, message: issue.message })), Array.from({ length: 2 }, () => ({
+    code: "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED",
+    message: "Native callable storage has distinct physical input alternatives requiring a sealed join.",
+  })), "both required ambiguous uses reject before any physical program is published");
+  assert.equal(result.artifacts.length, 0, "a rejected physical storage program emits nothing");
+  const declaration = name => context.sourceStorage.nodes.find(node => context.ast.name(node) !== undefined &&
+    context.ast.text(context.ast.name(node)) === name &&
+    (context.ast.is.IsFunctionDeclaration(node) || context.ast.is.IsVariableDeclaration(node)));
+  const current = { plan: context.callableValues.nativeStorage, declaration,
+    initializer: name => Node_Initializer(context.ast, declaration(name)) };
   for (const result of [current.plan.prepareReturn(current.declaration("choose")),
-    current.plan.valueFor(current.declaration("selected"))])
+    current.plan.prepareValue(current.declaration("selected"))])
     assert.equal(result.kind, "unresolved", "no signature-based choice, closed error guess, or silent fallback");
   const created = current.plan.prepareReturn(current.declaration("create"));
   const returned = current.plan.invocationReturnFor(current.declaration("create"), current.initializer("supplied"));
@@ -428,7 +602,7 @@ test("non-callable storage remains an exact identity without inspecting unrelate
     boundValueFrontierFor() { originQueries += 1; throw new Error("non-callable frontier scan"); },
   } });
   const owner = current.declaration("number");
-  const value = plan.valueFor(current.declaration("selected"));
+  const value = plan.prepareValue(current.declaration("selected"));
   assert.equal(value.kind, "identity");
   assert.equal(value.carrier === current.program.records.runtimeCarrier.get(current.declaration("selected")).carrier, true);
   assert.equal(plan.prepareReturn(owner).kind, "identity");
@@ -450,7 +624,7 @@ test("structural native dispatch signatures are not stored callable payloads and
     }
   `);
   const value = current.declaration("selected");
-  assert.equal(current.plan.valueFor(value).kind, "identity", "the native dispatch layout already owns its signatures");
+  assert.equal(current.plan.prepareValue(value).kind, "identity", "the native dispatch layout already owns its signatures");
   for (const [name, field] of [
     ["missing", () => undefined],
     ["stored", (carrier, index) => {
@@ -459,7 +633,7 @@ test("structural native dispatch signatures are not stored callable payloads and
     }],
   ]) {
     const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: { field } });
-    const selected = plan.valueFor(value);
+    const selected = plan.prepareValue(value);
     assert.equal(selected.kind, "unresolved", name);
     assert.match(selected.reason, /layout owner/u, name);
   }
@@ -479,6 +653,14 @@ const nestedMethodStorageSource = `
 
 test("nested structural methods retain the canonical physical layout through stored arrays and tuples", () => {
   const current = fixture(nestedMethodStorageSource);
+  const leaf = current.declaration("leaf");
+  const logical = rustStructuralObjectCarrierValue(current.program.records.runtimeCarrier.get(leaf)?.carrier);
+  const method = current.storage.nodes.find(node => current.source.ast.is.IsMethodDeclaration(node) &&
+    current.source.ast.parent(node) === current.initializer("leaf"));
+  assert.equal(rustCallableProtocol(logical?.fields[0]?.type)?.lifetime?.kind, "placeholder",
+    "structural signature metadata does not publish the first source body's retained lifetime");
+  assert.equal(rustCallableProtocol(current.program.records.targetOperation.get(method)?.resultCarrier)?.lifetime?.kind, "static",
+    "the actual empty-capture method value still carries its independently proven native retention");
   const methodSlots = new Map();
   const reads = [];
   const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: {
@@ -494,7 +676,7 @@ test("nested structural methods retain the canonical physical layout through sto
   for (const name of ["leaf", "nested", "elements", "array", "tuple", "tupled"]) {
     const declaration = current.declaration(name);
     const before = reads.length;
-    const selected = plan.valueFor(declaration);
+    const selected = plan.prepareValue(declaration);
     assert.equal(selected.kind, "identity", selected.reason ?? `${name} uses its existing native structural layout`);
     assert.equal(selected.carrier === current.program.records.runtimeCarrier.get(declaration).carrier, true,
       `${name} preserves the exact source carrier rather than inventing an aggregate layout`);
@@ -506,6 +688,45 @@ test("nested structural methods retain the canonical physical layout through sto
     assert.equal(field.methodStorageCarrier === carrier, true, "physical selection never rewrites the method storage carrier");
     assert.equal(Object.isFrozen(field), true, "the physical method field remains frozen");
   }
+});
+
+test("nested method signatures preserve an actual borrowed method value without refining the shared logical type", () => {
+  const current = fixture(`
+    import type { int32 } from "@tsonic/core/types.js";
+    import type { Life, Ref } from "@tsonic/rust/types.js";
+    import { load } from "@tsonic/rust/lang.js";
+    export function read<Region extends Life>(value: Ref<int32, Region>): int32 {
+      const leaf = { read(): int32 { return load(value); } };
+      const selected: { read(): int32 } = leaf;
+      const tuple: [{ read(): int32 }, int32] = [selected, 3];
+      const callback = leaf.read;
+      return callback() + tuple[0].read();
+    }
+  `);
+  const declaration = current.declaration("leaf");
+  const carrier = current.program.records.runtimeCarrier.get(declaration)?.carrier;
+  const logical = rustStructuralObjectCarrierValue(carrier);
+  assert.equal(rustCallableProtocol(logical?.fields[0]?.type)?.lifetime?.kind, "placeholder",
+    "the checked method signature is independent of the actual captured reference");
+  const method = current.storage.nodes.find(node => current.source.ast.is.IsMethodDeclaration(node) &&
+    current.source.ast.parent(node) === current.initializer("leaf"));
+  const actual = rustCallableProtocol(current.program.records.targetOperation.get(method)?.resultCarrier);
+  const parameter = current.source.ast.parameters(current.declaration("read"))[0];
+  const nativeInput = current.program.records.sourceParameterAbi.get(parameter)?.valueCarrier;
+  assert.equal(nativeInput?.kind, "reference", "the original formal retains its native borrowed representation");
+  assert.equal(actual?.lifetime === nativeInput.lifetime, true,
+    "the actual method value keeps the exact original native captured lifetime");
+  for (const name of ["leaf", "selected", "tuple"]) {
+    const node = current.declaration(name);
+    const selected = current.plan.prepareValue(node);
+    assert.equal(selected.kind, "identity", `${name}: ${selected.reason ?? "the canonical stored method layout is complete"}`);
+    assert.equal(selected.carrier === current.program.records.runtimeCarrier.get(node)?.carrier, true,
+      `${name}: no context-dependent rewrite of the logical structural carrier`);
+  }
+  const field = current.program.structuralShapes.field(carrier, 0);
+  assert.equal(field?.methodConstructions?.some(witness => witness.expression === method), true,
+    "the final physical field retains the actual original borrowed construction witness");
+  assert.equal(Object.isFrozen(field), true, "native storage consumes the completed immutable physical owner");
 });
 
 test("nested native method storage rejects missing layouts, slots and foreign source identities", () => {
@@ -524,7 +745,7 @@ test("nested native method storage rejects missing layouts, slots and foreign so
           ? { ...field, methodStorageCarrier: undefined } : { ...field, method: undefined };
       },
     } });
-    const selected = plan.valueFor(declaration);
+    const selected = plan.prepareValue(declaration);
     assert.equal(selected.kind, "unresolved", `${mode} cannot prove a physical layout`);
     assert.match(selected.reason, /layout owner/u, `${mode} fails at the actual missing physical layout`);
     assert.equal(nestedReads > 0, true, `${mode} observes the required nested slot rather than an unrelated refusal`);
@@ -532,7 +753,7 @@ test("nested native method storage rejects missing layouts, slots and foreign so
   }
   const foreign = fixture(nestedMethodStorageSource);
   for (const node of [{}, { ...declaration }, foreign.declaration("nested")]) {
-    const selected = current.plan.valueFor(node);
+    const selected = current.plan.prepareValue(node);
     assert.equal(selected.kind, "unresolved", "unknown or foreign nodes cannot acquire a physical aggregate layout");
     assert.equal(Object.isFrozen(selected), true, "unknown source selection remains immutable");
   }
