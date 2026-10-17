@@ -199,6 +199,7 @@ function declarationParticipatesInRustLiveness(
   declaration: Node,
   program: RustReachabilityInput,
 ): boolean {
+  if (program.records.compileTimeSource.get(declaration)) return false;
   if (program.records.typeOnlyDeclaration.get(declaration) !== undefined) return false;
   return program.source.ast.kindName(declaration) !== "KindTypeAliasDeclaration" ||
     program.records.typeAliasDeclaration.get(declaration)?.kind !== "erased";
