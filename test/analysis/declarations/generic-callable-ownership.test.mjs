@@ -108,7 +108,14 @@ closureCapture: { get: (node) => {
         return undefined;
     return { receivers: node.receivers ?? [], receiverFields: [], captures: node.captures ?? [] };
 } }});
-  const names = { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined };
+  const names = Object.freeze({ diagnostics: Object.freeze([]),
+    nameForDeclaration: () => undefined,
+    functionNameForDeclaration: () => undefined,
+    callableValueNameForDeclaration: () => undefined,
+    sourceScopeForDeclaration: () => undefined,
+    scopeForDeclaration: () => undefined,
+    nameForSourceType: () => undefined,
+  });
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
   const source = fakeCompileInput({ sourceFiles: files }).source;
