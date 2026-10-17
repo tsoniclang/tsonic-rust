@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, sep } from "node:path";
-import { runCargo, writeGeneratedProject } from "./cargo-projects.mjs";
+import { runCargo, writeGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const observedExecutables = new Set();
 const foreignContents = "This target belongs to a different owner.\n";
