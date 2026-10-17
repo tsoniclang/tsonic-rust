@@ -51,7 +51,8 @@ export function forward(left: () => int32, right: () => int32): (first: int32) =
 use retained_adapter_cost::index;
 use tsonic_rust_runtime as rt;
 use rt::CallableImplementation;
-${nativeOwnershipCostSupport}
+use std::cell::Cell;
+${nativeOwnershipCostSupport(root)}
 
 #[derive(Debug, PartialEq, Eq)]
 struct BorrowedFailure<'region>(&'region i32);

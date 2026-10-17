@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { writeGeneratedProject, runCargo } from "../../helpers/cargo-projects.mjs";
 import { nativeOwnershipCostSupport } from "../../helpers/native-ownership-cost.mjs";
@@ -126,11 +128,12 @@ fn check_${name.toLowerCase()}() {
     }
 }`;
     }).join("\n");
+    const root = writeGeneratedProject(`physical-numeric-arrays-${lane}`, result.artifacts);
     const proof = `
 #[cfg(test)]
 mod c130_physical_native_proof {
 use super::*;
-${nativeOwnershipCostSupport}
+${nativeOwnershipCostSupport(root)}
 ${cases}
 #[test]
 fn physical_values_cross_arm_number_equality_and_native_cost() {
@@ -139,8 +142,7 @@ fn physical_values_cross_arm_number_equality_and_native_cost() {
 }
 }
 `;
-    const root = writeGeneratedProject(`physical-numeric-arrays-${lane}`, result.artifacts.map(artifact =>
-      artifact.path === "src/index.rs" ? { ...artifact, text: artifact.text + proof } : artifact));
+    appendFileSync(join(root, "src/index.rs"), proof);
     runCargo(root, ["generate-lockfile", "--offline"]);
     runCargo(root, ["fmt"]);
     runCargo(root, ["fmt", "--all", "--check"]);
@@ -406,11 +408,12 @@ for (const surfaces of [[], ["js"]]) {
     }
 }`;
     }).join("\n    ");
+    const root = writeGeneratedProject(`inferred-numeric-arrays-${lane}`, result.artifacts);
     const proof = `
 #[cfg(test)]
 mod c102_native_proof {
 use super::*;
-${nativeOwnershipCostSupport}
+${nativeOwnershipCostSupport(root)}
 ${handwritten}
 ${assertDense}
 #[test]
@@ -459,9 +462,7 @@ fn exact_per_operation_native_cost() {
 }
 }
 `;
-    const artifacts = result.artifacts.map(artifact => artifact.path === "src/index.rs"
-      ? { ...artifact, text: artifact.text + proof } : artifact);
-    const root = writeGeneratedProject(`inferred-numeric-arrays-${lane}`, artifacts);
+    appendFileSync(join(root, "src/index.rs"), proof);
     runCargo(root, ["generate-lockfile", "--offline"]);
     runCargo(root, ["fmt"]);
     runCargo(root, ["fmt", "--all", "--check"]);
