@@ -564,14 +564,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         }
       }
     }
-    const projection = records.flowReadProjection.get(node);
-    if (projection !== undefined && rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer") {
-      const cloneSources = projection.kind === "union-map"
-        ? projection.arms.filter(arm => arm.source[arm.source.length - 1]?.variant.kind === "payload").map(arm => arm.carrier)
-        : projection.kind === "option-value" ||
-          (projection.kind === "source-union" || projection.kind === "runtime-union") && projection.project === undefined
-          ? [projection.selectedCarrier] : [];
-      for (const source of cloneSources) {
+    const projectionRead = input.readRequirements.storageReads.get(node)?.projection;
+    if (projectionRead !== undefined && rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer" &&
+      !(projectionRead.cloneBorrowable && input.readRequirements.borrowed.has(node))) {
+      for (const source of projectionRead.cloneSources) {
         const error = addUse(node, source, ["clone"]);
         if (error !== undefined) return error;
       }

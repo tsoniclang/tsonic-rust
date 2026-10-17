@@ -11,6 +11,11 @@ import { analyzeRustReadUses } from "../../../dist/analysis/ownership/uses.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustOptionTargetType } from "../../../dist/target-model/types/carriers/optional.js";
+import { rustOptionalStorageProjection } from "../../../dist/target-model/types/projections.js";
+import { rustSourceUnionTargetType } from "../../../dist/target-model/types/carriers/source-types.js";
+import { rustStringTargetType, rustBorrowedStrTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
+import { rustStringToBorrowedStrValueConversion } from "../../../dist/public/provider.js";
 
 const parameter = Object.freeze({ kind: "type-parameter", identity: "Owner", name: "Owner" });
 const families = Object.freeze({ implementation: () => undefined });
@@ -125,7 +130,13 @@ test("an unproved associated owned copy is rejected once at pre-seal read admiss
     };
     const prepared = prepareRustReadOwnership(input);
     assert.equal(prepared.kind, "resolved", `${mode}: the original complete source inventory is valid`);
+    const preparedProjection = prepared.requirements.storageReads.get(reference).projection;
+    assert.equal(Object.isFrozen(preparedProjection), true, `${mode}: the completed projection disposition is immutable`);
+    assert.equal(preparedProjection.flowResultBorrow, true, `${mode}: the original Option supports a native payload borrow`);
+    assert.equal(preparedProjection.cloneSources[0] === selectedCarrier, true, `${mode}: owned demand retains the exact associated payload`);
     const result = analyzeRustReadOwnership({ ...input, requirements: prepared.requirements });
+    assert.equal(prepared.requirements.storageReads.get(reference).projection === preparedProjection, true,
+      `${mode}: final admission consumes the original prepared disposition`);
     if (mode === "copy") {
       assert.equal(result.kind, "rejected", "no unproved owned associated copy reaches the planner");
       assert.equal(result.diagnostics.length, 1, "the same negative case produces exactly one admission diagnostic");
@@ -137,5 +148,54 @@ test("an unproved associated owned copy is rejected once at pre-seal read admiss
       assert.equal(result.kind, "resolved", `${mode}: no speculative Clone bound is required`);
       assert.equal(result.ownership.reads.get(reference).value.kind, mode, `${mode}: exact admitted ownership`);
     }
+  }
+});
+
+test("projection preparation retains mandatory clone_present and union payload demands without imposing Clone on native borrows", async () => {
+  const source = createTargetSourceProgram(await checkedSource("projection-native-clone-demands", {
+    "src/index.ts": "function read<T>(value: T | null) { return value; }",
+  }));
+  const storage = createSourceStorageQuery(source, source.sourceFiles);
+  const reference = storage.nodes.find(node => source.ast.is.IsIdentifier(node) && source.ast.text(node) === "value" &&
+    source.ast.kindName(source.ast.parent(node)) === "KindReturnStatement");
+  assert.equal(reference !== undefined, true, "all cases retain the original checked payload read");
+  const definitions = createRustTypeDefinitionRegistry();
+  const union = rustSourceUnionTargetType(source.ast.getFileName(source.ast.getSourceFile(reference)), "Values");
+  const narrowed = rustSourceUnionTargetType(source.ast.getFileName(source.ast.getSourceFile(reference)), "Narrowed");
+  const string = rustStringTargetType();
+  const integer = { kind: "source-primitive", name: "int32" };
+  const boolean = { kind: "source-primitive", name: "bool" };
+  assert.equal(definitions.registerSourceUnion({ carrier: union, variants: [
+    { name: "Text", carrier: string }, { name: "Integer", carrier: integer }, { name: "Flag", carrier: boolean },
+  ] }, true), true, "the original union has three exact native payloads");
+  assert.equal(definitions.registerSourceUnion({ carrier: narrowed, variants: [
+    { name: "Text", carrier: string }, { name: "Integer", carrier: integer },
+  ] }, true), true, "the narrowed union retains the same two native payloads");
+  const selectedDefinitions = definitions.seal();
+  for (const [name, carrier, selected, conversion, borrowable, count] of [
+    ["native Option", rustOptionTargetType(string), string, undefined, true, 1],
+    ["generic clone_present", rustOptionalStorageProjection(parameter), parameter, undefined, false, 1],
+    ["union payload reconstruction", union, narrowed, undefined, false, 2],
+    ["native conversion input", rustOptionTargetType(string), string, rustStringToBorrowedStrValueConversion, true, 1],
+  ]) {
+    const builder = createRustProgramRecordBuilder();
+    builder.runtimeCarriers.selected(reference, carrier);
+    const projection = builder.flowReadProjections.resolve([], reference, carrier, selected, {}, selectedDefinitions);
+    assert.equal(projection.kind, "projection", `${name}: actual native payload relation is admitted`);
+    if (conversion !== undefined) builder.contextualValueConversions.convert(reference, selected, rustBorrowedStrTargetType(), conversion);
+    const records = builder.seal([]);
+    const uses = new Map([[reference, { mode: "shared", later: [], laterStart: 0, stableAcrossEffects: true }]]);
+    const prepared = prepareRustReadOwnership({ storage, nativeNodes: storage.nodes, records,
+      flow: { readTransfers: new Map(), captureRequirements: new Map(), captureTransfers: new Map(), graphs: new Map(), liveness: new Map() },
+      borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
+      borrowEffectsInput: { ast: source.ast, records, navigation: source.navigation, readUses: uses,
+        isNativeNode: node => storage.nodes.includes(node) }, definitions: selectedDefinitions,
+      genericCallables: { definitionFor: () => undefined } });
+    assert.equal(prepared.kind, "resolved", `${name}: complete original-source preparation`);
+    const selectedRead = prepared.requirements.storageReads.get(reference).projection;
+    assert.equal(selectedRead.cloneBorrowable, borrowable, `${name}: exact borrowed versus owned physical disposition`);
+    assert.equal(selectedRead.cloneSources.length, count, `${name}: no payload requirement is lost`);
+    assert.equal(prepared.requirements.borrowed.has(reference), true, `${name}: an admitted borrow cannot waive mandatory reconstruction`);
+    assert.equal(selectedRead.flowConversionInput, conversion === undefined ? "value" : "borrow", `${name}: exact native conversion source mode`);
   }
 });
