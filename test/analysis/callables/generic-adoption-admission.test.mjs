@@ -322,6 +322,25 @@ nativeEntryInverses.push(...[
   ["opaque-set-nonresolving-callable", "function wrap<Value>(value: Value): Promise<number> { return new Promise<number>(resolve => { const values = new Set<() => void>([() => { void value; }]); values.forEach(actual => { actual(); }); resolve(7); }); } console.log(await wrap(Promise.resolve(5)));"]
 ]);
 
+nativeEntryInverses.push(...[
+  [
+    "opaque-set-returned-observer-keeps-union-nonadoption",
+    "function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { done(value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const observer = make((actual: Value): void => { void actual; }, value); const completion = make(resolve, 7); new Set([observer]).forEach(next => { next(); }); completion(); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-set-returned-observer-keeps-union-nonadoption-reversed",
+    "function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { done(value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const observer = make((actual: Value): void => { void actual; }, value); const completion = make(resolve, 7); completion(); new Set([observer]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-set-factory-callee-is-not-returned-payload",
+    "function make<Value>(value: Value, done: (actual: number) => void): () => void { done(7); return () => { void value; }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const observer = make(value, resolve); new Set([observer]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ],
+  [
+    "opaque-set-factory-callee-is-not-returned-payload-alias",
+    "function make<Value>(value: Value, done: (actual: number) => void): () => void { done(7); return () => { void value; }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const original = make(value, resolve); const observer = original; new Set([observer]).forEach(next => { next(); }); }); } console.log(await wrap(Promise.resolve(5)));"
+  ]
+]);
+
 for (const [name, sourceText] of nativeEntryInverses) {
   test("Rust native callback non-adoption inverse: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"],
@@ -334,15 +353,17 @@ for (const [name, sourceText] of nativeEntryInverses) {
   });
 }
 const nativeOpaquePayloadCases = [
-  ["map-callable-payload", "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values = new Map<number, () => void>([[0, () => { resolve(value); }]]); values.forEach(actual => { actual(); }); }); }"],
-  ["set-callable-payload", "function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values = new Set<() => void>([() => { resolve(value); }]); values.forEach(actual => { actual(); }); }); }"]
+["map-callable-payload","function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values = new Map<number, () => void>([[0, () => { resolve(value); }]]); values.forEach(actual => { actual(); }); }); }","resolve(value)"],
+["set-callable-payload","function wrap<Value>(value: Value): Promise<Value> { return new Promise<Value>(resolve => { const values = new Set<() => void>([() => { resolve(value); }]); values.forEach(actual => { actual(); }); }); }","resolve(value)"],
+["set-returned-adopter-actual-creation","function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { done(value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const observer = make((actual: number): void => { void actual; }, 7); const completion = make(resolve, value); new Set([completion]).forEach(next => { next(); }); observer(); }); }","done(value)"],
+["set-returned-adopter-actual-creation-reversed","function make<Part>(done: (value: Part) => void, value: Part): () => void { return () => { done(value); }; } function wrap<Value>(value: Value): Promise<Value | number> { return new Promise<Value | number>(resolve => { const observer = make((actual: number): void => { void actual; }, 7); const completion = make(resolve, value); observer(); new Set([completion]).forEach(next => { next(); }); }); }","done(value)"]
 ];
 
-for (const [name, declarations] of nativeOpaquePayloadCases) {
+for (const [name, declarations, expression] of nativeOpaquePayloadCases) {
   test("Rust native opaque callable input is unresolved, not safe empty: " + name, () => {
     const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": declarations +
       "\nexport function reject(value: Promise<number>): void { void wrap(value); }" } });
-    assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: "resolve(value)" }]);
+    assertRejectedAsyncSource(compilation, [{ code: "RUST_ASYNC_RESULT_USE_NOT_PROVEN", kind: "KindCallExpression", text: expression }]);
   });
   test("Rust ordinary opaque callable input keeps its native value: " + name, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin",
