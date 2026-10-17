@@ -6,6 +6,7 @@ import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/t
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
+import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callables/emission-requests.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustPhysicalEmissionContexts } from "../../../dist/analysis/program/physical-emission-contexts.js";
 import { analyzeRustInitializationErrors } from "../../../dist/analysis/errors/initialization.js";
@@ -93,6 +94,86 @@ function actual(source, surfaces) {
   return analyzeRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
     files: { "index.ts": source } }).program;
 }
+
+test("declaration bindings keep full formals and only free captured generic identities", () => {
+  const value = Object.freeze({ kind: "type-parameter", identity: "declared:value", name: "Value" });
+  const outer = Object.freeze({ kind: "type-parameter", identity: "captured:value", name: "Value" });
+  const unused = Object.freeze({ kind: "type-parameter", identity: "declared:unused", name: "Unused" });
+  const region = Object.freeze({ kind: "bound", binderIdentity: "declared", identity: "region", name: "region" });
+  const outerRegion = Object.freeze({ kind: "bound", binderIdentity: "captured", identity: "region", name: "region" });
+  const length = Object.freeze({ kind: "parameter", identity: "declared:length", name: "Length" });
+  const outerLength = Object.freeze({ kind: "parameter", identity: "captured:length", name: "Length" });
+  const parameters = Object.freeze([
+    { kind: "type", type: value }, { kind: "type", type: unused },
+    { kind: "lifetime", lifetime: region }, { kind: "const", value: length },
+  ]);
+  const environment = Object.freeze([
+    { kind: "type", type: { ...value } }, { kind: "type", type: outer },
+    { kind: "lifetime", lifetime: { ...region } }, { kind: "lifetime", lifetime: outerRegion },
+    { kind: "const", value: { ...length } }, { kind: "const", value: outerLength },
+  ]);
+  const bindings = rustEmissionDeclarationBindings(parameters, environment);
+  assert.equal(bindings !== undefined, true, "the same declared reference in the producer environment is not a second formal");
+  assert.equal(bindings.types.size, 3, "all declared, unused and same-spelling outer type binders remain present");
+  for (const parameter of [value, outer, unused]) assert.equal(bindings.types.get(parameter.identity)?.identity,
+    parameter.identity, parameter.identity + ": exact original type identity");
+  assert.equal(bindings.lifetimes.size, 2, "equal lifetime spelling never merges different actual binders");
+  for (const lifetime of [region, outerRegion]) assert.equal(rustLifetimeKey(bindings.lifetimes.get(rustLifetimeKey(lifetime))),
+    rustLifetimeKey(lifetime), lifetime.binderIdentity + ": exact native lifetime binder");
+  assert.equal(bindings.consts.size, 2, "declared and free captured const binders remain separate");
+  for (const parameter of [length, outerLength]) assert.equal(bindings.consts.get(parameter.identity)?.identity,
+    parameter.identity, parameter.identity + ": exact const identity");
+  assert.equal(bindings.types.has("foreign:value"), false, "no unselected source type identity is invented");
+  assert.equal(Object.isFrozen(bindings) && typeof bindings.types.set === "undefined" &&
+    typeof bindings.lifetimes.set === "undefined" && typeof bindings.consts.set === "undefined", true,
+  "the selecting owner publishes one immutable binding value");
+  const freeOnly = rustEmissionDeclarationBindings([], environment);
+  assert.equal(freeOnly !== undefined && freeOnly.types.size === 2 && freeOnly.lifetimes.size === 2 && freeOnly.consts.size === 2,
+    true, "an enclosing free environment is retained even when this declaration has no formals");
+});
+
+test("declaration environment admission still rejects duplicate and incompatible binding inputs", () => {
+  const parameter = Object.freeze({ kind: "type", type: { kind: "type-parameter", identity: "value", name: "Value" } });
+  const lifetime = Object.freeze({ kind: "lifetime", lifetime: { kind: "parameter", identity: "region", name: "region" } });
+  const constant = Object.freeze({ kind: "const", value: { kind: "parameter", identity: "length", name: "Length" } });
+  for (const [name, argument] of [["type", parameter], ["lifetime", lifetime], ["const", constant]]) {
+    assert.equal(rustEmissionDeclarationBindings([argument, argument], []) === undefined, true,
+      name + ": a duplicate declaration is not repaired by the selection owner");
+    assert.equal(rustEmissionDeclarationBindings([], [argument, argument]) === undefined, true,
+      name + ": a malformed duplicate free environment is not silently deduplicated");
+    assert.equal(rustEmissionIdentityBindings([argument, argument]) === undefined, true,
+      name + ": the existing strict generic binding matcher remains unchanged");
+  }
+  for (const [name, owned, incompatible] of [
+    ["type", parameter, { ...parameter, type: { ...parameter.type, name: "Contradictory" } }],
+    ["lifetime", lifetime, { ...lifetime, lifetime: { ...lifetime.lifetime, name: "contradictory" } }],
+    ["const", constant, { ...constant, value: { ...constant.value, name: "Contradictory" } }],
+  ]) assert.equal(rustEmissionDeclarationBindings([owned], [incompatible]) === undefined, true,
+    name + ": a contradictory reference to the identical declared binder is rejected");
+  for (const [name, argument] of [
+    ["concrete type", { kind: "type", type: { kind: "source-primitive", name: "int32" } }],
+    ["static lifetime", { kind: "lifetime", lifetime: { kind: "static" } }],
+    ["literal const", { kind: "const", value: { kind: "integer", value: "2" } }],
+  ]) {
+    assert.equal(rustEmissionDeclarationBindings([argument], []) === undefined, true, name + ": not a declared parameter");
+    assert.equal(rustEmissionDeclarationBindings([], [argument]) === undefined, true, name + ": not a free generic reference");
+  }
+});
+
+test("real generic declarations retain owned, unused and captured binders without duplicate self bindings", () => {
+  const source = `
+export function identity<Value, Unused>(value: Value): Value { return value; }
+export function make<Outer>(captured: Outer): <Value>(value: Value) => Outer {
+  return <Value>(value: Value): Outer => captured;
+}
+`;
+  for (const surfaces of [[], ["js"]]) {
+    const result = compileRust({ surfaces, files: { "index.ts": source } }).result;
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+    assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
+      "actual checked native generic declarations and captured outer binders emit Rust");
+  }
+});
 
 test("higher-ranked emission identity bindings preserve distinct actual binder identities", () => {
   const first = Object.freeze({ kind: "bound", binderIdentity: "first", identity: "region", name: "region" });

@@ -4,7 +4,7 @@ import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type T
 import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage,
   VariableDeclarationList_Declarations, VariableStatement_DeclarationList,
   sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
-import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
@@ -44,6 +44,37 @@ export interface RustPhysicalCallableEmissionRequestInput {
   readonly adapterFlows: readonly { readonly subject: Node; readonly conversion: RustGenericCallableConversion }[];
   readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
   readonly identitySources: RustGenericCallableIdentitySources;
+}
+
+export function rustEmissionDeclarationBindings(
+  parameters: readonly RustTargetGenericArgument[], environment: readonly RustTargetGenericArgument[],
+): RustTargetGenericBindings | undefined {
+  const identity = (argument: RustTargetGenericArgument): { readonly key: string; readonly name: string } | undefined => {
+    if (argument.kind === "type" && argument.type.kind === "type-parameter")
+      return { key: `type\0${argument.type.identity}`, name: argument.type.name };
+    if (argument.kind === "lifetime" && (argument.lifetime.kind === "parameter" || argument.lifetime.kind === "bound"))
+      return { key: `lifetime\0${rustLifetimeKey(argument.lifetime)}`, name: argument.lifetime.name };
+    if (argument.kind === "const" && argument.value.kind === "parameter")
+      return { key: `const\0${argument.value.identity}`, name: argument.value.name };
+    return undefined;
+  };
+  const declared = new Map<string, string>();
+  for (const parameter of parameters) {
+    const selected = identity(parameter);
+    if (selected === undefined || declared.has(selected.key)) return undefined;
+    declared.set(selected.key, selected.name);
+  }
+  const arguments_ = [...parameters];
+  const captured = new Set<string>();
+  for (const argument of environment) {
+    const selected = identity(argument);
+    if (selected === undefined || captured.has(selected.key)) return undefined;
+    captured.add(selected.key);
+    const name = declared.get(selected.key);
+    if (name === undefined) arguments_.push(argument);
+    else if (name !== selected.name) return undefined;
+  }
+  return rustEmissionIdentityBindings(arguments_);
 }
 
 export function prepareRustPhysicalCallableEmissionRequests(
@@ -87,10 +118,10 @@ export function prepareRustPhysicalCallableEmissionRequests(
       diagnostics.push(emissionDiagnostic(owner, "An actual emitted use requires its original declaration identity and canonical generic parameter contract."));
       return undefined;
     }
-    const arguments_: RustTargetGenericArgument[] = [...producer?.environment ?? [], ...(parameters ?? []).map(parameter =>
+    const arguments_: RustTargetGenericArgument[] = (parameters ?? []).map(parameter =>
       parameter.kind === "lifetime" ? { kind: "lifetime" as const, lifetime: parameter.lifetime }
-        : { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } })];
-    const bindings = rustEmissionIdentityBindings(arguments_);
+        : { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } });
+    const bindings = rustEmissionDeclarationBindings(arguments_, producer?.environment ?? []);
     if (bindings === undefined) {
       diagnostics.push(emissionDiagnostic(owner, "An actual emitted use has no exact type, lifetime and const identity bindings."));
       return undefined;
