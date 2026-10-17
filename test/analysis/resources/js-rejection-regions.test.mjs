@@ -19,6 +19,7 @@ function selectRegion(nativeErrors, localErrors = false, asynchronous = true) {
     ast: { getSourceFile: () => file, getFileName: () => fileName,
       forEachChild: (node, visit) => { if (node === file) visit(declaration); } },
     sourceFiles: [file],
+    isNativeNode: node => node === file || node === declaration,
     promiseBodies: { declarations: new Map(asynchronous ? [[declaration, { name: "body" }]] : []),
       objects: new Map(asynchronous ? [[declaration, declaration]] : []) },
     records: { errorEffects: { get: node => node === declaration ? effects : undefined },

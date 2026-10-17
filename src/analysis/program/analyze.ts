@@ -282,6 +282,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   const receiverStorage = analyzeRustReceiverStorage({ ast, navigation: context.source.navigation,
     semantics: context.source.semantics, projectTypes, sourceFiles: projectSourceFiles,
+    isNativeNode: context.isNativeNode,
   });
   const callableOwnership = context.callableOwnership.initialize({ storage: context.sourceStorage, nativeNodes: context.nativeNodes,
     receiverCaptures: receiverStorage.captures,
@@ -357,6 +358,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     referenceDeclarations: mutableStorageDeclarations.referenceDeclarations,
     projectTypes,
     sourceFiles: projectSourceFiles,
+    isNativeNode: context.isNativeNode,
     hasPromotedStorage(declaration) {
       return promotedStorageDeclarations.has(declaration) ||
         context.records.bindingStorage.get(declaration) !== undefined ||
@@ -555,6 +557,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   );
   context.frozenDataWrites.initialize({ jsEnabled: walk.jsEnabled, ast, projectTypes,
     representations: context.objectRepresentations, structuralShapes: context.structuralShapes,
+    isNativeNode: context.isNativeNode,
     sourceFiles: projectSourceFiles, records: context.records, views: context.classValues.instanceViewRequests(),
     typeDefinitions: context.typeDefinitions });
   context.projectFieldDispatch.initialize({
@@ -593,8 +596,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   if (context.diagnostics.length !== selectedIssuePosition) return undefined;
   const fallibility = recordFallibilityFacts(walk, projectSourceFiles);
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
-  recordResourceManagementFacts(walk, projectSourceFiles);
-  recordFutureValueFacts(walk, projectSourceFiles);
+  recordResourceManagementFacts(walk);
+  recordFutureValueFacts(walk);
   const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
   if (sourcePackageComponents.kind === "rejected") {
     context.diagnostics.push(...sourcePackageComponents.diagnostics);

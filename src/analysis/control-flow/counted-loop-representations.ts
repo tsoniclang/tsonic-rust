@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import {
   ForStatement_Condition,
   isSourceCallableBodyBoundary,
@@ -57,7 +57,7 @@ interface RustCountedLoopAnalysisContext {
 
 export function analyzeRustCountedLoopRepresentations(input: {
   readonly ast: AstReader;
-  readonly sourceFiles: readonly SourceFile[];
+  readonly nativeNodes: readonly Node[];
   readonly navigation: SourceProgramNavigation;
   readonly records: RustProgramRecords & SourceLiteralIndex;
   readonly borrowedElementReads: RustBorrowedElementReads;
@@ -78,15 +78,8 @@ export function analyzeRustCountedLoopRepresentations(input: {
         byStatement.set(node, Object.freeze(representation));
       }
     }
-    input.ast.forEachChild(node, (child) => {
-      if (child !== undefined) {
-        visit(child);
-      }
-    });
   };
-  for (const sourceFile of input.sourceFiles) {
-    visit(sourceFile);
-  }
+  for (const node of input.nativeNodes) visit(node);
   return Object.freeze({
     representationFor(statement: Node) {
       return byStatement.get(statement);

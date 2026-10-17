@@ -72,7 +72,8 @@ function placementInputs() {
     parent: node => parents.get(node),
     body: node => bodies.has(node) ? {} : undefined,
     kindName: node => functionSet.has(node) ? "KindFunctionDeclaration" : node === file ? "KindSourceFile" : "KindBlock",
-    is: { IsFunctionDeclaration: node => functionSet.has(node), IsSourceFile: node => node === file },
+    is: { IsFunctionDeclaration: node => functionSet.has(node), IsSourceFile: node => node === file,
+      IsArrowFunction: () => false, IsFunctionExpression: () => false },
     forEachChild() { throw new Error("native participation must use the existing finite source domain"); },
   }, {});
   let implementationReads = 0;

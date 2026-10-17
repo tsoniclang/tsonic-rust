@@ -16,7 +16,7 @@ import {
   Node_Name,
   Node_Type,
   sourceLexicalEnvironment,
-  sourceCallableDefinitionIsDiscarded,
+  sourceExpressionResultUse,
 } from "@tsonic/target-api/source";
 
 import {
@@ -26,6 +26,7 @@ import {
   rustCallableInputProtocol,
   rustCallableTargetType,
   rustClosureProtocol,
+  rustUnitTargetType,
 } from "../../target-model/types/index.js";
 import { recordRustParameterAbiSelection, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
 import { recordStatementFacts } from "../control-flow/statements.js";
@@ -111,6 +112,8 @@ export function resolveFunctionExpressionCarrier(
   },
 ): TargetTypeRef | undefined {
   const { ast } = walk.context;
+  if ((ast.is.IsArrowFunction(expression) || ast.is.IsFunctionExpression(expression)) &&
+    sourceExpressionResultUse(ast, expression) === "discarded") return rustUnitTargetType();
   const genericParameters = walk.context.sourceLifetimes.contractFor(expression)?.parameters
     .flatMap(parameter => parameter.kind === "type" ? [rustTypeParameterFromSourceContract(parameter)] : []);
   const parameters = ast.parameters(expression);
@@ -327,9 +330,7 @@ export function resolveFunctionExpressionCarrier(
   const valueResult = selectedValueResult ?? bodyCarrier;
   if (finalizeRustCallableSignature(walk, expression,
     { ...signatureRequest, selectedReturn: generator?.resultCarrier ?? bodyCarrier }) === undefined) return undefined;
-  const discarded = sourceCallableDefinitionIsDiscarded(expression, ast);
-  const captures = discarded ? { receivers: [], receiverFields: [], captures: [] }
-    : collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
+  const captures = collectRustLexicalCaptures(walk, expression, [...parameters.flatMap(parameter => {
     const initializer = parameter === undefined ? undefined : Node_Initializer(ast, parameter);
     return initializer === undefined ? [] : [initializer];
   }), body],

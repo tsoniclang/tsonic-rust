@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import {
   BinaryExpression_Left, BinaryExpression_Right, ForInOrOfStatement_Initializer,
   ForInOrOfStatement_Statement, Node_Expression, Node_Name, Node_Operand,
@@ -108,7 +108,7 @@ export function selectRustBorrowedIterationBinding(
 }
 
 export function analyzeRustBorrowedIterationBindings(
-  ast: AstReader, files: readonly SourceFile[], records: RustProgramRecords, navigation: SourceProgramNavigation,
+  ast: AstReader, nativeNodes: readonly Node[], records: RustProgramRecords, navigation: SourceProgramNavigation,
 ): (node: Node) => RustBorrowedIterationBinding | undefined {
   const bindings = new WeakMap<Node, RustBorrowedIterationBinding>();
   const visit = (node: Node): void => {
@@ -116,9 +116,8 @@ export function analyzeRustBorrowedIterationBindings(
       const selected = selectRustBorrowedIterationBinding(node, ast, records, navigation);
       if (selected !== undefined) bindings.set(node, selected);
     }
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  files.forEach(visit);
+  nativeNodes.forEach(visit);
   return node => bindings.get(node);
 }
 

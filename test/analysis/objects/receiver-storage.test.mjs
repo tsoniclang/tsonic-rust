@@ -4,7 +4,9 @@ import { analyzeRustReceiverStorage } from "../../../dist/analysis/project-types
 import { createRustObjectRepresentationPlan } from "../../../dist/analysis/project-types/object-representation.js";
 
 test("source receiver storage requires no physical carrier or representation decision", () => {
+  const nativeNodes = new Set();
   const input = { ast: {}, navigation: {}, semantics: {}, sourceFiles: [],
+    isNativeNode: node => nativeNodes.has(node),
     projectTypes: { definitions: [] } };
   for (const name of ["hasPromotedStorage", "hasMutableStorageUse", "valueWrites", "referenceDeclarations"]) {
     Object.defineProperty(input, name, { get() { throw new Error("physical representation read before ownership selection"); } });
@@ -20,6 +22,7 @@ test("source receiver storage requires no physical carrier or representation dec
 });
 
 test("physical object analysis consumes the exact presealed receiver storage plan", () => {
+  const nativeNodes = new Set();
   const declaration = {};
   const alias = { declaration };
   const aliases = Object.freeze([alias]);
@@ -30,6 +33,7 @@ test("physical object analysis consumes the exact presealed receiver storage pla
   });
   const plan = createRustObjectRepresentationPlan({
     ast: {}, navigation: {}, semantics: {}, sourceFiles: [], projectTypes: { definitions: [] },
+    isNativeNode: node => nativeNodes.has(node),
     receiverStorage, valueWrites: new Set(), hasPromotedStorage: () => false,
     hasMutableStorageUse: () => false,
   });

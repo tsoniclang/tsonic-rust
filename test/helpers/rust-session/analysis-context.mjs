@@ -8,8 +8,10 @@ export function analyzeRustCheckedContext(request, configureContext) {
   assert.equal(references.kind, "resolved");
   const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, references.plan.activeCrates);
   assert.equal(dispatch.kind, "resolved");
-  let context = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
+  const created = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
     request.rootPublishesLibrary, dispatch.plan);
+  assert.equal(created.kind, "resolved", "the actual checked native context is admitted before body analysis");
+  let context = created.value;
   if (configureContext !== undefined) context = configureContext(context);
   analyzeRustProgram(context, request.configuration.outputType);
   return context;

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceCallableDefinitionIsDiscarded } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
@@ -42,7 +42,7 @@ export interface RustSuspendedCallablePlan {
 
 export function createRustSuspendedCallablePlan(
   ast: AstReader,
-  sourceFiles: readonly SourceFile[],
+  nativeNodes: readonly Node[],
   records: RustProgramRecords,
   names: RustNamePlan,
   lifetimes: RustLifetimeIndex,
@@ -56,9 +56,8 @@ export function createRustSuspendedCallablePlan(
     const name = names.nameForDeclaration(node);
     if (name !== undefined) usedNames.add(name);
     if (records.closureCapture.get(node)?.invocationOwner === "shared-state") selected.push(node);
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  for (const sourceFile of sourceFiles) visit(sourceFile);
+  for (const node of nativeNodes) visit(node);
   selected.sort((left, right) => ast.getFileName(ast.getSourceFile(left)).localeCompare(ast.getFileName(ast.getSourceFile(right)), "en") || ast.pos(left) - ast.pos(right));
   const implementations = new Map<Node, RustSuspendedCallableImplementation>();
   const issues: RustSourceCallableSpecializationIssue[] = [];

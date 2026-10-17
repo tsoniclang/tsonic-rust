@@ -25,6 +25,7 @@ export interface RustFrozenDataWriteRegistry extends RustFrozenDataWritePlan {
     readonly representations: RustObjectRepresentationPlan;
     readonly structuralShapes: RustStructuralShapePlan;
     readonly sourceFiles: readonly SourceFile[];
+    readonly isNativeNode: (node: Node) => boolean;
     readonly records: RustProgramRecords;
     readonly views: readonly RustProjectStructuralView[];
     readonly typeDefinitions: RustTypeDefinitions;

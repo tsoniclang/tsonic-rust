@@ -25,6 +25,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
   readonly navigation: SourceProgramNavigation;
   readonly semantics: SourceProgramSemantics;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly projectTypes: RustProjectTypePolicy;
   readonly isStoredField: (declaration: Node) => boolean;
   readonly deferredFields: ReadonlySet<Node>;
@@ -41,6 +42,7 @@ export function analyzeRustReceiverFieldCaptures(input: {
   let visited = 0;
   while (pending.length > 0) {
     const node = pending.pop()!;
+    if (!input.isNativeNode(node)) continue;
     if (++visited > 4_194_304) {
       issues.push({ node, reason: "Rust receiver capture analysis exceeds its finite node budget." });
       break;

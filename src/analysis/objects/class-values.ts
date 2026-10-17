@@ -180,6 +180,7 @@ export function createRustClassValueRegistry(): RustClassValueRegistry {
         if (names === undefined) {
           names = new Set(projectNamesByFile.get(file));
           const collect = (node: Node): void => {
+            if (!context.isNativeNode(node)) return;
             const name = context.names.nameForDeclaration(node);
             if (name !== undefined) names!.add(name);
             const slot = context.projectTypes.memberSlotName(node, "static");

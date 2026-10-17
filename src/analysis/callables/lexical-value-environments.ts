@@ -12,6 +12,7 @@ import { rustRetainedCallableStorage } from "./results.js";
 export function recordRustLexicalValueEnvironments(walk: RustFactWalk, lexical: RustLexicalFunctionEnvironments): void {
   const { ast, source, records } = walk.context;
   const visit = (node: Node): void => {
+    if (!walk.context.isNativeNode(node)) return;
     const selection = lexical.forDeclaration(node);
     const retained = rustRetainedCallableStorage(records, node) !== undefined;
     if (selection?.kind === "resolved" && (selection.valueObserved || retained)) {

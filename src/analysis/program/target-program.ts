@@ -98,13 +98,15 @@ export function analyzeRustTargetProgram(
       ...(activeProviderHooks.some(hook => hook.phase === "async-entry-execution") ? [] : [rustJsAsyncExecutor])] : providerBinaryHooks,
     runtimeReferences.plan.activeCrates,
   );
-  const context = createRustAnalysisContext(
+  const contextResult = createRustAnalysisContext(
     input,
     providerSemantics,
     jsEnabled,
     rootPublishesLibrary,
     dispatchContexts.plan,
   );
+  if (contextResult.kind === "rejected") return contextResult;
+  const context = contextResult.value;
   if (context.diagnostics.length > 0) return rejectedTargetStage(context.diagnostics);
   const sourceStage = analyzeRustProgram(context, configuration.outputType);
   if (context.diagnostics.length > 0) {
@@ -183,7 +185,7 @@ export function analyzeRustTargetProgram(
     },
   });
   const dispatchContextDemand = analyzeRustDispatchContextDemand(
-    context.ast, context.sourceFiles, records, sourcePackageComponents, dispatchContexts.plan,
+    context.ast, context.sourceFiles, records, sourcePackageComponents, context.isNativeNode, dispatchContexts.plan,
   );
   if (dispatchContextDemand.kind === "rejected") return rejectedTargetStage(dispatchContextDemand.diagnostics);
   const binaryDispatchDemand = analyzeRustBinaryDispatchDemand(
@@ -250,6 +252,7 @@ export function analyzeRustTargetProgram(
   });
   if (ownershipFlow.kind === "rejected") return rejectedTargetStage(ownershipFlow.diagnostics);
   const errorRegions = analyzeRustErrorRegions({ ast: context.ast, sourceFiles: context.sourceFiles, records,
+    isNativeNode: context.isNativeNode,
     promiseBodies: context.promiseBodies.plan,
     names: context.names, callables: context.callableValues.selected,
     producers: context.callableValues.nativeProducers, definitions: context.typeDefinitions,
@@ -258,7 +261,7 @@ export function analyzeRustTargetProgram(
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
-    context.sourceFiles,
+    context.nativeNodes,
     records,
     context.names,
     context.sourceLifetimes,
@@ -300,7 +303,7 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.backend.source-module-construction"],
     })));
   }
-  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, records, context.source.navigation);
+  const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.nativeNodes, records, context.source.navigation);
   const borrowEffectsInput = {
     sourceFacts: context.source.sourceFacts,
     ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
@@ -342,13 +345,13 @@ export function analyzeRustTargetProgram(
   } = {
     errorRegions: completeRustErrorRegionRecords(errorRegions.value, initializationErrors.value),
     genericCallableErrors: genericCallableErrors.value,
-    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, sourceFiles: context.sourceFiles, records }),
+    captureStorage: analyzeRustCaptureStorage({ ast: context.ast, nativeNodes: context.nativeNodes, records }),
     promiseResults: promiseResults.results,
     promiseBodies: context.promiseBodies.plan,
     lexicalFunctions,
     errorStorageDemands: context.errorStorageDemands,
     localStorageAliases: analyzeRustLocalStorageAliases({ ast: context.ast,
-      navigation: context.source.navigation, sourceFiles: context.sourceFiles, records }),
+      navigation: context.source.navigation, nativeNodes: context.nativeNodes, records }),
     numericRepresentations: analyzeRustNumericRepresentations({ source: context.source,
       sourceFiles: context.sourceFiles, records }),
     host: Object.freeze({
@@ -377,7 +380,7 @@ export function analyzeRustTargetProgram(
     declarationGenericRequirements: declarationGenericRequirements.index,
     ownership: ownership.ownership,
     borrowedElementReads,
-    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.sourceFiles, records),
+    borrowedInitializers: analyzeRustBorrowedInitializers(context.ast, context.nativeNodes, records),
     providerMutableInputs,
     retainedCallableInputs: retainedCallableInputs.value,
     structuralShapes: context.structuralShapes.seal(),
@@ -391,8 +394,7 @@ export function analyzeRustTargetProgram(
     binaryHooks,
     binaryExecution: binaryExecution.value,
     providerErrorCarriers: analyzeRustProviderErrorCarriers(
-      context.ast,
-      context.sourceFiles,
+      context.nativeNodes,
       records,
       binaryHooks,
     ),
@@ -407,7 +409,7 @@ export function analyzeRustTargetProgram(
     sourcePackageComponents,
     countedLoops: analyzeRustCountedLoopRepresentations({
       ast: context.ast,
-      sourceFiles: context.sourceFiles,
+      nativeNodes: context.nativeNodes,
       navigation: context.source.navigation,
       records: finalRecords,
       borrowedElementReads,
@@ -415,12 +417,13 @@ export function analyzeRustTargetProgram(
     projectFlowReadSelections: analyzeRustProjectFlowReadSelections({
       ast: context.ast,
       sourceFiles: context.sourceFiles,
+      isNativeNode: context.isNativeNode,
       records,
     }),
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
-  const reachability = analyzeRustReachability(program);
+  const reachability = analyzeRustReachability(program, context.nativeNodes);
   context.callableValues.publish();
   return resolvedTargetStage(Object.freeze({ ...program,
     records: Object.freeze({ ...createRustProgramRecords(records), literalValue: context.literalValues.literalValue }),

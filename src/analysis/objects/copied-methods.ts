@@ -19,6 +19,7 @@ export function selectRustCopiedMethods(
   const incoming = new Map<string, Set<string>>();
   const key = (carrier: TargetTypeRef, index: number): string => `${structuralStorageKey(carrier, componentForFile)}#${index}`;
   const visit = (node: Node): void => {
+    if (!walk.context.isNativeNode(node)) return;
     const binding = walk.context.records.bindingProjection.get(node);
     if (binding?.projection.kind === "object-rest") {
       const shape = rustStructuralObjectCarrierValue(binding.sourceCarrier);

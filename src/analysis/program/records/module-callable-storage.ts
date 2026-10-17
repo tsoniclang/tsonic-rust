@@ -22,6 +22,7 @@ export function createRustModuleCallableStorageProducer(
     finalize(walk: RustFactWalk): void {
       assertOpen();
       const visit = (node: Node): void => {
+        if (!walk.context.isNativeNode(node)) return;
         const selection = selectRustModuleCallableStorage(walk, node);
         if (selection !== undefined) {
           requireRustRecord(walk.context.requiredRecords, "moduleCallableStorage", node,

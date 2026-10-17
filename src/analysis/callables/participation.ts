@@ -1,5 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceLexicalFunctionIsUnused, sourceNodesOutsideErasedSubtrees,
+  sourceExpressionResultUse,
   type SourceProgramNavigation, type SourceSubtreeParticipation } from "@tsonic/target-api/source";
 import type { RustNativeParticipation } from "../../target-model/records/native-demand.js";
 import type { RustNativeParticipationProducer } from "../program/records/native-participation.js";
@@ -13,6 +14,8 @@ export function analyzeRustNativeParticipation(input: {
   readonly requiredRecords: RustRequiredRecord[];
 }): SourceSubtreeParticipation {
   return sourceNodesOutsideErasedSubtrees(input.ast, input.nodes, node => {
+    if (input.ast.is.IsArrowFunction(node) || input.ast.is.IsFunctionExpression(node))
+      return sourceExpressionResultUse(input.ast, node) === "discarded";
     if (!input.ast.is.IsFunctionDeclaration(node)) return false;
     const parent = input.ast.parent(node);
     const moduleLevel = parent !== undefined && input.ast.is.IsSourceFile(parent);

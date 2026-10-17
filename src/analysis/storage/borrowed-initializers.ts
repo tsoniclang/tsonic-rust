@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 
@@ -16,7 +16,7 @@ export interface RustBorrowedInitializerQueries {
 }
 
 export function analyzeRustBorrowedInitializers(
-  ast: AstReader, files: readonly SourceFile[], records: RustProgramRecords,
+  ast: AstReader, nativeNodes: readonly Node[], records: RustProgramRecords,
 ): RustBorrowedInitializerQueries {
   const selections = new WeakMap<Node, RustBorrowedInitializer>();
   const select = (expression: Node): void => {
@@ -50,8 +50,7 @@ export function analyzeRustBorrowedInitializers(
       const initializer = Node_Initializer(ast, node);
       if (initializer !== undefined) select(initializer);
     }
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  files.forEach(visit);
+  nativeNodes.forEach(visit);
   return Object.freeze({ forExpression: (expression: Node) => selections.get(expression) });
 }

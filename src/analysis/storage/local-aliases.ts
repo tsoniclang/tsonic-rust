@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceProgramNavigation } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import { isRustVecCarrier } from "../../target-model/types/index.js";
@@ -12,7 +12,7 @@ export interface RustLocalStorageAliasPlan {
 export function analyzeRustLocalStorageAliases(input: {
   readonly ast: AstReader;
   readonly navigation: SourceProgramNavigation;
-  readonly sourceFiles: readonly SourceFile[];
+  readonly nativeNodes: readonly Node[];
   readonly records: RustProgramRecords;
 }): RustLocalStorageAliasPlan {
   const { ast, navigation, records } = input;
@@ -56,9 +56,8 @@ export function analyzeRustLocalStorageAliases(input: {
         }
       }
     }
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
-  input.sourceFiles.forEach(visit);
+  input.nativeNodes.forEach(visit);
   return Object.freeze({ owner: (declaration: Node) => owners.get(declaration),
     requiresMutableOwner: (declaration: Node) => mutableOwners.has(declaration) });
 }

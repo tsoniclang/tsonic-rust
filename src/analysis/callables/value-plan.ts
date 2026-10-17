@@ -322,7 +322,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     },
     finalizeSelected() {
       if (structuralMethodStorage === undefined) throw new Error("Physical callable families require their completed constructor and field storage selection.");
-      const suspended = createRustSuspendedCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.lifetimes,
+      const suspended = createRustSuspendedCallablePlan(input.ast, input.nativeNodes, input.records, input.names, input.lifetimes,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
       const frames = createRustFrameCallablePlan({ ...input, usedNames });

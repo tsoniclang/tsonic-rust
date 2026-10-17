@@ -236,6 +236,7 @@ test("nominal union liveness reuses exact upcast fields and retains every nested
     fakeStatement({ kindName: "KindTypeAliasDeclaration" }), carrier,
   ]));
   const usage = analyzeRustGeneratedItemUsage({ ast, sourceFiles: [sourceFile], declarations: [...unionCarriers.keys()],
+    nativeNodes: [sourceFile, node],
     records: createRustRecordFixture({contextualValueConversion: { get: (subject) => subject === node
     ? { sourceCarrier: source, targetCarrier: target, conversion } : undefined },
 runtimeCarrier: { get: subject => unionCarriers.has(subject) ? { carrier: unionCarriers.get(subject) } : undefined }}),

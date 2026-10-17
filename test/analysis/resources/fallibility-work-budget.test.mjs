@@ -19,8 +19,10 @@ function fixture(text) {
     assert.equal(references.kind, "resolved");
     const dispatch = analyzeRustDispatchContextCatalog(request.providerSemantics.dispatchContexts, references.plan.activeCrates);
     assert.equal(dispatch.kind, "resolved");
-    const context = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
+    const created = createRustAnalysisContext(request.input, request.providerSemantics, request.jsEnabled,
       request.rootPublishesLibrary, dispatch.plan);
+    assert.equal(created.kind, "resolved", "the checked context is complete before the fallibility worklist");
+    const context = created.value;
     analyzeRustProgram(context, request.configuration.outputType);
     program = { ...context, records: context.records.seal(context.requiredRecords) };
     return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };

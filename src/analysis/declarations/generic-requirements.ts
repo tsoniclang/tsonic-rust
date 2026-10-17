@@ -5,7 +5,7 @@ import {
   type RequirementContractState,
 } from "./generic-requirement-contract.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { Node } from "@tsonic/tsts";
 import { type RustOptionalStorageRequirement } from "./type-projections.js";
 import { collectRustCallableDeclarations } from "./generic-reference-uses.js";
 import { type RustAssociatedTypeRequirement } from "./associated-requirements.js";
@@ -90,7 +90,7 @@ export type AnalyzeRustDeclarationGenericRequirementsResult =
 
 export function analyzeRustDeclarationGenericRequirements(
   source: TargetSourceProgram,
-  sourceFiles: readonly SourceFile[],
+  nativeNodes: readonly Node[],
   records: RustAnalysisRecords,
   names: RustNamePlan,
   sourceLifetimes: RustLifetimeIndex,
@@ -128,7 +128,7 @@ export function analyzeRustDeclarationGenericRequirements(
     }
     return references.has(node);
   };
-  const declarations = collectRustCallableDeclarations(ast, sourceFiles);
+  const declarations = collectRustCallableDeclarations(ast, nativeNodes);
   const declarationById = new Map<string, Node>();
   const idByDeclaration = new WeakMap<Node, string>();
   const bodyIdByDeclaration = new WeakMap<Node, string>();

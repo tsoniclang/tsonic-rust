@@ -48,7 +48,9 @@ function fixture(text, options = {}) {
     source.ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
   }
   const storage = createSourceStorageQuery(source, [file]);
+  const nativeNodes = new Set(storage.nodes);
   const receiverCaptures = analyzeRustReceiverFieldCaptures({ ast: source.ast,
+    isNativeNode: node => nativeNodes.has(node),
     navigation: source.navigation, semantics: source.semantics, sourceFiles: [file],
     projectTypes: { definitions: [], definitionContainingDeclaration: () => undefined },
     isStoredField: declaration => source.ast.is.IsPropertyDeclaration(declaration) || sourceParameterIsProperty(source.ast, declaration), deferredFields: new Set() });

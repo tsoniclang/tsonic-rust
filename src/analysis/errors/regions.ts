@@ -37,6 +37,7 @@ export type RustAnalyzedErrorRegions = Omit<RustErrorRegionRecords, "initializat
 export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
   readonly names: RustNamePlan;
   readonly callables: Pick<RustCallableValuePlan, "native" | "nativeGenericProducers">;
@@ -157,6 +158,7 @@ export function analyzeRustErrorRegions(input: RustErrorTypeContext & {
       else if (adapter.kind === "option-map" || adapter.kind === "option-some") registerAdapter(node, adapter.element, depth + 1);
     };
     const visit = (node: Node): void => {
+      if (!input.isNativeNode(node)) return;
       for (const name of [input.names.nameForDeclaration(node), input.names.functionNameForDeclaration(node),
         input.names.callableValueNameForDeclaration(node)]) if (name !== undefined) usedNames.add(name);
       const effects = input.records.errorEffects.get(node);

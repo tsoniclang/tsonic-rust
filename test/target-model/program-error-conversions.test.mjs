@@ -132,12 +132,11 @@ test("native throw carriers are declared once and transported by the used-error 
   const statement = {};
   const error = { kind: "conversion", expression: {}, conversion: { kind: "program-error", source: native,
     target, route: { kind: "runtime", boundary: "provider-native" } } };
-  const ast = { forEachChild() {} };
   for (const [selected, expected] of [
     [error, [native]], [{ ...error, conversion: { ...error.conversion, route: { kind: "runtime", boundary: "target-runtime" } } }, []],
     [{ kind: "program", expression: {}, carrier: target }, []],
   ]) {
-    const used = analyzeRustProviderErrorCarriers(ast, [statement], createRustRecordFixture({targetOperation: { get: (node) => node === statement
+    const used = analyzeRustProviderErrorCarriers([statement], createRustRecordFixture({targetOperation: { get: (node) => node === statement
     ? { kind: "throw-op", error: selected } : undefined }}), []);
     assert.deepEqual(used, expected);
     assert.ok(Object.isFrozen(used));
@@ -155,7 +154,7 @@ test("source-program native errors enter inventory only through selected operati
   for (const [selected, expected] of [[undefined, []],
     [{ kind: "provider-operation", abi: { target: { form: "call" }, effects: { nativeErrorCarriers: [native] } } }, [native]],
     [{ kind: "provider-operation", abi: { target: { form: "call" }, effects: {} } }, []]]) {
-    const used = analyzeRustProviderErrorCarriers({ forEachChild() {} }, [statement], createRustRecordFixture({targetOperation: { get: (node) => node === statement ? selected : undefined }}), []);
+    const used = analyzeRustProviderErrorCarriers([statement], createRustRecordFixture({targetOperation: { get: (node) => node === statement ? selected : undefined }}), []);
     assert.deepEqual(used, expected);
     assert.equal(Object.isFrozen(used), true);
   }

@@ -16,9 +16,10 @@ type DeclarationOwner =
   | { readonly kind: "erased" }
   | { readonly kind: "root" };
 
-export function analyzeRustReachability(program: RustReachabilityInput): RustReachability {
+export function analyzeRustReachability(program: RustReachabilityInput, nativeNodes: readonly Node[]): RustReachability {
   const ast = program.source.ast;
-  const declarations = collectDeclarationUnits(ast, program.sourceFiles);
+  const nativeNodeSet = new Set(nativeNodes);
+  const declarations = collectDeclarationUnits(ast, nativeNodes);
   const declarationSet = new Set(declarations);
   const canonicalByDeclaration = new Map<Node, Node>();
   const canonical = (declaration: Node): Node => {
@@ -50,7 +51,7 @@ export function analyzeRustReachability(program: RustReachabilityInput): RustRea
   const externallyReachable = new Set<Node>();
   const runtimeInitializationRoots = program.sourceFiles.filter((sourceFile) =>
     program.moduleInitialization.requirementFor(sourceFile).kind === "required");
-  const runtimeInitializationNodes = collectSubtreeNodes(ast, runtimeInitializationRoots);
+  const runtimeInitializationNodes = collectSubtreeNodes(ast, runtimeInitializationRoots, nativeNodeSet);
   const publicDeclarations = new Set<Node>(program.sourcePackageFacades.componentIds.flatMap(
     (componentId) => program.sourcePackageFacades.exportsForComponent(componentId)
       .map((entry) => entry.declaration),
@@ -63,6 +64,7 @@ export function analyzeRustReachability(program: RustReachabilityInput): RustRea
   const generatedUsage = analyzeRustGeneratedItemUsage({
     ast,
     sourceFiles: program.sourceFiles,
+    nativeNodes,
     declarations,
     records: program.records,
     projectTypes: program.projectTypes,
@@ -236,12 +238,12 @@ function declarationEmitsStandaloneRustItem(
   }
 }
 
-function collectSubtreeNodes(ast: AstReader, roots: readonly Node[]): WeakSet<Node> {
+function collectSubtreeNodes(ast: AstReader, roots: readonly Node[], nativeNodes: ReadonlySet<Node>): WeakSet<Node> {
   const nodes = new WeakSet<Node>();
   const pending = [...roots];
   while (pending.length > 0) {
     const node = pending.pop()!;
-    if (nodes.has(node)) continue;
+    if (nodes.has(node) || !nativeNodes.has(node)) continue;
     nodes.add(node);
     ast.forEachChild(node, (child) => {
       if (child !== undefined) pending.push(child);
@@ -252,23 +254,19 @@ function collectSubtreeNodes(ast: AstReader, roots: readonly Node[]): WeakSet<No
 
 function collectDeclarationUnits(
   ast: AstReader,
-  sourceFiles: readonly SourceFile[],
+  nativeNodes: readonly Node[],
 ): readonly Node[] {
-  const declarations: Node[] = [];
-  const pending: Node[] = [...sourceFiles]
-    .sort((left, right) => ast.getFileName(right).localeCompare(ast.getFileName(left), "en"));
-  while (pending.length > 0) {
-    const node = pending.pop()!;
-    if (isDeclarationUnit(ast, node)) declarations.push(node);
-    const children: Node[] = [];
-    ast.forEachChild(node, (child) => {
-      if (child !== undefined) children.push(child);
-    });
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      pending.push(children[index]!);
-    }
+  const byFile = new Map<SourceFile, Node[]>();
+  for (const node of nativeNodes) {
+    if (!isDeclarationUnit(ast, node)) continue;
+    const file = ast.getSourceFile(node);
+    if (file === undefined) throw new Error("An admitted native declaration requires its exact checked source file.");
+    const declarations = byFile.get(file) ?? [];
+    declarations.push(node);
+    byFile.set(file, declarations);
   }
-  return Object.freeze(declarations);
+  return Object.freeze([...byFile].sort(([left], [right]) =>
+    ast.getFileName(left).localeCompare(ast.getFileName(right), "en")).flatMap(([, declarations]) => declarations));
 }
 
 function isDeclarationUnit(ast: AstReader, node: Node): boolean {

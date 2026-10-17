@@ -1,4 +1,4 @@
-import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node } from "@tsonic/tsts";
 import {
   BinaryExpression_Left, BinaryExpression_Right, BreakOrContinueStatement_Label, Node_Expression, Node_Initializer, Node_Operand,
   VariableDeclarationList_Declarations, VariableStatement_DeclarationList, type SourceProgramNavigation,
@@ -19,7 +19,7 @@ export interface RustBorrowedElementLocal extends RustBorrowedElementRead {
 
 export function analyzeRustBorrowedElementLocals(
   ast: AstReader,
-  files: readonly SourceFile[],
+  nativeNodes: readonly Node[],
   records: RustProgramRecords,
   navigation: SourceProgramNavigation,
 ) {
@@ -163,7 +163,6 @@ export function analyzeRustBorrowedElementLocals(
       references: Object.freeze(uses.map(use => use.reference)) });
   };
   const visit = (node: Node): void => {
-    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
     if (ast.is.IsBlock(node)) {
       const statements = ast.statements(node);
       const statementIndexes = new Map(statements.map((statement, index) => [statement, index]));
@@ -181,7 +180,7 @@ export function analyzeRustBorrowedElementLocals(
       }
     }
   };
-  files.forEach(visit);
+  for (let index = nativeNodes.length - 1; index >= 0; index -= 1) visit(nativeNodes[index]!);
   return Object.freeze({
     forStatement: (node: Node) => starts.get(node),
     endingAt: (node: Node) => endings.get(node) ?? [],

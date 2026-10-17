@@ -11,6 +11,7 @@ export interface RustReceiverStorageInput {
   readonly semantics: SourceProgramSemantics;
   readonly projectTypes: RustProjectTypePolicy;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
 }
 
 export interface RustReceiverStoragePlan extends RustReceiverFieldAliasQueries {

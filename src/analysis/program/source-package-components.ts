@@ -345,6 +345,7 @@ export function validateRustGenericSourcePackageComponents(
       else inspect(selected.carrier);
     };
     const visit = (node: import("@tsonic/tsts").Node): void => {
+      if (!context.isNativeNode(node)) return;
       if (IsTypeSyntaxNode(context.ast, node)) return;
       if (context.records.typeAliasDeclaration.get(node)?.kind === "erased") return;
       inspectStorage(node, context.records.runtimeCarrier.get(node)?.carrier, () => nativeStorage.valueFor(node));

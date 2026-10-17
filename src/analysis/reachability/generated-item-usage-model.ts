@@ -68,6 +68,7 @@ export interface RustGeneratedItemUsage {
 export interface RustGeneratedItemUsageInput {
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
+  readonly nativeNodes: readonly Node[];
   readonly declarations: readonly Node[];
   readonly records: RustAnalysisRecords;
   readonly projectTypes: RustProjectTypePolicy;
