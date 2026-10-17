@@ -36,6 +36,7 @@ const walkerContracts = new Map([
   ["analysis/callables/ownership-components.ts", [2, "checked-source-identities-and-native-roots"]],
   ["analysis/callables/signatures.ts", [1, "native-domain"]],
   ["analysis/callables/value-plan.ts", [1, "native-domain"]],
+  ["analysis/callables/emission-requests.ts", [1, "native-domain"]],
   ["analysis/declarations/lifetimes.ts", [1, "native-domain"]],
   ["analysis/module-initialization/analyze.ts", [1, "admitted-module-statements"]],
   ["analysis/names/plan.ts", [1, "native-domain"]],
