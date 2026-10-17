@@ -45,6 +45,19 @@ class Specific extends Detail<number> {
 export function detail(value: number): number { return new Specific(value).detail; }
 `;
 
+const generatorSource = `
+import type { int32 } from "@tsonic/core/types.js";
+export function* values(): Generator<int32, int32, void> { yield 1; return 2; }
+`;
+
+const nativeHandlerSource = `
+import { loadnativeptr, unsafecontext } from "@tsonic/core/lang.js";
+import type { NativePointer, int32 } from "@tsonic/core/types.js";
+export function readNative(pointer: NativePointer<int32>): int32 {
+  return unsafecontext(loadnativeptr(pointer));
+}
+`;
+
 const frameSource = `
 class Value {
   recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
@@ -90,6 +103,8 @@ function observeCallablePublication(registry, assertions, carriers, observations
     ...descriptors,
     seal: { value(input) {
       observations.seals++;
+      assertions.equal(observations.requestSelections, 1, "one actual early physical-use selection precedes the late seal");
+      observations.verifyHandlerInputs();
       physical = registry.selected.generic.physical;
       const joined = physical.definitions().find(definition => definition.members.length === 2);
       assertions.equal(joined !== undefined, true, "the real pipeline selects the original two-member family");
@@ -105,6 +120,7 @@ function observeCallablePublication(registry, assertions, carriers, observations
       assertions.equal(registry.seal(input) === published, true, "repeated seals read the same completed publication");
       assertions.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "sealed, not published");
       observations.published = published.value;
+      observations.verifyHandlerInputs();
       return published;
     } },
     publish: { value() {
@@ -117,23 +133,58 @@ function observeCallablePublication(registry, assertions, carriers, observations
 }
 
 test("the planner phase label starts at publication, after the actual callable seal and reachability (instrumented load observation)", () => {
-  const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } }, files: { "index.ts": genericSource } };
+  const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } }, files: { "index.ts": genericSource + nativeHandlerSource } };
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
   const registryUrl = new URL("../../../dist/analysis/callables/value-plan.js", import.meta.url).href;
   const componentsUrl = new URL("../../../dist/analysis/program/source-package-components.js", import.meta.url).href;
+  const handlerUrl = new URL("../../../dist/analysis/operations/native-handlers.js", import.meta.url).href;
+  const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
   const carriersUrl = new URL("../../../dist/target-model/types/carriers/generic-callables.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-instrumented-callable-publication-proof";
   const registryObservation = `export function createRustCallableValuePlanRegistry() { return globalThis[Symbol.for(${JSON.stringify(key)})].registry(observedCreateRustCallableValuePlanRegistry()); }`;
   const componentsObservation = `export function analyzeRustSourcePackageComponents(...inputs) { const result = observedAnalyzeRustSourcePackageComponents(...inputs); globalThis[Symbol.for(${JSON.stringify(key)})].components.push(result); return result; }`;
+  const handlerObservation = `export function analyzeRustNativeHandlers(...inputs) { const result = observedAnalyzeRustNativeHandlers(...inputs); globalThis[Symbol.for(${JSON.stringify(key)})].handlers(inputs); return result; }`;
+  const requestObservation = `export function prepareRustPhysicalCallableEmissionRequests(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.beforeRequests(inputs[0]); const result = observedPrepareRustPhysicalCallableEmissionRequests(...inputs); observations.requests = result; observations.requestSelections++; return result; }`;
   const script = `
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
+import { sourceMarkerFactKey } from "@tsonic/tsts";
 const observationKey = Symbol.for(${JSON.stringify(key)});
-const observations = { seals: 0, publications: 0, components: [], anchors: new Set() };
+const observations = { seals: 0, publications: 0, components: [], anchors: new Set(), handlerSelections: 0, requestSelections: 0 };
 globalThis[observationKey] = observations;
+const families = ["targetOperation", "rawLocationPlan", "memoryLayoutObservation", "rawAddressPlan", "memoryBindingPlan", "typedLocationPlan", "nativeHandler"];
+observations.handlers = ([nodes, records, safety, sourceFacts, requirements]) => {
+  observations.handlerSelections++;
+  observations.handlerInputs = { nodes, records, safety, sourceFacts, requirements,
+    values: nodes.map(node => ({ node, values: families.map(family => records[family].get(node)),
+      safety: safety.get(node), marker: sourceFacts.getFact(node, sourceMarkerFactKey) })) };
+};
+observations.verifyHandlerInputs = () => {
+  const { nodes, records, safety, sourceFacts, requirements, values } = observations.handlerInputs;
+  assert.equal(nodes.length === values.length, true, "the original native input domain stays complete");
+  let selected = 0;
+  for (const row of values) {
+    for (const [index, family] of families.entries()) assert.equal(records[family].get(row.node) === row.values[index], true,
+      "no later writer changes the original handler input: " + family);
+    assert.equal(safety.get(row.node) === row.safety, true, "same completed safety selection");
+    assert.equal(sourceFacts.getFact(row.node, sourceMarkerFactKey) === row.marker, true, "same checked source-marker evidence");
+    if (records.nativeHandler.get(row.node) !== undefined) {
+      selected++;
+      assert.equal(requirements.some(requirement => requirement.family === "nativeHandler" && requirement.subject === row.node), true,
+        "the actual handler keeps its original required-record obligation");
+    }
+  }
+  assert.equal(selected > 0, true, "real pointer and safety source selects nonempty canonical handlers");
+};
+observations.beforeRequests = input => {
+  assert.equal(observations.handlerSelections, 1, "the single original handler owner finishes before early requests");
+  assert.equal(input.nativeNodes === observations.handlerInputs.nodes && input.records === observations.handlerInputs.records, true,
+    "the original canonical nativeNodes and records are passed unchanged");
+  observations.verifyHandlerInputs();
+};
 registerHooks({ load(url, context, nextLoad) {
   const loaded = nextLoad(url, context);
   const selections = [
@@ -143,6 +194,10 @@ registerHooks({ load(url, context, nextLoad) {
     { url: ${JSON.stringify(componentsUrl)}, anchor: "export function analyzeRustSourcePackageComponents(",
       replacement: "function observedAnalyzeRustSourcePackageComponents(",
       extension: ${JSON.stringify(componentsObservation)} },
+    { url: ${JSON.stringify(handlerUrl)}, anchor: "export function analyzeRustNativeHandlers(",
+      replacement: "function observedAnalyzeRustNativeHandlers(", extension: ${JSON.stringify(handlerObservation)} },
+    { url: ${JSON.stringify(collectorUrl)}, anchor: "export function prepareRustPhysicalCallableEmissionRequests(",
+      replacement: "function observedPrepareRustPhysicalCallableEmissionRequests(", extension: ${JSON.stringify(requestObservation)} },
   ];
   const selection = selections.find(selection => selection.url === url);
   if (selection === undefined) return loaded;
@@ -158,9 +213,26 @@ const compiled = compileRust(${JSON.stringify(options)});
 assert.equal(compiled.result.diagnostics.length, 0, compiled.result.diagnostics.map(issue => issue.message).join("\\n").slice(0, 2048));
 assert.equal(compiled.result.program === observations.published, false, "the observed publication is the callable product, not the enclosing program");
 assert.equal(compiled.result.program.callableValues === observations.published, true, "the pipeline publishes the exact observed completed product");
-assert.equal(observations.anchors.size, 2, "both original production functions are observed without writing dist");
+assert.equal(observations.anchors.has(${JSON.stringify(registryUrl)}) && observations.anchors.has(${JSON.stringify(componentsUrl)}), true,
+  "both original production functions are observed without writing dist");
+assert.equal(observations.anchors.size, 4, "each original stage and each required input observer has one exact anchor");
 assert.equal(observations.seals, 1, "one actual late callable seal");
 assert.equal(observations.publications, 1, "one actual planner publication");
+assert.equal(observations.requests.kind, "resolved", "only an admitted complete request inventory is published");
+assert.equal(observations.requestSelections, 1, "the source-use owner is never replayed after sealing");
+const { IsTypeSyntaxNode } = await import("@tsonic/target-api/source");
+const { records } = observations.handlerInputs;
+let metadata = 0;
+for (const request of observations.requests.value) {
+  assert.equal(Object.isFrozen(request) && Object.isFrozen(request.context) && Object.isFrozen(request.bindings), true,
+    "the exact early use and binding inputs are immutable");
+  if (request.kind === "type" && IsTypeSyntaxNode(compiled.result.program.source.ast, request.subject)) metadata++;
+  if (request.kind !== "type") assert.equal(IsTypeSyntaxNode(compiled.result.program.source.ast, request.subject), false,
+    "annotation metadata never becomes a callable-storage subject");
+  if (request.kind === "return") assert.equal(records.sourceCallableReturn.get(request.subject) !== undefined, true,
+    "body returns retain their actual selected declaration contract");
+}
+assert.equal(metadata > 0, true, "required authored type elaboration stays present independently of runtime storage");
 process.stdout.write("R14_INSTRUMENTED_PHASE_PROOF " + JSON.stringify(compiled.result.artifacts));
 `;
   const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
@@ -267,6 +339,26 @@ for (const surfaces of [[], ["js"]]) {
     }
     assert.equal(inherited > 0, true, "the actual inherited field or constructor points are covered");
   });
+
+  test(`generator contexts retain their actual body destination and independent protocol endpoints (${surfaces[0] ?? "native"})`, () => {
+    const program = actual(generatorSource, surfaces);
+    let selected = 0;
+    for (const producer of program.callableValues.nativeProducers.producers) {
+      const generator = program.records.generator.get(producer.declaration);
+      if (generator === undefined) continue;
+      const context = program.physicalEmissionContexts.contexts.find(candidate => candidate.use.subject === producer.declaration &&
+        candidate.use.role === "native-body");
+      assert.equal(context !== undefined && context.returnDestination.kind === "value", true,
+        "the actual generator has a completed body context");
+      assert.equal(context.returnDestination.carrier === generator.returnType, true,
+        "body return does not become the outward generator protocol");
+      for (const carrier of [generator.yieldType, generator.returnType, generator.nextType, generator.resultCarrier])
+        assert.equal(program.physicalEmissionContexts.carrierFor(context.use, carrier) !== undefined, true,
+          "each independently selected protocol endpoint is prepared before publication");
+      selected++;
+    }
+    assert.equal(selected > 0, true, "the retained generator domain is nonempty");
+  });
 }
 
 test("published context, operand, carrier and source occurrence readers cannot consult or mutate producers", () => {
@@ -306,7 +398,8 @@ test("published context, operand, carrier and source occurrence readers cannot c
   let program;
   let source;
   const compiled = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
-    files: { "index.ts": `export function inspect(value: string, word: string): boolean { return value.includes(word); }` },
+    files: { "index.ts": `export function inspect(value: string, word: string): boolean { return value.includes(word); }
+export function ordinary(value: number): number { const stored = value; return stored; }` },
     compileTarget(request) {
       source = { ...request.input.source, ast: guard(request.input.source.ast, "AST"),
         semantics: guard(request.input.source.semantics, "semantics"), navigation: guard(request.input.source.navigation, "navigation") };
@@ -353,7 +446,10 @@ test("published context, operand, carrier and source occurrence readers cannot c
 });
 
 test("a required missing physical operand refuses at the preparation owner before publication", () => {
-  const program = actual("export function value(input: number): number { return input + 1; }", []);
+  const arithmetic = actual("export function value(input: number): number { return input + 1; }", []);
+  assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
+    "ordinary arithmetic retains its real body context without artificial callable-storage reads");
+  const program = actual("export function contains(input: string): boolean { return input.includes(\"value\"); }", ["js"]);
   const prepared = program.physicalEmissionContexts;
   const operand = prepared.operands.find(operand => operand.origin.kind === "operand");
   assert.equal(operand !== undefined, true, "the negative control starts from an actual checked operand");
@@ -361,7 +457,8 @@ test("a required missing physical operand refuses at the preparation owner befor
     nativeStorage: { ...program.callableValues.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
   [{ use: targetUseSiteRef(operand.node, "missing-control", "actual-native-owner"), declaration: operand.context.declaration,
     bindings: operand.context.bindings, returnDestination: operand.context.returnDestination, error: operand.context.error,
-    nodes: [operand.node], sourceCarriers: [], physicalCarriers: [] }]);
+    demands: [Object.freeze({ kind: "value", subject: operand.node, owner: operand.context.declaration,
+      bindings: operand.context.bindings, context: operand.use })], sourceCarriers: [], physicalCarriers: [] }]);
   assert.equal(result.kind, "rejected");
   assert.equal(result.diagnostics.some(diagnostic => diagnostic.code === "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED" &&
     diagnostic.sourceNode === operand.node && diagnostic.message === "missing native producer proof"), true,
@@ -369,7 +466,19 @@ test("a required missing physical operand refuses at the preparation owner befor
   assert.equal(Object.hasOwn(result, "value"), false, "no incomplete context product is published");
 });
 
-test("worker contexts retain the existing complete initializer selection, not an invented module error region", () => {
+test("the removed native-node context input is rejected instead of becoming an implicit demand inventory", () => {
+  const program = actual("export function value(input: number): number { return input + 1; }", []);
+  const context = program.physicalEmissionContexts.contexts.find(candidate => candidate.use.role === "native-body");
+  assert.equal(context !== undefined, true, "the old-form negative starts from an actual emitted context");
+  assert.throws(() => prepareRustEmissionContextRequests({ ast: program.source.ast, records: program.records,
+    sourceOccurrences: program.physicalEmissionContexts.sourceOccurrences, errorRegions: program.errorRegions,
+    nativeStorage: program.callableValues.nativeStorage }, [{ use: context.use, declaration: context.declaration,
+      bindings: context.bindings, returnDestination: context.returnDestination, error: context.error,
+      nodes: [context.declaration], sourceCarriers: [], physicalCarriers: context.operands }]),
+  /original selected demand rows, not a native-node inventory/u, "no old signature, empty default or second admission path");
+});
+
+function verifyActualWorkerContexts(observations) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: {
     "index.ts": `import { seed } from "./worker.js"; export function value(): number { return seed; }`,
     "worker.ts": `function checked(value: number): number { if (value < 0) throw new Error("seed"); return value; }
@@ -388,13 +497,16 @@ export const seed: number = checked(1);`,
   const visit = node => { nodes.push(node); source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
   program.sourceFiles.forEach(visit);
   const callable = program.callableValues;
+  assert.equal(observations.calls, 1, "the actual selecting owner ran exactly once");
+  assert.equal(observations.requests.kind, "resolved", "the actual checked source use inventory was admitted");
   const result = prepareRustPhysicalEmissionContexts({ ast: source.ast, sourceFiles: program.sourceFiles, nativeNodes: nodes,
     isNativeNode: () => true, records: program.records, sourceLifetimes: program.sourceLifetimes,
     generic: callable.generic, frames: callable.frames, suspended: callable.suspended, native: callable.native,
     nativeStorage: callable.nativeStorage, nativeProducers: callable.nativeProducers,
     genericCompletions: callable.genericCompletions, genericErrors: program.genericCallableErrors,
     declarationGenericRequirements: program.declarationGenericRequirements, errorRegions: program.errorRegions,
-    sourceOccurrences: program.physicalEmissionContexts.sourceOccurrences, constructions: [], projectTypes: program.projectTypes,
+    sourceOccurrences: program.physicalEmissionContexts.sourceOccurrences, emissionRequests: observations.requests.value,
+    constructions: [], projectTypes: program.projectTypes,
     initialization: selected.value });
   assert.equal(result.kind, "resolved", result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   const context = result.value.contexts.contexts.find(context => context.use.role === "worker-initializer" && context.declaration === worker);
@@ -403,4 +515,38 @@ export const seed: number = checked(1);`,
   assert.equal(Object.isFrozen(context.error) && Object.isFrozen(context.error.initializer), true);
   assert.equal(result.value.contexts.contexts.some(context => context.use.role === "module-initializer"), true,
     "actual selected module initializer contexts accompany the worker composition");
+}
+
+test("worker contexts retain the existing complete initializer selection, not an invented module error region (instrumented load observation)", () => {
+  const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
+  const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
+  const initializationUrl = new URL("../../../dist/analysis/errors/initialization.js", import.meta.url).href;
+  const preparationUrl = new URL("../../../dist/analysis/program/physical-emission-contexts.js", import.meta.url).href;
+  const key = "r14-actual-worker-source-requests";
+  const script = `
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
+const observations = { calls: 0, anchors: 0 };
+globalThis[Symbol.for(${JSON.stringify(key)})] = observations;
+registerHooks({ load(url, context, nextLoad) {
+  const loaded = nextLoad(url, context);
+  if (url !== ${JSON.stringify(collectorUrl)}) return loaded;
+  const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+  const anchor = "export function prepareRustPhysicalCallableEmissionRequests(";
+  assert.equal(source.split(anchor).length, 2, "one exact source-request observation anchor");
+  observations.anchors++;
+  const extension = 'export function prepareRustPhysicalCallableEmissionRequests(...inputs) { const result = observedPrepareRustPhysicalCallableEmissionRequests(...inputs); const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.calls++; observations.requests = result; return result; }';
+  return { ...loaded, source: source.replace(anchor, "function observedPrepareRustPhysicalCallableEmissionRequests(") + "\\n" + extension };
+} });
+const { analyzeRust } = await import(${JSON.stringify(helperUrl)});
+const { analyzeRustInitializationErrors } = await import(${JSON.stringify(initializationUrl)});
+const { prepareRustPhysicalEmissionContexts } = await import(${JSON.stringify(preparationUrl)});
+(${verifyActualWorkerContexts.toString()})(observations);
+assert.equal(observations.anchors, 1, "one observation, no production observer or altered source input");
+process.stdout.write("R14_INSTRUMENTED_WORKER_CONTEXT_PROOF");
+`;
+  const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(observed.status, 0, `instrumented actual worker proof: ${observed.error?.message ?? ""}\n${observed.stderr.slice(-4096)}\n${observed.stdout.slice(-2048)}`);
+  assert.equal(observed.stdout, "R14_INSTRUMENTED_WORKER_CONTEXT_PROOF", "explicit instrumented worker proof label");
 });

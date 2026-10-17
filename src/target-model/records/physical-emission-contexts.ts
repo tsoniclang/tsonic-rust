@@ -46,7 +46,7 @@ export interface RustPhysicalEmissionSourceOccurrence {
 }
 
 export type RustPhysicalEmissionEvaluationOrigin =
-  | { readonly kind: "ordinary" }
+  | { readonly kind: "ordinary"; readonly site: TargetUseSiteRef }
   | { readonly kind: "provider-source"; readonly slot: RustPhysicalEmissionSourceSlot };
 
 export type RustPhysicalEmissionOperandOrigin =

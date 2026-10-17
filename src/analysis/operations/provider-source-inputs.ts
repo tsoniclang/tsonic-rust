@@ -4,11 +4,11 @@ import type { SourceProgramSemantics } from "@tsonic/target-api/source";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustFinalizedSourceInput } from "../../target-model/records/finalized-operation.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustStatementCompletionIndex } from "../../target-model/records/statement-completion.js";
 import type { RustEmissionProviderOperation, RustPhysicalEmissionSourceOccurrence,
   RustPhysicalEmissionSourceSlot } from "../../target-model/records/physical-emission-contexts.js";
 import { isRustAbsenceCarrier, isRustUnitCarrier } from "../../target-model/types/index.js";
 import { rustFinalizedSourceInputs } from "./finalized-operation/conversions.js";
+import { rustRuntimeSetSourceInputs } from "../control-flow/statement-completion.js";
 
 export function providerSourceInputNode(
   input: RustFinalizedSourceInput,
@@ -60,12 +60,14 @@ export function prepareRustProviderSourceOccurrences(input: {
   readonly ast: AstReader;
   readonly semantics: SourceProgramSemantics;
   readonly nodes: readonly Node[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
-  readonly statementCompletions: Pick<RustStatementCompletionIndex, "setterFor">;
 }): TargetStageResult<readonly RustPhysicalEmissionSourceOccurrence[]> {
   const occurrences: RustPhysicalEmissionSourceOccurrence[] = [];
   const diagnostics: TargetDiagnostic[] = [];
   for (const node of input.nodes) {
+    if (!input.isNativeNode(node) || input.records.compileTimeSource.get(node) === true ||
+      input.records.nativeUnreachable.get(node) === true || input.records.nativeParticipation.get(node) === "erased") continue;
     const facts = [input.records.targetOperation.get(node), input.records.compoundWrite.get(node)];
     const operations = new Set(facts.flatMap(fact => fact?.kind === "provider-operation" || fact?.kind === "runtime-set" ? [fact]
       : fact?.kind === "union-property" ? fact.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : []));
@@ -77,7 +79,7 @@ export function prepareRustProviderSourceOccurrences(input: {
     const element = accessed !== undefined && input.ast.is.IsElementAccessExpression(accessed) ? checked.elementAccess(accessed) : undefined;
     const originalReceiver = asSourceNode(input.records.selectedOperation.get(node)?.provenance?.sourceReceiver, input.ast);
     for (const operation of operations) {
-      const setter = operation.kind === "runtime-set" ? input.statementCompletions.setterFor(node) : undefined;
+      const setter = operation.kind === "runtime-set" ? rustRuntimeSetSourceInputs(input.ast, node, operation) : undefined;
       const receiver = operation.kind === "runtime-set" ? setter?.receiver
         : originalReceiver ?? call?.sourceReceiver?.expression ?? call?.sourceCalleeAccess?.receiver.expression ?? property?.receiver.expression ?? element?.receiver.expression;
       const arguments_ = operation.kind === "runtime-set" ? setter?.sourceArguments

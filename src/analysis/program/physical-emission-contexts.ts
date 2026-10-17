@@ -1,5 +1,4 @@
 import type { SourceFile } from "@tsonic/tsts";
-import { sourceEnclosingCallable } from "@tsonic/target-api/source";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustInitializationErrorRecords, RustModuleErrorInitializer } from "../../target-model/records/error-regions.js";
@@ -28,13 +27,11 @@ export function prepareRustPhysicalEmissionContexts(
       bindings, returnDestination: Object.freeze({ kind: "none" }),
       error: Object.freeze({ kind: "region", owner: sourceFile, region: module.region }), sourceCarriers: [],
       physicalCarriers: module.region.sources.map(source => source.errorType),
-      nodes: input.nativeNodes.filter(node => input.ast.getSourceFile(node) === sourceFile &&
-        sourceEnclosingCallable(node, input.ast) === undefined &&
-        !input.constructions.some(plan => plan.pointFor(node) !== undefined)) });
+      demands: input.emissionRequests.filter(demand => demand.owner === sourceFile) });
   }
   for (const worker of input.initialization.workers) {
     requests.push({ use: targetUseSiteRef(worker.sourceFile, "worker-initializer", input.ast.getFileName(worker.sourceFile)),
-      declaration: worker.sourceFile, bindings, returnDestination: Object.freeze({ kind: "none" }), nodes: [],
+      declaration: worker.sourceFile, bindings, returnDestination: Object.freeze({ kind: "none" }), demands: [],
       error: Object.freeze({ kind: "initializer", owner: worker.sourceFile, initializer: worker.initializer }), sourceCarriers: [],
       physicalCarriers: worker.initializer.modules.flatMap(module => module.region.sources.map(source => source.errorType)) });
   }

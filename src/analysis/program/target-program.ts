@@ -9,7 +9,6 @@ import {
 } from "@tsonic/target-api/analysis";
 import type { SourceLiteralIndex } from "@tsonic/target-api/source";
 import { analyzeRustProgram } from "./analyze.js";
-import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { createRustProgramRecords } from "./records/create.js";
 import type { RustAnalysisRecords } from "./records/model.js";
 import { analyzeRustNumericRepresentations } from "../numeric/representations.js";
@@ -166,8 +165,6 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
-  analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
-    context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
     isNativeNode: context.isNativeNode,
@@ -369,9 +366,9 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
-  const callableValues = context.callableValues.seal({ semantics: context.source.semantics,
+  const callableValues = context.callableValues.seal({
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
-    errorRegions: completedErrorRegions, initialization: initializationErrors.value, statementCompletions: statementCompletions.plan,
+    errorRegions: completedErrorRegions, initialization: initializationErrors.value,
     constructions: context.projectTypes.definitions.flatMap(definition => {
       const plan = projectConstructions.forDefinition(definition);
       return plan === undefined ? [] : [plan];

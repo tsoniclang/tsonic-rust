@@ -4,6 +4,7 @@ import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } fro
 import { resolveRustProjectField } from "../operations/provider/project-fields.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
+import { analyzeRustNativeHandlers } from "../operations/native-handlers.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
@@ -586,6 +587,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.nativeNodes, context.records,
     context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);
+  analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
+    context.source.sourceFacts, context.requiredRecords);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
     nativeNodes: context.nativeNodes, isNativeNode: context.isNativeNode,
     sourcePackages: context.sourcePackages,
@@ -628,7 +631,12 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     callableValues.nativeStorage, callableValues.native);
   const effectDiagnosticEnd = context.diagnostics.length;
   try {
-    context.callableValues.finalizeSelected().forEach(callableIssue);
+    const callableSelection = context.callableValues.finalizeSelected();
+    if (callableSelection.kind === "rejected") {
+      context.diagnostics.push(...callableSelection.diagnostics);
+      return undefined;
+    }
+    callableSelection.value.forEach(callableIssue);
     fallibility.complete();
   } finally {
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
