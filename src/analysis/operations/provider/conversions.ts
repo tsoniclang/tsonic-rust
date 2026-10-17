@@ -13,7 +13,7 @@ import { selectRustValueCarrierReconciliation } from "../../../policy/types/reso
 import { recordRustValueCarrierReconciliation, rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { resolveRustTargetTypeRef } from "../../../policy/types/resolution/index.js";
 import { rustCallableProtocol, rustTargetTypeContainsTypeParameter } from "../../../target-model/types/index.js";
-import { sourceExpressionResultUse } from "@tsonic/target-api/source";
+import { sourceExpressionResultDisposition } from "@tsonic/target-api/source";
 import { rustUnitTargetType } from "../../../target-model/types/index.js";
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
@@ -127,7 +127,7 @@ export function selectRustCheckedConversion(
   }
   const sourceCarrier = rustEffectiveValueCarrier(context.records, request.sourceExpression) ??
     resolveRustTargetTypeRef(request.sourceExpression, context, options);
-  const targetCarrier = sourceExpressionResultUse(context.ast, request.expression) === "discarded" &&
+  const targetCarrier = sourceExpressionResultDisposition(context.ast, request.expression).kind === "discarded" &&
       rustTargetTypeRefEquals(sourceCarrier, rustUnitTargetType())
     ? sourceCarrier
     : resolveRustTargetTypeRef(request.explicitTargetTypeNode, context, options);

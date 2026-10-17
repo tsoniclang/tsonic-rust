@@ -31,7 +31,7 @@ import {
   KindVoidExpression,
   Node_Expression,
   sourceIntegerLiteralValue,
-  sourceExpressionResultUse,
+  sourceExpressionResultDisposition,
 } from "@tsonic/target-api/source";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import { rustNumericLiteralIsFinite } from "../numeric/literal-admission.js";
@@ -429,7 +429,7 @@ export function resolveExpressionCarrierUncached(
         const left = resolveExpressionCarrier(probe, whenTrue, sourceFile, undefined);
         const right = resolveExpressionCarrier(probe, whenFalse, sourceFile, undefined);
         if (left !== undefined && right !== undefined) {
-          semanticCarrier = sourceExpressionResultUse(walk.context.ast, expression) === "discarded" &&
+          semanticCarrier = sourceExpressionResultDisposition(walk.context.ast, expression).kind === "discarded" &&
               rustTargetTypeRefEquals(left, right)
             ? left
             : resolveRustBranchUnion(expression, [
