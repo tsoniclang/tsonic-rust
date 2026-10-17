@@ -32,6 +32,7 @@ import {
 } from "../options/rust-target-options.js";
 import { rustRuntimeCrateReference } from "../providers/runtime/source-crates.js";
 import type { RustEdition } from "../target-model/project/model.js";
+import type { RustTargetAnalysisRequest } from "../analysis/program/model.js";
 
 type RustCompilationSessionState =
   | "created"
@@ -108,6 +109,7 @@ export function createRustCompilationSession(
         ),
         jsEnabled,
         rootPublishesLibrary: configuration.outputType === "lib",
+        nativeRetention: (requests: Parameters<RustTargetAnalysisRequest["nativeRetention"]>[0]) => compilerProviderSession.resultRetention(requests),
       })), configuration.edition);
     },
     close(): void {

@@ -27,6 +27,8 @@ import { rustProviderBindingProviderId } from "../packages/source-provider.js";
 import type {
   RustCompilerDependency,
   RustCompilerProjectSnapshot,
+  RustCompilerNativeRetentionFact,
+  RustCompilerNativeRetentionQuestion,
 } from "./model/model.js";
 import {
   compilerModulePathFromSpecifier,
@@ -37,6 +39,9 @@ import {
 } from "./projection/projection.js";
 import { standardModuleRequestFromSpecifier } from "./projection/module-specifier.js";
 import type { RustCompilerProviderProjection } from "./projection/projection.js";
+import type { RustCompilerNativeDeclarationProjection, RustCompilerNativeTypeProjection,
+  RustNativeResultRetentionRequest } from "./projection/model.js";
+import { projectRustNativeResultRetentionQuestion } from "./projection/result-loans.js";
 import type { RustNamedTypeTraitContract } from "../../target-model/types/model.js";
 import { createRustCompilerWorkerClient } from "./acquisition/worker-client.js";
 import type { RustCompilerWorkerClient } from "./acquisition/worker-client.js";
@@ -53,6 +58,7 @@ type RustCompilerProviderDiagnosticCode = keyof typeof rustCompilerProviderDiagn
 
 export interface RustCompilerProviderSession {
   readonly sourceProviders: readonly SourceDeclarationProvider[];
+  resultRetention(requests: readonly RustNativeResultRetentionRequest[]): readonly RustCompilerNativeRetentionFact[];
   semantics(): RustProviderSemantics;
   close(): void;
 }
@@ -100,6 +106,7 @@ export function createRustCompilerProviderSession(
       sourceProviders: Object.freeze([standardProvider]),
       registries: Object.freeze([standardRegistry]),
       snapshotLeases: Object.freeze([standardSnapshotLease]),
+      worker, foundation: context.configuration.foundation,
       createSemantics: () => standardRegistry.semantics(),
     });
   }
@@ -133,6 +140,7 @@ export function createRustCompilerProviderSession(
     sourceProviders: Object.freeze(sourceProviders),
     registries: Object.freeze([standardRegistry, registry]),
     snapshotLeases: Object.freeze([standardSnapshotLease, snapshotLease]),
+    worker, foundation: context.configuration.foundation,
     createSemantics: () => mergeRustProviderSemantics(
       standardRegistry.semantics(),
       registry.semantics(),
@@ -145,11 +153,44 @@ function createCompilerProviderSessionResult(options: {
   readonly registries: readonly ProjectionRegistry[];
   readonly snapshotLeases: readonly CompilerSnapshotLease[];
   readonly createSemantics: () => RustProviderSemantics;
+  readonly worker: RustCompilerWorkerClient;
+  readonly foundation: RustTargetConfiguration["foundation"];
 }): RustCompilerProviderSession {
   let state: "open" | "sealed" | "closed" = "open";
   let semantics: RustProviderSemantics | undefined;
   return Object.freeze({
     sourceProviders: options.sourceProviders,
+    resultRetention(requests: readonly RustNativeResultRetentionRequest[]): readonly RustCompilerNativeRetentionFact[] {
+      if (state === "closed") throw new Error("Rust compiler-provider session is closed.");
+      const result = new Map<string, RustCompilerNativeRetentionFact>();
+      const groups = options.registries.map(() => new Map<string, RustCompilerNativeRetentionQuestion>());
+      for (const request of requests) {
+        if (result.has(request.id) || groups.some(group => group.has(request.id))) throw new Error("Native result retention requests require unique original identities.");
+        try {
+          const owners = options.registries.map((registry, index) => ({ index, question: registry.retentionQuestion(request) }))
+            .filter((entry): entry is { index: number; question: RustCompilerNativeRetentionQuestion } => entry.question !== undefined);
+          if (owners.length !== 1) throw new Error("The native result retention request requires one original compiler-provider declaration owner.");
+          groups[owners[0]!.index]!.set(request.id, owners[0]!.question);
+        } catch (error) {
+          result.set(request.id, Object.freeze({ questionId: request.id, applicationIdentity: "unavailable",
+            kind: "unavailable", reasons: Object.freeze([error instanceof Error ? error.message : String(error)]) }));
+        }
+      }
+      for (const [index, group] of groups.entries()) {
+        if (group.size === 0) continue;
+        const batch = options.worker.resultRetention({ snapshot: options.snapshotLeases[index]!.get(),
+          questions: Object.freeze([...group.values()]), foundation: options.foundation });
+        if (batch.facts.length !== group.size || new Set(batch.facts.map(fact => fact.questionId)).size !== group.size)
+          throw new Error("Native result retention returned an incomplete or duplicated compiler fact batch.");
+        for (const fact of batch.facts) {
+          const original = group.get(fact.questionId);
+          if (original === undefined || fact.applicationIdentity !== original.applicationIdentity)
+            throw new Error("Native result retention returned a foreign application or native question fact.");
+          result.set(fact.questionId, fact);
+        }
+      }
+      return Object.freeze(requests.map(request => result.get(request.id)!));
+    },
     semantics(): RustProviderSemantics {
       if (state === "closed") {
         throw new Error("Rust compiler-provider session is closed.");
@@ -301,6 +342,7 @@ function createCompilerProvider(
 
 interface ProjectionRegistry {
   add(projection: RustCompilerProviderProjection): void;
+  retentionQuestion(request: RustNativeResultRetentionRequest): RustCompilerNativeRetentionQuestion | undefined;
   semantics(): RustProviderSemantics;
   close(): void;
 }
@@ -320,9 +362,16 @@ function createProjectionRegistry(options: {
   const typesByIdentity = new Map<string, RustProviderTypeDefinition>();
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
+  const nativeDeclarations = new Map<string, RustCompilerNativeDeclarationProjection>();
+  const nativeApplications: RustCompilerNativeTypeProjection[] = [];
   let state: "open" | "sealed" | "closed" = "open";
   let sealedSemantics: RustProviderSemantics | undefined;
   return Object.freeze({
+    retentionQuestion(request: RustNativeResultRetentionRequest): RustCompilerNativeRetentionQuestion | undefined {
+      if (state === "closed") throw new Error("Rust compiler-provider registry is closed.");
+      const declaration = nativeDeclarations.get(request.declarationIdentity);
+      return declaration === undefined ? undefined : projectRustNativeResultRetentionQuestion(request, declaration, nativeApplications);
+    },
     add(projection: RustCompilerProviderProjection): void {
       if (state !== "open") {
         throw new Error("Rust compiler-provider semantics are sealed for backend consumption.");
@@ -355,6 +404,10 @@ function createProjectionRegistry(options: {
       for (const row of projection.operations) {
         addExact(operationsByIdentity, providerOperationIdentity(row), row, "operation");
       }
+      for (const [identity, declaration] of projection.nativeDeclarations) {
+        addExact(nativeDeclarations, identity, declaration, "native declaration");
+      }
+      nativeApplications.push(...projection.nativeApplications);
       for (const row of projection.types) {
         addExact(typesByIdentity, providerTypeIdentity(row), row, "type");
       }
@@ -466,6 +519,8 @@ function createProjectionRegistry(options: {
       typesByIdentity.clear();
       carrierPaths.clear();
       carrierTraits.clear();
+      nativeDeclarations.clear();
+      nativeApplications.length = 0;
       sealedSemantics = undefined;
       state = "closed";
     },

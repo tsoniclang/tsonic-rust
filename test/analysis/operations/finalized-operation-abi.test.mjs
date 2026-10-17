@@ -45,7 +45,9 @@ function nativeReturnedLoanOptions() {
   const fn = { identity, name: "view", result, parameters: [], genericParameters: [], typeRequirements: [],
     receiver: { kind: "shared", lifetime, type: { kind: "reference", lifetime, mutable: false,
       target: { kind: "primitive", name: "str" } } }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false };
-  fn.resultLoans = selectRustCompilerResultLoans(fn);
+  const selectedLoans = selectRustCompilerResultLoans(fn);
+  fn.resultLoans = selectedLoans.contract;
+  fn.resultLoanTypes = selectedLoans.types;
   return { operationKind: "method", form: { form: "receiver-method", name: "as_str" },
     sourceReceiver: { kind: "runtime", carrier: string }, sourceArgumentCarriers: [], resultCarrier: string,
     resultConversion: rustBorrowedStrToStringValueConversion, resultLoans: projectRustNativeResultLoans(fn, result),
@@ -63,6 +65,11 @@ test("native result provenance binds the exact final ABI input after immutable s
     "the canonical formal origin is retained");
   assert.equal(selected.loans[0].origins[0].input === abi.targetReceiver.input, true,
     "the finalized native input is original, not a structurally equal snapshot copy");
+  assert.equal(selected.inputLoans.length, 1, "original input provenance is published independently of completion");
+  assert.equal(selected.inputLoans[0].origin === selected.contract.inputLoans.origins[0], true,
+    "the exact normalized native input origin survives finalization");
+  assert.equal(selected.inputLoans[0].input === abi.targetReceiver.input, true,
+    "the same actual ABI input owns pending and completion transport");
   assert.equal(Object.isFrozen(selected) && Object.isFrozen(selected.loans), true, "published provenance is immutable");
 });
 
@@ -91,6 +98,33 @@ test("unavailable native provenance remains unavailable rather than a known empt
   assert.equal(abi.result.resultLoans.contract.kind, "unavailable", "unknown is not changed to complete");
   assert.equal(abi.result.resultLoans.contract.reasons.length, 1, "the exact missing premise is retained");
   assert.equal("dropProven" in abi.result.resultLoans, false, "signature provenance does not claim native drop liveness");
+});
+
+test("pending native input provenance is strict even when completion carries no loan", () => {
+  const options = nativeReturnedLoanOptions();
+  const abi = finalizeRustProviderOperationAbi({ ...options, isAsync: true, resultCarrier: unit,
+    resultConversion: undefined, resultLoans: { ...options.resultLoans, loans: [] } });
+  assert.equal(abi !== undefined, true, "the original pending input relation does not require a borrowed completion");
+  assert.equal(abi.result.kind, "async", "this is an actual finalized pending native operation");
+  const selected = abi.result.resultLoans;
+  assert.equal(selected.loans.length, 0, "completion has no manufactured result loan");
+  assert.equal(selected.inputLoans.length, 1, "the original native input lifetime still belongs to the invocation");
+  assert.equal(selected.inputLoans[0].input === abi.targetReceiver.input, true,
+    "pending lifetime transport binds to the actual immutable ABI input");
+  const { inputLoans: removed, ...oldContract } = selected.contract;
+  assert.equal(removed.origins.length, 1, "the test removes a real original native origin");
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, result: { ...abi.result,
+    resultLoans: { ...selected, contract: oldContract } } }), false, "completion-only old native metadata is rejected");
+  const { inputLoans: removedRows, ...oldSelection } = selected;
+  assert.equal(removedRows.length, 1, "the old finalized shape actually discards pending input evidence");
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, result: { ...abi.result, resultLoans: oldSelection } }), false,
+    "an old finalized result cannot silently supply an empty input domain");
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, result: { ...abi.result,
+    resultLoans: { ...selected, inputLoans: [] } } }), false, "dropping the native input row is not a known-empty proof");
+  const origin = selected.inputLoans[0];
+  assert.equal(validateRustFinalizedOperationAbi({ ...abi, result: { ...abi.result,
+    resultLoans: { ...selected, inputLoans: [{ ...origin, input: { ...origin.input } }] } } }), false,
+    "a structurally equal foreign input cannot stand in for the finalized input");
 });
 
 test("a real closed Vector.add ABI owns exact binary-trait admission", () => {

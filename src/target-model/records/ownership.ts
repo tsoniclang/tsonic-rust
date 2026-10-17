@@ -98,12 +98,11 @@ export interface RustNativeInputValue extends RustNativeInputBase {
 
 export type RustNativeInputOwnership = RustNativeInputPlace | RustNativeInputValue;
 
-export interface RustNativeResultPlaceLoan {
-  readonly declaration: RustNativeResultLoan;
-  readonly resultPath: readonly string[];
+export type RustNativeResultPlaceLoan = {
   readonly origins: readonly { readonly declaration: RustNativeResultLoanOrigin; readonly input: RustNativeInputOwnership;
     readonly kind: "borrow" | "carried" }[];
-}
+} & ({ readonly kind: "value"; readonly declaration: RustNativeResultLoan; readonly resultPath: readonly string[] }
+  | { readonly kind: "pending"; readonly declaration: RustNativeResultLoanOrigin });
 
 export type RustNativeResultPlaceSelection =
   | { readonly kind: "resolved"; readonly node: Node; readonly operation: RustEmissionProviderOperation;
@@ -127,7 +126,17 @@ export interface RustNativeResultOwnership {
   readonly context: RustPhysicalEmissionContext;
   readonly place: RustNativeResultPlaceSelection;
   readonly source: RustResultLoanSourceSelection;
+  readonly retention: readonly {
+    readonly loan: RustNativeResultPlaceLoan;
+    readonly origin: RustNativeResultPlaceLoan["origins"][number];
+    readonly questionId: string;
+    readonly applicationIdentity: string;
+    readonly use: "retained" | "released";
+    readonly cleanup: "retained" | "released";
+  }[];
 }
 
-export type RustNativeResultLoanIndex = ReadonlyMap<Node,
-  ReadonlyMap<RustEmissionProviderOperation, ReadonlyMap<TargetUseSiteRef, RustNativeResultOwnership>>>;
+export type RustPreparedNativeResultOwnership = Omit<RustNativeResultOwnership, "retention">;
+
+export type RustNativeResultLoanIndex<Row extends RustPreparedNativeResultOwnership = RustNativeResultOwnership> = ReadonlyMap<Node,
+  ReadonlyMap<RustEmissionProviderOperation, ReadonlyMap<TargetUseSiteRef, Row>>>;

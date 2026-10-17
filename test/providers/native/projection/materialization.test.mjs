@@ -30,7 +30,11 @@ function declaration(name) {
           path: "core::ops::function::Fn", genericArguments: [{ kind: "type", type: { kind: "tuple", elements: [scalar] } }],
           associatedConstraints: [{ kind: "equality", identity: identity("Output"), name: "Output", genericArguments: [], type: scalar }] } }] }] }],
   };
-  for (const method of exported.methods) method.resultLoans = selectRustCompilerResultLoans(method);
+  for (const method of exported.methods) {
+    const selected = selectRustCompilerResultLoans(method);
+    method.resultLoans = selected.contract;
+    method.resultLoanTypes = selected.types;
+  }
   return exported;
 }
 
@@ -170,7 +174,11 @@ test("primitive methods use exact compiler carriers under export aliases and nam
       parameters: [{ name: "right", type: { kind: "primitive", name: "u32" } }],
       result: { kind: "primitive", name: "u32" }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false,
       typeRequirements: [], genericParameters: [] }] };
-  for (const method of primitive.methods) method.resultLoans = selectRustCompilerResultLoans(method);
+  for (const method of primitive.methods) {
+    const selected = selectRustCompilerResultLoans(method);
+    method.resultLoans = selected.contract;
+    method.resultLoanTypes = selected.types;
+  }
   const header = project([primitive], { kind: "incremental", completeExports: [] });
   assert.equal(header.declarationModel.exports[0].kind, "namespace");
   assert.equal(header.declarationModel.exports[0].members.length, 1);

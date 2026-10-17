@@ -132,6 +132,21 @@ export function projectFunction(
     operationGenerics,
     functionContext,
   );
+  const nativeParameters = operationGenerics.map((native, index) => Object.freeze({ native, projected: operationGenericBindings[index]! }));
+  context.nativeDeclarations.set(fn.identity.itemId, Object.freeze({ declaration: fn, dependency: context.dependency,
+    publicPath: Object.freeze([...ownerTargetPath]), ownerParameters: Object.freeze([...ownerGenerics]),
+    method: context.currentType === undefined ? undefined : fn.name,
+    parameters: Object.freeze(nativeParameters) }));
+  for (const [index, parameter] of fn.parameters.entries()) context.nativeApplications.push(Object.freeze({
+    native: parameterPassing(parameter.type).type, target: parameterCarriers[index + (fn.receiver?.kind === "custom" ? 1 : 0)]!,
+  }));
+  if (fn.receiver?.kind === "custom") context.nativeApplications.push(Object.freeze({
+    native: parameterPassing(fn.receiver.type).type, target: parameterCarriers[0]!,
+  }));
+  else if (fn.receiver !== undefined && context.currentType !== undefined) context.nativeApplications.push(Object.freeze({
+    native: fn.receiver.type.kind === "reference" ? fn.receiver.type.target : fn.receiver.type, target: context.currentType.carrier,
+  }));
+  context.nativeApplications.push(Object.freeze({ native: exposedResultType, target: resultCarrier }));
   const operationTypeNames = operationGenericBindings.flatMap((parameter) =>
     parameter.kind === "type" ? [parameter.sourceName] : []);
   const targetGenericArguments = targetGenericParameterArguments(fn.genericParameters, functionContext);

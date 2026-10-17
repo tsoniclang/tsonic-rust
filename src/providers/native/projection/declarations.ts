@@ -52,6 +52,8 @@ import type {
   ProjectionContext,
   ProjectionOwner,
   RustCompilerProviderProjection,
+  RustCompilerNativeDeclarationProjection,
+  RustCompilerNativeTypeProjection,
 } from "./model.js";
 import type {
   RustNamedTypeTraitContract,
@@ -88,6 +90,8 @@ export function projectRustCompilerModule(
   const completeExports = new Set<string>();
   const carrierPaths = new Map<string, string>();
   const carrierTraits = new Map<string, RustNamedTypeTraitContract>();
+  const nativeDeclarations = new Map<string, RustCompilerNativeDeclarationProjection>();
+  const nativeApplications: RustCompilerNativeTypeProjection[] = [];
   const standardTypes = new Map(module.standardTypeLocations.map((location) => [
     canonicalPathKey(location.canonicalPath),
     location,
@@ -108,6 +112,8 @@ export function projectRustCompilerModule(
     imports,
     carrierPaths,
     carrierTraits,
+    nativeDeclarations,
+    nativeApplications,
     standardTypes,
     localTypeLocations,
   };
@@ -140,6 +146,8 @@ export function projectRustCompilerModule(
     types: Object.freeze(types),
     carrierPaths,
     carrierTraits,
+    nativeDeclarations,
+    nativeApplications: Object.freeze(nativeApplications),
   });
 }
 

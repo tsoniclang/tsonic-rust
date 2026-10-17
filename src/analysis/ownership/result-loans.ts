@@ -5,7 +5,7 @@ import { createSourceStorageBudget, defaultSourceStorageLimits,
 import type { RustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
 import type { RustFinalizedNativeResultLoans, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
-import type { RustNativeInputOwnership, RustNativeResultLoanIndex, RustNativeResultOwnership,
+import type { RustNativeInputOwnership, RustNativeResultLoanIndex, RustPreparedNativeResultOwnership,
   RustNativeResultPlaceLoan, RustNativeResultPlaceSelection,
   RustResultLoanSourceSelection } from "../../target-model/records/ownership.js";
 import type { RustCallableEmissionContexts, RustEmissionProviderOperation,
@@ -18,7 +18,7 @@ export function analyzeRustNativeResultLoans(input: {
   readonly nativeInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership>;
   readonly definitions: RustTypeDefinitions;
   readonly limits?: Partial<SourceStorageLimits>;
-}): RustNativeResultLoanIndex {
+}): RustNativeResultLoanIndex<RustPreparedNativeResultOwnership> {
   const inputs = new Map<RustPhysicalEmissionContext,
     Map<RustEmissionProviderOperation, Map<Node, Map<TargetUseSiteRef, RustNativeInputOwnership>>>>();
   for (const place of input.nativeInputs.values()) {
@@ -33,7 +33,7 @@ export function analyzeRustNativeResultLoans(input: {
     operations.set(origin.operation, nodes);
     inputs.set(place.operand.context, operations);
   }
-  const results = new Map<Node, Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustNativeResultOwnership>>>();
+  const results = new Map<Node, Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustPreparedNativeResultOwnership>>>();
   const emptyInputs: ReadonlyMap<TargetUseSiteRef, RustNativeInputOwnership> = new Map();
   for (const context of input.physicalEmissionContexts.contexts) {
     if (input.physicalEmissionContexts.contextFor(context.use) !== context)
@@ -44,8 +44,8 @@ export function analyzeRustNativeResultLoans(input: {
       if (origins.use !== context.use || input.physicalEmissionContexts.sourceFor(node, operation) !== occurrence ||
         input.physicalEmissionContexts.sourceOriginFor(context.use, occurrence) !== origins)
         throw new Error("Native returned-loan admission requires its original per-use operation source correspondence.");
-      const operations = results.get(node) ?? new Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustNativeResultOwnership>>();
-      const contexts = operations.get(operation) ?? new Map<TargetUseSiteRef, RustNativeResultOwnership>();
+      const operations = results.get(node) ?? new Map<RustEmissionProviderOperation, Map<TargetUseSiteRef, RustPreparedNativeResultOwnership>>();
+      const contexts = operations.get(operation) ?? new Map<TargetUseSiteRef, RustPreparedNativeResultOwnership>();
       if (contexts.has(context.use)) throw new Error("Native returned-loan admission requires one row per original operation and physical context.");
       const nativeInputs = inputs.get(context)?.get(operation)?.get(node) ?? emptyInputs;
       const place = selectRustNativeResultPlaces(node, operation, context.use, {
@@ -139,11 +139,10 @@ export function selectRustNativeResultPlaces(
   const native = result.resultLoans;
   if (native === undefined) return unavailable("The native declaration has no published result/formal lifetime correspondence.");
   if (native.contract.kind === "unavailable") return unavailable(...native.contract.reasons);
-  if (result.kind === "async") return unavailable(
-    "The awaited native result relation does not establish the Future value's carried input loans.");
-  const carrier = input.physicalEmissionContexts.carrierFor(contextUse, result.carrier);
+  if (result.kind === "async" && native.contract.inputLoans.kind === "unavailable") return unavailable(...native.contract.inputLoans.reasons);
+  const carrier = input.physicalEmissionContexts.carrierFor(contextUse, result.kind === "async" ? result.futureCarrier : result.carrier);
   if (carrier === undefined) return unavailable("The returned-loan relation has no actual selected result carrier.");
-  const conversion = result.conversion;
+  const conversion = result.kind === "async" ? result.awaitedConversion : result.conversion;
   const places = new Map<RustFinalizedNativeResultLoans["loans"][number]["origins"][number]["input"], RustNativeInputOwnership[]>();
   for (const place of input.nativeInputs.values()) {
     const origin = place.operand.origin;
@@ -158,21 +157,32 @@ export function selectRustNativeResultPlaces(
     const path = convertedResultPath(selected.loan.resultPath, conversion, input.definitions);
     if (path === undefined) return unavailable("The selected native result conversion has no established returned-loan path transport.");
     if (path === null) continue;
+    const origins = bindOrigins(selected.origins);
+    if (origins === undefined) return unavailable("The native input conversion does not establish each returned loan's original physical input use.");
+    loans.push(Object.freeze({ kind: "value", declaration: selected.loan, resultPath: path, origins }));
+  }
+  if (result.kind === "async") for (const selected of native.inputLoans) {
+    const origins = bindOrigins([selected]);
+    if (origins === undefined) return unavailable("The native pending input conversion does not establish its original physical input use.");
+    loans.push(Object.freeze({ kind: "pending", declaration: selected.origin, origins }));
+  }
+  return Object.freeze({ kind: "resolved", node, operation, context, carrier, native, loans: Object.freeze(loans) });
+
+  function bindOrigins(selected: RustFinalizedNativeResultLoans["loans"][number]["origins"]): RustNativeResultPlaceLoan["origins"] | undefined {
     const origins: RustNativeResultPlaceLoan["origins"][number][] = [];
-    for (const origin of selected.origins) {
+    for (const origin of selected) {
       const actual = places.get(origin.input);
-      if (actual?.length !== 1) return unavailable("A returned native loan has no unique original input-use place in this physical context.");
+      if (actual?.length !== 1) return undefined;
       const selectedInput = actual[0]!;
       const declaredKind = inputLoanKind(origin.origin.kind, origin.input.conversion, input.definitions);
       const kind = declaredKind === "borrow" && selectedInput.kind === "value" &&
         origin.input.conversion.kind === "identity" && origin.input.sourceCarrier.kind === "reference" ? "carried" : declaredKind;
       if (kind === undefined || kind === "borrow" && selectedInput.kind !== "place")
-        return unavailable("The native input conversion does not establish that the returned loan refers to the authored source place.");
+        return undefined;
       origins.push(Object.freeze({ declaration: origin.origin, input: selectedInput, kind }));
     }
-    loans.push(Object.freeze({ declaration: selected.loan, resultPath: path, origins: Object.freeze(origins) }));
+    return Object.freeze(origins);
   }
-  return Object.freeze({ kind: "resolved", node, operation, context, carrier, native, loans: Object.freeze(loans) });
 }
 
 function inputLoanKind(kind: "borrow" | "carried", conversion: RustFinalizedValueConversion,

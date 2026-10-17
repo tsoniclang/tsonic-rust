@@ -53,6 +53,7 @@ export interface RustTargetAnalysisRequest {
   readonly providerSemantics: RustProviderSemantics;
   readonly jsEnabled: boolean;
   readonly rootPublishesLibrary: boolean;
+  readonly nativeRetention: import("../../providers/native/session.js").RustCompilerProviderSession["resultRetention"];
 }
 
 export interface RustPlanningHost {

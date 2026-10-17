@@ -5,7 +5,7 @@ import type { ProviderExportDeclaration } from "@tsonic/tsts";
 import type { RustCompilerExport, RustCompilerFunction, RustCompilerType } from "../model/model.js";
 import type { ProjectionContext } from "./model.js";
 import type { RustProviderOperationDefinition } from "../../packages/model.js";
-import { projectRustNativeExplicitReceiverResultLoans } from "./result-loans.js";
+import { projectRustNativeExplicitReceiverInput, projectRustNativeExplicitReceiverResultLoans } from "./result-loans.js";
 
 export function projectPrimitiveExport(
   exported: Extract<RustCompilerExport, { readonly kind: "primitive" }>,
@@ -47,5 +47,7 @@ function explicitReceiver(method: RustCompilerFunction, owner: RustCompilerType)
     kind: "reference", mutable: receiver.kind === "mutable", lifetime: receiver.lifetime, target: owner,
   };
   return Object.freeze({ ...method, receiver: Object.freeze({ kind: "custom", type }),
+    resultLoanTypes: Object.freeze({ ...method.resultLoanTypes, inputs: Object.freeze(method.resultLoanTypes.inputs.map(row =>
+      Object.freeze({ ...row, input: projectRustNativeExplicitReceiverInput(row.input) }))) }),
     resultLoans: projectRustNativeExplicitReceiverResultLoans(method.resultLoans) });
 }

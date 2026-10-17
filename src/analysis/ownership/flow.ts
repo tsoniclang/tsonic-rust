@@ -68,7 +68,8 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const livenessByDeclaration = new Map<Node, Extract<SourceFlowLivenessSelection, { readonly kind: "resolved" }>>();
   for (const declaration of input.nativeNodes) {
     if (input.borrowUses.failure() !== undefined) break;
-    if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
+    const moduleRoot = ast.is.IsSourceFile(declaration);
+    if (!moduleRoot && (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined)) continue;
     const selected = createSourceControlFlow(source, declaration, { domain: domain.domain, limits: input.limits });
     const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, input.limits) : selected;
     if (liveness.kind === "unresolved") return { kind: "rejected", diagnostics: [{
@@ -80,6 +81,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     const graph = selected.graph;
     graphs.set(declaration, graph);
     livenessByDeclaration.set(declaration, liveness);
+    if (moduleRoot) continue;
     const awaitedReads = new Set<Node>();
     for (const point of graph.points) if (point.operation.kind === "read" && point.source !== undefined &&
       liveness.reachable.has(point.id) && sourceEnclosingCallable(point.source, ast) === declaration &&

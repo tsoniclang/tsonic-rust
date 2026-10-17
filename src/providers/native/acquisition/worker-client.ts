@@ -17,6 +17,8 @@ import type {
   RustCompilerModuleModel,
   RustCompilerProjectSnapshot,
   RustCompilerStandardLibrarySnapshot,
+  RustCompilerNativeRetentionQuestion,
+  RustCompilerNativeRetentionBatch,
 } from "../model/model.js";
 import type { RustFoundation } from "../../../target-model/foundation/model.js";
 import { rustCompilerProviderProtocolVersion } from "../model/model.js";
@@ -41,6 +43,11 @@ interface RustCompilerWorkerSession {
 }
 
 export interface RustCompilerWorkerClient {
+  resultRetention(options: {
+    readonly snapshot: RustCompilerProjectSnapshot;
+    readonly questions: readonly RustCompilerNativeRetentionQuestion[];
+    readonly foundation: RustFoundation;
+  }): RustCompilerNativeRetentionBatch;
   snapshot(manifestPath: string): RustCompilerProjectSnapshot;
   standardSnapshot(): RustCompilerStandardLibrarySnapshot;
   module(options: {
@@ -55,6 +62,19 @@ export interface RustCompilerWorkerClient {
 export function createRustCompilerWorkerClient(root: string): RustCompilerWorkerClient {
   const session = getWorkerSession(resolve(root));
   return Object.freeze({
+    resultRetention(options: {
+      readonly snapshot: RustCompilerProjectSnapshot;
+      readonly questions: readonly RustCompilerNativeRetentionQuestion[];
+      readonly foundation: RustFoundation;
+    }): RustCompilerNativeRetentionBatch {
+      const response = request(session, {
+        protocolVersion: rustCompilerProviderProtocolVersion, id: requestId(), kind: "result-retention",
+        snapshot: options.snapshot, questions: options.questions, foundation: options.foundation,
+        targetDirectory: join(session.root, "cargo", options.snapshot.digest),
+      });
+      if (response.kind !== "result-retention") throw responseError(response);
+      return response.batch;
+    },
     snapshot(manifestPath: string): RustCompilerProjectSnapshot {
       const response = request(session, {
         protocolVersion: rustCompilerProviderProtocolVersion,
@@ -195,7 +215,7 @@ function terminateSession(session: RustCompilerWorkerSession): void {
 function isWorkerResponse(value: unknown): value is RustCompilerWorkerResponse {
   return isRecord(value) && value.protocolVersion === rustCompilerProviderProtocolVersion &&
     typeof value.id === "string" &&
-    (value.kind === "snapshot" || value.kind === "module" || value.kind === "error");
+    (value.kind === "snapshot" || value.kind === "module" || value.kind === "result-retention" || value.kind === "error");
 }
 
 function responseError(response: RustCompilerWorkerResponse): Error {

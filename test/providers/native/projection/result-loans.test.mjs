@@ -20,7 +20,8 @@ const callable = (result, parameters = [], receiver, genericParameters = []) => 
     ...(receiver === undefined ? {} : { receiver: { ...receiver,
       type: receiver.kind === "shared" || receiver.kind === "mutable" ? reference(receiver.lifetime, native("Owner"),
         receiver.kind === "mutable") : receiver.type } }) };
-  return { ...declaration, resultLoans: selectRustCompilerResultLoans(declaration) };
+  const selected = selectRustCompilerResultLoans(declaration);
+  return { ...declaration, resultLoans: selected.contract, resultLoanTypes: selected.types };
 };
 
 test("returned native lifetimes retain every exact receiver and formal origin", () => {
@@ -154,7 +155,9 @@ for (const mode of ["value", "shared", "mutable", "custom", "absent", "static"])
       typeRequirements: [], asynchronous: false, unsafe: false, abi: "Rust", variadic: false,
       ...(receiver === undefined ? {} : { receiver }),
       ...(mode === "value" ? {} : { borrowedResult: { sourceType: scalar, conversion: "copy" } }) };
-    declaration.resultLoans = selectRustCompilerResultLoans(declaration);
+    const selectedLoans = selectRustCompilerResultLoans(declaration);
+    declaration.resultLoans = selectedLoans.contract;
+    declaration.resultLoanTypes = selectedLoans.types;
     const original = declaration.resultLoans;
     const dependency = { alias: "loan_fixture", packageId: "loan_fixture 1", packageName: "loan_fixture", packageVersion: "1",
       crateName: "loan_fixture", targetCrateName: "loan_fixture", manifestPath: "/loan_fixture/Cargo.toml",

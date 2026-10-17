@@ -366,8 +366,10 @@ function isOperationResult(value: unknown): value is RustFinalizedOperationResul
 }
 
 function isNativeResultLoans(value: unknown): value is NonNullable<RustFinalizedOperationResult["resultLoans"]> {
-  return isRecord(value) && hasExactKeys(value, ["contract", "loans"]) &&
+  return isRecord(value) && hasExactKeys(value, ["contract", "loans", "inputLoans"]) &&
     isRustNativeResultLoanContract(value.contract) && Array.isArray(value.loans) &&
+    Array.isArray(value.inputLoans) && value.inputLoans.every(origin => isRecord(origin) &&
+      hasExactKeys(origin, ["origin", "input"]) && isRecord(origin.origin) && isSourceInput(origin.input)) &&
     value.loans.every(loan => isRecord(loan) && hasExactKeys(loan, ["loan", "origins"]) &&
       isRecord(loan.loan) && Array.isArray(loan.origins) && loan.origins.every(origin =>
         isRecord(origin) && hasExactKeys(origin, ["origin", "input"]) && isRecord(origin.origin) && isSourceInput(origin.input)));
@@ -378,6 +380,14 @@ function nativeResultLoansMatchInputs(abi: RustFinalizedOperationAbi): boolean {
   if (selected === undefined) return true;
   if (selected.loans.length !== selected.contract.loans.length) return false;
   const inputs = rustFinalizedSourceInputs(abi);
+  const expectedInputs = selected.contract.inputLoans.origins.flatMap(origin => inputs.filter(input =>
+    input.source.kind === origin.input.kind && (input.source.kind === "receiver" || origin.input.kind === "argument" &&
+      input.source.sourceIndex === origin.input.sourceIndex)).map(input => ({ origin, input })));
+  if (selected.contract.inputLoans.origins.some(origin => !expectedInputs.some(row => row.origin === origin)) ||
+    selected.inputLoans.length !== expectedInputs.length || selected.inputLoans.some((row, index) =>
+    row.origin !== expectedInputs[index]?.origin || row.input !== expectedInputs[index]?.input ||
+    row.origin.kind === "borrow" && (row.origin.mutable ? row.input.mode !== "mut-ref"
+      : row.input.mode !== "ref" && row.input.mode !== "mut-ref"))) return false;
   return selected.loans.every((selectedLoan, index) => {
     const loan = selected.contract.loans[index];
     if (loan !== selectedLoan.loan) return false;

@@ -19,6 +19,7 @@ import type {
 } from "./protocol.js";
 import { loadRustCompilerModule } from "./rustdoc.js";
 import { createRustdocDocumentLoader } from "./rustdoc-artifact.js";
+import { loadRustNativeResultRetentionBatch } from "./result-retention.js";
 
 const pollMilliseconds = 20;
 const ownerPollMilliseconds = 1_000;
@@ -82,6 +83,10 @@ function processPendingRequests(): void {
 }
 
 function processRequest(request: RustCompilerWorkerRequest): RustCompilerWorkerResponse {
+  if (request.kind === "result-retention") {
+    return { protocolVersion: rustCompilerProviderProtocolVersion, id: request.id,
+      kind: "result-retention", batch: loadRustNativeResultRetentionBatch(request) };
+  }
   if (request.kind === "snapshot") {
     return {
       protocolVersion: rustCompilerProviderProtocolVersion,
@@ -135,13 +140,17 @@ function parseRequest(text: string): RustCompilerWorkerRequest {
   const value = JSON.parse(text) as unknown;
   if (!isRecord(value) || value.protocolVersion !== rustCompilerProviderProtocolVersion ||
     typeof value.id !== "string" || value.id.length === 0 ||
-    (value.kind !== "snapshot" && value.kind !== "standard-snapshot" && value.kind !== "module")) {
+    (value.kind !== "snapshot" && value.kind !== "standard-snapshot" && value.kind !== "module" && value.kind !== "result-retention")) {
     throw new Error("Rust compiler-provider worker received an invalid request envelope.");
   }
   if (value.kind === "snapshot") {
     if (typeof value.manifestPath !== "string" || value.manifestPath.length === 0) {
       throw new Error("Rust compiler-provider snapshot request has no manifest path.");
     }
+  } else if (value.kind === "result-retention" && (!isRecord(value.snapshot) || !Array.isArray(value.questions) ||
+    typeof value.targetDirectory !== "string" ||
+    (value.foundation !== "core" && value.foundation !== "alloc" && value.foundation !== "std"))) {
+    throw new Error("Rust compiler-provider result-retention request has an invalid payload.");
   } else if (value.kind === "module" && (!isRecord(value.snapshot) || !isRecord(value.dependency) ||
     !Array.isArray(value.modulePath) || typeof value.targetDirectory !== "string" ||
     (value.foundation !== "core" && value.foundation !== "alloc" && value.foundation !== "std"))) {

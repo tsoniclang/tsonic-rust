@@ -95,6 +95,7 @@ export type RustFinalizedTargetInput = RustFinalizedSourceInput | RustFinalizedS
 
 export interface RustFinalizedNativeResultLoans {
   readonly contract: RustNativeResultLoanContract;
+  readonly inputLoans: readonly { readonly origin: RustNativeResultLoanOrigin; readonly input: RustFinalizedSourceInput }[];
   readonly loans: readonly {
     readonly loan: RustNativeResultLoan;
     readonly origins: readonly { readonly origin: RustNativeResultLoanOrigin; readonly input: RustFinalizedSourceInput }[];
