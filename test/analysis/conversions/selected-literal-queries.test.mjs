@@ -5,6 +5,7 @@ import { analyzeSourceLiteralValues, createTargetSourceProgram } from "@tsonic/t
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { normalizeSelectedLiteralCarrier } from "../../../dist/analysis/expressions/selected-literals.js";
 import { rustPostCheckUnaryMinusOperationId } from "../../../dist/target-model/operations/model.js";
+import { isRustNumericCarrier, rustPrimitiveTypeName } from "../../../dist/target-model/types/carriers/primitives.js";
 
 const integer = { kind: "source-primitive", name: "int32" };
 const wide = { kind: "source-primitive", name: "int64" };
@@ -67,6 +68,42 @@ for (const expression of ["3", "-3", "+3"]) {
     assert.throws(() => current.select(first, integer), /after analysis is sealed/u);
   });
 }
+
+for (const expression of ["1.5", "-1.5", "+1.5"]) {
+  test(`checked ${expression} half literal queries admit once without widening runtime numerics`, () => {
+    const current = fixture(expression);
+    const half = { kind: "source-primitive", name: "float16" };
+    const first = current.select(undefined, half);
+    assert.equal(first === half, true, "the exact native literal carrier is selected");
+    const native = current.builder.targetOperation.get(current.node);
+    const selected = current.builder.selectedOperation.get(current.node);
+    const counts = expression === "1.5" ? { runtime: 1, target: 0, selected: 0 } : { runtime: 1, target: 1, selected: 1 };
+    assert.deepEqual(current.admissions, counts, "literal evidence is admitted exactly once");
+    assert.equal(current.select(first, { ...half }) === first, true, "repeated selection preserves carrier identity");
+    assert.equal(current.builder.targetOperation.get(current.node) === native, true, "native literal evidence is stable");
+    assert.equal(current.builder.selectedOperation.get(current.node) === selected, true, "selected literal evidence is stable");
+    assert.deepEqual(current.admissions, counts, "repeated selection never writes again");
+    assert.equal(isRustNumericCarrier(half), false, "literal admission does not enable runtime half operators");
+    assert.equal(rustPrimitiveTypeName("float16"), undefined, "literal admission invents no native runtime half renderer");
+    current.builder.seal(current.context.requiredRecords);
+    assert.throws(() => current.select(first, half), /after analysis is sealed/u);
+  });
+}
+
+test("half overflow admits no facts and preserves an existing explicit float64 selection", () => {
+  const half = { kind: "source-primitive", name: "float16" };
+  const invalid = fixture("65520");
+  assert.equal(invalid.select(undefined, half), undefined, "half native overflow is not admitted");
+  assert.equal(invalid.builder.runtimeCarrier.get(invalid.node) === undefined, true, "no invalid runtime carrier");
+  assert.equal(invalid.builder.targetOperation.get(invalid.node) === undefined, true, "no invalid native operation");
+  assert.equal(invalid.builder.selectedOperation.get(invalid.node) === undefined, true, "no invalid selected operation");
+  assert.deepEqual(invalid.admissions, { runtime: 0, target: 0, selected: 0 }, "no partial literal publication");
+  const explicit = fixture("65520");
+  const first = explicit.select(undefined, { kind: "source-primitive", name: "float64" });
+  assert.equal(explicit.select(first, half) === first, true, "native float64 admission is not retroactively changed");
+  assert.equal(explicit.builder.runtimeCarrier.get(explicit.node)?.carrier === first, true, "the original carrier remains canonical");
+  assert.deepEqual(explicit.admissions, { runtime: 1, target: 0, selected: 0 }, "invalid half selection never rewrites float64");
+});
 
 test("a new unrepresentable literal target does not poison the selected carrier", () => {
   const current = fixture("256");
