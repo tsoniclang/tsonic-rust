@@ -3,6 +3,35 @@ import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
+const absenceObservations = ["null", "undefined"].flatMap(absence =>
+  ["===", "!==", "==", "!="].flatMap(operator => [
+    `(value ${operator} ${absence}) === ${operator === "===" || operator === "==" ? "!present" : "present"}`,
+    `(${absence} ${operator} value) === ${operator === "===" || operator === "==" ? "!present" : "present"}`,
+  ]));
+const absenceSource = `
+enum Value { First = 1, Second = 2 }
+function observe(value: Value | null | undefined, present: boolean): boolean {
+  return ${absenceObservations.map(expression => `(${expression})`).join(" && ")};
+}
+export function run(flag: boolean): boolean {
+  const selected = flag ? Value.First : undefined;
+  const joined = flag ? Value.Second : null;
+  const copied = selected;
+  return observe(Value.First, true) && observe(null, false) && observe(undefined, false) &&
+    observe(selected, flag) && observe(joined, flag) && observe(copied, flag) &&
+    ((copied ?? Value.First) === Value.First);
+}
+`;
+const absenceProjectionRefusals = [
+  ["nullable numeric peer", "export function use(value: Value | undefined, operand: number): boolean { return value === operand; }"],
+  ["reversed nullable numeric peer", "export function use(value: Value | null, operand: number): boolean { return operand != value; }"],
+  ["shadowed undefined", "export function use(value: Value, undefined: number): boolean { return value === undefined; }"],
+  ["nullable arithmetic", "export function use(value: Value | undefined): number { return (value ?? Value.First) + 1; }"],
+  ["explicit numeric destination", "export function use(value: Value | undefined): number | undefined { const selected: number | undefined = value; return selected; }"],
+  ["explicit numeric assertion", "export function use(value: Value): boolean { return (value as number) === undefined; }"],
+];
+
+
 const numericUses = [
   ["float64 equality", "export function use(value: Value, operand: number): boolean { return value === operand; }"],
   ["int32 equality", "export function use(value: Value, operand: int32): boolean { return value === operand; }"],
@@ -94,6 +123,55 @@ for (const [label, declaration] of [
 }
 
 for (const surfaces of [[], ["js"]]) {
+  test(`Rust ${surfaces[0] ?? "native"} enum absence observations match the single native absence state`, { timeout: 300_000 }, () => {
+    const compiled = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } },
+      files: { "index.ts": `${absenceSource}\nif (!run(true) || !run(false)) throw new Error("enum absence observations");` } });
+    assert.equal(compiled.result.diagnostics.length, 0,
+      compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
+    assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true,
+      "an absence observation retains the enum domain without numeric projection");
+    validateGeneratedProject(`enum-absence-${surfaces[0] ?? "native"}`, [...compiled.result.artifacts,
+      { path: "tests/native_enum_absence.rs", text: `#[derive(Clone, Copy, PartialEq, Eq)]
+enum NativeValue {
+    First = 1,
+    Second = 2,
+}
+
+#[test]
+fn native_enum_absence_observations() {
+    for flag in [true, false] {
+        let selected = if flag {
+            Some(NativeValue::First)
+        } else {
+            None
+        };
+        let joined = if flag {
+            Some(NativeValue::Second)
+        } else {
+            None
+        };
+        let absent = None;
+        for value in [selected, joined, selected] {
+            assert_eq!(value.is_some(), flag);
+            assert_eq!(value.is_none(), !flag);
+            assert_eq!(absent == value, !flag);
+            assert_eq!(absent != value, flag);
+        }
+        assert!(selected.unwrap_or(NativeValue::First) == NativeValue::First);
+    }
+}
+` }], { run: true });
+  });
+
+  for (const [label, body] of absenceProjectionRefusals) {
+    test(`Rust ${surfaces[0] ?? "native"} absence observation does not admit ${label}`, () => {
+      const compiled = compileRust({ surfaces, files: { "index.ts": `enum Value { First = 1, Second = 2 } ${body}` } });
+      assert.equal(compiled.result.diagnostics.length, 1, `${label}: one actual projection`);
+      assert.equal(compiled.result.diagnostics[0]?.code, "TSONIC_ENUM_NUMERIC_USE_NOT_SUPPORTED", `${label}: shared refusal`);
+      assert.equal(compiled.result.program === undefined && compiled.result.plan === undefined, true, `${label}: rejected before seal`);
+      assert.equal(compiled.result.artifacts.length, 0, `${label}: no native output`);
+    });
+  }
   for (const [label, body] of numericUses) {
     test(`Rust ${surfaces[0] ?? "native"} refuses enum ${label} at shared source admission`, () => {
       const compiled = compileRust({ surfaces, files: { "index.ts": `
@@ -184,14 +262,28 @@ if (!run(true) || !run(false)) throw new Error("enum composition");
       compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
     assert.equal(compiled.result.artifacts.length > 0, true, "same-enum choice is real native output, not a fabricated logical/bitwise capability");
     validateGeneratedProject(`enum-composition-${surfaces[0] ?? "native"}`,
-      [...compiled.result.artifacts, { path: "tests/native_enum_composition.rs", text: `
-#[derive(PartialEq, Eq)]
-enum NativeValue { First = 1, Second = 2 }
+      [...compiled.result.artifacts, { path: "tests/native_enum_composition.rs", text: `#[derive(PartialEq, Eq)]
+enum NativeValue {
+    First = 1,
+    Second = 2,
+}
 
 #[test]
 fn native_enum_composition() {
-    assert!((if true { NativeValue::First } else { NativeValue::Second }) == NativeValue::First);
-    assert!((if false { NativeValue::First } else { NativeValue::Second }) == NativeValue::Second);
+    assert!(
+        (if true {
+            NativeValue::First
+        } else {
+            NativeValue::Second
+        }) == NativeValue::First
+    );
+    assert!(
+        (if false {
+            NativeValue::First
+        } else {
+            NativeValue::Second
+        }) == NativeValue::Second
+    );
 }
 ` }], { run: true });
   });

@@ -83,7 +83,8 @@ export function planRustIdentifierValue(
   const module = binding === undefined ? undefined
     : context.input.program.records.moduleBinding.get(binding.sourceDeclaration);
   if (module?.storage === "native-const" && isRustStringCarrier(module.valueCarrier)) {
-    return { kind: "owned-string-from-borrowed-str", expression: { kind: "path", path } };
+    const value: RustExpr = { kind: "path", path };
+    return access === "value" ? { kind: "owned-string-from-borrowed-str", expression: value } : value;
   }
   const captured = rustCapturedBinding(node, context);
   const storage = rustLocationStorageForReference(node, context);
