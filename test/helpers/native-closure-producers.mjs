@@ -11,6 +11,7 @@ import { printRustExpr } from "../../dist/print/source/expressions/core.js";
 
 export function nativeClosureProducerFixture({ asynchronous = false, surfaces = [], source, packages = [],
   selectRecords = records => records, selectProducers = value => value,
+  selectErrorRegions = regions => regions,
   body = () => ({ kind: "int-literal", text: "3" }),
 } = {}) {
   const output = asynchronous ? "Promise<int32>" : "int32";
@@ -31,7 +32,8 @@ export function create(): () => ${output} {
   assert.equal(closures.length, 1, "one checked closure producer");
   const node = closures[0];
   const records = selectRecords(original.records, node);
-  const program = { ...original, records, callableValues: { ...original.callableValues,
+  const program = { ...original, records, errorRegions: selectErrorRegions(original.errorRegions, node),
+    callableValues: { ...original.callableValues,
     nativeProducers: selectProducers(original.callableValues.nativeProducers),
   } };
   const fileNames = program.sourceFiles.map(file => ast.getFileName(file));
@@ -81,7 +83,7 @@ export function nativeClosureProducerFailurePackage(errorType, { path = "fail", 
     operations: [{ exportId: "test:producer::fail", operationKind: "method",
       target: { form: "call", path }, parameterCarriers: parameters.map(parameter => ({ kind: "source-primitive", name: parameter.type })),
       resultCarrier, isFallible: true,
-      errorBoundary: "source-program", nativeErrorCarriers: [errorType],
+      errorBoundary: "provider-native", errorCarrier: errorType,
     }],
   });
 }

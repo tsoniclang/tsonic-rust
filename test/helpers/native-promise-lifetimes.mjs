@@ -2,6 +2,63 @@ import assert from "node:assert/strict";
 import { appendFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runCargo, writeGeneratedProject } from "./cargo-projects.mjs";
+import { rustJsPromiseOutputTargetType } from "../../dist/target-model/types/carriers/promises.js";
+import { rustSourcePrimitiveTargetType } from "../../dist/target-model/types/index.js";
+import { rustTargetTypeRefEquals } from "../../dist/target-model/types/equality.js";
+
+export function assertSettledCopiedPromise(result, storageName) {
+  const program = result.program;
+  assert.equal(program !== undefined, true, "the settled copied result has a published native program");
+  const ast = program.source.ast;
+  const declarations = [];
+  const visit = node => {
+    if (ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "read") declarations.push(node);
+    ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  program.sourceFiles.forEach(visit);
+  assert.equal(declarations.length, 1, "one exact read declaration owns the copied result");
+  const fact = program.records.asyncFunction.get(declarations[0]);
+  assert.equal(fact?.kind === "js-promise" && fact.lowering.kind === "settled", true,
+    "the actual source read completes synchronously before publication");
+  const payload = fact === undefined ? undefined : rustJsPromiseOutputTargetType(fact.futureCarrier);
+  assert.equal(rustTargetTypeRefEquals(payload, rustSourcePrimitiveTargetType("int32")), true,
+    "the exact selected Promise owns one copied native i32 payload");
+  const output = result.artifacts.find(artifact => artifact.path === "src/index.rs")?.text;
+  assert.equal(typeof output, "string", "the original copied-read program emits native code");
+  const read = output.match(/\bfn read(?:<[^>]*>)?\([^)]*\)\s*->\s*js_abi::JsPromise<i32>\s*\{([\s\S]*?)^\}/mu);
+  assert.equal(read !== null, true, "read emits the one-payload JsPromise<i32> signature");
+  assert.equal(/JsPromise::(?:resolved|from_result)\(/u.test(read[1]), true,
+    "read uses the actual settled native constructor");
+  assert.equal(/from_\w+_factory/u.test(read[1]), false, "read creates no pending factory");
+  assert.equal(new RegExp(`let ${storageName}: js_abi::JsPromise<i32>`, "u").test(output), true,
+    "the original stored completion owns i32 rather than an input loan");
+}
+
+export function assertRejectedAsyncSource(compilation, expected) {
+  const { result, source } = compilation;
+  const ast = source.ast;
+  const nodes = [];
+  const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
+  source.sourceFiles.filter(file => file !== undefined).forEach(visit);
+  const text = node => ast.getSourceText(ast.getSourceFile(node)).slice(ast.pos(node), ast.end(node)).trim();
+  assert.deepEqual(result.diagnostics.map(issue => issue.code).sort(), expected.map(issue => issue.code).sort(),
+    "every rejection has its exact complete diagnostic code, with no unrelated or missing failure");
+  const consumed = new Set();
+  for (const item of expected) {
+    const sourceNodes = nodes.filter(node => ast.kindName(node) === item.kind && text(node) === item.text);
+    const expectedNode = sourceNodes[item.occurrence ?? 0];
+    assert.equal(expectedNode !== undefined, true, `${item.code}: actual checked source occurrence ${item.occurrence ?? 0}`);
+    const matching = result.diagnostics.filter(issue => !consumed.has(issue) && issue.code === item.code &&
+      issue.sourceNode === expectedNode);
+    assert.equal(matching.length, 1, `${item.code}: exactly the intended ${item.kind} ${item.text.slice(0, 96)}`);
+    const issue = matching[0];
+    consumed.add(issue);
+    assert.equal(nodes.includes(issue.sourceNode), true, `${item.code}: the exact original checked source node`);
+  }
+  assert.equal(consumed.size, result.diagnostics.length, "all actual source rejections are accounted for by identity");
+  assert.equal(result.program === undefined, true, "source rejection precedes native program publication");
+  assert.equal(result.artifacts.length, 0, "source rejection emits no artifacts");
+}
 
 export function verifyNativeBorrowedPromiseBoundary(name, artifacts, optional) {
   const output = optional ? "Option<i32>" : "i32";

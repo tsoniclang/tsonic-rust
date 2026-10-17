@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, artifactText } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
-import { verifyNativeBorrowedPromiseBoundary } from "../../helpers/native-promise-lifetimes.mjs";
+import { assertRejectedAsyncSource, assertSettledCopiedPromise, verifyNativeBorrowedPromiseBoundary }
+  from "../../helpers/native-promise-lifetimes.mjs";
 
 test("retained async callbacks observe mutable Promise storage without lifetime adapters", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "bin" } }, files: {
@@ -32,7 +33,7 @@ await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
-  assert.match(source, /rt::Location<js_abi::JsPromise<(?:String|\(\))>>/u);
+  assert.match(source, /rt::Location<js_abi::JsPromise<(?:String|\(\))>, core::convert::Infallible>/u);
   assert.doesNotMatch(source, /transmute|\.then\(|\.then_async\(/u);
   validateGeneratedProject("suspended-capture-storage", result.artifacts, { run: true });
 });
@@ -57,12 +58,13 @@ export async function main(): Promise<void> {
 await main();
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
+  assertSettledCopiedPromise(result, "processing");
   assert.equal(validateGeneratedProject("suspended-capture-settled-copy", result.artifacts, { run: true }).status, 0,
     "the exact original eager read and repeated stored completion outlive only the copied value");
 });
 
 test("genuinely pending source storage cannot extend its retained input loan", { timeout: 300_000 }, () => {
-  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": `
+  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
 import type { Life, Ref } from "@tsonic/rust/types.js";
 import { load } from "@tsonic/rust/lang.js";
@@ -75,10 +77,10 @@ export function escape<L extends Life>(value: Ref<int32, L>, pending: Promise<vo
   return async (): Promise<int32> => await processing;
 }
 ` } });
-  assert.equal(result.diagnostics.some(row => row.code === "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES" && row.sourceNode !== undefined), true,
-    "the actual pending factory retains a real input lease, not a ready copied payload");
-  assert.equal(result.program === undefined && result.artifacts.length === 0, true,
-    "invalid lifetime transport publishes neither a native program nor output");
+  assertRejectedAsyncSource(compilation, [
+    { code: "TSONIC_BORROWED_ASYNC_RESULT_ESCAPES", kind: "KindCallExpression", text: "read(value, pending)" },
+    { code: "RUST_ASYNC_PROMISE_STORAGE_LIFETIME_NOT_PROVEN", kind: "KindCallExpression", text: "read(value, pending)" },
+  ]);
   const control = compileRust({ surfaces: ["js"], files: { "index.ts": `
 export async function read(): Promise<number> { return 17; }
 ` } }).result;
