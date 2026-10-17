@@ -681,6 +681,10 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
     join(sourceRoot, "backend/planner/statements/iteration.ts"),
     "utf8",
   );
+  const admission = readFileSync(
+    join(sourceRoot, "analysis/control-flow/statement-completion.ts"),
+    "utf8",
+  );
   const providerLowering = sourceSection(
     expressions,
     "export function planProviderOperationExpression(",
@@ -691,17 +695,36 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
     "function planRuntimeSetStatement(",
     "function planForOfStatement(",
   );
-  for (const [name, section] of [["provider expression", providerLowering], ["runtime setter", runtimeSet]]) {
-    assert.match(section, /validateRustFinalizedOperationAbi/u, `${name} must validate the total ABI`);
+  const setterAdmission = sourceSection(admission, "  const setter = (", "  const assignment = (");
+  assert.equal(/if \(!validateRustFinalizedOperationAbi\(fact\.abi, context\.input\.program\.typeDefinitions\)\)/u.test(providerLowering), true,
+    "provider operations and runtime setters share the unconditional total-ABI invariant guard");
+  assert.equal(/fact\.kind === "provider-operation" && !rustTargetTypeRefEquals\(fact\.resultCarrier, abiResultCarrier\)/u.test(providerLowering), true,
+    "only provider expressions require their logical result carrier to equal the native ABI result");
+  for (const [name, section] of [["provider expression", providerLowering], ["runtime setter admission", setterAdmission]]) {
     assert.match(section, /\.abi\.(?:targetReceiver|targetArguments|result|sourceArguments)/u, `${name} must consume finalized ABI fields`);
     assert.doesNotMatch(section, /\.argModes|\.argOrder|\.argConversions|\.receiverMode|\.indexConversion|\.resultConversion|\.parameterCarriers|\.sourceArgumentCount/u, `${name} must not interpret sparse authoring metadata`);
   }
+  assert.equal(/statementCompletions\.setterFor\(expression\)/u.test(runtimeSet), true,
+    "runtime setters consume the pre-seal source-operand admission");
+  assert.equal(/const sourceArgumentNodes = admitted\.sourceArguments/u.test(runtimeSet), true,
+    "runtime setter arguments are the admitted source identities");
+  assert.equal(/planProviderOperationExpression\(context, fact, admitted\.receiver, sourceArgumentNodes, expression/u.test(runtimeSet), true,
+    "runtime setters use the same total-ABI guard and renderer as provider expressions");
+  assert.equal(/planRustFinalizedOperationForm\(context, fact\.abi, receiver, args, operationNode/u.test(providerLowering), true,
+    "both finalized operation kinds use the canonical operation-form renderer");
   assert.match(expressionFacts, /function providerSelectedCallMatches\(/u);
   assert.match(expressionFacts, /selectedCall\.get\(node\)/u);
-  assert.match(runtimeSet, /fact\.abi\.operationKind !== expectedOperationKind/u);
-  assert.match(runtimeSet, /finishProviderOperationExpression\(context, fact, call, expression\)/u);
-  assert.match(runtimeSet, /runtimeCarrier\.get\(right\)/u);
-  assert.match(runtimeSet, /selectedOperatorIdentityMatches/u);
+  assert.match(setterAdmission, /operation\.abi\.operationKind !== expectedKind/u);
+  assert.match(runtimeSet, /finishProviderOperationExpression\(context, fact, native, expression\)/u);
+  assert.match(setterAdmission, /runtimeCarrier\.get\(value\)/u);
+  assert.equal(/selected\?\.operationKind === "operator"/u.test(setterAdmission), true,
+    "setter admission requires the selected operator kind");
+  assert.equal(/selected\.operationId === operation\.operationId/u.test(setterAdmission), true,
+    "setter admission retains the exact selected operation identity");
+  assert.equal(/selected\.targetOperation === operation\.operationId/u.test(setterAdmission), true,
+    "setter admission retains the exact selected target operation");
+  assert.equal(/rustTargetTypeRefEquals\(selected\.resultType, records\.runtimeCarrier\.get\(value\)\?\.carrier\)/u.test(setterAdmission), true,
+    "setter admission retains the exact checked result carrier");
 });
 
 test("operation target shape and source-call effects have one finalized owner", () => {
@@ -763,7 +786,8 @@ test("backend assignment and nullish checks consume finalized fact details", () 
   const semantics = readFileSync(join(sourceRoot, "analysis/operations/operators.ts"), "utf8");
   const operators = readFileSync(join(sourceRoot, "policy/operations/operators/rules.ts"), "utf8");
   assert.match(statements, /assignment === undefined \|\| assignment\.kind !== "operator-token"/u);
-  assert.match(statements, /selectedOperatorMatches\(expression, assignment, context\)/u);
+  assert.equal(/if \(context\.input\.program\.statementCompletions\.assignmentFor\(expression\) !== assignment\)\s*failRustPlannerInvariant\("Assignment requires its admitted native operator selection\.", expression\)/u.test(statements), true,
+    "assignment planning requires the exact selected operation admitted before sealing");
   assert.doesNotMatch(statements, /sourceReferenceFor|selectRustEquivalentAssignment/u);
   assert.match(statements, /fact\.writeStrategy === "in-place-string-append-parts"/u);
   assert.match(statements, /fact\.writeStrategy === "in-place-string-append-value"/u);
@@ -870,7 +894,8 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   assert.match(expressions, /Callable expression contains an undefined parameter slot/u);
   assert.match(declarations, /planBlockLike\(bodyNode, bodyContext\)/u);
   assert.match(statements, /planStatementSequence\(children, node, construction\?\.context \?\? context\)/u);
-  assert.match(statements, /Source block contains an undefined statement slot/u);
+  assert.equal(/const child = children\[index\];\s*if \(child === undefined\) \{\s*failRustPlannerInvariant\("Statement sequence requires its dense checked source nodes\.", diagnosticNode\)/u.test(statements), true,
+    "an undefined checked source slot fails the dense-sequence invariant instead of disappearing");
   assert.match(declarations, /Enum declaration contains an undefined member slot/u);
   assert.match(declarations, /Interface declaration contains an undefined member slot/u);
   assert.match(semantics, /RUST_SOURCE_AST_INCOMPLETE/u);
