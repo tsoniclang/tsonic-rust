@@ -28,9 +28,9 @@ export enum Ordinary { First = 7, Next }
 ` } });
   assert.equal(result.diagnostics.length, 0, "authored exact integer constants remain admitted");
   const generated = artifactText(result, "src/index.rs");
-  assert.match(generated, /pub const First: Self = Self \{ value: 9007199254740993 \}/u, "the authored value does not round through Number");
-  assert.match(generated, /pub const Next: Self = Self \{ value: 9007199254740994 \}/u, "the explicit large successor retains its exact native integer");
-  assert.match(generated, /pub const Next: Self = Self \{ value: 8 \}/u, "a checker-coherent ordinary implicit increment remains supported");
+  assert.match(generated, /pub const First: Self = Self \{\s*value: 9007199254740993,?\s*\}/u, "the authored value does not round through Number");
+  assert.match(generated, /pub const Next: Self = Self \{\s*value: 9007199254740994,?\s*\}/u, "the explicit large successor retains its exact native integer");
+  assert.match(generated, /pub const Next: Self = Self \{\s*value: 8,?\s*\}/u, "a checker-coherent ordinary implicit increment remains supported");
 });
 
 test("source enum definitions retain the identical early completed values and common width", () => {
