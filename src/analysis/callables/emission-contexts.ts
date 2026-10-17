@@ -434,6 +434,7 @@ export function prepareRustEmissionContextRequests(
   if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
   const nativeBodies = new Map(requests.filter(request => request.role === "native-body")
     .map(request => [request.declaration, request] as const));
+  const selectedDemands = new Set(input.emissionRequests);
   const creationOwners = new Map<TargetUseSiteRef, ReadonlySet<Node>>();
   for (let index = 0; index < requests.length; index += 1) {
     const enclosing = requests[index]!;
@@ -443,7 +444,10 @@ export function prepareRustEmissionContextRequests(
     const ancestors = creationOwners.get(enclosing.use) ?? new Set([enclosing.declaration]);
     for (const demand of enclosing.demands) {
       if (demand.kind !== "type" || demand.context.role !== "inline-body") continue;
-      if (demand.owner !== enclosing.declaration || demand.context.subject !== demand.subject) {
+      const layer = enclosing.source.kind === "construction" ? enclosing.source.layer : undefined;
+      const owns = layer === undefined ? demand.owner === enclosing.declaration
+        : demand.owner === layer.definition.declaration || demand.owner === layer.constructor;
+      if (!selectedDemands.has(demand) || !owns || demand.context.subject !== demand.subject) {
         diagnostics.push(emissionDiagnostic(demand.subject, "An inline body requires its exact original selecting creation owner and occurrence."));
         continue;
       }
