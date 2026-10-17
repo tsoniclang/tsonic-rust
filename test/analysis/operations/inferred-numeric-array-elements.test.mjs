@@ -87,7 +87,7 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
   const computedFloat = [signed, computed];
   const nativeFloat32 = [narrow, 0.1];
   const tuple: [int32, int32?] = [signed];
-  const fixed: FixedArray<int32, 2> = [signed, 1];
+  const fixed: FixedArray<int32, 2> = [signed, 1] as const;
   const empty: int32[] = [];
 }
 ` } });
@@ -99,7 +99,8 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
     for (const name of ["signedLiteral", "parenthesized", "empty"]) assertArray(program, initializers, name, "int32");
     assertArray(program, initializers, "nativeFloat32", "float32");
     assert.equal(program.records.targetOperation.get(initializers.get("tuple"))?.kind, "tuple-literal", "tuple keeps its own admission");
-    assert.equal(program.records.targetOperation.get(initializers.get("fixed"))?.kind, "fixed-array-literal", "fixed array keeps its extent owner");
+    const fixed = program.source.ast.as.AsAsExpression(initializers.get("fixed"))?.Expression;
+    assert.equal(program.records.targetOperation.get(fixed)?.kind, "fixed-array-literal", "fixed array keeps its extent owner");
     const zero = program.source.ast.elements(initializers.get("negativeZero"))[1];
     const literal = program.records.literalValue.get(zero);
     assert.equal(literal?.numeric?.kind === "authored" && literal.numeric.token.negative &&
