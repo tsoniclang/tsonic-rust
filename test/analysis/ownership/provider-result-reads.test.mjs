@@ -159,7 +159,7 @@ test("native borrowed-string fields copy their raw reference with exactly the ha
     }, { exportId: "@raw/native::count", operationKind: "method",
       target: { form: "call", path: "raw_field_fixture::count", argModes: ["value"],
         argConversions: [rustStringToBorrowedStrValueConversion] },
-      parameterCarriers: [rustBorrowedStrTargetType()], resultCarrier: integer,
+      parameterCarriers: [string], resultCarrier: integer,
       resultLoans: { kind: "complete", declarationIdentity: "raw_field_fixture::count",
         resultTypeIdentity: "i32", valueTypeIdentity: "i32", loans: [] },
     }],
