@@ -54,6 +54,10 @@ const numericUses = [
   ["inferred complement comparison", "export function use(value: Value): boolean { const result = ~value; return result === 0; }"],
   ["inferred complement arithmetic", "export function use(value: Value): number { const result = ~value; return result + 1; }"],
   ["unwritten inferred binding", "export function use(value: Value): number { let result = ~value; return result; }"],
+  ["discarded arithmetic", "export function use(value: Value): void { value + 1; }"],
+  ["discarded numeric assertion", "export function use(value: Value): void { (value as number); }"],
+  ["void numeric assertion", "export function use(value: Value): void { void (value as number); }"],
+  ["copied numeric assertion", "export function use(value: Value): number { const projected = value as number; const copied = projected; return copied; }"],
   ["shift", "export function use(value: Value): number { return value << 1; }"],
   ["conditional complement", "export function use(left: Value, right: Value, flag: boolean): number { const result = flag ? ~left : ~right; return result; }"],
   ["conditional bitwise", "export function use(left: Value, right: Value, flag: boolean): number { const result = flag ? left | right : left & right; return result; }"],
@@ -207,6 +211,7 @@ ${body}
 
   for (const [label, body] of [
     ["same-enum mutable destination", "export function use(value: Value): Value { let result: Value = value; result = value; return result; }"],
+    ["wrapped same-enum mutable destination", "export function use(value: Value): Value { let result: Value = value; (result = value); return result; }"],
     ["same-enum class field", "export class Holder { value: Value = Value.First; }"],
     ["same-enum parameter default", "export function use(value: Value = Value.First): Value { return value; }"],
     ["same-enum assertion", "export function use(value: Value): Value { return value as Value; }"],
