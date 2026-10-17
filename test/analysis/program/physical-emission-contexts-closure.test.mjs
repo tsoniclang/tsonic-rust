@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
@@ -718,4 +718,100 @@ process.stdout.write("R14_INSTRUMENTED_WORKER_CONTEXT_PROOF");
   const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
   assert.equal(observed.status, 0, `instrumented actual worker proof: ${observed.error?.message ?? ""}\n${observed.stderr.slice(-4096)}\n${observed.stdout.slice(-2048)}`);
   assert.equal(observed.stdout, "R14_INSTRUMENTED_WORKER_CONTEXT_PROOF", "explicit instrumented worker proof label");
+});
+
+function verifyEmissionSourceFileBoundaries(input, prepare, genuine, observations) {
+  assert.equal(genuine.kind, "resolved", "the genuine checked source request vector is admitted");
+  const nodes = [];
+  const visit = node => {
+    nodes.push(node);
+    input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  input.sourceFiles.forEach(visit);
+  const call = nodes.find(node => input.records.targetOperation.get(node)?.kind === "source-call");
+  const declaration = nodes.find(node => input.projectTypes.definitionForDeclaration(node) !== undefined);
+  assert.equal(call !== undefined && declaration !== undefined, true, "actual source has both boundary consumers");
+  const fields = input.ast.members(declaration).filter(member => member !== undefined && sourceClassFieldHasStorage(input.ast, member));
+  const staticField = fields.find(member => input.ast.hasModifierKind(member, "static"));
+  const instanceField = fields.find(member => !input.ast.hasModifierKind(member, "static"));
+  assert.equal(staticField !== undefined && instanceField !== undefined, true, "both actual field ownership modes participate");
+  const file = input.ast.getSourceFile(call);
+  const foreign = input.sourceFiles.find(sourceFile => sourceFile !== file);
+  assert.equal(file !== undefined && foreign !== undefined, true, "two genuine checked source files provide distinct identity controls");
+  assert.equal(genuine.value.some(request => request.subject === staticField && request.owner === file && request.kind === "type"), true,
+    "a static field retains its original checked module owner");
+  assert.equal(genuine.value.some(request => request.subject === instanceField && request.owner === declaration && request.kind === "type"), true,
+    "an instance field retains its original class owner");
+  const sourceFiles = input.sourceFiles.filter(sourceFile => sourceFile !== foreign);
+  const domain = new Set(sourceFiles);
+  for (const [name, subject] of [["call", call], ["static-field", staticField]]) {
+    for (const mode of ["missing", "foreign"]) {
+      const ast = Object.freeze(Object.create(Object.getPrototypeOf(input.ast), {
+        ...Object.getOwnPropertyDescriptors(input.ast),
+        getSourceFile: { value(node) {
+          return node === subject ? mode === "missing" ? undefined : foreign : input.ast.getSourceFile(node);
+        } },
+      }));
+      const carrierHost = Object.freeze({ ...input.carrierHost, semantics(sourceFile) {
+        assert.equal(sourceFile !== undefined && domain.has(sourceFile), true,
+          name + "/" + mode + ": invalid files never reach source semantics");
+        return input.carrierHost.semantics(sourceFile);
+      } });
+      const result = prepare({ ...input, ast, sourceFiles, carrierHost });
+      assert.equal(result.kind, "rejected", name + "/" + mode + ": missing ownership evidence rejects the whole stage");
+      assert.equal(result.diagnostics.length, 1, name + "/" + mode + ": one precise owning boundary failure");
+      assert.equal(result.diagnostics.some(issue => issue.code === "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED" &&
+        issue.sourceNode === subject && issue.message ===
+          "An emitted source occurrence requires its exact checked owning SourceFile in the current source-file domain."), true,
+      name + "/" + mode + ": original source identity and required diagnostic survive unchanged");
+      assert.equal(Object.hasOwn(result, "value"), false, name + "/" + mode + ": no empty or partial success fallback");
+      observations.cases++;
+    }
+  }
+}
+
+test("source call and static field requests require genuine owning files without losing instance ownership (instrumented boundary controls)", () => {
+  const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } }, files: {
+    "index.ts": `import { seed } from "./worker.js";
+class Item { static current: number = 1; instance: number = 2; }
+export function value(input: number): number { return seed(input) + Item.current; }`,
+    "worker.ts": `export function seed(value: number): number { return value; }`,
+  } };
+  const ordinary = compileRust(options);
+  assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+  assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected genuine boundary source emits normally");
+  const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
+  const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
+  const key = "r14-checked-source-file-boundary-proof";
+  const script = `
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import { sourceClassFieldHasStorage } from "@tsonic/target-api/source";
+const observations = { calls: 0, anchors: 0, cases: 0 };
+globalThis[Symbol.for(${JSON.stringify(key)})] = observations;
+observations.verify = (input, prepare, genuine) => (${verifyEmissionSourceFileBoundaries.toString()})(input, prepare, genuine, observations);
+registerHooks({ load(url, context, nextLoad) {
+  const loaded = nextLoad(url, context);
+  if (url !== ${JSON.stringify(collectorUrl)}) return loaded;
+  const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+  const anchor = "export function prepareRustPhysicalCallableEmissionRequests(";
+  assert.equal(source.split(anchor).length, 2, "one exact source-request boundary observation anchor");
+  observations.anchors++;
+  const extension = 'export function prepareRustPhysicalCallableEmissionRequests(...inputs) { const result = observedPrepareRustPhysicalCallableEmissionRequests(...inputs); const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.calls++; observations.verify(inputs[0], observedPrepareRustPhysicalCallableEmissionRequests, result); return result; }';
+  return { ...loaded, source: source.replace(anchor, "function observedPrepareRustPhysicalCallableEmissionRequests(") + "\\n" + extension };
+} });
+const { compileRust } = await import(${JSON.stringify(helperUrl)});
+const compiled = compileRust(${JSON.stringify(options)});
+assert.equal(compiled.result.diagnostics.length, 0, compiled.result.diagnostics.map(issue => issue.message).join("\\n").slice(0, 2048));
+assert.equal(observations.anchors, 1, "one real pipeline owner observed without dist writes");
+assert.equal(observations.calls, 1, "one genuine pipeline publication, separate from the four counterfactual boundary cases");
+assert.equal(observations.cases, 4, "both consumers reject both missing and genuine foreign-domain files");
+process.stdout.write("R14_INSTRUMENTED_SOURCE_BOUNDARY_PROOF " + JSON.stringify(compiled.result.artifacts));
+`;
+  const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(observed.status, 0, `instrumented actual boundary proof: ${observed.error?.message ?? ""}\n${observed.stderr.slice(-4096)}\n${observed.stdout.slice(-2048)}`);
+  const marker = "R14_INSTRUMENTED_SOURCE_BOUNDARY_PROOF ";
+  assert.equal(observed.stdout.startsWith(marker), true, "explicit boundary proof label");
+  assert.equal(JSON.stringify(JSON.parse(observed.stdout.slice(marker.length))) === JSON.stringify(ordinary.result.artifacts), true,
+    "boundary controls leave the genuine original pipeline and generated artifacts unchanged");
 });
