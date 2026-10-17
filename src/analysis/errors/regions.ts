@@ -17,7 +17,7 @@ import { bindRustGenericArguments } from "../../target-model/types/carriers/gene
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { rustNativeCallableCompletion } from "../../target-model/types/callable-completions.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner, type RustErrorTypeContext } from "../program/error-types.js";
+import { normalizeRustErrorType, selectRustPhysicalProgramErrorOwner, type RustErrorTypeContext } from "./error-types.js";
 import { rustNativeErrorJoinReference } from "../../target-model/types/native-error-joins.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../../target-model/types/equality.js";

@@ -4,7 +4,7 @@ import { rustJsPromiseTargetId, rustSourceUnionTargetType } from "../../target-m
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import { closedMetadataKey, snapshotClosedMetadata } from "../../target-model/metadata/closed-data.js";
-import { normalizeRustErrorType, type RustErrorTypeContext } from "../program/error-types.js";
+import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustTypeDefinitionRegistry } from "../project-types/type-definitions.js";
 import { rustGenericCallableInvocationBindings, rustGenericCallableMemberBindings,
   type RustGenericCallableBindingContext } from "./generic-bindings.js";

@@ -10,7 +10,8 @@ import { rustCallableInputProtocol, rustCallableProtocol, rustNativeCallableProt
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import type { AstReader, Node } from "@tsonic/tsts";
 
-import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
+import { classifyCarrierRequirements, type RustCarrierRequirementSelection } from "./generic-carrier-requirements.js";
+import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 import { createRustOptionalStorageCollector } from "./type-projections.js";
 import { isRustBorrowedValueRead, isRustDeclarationPathUse, isRustReturnedValue, isRustIndependentCallable, isRustGenericTypeDeclaration } from "./generic-reference-uses.js";
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
@@ -96,6 +97,7 @@ interface ClassifyCallableInput {
   readonly implementationDeclaration: (declaration: Node) => Node;
   readonly contractFor: (declaration: Node, body?: true) => RequirementContractState | undefined;
   readonly errorRegions: RustAnalyzedErrorRegions;
+  readonly errorTypes: RustErrorTypeContext;
 }
 
 export function classifyRustCallableRequirements(input: ClassifyCallableInput):
@@ -152,9 +154,18 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     genericCallables: input.genericCallables, structuralShapes: input.structuralShapes,
     frameCallables: input.frameCallables, classValues: input.classValues,
     objectRepresentations: input.objectRepresentations, projectTypes: input.projectTypes, records };
+  const classifyUse = (node: Node, carrier: TargetTypeRef,
+    requirements: readonly RustGenericRequirement[]): RustCarrierRequirementSelection => {
+    const normalized = mapRustTargetTypes(carrier, normalizeFamily);
+    const physical = requirements.includes("static")
+      ? normalizeRustErrorType(normalized, input.errorTypes, node) : normalized;
+    return physical === undefined ? { kind: "unresolved",
+      reason: "A native static requirement has no exact admitted physical error-boundary carrier." }
+      : classifyCarrierRequirements(physical, requirements, declared, byParameter, associated.require,
+        input.typeDefinitions, staticEvidence);
+  };
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
-    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require,
-      input.typeDefinitions, staticEvidence).kind === "supported",
+    (carrier, requirements) => classifyUse(declaration, carrier, requirements).kind === "supported",
     carrier => nativeBindings.some(binding => rustNativeCallableErrorChannel(binding, binding.implementation, carrier) !== undefined));
   for (const parameter of [...input.inheritedBody?.typeParameters ?? [], ...input.inheritedBody?.capturedTypeParameters ?? [],
     ...input.inheritedBody?.nativeInputs ?? []])
@@ -181,15 +192,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     const normalized = normalizeRustGenericRequirements(requirements);
     const requiredCarrier = nativeStorage && normalized.includes("static")
       ? substituteElidedLifetime(carrier, rustStaticLifetime) : carrier;
-    const classified = classifyCarrierRequirements(
-      mapRustTargetTypes(requiredCarrier, normalizeFamily),
-      normalized,
-      declared,
-      byParameter,
-      associated.require,
-      input.typeDefinitions,
-      staticEvidence,
-    );
+    const classified = classifyUse(node, requiredCarrier, normalized);
     if (classified.kind === "unresolved") return classified.reason;
     if (classified.kind === "unsatisfied") {
       return `A generated Rust operation requires ${rustRequirementDescription(normalized)} that its exact target carrier does not provide.`;

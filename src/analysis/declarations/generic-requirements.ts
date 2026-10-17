@@ -41,6 +41,7 @@ import type { RustFrameCallablePlan } from "../callables/frame-values.js";
 import type { RustProjectStructuralView } from "../objects/project-structural-views.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
+import type { RustErrorTypeContext } from "../errors/error-types.js";
 import type { RustPromiseBodies } from "../../target-model/records/callables-and-resources.js";
 import type { RustNativeStoragePlan } from "../callables/native-storage.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
@@ -110,6 +111,7 @@ export function analyzeRustDeclarationGenericRequirements(
   promiseBodies: RustPromiseBodies,
   nativeStorage: RustNativeStoragePlan,
   classValues: RustClassValuePlan,
+  errorTypes: RustErrorTypeContext,
 ): AnalyzeRustDeclarationGenericRequirementsResult {
   const ast = source.ast;
   const diagnostics: TargetDiagnostic[] = [];
@@ -203,6 +205,7 @@ export function analyzeRustDeclarationGenericRequirements(
         nativeStorage,
         classValues,
         errorRegions,
+        errorTypes,
         frameCallables,
         structuralShapes: shapes,
         structuralViewsFor: (declaration: Node) => viewsByDeclaration.get(declaration) ?? [],

@@ -25,7 +25,7 @@ import { rustRetainedValueLifetime } from "../../policy/ownership/retained-envir
 import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
-import { normalizeRustErrorType } from "../program/error-types.js";
+import { normalizeRustErrorType } from "../errors/error-types.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-environments.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";

@@ -9,7 +9,7 @@ import type { RustSourceModuleConstructionIndex } from "../source-modules/model.
 import type { RustSourcePackageFacadeClassifications } from "../program/source-package-facades.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import { stronglyConnectedSourceFiles } from "../program/module-graph.js";
-import { selectRustPhysicalProgramErrorOwner } from "../program/error-types.js";
+import { selectRustPhysicalProgramErrorOwner } from "./error-types.js";
 import type { RustAnalyzedErrorRegions } from "./regions.js";
 import type { RustBinaryErrorSelection, RustInitializationErrorRecords, RustInitializerErrorSelection,
   RustInitializerSelection, RustModuleErrorInitializer, RustPhysicalErrorOwner } from "../../target-model/records/error-regions.js";
