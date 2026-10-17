@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import { analyzeSourceLiveness, createSourceControlFlow, type SourceFlowLimits,
   type SourceStorageQueries } from "@tsonic/target-api/analysis";
-import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand,
+import { Node_Expression, isSourceCallableBodyBoundary, sourceEnclosingCallable, sourceExpressionResultDisposition, sourceNodesEqual, sourceParameterIsProperty, sourceTransparentExpressionOperand,
   type TargetSourceProgram } from "@tsonic/target-api/source";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import type { RustClosureCaptureFact } from "../../target-model/records/operation-selections.js";
@@ -43,6 +43,10 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     }] };
     if (selected.kind !== "resolved") throw new Error("Resolved ownership liveness requires its source graph.");
     const graph = selected.graph;
+    const awaitedReads = new Set<Node>();
+    for (const point of graph.points) if (point.operation.kind === "read" && point.source !== undefined &&
+      liveness.reachable.has(point.id) && sourceEnclosingCallable(point.source, ast) === declaration &&
+      sourceExpressionResultDisposition(ast, point.source).kind === "awaited-in-scope") awaitedReads.add(point.source);
     const ownedCaptures = new Set((input.capturesFor(declaration)?.captures ?? [])
       .filter(capture => capture.storage === "value").map(capture => capture.declaration));
     for (const point of graph.points) {
@@ -52,13 +56,13 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
           sourceNodesEqual(ast, value.declaration, point.operation.kind === "capture" ? point.operation.binding : undefined));
         if (capture === undefined || capture.storage !== "value" ||
           liveness.after.get(point.id)!.has(point.operation.binding) ||
-          !bindingCanTransfer(point.operation.binding, declaration, input)) continue;
+          !bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads)) continue;
         const transferred = new Set(captureTransfers.get(point.source));
         transferred.add(capture.declaration);
         captureTransfers.set(point.source, transferred);
       } else if (point.operation.kind === "read" && liveness.lastUses.has(point.source) &&
         !hasOverlappingArgumentBorrow(point.source, point.operation.binding, input) &&
-        (bindingCanTransfer(point.operation.binding, declaration, input) ||
+        (bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads) ||
           input.isOnceCallable(declaration) && ownedCaptures.has(point.operation.binding))) {
         movingReads.add(point.source);
       }
@@ -87,13 +91,14 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   return { kind: "resolved", flow: Object.freeze({ movingReads, captureTransfers }) };
 }
 
-function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput): boolean {
+function bindingCanTransfer(binding: Node, callable: Node, input: RustOwnershipFlowInput, awaitedReads: ReadonlySet<Node>): boolean {
   const { ast, navigation } = input.source;
   if (sourceEnclosingCallable(binding, ast) !== callable) return false;
   const kind = ast.variableDeclarationKind(binding);
   if (kind === "using" || kind === "await using") return false;
   const summary = navigation.declarationUseSummary(binding);
-  return !summary.exported && !summary.hasUnclassifiedValueUse;
+  return !summary.exported && (!summary.hasUnclassifiedValueUse || summary.uses.every(use =>
+    use.role !== "value" || awaitedReads.has(use.reference)));
 }
 
 function hasOverlappingArgumentBorrow(reference: Node, binding: Node, input: RustOwnershipFlowInput): boolean {

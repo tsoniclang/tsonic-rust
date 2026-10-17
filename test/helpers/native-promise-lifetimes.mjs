@@ -40,7 +40,8 @@ export function assertRejectedAsyncSource(compilation, expected) {
   const nodes = [];
   const visit = node => { nodes.push(node); ast.forEachChild(node, child => { if (child !== undefined) visit(child); }); };
   source.sourceFiles.filter(file => file !== undefined).forEach(visit);
-  const text = node => ast.getSourceText(ast.getSourceFile(node)).slice(ast.pos(node), ast.end(node)).trim();
+  const text = node => Buffer.from(ast.getSourceText(ast.getSourceFile(node)))
+    .subarray(ast.pos(node), ast.end(node)).toString("utf8").trim();
   assert.deepEqual(result.diagnostics.map(issue => issue.code).sort(), expected.map(issue => issue.code).sort(),
     "every rejection has its exact complete diagnostic code, with no unrelated or missing failure");
   const consumed = new Set();

@@ -103,11 +103,11 @@ mod contextual_async_cost {
   assert.equal(executed.status, 0, executed.stdout.slice(-4096) + executed.stderr.slice(-4096));
 });
 
-for (const [name, body, nativeBody] of [
+for (const [name, body, nativeBody, alias] of [
   ["read", "await pending; return load(value);", "pending.into_result().await?; Ok::<_, js_abi::JsValue>(value)"],
   ["readFirst", "const copied = load(value); await pending; return copied;", "let copied = value; pending.into_result().await?; Ok::<_, js_abi::JsValue>(copied)"],
-]) {
-  test(`direct native ${name} adds exactly zero ownership costs against its inlined body`, { timeout: 300_000 }, () => {
+].flatMap(entry => [false, true].map(alias => [...entry, alias]))) {
+  test(`${alias ? "lexical alias" : "direct native"} ${name} adds exactly zero ownership costs against its inlined body`, { timeout: 300_000 }, () => {
     const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } },
       files: { "index.ts": `
 import type { int32 } from "@tsonic/core/types.js";
@@ -118,7 +118,8 @@ async function ${name}<Region extends Life>(value: Ref<int32, Region>, pending: 
 }
 export async function run(pending: Promise<void>): Promise<int32> {
   const value: int32 = 17;
-  return await ${name}(ref(value), pending);
+  ${alias ? `const selected = ${name};` : ""}
+  return await ${alias ? "selected" : name}(ref(value), pending);
 }
 ` } });
     assert.equal(result.diagnostics.length, 0,
@@ -128,7 +129,7 @@ export async function run(pending: Promise<void>): Promise<int32> {
     assert.equal((output.match(/JsPromise::from_fallible_factory\(/gu) ?? []).length, 1,
       "only run's genuine public object facet constructs a task");
     assert.equal(/Box::pin|'Region: 'static/u.test(output), false, "the borrowed direct body adds no boxed/static adapter");
-    const directory = writeGeneratedProject(`direct-native-${name}-cost`, result.artifacts);
+    const directory = writeGeneratedProject(`${alias ? "lexical-alias" : "direct-native"}-${name}-cost`, result.artifacts);
     appendFileSync(join(directory, "src/index.rs"), `
 #[cfg(test)]
 mod direct_native_cost {
