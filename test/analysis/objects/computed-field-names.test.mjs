@@ -285,7 +285,9 @@ export function make(): number {
   return value[${current.key}];
 }
 ` } });
-      assert.equal(compiled.result.diagnostics.length, 0, "computed-field program compiles to native Rust");
+      assert.equal(compiled.result.diagnostics.length, 0,
+        `computed-field program compiles to native Rust; program=${compiled.result.program !== undefined}; plan=${compiled.result.plan !== undefined}; artifacts=${compiled.result.artifacts.length}; ` +
+        compiled.result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("\n").slice(0, 2048));
       assert.equal(compiled.result.artifacts.length > 0, true, "computed-field program emits native artifacts");
       const definition = compiled.result.program.projectTypes.definitions.find(candidate => candidate.sourceName === "Holder");
       assert.equal(definition !== undefined, true, "checked field owner is preserved");

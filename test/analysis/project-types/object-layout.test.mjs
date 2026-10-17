@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustProjectObjectLayout } from "../../../dist/analysis/project-types/object-layout.js";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
-import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 
 test("project layouts read only admitted leaf names and never partial computed fields", () => {
   const field = (kind, value, optional = false) => ({ kind: "KindPropertySignature", name: { kind, value }, optional });
@@ -79,8 +80,9 @@ export interface Fields {
 
 test("checked project definitions publish one immutable exact layout without post-analysis syntax reads", () => {
   let allowSyntax = true;
-  let program;
-  const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": checkedLayoutSource },
+  const checkedPolicy = () => {
+    let policy;
+    const compilation = compileRust({ surfaces: ["js"], files: { "index.ts": checkedLayoutSource },
     compileTarget(request) {
       const ast = new Proxy({ ...request.input.source.ast }, {
         get(reader, key) {
@@ -89,18 +91,20 @@ test("checked project definitions publish one immutable exact layout without pos
           return typeof value === "function" ? value.bind(reader) : value;
         },
       });
-      const result = analyzeRustTargetProgram({ ...request, input: { ...request.input,
+      const context = analyzeRustCheckedContext({ ...request, input: { ...request.input,
         source: { ...request.input.source, ast } } });
-      if (result.kind === "rejected") return result;
-      program = result.value;
+      if (context.diagnostics.length !== 0) return { kind: "rejected", diagnostics: context.diagnostics };
+      policy = context.projectTypes.seal();
       return { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
     },
   });
-  assert.deepEqual(compilation.result.diagnostics.map(({ code, message }) => ({ code, message })), []);
-  assert.equal(program !== undefined, true);
-  const foreign = analyzeRust({ surfaces: ["js"], files: { "index.ts": checkedLayoutSource } }).program;
+    assert.deepEqual(compilation.result.diagnostics.map(({ code, message }) => ({ code, message })), []);
+    assert.equal(policy !== undefined, true, "the exact checked layout owner seals before native declaration admission");
+    return policy;
+  };
+  const policy = checkedPolicy();
+  const foreign = checkedPolicy();
   allowSyntax = false;
-  const policy = program.projectTypes;
   assert.equal(Object.isFrozen(policy), true);
   for (const [name, expected] of [["Base", [["optional", 0, "optional"], ["current", 1, "required"]]],
     ["Child", [["extra", 0, "required"]]], ["Fields", [["name", 0, "required"], ["optional", 1, "optional"]]]]) {
@@ -114,10 +118,10 @@ test("checked project definitions publish one immutable exact layout without pos
       [sourceName, storageIndex, presence]), expected);
     assert.equal(Object.isFrozen(layout), true);
     assert.equal(layout.fields.every(Object.isFrozen), true);
-    assert.equal(policy.objectLayoutForDefinition({ ...definition }), undefined, name + " forged definition");
-    const foreignDefinition = foreign.projectTypes.definitions.find(candidate => candidate.sourceName === name);
+    assert.equal(policy.objectLayoutForDefinition({ ...definition }) === undefined, true, name + " forged definition");
+    const foreignDefinition = foreign.definitions.find(candidate => candidate.sourceName === name);
     assert.equal(foreignDefinition !== undefined, true, name + " independent checker definition");
-    assert.equal(policy.objectLayoutForDefinition(foreignDefinition), undefined, name + " foreign identity");
+    assert.equal(policy.objectLayoutForDefinition(foreignDefinition) === undefined, true, name + " foreign identity");
     if (name === "Fields") {
       assert.equal(layout.indexSignatures.length, 1);
       assert.equal(Object.isFrozen(layout.indexSignatures[0]), true);
@@ -125,4 +129,23 @@ test("checked project definitions publish one immutable exact layout without pos
   }
   const child = policy.definitions.find(candidate => candidate.sourceName === "Child");
   assert.deepEqual(policy.classLineage(child).map(definition => definition.sourceName), ["Base", "Child"]);
+});
+
+test("the same mixed checked layout is refused before native declaration publication", () => {
+  let published = false;
+  const { result } = compileRust({ surfaces: ["js"], files: { "index.ts": checkedLayoutSource },
+    compileTarget(request) {
+      const selected = analyzeRustTargetProgram(request);
+      if (selected.kind === "resolved") published = true;
+      return selected.kind === "rejected" ? selected
+        : { kind: "resolved", value: { artifacts: [] }, diagnostics: [] };
+    },
+  });
+  assert.equal(result.diagnostics.length, 1, "the existing mixed index/native-storage refusal has one owner");
+  assert.equal(result.diagnostics[0].code, "RUST_INTERFACE_INDEX_LAYOUT_NOT_SUPPORTED");
+  assert.equal(result.diagnostics[0].message,
+    "Rust index-backed interfaces require exactly one index signature and no separately stored property signatures.");
+  assert.equal(published, false, "the unsupported native declaration never reaches program publication");
+  assert.equal(result.program === undefined && result.plan === undefined, true, "no native program or plan is published");
+  assert.equal(result.artifacts.length, 0, "the original mixed form has no native output");
 });

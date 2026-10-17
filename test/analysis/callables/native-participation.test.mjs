@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
+import { createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { requireRustRecord } from "../../../dist/analysis/program/records/required-records.js";
 
 function checkedFunctions(text) {
-  const { program } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
+  const { program, source } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const { ast } = program.source;
   const declarations = [];
   const visit = node => {
@@ -16,7 +17,7 @@ function checkedFunctions(text) {
   };
   for (const file of program.sourceFiles) visit(file);
   const named = name => declarations.filter(node => ast.text(ast.name(node)) === name);
-  return { program, ast, declarations, named };
+  return { program, source, ast, declarations, named };
 }
 
 test("native named-function placement retains exact overload bodies and checked lexical uses", () => {
@@ -117,7 +118,7 @@ test("native placement closes one finite declaration domain and does not inspect
 
 test("an exhausted actual checked source domain publishes no partial native participation", () => {
   const current = checkedFunctions("export function run(): number { return 3; }");
-  const storage = createSourceStorageQuery(current.program.source, current.program.sourceFiles, {
+  const storage = createSourceStorageQuery(createTargetSourceProgram(current.source), current.program.sourceFiles, {
     maximumNodes: 1, maximumEdges: 262144, maximumSubjectRows: 1048576,
     maximumTransportRows: 4194304, maximumSteps: 33554432,
   });

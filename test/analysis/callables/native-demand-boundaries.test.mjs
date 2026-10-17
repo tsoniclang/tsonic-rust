@@ -129,7 +129,7 @@ export function run(): number {
   function unused() { class Local { value = 1; } return new Local(); }
   type Escaped = ReturnType<typeof unused>;
   const values: Escaped[] = [];
-  return values.length;
+  return 42;
 }` } }).result;
     }, "an unmaterialized erased native class is never a planner invariant");
     assert.equal(result.diagnostics.some(diagnostic => diagnostic.category === "error"), true,
@@ -185,7 +185,7 @@ export function run(value: number): number {
     ["non-null", "(LAMBDA)!"],
     ["type-assertion", "(<(() => number)>LAMBDA)"],
     ["void", "void LAMBDA"],
-    ["conditional", "key.length > 0 ? LAMBDA : LAMBDA"],
+    ["conditional", 'key === "selected" ? LAMBDA : LAMBDA'],
   ]) {
     const lambda = '((): number => { const value = { [key]: 7 }; return 1; })';
     test(`discarded ${wrapper} callable bodies are never admitted (${surface})`, () => {
