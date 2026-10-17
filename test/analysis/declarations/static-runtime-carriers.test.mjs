@@ -9,7 +9,7 @@ import * as errorIds from "../../../dist/target-model/types/carriers/source-erro
 import { rustJsArrayValueTargetId } from "../../../dist/target-model/types/carriers/array-values.js";
 import { rustJsArrayEntriesTargetId } from "../../../dist/target-model/types/carriers/array-entries.js";
 import * as carrierExports from "../../../dist/target-model/types/carriers/built-ins.js";
-import { classifyCarrierRequirements, rustFinalContractSupportsStatic } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
+import { classifyCarrierRequirements, rustFinalContractSupportsRequirements } from "../../../dist/analysis/declarations/generic-carrier-requirements.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
 import { rustCallableInputTargetType, rustFutureTargetType, rustJsPromiseTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 import { analyzeRust, compileRust, artifactText } from "../../helpers/rust-session.mjs";
@@ -166,9 +166,9 @@ test("native storage checks exact argument kinds, all free parameters and every 
       if (arguments_[index].kind !== "type") continue;
       const generic = arguments_.map((argument, position) => position !== index ? argument : { kind: "type", type: parameter });
       if (id === nativeIds.rustCallableTargetId && index === 1) generic[index] = { kind: "type", type: { kind: "tuple", elements: [parameter] } };
-      assert.equal(rustFinalContractSupportsStatic(finalContract([]), carrier(id, generic), { implementation: () => undefined },
+      assert.equal(rustFinalContractSupportsRequirements(finalContract([]), carrier(id, generic), ["static"], { implementation: () => undefined },
         emptyRustTypeDefinitions, undefined).kind, "unsatisfied", `${id}: known generic ${index} needs its own bound`);
-      assert.equal(rustFinalContractSupportsStatic(finalContract(["static"]), carrier(id, generic), { implementation: () => undefined },
+      assert.equal(rustFinalContractSupportsRequirements(finalContract(["static"]), carrier(id, generic), ["static"], { implementation: () => undefined },
         emptyRustTypeDefinitions, undefined).kind, "supported", `${id}: exact generic ${index} bound is sufficient`);
     }
   }
@@ -282,7 +282,7 @@ export function inspect<Region extends Life>(loan: Ref<int32, Region>) {
   const environment = program.classValues.forDeclaration(template.declaration)?.environment;
   assert.equal(environment !== undefined && environment.captures.length === 1, true, "the nonempty actual capture blueprint is present");
   for (const name of ["owned", "borrowed", "ownedAgain", "borrowedAgain", "borrowed", "owned"])
-    assert.equal(rustFinalContractSupportsStatic(contract, carriers.get(name), program.typeFamilies, program.typeDefinitions, evidence).kind,
+    assert.equal(rustFinalContractSupportsRequirements(contract, carriers.get(name), ["static"], program.typeFamilies, program.typeDefinitions, evidence).kind,
       name.startsWith("borrowed") ? "unsatisfied" : "supported", `${name}: only its exact physical binding decides static retention`);
 });
 
