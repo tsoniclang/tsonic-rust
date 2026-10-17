@@ -10,6 +10,8 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { createRustSourceErrorEffectSelection } from "../../../dist/analysis/resources/source-error-effects.js";
 import { rustProducerErrorReference } from "../../../dist/target-model/types/carriers/producer-errors.js";
 import { rustTargetGenericReferences } from "../../../dist/target-model/types/carriers/generic-references.js";
+import { rustJsRejectionErrorIdentity } from "../../../dist/target-model/records/error-effects.js";
+import { rustJsValueTargetType } from "../../../dist/target-model/types/carriers/js.js";
 import { Node_Expression, Node_Initializer, TryStatement_TryBlock, TryStatement_CatchClause,
   CatchClause_Block, TryStatement_FinallyBlock } from "@tsonic/target-api/source";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
@@ -257,6 +259,81 @@ test("source error rebinding rejects unknown identities, mutated carriers and un
     "identity and carrier must agree with the exact sealed native source");
   assert.equal(select(current.calls("callback")[0], declaration, "invoke", effects) === undefined, true,
     "an unselected invocation cannot supply another declaration's input binding");
+});
+
+test("completed source rejection channels keep their identity before physical publication", () => {
+  const current = analyzedFixture(analyzeRustErrorEffects(`
+    export function value(): number { return 7; }
+    export function forward(): number { const output = value(); return output; }
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const declaration = current.declaration("value");
+  const source = { identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() };
+  const effects = { localErrors: false, nativeErrors: [source] };
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [source.errorType]);
+  assert.equal(bindings !== undefined, true, "the exact checked source invocation is ready");
+  const edge = selection.edgeFor(declaration, "await", effects, bindings);
+  assert.equal(edge !== undefined, true, "the source channel is selected without physical readers");
+  assert.equal(edge.nativeErrors.length, 1, "one source channel remains one channel");
+  const target = edge.nativeErrors[0].target;
+  assert.equal(target.identity, rustJsRejectionErrorIdentity, "a completed canonical channel cannot become a pending identity");
+  assert.equal(rustTargetTypeRefEquals(target.errorType, source.errorType), true, "the exact source payload is retained");
+  const completed = selection.complete(target, {
+    invocationInputFor: () => assert.fail("a closed source channel has no physical invocation dependency"),
+    boundSubjectFor: () => assert.fail("a closed source channel has no physical storage dependency"),
+  });
+  assert.equal(completed === target, true, "late physical completion does not replace an already completed source channel");
+});
+
+test("a pending source channel stays deferred even when its payload is already closed", () => {
+  const current = analyzedFixture(analyzeRustErrorEffects(`
+    export function value(): number { return 7; }
+    export function forward(): number { const output = value(); return output; }
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const declaration = current.declaration("value");
+  const source = { identity: "test/pending-source-channel", errorType: rustJsValueTargetType() };
+  let completions = 0;
+  assert.equal(selection.pending(source, () => {
+    completions++;
+    return { identity: rustJsRejectionErrorIdentity, errorType: rustJsValueTargetType() };
+  }), true, "the original source owns its unresolved identity");
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration, [source.errorType]);
+  const edge = selection.edgeFor(declaration, "await", { localErrors: false, nativeErrors: [source] }, bindings);
+  assert.equal(edge !== undefined, true, "pending source rebinding is represented explicitly");
+  const target = edge.nativeErrors[0].target;
+  assert.equal(target.identity.startsWith("pending-native-error:"), true, "a closed payload alone cannot complete its pending source");
+  assert.equal(completions, 0, "the source phase cannot read the pending physical channel");
+  const completed = selection.complete(target, {
+    invocationInputFor: () => assert.fail("this pending identity has no physical input dependency"),
+    boundSubjectFor: () => assert.fail("this pending identity has no physical storage dependency"),
+  });
+  assert.equal(completed?.identity, rustJsRejectionErrorIdentity, "the original completion supplies the final identity");
+  assert.equal(completions, 1, "one pending source is completed once");
+});
+
+test("source rebinding retains pending generic payloads until their physical completion", () => {
+  const current = analyzedFixture(analyzeRustErrorEffects(`
+    export function invoke(callback: () => number): number { return callback(); }
+    export function forward(callback: () => number): number { const output = invoke(callback); return output; }
+  `));
+  const selection = createRustSourceErrorEffectSelection({ context: current.program });
+  const declaration = current.declaration("invoke");
+  const effects = current.callable("invoke");
+  const bindings = selection.bindingsFor(current.initializer("output"), declaration,
+    effects.nativeErrors.map(error => error.errorType));
+  const edge = selection.edgeFor(declaration, "invoke", effects, bindings);
+  assert.equal(edge !== undefined, true, "the actual selected callback channel can be rebound");
+  assert.equal(edge.nativeErrors.length, 1, "the real formal channel is preserved");
+  const target = edge.nativeErrors[0].target;
+  assert.equal(rustTargetGenericReferences(target.errorType).typeIdentities.length > 0, true,
+    "the caller's physical native parameter remains explicit");
+  assert.equal(target.identity.startsWith("pending-native-error:"), true,
+    "an open physical payload cannot be mistaken for a completed closed channel");
+  const completed = selection.complete(target, current.program.callableValues.nativeStorage);
+  assert.equal(completed !== undefined, true, "the same completed physical owner supplies the payload");
+  assert.equal(rustTargetTypeRefEquals(completed.errorType, target.errorType), true,
+    "completion preserves the actual caller-bound payload");
 });
 
 test("source async invocation remains pure while exact rebound errors belong to awaiting", () => {

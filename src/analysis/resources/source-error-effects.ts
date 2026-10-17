@@ -265,21 +265,24 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       const origin = recorded.origin;
       const errorType = bindings.substitute(source.errorType);
       if (errorType === undefined) return undefined;
-      const identity = `pending-native-error:${closedMetadataKey({ source: origin.identity,
-        errorType, bindings: bindings.identity })}`;
+      const references = rustTargetGenericReferences(errorType, "metadata");
+      const sourceComplete = !pending.has(source.identity) && !pending.has(origin.identity) &&
+        references.typeIdentities.length === 0 && references.lifetimeIdentities.length === 0 &&
+        references.constIdentities.length === 0;
+      const identity = sourceComplete ? substitutedErrorIdentity(source, origin, errorType)
+        : `pending-native-error:${closedMetadataKey({ source: origin.identity,
+          errorType, bindings: bindings.identity })}`;
       let target = origins.get(identity)?.selected;
       if (target === undefined) {
         target = Object.freeze({ identity, errorType: snapshotClosedMetadata(errorType) });
         origins.set(identity, { origin, selected: target });
-        pending.set(identity, physical => {
+        if (!sourceComplete) pending.set(identity, physical => {
           const completedSource = complete(source, physical);
           const completedOrigin = complete(origin, physical);
           if (completedSource === undefined || completedOrigin === undefined) return undefined;
           const selectedType = bindings.complete(completedSource.errorType, physical);
           if (selectedType === undefined) return undefined;
-          const selectedIdentity = rustTargetTypeRefEquals(selectedType, completedSource.errorType) ? completedSource.identity
-            : rustTargetTypeRefEquals(selectedType, completedOrigin.errorType) ? completedOrigin.identity
-              : `native-error-substitution:${closedMetadataKey({ source: completedOrigin.identity, errorType: selectedType })}`;
+          const selectedIdentity = substitutedErrorIdentity(completedSource, completedOrigin, selectedType);
           return Object.freeze({ identity: selectedIdentity, errorType: snapshotClosedMetadata(selectedType) });
         });
       } else if (!rustTargetTypeRefEquals(target.errorType, errorType)) return undefined;
@@ -312,4 +315,10 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
       return true;
     },
   });
+}
+
+function substitutedErrorIdentity(source: RustNativeErrorEffect, origin: RustNativeErrorEffect, errorType: TargetTypeRef): string {
+  return rustTargetTypeRefEquals(errorType, source.errorType) ? source.identity
+    : rustTargetTypeRefEquals(errorType, origin.errorType) ? origin.identity
+      : `native-error-substitution:${closedMetadataKey({ source: origin.identity, errorType })}`;
 }
