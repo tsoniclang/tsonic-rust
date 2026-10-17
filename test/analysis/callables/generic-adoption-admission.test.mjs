@@ -1,11 +1,52 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust } from "../../helpers/rust-session.mjs";
+import { checkRustSession, compileRust, createRustSession, rustSourceDiagnostics } from "../../helpers/rust-session.mjs";
 import { assertRejectedAsyncSource } from "../../helpers/native-promise-lifetimes.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 
 const code = "TSONIC_GENERIC_ASYNC_ADOPTION_UNSUPPORTED";
 const identity = "async function identity<Value>(value: Value) { return value; }";
+
+for (const surface of ["native", "js"]) {
+  test(`Rust canonical Promise resolve source arity admits void omission and generic payloads: ${surface}`, () => {
+    const source = checkRustSession(createRustSession({ surfaces: surface === "js" ? ["js"] : [], files: { "index.ts": `
+      export function generic<Value>(value: Value): Promise<Value> {
+        return new Promise<Value>(resolve => { resolve(value); });
+      }
+      export function complete(): Promise<void> { return new Promise<void>(resolve => { resolve(); }); }
+    ` } }));
+    assert.equal(source.diagnostics.length, 0, "the canonical checked signature preserves both valid source contracts");
+    assert.equal(source.extensionDiagnostics.length, 0, "void omission does not require an extension escape");
+  });
+
+  test(`Rust canonical Promise resolve source arity rejects omitted nonvoid payloads: ${surface}`, () => {
+    const diagnostics = rustSourceDiagnostics(createRustSession({ surfaces: surface === "js" ? ["js"] : [], files: { "index.ts": `
+      export function incomplete(): Promise<number> { return new Promise<number>(resolve => { resolve(); }); }
+    ` } }));
+    assert.equal(diagnostics.match(/TS\d+:/gu)?.length, 1, "exactly one original nonvoid arity error");
+    assert.match(diagnostics, /TS2554: Expected 1 arguments, but got 0\./u,
+      "the native checked signature retains the precise nonvoid argument requirement");
+  });
+}
+
+test("Rust recursive closure creations preserve disjoint local stores at a shared invocation", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"],
+    target: { id: "rust", options: { outputType: "bin", crateName: "recursive_capture_store_prefix" } }, files: { "index.ts": `
+      export {};
+      function factory(count: number, seed: number): () => number {
+        if (count > 0) return factory(count - 1, seed);
+        return () => { let local = seed; local += 1; return local; };
+      }
+      function invoke(callback: () => number): number { return callback(); }
+      console.log(invoke(factory(1, 1)));
+      console.log(invoke(factory(0, 10)));
+    ` } });
+  assert.equal(result.diagnostics.length, 0,
+    JSON.stringify(result.diagnostics.map(({ code, message }) => ({ code, message }))));
+  const output = validateGeneratedProject("recursive-capture-store-prefix", result.artifacts, { run: true }).stdout;
+  assert.deepEqual(output.trim().split(/\r?\n/u), ["2", "11"],
+    "different real factory/caller creations cannot merge their private local stores");
+});
 
 const nativeEntryCases = [
   [
