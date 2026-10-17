@@ -72,7 +72,7 @@ import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { rustOptionNestingDepth } from "../../target-model/types/carriers/optional.js";
 import { rustValueCarrierBeforeContextualConversion, rustValueCarrierBeforeOptionProjection, rustStrictEqualityOperandCarrier } from "../conversions/value-carrier-queries.js";
 import { rustRuntimeUnionContract, rustRuntimeUnionProjection } from "../../target-model/types/carriers/runtime-unions.js";
-import { selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
+import { isRustNumericLiteralCarrier, selectedIntegerLiteralJoin, selectedIntegerLiteralUnionJoin, selectedSourceLiteralIsRepresentable } from "../../policy/types/resolution/selected-numeric-literal.js";
 import { rustNumericPromotionConversion } from "../../policy/operations/numeric/promotion.js";
 import { setCarrierFact } from "./project-calls.js";
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
@@ -786,13 +786,13 @@ export function resolvePostCheckUnaryCarrier(
   if (walk.context.literalValues.literalValue.get(expression)?.numeric?.kind === "checked-float64") {
     expected = rustSourcePrimitiveTargetType("float64");
   }
-  if (!isRustNumericCarrier(expected) && !isRustBigIntCarrier(expected)) {
+  if (!isRustNumericLiteralCarrier(expected) && !isRustBigIntCarrier(expected)) {
     expected = operand !== undefined && walk.context.ast.kindName(operand) === KindBigIntLiteral
       ? rustBigIntTargetType()
       : rustSourcePrimitiveTargetType("float64");
   }
   const fixedWidthLiteral = expected?.kind === "source-primitive" &&
-    isRustNumericCarrier(expected) &&
+    isRustNumericLiteralCarrier(expected) &&
     selectedSourceLiteralIsRepresentable(walk.context.literalValues.literalValue.get(expression), expected.name);
   const bigintLiteral = isRustBigIntCarrier(expected) && operand !== undefined &&
     walk.context.ast.kindName(operand) === KindBigIntLiteral &&

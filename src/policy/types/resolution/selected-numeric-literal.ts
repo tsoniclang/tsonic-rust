@@ -17,6 +17,7 @@ import { rustNumericPromotionKind } from "../../../target-model/conversions/nume
 import { rustUnionLeaves } from "../../../target-model/types/union-relations.js";
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { rustSourceOptionalElementCarrier } from "../../../target-model/types/carriers/optional.js";
+import { isRustNumericCarrier } from "../../../target-model/types/carriers/primitives.js";
 import type { RustTypeDefinitions } from "../../../target-model/types/source-union-definitions.js";
 
 type SourcePrimitiveName = Extract<
@@ -25,6 +26,13 @@ type SourcePrimitiveName = Extract<
 >["name"];
 
 const rustFloat32OverflowMidpoint = (1n << 128n) - (1n << 103n);
+
+export function isRustNumericLiteralCarrier(
+  carrier: TargetTypeRef | undefined,
+): carrier is Extract<TargetTypeRef, { readonly kind: "source-primitive" }> {
+  return isRustNumericCarrier(carrier) ||
+    carrier?.kind === "source-primitive" && carrier.name === "float16";
+}
 
 export function isUnannotatedRustNumericLiteral(literal: SourceLiteralValue | undefined): boolean {
   return literal?.numeric !== undefined && literal.number !== undefined || literal?.integer !== undefined;
@@ -71,12 +79,16 @@ export function selectedSourceLiteralIsRepresentable(
   if (primitive === "bool") {
     return literal?.form === "true" || literal?.form === "false";
   }
-  if (primitive === "float32" || primitive === "float64") {
+  if (primitive === "float16" || primitive === "float32" || primitive === "float64") {
     const numeric = literal?.numeric;
     if (literal === undefined || numeric === undefined || literal.number === undefined) return false;
-    return primitive === "float64" || (numeric.kind === "authored"
-      ? compareSourceNumericLiteralMagnitude(numeric.token, rustFloat32OverflowMidpoint) < 0
-      : Number.isFinite(Math.fround(numeric.value)));
+    if (primitive === "float64") return true;
+    const overflowMidpoint = primitive === "float16" ? 65520n : rustFloat32OverflowMidpoint;
+    return numeric.kind === "authored"
+      ? compareSourceNumericLiteralMagnitude(numeric.token, overflowMidpoint) < 0
+      : primitive === "float16"
+        ? Math.abs(numeric.value) < 65520
+        : Number.isFinite(Math.fround(numeric.value));
   }
   const value = literal?.integer;
   if (primitive === "native-int" || primitive === "native-uint") {
