@@ -424,9 +424,7 @@ function inferArrayLiteralElement(
     const elementType = source === undefined ? undefined : spread ? types.typeArguments(source)[0] : source;
     const type = elementType === undefined ? undefined : types.literalBaseType(elementType);
     if (carrier === undefined || type === undefined) return undefined;
-    const literal = walk.context.literalValues.literalValue.get(operand);
-    rows.push({ type, carrier, literal: literal?.numeric?.kind === "authored" ||
-      literal?.numeric === undefined && literal?.integer !== undefined ? literal : undefined });
+    rows.push({ type, carrier, literal: walk.context.literalValues.literalValue.get(operand) });
   }
   const numeric = selectRustInferredNumericArrayElement(selectedElement, rows);
   if (numeric !== undefined) return numeric;

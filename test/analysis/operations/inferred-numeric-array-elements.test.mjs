@@ -8,6 +8,7 @@ import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/r
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustUnionLeaves } from "../../../dist/target-model/types/union-relations.js";
 import {
+  isRustVecCarrier,
   rustJsArrayLikeElementTargetType,
   rustSourcePrimitiveTargetType,
   rustSourceUnionTargetType,
@@ -35,11 +36,11 @@ function bindings(program) {
 function assertArray(program, initializers, name, primitive) {
   const node = initializers.get(name);
   const fact = node === undefined ? undefined : program.records.targetOperation.get(node);
-  assert.equal(fact?.kind === "array-literal", true, `${name}: one admitted array operation`);
+  assert.equal(fact?.kind === "array-literal", true, `${name}: one admitted array operation, got ${fact?.kind ?? "absent"}`);
   assert.equal(rustTargetTypeRefEquals(fact.elementCarrier, rustSourcePrimitiveTargetType(primitive)), true,
     `${name}: exact native ${primitive} element`);
   assert.equal(Object.isFrozen(fact.contributions), true, `${name}: immutable ordered contributions`);
-  const resultElement = fact.resultCarrier.kind === "vec" ? fact.resultCarrier.element
+  const resultElement = isRustVecCarrier(fact.resultCarrier) ? fact.resultCarrier.element
     : rustJsArrayLikeElementTargetType(fact.resultCarrier);
   assert.equal(rustTargetTypeRefEquals(resultElement, fact.elementCarrier), true, `${name}: storage uses the selected element`);
   return fact;
@@ -86,7 +87,7 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
   const computedFloat = [signed, computed];
   const nativeFloat32 = [narrow, 0.1];
   const tuple: [int32, int32?] = [signed];
-  const fixed: FixedArray<int32, 2n> = [signed, 1];
+  const fixed: FixedArray<int32, 2> = [signed, 1];
   const empty: int32[] = [];
 }
 ` } });
@@ -133,7 +134,6 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: bool
   for (const [name, body, code] of [
     ["fractional integer destination", "export function invalid(): int32[] { return [0.5]; }", "RUST_INTEGER_LITERAL_NOT_EXACT"],
     ["out-of-range integer destination", "export function invalid(): int32[] { return [2147483648]; }", "RUST_INTEGER_LITERAL_NOT_EXACT"],
-    ["fixed extent mismatch", "export function invalid(): FixedArray<int32, 2n> { return [1]; }", "RUST_FIXED_ARRAY_LITERAL_LENGTH_MISMATCH"],
     ["mutable widening", "export function invalid(values: string[]): (string | number)[] { return values; }", undefined],
     ["non-Clone mutable references", 'import type { Mut } from "@tsonic/rust/types.js"; export function invalid(values: Mut<int32>[]): Mut<int32>[] { return [...values]; }', undefined],
   ]) {
@@ -144,6 +144,15 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: bool
         (code === undefined || diagnostic.code === code)), true, `${name}: precise existing owner refusal`);
     });
   }
+
+  test(`C102 ${lane}: fixed extent mismatch remains refused without output`, () => {
+    let targetEntered = false;
+    assert.throws(() => compileRust({ surfaces, files: { "index.ts": header +
+      "export function invalid(): FixedArray<int32, 2> { return [1]; }" },
+    compileTarget() { targetEntered = true; throw new Error("invalid fixed extent reached the target"); } }),
+    /TypeScript diagnostics:[\s\S]*TS(?:2322|2741)[\s\S]*length/u, "checked fixed extent is rejected at the source boundary");
+    assert.equal(targetEntered, false, "no target operation or output is published for a source extent mismatch");
+  });
 
   test(`C102 ${lane}: erased aggregate bodies create no native facts or demands`, () => {
     const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
@@ -190,6 +199,9 @@ test("C102 policy uses exact existing numeric and literal relations, not a synth
   assert.equal(select(genuine, [signed, wide]) === undefined, true, "genuine checked native union stays with its owner");
   assert.equal(select(primitive("float64"), [signed, { carrier: primitive("float64"), literal: undefined }])?.name,
     "float64", "a genuine computed float64 remains a fixed contribution");
+  assert.equal(select(primitive("float64"), [signed, { carrier: primitive("float64"), literal: {
+    form: "numeric", number: 1, integer: 1n, numeric: { kind: "checked-float64", value: 1 },
+  } }])?.name, "float64", "checked float64 metadata cannot become an adaptable authored integer");
   assert.equal(select(primitive("float64"), []) === undefined, true, "missing contributions are not invented");
 });
 

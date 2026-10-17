@@ -18,10 +18,13 @@ export function selectRustInferredNumericArrayElement(
   contributions: readonly RustInferredNumericArrayContribution[],
 ): TargetTypeRef | undefined {
   if (contributions.length === 0) return undefined;
-  const peers = contributions.filter(contribution => contribution.literal === undefined);
+  const constraints = contributions.map(({ carrier, literal }) => ({ carrier,
+    literal: literal?.numeric?.kind === "authored" || literal?.numeric === undefined && literal?.integer !== undefined
+      ? literal : undefined }));
+  const peers = constraints.filter(contribution => contribution.literal === undefined);
   if (peers.some(peer => !isRustNumericCarrier(peer.carrier))) return undefined;
   const accepts = (candidate: TargetTypeRef): boolean => isRustNumericCarrier(candidate) &&
-    contributions.every(contribution => contribution.literal === undefined
+    constraints.every(contribution => contribution.literal === undefined
       ? implicitNumericConversion(contribution.carrier, candidate)
       : literalFits(contribution.literal, candidate));
   const homogeneous = peers[0]?.carrier;
@@ -31,7 +34,7 @@ export function selectRustInferredNumericArrayElement(
   }
   if (!isRustNumericCarrier(sourceElement)) return undefined;
   const candidates: TargetTypeRef[] = [];
-  for (const contribution of contributions) {
+  for (const contribution of constraints) {
     const { carrier, literal } = contribution;
     if (!isRustNumericCarrier(carrier) || literal?.integer !== undefined &&
       peers.some(peer => isRustIntegerCarrier(peer.carrier) && literalFits(literal, peer.carrier))) {
