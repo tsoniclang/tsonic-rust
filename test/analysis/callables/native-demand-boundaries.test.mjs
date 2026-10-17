@@ -92,11 +92,25 @@ export function run(): number {
   test(`an unused nested enum does not create a native declaration obligation (${surface})`, () => {
     const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
 export function run(): number {
-  function unused(): number { enum Hidden { Value = 7 } return Hidden.Value; }
+  function unused(): number { enum Hidden { Value = 7 } const member: Hidden = Hidden.Value; return 1; }
   return 42;
 }` } });
     assert.equal(result.diagnostics.length, 0, "an enum in an erased body needs no emitted native declaration");
     assert.equal(/\benum Hidden\b/u.test(rustSourceText(result)), false, "no native enum escapes the erased subtree");
+  });
+
+  test(`erased enum bodies retain the shared source enum-numeric rule (${surface})`, () => {
+    const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+export function run(): number {
+  function unused(): number { enum Hidden { Value = 7 } return Hidden.Value; }
+  return 42;
+}` } });
+    assert.equal(result.diagnostics.length, 1, "the original source retains its one shared source diagnostic");
+    assert.equal(result.diagnostics[0]?.code, "TSONIC_ENUM_NUMERIC_USE_NOT_SUPPORTED");
+    assert.equal(result.diagnostics[0]?.message,
+      "Enum value 'Hidden' is used as a number; enum-numeric operations are not supported yet. Use equality or bitwise operations within the same enum instead.");
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      "the shared source refusal precedes all native publication");
   });
 
   test(`a type-only callable reference preserves its required native signature without demanding its unused body (${surface})`, () => {

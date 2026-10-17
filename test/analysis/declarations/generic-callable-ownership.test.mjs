@@ -50,6 +50,8 @@ function input() {
     is: { ...baseAst.is,
       IsCallSignatureDeclaration: node => node.kindName === "KindCallSignature",
       IsConstructSignatureDeclaration: node => node.kindName === "KindConstructSignature",
+      IsPropertySignatureDeclaration: node => node.kindName === "KindPropertySignature",
+      IsVariableDeclarationList: node => node.kindName === "KindVariableDeclarationList",
     },
     typeParameters: node => node.typeParameters ?? [],
     forEachChild: (node, visit) => { for (const child of node.nodes ?? []) visit(child); },
@@ -167,20 +169,34 @@ closureCapture: { get: (node) => {
       currentSource.navigation, materialize().isNativeNode, [], closed).plan };
 }
 
-function physicalLifecycleInputs() {
+function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
+  let registry;
   let input;
+  let construction;
   let components;
-  let effectsFor;
+  let preparationIssues;
+  let selectionIssues;
   const { result } = compileRust({ files: { "index.ts": "export function value(value: number): number { return value; }" },
     compileTarget(request) {
       const context = analyzeRustCheckedContext(request, current => {
         const original = current.callableValues;
+        registry = original;
+        beforeInitialize(original);
         const callableValues = Object.create(original, {
-          initialize: { value(selected) { input = selected; return original.initialize(selected); } },
+          initialize: { value(selected) {
+            input = selected;
+            construction = original.initialize(selected);
+            afterInitialize(original, construction);
+            return construction;
+          } },
           preparePhysicalStorage: { value(selected, effects) {
             components = selected;
-            effectsFor = effects;
-            return original.preparePhysicalStorage(selected, effects);
+            preparationIssues = original.preparePhysicalStorage(selected, effects);
+            return preparationIssues;
+          } },
+          finalizeSelected: { value() {
+            selectionIssues = original.finalizeSelected();
+            return selectionIssues;
           } },
         });
         return { ...current, callableValues };
@@ -190,30 +206,33 @@ function physicalLifecycleInputs() {
     },
   });
   assert.equal(result.diagnostics.length, 0, "the complete checked lifecycle supplies its actual private construction inputs");
-  assert.equal(input !== undefined && components !== undefined && effectsFor !== undefined, true,
+  assert.equal(registry !== undefined && input !== undefined && construction !== undefined && components !== undefined, true,
     "source effects and the one component classification precede physical storage preparation");
-  return { input, components, effectsFor };
+  assert.equal(preparationIssues?.length, 0, "all actual physical storage is prepared without issues");
+  assert.equal(selectionIssues?.length, 0, "source-selected families finalize without issues");
+  return { registry, input, construction, components };
 }
 
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {
-  const registry = createRustCallableValuePlanRegistry();
-  assert.throws(() => registry.generic, /finalized after their selected adapters/u);
-  assert.throws(() => registry.issues, /finalized after their selected adapters/u);
-  assert.throws(() => registry.finalizeSelected(), /finalized after their selected adapters/u);
-  assert.throws(() => registry.selected, /selected physical families after effect analysis/u);
-  assert.throws(() => registry.seal(), /finalized after their selected adapters/u);
-  const { input: planInput, components, effectsFor } = physicalLifecycleInputs();
-  const construction = registry.initialize(planInput);
-  assert.equal(registry.generic === construction.generic, true, "construction has one identical generic family owner");
-  assert.equal(registry.issues.length, 0, "the actual complete construction has no issues");
-  assert.equal(Object.isFrozen(construction), true);
-  assert.equal("suspended" in construction || "frames" in construction || "initializePhysical" in construction.generic, false,
-    "construction exposes neither retained inventories nor the physical initializer");
-  assert.throws(() => registry.seal(), /Physical callable publication requires completed source-selected families and effects/u);
-  assert.throws(() => registry.publish(), /selected physical families after effect analysis/u);
-  assert.throws(() => registry.finalizeSelected(), /Physical callable families require their completed constructor and field storage selection/u);
-  assert.equal(registry.preparePhysicalStorage(components, effectsFor).length, 0, "all actual physical storage is prepared without issues");
-  assert.equal(registry.finalizeSelected().length, 0, "source-selected families finalize without issues");
+  const { registry, input: planInput, construction, components } = physicalLifecycleInputs({
+    beforeInitialize(current) {
+      assert.throws(() => current.generic, /finalized after their selected adapters/u);
+      assert.throws(() => current.issues, /finalized after their selected adapters/u);
+      assert.throws(() => current.finalizeSelected(), /finalized after their selected adapters/u);
+      assert.throws(() => current.selected, /selected physical families after effect analysis/u);
+      assert.throws(() => current.seal(), /finalized after their selected adapters/u);
+    },
+    afterInitialize(current, selectedConstruction) {
+      assert.equal(current.generic === selectedConstruction.generic, true, "construction has one identical generic family owner");
+      assert.equal(current.issues.length, 0, "the actual complete construction has no issues");
+      assert.equal(Object.isFrozen(selectedConstruction), true);
+      assert.equal("suspended" in selectedConstruction || "frames" in selectedConstruction || "initializePhysical" in selectedConstruction.generic, false,
+        "construction exposes neither retained inventories nor the physical initializer");
+      assert.throws(() => current.seal(), /Physical callable publication requires completed source-selected families and effects/u);
+      assert.throws(() => current.publish(), /selected physical families after effect analysis/u);
+      assert.throws(() => current.finalizeSelected(), /Physical callable families require their completed constructor and field storage selection/u);
+    },
+  });
   const selected = registry.selected;
   assert.throws(() => selected.genericCompletions, /Generic callable completions require sealed producer effects and component owners/u);
   registry.initializeCompletions({ ast: planInput.ast, sourceLifetimes: planInput.lifetimes,

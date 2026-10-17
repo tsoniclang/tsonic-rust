@@ -45,8 +45,9 @@ export function analyzeRustReadOwnership(input: {
     if (!budget.node() || !budget.step() || !budget.row()) return rejectedBudget();
     const node = input.nativeNodes[index]!;
     const operand = sourceTransparentExpressionOperand(ast, node);
-    const inherited = operand === undefined ? undefined : storageReads.get(operand);
-    if (operand !== undefined && inherited === undefined) {
+    const nativeOperand = operand !== undefined && input.borrowEffectsInput.isNativeNode(operand);
+    const inherited = nativeOperand ? storageReads.get(operand) : undefined;
+    if (nativeOperand && inherited === undefined) {
       return { kind: "rejected", diagnostics: [{
         code: "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID", category: "error", source: "tsonic-rust", sourceNode: node,
         message: "Rust ownership requires the complete parent-before-child checked source inventory.",

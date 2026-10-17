@@ -12,7 +12,8 @@ import { createRustNamePlan } from "../../../dist/analysis/names/plan.js";
 import { rustProjectCallableTargetName } from "../../../dist/analysis/names/source-member-name.js";
 import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
-import { emptyRustLifetimeIndex } from "../../../dist/target-model/lifetimes/index.js";
+import { analyzeRustLifetimes } from "../../../dist/analysis/declarations/lifetimes.js";
+import { rustProjectGenericParameters } from "../../../dist/policy/types/project/project-generic-contract.js";
 import { createRustCallableOwnershipRegistry } from "../../../dist/analysis/callables/ownership-plan.js";
 import { selectRustCallableOwnershipCarrier } from "../../../dist/analysis/callables/ownership-carriers.js";
 import { rustCallableTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
@@ -63,15 +64,18 @@ function fixture(text, options = {}) {
   const names = createRustNamePlan({ ast: source.ast, sourceFiles: [file], isNativeNode,
     semanticsFor: source.semantics.forNode, runtimeValueUses: { hasFirstClassUse: () => false } });
   assert.equal(names.diagnostics.length, 0, "the checked fixture has exact native names");
+  const lifetimes = analyzeRustLifetimes({ source, ast: source.ast, sourceFiles: [file], records: builder,
+    names, isNativeNode, semanticsFor: source.semantics.forNode,
+    referencedDeclaration: node => source.navigation.sourceReferenceFor(node)?.declaration });
+  assert.equal(lifetimes.diagnostics.length, 0, "the checked fixture has exact native generic lifetime contracts");
+  assert.equal(lifetimes.index !== undefined, true, "the canonical source lifetime owner completes before project layout");
   const projectTypes = createRustProjectTypePolicy({ ast: source.ast, navigation: source.navigation,
     names, sourceFiles: [file], sourceNodes: participation.nodes, isNativeNode,
-    semanticsFor: source.semantics.forNode, sourceLifetimes: emptyRustLifetimeIndex,
+    semanticsFor: source.semantics.forNode, sourceLifetimes: lifetimes.index,
     collectImplicitInterfaces: () => [], thrownClassDeclarations: new Set(), sourceCreatedErrorOrigins: [],
     normalizeCarrier: carrier => carrier, isRepresentationAlias: () => false,
-    genericParametersFor(declaration) {
-      assert.equal(source.ast.typeParameters(declaration).length, 0, "this fixture's actual class declarations are nongeneric");
-      return [];
-    },
+    genericParametersFor: declaration => rustProjectGenericParameters(declaration,
+      { ast: source.ast, sourceLifetimes: lifetimes.index, semanticsFor: source.semantics.forNode }),
     externallyExtensible: declaration => source.navigation.declarationUseSummary(declaration).exported,
     targetNameForCallable: declaration => rustProjectCallableTargetName(declaration,
       { ast: source.ast, names, semanticsFor: source.semantics.forNode }),

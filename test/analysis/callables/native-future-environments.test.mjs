@@ -137,18 +137,29 @@ test("owned bodyless callable contracts retain environments without requiring an
     export function declared(value: int32): int32 { return value; }
   ` } });
   const ast = program.source.ast;
-  const storage = createSourceStorageQuery(createTargetSourceProgram(checked), program.sourceFiles);
+  const source = createTargetSourceProgram(checked);
+  const storage = createSourceStorageQuery(source, program.sourceFiles);
   const declarations = storage.nodes.filter(node => ast.body(node) === undefined &&
     (ast.is.IsFunctionDeclaration(node) || ast.is.IsMethodDeclaration(node) || ast.is.IsMethodSignatureDeclaration(node)));
   assert.equal(declarations.length, 7);
   for (const declaration of declarations) {
     const name = ast.text(ast.name(declaration));
-    const environment = program.callableValues.nativeStorage.futureEnvironmentFor(declaration);
+    let nativeDeclaration = declaration;
+    if (program.records.nativeParticipation.get(declaration) === "erased") {
+      const implementation = source.navigation.callableImplementation(declaration);
+      assert.equal(implementation.kind, "resolved", `${name}: an erased overload has its actual checked implementation`);
+      nativeDeclaration = implementation.implementation.declaration;
+      assert.equal(nativeDeclaration !== declaration && ast.body(nativeDeclaration) !== undefined, true,
+        `${name}: the native contract belongs to the concrete implementation, not its erased overload`);
+      assert.equal(program.records.nativeParticipation.get(nativeDeclaration) === "erased", false,
+        `${name}: the checked implementation is actually admitted`);
+    }
+    const environment = program.callableValues.nativeStorage.futureEnvironmentFor(nativeDeclaration);
     assert.equal(environment.kind, "resolved", `${name}: ${environment.reason ?? "owned declaration"}`);
     assert.equal(environment.captures.length, 0);
     assert.equal(environment.inputs.length, name === "future" ? 1 : 0, name);
     if (!ast.is.IsMethodSignatureDeclaration(declaration) && name !== "future") {
-      for (const parameter of ast.parameters(declaration)) {
+      for (const parameter of ast.parameters(nativeDeclaration)) {
         const abi = program.records.sourceParameterAbi.get(parameter);
         assert.equal(abi !== undefined, true, name);
         const physical = program.callableValues.nativeStorage.parameterFor(parameter);
