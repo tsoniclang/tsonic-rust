@@ -478,8 +478,8 @@ function inferArrayLiteralElement(
   const inferred = (): TargetTypeRef | undefined => resolveRustInferredUnion(
     sourceElement, unionMembers, carriers, rustResolutionContext(walk, expression), walk.operationOptions,
   );
-  return resolveRustSourceUnionCarrier(carriers, values => numericRows && !types.isUnion(sourceElement)
-    ? inferred() : resolveRustUnionValueCarrier(values, walk.operationOptions, inferred)) ?? refuseElement();
+  return resolveRustSourceUnionCarrier(carriers, values =>
+    resolveRustUnionValueCarrier(values, walk.operationOptions, inferred)) ?? refuseElement();
 }
 
 function resolveArrayElementCarrier(

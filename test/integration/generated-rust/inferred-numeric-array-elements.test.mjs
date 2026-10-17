@@ -38,6 +38,7 @@ const physicalForms = [
   ["literalLast", "[signed, unsigned, 1]", ["int32", "uint32", "float64"]],
   ["literalMiddle", "[signed, 1, unsigned]", ["int32", "float64", "uint32"]],
   ["literalFirst", "[1, signed, unsigned]", ["float64", "int32", "uint32"]],
+  ["literalWrapped", "[signed, unsigned, ((1))]", ["int32", "uint32", "float64"]],
 ];
 
 for (const surfaces of [[], ["js"]]) {
@@ -94,6 +95,7 @@ fn check_${name.toLowerCase()}() {
         assert_eq!(actual.to_bits(), expected.to_bits());
     }
     assert!(${name}Equal(1, 1)${lane === "native" ? '.expect("checked source reads succeed")' : ""});
+    assert!(!${name}Equal(-1, u32::MAX)${lane === "native" ? '.expect("distinct checked source reads succeed")' : ""});
     for iteration in 0..1000 {
         let (actual, cost) = measure(|| ${name}(std::hint::black_box(-1), std::hint::black_box(u32::MAX)));
         let (expected, expected_cost) = measure(|| handwritten_${name.toLowerCase()}(std::hint::black_box(-1), std::hint::black_box(u32::MAX)));
@@ -147,7 +149,7 @@ const operationControls = [
   ["sort", 'values.sort(); return JSON.stringify(values) === EXPECTED_SORT;', ["values.sort()", "JSON.stringify(values)"]],
 ];
 
-for (const [formName, form, names] of physicalForms.filter(([name]) => name !== "reverse")) {
+for (const [formName, form, names] of physicalForms.filter(([name]) => name !== "reverse" && name !== "literalWrapped")) {
   for (const [operation, body, anchors] of operationControls) {
     test(`C130 js: ${formName} ${operation} uses native number semantics or a precise pre-seal refusal`, { timeout: 300_000 }, () => {
       const expectedJson = names.length === 2 ? "[1,1]" : "[1,1,1]";
@@ -187,6 +189,7 @@ use super::*;
 fn exact_cross_arm_number_semantics() {
     ${artifactText(result, "src/lib.rs").includes("pub fn initialize()") ? "crate::initialize();" : ""}
     assert!(check(${operation === "sort" ? "10, 2" : "1, 1"})${checkedResult});
+    assert!(!check(-1, u32::MAX)${checkedResult});
 }
 }
 `;

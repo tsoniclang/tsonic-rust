@@ -146,7 +146,7 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: bool
   });
 
   test(`C130 ${lane}: incompatible integer peers retain two physical arms and literal permutations retain three`, () => {
-    for (const expression of ["[signed, unsigned]", "[unsigned, signed]", "[signed, unsigned, 1]", "[signed, 1, unsigned]", "[1, signed, unsigned]"]) {
+    for (const expression of ["[signed, unsigned]", "[unsigned, signed]", "[signed, unsigned, 1]", "[signed, 1, unsigned]", "[1, signed, unsigned]", "[signed, unsigned, ((1))]"]) {
       const { program, source } = analyzeRust({ surfaces, files: { "index.ts": header +
         `export function inspect(signed: int32, unsigned: uint32) { const values = ${expression}; return values; }` } });
       const initializer = bindings(program).get("values");
