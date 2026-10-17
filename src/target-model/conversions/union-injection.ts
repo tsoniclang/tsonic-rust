@@ -4,7 +4,7 @@ import { rustUnionPathsMatching, type RustUnionLeaf } from "../types/union-relat
 import { rustNativeRepresentationMatches } from "./native-representation.js";
 import { isRustJsValueCarrier } from "../types/carriers/js.js";
 import { rustTsValueTargetId } from "../types/carriers/source-types.js";
-import { rustTsValueAdmission } from "../types/carriers/traits.js";
+import { rustTsValueProjection } from "../types/carriers/traits.js";
 import { selectRustProgramErrorConversion } from "./program-error.js";
 
 export function rustUnionPayloadAdmission(
@@ -16,7 +16,7 @@ export function rustUnionPayloadAdmission(
   const paths = rustUnionPathsMatching(target, definitions, carrier =>
     rustNativeRepresentationMatches(source, carrier) || selectRustProgramErrorConversion(source, carrier, definitions) !== undefined ||
     (isRustJsValueCarrier(carrier) || carrier.kind === "target-named" && carrier.id === rustTsValueTargetId) &&
-    (broadAdmission ??= rustTsValueAdmission(source, definitions) !== undefined));
+    (broadAdmission ??= rustTsValueProjection(source) !== undefined));
   if (paths === undefined) return undefined;
   const native = paths.filter(leaf => rustNativeRepresentationMatches(source, leaf.carrier));
   const converted = native.length > 0 ? [] : paths.filter(leaf =>

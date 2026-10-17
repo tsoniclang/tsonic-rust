@@ -262,7 +262,10 @@ test("sealed family implementations have completed contracts and missing contrac
     typeFamilies: program.typeFamilies,
     genericRequirements: { ...program.declarationGenericRequirements, contractForCarrier: () => undefined },
     ...nativeDeclarationSelectionInput(program),
-  }), error => error instanceof Error && error.message.includes(
+  }, new WeakMap(program.projectTypes.definitions.flatMap(definition => {
+    const form = program.nativeDeclarations.get(definition.declaration);
+    return form === undefined ? [] : [[definition.declaration, form]];
+  }))), error => error instanceof Error && error.message.includes(
     "A sealed type-family implementation has no completed native generic requirement contract."),
   "a broken completed internal contract cannot become a user source rejection");
 });

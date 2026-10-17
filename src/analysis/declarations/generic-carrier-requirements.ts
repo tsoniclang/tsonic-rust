@@ -14,7 +14,7 @@ import { rustCarrierSupportsNumberPredicate, rustCarrierSupportsSourceNumeric } 
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import { rustRetainedErrorTargetType } from "../../target-model/types/carriers/source-error.js";
 import { rustCarrierSatisfiesTraitRef } from "../../target-model/types/carriers/traits.js";
-import { isRustNeverCarrier, rustCarrierSupportsTrait, rustFixedArrayCarrierValue,
+import { isRustNeverCarrier, rustCarrierSupportsTrait, selectRustCloneRequirements, rustFixedArrayCarrierValue,
   rustNamedTypeCarrierValue, rustSourceTypeCarrierValue, rustStructuralObjectCarrierValue,
   rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
@@ -119,11 +119,18 @@ export function classifyCarrierRequirements(
       continue;
     }
     const traitPath = requirement === "clone" ? "core::clone::Clone" : "core::default::Default";
-    if (!rustCarrierSupportsTrait(carrier, traitPath, (name, selectedTrait) => {
+    const parameterSupports = (name: string, selectedTrait: string): boolean => {
       if (!declared.has(name) || selectedTrait !== traitPath) return false;
       byParameter.get(name)!.add(requirement);
       return true;
-    }, (projection, selectedTrait) => selectedTrait === traitPath && associatedSupports(projection, requirement), definitions))
+    };
+    const associated = (projection: Extract<TargetTypeRef, { readonly kind: "associated-type" }>, selectedTrait: string): boolean =>
+      selectedTrait === traitPath && associatedSupports(projection, requirement);
+    if (requirement === "clone") {
+      const selected = selectRustCloneRequirements(carrier, definitions, parameterSupports, associated);
+      if (selected.kind === "required") return unresolved("A native Clone requirement has no completed physical source-object field definition.");
+      if (selected.kind === "available") continue;
+    } else if (rustCarrierSupportsTrait(carrier, traitPath, parameterSupports, associated, definitions)) continue;
       return unsatisfied(`The exact native carrier does not provide ${requirement}.`);
   }
   return supported;

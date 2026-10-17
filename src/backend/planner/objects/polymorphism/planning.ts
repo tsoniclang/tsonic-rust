@@ -21,8 +21,8 @@ import {
   rustProjectObjectDispatchField,
   rustProjectObjectIdentityField,
   rustProjectObjectStateField,
-  readRustProjectDispatchedField,
-} from "../project-objects.js";
+} from "../../../../target-model/types/field-storage.js";
+import { readRustProjectDispatchedField } from "../project-objects.js";
 import { planProjectClassConstructor } from "./construction.js";
 import {
   planProjectDispatchTrait,

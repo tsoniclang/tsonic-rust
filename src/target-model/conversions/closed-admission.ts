@@ -6,10 +6,10 @@ import { rustClosedValueRetainsError } from "../types/carriers/closed-values.js"
 import { rustJsRecordValueAdmission, rustJsSharedObjectValueAdmission } from "./closed-record.js";
 import { rustNumberBoxingConversionId } from "./number-boxing.js";
 import {
-  isRustAbsenceCarrier, rustCarrierSupportsClone, rustCarrierSupportsTrait,
+  isRustAbsenceCarrier, selectRustCloneRequirements, rustCarrierSupportsTrait,
   rustEmptyObjectTargetType, rustJsClosedValueCarrierTraitPath, rustJsErrorTargetType,
   rustJsSymbolTargetType, rustJsValueTargetType, rustProgramErrorTargetType,
-  rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueAdmission, rustTsValueTargetType,
+  rustSourcePrimitiveTargetType, rustStringTargetType, rustTsValueProjection, rustTsValueTargetType,
 } from "../types/index.js";
 import {
   rustAbsenceToJsValueConversion, rustBoolToJsValueConversion, rustJsValueCloneConversion,
@@ -25,7 +25,7 @@ export function rustClosedValueAdmissionConversion(
 ): RustClosedValueAdmissionConversion | undefined {
   if (rustTargetTypeRefEquals(target, rustTsValueTargetType())) {
     if (rustTargetTypeRefEquals(source, target)) return rustTsValueCloneConversion;
-    return rustClosedValueRetainsError(source, definitions) || rustTsValueAdmission(source, definitions) !== undefined
+    return rustClosedValueRetainsError(source, definitions) || rustTsValueProjection(source) !== undefined
       ? Object.freeze({ kind: "ts-value-from-closed-carrier", source }) : undefined;
   }
   if (!rustTargetTypeRefEquals(target, rustJsValueTargetType())) return undefined;
@@ -41,9 +41,9 @@ export function rustClosedValueAdmissionConversion(
   if (rustTargetTypeRefEquals(source, rustJsSymbolTargetType())) return rustSymbolToJsValueConversion;
   return rustTargetTypeRefEquals(source, rustProgramErrorTargetType()) ||
     rustClosedValueRetainsError(source, definitions) || rustTargetTypeRefEquals(source, rustEmptyObjectTargetType()) ||
-    rustJsRecordValueAdmission(source) || rustJsSharedObjectValueAdmission(source, definitions) ||
-    rustTsValueAdmission(source, definitions)?.kind === "project-object" ||
-    rustCarrierSupportsClone(source, definitions) &&
+    rustJsRecordValueAdmission(source) || rustJsSharedObjectValueAdmission(source) ||
+    rustTsValueProjection(source)?.kind === "project-object" ||
+    selectRustCloneRequirements(source, definitions, () => true, () => true).kind !== "unavailable" &&
     rustCarrierSupportsTrait(source, rustJsClosedValueCarrierTraitPath, undefined, undefined, definitions)
     ? Object.freeze({ kind: "js-value-from-closed-carrier", source }) : undefined;
 }

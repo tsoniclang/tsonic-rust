@@ -8,9 +8,10 @@ import { closedMetadataKey, hasExactObjectKeys, isClosedMetadata, isDenseDataArr
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { instantiateRustSourceUnionVariants, rustSourceUnionDefinitionIdentity, createRustSourceUnionPayloadTemplate,
   type RustTypeDefinitions, type RustSourceUnionDefinition, type RustSourceUnionPayloadTemplate,
-  type RustProgramErrorOrigin } from "../../target-model/types/source-union-definitions.js";
+  type RustProgramErrorOrigin, type RustSourceObjectPhysicalDefinition } from "../../target-model/types/source-union-definitions.js";
 
 export interface RustTypeDefinitionRegistry extends RustTypeDefinitions {
+  registerSourceObjectPhysicalDefinition(definition: RustSourceObjectPhysicalDefinition): boolean;
   registerSourceEnum(carrier: TargetTypeRef, definition: RustNativeEnumDeclaration): boolean;
   registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean): boolean;
   registerProgramErrorOrigin(carrier: TargetTypeRef, origin: RustProgramErrorOrigin): boolean;
@@ -26,12 +27,21 @@ export function createRustTypeDefinitionRegistry(
     throw new Error("Rust type definitions require an exact closed value carrier.");
   }
   const closedValueCarrier = snapshotClosedMetadata(selectedClosedValueCarrier);
-  const definitions = new Map<string, RustSourceUnionDefinition>();
+  const definitions = new Map<string, RustSourceUnionDefinition | RustSourceObjectPhysicalDefinition>();
   const enums = new Map<string, RustNativeEnumDeclaration>();
   const templates = new Map<string, RustSourceUnionDefinition>();
   const payloadTemplates = new Map<string, RustSourceUnionPayloadTemplate>();
   const errorOrigins = new Map<string, RustProgramErrorOrigin>();
   let sealed = false;
+  const objectKey = (carrier: TargetTypeRef): string | undefined => {
+    const value = rustSourceTypeCarrierValue(carrier);
+    return value?.shape === "object" ? closedMetadataKey(["source-object", value.fileName, value.typeName]) : undefined;
+  };
+  const sourceObjectPhysicalDefinition: RustTypeDefinitions["sourceObjectPhysicalDefinition"] = carrier => {
+    const key = objectKey(carrier);
+    const definition = key === undefined ? undefined : definitions.get(key);
+    return definition !== undefined && "fields" in definition ? definition : undefined;
+  };
   const sourceEnumDefinition: RustTypeDefinitions["sourceEnumDefinition"] = carrier =>
     enums.get(closedMetadataKey(carrier));
   const sourceVariants: RustTypeDefinitions["sourceUnionVariants"] = carrier => {
@@ -41,7 +51,7 @@ export function createRustTypeDefinitionRegistry(
     const logical = value.origin === "authored"
       ? rustSourceUnionTargetType(value.fileName, value.typeName, value.genericArguments) : carrier;
     const exact = definitions.get(closedMetadataKey(logical));
-    if (exact !== undefined) return exact.variants;
+    if (exact !== undefined) return "variants" in exact ? exact.variants : undefined;
     const identity = rustSourceUnionDefinitionIdentity(carrier);
     const template = identity === undefined ? undefined : templates.get(identity);
     return template === undefined ? undefined : instantiateRustSourceUnionVariants(template, carrier);
@@ -69,10 +79,26 @@ export function createRustTypeDefinitionRegistry(
   };
   return Object.freeze({
     closedValueCarrier,
+    sourceObjectPhysicalDefinition,
     sourceEnumDefinition,
     sourceUnionVariants,
     sourceUnionPayloadTemplate,
     programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined,
+    registerSourceObjectPhysicalDefinition(definition: RustSourceObjectPhysicalDefinition) {
+      if (sealed) throw new Error("Rust type definitions are sealed.");
+      if (definition === null || typeof definition !== "object" || !isClosedMetadata(definition) ||
+        !hasExactObjectKeys(definition, ["carrier", "fields"]) || !isRustTargetTypeRef(definition.carrier) ||
+        !isDenseDataArray(definition.fields) || definition.fields.some(field => field === null || typeof field !== "object" ||
+          !hasExactObjectKeys(field, ["name", "clone"]) || typeof field.name !== "string" || field.name.length === 0 ||
+          field.clone === null || typeof field.clone !== "object" ||
+          !((field.clone.kind === "unconditional" || field.clone.kind === "unavailable") && hasExactObjectKeys(field.clone, ["kind"]) ||
+            field.clone.kind === "required" && hasExactObjectKeys(field.clone, ["kind", "carrier"]) && isRustTargetTypeRef(field.clone.carrier))) ||
+        new Set(definition.fields.map(field => field.name)).size !== definition.fields.length) return false;
+      const key = objectKey(definition.carrier);
+      if (key === undefined || definitions.has(key)) return false;
+      definitions.set(key, snapshotClosedMetadata(definition));
+      return true;
+    },
     registerSourceEnum(carrier: TargetTypeRef, definition: RustNativeEnumDeclaration) {
       if (sealed) throw new Error("Rust type definitions are sealed.");
       const source = rustSourceTypeCarrierValue(carrier);
@@ -99,9 +125,11 @@ export function createRustTypeDefinitionRegistry(
       errorOrigins.set(identity, previous ?? snapshotClosedMetadata(origin));
       return true;
     },
-    definitionCarriers: () => Object.freeze([...definitions.values()].flatMap(definition => definition.variants.map(variant => variant.carrier))),
-    generatedUnions: () => Object.freeze([...definitions.values()].filter(definition =>
-      rustSourceUnionCarrierValue(definition.carrier)?.origin === "generated")),
+    definitionCarriers: () => Object.freeze([...definitions.values()].flatMap(definition => "variants" in definition
+      ? definition.variants.map(variant => variant.carrier)
+      : definition.fields.flatMap(field => field.clone.kind === "required" ? [field.clone.carrier] : []))),
+    generatedUnions: () => Object.freeze([...definitions.values()].filter((definition): definition is RustSourceUnionDefinition =>
+      "variants" in definition && rustSourceUnionCarrierValue(definition.carrier)?.origin === "generated")),
     registerSourceUnion(definition: RustSourceUnionDefinition, template: boolean) {
       if (sealed) throw new Error("Rust type definitions are sealed.");
       if (typeof template !== "boolean" || definition === null || typeof definition !== "object" || !isClosedMetadata(definition) ||
@@ -122,6 +150,7 @@ export function createRustTypeDefinitionRegistry(
           }))) return false;
       const key = closedMetadataKey(definition.carrier);
       const existing = definitions.get(key);
+      if (existing !== undefined && !("variants" in existing)) return false;
       const expected = sourceUnionVariants(definition.carrier);
       if (expected !== undefined && (expected.length !== definition.variants.length ||
         expected.some((variant, index) => variant.name !== definition.variants[index]!.name ||
@@ -140,9 +169,12 @@ export function createRustTypeDefinitionRegistry(
         }
         for (const child of rustTargetTypeChildren(carrier)) visit(child);
       };
-      for (const definition of definitions.values()) for (const variant of definition.variants) visit(variant.carrier);
+      for (const definition of definitions.values()) {
+        if ("variants" in definition) for (const variant of definition.variants) visit(variant.carrier);
+        else for (const field of definition.fields) if (field.clone.kind === "required") visit(field.clone.carrier);
+      }
       sealed = true;
-      return Object.freeze({closedValueCarrier, sourceEnumDefinition, sourceUnionVariants, sourceUnionPayloadTemplate,
+      return Object.freeze({closedValueCarrier, sourceObjectPhysicalDefinition, sourceEnumDefinition, sourceUnionVariants, sourceUnionPayloadTemplate,
         programErrorOrigin: (carrier: TargetTypeRef) => isRustTargetTypeRef(carrier) ? errorOrigins.get(closedMetadataKey(carrier)) : undefined});
     },
   });

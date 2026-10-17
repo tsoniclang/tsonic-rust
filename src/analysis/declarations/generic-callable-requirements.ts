@@ -17,28 +17,23 @@ import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type
 import { mapRustTargetTypes, substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
 import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
-import { rustJsArrayEntriesElementTargetType } from "../../target-model/types/carriers/array-entries.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/carriers/generic-references.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { createRustProjectProjectionRequirementCollector } from "./project-projection-requirements.js";
 import { rustReadTransferRequirement } from "../ownership/flow.js";
 import { rustCaptureReadFormation, type RustReadOwnershipRequirements } from "../ownership/reads.js";
-import { ElementAccessExpression_ArgumentExpression, KindBinaryExpression, KindExpressionStatement, Node_Expression, sourceParameterIsProperty } from "@tsonic/target-api/source";
-import { rustValueCarrierBeforeOptionProjection } from "../conversions/value-carrier-queries.js";
-import { isRustAssignmentOperator } from "../../target-model/syntax/tokens.js";
+import { sourceParameterIsProperty } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustValueConversionContract } from "../../target-model/conversions/contracts.js";
-import { rustFinalizedSourceInputs } from "../operations/finalized-operation/conversions.js";
 import {
   getRustGeneratorProtocol,
-  isRustCopyCarrier,
   rustClosureProtocol,
   rustSourceTypeCarrierValue,
+  rustNamedTypeCarrierValue,
+  rustTargetGenericTypeArguments,
+  rustCarrierSatisfiesTraitRef,
 } from "../../target-model/types/index.js";
-import { rustRecordReadAdmitsAbsence } from "../../target-model/types/carriers/records.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
-import { rustBindingProjectionCloneCarriers } from "../../policy/types/storage/binding-normalization.js";
 
 import { rustAwaitValueRequirements } from "../callables/await-values.js";
 import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
@@ -54,7 +49,8 @@ import { rustProjectViewBindings } from "../objects/view-implementations.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
-import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
+import { rustCallableParameterCloneSources } from "../callables/adapter-requirements.js";
+import { createRustCloneRequirementCollector } from "./generic-clone-requirements.js";
 
 interface ClassifyCallableInput extends RustCallableInvocationRequirementContext {
   readonly readRequirements: RustReadOwnershipRequirements;
@@ -81,7 +77,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   | { readonly kind: "rejected"; readonly reason: string; readonly promiseStorage?: true } {
   const { ast, declaration, records } = input;
   const definition = input.projectTypes.definitionForDeclaration(declaration);
-  const typeParameterNodes = (definition === undefined ? ast.typeParameters(declaration)
+  const typeParameterNodes = (definition === undefined ? ast.is.IsSourceFile(declaration) ? [] : ast.typeParameters(declaration)
     : definition.genericParameters.map(parameter => parameter.declaration)).filter(
     (candidate): candidate is Node => candidate !== undefined &&
       input.sourceLifetimes.parameterFor(candidate)?.kind !== "lifetime",
@@ -180,8 +176,9 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     return undefined;
   };
+  const cloneRequirements = createRustCloneRequirementCollector(input, addUse);
   for (const adapter of input.promiseObjectFacet === true ? [] : records.projectCallableAdapters.get(declaration) ?? []) {
-    for (const carrier of rustCallableRestCloneSources(adapter.parameterAdapters)) {
+    for (const carrier of rustCallableParameterCloneSources(adapter.parameterAdapters)) {
       const error = addUse(declaration, carrier, ["clone"]);
       if (error !== undefined) return { kind: "rejected", reason: error };
     }
@@ -304,6 +301,22 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       carrier = mapRustTargetTypes(carrier, normalizeFamily);
       if (!optionalStorage.collect(carrier)) return "A native optional storage projection has no exact generic owner.";
       if (!associated.collect(carrier)) return "A dependent Rust type has no exact family implementation or generic obligation.";
+      const native = rustNamedTypeCarrierValue(carrier);
+      if (native !== undefined) {
+        const arguments_ = rustTargetGenericTypeArguments(native.genericArguments);
+        for (const requirement of native.typeRequirements) {
+          const argument = arguments_[requirement.typeArgumentIndex];
+          if (argument === undefined) return "A native type requirement has no exact semantic type argument.";
+          const trait = requirement.trait;
+          if (trait.genericArguments.length === 0 && trait.associatedConstraints.length === 0 && trait.lifetimeBinder === undefined &&
+            (trait.path === "core::clone::Clone" || trait.path === "core::default::Default")) {
+            const error = addUse(node, argument, [trait.path === "core::clone::Clone" ? "clone" : "default"]);
+            if (error !== undefined) return error;
+          } else if (!rustCarrierSatisfiesTraitRef(argument, trait, undefined, input.typeDefinitions)) {
+            return "A native type argument does not provide its exact declared well-formedness trait contract.";
+          }
+        }
+      }
       const sourceType = rustSourceTypeCarrierValue(carrier);
       const definition = sourceType === undefined ? undefined : input.projectTypes.definitionForCarrier(carrier);
       if (definition !== undefined && definition.declaration !== declaration) {
@@ -366,11 +379,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const carrier = records.runtimeCarrier.get(node)?.carrier;
-    const bindingProjection = records.bindingProjection.get(node);
-    for (const copied of bindingProjection === undefined ? [] : rustBindingProjectionCloneCarriers(bindingProjection)) {
-      const error = addUse(node, copied, ["clone"]);
-      if (error !== undefined) return error;
-    }
+    const bindingError = cloneRequirements.binding(node, carrier);
+    if (bindingError !== undefined) return bindingError;
     for (const signatureCarrier of [
       records.sourceCallableReturn.get(node)?.returnCarrier,
       records.sourceParameterAbi.get(node)?.parameterCarrier,
@@ -494,124 +504,14 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = records.targetOperation.get(node);
-    if (operation?.kind === "array-literal") {
-      for (const contribution of operation.contributions) {
-        if (contribution.kind !== "spread") continue;
-        for (const selected of contribution.input.inputs) {
-          if (selected.kind === "empty") continue;
-          const conversion = rustValueConversionContract(selected.conversion, input.typeDefinitions);
-          if (conversion?.lowering !== "rest-sequence") return "An array spread has no exact sequence conversion contract.";
-          for (const element of conversion.cloneSources) {
-            const error = addUse(node, element, ["clone"]);
-            if (error !== undefined) return error;
-          }
-        }
-      }
-    }
-    if (operation?.kind === "source-index-signature" &&
-      (operation.accessMode === "read" || operation.accessMode === "read-write")) {
-      const requirements: readonly RustGenericRequirement[] = operation.storage.kind === "record" &&
-        rustRecordReadAdmitsAbsence(operation.resultCarrier)
-        ? ["clone", "default"] : ["clone"];
-      const error = addUse(node, operation.resultCarrier, requirements);
-      if (error !== undefined) return error;
-    }
-    if (operation?.kind === "record-index-literal" && operation.contributions.some(contribution => contribution.kind === "spread")) {
-      const error = addUse(node, operation.valueCarrier, ["clone"]);
-      if (error !== undefined) return error;
-    }
-    if ((operation?.kind === "source-field" || operation?.kind === "source-union-field") &&
-      operation.accessMode !== "write") {
-      const fields = operation.kind === "source-field" ? [operation]
-        : operation.selectedVariantIndexes.map(index => operation.variants[index]?.field);
-      if (fields.some(field => field?.storage === "structural-object" && field.valueSemantics.kind === "stored")) {
-        const error = addUse(node, operation.resultCarrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-    }
-    if (operation?.kind === "nullish-assignment") {
-      const parent = ast.parent(node);
-      if (parent === undefined || ast.kindName(parent) !== KindExpressionStatement) {
-        const error = addUse(node, operation.rightCarrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-    }
-    if (operation?.kind === "iteration" && operation.iterationKind !== "for-in") {
-      const iterable = Node_Expression(ast, node);
-      const iterableCarrier = iterable === undefined ? undefined : records.runtimeCarrier.get(iterable)?.carrier;
-      if (operation.lowering.kind === "js-array" ||
-        operation.lowering.kind === "borrowed" && operation.lowering.style === "cloned" ||
-        operation.lowering.kind === "receiver-method" && rustJsArrayEntriesElementTargetType(iterableCarrier) !== undefined) {
-        const error = addUse(node, operation.elementCarrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-    }
+    const operationError = cloneRequirements.operation(node, operation);
+    if (operationError !== undefined) return operationError;
     for (const operand of records.genericNumericOperands.get(node) ?? []) {
       const error = addUse(node, operand, ["source-numeric"]);
       if (error !== undefined) return error;
     }
-    if (ast.kindName(node) === KindBinaryExpression) {
-      const parent = ast.parent(node);
-      const assignment = operation?.kind === "runtime-set" ||
-        (operation?.kind === "operator-token" || operation?.kind === "operator-call") &&
-        isRustAssignmentOperator(operation.operator);
-      if (assignment &&
-          (parent === undefined || ast.kindName(parent) !== KindExpressionStatement)) {
-        const carrier = rustValueCarrierBeforeOptionProjection(records, node);
-        if (carrier !== undefined) {
-          const error = addUse(node, carrier, ["clone"]);
-          if (error !== undefined) return error;
-        }
-      }
-    }
-    const projectionRead = input.readRequirements.storageReads.get(node)?.projection;
-    if (projectionRead !== undefined && rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer" &&
-      !(projectionRead.cloneBorrowable && input.readRequirements.borrowed.has(node))) {
-      for (const source of projectionRead.cloneSources) {
-        const error = addUse(node, source, ["clone"]);
-        if (error !== undefined) return error;
-      }
-    }
-    const providerOperations = operation?.kind === "provider-operation" ? [operation]
-      : operation?.kind === "union-property" ? operation.variants.flatMap(variant => variant.operation === undefined ? [] : [variant.operation]) : [];
-    for (const providerOperation of providerOperations) {
-      for (const result of input.readRequirements.nativeResults.get(node) ?? []) {
-        if (result.abi !== providerOperation.abi || !result.requiresClone) continue;
-        const error = addUse(node, result.carrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-      for (const argument of rustFinalizedSourceInputs(providerOperation.abi)) {
-        const conversions = argument.conversion.kind === "sequence" ? argument.conversion.steps
-          : argument.conversion.kind === "semantic" ? [argument.conversion] : [];
-        for (const selected of conversions) {
-          const conversion = rustValueConversionContract(selected.conversion, input.typeDefinitions);
-          if (conversion?.lowering !== "rest-sequence") continue;
-          for (const carrier of conversion.cloneSources) {
-            const error = addUse(node, carrier, ["clone"]);
-            if (error !== undefined) return error;
-          }
-        }
-      }
-      for (const argument of providerOperation.abi.sourceArguments) {
-        if (argument.disposition !== "runtime" || argument.mode !== "value" ||
-          argument.form !== "value") continue;
-        const expression = ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node)
-          ? ast.arguments(node)[argument.sourceIndex]
-          : ast.is.IsElementAccessExpression(node) && argument.role === "index" && argument.sourceIndex === 0
-            ? ElementAccessExpression_ArgumentExpression(ast, node) : undefined;
-        if (expression === undefined || !ast.is.IsIdentifier(expression) ||
-          rustReadTransferRequirement(input.ownershipFlow, expression) === "transfer") continue;
-        const carrier = records.runtimeCarrier.get(expression)?.carrier;
-        if (carrier === undefined) return "A provider argument lost its exact source storage carrier.";
-        if (isRustCopyCarrier(carrier)) continue;
-        const error = addUse(expression, carrier, ["clone"]);
-        if (error !== undefined) return error;
-      }
-      for (const requirement of providerOperation.carrierRequirements ?? []) {
-        const error = addUse(node, requirement.carrier, [requirement.requirement]);
-        if (error !== undefined) return error;
-      }
-    }
+    const readError = cloneRequirements.read(node, operation);
+    if (readError !== undefined) return readError;
     if (ast.kindName(node) === "KindAwaitExpression") {
       const awaiting = records.awaitValue.get(node);
       if (awaiting !== undefined) {

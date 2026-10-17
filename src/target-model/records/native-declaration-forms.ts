@@ -4,11 +4,13 @@ import type { RustSourceTypeFamilyImplementation } from "../types/type-families.
 import type { TargetTypeRef } from "../types/model.js";
 import type {
   RustNativeAliasDeclaration,
+  RustNativeClassDeclaration,
   RustNativeEnumDeclaration,
   RustNativeInterfaceDeclaration,
 } from "./native-value-declarations.js";
 
 export type RustNativeDeclarationForm =
+  | RustNativeClassDeclaration
   | RustNativeEnumDeclaration
   | RustNativeInterfaceDeclaration
   | RustNativeAliasDeclaration;

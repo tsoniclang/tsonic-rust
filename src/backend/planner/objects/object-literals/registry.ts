@@ -11,7 +11,7 @@ import { allocateRustSyntheticTypeName } from "../../names/synthetic.js";
 import { rustCallableProtocol, rustSourceTypeCarrierValue } from "../../../../target-model/types/index.js";
 
 import { rustProjectInstanceContracts } from "../../../../analysis/project-types/type-policy.js";
-import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../project-objects.js";
+import { rustProjectObjectIdentityField, rustProjectObjectStateField } from "../../../../target-model/types/field-storage.js";
 import { rustProjectObjectIdentityImplementation } from "../project-identity.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type {

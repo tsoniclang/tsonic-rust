@@ -3,7 +3,8 @@ import { rustPackageFallibleBoundary } from "../../program/fallible-boundaries.j
 import { planRustAuthoredStructScope } from "../scoped-types.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
 import { applyFallibleShape } from "../../types/fallible-shape.js";
-import { createRustProjectObject, rustProjectObjectStateField, rustProjectObjectType } from "../../objects/project-objects.js";
+import { rustProjectObjectStateField } from "../../../../target-model/types/field-storage.js";
+import { createRustProjectObject, rustProjectObjectType } from "../../objects/project-objects.js";
 import {
   diagnosticInput,
   isValidRustIdentifier,
@@ -19,13 +20,11 @@ import {
 } from "../../program/reachability-directives.js";
 import {
   KindClassStaticBlockDeclaration,
-  Node_Initializer,
-  Node_Type,
   sourceClassFieldIsTypeOnly,
   sourceObjectMemberDeclarations,
   sourceParameterIsProperty,
 } from "@tsonic/target-api/source";
-import { missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
+import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { planExpression } from "../../expressions/index.js";
 import { planProjectMethod, planProjectMethodVariants } from "./methods.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
@@ -58,12 +57,13 @@ import {
 } from "../../objects/project-storage-abi.js";
 import { rustProjectStateIdentityImplementation } from "../../objects/project-identity.js";
 import { rustProjectTypeParameterContext } from "../../names/type-parameters.js";
-import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
+import { rustProjectCloneImplementation, rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import { rustClassEnvironmentContext, rustClassEnvironmentParameter } from "../../objects/class-environments.js";
 import { rustClassEnvironmentHandleType } from "../../objects/class-environment-types.js";
-import { rustCapturedFieldStorage, rustCapturedFieldType } from "../../objects/captured-fields.js";
+import { rustCapturedFieldType } from "../../objects/captured-fields.js";
 import { rustFrameBindingType } from "../../bindings/frame-storage.js";
 import { rustClassFrameLayout } from "../../objects/frame-storage.js";
+import { rustFrameCallableTypes } from "../../types/frame-callables.js";
 
 export interface PlannedProjectObjectField {
   readonly declaration: Node;
@@ -83,6 +83,9 @@ export function carrierOf(context: RustPlanContext, node: Node | undefined) {
 
 export function planClassDeclaration(node: Node, context: RustPlanContext): readonly RustItem[] | undefined {
   const { ast } = context.input.program.source;
+  const admitted = context.input.program.nativeDeclarations.get(node);
+  if (admitted?.kind !== "class") return failRustPlannerInvariant(
+    "Class emission requires its complete pre-seal physical native declaration.", node);
   const definition = context.input.program.projectTypes.definitionForDeclaration(node);
   const className = context.input.program.names.nameForDeclaration(node) ?? "";
   if (!isValidRustIdentifier(className)) {
@@ -165,6 +168,17 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     return undefined;
   }
   const fields: PlannedProjectObjectField[] = [];
+  for (const selected of admitted.fields) {
+    const type = rustTypeFromCarrierInContext(selected.carrier, context);
+    const storageType = type === undefined ? undefined : selected.storage.kind === "frame"
+      ? rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(selected.storage.declaration)!, context)
+      : selected.storage.kind === "capture" ? rustCapturedFieldType(selected.storage.selection, type) : type;
+    if (type === undefined || storageType === undefined) return failRustPlannerInvariant(
+      "An admitted class field requires its exact renderable physical storage.", selected.declaration);
+    fields.push({ ...selected, type, storageType,
+      visibility: rustProjectMemberStorageVisibility(ast, selected.declaration, publiclyReachable),
+      ...(selected.initializer === undefined ? {} : { initializer: selected.initializer }) });
+  }
   const constructorMembers: Node[] = [];
   const methods: Node[] = [];
   const accessors: { readonly declaration: Node; readonly role: "read" | "write" }[] = [];
@@ -185,49 +199,6 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
       continue;
     }
     if (memberKind === "KindPropertyDeclaration" || sourceParameterIsProperty(ast, member)) {
-      if (ast.hasModifierKind(member, "static")) {
-        continue;
-      }
-      if (context.input.program.objectRepresentations.aliasFor(member) !== undefined) continue;
-      const fieldName = context.input.program.projectTypes.fieldStorageName(definition, member) ?? "";
-      const layoutField = layout.fields.find((field) => field.declaration === member);
-      if (layoutField === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.class-field-layout",
-          `Class field '${fieldName}' has no exact project-object storage slot.`,
-        ));
-        failed = true;
-        continue;
-      }
-      const sourceFieldName = layoutField.sourceName;
-      const fieldCarrier = carrierOf(context, member) ?? carrierOf(context, Node_Type(ast, member));
-      const fieldType = rustTypeFromCarrierInContext(fieldCarrier, context);
-      if (!isValidRustIdentifier(fieldName) || fieldCarrier === undefined || fieldType === undefined) {
-        context.diagnostics.push(missingFactDiagnostic(
-          diagnosticInput(context, member),
-          "rust.backend.class",
-          `Class field '${sourceFieldName}' has no supported Rust storage identity or carrier fact.`,
-        ));
-        failed = true;
-        continue;
-      }
-      const initializer = sourceParameterIsProperty(ast, member)
-        ? ast.name(member)
-        : Node_Initializer(ast, member);
-      fields.push({
-        declaration: member,
-        sourceName: layoutField.sourceName,
-        targetName: fieldName,
-        storageIndex: layoutField.storageIndex,
-        carrier: fieldCarrier,
-        type: fieldType,
-        storageType: context.input.program.callableValues.frames.bindingFor(member) === undefined
-          ? rustCapturedFieldType(rustCapturedFieldStorage(member, context), fieldType)
-          : rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(member)!, context)!,
-        visibility: rustProjectMemberStorageVisibility(ast, member, publiclyReachable),
-        ...(initializer === undefined ? {} : { initializer }),
-      });
       continue;
     }
     if (memberKind === "KindConstructor") {
@@ -298,10 +269,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const implementationGenerics = rustProjectGenerics(definition, implementationContext);
   const implementationFields = fields.map(field => {
     const type = rustTypeFromCarrierInContext(field.carrier, implementationContext);
+    const selected = admitted.fields.find(candidate => candidate.declaration === field.declaration)!;
     return { ...field, type, storageType: type === undefined ? undefined
-      : context.input.program.callableValues.frames.bindingFor(field.declaration) === undefined
-        ? rustCapturedFieldType(rustCapturedFieldStorage(field.declaration, implementationContext), type)
-        : rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(field.declaration)!, implementationContext) };
+      : selected.storage.kind === "frame"
+        ? rustFrameBindingType(context.input.program.callableValues.frames.bindingFor(selected.storage.declaration)!, implementationContext)
+        : selected.storage.kind === "capture" ? rustCapturedFieldType(selected.storage.selection, type) : type };
   });
   if (implementationType === undefined || implementationFields.some(field => field.type === undefined || field.storageType === undefined)) return undefined;
   const constructorFn = planConstructor(
@@ -362,15 +334,10 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   const stateCarrier = stateType === undefined
     ? undefined
     : rustProjectObjectType(stateType, representation, environmentType);
-  const frame = context.input.program.callableValues.frames.definitionForOwner(node);
-  const frameLayout = frame === undefined ? undefined : rustClassFrameLayout(frame, context, storageVisibility);
-  if (frame !== undefined && frameLayout === undefined) return undefined;
-  const valueFields: readonly RustStructField[] = [
-    ...(frameLayout?.fields ?? []),
-    ...(representation.kind !== "value" || environment === undefined || environmentType === undefined ? [] : [{
-      name: environment.instanceFieldName, type: environmentType, visibility: "private" as const,
-    }]),
-    ...fields.filter(field => frameLayout?.ownsField(field.declaration) !== true).map((field): RustStructField => {
+  const valueFields: readonly RustStructField[] = admitted.physical.storageFields.map((selected): RustStructField => {
+    if (selected.kind === "field") {
+      const field = fields.find(field => field.declaration === selected.declaration);
+      if (field === undefined) return failRustPlannerInvariant("A native physical field has no selected class storage.", node);
       const deadCode = rustAuthoredFieldDeadCodeDisposition(
         context,
         node,
@@ -383,8 +350,11 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         visibility: field.visibility,
         ...(deadCode === undefined ? {} : { deadCode }),
       };
-    }),
-    ...methodProperties.map((property) => ({
+    }
+    if (selected.kind === "method") {
+      const property = methodProperties.find(property => property.declaration === selected.declaration);
+      if (property === undefined) return failRustPlannerInvariant("A native method field has no admitted callable type.", node);
+      return {
         name: property.targetName,
         type: {
           kind: "named" as const,
@@ -393,16 +363,31 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
         },
         visibility: storageVisibility,
         ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
-      })),
-    ...(stateMarker === undefined
-      ? []
-      : [{
+      };
+    }
+    if (selected.kind === "marker") {
+      if (stateMarker === undefined) return failRustPlannerInvariant("A native generic marker has no materialized type.", node);
+      return {
           name: stateMarker.name,
           type: stateMarker.type,
           visibility: storageVisibility,
           ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
-        }]),
-  ];
+        };
+    }
+    if (selected.kind === "environment") {
+      if (environmentType === undefined) return failRustPlannerInvariant("A native retained environment has no materialized type.", node);
+      return { name: selected.name, type: environmentType, visibility: "private" };
+    }
+    if (selected.kind === "frame-counter") return { name: selected.name,
+      type: { kind: "named", path: "rt::FrameEntryCounter" }, visibility: storageVisibility };
+    if (selected.kind === "frame") {
+      const types = rustFrameCallableTypes(selected.carrier, context);
+      if (types === undefined) return failRustPlannerInvariant("An admitted native frame has no materialized type.", node);
+      return { name: selected.name, type: { kind: "named", path: "alloc::rc::Rc",
+        genericArguments: [{ kind: "type", type: types.frameType }] }, visibility: storageVisibility };
+    }
+    return failRustPlannerInvariant("An ordinary class has an incompatible native physical field kind.", node);
+  });
   if (representation.kind !== "value" && stateCarrier === undefined) {
     return undefined;
   }
@@ -436,7 +421,7 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
     kind: "struct",
     name: className,
     visibility: structVisibility,
-    attrs: [...generatedStructAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
+    attrs: [...generatedStructAttributes, ...rustDeriveAttributes(representation.kind === "value" || explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
     generics,
     fields: structFields,
   };
@@ -450,6 +435,13 @@ export function planClassDeclaration(node: Node, context: RustPlanContext): read
   return [
     ...(representation.kind === "value" ? [] : [stateItem]),
     planRustAuthoredStructScope(node, structItem, context),
+    ...(representation.kind === "value" && admitted.physical.clone.kind === "conditional"
+      ? [rustProjectCloneImplementation(openType, generics, admitted.physical.fields.map(selected => {
+          const field = valueFields.find(field => field.name === selected.name);
+          if (field === undefined) return failRustPlannerInvariant("An admitted Clone field has no materialized storage.", node);
+          return { name: selected.name, copy: selected.copy,
+            ...(selected.clone.kind !== "required" || selected.copy ? {} : { requirement: field.type }) };
+        }))] : []),
     ...(explicitWrapperTraits ? rustProjectWrapperTraits(openType, className, generics) : []),
     ...(representation.kind === "value"
       ? []

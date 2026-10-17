@@ -8,13 +8,9 @@ import { isRustCopyCarrier } from "../../../target-model/types/index.js";
 import type { RustExpr, RustType } from "../../target-ast/syntax/nodes.js";
 import type { RustObjectRepresentation } from "../../../analysis/project-types/object-representation.js";
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
-import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
+import { rustProjectObjectStateField, type RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { rustCapturedFieldLocation, writeRustCapturedFieldFromStorage } from "./captured-fields.js";
 import { rustNativeObjectOwnerPaths } from "../../../policy/types/model/native-type-selection.js";
-
-export const rustProjectObjectStateField = "state";
-export const rustProjectObjectIdentityField = "identity";
-export const rustProjectObjectDispatchField = "dispatch";
 
 const rustProjectObjectStateBinding = "state";
 

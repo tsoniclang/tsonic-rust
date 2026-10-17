@@ -7,13 +7,14 @@ import { createRustOptionalStorageCollector } from "../../declarations/type-proj
 import { createRustAssociatedRequirementCollector } from "../../declarations/associated-requirements.js";
 import { classifyCarrierRequirements } from "../../declarations/generic-carrier-requirements.js";
 import type { RustGenericRequirement } from "../../declarations/generic-requirements.js";
+import { selectRustCloneRequirements, type RustCloneRequirementSelection } from "../../../target-model/types/index.js";
 
-export function canRequireSourceClone(
+export function sourceCloneRequirements(
   carrier: TargetTypeRef,
   expression: Node,
   context: RustOperationAnalysisContext,
   families: RustSourceTypeFamilyRegistry,
-): boolean {
+): RustCloneRequirementSelection {
   const parameters = new Set<string>();
   for (let owner: Node | undefined = expression; owner !== undefined; owner = context.ast.parent(owner)) {
     const contract = context.sourceLifetimes.contractFor(owner);
@@ -23,9 +24,15 @@ export function canRequireSourceClone(
   }
   const requirements = new Map([...parameters].map(identity => [identity, new Set<RustGenericRequirement>()] as const));
   const storage = createRustOptionalStorageCollector(parameters, parameters, requirements);
-  if (!storage.collect(carrier)) return false;
+  if (!storage.collect(carrier)) return { kind: "unavailable" };
   const classify = (type: TargetTypeRef, required: readonly RustGenericRequirement[]): boolean =>
     classifyCarrierRequirements(type, required, parameters, requirements, associated.require, context.typeDefinitions, undefined).kind === "supported";
   const associated = createRustAssociatedRequirementCollector(parameters, families, classify, () => false);
-  return associated.collect(carrier) && classify(carrier, ["clone"]);
+  return !associated.collect(carrier) ? { kind: "unavailable" }
+    : selectRustCloneRequirements(carrier, context.typeDefinitions, identity => {
+        const selected = requirements.get(identity);
+        if (selected === undefined) return false;
+        selected.add("clone");
+        return true;
+      }, projection => associated.require(projection, "clone"));
 }

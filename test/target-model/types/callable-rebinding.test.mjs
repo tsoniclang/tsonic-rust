@@ -6,7 +6,7 @@ import { rustFrameCallableTargetType, rustFrameCallableValue } from "../../../di
 import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGenericCallableValue } from "../../../dist/target-model/types/carriers/generic-callables.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
-import { rustCarrierSupportsClone } from "../../../dist/target-model/types/carriers/traits.js";
+import { selectRustCloneRequirements } from "../../../dist/target-model/types/carriers/traits.js";
 import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 
@@ -30,7 +30,7 @@ test("finalizing a callable signature preserves native representation and frame 
     assert.equal(Object.isFrozen(selected), true);
     if (source === frame) {
       assert.equal(rustFrameCallableValue(selected)?.owner.origin.declarationIdentity, "owner");
-      assert.equal(rustCarrierSupportsClone(selected), true, "frame root cloning does not require cloning its captures");
+      assert.equal(selectRustCloneRequirements(selected).kind === "available", true, "frame root cloning does not require cloning its captures");
     }
     if (source.kind === "function-pointer") {
       assert.deepEqual(selected.abi, ["C"]);

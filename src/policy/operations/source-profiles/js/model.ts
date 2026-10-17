@@ -54,7 +54,7 @@ export interface JsOperationRequest {
   ) => TargetTypeRef | undefined;
   readonly carrierSupportsProjectIdentity?: (carrier: TargetTypeRef) => boolean;
   readonly argumentValueDomainHasTargetType?: (index: number, expected: TargetTypeRef) => boolean;
-  readonly canRequireClone?: (carrier: TargetTypeRef) => boolean;
+  readonly cloneRequirements?: (carrier: TargetTypeRef) => import("../../../../target-model/types/carriers/traits.js").RustCloneRequirementSelection;
   readonly numericParameterArgument?: (index: number, carrier: TargetTypeRef, domain: "numeric" | "number") => boolean;
   readonly resultUse?: "consumed" | "discarded";
   readonly accessMode?: "read" | "write" | "read-write" | "delete";

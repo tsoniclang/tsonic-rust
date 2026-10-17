@@ -5,7 +5,7 @@ import type { RustExpr } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { cloneRustExpression as cloneExpression } from "../../../target-ast/syntax/expressions.js";
 import { cloneField } from "./model.js";
-import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../project-objects.js";
+import { rustProjectObjectDispatchField, rustProjectObjectIdentityField } from "../../../../target-model/types/field-storage.js";
 
 export function planRustReceiverAlias(
   receiver: RustExpr,

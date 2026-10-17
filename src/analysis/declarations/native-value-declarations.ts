@@ -6,8 +6,8 @@ import { rustNativePropertyNameIssue } from "../objects/computed-field-names.js"
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import { isValidRustIdentifier } from "../../target-model/names/identifiers.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
-import type { RustNativeDeclarationForm } from "../../target-model/records/native-declaration-forms.js";
-import type { RustNativeInterfaceField } from "../../target-model/records/native-value-declarations.js";
+import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "../../target-model/records/native-declaration-forms.js";
+import type { RustNativeInterfaceField, RustNativeInterfaceDeclaration } from "../../target-model/records/native-value-declarations.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
@@ -21,7 +21,6 @@ import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import {
   isRustIntegerCarrier,
   isRustStringCarrier,
-  rustCarrierSupportsClone,
   rustOptionElementCarrier,
   rustSourceUnionCarrierValue,
 } from "../../target-model/types/index.js";
@@ -48,6 +47,7 @@ export type RustNativeDeclarationAdmission =
 export function admitRustNativeValueDeclaration(
   declaration: Node,
   input: RustNativeValueDeclarationInput,
+  objects: Pick<RustNativeDeclarationForms, "get">,
 ): RustNativeDeclarationAdmission {
   const kind = input.ast.kindName(declaration);
   if (kind === "KindEnumDeclaration") {
@@ -63,21 +63,29 @@ export function admitRustNativeValueDeclaration(
   const definition = kind === "KindInterfaceDeclaration"
     ? input.projectTypes.definitionForDeclaration(declaration) : undefined;
   if (definition !== undefined && input.projectTypes.isPolymorphic(definition)) return { kind: "erased" };
+  if (kind === "KindInterfaceDeclaration") {
+    const form = objects.get(declaration);
+    if (form?.kind !== "interface") failTargetAnalysisInvariant("tsonic-rust",
+      "An emitted native interface requires its completed physical field selection.", declaration);
+    return { kind: "accepted", form };
+  }
   const name = input.names.nameForDeclaration(declaration);
   if (name === undefined || !isValidRustIdentifier(name)) {
     return reject(declaration, "RUST_DECLARATION_NAME_NOT_CLOSED",
       "An emitted native declaration requires its exact preserved Rust identifier.");
   }
-  if (kind === "KindInterfaceDeclaration") return admitInterface(declaration, name, input);
   return admitAlias(declaration, name, input);
 }
 
-function admitInterface(
+export function admitRustNativeInterfaceFields(
   declaration: Node,
-  name: string,
-  input: RustNativeValueDeclarationInput,
-): RustNativeDeclarationAdmission {
+  input: Pick<RustNativeValueDeclarationInput, "ast" | "semanticsFor" | "records" | "names" | "projectTypes" | "objectRepresentations">,
+): { readonly kind: "accepted"; readonly form: Omit<RustNativeInterfaceDeclaration, "physical"> } |
+  Extract<RustNativeDeclarationAdmission, { readonly kind: "rejected" }> {
   const { ast, records, projectTypes } = input;
+  const name = input.names.nameForDeclaration(declaration);
+  if (name === undefined || !isValidRustIdentifier(name)) return reject(declaration,
+    "RUST_DECLARATION_NAME_NOT_CLOSED", "An emitted native declaration requires its exact preserved Rust identifier.");
   for (const member of ast.members(declaration)) {
     if (member === undefined) continue;
     const name = ast.name(member);
@@ -126,10 +134,9 @@ function admitInterface(
       const keyCarrier = selected === undefined ? undefined : records.runtimeCarrier.get(selected.keyParameter)?.carrier ??
         records.runtimeCarrier.get(Node_Type(ast, selected.keyParameter))?.carrier;
       if (selected === undefined || keyCarrier === undefined || carrier === undefined || targetName === undefined ||
-        !isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier) ||
-        !rustCarrierSupportsClone(carrier, input.typeDefinitions)) {
+        !isRustStringCarrier(keyCarrier) && !isRustIntegerCarrier(keyCarrier)) {
         return reject(member, "RUST_INTERFACE_INDEX_CARRIER_NOT_SUPPORTED",
-          "Rust index-backed interfaces require a closed string/integer key, a cloneable value, and deterministic generated storage.");
+          "Rust index-backed interfaces require a closed string/integer key, an exact value carrier, and deterministic generated storage.");
       }
       const nativeKey = selectRustNativeTypeCarrier(keyCarrier, nativeTypes, "general");
       if (nativeKey.kind === "rejected") return reject(selected.keyParameter,
@@ -241,7 +248,7 @@ function admitAlias(
   }) };
 }
 
-function reject(sourceNode: Node, code: string, message: string): RustNativeDeclarationAdmission {
+function reject(sourceNode: Node, code: string, message: string): Extract<RustNativeDeclarationAdmission, { readonly kind: "rejected" }> {
   return { kind: "rejected", diagnostics: Object.freeze([Object.freeze({ code, message, sourceNode,
     category: "error" as const, source: "tsonic-rust", evidence: ["target.capability=rust.declaration.native-form"] })]) };
 }
