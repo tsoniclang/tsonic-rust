@@ -46,8 +46,10 @@ type Origins =
   | { readonly kind: "unavailable"; readonly reason: string;
       readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[]; readonly boundaries: readonly SourceStorageDomainBoundary[] };
 type SourceCaller =
-  | { readonly kind: "selected"; readonly origin: RustPhysicalEmissionSourceOrigin }
-  | { readonly kind: "unavailable"; readonly bindings: SourceStorageBindings; readonly reason: string };
+  | { readonly kind: "selected"; readonly origin: RustPhysicalEmissionSourceOrigin;
+      readonly boundaries: readonly SourceStorageDomainBoundary[] }
+  | { readonly kind: "unavailable"; readonly bindings: SourceStorageBindings; readonly reason: string;
+      readonly boundaries: readonly SourceStorageDomainBoundary[] };
 type CallerSelection = { readonly origins: Origins; readonly callers: readonly SourceCaller[] };
 
 type Construction = Extract<SourceStorageConstructionSelection, { readonly kind: "resolved" }>["alternatives"][number];
@@ -80,6 +82,7 @@ const sourceBindings = (origin: RustPhysicalEmissionSourceOrigin): SourceStorage
   origin.kind === "module" || origin.kind === "construction" ? origin.selection.bindings : origin.activation.bindings;
 const callerSelection = (origins: Origins, callers: readonly SourceCaller[]): CallerSelection =>
   Object.freeze({ origins, callers: Object.freeze(callers) });
+const closedSourceBoundaries: readonly SourceStorageDomainBoundary[] = Object.freeze([]);
 
 export function createRustEmissionSourceOriginPreparation(input: RustEmissionSourceInput,
   requests: readonly RustEmissionSourceRequest[]):
@@ -141,7 +144,7 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
     if (bindings.kind === "unresolved") return callerSelection(unavailable(bindings.reason), []);
     const selected = nativeRows(request.declaration, bindings.bindings);
     if (selected.kind === "unresolved") return callerSelection(unavailable(selected.reason), [
-      { kind: "unavailable", bindings: bindings.bindings, reason: selected.reason }]);
+      { kind: "unavailable", bindings: bindings.bindings, reason: selected.reason, boundaries: closedSourceBoundaries }]);
     const alternatives: RustPhysicalEmissionSourceOrigin[] = [];
     const callers: SourceCaller[] = [];
     let failure: string | undefined;
@@ -149,16 +152,16 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
       if (row.activation.declaration !== request.declaration || row.activation.kind !== "declaration") {
         const reason = "A native declaration source requires its identical selected declaration activation.";
         failure ??= reason;
-        callers.push({ kind: "unavailable", bindings: bindings.bindings, reason });
+        callers.push({ kind: "unavailable", bindings: bindings.bindings, reason, boundaries: closedSourceBoundaries });
         continue;
       }
       const origin = Object.freeze({ kind: "declaration" as const, activation: row.activation, targetBindings: row.targetBindings });
       alternatives.push(origin);
-      callers.push({ kind: "selected", origin });
+      callers.push({ kind: "selected", origin, boundaries: closedSourceBoundaries });
     }
     if (selected.rows.length === 0) {
       failure = "A native declaration source has no owning activation.";
-      callers.push({ kind: "unavailable", bindings: bindings.bindings, reason: failure });
+      callers.push({ kind: "unavailable", bindings: bindings.bindings, reason: failure, boundaries: closedSourceBoundaries });
     }
     return callerSelection(failure === undefined
       ? Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) }) : unavailable(failure, alternatives), callers);
@@ -177,34 +180,37 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
       const executions = storage.contributingExecutionsFor(subject, request.declaration, entry.row.producer);
       if (executions.kind === "unresolved") { failure ??= executions.reason; continue; }
       if (executions.kind === "open") boundaries.push(...executions.boundaries);
+      const callerBoundaries = Object.freeze([
+        ...entry.selection.kind === "open" ? entry.selection.boundaries : [],
+        ...executions.kind === "open" ? executions.boundaries : [],
+      ]);
       for (const execution of executions.producers) {
         const activations = nativeRows(request.declaration, execution.bindings);
         if (activations.kind === "unresolved") {
           failure ??= activations.reason;
-          callers.push({ kind: "unavailable", bindings: execution.bindings, reason: activations.reason });
+          callers.push({ kind: "unavailable", bindings: execution.bindings, reason: activations.reason,
+            boundaries: callerBoundaries });
           continue;
         }
         if (activations.rows.length === 0) {
           const reason = "A callable source execution has no owning activation and native binding row.";
           failure ??= reason;
-          callers.push({ kind: "unavailable", bindings: execution.bindings, reason });
+          callers.push({ kind: "unavailable", bindings: execution.bindings, reason, boundaries: callerBoundaries });
         }
         for (const row of activations.rows) {
           if (row.activation.declaration !== request.declaration) {
             const reason = "A callable source activation belongs to a different original body owner.";
             failure ??= reason;
-            callers.push({ kind: "unavailable", bindings: execution.bindings, reason });
+            callers.push({ kind: "unavailable", bindings: execution.bindings, reason, boundaries: callerBoundaries });
             continue;
           }
           const origin = Object.freeze({ kind: "callable" as const, producer: entry.row.producer, member: entry.row.member,
             execution, activation: row.activation, targetBindings: row.targetBindings });
           alternatives.push(origin);
-          callers.push({ kind: "selected", origin });
+          callers.push({ kind: "selected", origin, boundaries: callerBoundaries });
         }
       }
     }
-    if (failure === undefined && alternatives.length === 0 && boundaries.length === 0)
-      failure = "A callable source has no original checked execution and owning activation.";
     return callerSelection(failure !== undefined ? unavailable(failure, alternatives, boundaries)
       : boundaries.length === 0 ? Object.freeze({ kind: "resolved", alternatives: Object.freeze(alternatives) })
         : Object.freeze({ kind: "open", alternatives: Object.freeze(alternatives), boundaries: Object.freeze(boundaries) }), callers);
@@ -225,7 +231,8 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
     const module = modules.get(demand.owner);
     if (module !== undefined) {
       const origins = moduleOrigins(module, subject, demand.bindings);
-      return callerSelection(origins, origins.alternatives.map(origin => ({ kind: "selected" as const, origin })));
+      return callerSelection(origins, origins.alternatives.map(origin => ({ kind: "selected" as const, origin,
+        boundaries: origins.kind === "resolved" ? closedSourceBoundaries : origins.boundaries })));
     }
     const alternatives: RustPhysicalEmissionSourceOrigin[] = [];
     const callers: SourceCaller[] = [];
@@ -321,10 +328,9 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
         const boundaries = origins.kind === "resolved" ? [] : origins.boundaries;
         if (boundaries.length !== 0 && selectedCallers.callers.length === 0)
           invocationStatus(demand, undefined, undefined, { kind: "open", boundaries });
-        const state = Object.freeze({ boundaries, failure: origins.kind === "unavailable" ? origins.reason : undefined });
         for (const caller of selectedCallers.callers) pending.push({ demand, caller, root: undefined,
-          state: caller.kind === "unavailable" && state.failure === undefined
-            ? Object.freeze({ boundaries, failure: caller.reason }) : state });
+          state: Object.freeze({ boundaries: caller.boundaries,
+            failure: caller.kind === "unavailable" ? caller.reason : undefined }) });
       }
       const rows: ConstructionOrigin[] = [];
       const routed = new Map<Node, Map<SourceStorageBindings, Map<Construction, Set<ConstructionTraceState>>>>();
@@ -355,7 +361,7 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
             const missing = (reason: string): void => {
               constructionStatuses.push({ kind: "unavailable", invocation: entry.demand.subject,
                 root: root.root, owner, region: node, reason });
-              forward({ kind: "unavailable", bindings: selection.bindings, reason }, entry.state.failure === undefined
+              forward({ kind: "unavailable", bindings: selection.bindings, reason, boundaries: entry.state.boundaries }, entry.state.failure === undefined
                 ? Object.freeze({ boundaries: entry.state.boundaries, failure: reason }) : entry.state);
             };
             if (entry.state.failure !== undefined) constructionStatuses.push({ kind: "unavailable", invocation: entry.demand.subject,
@@ -374,14 +380,15 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
                 continue;
               }
               if (entry.caller.kind === "unavailable") {
-                forward({ kind: "unavailable", bindings: selection.bindings, reason: entry.caller.reason }, entry.state);
+                forward({ kind: "unavailable", bindings: selection.bindings, reason: entry.caller.reason,
+                  boundaries: entry.state.boundaries }, entry.state);
                 continue;
               }
               const origin: ConstructionOrigin = Object.freeze({ kind: "construction", invocation: entry.demand.subject,
                 construction, root, callerBindings, caller: entry.caller.origin, owner, region: node, selection,
                 activation: target.activation, targetBindings: target.targetBindings });
               rows.push(origin);
-              forward({ kind: "selected", origin }, entry.state);
+              forward({ kind: "selected", origin, boundaries: entry.state.boundaries }, entry.state);
             }
           };
           const implementation = construction.implementation;
