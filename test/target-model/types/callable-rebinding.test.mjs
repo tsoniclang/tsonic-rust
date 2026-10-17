@@ -7,6 +7,8 @@ import { rustGenericCallableTargetType, rustGenericCallableProtocol, rustGeneric
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
 import { rustCarrierSupportsClone } from "../../../dist/target-model/types/carriers/traits.js";
+import { rustSourceTypeCarrier } from "../../../dist/target-model/types/carriers/source-types.js";
+import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 
 const int32 = rustSourcePrimitiveTargetType("int32");
 const int64 = rustSourcePrimitiveTargetType("int64");
@@ -56,6 +58,27 @@ test("generic and frame signature finalization retain body-only captured type bi
   const frame = rustFrameCallableTargetType([int32], int32, owner, [captured]);
   const rebound = rebindRustCallableCarrier(frame, [int64], bool);
   assert.equal(rustFrameCallableValue(rebound).environment.some(type => type.identity === captured.identity), true);
+});
+
+test("an unchanged instantiated class-frame protocol retains its exact canonical environment binders", () => {
+  const element = { kind: "type-parameter", name: "Element", identity: "source:Element" };
+  const captured = { kind: "type-parameter", name: "Captured", identity: "source:Captured" };
+  const string = { kind: "target-named", id: "rust.std.String" };
+  const instance = rustSourceTypeCarrier(owner.origin.fileName, "Value", "object", [{ kind: "type", type: element }]);
+  const template = rustFrameCallableTargetType([element], element, { kind: "class", origin: owner.origin, instance }, [captured]);
+  const selected = substituteRustTargetTypeParameters(template, new Map([[element.identity, string], [captured.identity, bool]]));
+  const before = rustFrameCallableValue(selected);
+  const protocol = rustCallableProtocol(selected);
+  assert.equal(before.signature.environmentParameters.length, 2, "the original owner and body-only environment are both required");
+  const rebound = rebindRustCallableCarrier(selected, protocol.parameters.map(parameter => ({ ...parameter })), { ...protocol.result });
+  assert.equal(rebound === selected, true, "a physically identical protocol never reconstructs a monomorphic frame");
+  assert.equal(rustTargetTypeRefEquals(rebound, selected), true, "full carrier equality includes the original normalized signature");
+  assert.equal(rustFrameCallableValue(rebound).signature === before.signature, true, "the same canonical signature remains published");
+  assert.equal(rustFrameCallableValue(rebound).environment === before.environment, true, "the complete exact substituted environment remains unchanged");
+  assert.equal(rebindRustCallableCarrier(selected, protocol.parameters, protocol.result, { environment: [] }) === undefined, true,
+    "an unchanged protocol does not bypass the forbidden environment override");
+  assert.equal(rebindRustCallableCarrier(selected, protocol.parameters, protocol.result, { typeParameters: [element] }) === undefined, true,
+    "an unchanged frame never acquires a quantified method binder");
 });
 
 test("signature finalization rejects malformed carriers and forbidden representation changes", () => {

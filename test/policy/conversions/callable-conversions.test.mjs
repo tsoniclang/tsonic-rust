@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustCallableConversionMatches, selectRustCallableConversion } from "../../../dist/target-model/conversions/callable.js";
 import { rustCompilerOwnedContextualConversionMatches } from "../../../dist/target-model/conversions/contextual.js";
+import { selectRustValueCarrierReconciliation } from "../../../dist/policy/types/resolution/value-carrier-reconciliation.js";
+import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
+import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { rustAbsenceTargetType, rustCallableTargetType, rustClosureTargetType, rustJsValueTargetType, rustOptionTargetType, rustStringTargetType, rustUnitTargetType } from "../../../dist/target-model/types/index.js";
 
@@ -9,6 +12,54 @@ const number = { kind: "source-primitive", name: "float64" };
 const string = { kind: "source-primitive", name: "string" };
 const optional = rustOptionTargetType(number);
 const select = (source, target) => selectRustCallableConversion(source, target, selectRustSourceValueConversion);
+
+test("ordinary callable destinations retain the actual environment before selecting one required adapter", () => {
+  const projectTypes = { definitionForCarrier: () => undefined };
+  const error = { kind: "target-named", id: "test:ExactInvocationError" };
+  const otherError = { kind: "target-named", id: "test:OtherInvocationError" };
+  const lifetimes = [
+    { kind: "static" },
+    { kind: "parameter", identity: "test:retained", name: "Retained" },
+    { kind: "call-scoped-elision", callIdentity: "test:call", parameterIdentity: "test:input" },
+  ];
+  for (const lifetime of lifetimes) {
+    const source = rustCallableTargetType([], number, lifetime, error);
+    const requested = rustCallableTargetType([number], number, undefined, error);
+    const selected = selectRustValueCarrierReconciliation(source, requested, projectTypes);
+    assert.equal(selected.kind, "conversion", `${lifetime.kind}: the real argument adapter remains`);
+    assert.equal(selected.fact.conversion.kind, "callable-adapter", `${lifetime.kind}: one exact native adapter`);
+    assert.equal(rustTargetTypeRefEquals(selected.fact.sourceCarrier, source), true, "the original source is unchanged");
+    assert.equal(rustCallableProtocol(selected.fact.targetCarrier).lifetime === lifetime, true,
+      "the selected destination retains the actual source environment");
+    assert.equal(rustCallableProtocol(requested).lifetime.kind, "placeholder", "the authored request is immutable");
+    assert.equal(rustCallableConversionMatches(selected.fact.conversion, source, selected.fact.targetCarrier), true,
+      "the selected adaptation and its complete native destination agree");
+    const returned = selectRustValueCarrierReconciliation(selected.fact.targetCarrier, requested, projectTypes);
+    assert.equal(returned.kind, "identity", "returning the already adapted value adds no lifetime-only wrapper");
+    const same = selectRustValueCarrierReconciliation(source, rustCallableTargetType([], number, undefined, error), projectTypes);
+    assert.equal(same.kind, "identity", "an otherwise identical callable preserves its exact source carrier");
+    const mismatch = selectRustValueCarrierReconciliation(source,
+      rustCallableTargetType([number], number, undefined, otherError), projectTypes);
+    assert.equal(mismatch.kind, "incompatible", "environment inference cannot change the native error identity");
+    const resultMismatch = selectRustValueCarrierReconciliation(source,
+      rustCallableTargetType([number], string, undefined, error), projectTypes);
+    assert.equal(resultMismatch.kind, "incompatible", "environment inference cannot change the result protocol");
+  }
+  const actual = rustCallableTargetType([], number, lifetimes[1], error);
+  for (const lifetime of [lifetimes[0], { kind: "parameter", identity: "test:destination", name: "Destination" }]) {
+    const requested = rustCallableTargetType([number], number, lifetime, error);
+    const selected = selectRustValueCarrierReconciliation(actual, requested, projectTypes);
+    assert.equal(selected.kind, "conversion", "an explicit destination remains an explicit native requirement");
+    assert.equal(rustTargetTypeRefEquals(selected.fact.targetCarrier, requested), true,
+      "inference never overwrites an explicit or static destination");
+  }
+  const unresolved = rustCallableTargetType([], number, undefined, error);
+  const selected = selectRustValueCarrierReconciliation(unresolved,
+    rustCallableTargetType([number], number, undefined, error), projectTypes);
+  assert.equal(selected.kind, "conversion", "the original unclosed request is not silently strengthened");
+  assert.equal(rustCallableProtocol(selected.fact.targetCarrier).lifetime.kind, "placeholder",
+    "an unknown source environment never becomes static");
+});
 
 test("native closure adapters retain exact inputs, results and invocation failure", () => {
   const integer = { kind: "source-primitive", name: "int64" };

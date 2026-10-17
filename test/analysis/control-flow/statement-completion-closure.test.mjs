@@ -57,6 +57,35 @@ for (const surfaces of [[], ["js"]]) {
       const returned = ast.statements(selectedBranch)[0];
       assert.equal(program.statementCompletions.admitted(returned), true,
         "the selected return retains its existing admission");
+      validateGeneratedProject(`finalized-${selectedThen ? "true" : "false"}-guard-${surface}`, result.artifacts);
+    });
+  }
+
+  for (const selectedThen of [false, true]) {
+    test(`finalized ${selectedThen ? "true" : "false"} guard without else preserves exact branch admission (${surface})`, () => {
+      const { result } = compileRust({ surfaces, files: { "index.ts": `
+export function run(value: number): number {
+  if (${selectedThen}) { value += 1; }
+  return value;
+}` } });
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+      assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+        "an absent else does not invent an unresolved branch or remove the native program");
+      const program = result.program;
+      const ast = program.source.ast;
+      const guard = checkedGuardNodes(program).find(ast.is.IsIfStatement);
+      const statement = ast.as.AsIfStatement(guard);
+      assert.equal(statement?.ElseStatement === undefined && statement?.ThenStatement !== undefined, true,
+        "the real checked source has exactly one authored then branch");
+      assert.equal(program.records.nativeGuardResult.get(statement.Expression), selectedThen,
+        "the canonical guard owner retains the real Boolean outcome");
+      assert.equal(program.records.nativeUnreachable.get(statement.ThenStatement) === true, !selectedThen,
+        "only the actual nonselected then root receives unreachable evidence");
+      const assignment = ast.statements(statement.ThenStatement)[0];
+      assert.equal(program.statementCompletions.admitted(assignment), selectedThen,
+        "the selected body alone receives native statement completion");
+      validateGeneratedProject(`finalized-no-else-${selectedThen}-${surface}`, result.artifacts);
     });
   }
 
@@ -96,20 +125,53 @@ export function run(value: number): number {
       "the real selected invocation retains its actual fallible ABI");
     assert.equal(program.records.errorEffects.get(callable)?.localErrors, true,
       "the selected call and cleanup are never rewritten as pure");
+    validateGeneratedProject(`finalized-selected-effects-${surface}`, result.artifacts);
   });
 
-  test(`unresolved guard never erases an unsupported native body (${surface})`, () => {
+  test(`unresolved guard never erases an unsupported native computed field (${surface})`, () => {
     const { result } = compileRust({ surfaces, files: { "index.ts": `
-export function run(flag: boolean): number {
-  if (flag) { interface Unresolved { value: number; } }
+export function run(flag: boolean, key: string): number {
+  if (flag) { const value = { [key]: 1 }; }
   return 1;
 }` } });
-    assert.equal(result.diagnostics.some(issue => issue.code === "RUST_STATEMENT_NOT_SUPPORTED" &&
-      issue.message === "The Rust target does not support this runtime statement."), true,
-    "an unresolved native branch keeps the existing precise statement admission rejection");
+    assert.equal(result.diagnostics.some(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN" &&
+      issue.message === "The computed key is not a const singleton binding or an exact enum constant."), true,
+    "an unresolved native branch keeps the existing precise checked-key admission rejection");
     assert.equal(result.program === undefined, true, "an unsupported native body publishes no program");
     assert.equal(result.plan === undefined, true, "an unsupported native body reaches no planner");
     assert.equal(result.artifacts.length, 0, "an unsupported native body emits no partial artifacts");
+  });
+
+  for (const condition of ["false", "true"]) {
+    test(`finalized ${condition} guard preserves native computed-field admission (${surface})`, () => {
+      const { result } = compileRust({ surfaces, files: { "index.ts": `
+export function run(key: string): number {
+  if (${condition}) { const value = { [key]: 1 }; }
+  return 1;
+}` } });
+      if (condition === "true") {
+        assert.equal(result.diagnostics.some(issue => issue.code === "RUST_COMPUTED_FIELD_NAME_NOT_PROVEN" &&
+          issue.message === "The computed key is not a const singleton binding or an exact enum constant."), true,
+        "a required runtime field retains its exact native refusal");
+        assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+          "a selected unsupported native field never reaches publication");
+      } else {
+        assert.equal(result.diagnostics.length, 0, "an actual unreachable field imposes no native key obligation");
+        assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length > 0, true,
+          "the selected valid native path still publishes");
+      }
+    });
+  }
+
+  test(`supported debugger remains an effect-preserving native no-op (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+let calls = 0;
+function run(flag: boolean): number { if (flag) { debugger; calls += 1; } return calls; }
+if (run(false) !== 0 || run(true) !== 1 || run(false) !== 1) throw new Error("debugger effects");
+` } });
+    assert.equal(result.diagnostics.length, 0, "the admitted debugger requires no emulation or rejection");
+    assert.equal(result.program !== undefined && result.plan !== undefined, true, "the supported body reaches native planning");
+    validateGeneratedProject(`finalized-debugger-effects-${surface}`, result.artifacts, { run: true });
   });
 }
 

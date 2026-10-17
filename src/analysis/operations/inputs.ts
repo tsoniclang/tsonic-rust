@@ -595,6 +595,6 @@ export function recordForOfFacts(
 export function sourceTypeCarrierForDeclaration(walk: RustFactWalk, declaration: Node): TargetTypeRef | undefined {
   const definition = walk.context.projectTypes.definitionForDeclaration(declaration);
   return definition === undefined
-    ? walk.sourceTypes.carrierForDeclaration(declaration, walk.context.ast)
+    ? walk.sourceTypes.carrierForDeclaration(declaration)
     : walk.context.projectTypes.openCarrier(definition);
 }

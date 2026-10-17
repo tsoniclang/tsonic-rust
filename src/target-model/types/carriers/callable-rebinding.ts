@@ -1,5 +1,5 @@
 import type { TargetTypeRef } from "../model.js";
-import { isRustTargetTypeRef } from "../equality.js";
+import { isRustTargetTypeRef, rustTargetTypeRefEquals } from "../equality.js";
 import { hasExactObjectKeys, isDenseDataArray, snapshotClosedMetadata } from "../../metadata/closed-data.js";
 import { rustCallableProtocol, rustCallableTargetType, rustCallableInputProtocol, rustCallableInputTargetType } from "./callables.js";
 import { rustFrameCallableTargetType, rustFrameCallableValue } from "./frame-callables.js";
@@ -36,6 +36,10 @@ export function rebindRustCallableCarrier(
   if (frame !== undefined) {
     if (options.environment !== undefined || options.typeParameters !== undefined && options.typeParameters.length !== 0)
       return undefined;
+    const protocol = rustCallableProtocol(carrier);
+    if (protocol !== undefined && protocol.parameters.length === parameters.length &&
+      protocol.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, parameters[index])) &&
+      rustTargetTypeRefEquals(protocol.result, result)) return carrier;
     return rustFrameCallableTargetType(parameters, result, frame.owner, frame.environment);
   }
   return rustCallableProtocol(carrier) === undefined || options.environment !== undefined ||

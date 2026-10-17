@@ -150,6 +150,15 @@ export function createRustNativeStorageQueries(input: {
     return parent === undefined ? unresolved("Native invocation storage has no exact caller bindings.")
       : input.storage.bindingsForInvocation(implementation, invocation, parent);
   };
+  const invocationInputBindingsFor = (selected: RustNativeCallableInput, invocation: Node,
+    owner?: Node): SourceStorageBindingsSelection => {
+    const signature = input.records.selectedCall.get(invocation);
+    const declaration = asSourceNode(signature?.sourceDeclaration, input.ast);
+    if (declaration === undefined || !nodes.has(declaration) ||
+      !input.native.inputsFor(declaration).includes(selected) && !input.native.capturesFor(declaration).includes(selected))
+      return unresolved("Native invocation input requires its exact callee formal or captured input correspondence.");
+    return invocationBindingsFor(declaration, invocation, owner);
+  };
   const select = (subject: SourceStorageSubject, carrier: TargetTypeRef,
     bindings: SourceStorageBindings | undefined, position: "value" | "input" = "value"): RustNativeStorageSelection => {
     if (bindings === undefined) return unresolved("Native callable storage has no exact declaration-local bindings.");
@@ -317,7 +326,12 @@ export function createRustNativeStorageQueries(input: {
             if (target === undefined || !rustCallableInvocationSignaturesMatch(current, target))
               return fail("Native callable conversion storage conflicts with its selected activation signature.");
             const operand = visit(conversion.source, origin, frontier.bindings, depth + 1, false, "input");
-            const source = operand === undefined ? undefined : rustNativeCallablePhysicalSource(conversion.source,
+            const physicalInputs = operand === undefined ? [] : [...selectedInputs].filter(candidate =>
+              rustTargetTypeRefEquals(candidate.implementation, operand));
+            const sourceCarrier = physicalInputs.length === 0 ? conversion.source : physicalInputs.length === 1 &&
+              rustCallableInvocationSignaturesMatch(conversion.source, physicalInputs[0]!.carrier)
+              ? physicalInputs[0]!.carrier : undefined;
+            const source = operand === undefined || sourceCarrier === undefined ? undefined : rustNativeCallablePhysicalSource(sourceCarrier,
               { kind: "selected", carrier: operand, inputs: [...selectedInputs] }, input.definitions);
             const file = input.ast.getSourceFile(origin.node);
             candidatePhysical = source === undefined || file === undefined ? undefined
@@ -557,7 +571,7 @@ export function createRustNativeStorageQueries(input: {
       if (!ownedInputs.has(selected)) return unresolved("Native invocation input requires its exact owned input identity.");
       const witness = absenceWitnesses.get(invocation)?.get(selected);
       if (witness !== undefined) return Object.freeze({ kind: "selected", carrier: rustSourceOptionalTargetType(witness), inputs: Object.freeze([]) });
-      const bindings = invocationBindingsFor(selected.owner, invocation, owner);
+      const bindings = invocationInputBindingsFor(selected, invocation, owner);
       if (bindings.kind === "unresolved") return bindings;
       const signature = input.records.selectedCall.get(invocation);
       const operation = input.records.targetOperation.get(invocation);
@@ -572,7 +586,7 @@ export function createRustNativeStorageQueries(input: {
     invocationArgumentWitnessFor: (invocation: Node, argument: Node) => argumentWitnesses.get(invocation)?.get(argument),
     invocationOriginsFor(selected: RustNativeCallableInput, invocation: Node, owner?: Node): SourceStorageSubjectsSelection {
       if (!ownedInputs.has(selected)) return unresolved("Native invocation input requires its exact owned input identity.");
-      const bindings = invocationBindingsFor(selected.owner, invocation, owner);
+      const bindings = invocationInputBindingsFor(selected, invocation, owner);
       return bindings.kind === "unresolved" ? bindings : input.storage.boundOriginsFor(selected.subject, bindings.bindings);
     },
     implementationOriginsFor(selected: RustNativeCallableInput): SourceStorageProducersSelection {

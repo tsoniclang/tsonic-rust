@@ -7,7 +7,10 @@ import type { RustFactWalk } from "../program/walk.js";
 import { resolveRustTargetTypeRef } from "../../policy/types/resolution/index.js";
 import { selectRustNumericBinaryPromotion } from "../../policy/operations/numeric/promotion.js";
 import { isRustBigIntCarrier, isRustAbsenceCarrier, isRustNumericCarrier, rustOptionElementCarrier, rustOptionTargetType,
-  rustSourceOptionalTargetType } from "../../target-model/types/index.js";
+  rustSourceOptionalTargetType, rustCallableProtocol, rustCallableTargetType } from "../../target-model/types/index.js";
+import { rustCallableTargetId } from "../../target-model/types/carriers/source-types.js";
+import { rustLifetimeKey, rustLifetimeOutlives } from "../../target-model/lifetimes/index.js";
+import { rustEnclosingStorageContract } from "../../policy/ownership/suspended-storage.js";
 import { rustSourceOptionalElementCarrier } from "../../target-model/types/carriers/optional.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -48,7 +51,10 @@ export function selectRustInferredReturn(
   const scalar = rustOptionElementCarrier(baseline) ?? baseline;
   const annotated = Node_Type(ast, declaration) !== undefined;
   if (baseline === undefined || scalar === undefined) return { kind: "pending" };
-  if (annotated || ast.body(declaration) === undefined ||
+  const callable = rustCallableProtocol(scalar);
+  const inferEnvironment = annotated && scalar.kind === "target-named" && scalar.id === rustCallableTargetId &&
+    callable?.lifetime?.kind === "placeholder";
+  if (annotated && !inferEnvironment || ast.body(declaration) === undefined ||
     walk.context.semanticsFor(declaration).operations.generator(declaration) !== undefined) return { kind: "complete", carrier: baseline };
   const numericResult = isRustNumericCarrier(scalar) || isRustBigIntCarrier(scalar);
   const parameterAbis: RustSourceParameterAbiFact[] = [];
@@ -84,10 +90,31 @@ export function selectRustInferredReturn(
         ? selected : numericResult ? selectRustNumericBinaryPromotion(selected, value)?.carrier : undefined;
       if (selected === undefined) break;
     }
-    const result = expressions.length === 0 ? baseline : selected === undefined ? numericResult ? undefined : baseline
+    let result = expressions.length === 0 ? baseline : selected === undefined ? numericResult ? undefined : baseline
       : rustOptionElementCarrier(baseline) === undefined ? selected
         : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(selected)
           : rustSourceOptionalTargetType(selected);
+    if (inferEnvironment && callable !== undefined) {
+      const protocols = carriers.map(carrier => rustCallableProtocol(rustOptionElementCarrier(carrier) ?? carrier));
+      const exact = protocols.length !== 0 && protocols.every(protocol => protocol?.lifetime !== undefined &&
+        protocol.lifetime.kind !== "placeholder" && protocol.parameters.length === callable.parameters.length &&
+        protocol.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, callable.parameters[index])) &&
+        rustTargetTypeRefEquals(protocol.result, callable.result) && rustTargetTypeRefEquals(protocol.error, callable.error));
+      result = baseline;
+      if (exact) {
+        const lifetimes = new Map(protocols.flatMap(protocol => protocol?.lifetime === undefined
+          ? [] : [[rustLifetimeKey(protocol.lifetime), protocol.lifetime] as const]));
+        const contract = rustEnclosingStorageContract(declaration, ast, walk.context.sourceLifetimes);
+        const selectedLifetimes = [...lifetimes.values()].filter(candidate =>
+          [...lifetimes.values()].every(source => rustLifetimeOutlives(source, candidate, contract)));
+        if (selectedLifetimes.length === 1) {
+          const refined = rustCallableTargetType(callable.parameters, callable.result, selectedLifetimes[0], callable.error);
+          result = rustOptionElementCarrier(baseline) === undefined ? refined
+            : rustSourceOptionalElementCarrier(baseline) === undefined ? rustOptionTargetType(refined)
+              : rustSourceOptionalTargetType(refined);
+        }
+      }
+    }
     if (result === undefined) return { kind: "pending", hint: baseline };
     let local = memo;
     if (local === undefined) walk.inferredReturns.set(walk.context.records, local = new WeakMap());

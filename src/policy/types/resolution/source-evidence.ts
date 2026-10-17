@@ -29,8 +29,8 @@ import type {
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { selectRustPointerReturnCarrier } from "../../operations/pointers/return.js";
 import { rustTargetGenericReferences } from "../../../target-model/types/carriers/generic-references.js";
-import { inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
-import { mapRustTargetTypes } from "../../../target-model/types/carriers/substitution.js";
+import { inferRustTargetGenericBindings, inferRustTargetTypeParameterBindings } from "../../../target-model/types/carriers/generic-inference.js";
+import { mapRustTargetTypes, substituteRustTargetGenerics } from "../../../target-model/types/carriers/substitution.js";
 import { resolveBoundSourceTypeParameter } from "./callables.js";
 import { rustTypeFamilyNormalizer } from "../model/type-family-normalization.js";
 import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from "../../../target-model/types/carriers/generic-callables.js";
@@ -128,10 +128,50 @@ export function resolveRustCallableStorageCarrier(
   return carrier === undefined || subject === undefined ? carrier : options.callableStorageCarrier(subject, carrier,
     (owner, excludedCaptures) => resolveRustCallableEnvironment(owner, context, options, resolving, excludedCaptures),
     owner => {
-      const semantics = context.semanticsFor(owner);
-      const type = semantics.declarations.declaredType(owner);
-      return type === undefined ? undefined : resolveRustTargetType(type,
-        { ...context, currentSemantics: semantics, sourceStorageSubject: undefined }, options, resolving);
+      const receiver = context.sourceStorage.subject(owner, "receiver");
+      const producers = context.sourceStorage.storageProducersFor(subject);
+      if (options.sourceTypes.carrierForDeclaration(owner) === undefined || receiver.kind === "unresolved" ||
+        producers.kind !== "complete" || producers.producers.length === 0) return undefined;
+      const checkedInstance = context.sourceStorage.typeFor(receiver.subject);
+      if (checkedInstance.kind === "unresolved") return undefined;
+      const template = resolveRustTargetType(checkedInstance.type, { ...context,
+        currentSemantics: context.semanticsFor(owner), sourceStorageSubject: receiver.subject,
+        sourceTypeParameterSubstitutions: new Map() }, options, new Set());
+      if (template === undefined) return undefined;
+      const references = rustTargetGenericReferences(template);
+      let instance: TargetTypeRef | undefined;
+      let selectedProtocol: ReturnType<typeof rustCallableProtocol>;
+      for (const producer of producers.producers) {
+        const checkedTemplate = context.sourceStorage.typeFor(producer.subject);
+        if (checkedTemplate.kind === "unresolved") return undefined;
+        const templateCarrier = resolveRustTargetType(checkedTemplate.type, { ...context,
+          currentSemantics: context.semanticsFor(producer.subject.node), sourceStorageSubject: undefined,
+          sourceTypeParameterSubstitutions: new Map(), callableRepresentation: "signature" }, options, new Set(resolving));
+        const templateProtocol = rustCallableProtocol(templateCarrier);
+        if (templateProtocol === undefined || selectedProtocol !== undefined &&
+          (selectedProtocol.parameters.length !== templateProtocol.parameters.length ||
+            !selectedProtocol.parameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, templateProtocol.parameters[index])) ||
+            !rustTargetTypeRefEquals(selectedProtocol.result, templateProtocol.result))) return undefined;
+        selectedProtocol = templateProtocol;
+        const bound = context.sourceStorage.boundOriginsFor(receiver.subject, producer.bindings);
+        if (bound.kind === "unresolved" || bound.subjects.length === 0) return undefined;
+        for (const actual of bound.subjects) {
+          const checked = context.sourceStorage.typeFor(actual);
+          if (checked.kind === "unresolved") return undefined;
+          const carrier = resolveRustTargetType(checked.type, { ...context,
+            currentSemantics: context.semanticsFor(actual.node), sourceStorageSubject: actual }, options, resolving);
+          if (carrier === undefined || instance !== undefined && !rustTargetTypeRefEquals(instance, carrier)) return undefined;
+          instance = carrier;
+        }
+      }
+      if (instance === undefined || selectedProtocol === undefined) return undefined;
+      const bindings = inferRustTargetGenericBindings(template, instance, {
+        typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
+        constIdentities: new Set(references.constIdentities),
+      });
+      if (bindings === undefined || !rustTargetTypeRefEquals(substituteRustTargetGenerics(template,
+        bindings.types, bindings.lifetimes, bindings.consts), instance)) return undefined;
+      return Object.freeze({ instance: template, parameters: selectedProtocol.parameters, result: selectedProtocol.result, bindings });
     });
 }
 

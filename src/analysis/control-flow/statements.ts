@@ -40,6 +40,7 @@ import {
   Node_Expression,
   Node_Initializer,
   Node_Name,
+  Node_Type,
   VariableDeclarationList_Declarations,
   VariableStatement_DeclarationList,
   sourceIntegerInduction,
@@ -52,6 +53,7 @@ import { appendRustDiagnostic, boolCarrier, rustResolutionContext } from "../pro
 import { recordForOfFacts } from "../operations/inputs.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
 import { reconcileRequiredCarrier, resolveExpressionCarrier } from "../expressions/carriers.js";
+import { rustEffectiveValueCarrier } from "../conversions/value-carrier-queries.js";
 import { resolveRustDeclaredBindingStorage, recordBindingPatternFacts, recordCallableDefaultParameterFacts } from "../declarations/types-and-bindings.js";
 import { recordCallableValueSignatureForDeclaration } from "../callables/signatures.js";
 import { recordThrowFacts } from "../resources/suspension.js";
@@ -98,6 +100,7 @@ export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, s
 }
 
 export function recordVariableStatementFacts(walk: RustFactWalk, statement: Node, sourceFile: SourceFile): void {
+  if (walk.context.records.typeOnlyDeclarations.statement(walk, statement) !== undefined) return;
   const moduleLevel = walk.context.ast.kindName(walk.context.ast.parent(statement)) === "KindSourceFile";
   const declarationList = VariableStatement_DeclarationList(walk.context.ast, statement);
   recordVariableDeclarationListFacts(walk, declarationList, statement, sourceFile, moduleLevel);
@@ -142,8 +145,19 @@ function recordVariableDeclarationListFacts(
       );
       continue;
     }
+    const annotationDiagnosticStart = walk.context.diagnostics.length;
+    const authoredType = Node_Type(walk.context.ast, declaration);
     const annotated = rustGenericCallableValueOwner(walk.context.ast, declaration,
       resolveRustDeclaredBindingStorage(walk, declaration));
+    if (authoredType !== undefined && annotated === undefined) {
+      if (walk.context.diagnostics.length === annotationDiagnosticStart &&
+        !walk.rejectedExpressions.has(declaration) && !walk.rejectedExpressions.has(authoredType)) {
+        appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
+          "A native binding requires its authored type and finalized Rust storage carrier before initializer admission.",
+          authoredType, ["target.capability=rust.native-binding-carrier"]);
+      }
+      continue;
+    }
     const predeclared = walk.context.records.runtimeCarrier.get(declaration)?.carrier;
     const induction = walk.context.ast.kindName(owner) === KindForStatement
       ? sourceIntegerInduction(declaration, walk.context.ast, walk.context.source.navigation, {
@@ -165,7 +179,14 @@ function recordVariableDeclarationListFacts(
         "The initializer cannot be represented by the declaration's exact Rust carrier.", initializer,
         ["target.capability=rust.initializer-carrier"]);
     }
-    const effective = selected ?? initializerCarrier ?? predeclared;
+    const effective = initializer === undefined ? selected ?? predeclared
+      : rustEffectiveValueCarrier(walk.context.records, initializer) ?? initializerCarrier ?? selected ?? predeclared;
+    if (effective === undefined && !walk.rejectedExpressions.has(declaration) &&
+      (initializer === undefined || !walk.rejectedExpressions.has(initializer))) {
+      appendRustDiagnostic(walk, "RUST_BINDING_CARRIER_NOT_PROVEN",
+        "A native binding requires an admitted source type and one finalized Rust value carrier.", declaration,
+        ["target.capability=rust.native-binding-carrier"]);
+    }
     if (effective !== undefined) {
       setCarrierFact(walk, declaration, effective);
       const name = Node_Name(walk.context.ast, declaration);

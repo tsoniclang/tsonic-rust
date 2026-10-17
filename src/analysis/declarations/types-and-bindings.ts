@@ -112,7 +112,7 @@ export function reserveTypeAliasUnion(walk: RustFactWalk, declaration: Node): vo
   const root = sourceTypeSyntaxRoot(ast, authoredType);
   if (root === undefined || ast.kindName(root) !== "KindUnionType" ||
     walk.sourceTypes.enumVariantsForDeclaration(declaration) !== undefined ||
-    walk.sourceTypes.carrierForDeclaration(declaration, ast) !== undefined) return;
+    walk.sourceTypes.carrierForDeclaration(declaration) !== undefined) return;
   const semantics = walk.context.semanticsFor(declaration);
   const sourceType = semantics.declarations.declaredType(declaration);
   if (sourceType === undefined || !semantics.types.isUnion(sourceType)) return;
@@ -214,7 +214,7 @@ export function selectRustTypeAliasDeclaration(
     };
   }
   reserveTypeAliasUnion(walk, declaration);
-  const reservedCarrier = walk.sourceTypes.carrierForDeclaration(declaration, ast);
+  const reservedCarrier = walk.sourceTypes.carrierForDeclaration(declaration);
   const reservedValue = rustOptionElementCarrier(reservedCarrier) ?? reservedCarrier;
   const compositeCarrier = rustSourceUnionCarrierValue(reservedValue) === undefined ? resolveRustTargetTypeRef(
     Node_Type(ast, declaration) ?? sourceType,

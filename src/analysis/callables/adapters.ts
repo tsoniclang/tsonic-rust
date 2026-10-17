@@ -204,19 +204,19 @@ export function selectRustCallableValueAdapter(
   const selected = selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, projectTypes, definitions);
   switch (selected.kind) {
     case "identity":
-      return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier });
+      return Object.freeze({ kind: "identity", sourceCarrier, targetCarrier: sourceCarrier });
     case "conversion":
       return Object.freeze({
         kind: "conversion",
         sourceCarrier,
-        targetCarrier,
+        targetCarrier: selected.fact.targetCarrier,
         conversion: selected.fact.conversion,
         ...(selected.upcast === undefined ? {} : { upcast: selected.upcast }),
       });
     case "project-upcast":
-      return Object.freeze({ kind: "project-upcast", sourceCarrier, targetCarrier });
+      return Object.freeze({ kind: "project-upcast", sourceCarrier, targetCarrier: selected.fact.targetCarrier });
     case "call-scoped-lifetime":
-      return Object.freeze({ kind: "call-scoped-lifetime", sourceCarrier, targetCarrier });
+      return Object.freeze({ kind: "call-scoped-lifetime", sourceCarrier, targetCarrier: selected.fact.selectedCarrier });
     case "incompatible":
       return undefined;
   }

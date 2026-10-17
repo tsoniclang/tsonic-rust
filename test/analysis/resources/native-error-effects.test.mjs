@@ -194,7 +194,17 @@ test("nested source functions propagate captures only when invoked", () => {
     }
   `);
   assertChannels(current.callable("dormant"), []);
-  assert.equal(current.callable("hidden").nativeErrors.length, 1);
+  const hidden = current.declaration("hidden");
+  assert.equal(current.program.records.nativeParticipation.get(hidden), "erased", "the actual unused lexical body is not native work");
+  assert.equal(current.program.records.errorEffects.get(hidden) === undefined, true,
+    "the erased native body has no fabricated native error region");
+  const callback = current.calls("callback").find(call => current.ast.body(hidden) === current.ast.parent(current.ast.parent(call)));
+  assert.equal(callback !== undefined, true, "the original checked unused callback invocation remains in the complete source");
+  const subject = current.program.sourceStorage.subjectFor(Node_Expression(current.ast, callback));
+  assert.equal(subject.kind, "resolved", "the erased invocation retains its exact checked source-storage subject");
+  assert.equal(current.program.sourceStorage.typeFor(subject.subject).kind, "resolved",
+    "native erasure never deletes the checked callback type evidence");
+  assert.equal(current.callable("inner").nativeErrors.length, 1, "the actually invoked lexical body keeps its exact native channel");
   assertChannels(current.callable("active"), current.callable("inner").nativeErrors);
 });
 

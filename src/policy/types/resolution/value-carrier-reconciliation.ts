@@ -8,7 +8,10 @@ import {
   rustCarrierSupportsClone,
   rustCarrierSupportsTrait,
   rustOptionElementCarrier,
+  rustCallableProtocol,
+  rustCallableTargetType,
 } from "../../../target-model/types/index.js";
+import { rustCallableTargetId } from "../../../target-model/types/carriers/source-types.js";
 import type { RustContextualValueConversion } from "../../../target-model/conversions/contextual.js";
 import type { RustProjectTypePolicy } from "../../../target-model/types/project-types.js";
 import { selectRustSourceValueConversion } from "../../conversions/selection.js";
@@ -155,6 +158,14 @@ export function selectRustValueCarrierReconciliation(
   projectTypes: RustProjectTypePolicy,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
 ): RustValueCarrierReconciliation {
+  const sourceCallable = rustCallableProtocol(sourceCarrier);
+  const targetCallable = rustCallableProtocol(targetCarrier);
+  if (targetCarrier.kind === "target-named" && targetCarrier.id === rustCallableTargetId &&
+    targetCallable?.lifetime?.kind === "placeholder" && sourceCallable?.lifetime !== undefined &&
+    sourceCallable.lifetime.kind !== "placeholder") {
+    targetCarrier = rustCallableTargetType(targetCallable.parameters, targetCallable.result,
+      sourceCallable.lifetime, targetCallable.error);
+  }
   if (rustTargetTypeRefEquals(sourceCarrier, targetCarrier)) {
     return { kind: "identity" };
   }
