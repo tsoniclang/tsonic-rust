@@ -64,7 +64,7 @@ import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
-import { analyzeRustNativeDeclarationForms } from "../declarations/native-forms.js";
+import { prepareRustNativeDeclarationForms } from "../declarations/native-forms.js";
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
 import { createRustProviderMutableInputPlan } from "../storage/provider-mutable-inputs.js";
 import { analyzeRustRetainedCallableInputs } from "../callables/retained-inputs.js";
@@ -285,6 +285,13 @@ export function analyzeRustTargetProgram(
     names: context.names, callables: context.callableValues.selected });
   if (errorRegions.kind === "rejected") return errorRegions;
   context.callableValues.finalizeStructuralStorage(errorRegions.value);
+  const preparedNativeDeclarations = prepareRustNativeDeclarationForms({ ast: context.ast, semanticsFor: context.semanticsFor,
+    names: context.names, records, projectTypes: context.projectTypes, typeDefinitions: context.typeDefinitions,
+    sourceLifetimes: context.sourceLifetimes, objectRepresentations,
+    frames: context.callableValues.selected.frames,
+    classValues, projectMethodProperties: context.projectMethodProperties, projectConstructions,
+    isNativeNode: context.isNativeNode });
+  if (preparedNativeDeclarations.kind === "rejected") return rejectedTargetStage(preparedNativeDeclarations.diagnostics);
   const declarationGenericRequirements = analyzeRustDeclarationGenericRequirements(
     context.source,
     context.nativeNodes,
@@ -491,7 +498,7 @@ export function analyzeRustTargetProgram(
     sourceModuleConstructions: sourceModuleConstructions.index,
     generatedDeclarationUses: context.generatedDeclarationUses.seal(),
   };
-  const nativeDeclarations = analyzeRustNativeDeclarationForms({ ast: context.ast, sourceFiles: context.sourceFiles,
+  const nativeDeclarations = preparedNativeDeclarations.forms.complete({ ast: context.ast, sourceFiles: context.sourceFiles,
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
     objectRepresentations, typeFamilies: program.typeFamilies,

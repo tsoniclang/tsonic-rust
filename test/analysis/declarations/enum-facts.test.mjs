@@ -150,7 +150,8 @@ test("late enum admission cannot re-evaluate names, constants, width or physical
   const declaration = enumDeclarations(source)[0];
   const form = program.nativeDeclarations.get(declaration);
   const admitted = admitRustNativeValueDeclaration(declaration, { ast: source.ast, records: program.records,
-    typeDefinitions: program.typeDefinitions, names: { nameForDeclaration() { throw new Error("late name decision"); } } });
+    typeDefinitions: program.typeDefinitions, names: { nameForDeclaration() { throw new Error("late name decision"); } } },
+    program.nativeDeclarations);
   assert.equal(admitted.kind, "accepted", "late admission consumes only completed enum evidence");
   assert.equal(admitted.form === form, true, "no replacement descriptor or second physical choice is introduced");
 });

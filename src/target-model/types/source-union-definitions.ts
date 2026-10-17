@@ -16,6 +16,19 @@ export interface RustSourceUnionDefinition {
   readonly variants: readonly RustSourceUnionVariantCarrierValue[];
 }
 
+export interface RustSourceObjectPhysicalDefinition {
+  readonly carrier: TargetTypeRef;
+  readonly fields: readonly RustSourceObjectPhysicalField[];
+}
+
+export interface RustSourceObjectPhysicalField {
+  readonly name: string;
+  readonly clone:
+    | { readonly kind: "unconditional" }
+    | { readonly kind: "unavailable" }
+    | { readonly kind: "required"; readonly carrier: TargetTypeRef };
+}
+
 export interface RustSourceUnionPayloadTemplate extends RustSourceUnionDefinition {
   readonly sourceArgumentIndexes: readonly number[];
   readonly payloadParameters: readonly {
@@ -26,6 +39,7 @@ export interface RustSourceUnionPayloadTemplate extends RustSourceUnionDefinitio
 
 export interface RustTypeDefinitions {
   readonly closedValueCarrier: TargetTypeRef;
+  sourceObjectPhysicalDefinition(carrier: TargetTypeRef): RustSourceObjectPhysicalDefinition | undefined;
   sourceEnumDefinition(carrier: TargetTypeRef): RustNativeEnumDeclaration | undefined;
   sourceUnionVariants(carrier: TargetTypeRef): readonly RustSourceUnionVariantCarrierValue[] | undefined;
   sourceUnionPayloadTemplate(carrier: TargetTypeRef): RustSourceUnionPayloadTemplate | undefined;
@@ -38,6 +52,7 @@ export type RustProgramErrorOrigin =
 
 export const emptyRustTypeDefinitions: RustTypeDefinitions = Object.freeze({
   closedValueCarrier: Object.freeze(rustTsValueTargetType()),
+  sourceObjectPhysicalDefinition: () => undefined,
   sourceEnumDefinition: () => undefined,
   sourceUnionVariants: () => undefined,
   sourceUnionPayloadTemplate: () => undefined,

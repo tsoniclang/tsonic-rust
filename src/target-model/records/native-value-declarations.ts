@@ -4,6 +4,8 @@ import type { RustProjectTypeDefinition } from "../types/project-types.js";
 import type { RustSourceGenericContract } from "../lifetimes/model.js";
 import type { RustTypeAliasDeclarationFact } from "./callables-and-resources.js";
 import type { RustSourceUnionPayloadTemplate } from "../types/source-union-definitions.js";
+import type { RustSourceObjectPhysicalDefinition, RustSourceObjectPhysicalField } from "../types/source-union-definitions.js";
+import type { RustCapturedFieldStorage } from "../types/field-storage.js";
 import type { RustConditionalSourceTypeFamily } from "../types/type-families.js";
 
 export interface RustNativeEnumDeclaration {
@@ -30,12 +32,53 @@ export interface RustNativeInterfaceDeclaration {
   readonly name: string;
   readonly definition: RustProjectTypeDefinition;
   readonly fields: readonly RustNativeInterfaceField[];
+  readonly physical: RustNativeObjectPhysicalDeclaration;
   readonly index?: {
     readonly declaration: Node;
     readonly targetName: string;
     readonly keyCarrier: TargetTypeRef;
     readonly valueCarrier: TargetTypeRef;
   };
+}
+
+export interface RustNativeClassField extends RustNativeInterfaceField {
+  readonly initializer: Node | undefined;
+  readonly storage:
+    | { readonly kind: "value" }
+    | { readonly kind: "capture"; readonly selection: RustCapturedFieldStorage }
+    | { readonly kind: "frame"; readonly declaration: Node };
+}
+
+export type RustNativeObjectPhysicalField = RustSourceObjectPhysicalField & {
+  readonly copy: boolean;
+} & (
+  | { readonly kind: "field"; readonly declaration: Node }
+  | { readonly kind: "frame"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "frame-counter" }
+  | { readonly kind: "environment"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "method"; readonly declaration: Node }
+  | { readonly kind: "index" }
+  | { readonly kind: "marker" }
+  | { readonly kind: "state" }
+);
+
+export interface RustNativeObjectPhysicalDeclaration {
+  readonly definition: RustSourceObjectPhysicalDefinition;
+  readonly storageFields: readonly RustNativeObjectPhysicalField[];
+  readonly fields: readonly RustNativeObjectPhysicalField[];
+  readonly clone:
+    | { readonly kind: "unavailable" }
+    | { readonly kind: "conditional"; readonly requirements: readonly TargetTypeRef[] };
+}
+
+export interface RustNativeClassDeclaration {
+  readonly kind: "class";
+  readonly name: string;
+  readonly definition: RustProjectTypeDefinition;
+  readonly fields: readonly RustNativeClassField[];
+  readonly methodProperties: readonly { readonly declaration: Node; readonly targetName: string }[];
+  readonly frameCounterName: string | undefined;
+  readonly physical: RustNativeObjectPhysicalDeclaration;
 }
 
 export interface RustNativeAliasDeclaration {

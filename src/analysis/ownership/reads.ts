@@ -187,6 +187,7 @@ interface RustReadProjectionRequirement {
   readonly flowResultBorrow: boolean;
   readonly flowConversionInput: "value" | "borrow" | "borrow-unless-moving";
   readonly cloneSources: readonly TargetTypeRef[];
+  readonly requiredCloneSources: readonly TargetTypeRef[];
   readonly cloneBorrowable: boolean;
 }
 
@@ -210,11 +211,14 @@ function selectRustReadProjectionRequirement(node: Node, records: RustAnalysisRe
     : conversionBorrows ? "borrow" : conversion.conversion.kind === "project-union-map" ? "borrow-unless-moving" : "value";
   const cloneSources = projection?.kind === "union-map"
     ? projection.arms.filter(arm => arm.source[arm.source.length - 1]?.variant.kind === "payload").map(arm => arm.carrier)
-    : projection?.kind === "option-value" ||
+    : projection?.kind === "program-error-variant" || projection?.kind === "option-value" ||
       (projection?.kind === "source-union" || projection?.kind === "runtime-union") && projection.project === undefined
-      ? [projection.selectedCarrier] : [];
+      ? [projection.selectedCarrier]
+      : projection?.kind === "project-downcast" ? [projection.dispatchCarrier] : [];
+  const requiredCloneSources = projection?.kind === "closed-native" ? [projection.selectedCarrier] : [];
   return Object.freeze({ conversionBorrows, projectBorrows, constructsContainer: option?.kind === "some",
     flowResultBorrow, flowConversionInput, cloneSources: Object.freeze(cloneSources),
+    requiredCloneSources: Object.freeze(requiredCloneSources),
     cloneBorrowable: flowResultBorrow || flowConversionInput !== "value" });
 }
 
@@ -415,7 +419,7 @@ export function analyzeRustReadOwnership(input: {
       const valueCarrier = projection?.selectedCarrier ?? carrier;
       const physicalValueCarrier = projection === undefined && captured !== undefined ? captured.carrier : valueCarrier;
       const copy = isRustCopyCarrier(physicalValueCarrier, selected => input.genericCallables.definitionFor(selected)?.copy === true);
-      const contract = input.genericRequirements.contractFor(declaration);
+      const contract = declaration === undefined ? undefined : input.genericRequirements.contractFor(declaration);
       const clone = contract !== undefined && rustFinalContractSupportsRequirements(contract, physicalValueCarrier, ["clone"],
         input.typeFamilies, input.definitions, undefined).kind === "supported";
       const use = uses.get(node);

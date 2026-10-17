@@ -5,7 +5,7 @@ import type {
 } from "../../target-model/operations/model.js";
 import {
   isRustCopyCarrier,
-  rustCarrierSupportsClone,
+  selectRustCloneRequirements,
   rustCarrierSatisfiesTraitRef,
   substituteRustTargetGenerics,
 } from "../../target-model/types/index.js";
@@ -37,7 +37,10 @@ export function rustProviderOperationGenericRequirementsAreSelectable(
   for (const parameter of requirements ?? []) {
     const carrier = bindings.types.get(parameter.identity);
     if (carrier === undefined || parameter.requirements.some((requirement) =>
-      !rustProviderTypeRequirementIsSatisfied(requirement, carrier, bindings, definitions) &&
+      !(requirement === "clone" || typeof requirement === "object" && requirement.path === "core::clone::Clone" &&
+        requirement.genericArguments.length === 0 && requirement.associatedConstraints.length === 0 && requirement.lifetimeBinder === undefined
+        ? selectRustCloneRequirements(carrier, definitions, () => true, () => true).kind !== "unavailable"
+        : rustProviderTypeRequirementIsSatisfied(requirement, carrier, bindings, definitions)) &&
       !rustProviderOperationRequirementIsRustcDecidable(requirement, bindings))) {
       return false;
     }
@@ -60,7 +63,7 @@ function rustProviderTypeRequirementIsSatisfied(
   definitions: RustTypeDefinitions,
 ): boolean {
   if (requirement === "copy") return isRustCopyCarrier(carrier);
-  if (requirement === "clone") return rustCarrierSupportsClone(carrier, definitions);
+  if (requirement === "clone") return selectRustCloneRequirements(carrier, definitions).kind === "available";
   const trait = substituteProviderTraitRequirement(requirement, bindings);
   return trait !== undefined && rustCarrierSatisfiesTraitRef(carrier, trait, undefined, definitions);
 }

@@ -144,9 +144,16 @@ export function instantiateProviderOperationTemplate<
     typeRequirements: _typeRequirements,
     ...closedTemplate
   } = template;
+  const carrierRequirements = [...template.carrierRequirements ?? [], ...(template.typeRequirements ?? []).flatMap(parameter =>
+    parameter.requirements.some(requirement => requirement === "clone" || typeof requirement === "object" &&
+      requirement.path === "core::clone::Clone" && requirement.genericArguments.length === 0 &&
+      requirement.associatedConstraints.length === 0 && requirement.lifetimeBinder === undefined)
+      ? [{ carrier: substitutions.types.get(parameter.identity)!, requirement: "clone" as const }] : [])];
   return {
     template: {
       ...closedTemplate,
+      ...(carrierRequirements.length === 0 ? {} : { carrierRequirements: carrierRequirements.map(requirement => ({ ...requirement,
+        carrier: substituteProviderCarrier(requirement.carrier, substitutions) })) }),
       target: substituteProviderOperationForm(template.target, substitutions),
       resultCarrier: substituteProviderCarrier(template.resultCarrier, substitutions),
       ...(template.sourceResultCarrier === undefined

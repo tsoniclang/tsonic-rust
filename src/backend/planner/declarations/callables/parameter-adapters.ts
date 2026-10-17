@@ -1,7 +1,7 @@
 import type { Node } from "@tsonic/tsts";
 import type { RustCallableParameterAbi, RustCallableParameterAdapter, RustCallableRestSegment } from "../../../../target-model/records/callable-adapters.js";
 import { callableRestElement, rustCallableParameterAdaptersMatch, rustCallableValueAdapterIsFallible } from "../../../../analysis/callables/adapters.js";
-import { isRustCopyCarrier, isRustJsArrayCarrier, isRustStringCarrier, rustCarrierSupportsClone, rustOptionTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
+import { isRustCopyCarrier, isRustJsArrayCarrier, isRustStringCarrier, rustOptionTargetType, rustVecTargetType } from "../../../../target-model/types/index.js";
 import type { RustExpr, RustFunctionParam, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { allocateRustSyntheticName, createRustSyntheticNameState } from "../../names/synthetic.js";
@@ -168,6 +168,6 @@ function readLogicalParameter(expression: RustExpr, abi: RustCallableParameterAb
   if (abi.mode === "value") return planRustParameterEntryValue(abi, expression, undefined, context);
   if (isRustStringCarrier(abi.valueCarrier)) return { kind: "owned-string-from-borrowed-str", expression };
   const value: RustExpr = { kind: "dereference", pointer: expression };
-  return isRustCopyCarrier(abi.valueCarrier) ? value : rustCarrierSupportsClone(abi.valueCarrier, context.input.program.typeDefinitions)
-    ? { kind: "method-call", receiver: value, method: "clone", args: [] } : undefined;
+  return isRustCopyCarrier(abi.valueCarrier) ? value
+    : { kind: "method-call", receiver: value, method: "clone", args: [] };
 }

@@ -48,7 +48,7 @@ function planFrameEntry(
   if (values.some(value => value === undefined)) return undefined;
   const fields = planRustReceiverFieldOwners(implementation.receiverFields, context, context,
     { staticStorage: false, offset: values.length });
-  const receivers = fields === undefined ? undefined : planRustReceiverOwners(node, implementation.receivers, context, fields.context,
+  const receivers = fields === undefined ? undefined : planRustReceiverOwners(implementation.receivers, context, fields.context,
     { staticStorage: false, offset: values.length + implementation.receiverFields.length });
   if (fields === undefined || receivers === undefined) return undefined;
   const receiverBindings = [...fields.bindings, ...receivers.bindings];

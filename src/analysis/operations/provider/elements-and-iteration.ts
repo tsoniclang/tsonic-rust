@@ -34,7 +34,7 @@ import { rustProjectObjectIndexSignature } from "../../project-types/object-layo
 
 import { rustTargetTypeRefEquals } from "../../../target-model/types/equality.js";
 import { selectedValueCarrier } from "../selected-values.js";
-import { canRequireSourceClone } from "./clone-requirements.js";
+import { sourceCloneRequirements } from "./clone-requirements.js";
 import { rustEffectiveValueCarrier } from "../../conversions/value-carrier-queries.js";
 import { selectJsSurfaceMemberRead } from "../../../policy/operations/source-profiles/js/member-reads.js";
 import { selectRustSourceProfileIndexMembers } from "./selected-members.js";
@@ -84,7 +84,7 @@ export function resolveRustCheckedElementAccess(
     ...(selectedReceiverCarrier === undefined ? {} : { receiverCarrier: selectedReceiverCarrier }),
     argumentCarriers: [selectedArgumentCarrier],
     argumentMatchScore: selectedArgumentMatchScore([request.argument], context, options),
-    canRequireClone: carrier => canRequireSourceClone(carrier, request.expression, context, options.sourceTypes.typeFamilies),
+    cloneRequirements: carrier => sourceCloneRequirements(carrier, request.expression, context, options.sourceTypes.typeFamilies),
   }, indexMembers?.readonly === true, context.typeDefinitions);
   if (selectedIndexOperation === undefined && request.sourceReceiverType !== undefined && request.sourceSelectedSymbol !== undefined &&
     request.sourceSelectedElementIndex === undefined) {

@@ -4,12 +4,11 @@ import { rustStringTargetType } from "../types/carriers/native.js";
 import { rustJsValueTargetType } from "../types/carriers/js.js";
 import { rustTargetTypeRefEquals } from "../types/equality.js";
 import { rustStructuralObjectCarrierValue } from "../types/carriers/source-types.js";
-import { rustTsValueAdmission } from "../types/carriers/traits.js";
-import type { RustTypeDefinitions } from "../types/source-union-definitions.js";
+import { rustTsValueProjection } from "../types/carriers/traits.js";
 
-export function rustJsSharedObjectValueAdmission(source: TargetTypeRef, definitions: RustTypeDefinitions): boolean {
+export function rustJsSharedObjectValueAdmission(source: TargetTypeRef): boolean {
   return rustStructuralObjectCarrierValue(source)?.representation === "reference" &&
-    rustTsValueAdmission(source, definitions) !== undefined;
+    rustTsValueProjection(source) !== undefined;
 }
 
 export function rustJsRecordValueAdmission(source: TargetTypeRef): boolean {

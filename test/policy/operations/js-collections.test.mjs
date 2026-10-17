@@ -68,8 +68,9 @@ test("generic collection clone obligations require an explicit source declaratio
     argumentCarriers: [],
   };
   assert.equal(selectJsSurfaceOperation(request), undefined);
-  assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
-  const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
+  assert.equal(selectJsSurfaceOperation({ ...request, cloneRequirements: () => ({ kind: "unavailable" }) }), undefined);
+  const selected = selectJsSurfaceOperation({ ...request, cloneRequirements: carrier => carrier === parameter
+    ? { kind: "required", carriers: [carrier] } : { kind: "unavailable" } });
   assert.deepEqual(selected.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone" }]);
   assert.deepEqual(selected.resultCarrier, { kind: "array", element: parameter });
 });
@@ -83,8 +84,9 @@ test("owned array reads retain their exact native Clone obligation", () => {
         argumentCarriers: [rustSourcePrimitiveTargetType("int32")],
       };
       assert.equal(selectJsSurfaceOperation(request), undefined);
-      assert.equal(selectJsSurfaceOperation({ ...request, canRequireClone: () => false }), undefined);
-      const selected = selectJsSurfaceOperation({ ...request, canRequireClone: carrier => carrier === parameter });
+      assert.equal(selectJsSurfaceOperation({ ...request, cloneRequirements: () => ({ kind: "unavailable" }) }), undefined);
+      const selected = selectJsSurfaceOperation({ ...request, cloneRequirements: carrier => carrier === parameter
+        ? { kind: "required", carriers: [carrier] } : { kind: "unavailable" } });
       assert.deepEqual(selected?.fact.carrierRequirements, [{ carrier: parameter, requirement: "clone" }]);
       assert.deepEqual(selected?.fact.sourceResultCarrier, parameter);
     }

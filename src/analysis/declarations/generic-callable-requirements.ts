@@ -54,7 +54,9 @@ import { rustProjectViewBindings } from "../objects/view-implementations.js";
 import { rustStructuralViewRequirementUses } from "./structural-view-requirements.js";
 import type { RustAnalyzedErrorRegions } from "../errors/regions.js";
 
-import { rustCallableRestCloneSources } from "../callables/adapter-requirements.js";
+import { rustCallableParameterCloneSources } from "../callables/adapter-requirements.js";
+import { createRustConversionRequirementCollector } from "./generic-clone-requirements.js";
+import { rustProjectStaticFieldStorage } from "../project-types/object-layout.js";
 
 interface ClassifyCallableInput extends RustCallableInvocationRequirementContext {
   readonly readRequirements: RustReadOwnershipRequirements;
@@ -81,7 +83,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   | { readonly kind: "rejected"; readonly reason: string; readonly promiseStorage?: true } {
   const { ast, declaration, records } = input;
   const definition = input.projectTypes.definitionForDeclaration(declaration);
-  const typeParameterNodes = (definition === undefined ? ast.typeParameters(declaration)
+  const typeParameterNodes = (definition === undefined ? ast.is.IsSourceFile(declaration) ? [] : ast.typeParameters(declaration)
     : definition.genericParameters.map(parameter => parameter.declaration)).filter(
     (candidate): candidate is Node => candidate !== undefined &&
       input.sourceLifetimes.parameterFor(candidate)?.kind !== "lifetime",
@@ -180,8 +182,9 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
     }
     return undefined;
   };
+  const { conversion: requireConversion, finalized: requireFinalizedConversion } = createRustConversionRequirementCollector(input, addUse);
   for (const adapter of input.promiseObjectFacet === true ? [] : records.projectCallableAdapters.get(declaration) ?? []) {
-    for (const carrier of rustCallableRestCloneSources(adapter.parameterAdapters)) {
+    for (const carrier of rustCallableParameterCloneSources(adapter.parameterAdapters)) {
       const error = addUse(declaration, carrier, ["clone"]);
       if (error !== undefined) return { kind: "rejected", reason: error };
     }
@@ -366,6 +369,24 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const carrier = records.runtimeCarrier.get(node)?.carrier;
+    const moduleBinding = records.moduleBinding.get(node);
+    const sourceBinding = records.sourceBinding.get(node);
+    const referencedModule = sourceBinding === undefined ? undefined : records.moduleBinding.get(sourceBinding.sourceDeclaration);
+    const storedCallable = moduleBinding?.storage === "native-callable" && moduleBinding.value !== undefined &&
+      records.moduleCallableStorage.get(moduleBinding.callableDeclaration)?.kind === "stored" ? moduleBinding.value.carrier : undefined;
+    const moduleCarrier = moduleBinding?.storage === "module-cell" && moduleBinding.initialization === "value"
+      ? moduleBinding.valueCarrier : referencedModule?.storage === "module-cell" ? referencedModule.valueCarrier : storedCallable;
+    const staticField = ast.kindName(node) !== "KindPropertyDeclaration" || !ast.hasModifierKind(node, "static") ? undefined
+      : rustProjectStaticFieldStorage(node, ast, input.projectTypes.memberSlotName(node, "static"));
+    if (moduleCarrier !== undefined || staticField !== undefined) {
+      const error = addUse(node, moduleCarrier ?? carrier, ["clone", "static"]);
+      if (error !== undefined) return error;
+    }
+    const contextual = records.contextualValueConversion.get(node);
+    if (contextual !== undefined) {
+      const error = requireConversion(node, contextual.conversion);
+      if (error !== undefined) return error;
+    }
     const bindingProjection = records.bindingProjection.get(node);
     for (const copied of bindingProjection === undefined ? [] : rustBindingProjectionCloneCarriers(bindingProjection)) {
       const error = addUse(node, copied, ["clone"]);
@@ -494,6 +515,24 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const operation = records.targetOperation.get(node);
+    if (operation?.kind === "project-type-test" && operation.lowering.kind === "closed-native" ||
+      operation?.kind === "source-call" && operation.resultProjection?.kind === "closed-native") {
+      const selectedCarrier = operation.kind === "source-call" ? operation.resultProjection!.selectedCarrier : operation.targetCarrier;
+      const error = addUse(node, selectedCarrier, ["clone", "static"]);
+      if (error !== undefined) return error;
+    }
+    if (operation?.kind === "operator-call" || operation?.kind === "operator-token") {
+      for (const conversion of [operation.leftConversion, operation.rightConversion]) {
+        const error = conversion === undefined ? undefined : requireConversion(node, conversion);
+        if (error !== undefined) return error;
+      }
+    }
+    if (operation?.kind === "logical-value") {
+      for (const conversion of [operation.leftConversion, operation.rightConversion]) {
+        const error = conversion === null ? undefined : requireFinalizedConversion(node, conversion);
+        if (error !== undefined) return error;
+      }
+    }
     if (operation?.kind === "array-literal") {
       for (const contribution of operation.contributions) {
         if (contribution.kind !== "spread") continue;
@@ -541,7 +580,8 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       const iterableCarrier = iterable === undefined ? undefined : records.runtimeCarrier.get(iterable)?.carrier;
       if (operation.lowering.kind === "js-array" ||
         operation.lowering.kind === "borrowed" && operation.lowering.style === "cloned" ||
-        operation.lowering.kind === "receiver-method" && rustJsArrayEntriesElementTargetType(iterableCarrier) !== undefined) {
+        operation.lowering.kind === "receiver-method" && (rustJsArrayEntriesElementTargetType(iterableCarrier) !== undefined ||
+          operation.lowering.name === "entries" || operation.lowering.name === "values")) {
         const error = addUse(node, operation.elementCarrier, ["clone"]);
         if (error !== undefined) return error;
       }
@@ -565,6 +605,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       }
     }
     const projectionRead = input.readRequirements.storageReads.get(node)?.projection;
+    for (const source of projectionRead?.requiredCloneSources ?? []) {
+      const error = addUse(node, source, ["clone", "static"]);
+      if (error !== undefined) return error;
+    }
     if (projectionRead !== undefined && rustReadTransferRequirement(input.ownershipFlow, node) !== "transfer" &&
       !(projectionRead.cloneBorrowable && input.readRequirements.borrowed.has(node))) {
       for (const source of projectionRead.cloneSources) {
@@ -581,17 +625,12 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
         if (error !== undefined) return error;
       }
       for (const argument of rustFinalizedSourceInputs(providerOperation.abi)) {
-        const conversions = argument.conversion.kind === "sequence" ? argument.conversion.steps
-          : argument.conversion.kind === "semantic" ? [argument.conversion] : [];
-        for (const selected of conversions) {
-          const conversion = rustValueConversionContract(selected.conversion, input.typeDefinitions);
-          if (conversion?.lowering !== "rest-sequence") continue;
-          for (const carrier of conversion.cloneSources) {
-            const error = addUse(node, carrier, ["clone"]);
-            if (error !== undefined) return error;
-          }
-        }
+        const error = requireFinalizedConversion(node, argument.conversion);
+        if (error !== undefined) return error;
       }
+      const result = providerOperation.abi.result;
+      const resultError = requireFinalizedConversion(node, result.kind === "sync" ? result.conversion : result.awaitedConversion);
+      if (resultError !== undefined) return resultError;
       for (const argument of providerOperation.abi.sourceArguments) {
         if (argument.disposition !== "runtime" || argument.mode !== "value" ||
           argument.form !== "value") continue;

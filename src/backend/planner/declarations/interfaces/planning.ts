@@ -8,7 +8,7 @@ import { rustTypeFromCarrierInContext } from "../../types/render.js";
 import type { Node } from "@tsonic/tsts";
 import type { PlannedProjectObjectField } from "../classes/planning.js";
 import type { RustItem, RustStructField } from "../../../target-ast/syntax/nodes.js";
-import { rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
+import { rustProjectCloneImplementation, rustProjectWrapperTraits } from "../../objects/project-wrapper-traits.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import { rustProjectImplementationVisibility } from "../../objects/project-storage-abi.js";
 import { structAttributes } from "../struct-attributes.js";
@@ -152,7 +152,7 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
     name: interfaceName,
     ...(interfaceDeadCode === undefined ? {} : { deadCode: interfaceDeadCode }),
     visibility: interfaceVisibility,
-    attrs: [...interfaceAttributes, ...rustDeriveAttributes(representation.kind === "value" ? ["Clone"] : explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
+    attrs: [...interfaceAttributes, ...rustDeriveAttributes(representation.kind === "value" || explicitWrapperTraits ? [] : ["Clone", "Debug", "PartialEq"])],
     generics,
     fields: representation.kind === "value" ? valueFields : [{
       name: rustProjectObjectStateField,
@@ -160,6 +160,13 @@ export function planInterfaceDeclaration(node: Node, context: RustPlanContext): 
       visibility: storageVisibility,
       ...(publiclyReachable ? { attrs: [rustHiddenAttribute] } : {}),
     }],
-  }, ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : []),
+  }, ...(representation.kind === "value" && admitted.physical.clone.kind === "conditional"
+    ? [rustProjectCloneImplementation(interfaceType, generics, admitted.physical.fields.map(selected => {
+        const field = valueFields.find(field => field.name === selected.name);
+        if (field === undefined) return failRustPlannerInvariant("An admitted native field has no materialized storage type.", node);
+        return { name: selected.name, copy: selected.copy,
+          ...(selected.clone.kind !== "required" || selected.copy ? {} : { requirement: field.type }) };
+      }))] : []),
+  ...(explicitWrapperTraits ? rustProjectWrapperTraits(interfaceType, interfaceName, generics) : []),
   ...(representation.kind === "value" ? [] : [rustProjectStateIdentityImplementation(interfaceType, generics)])];
 }

@@ -46,7 +46,8 @@ export function projectIdentityImplementations(
 ): readonly RustItem[] {
   const generics = rustProjectRepresentationGenerics(representation, context);
   return [
-    rustProjectCloneImplementation(wrapperType, generics, [rustProjectObjectIdentityField, rustProjectObjectDispatchField]),
+    rustProjectCloneImplementation(wrapperType, generics, [rustProjectObjectIdentityField, rustProjectObjectDispatchField]
+      .map(name => ({ name, copy: false }))),
     ...planRustProjectProjectionImplementations(definition, context),
     {
       kind: "impl",
