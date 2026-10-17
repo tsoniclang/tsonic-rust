@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { compileRust } from "./rust-session.mjs";
+import { compileRust } from "../../helpers/rust-session.mjs";
 import { nativeNodes, nativeSource, nativeFunction, nativeCalls, nativeMethods, nativeType,
-  nativeCallableContract, nativeScopedBinding, nativeDispatchBinding, assertNoNativeCalls } from "./native-ast.mjs";
+  nativeCallableContract, nativeScopedBinding, nativeDispatchBinding, assertNoNativeCalls } from "../../helpers/native-ast.mjs";
+import { assertNoTargetDiagnostics } from "../../../../tsonic/test/scripts/diagnostic-assertions.mjs";
 
 test("native AST inspection preserves source order and visits shared syntax exactly once", () => {
   const first = { kind: "call", path: "first", args: [] };
@@ -59,7 +60,7 @@ test("the canonical checked compilation exposes its exact selected native plan a
 import type { int32 } from "@tsonic/core/types.js";
 export function apply(value: int32, callback: (value: int32) => int32): int32 { return callback(value); }
 ` } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(result.program.source.ast === source.ast, true, "native plan belongs to the same checked source");
   const apply = nativeCallableContract(result, "apply", 1, [nativeType("i32")], nativeType("i32"));
   assert.equal(apply.params[1].type.kind, "reference");
@@ -69,7 +70,7 @@ export function apply(value: int32, callback: (value: int32) => int32): int32 { 
 
 test("Rust helper library defaults never infer output kind from the authored main name", () => {
   const { result, harness } = compileRust({ files: { "index.ts": "export function main(): void {}" } });
-  assert.deepEqual(result.diagnostics, []);
+  assertNoTargetDiagnostics(result.diagnostics);
   assert.equal(harness.target.options.outputType, "lib");
   assert.equal(harness.project.targets[0].options.outputType, "lib");
   assert.equal(result.artifacts.some(artifact => artifact.path === "src/main.rs"), false);

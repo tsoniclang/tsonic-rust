@@ -261,9 +261,14 @@ test("target builds delete stale dist artifacts before compilation", () => {
 test("bounded tests cap and report nested Cargo parallelism", () => {
   const runner = readFileSync(join(repositoryRoot, "scripts/test.sh"), "utf8");
   const hostRoot = resolve(repositoryRoot, process.env.TSONIC_ROOT ?? "../tsonic");
-  const guard = readFileSync(join(hostRoot, "test/scripts/bounded-run.sh"), "utf8");
+  const launcher = readFileSync(join(hostRoot, "test/scripts/bounded-run.sh"), "utf8");
+  const snapshot = readFileSync(join(hostRoot, "test/scripts/guard-snapshot.mjs"), "utf8");
+  const guard = readFileSync(join(hostRoot, "test/scripts/bounded-test-scope.sh"), "utf8");
   const worker = readFileSync(join(repositoryRoot, "scripts/test-worker.sh"), "utf8");
   assert.match(runner, /\$\{TSONIC_ROOT:-\.\.\/tsonic\}\/test\/scripts\/bounded-run\.sh" rust/u);
+  assert.match(launcher, /node "\$script_root\/guard-snapshot\.mjs"/u);
+  assert.match(launcher, /exec bash "\$snapshot\/bounded-test-scope\.sh" "\$@"/u);
+  assert.match(snapshot, /"bounded-test-scope\.sh", "test-resource-budget\.mjs"/u);
   assert.match(guard, /test-resource-budget\.mjs" "\$profile"/u);
   assert.match(guard, /export CARGO_BUILD_JOBS="\$\{cargo_build_jobs\}"/u);
   assert.match(guard, /nested Cargo jobs: %s per Cargo invocation/u);
@@ -557,8 +562,13 @@ test("optional chains consume exact TSTS evidence through one finalized Option f
   assert.doesNotMatch(semantics, /sourceReceiverDeclaration/u);
   assert.match(semantics, /request\.optionalChain/u);
   assert.match(semantics, /selectedMemberReceiverCarrier\(request, context, options\)/u);
-  assert.match(semantics, /records\.optionalChain\.set\(request\.expression, selection\.fact/u);
+  assert.match(semantics, /requireRustRecord\(context\.requiredRecords, "optionalChain", request\.expression, selection\.fact\.operationKind/u);
+  assert.match(semantics, /records\.optionalChains\.guard\(request\.expression, selection\.fact\.guard, selection\.fact\.operationKind, selection\.fact\)/u);
+  assert.doesNotMatch(semantics, /records\.optionalChain\.set\(/u);
   assert.doesNotMatch(semantics, /rustOptionalChainFactKey/u);
+  const producer = readFileSync(join(sourceRoot, "analysis/program/records/optional-chain.ts"), "utf8");
+  assert.match(producer, /id: "tsonic\.rust\.optionalChain"/u);
+  assert.match(producer, /family\.writer\.set\(expression, Object\.freeze\(\{ expression, guard, operationKind,/u);
 
   const selector = readFileSync(join(sourceRoot, "policy/operations/optional-chains.ts"), "utf8");
   assert.match(selector, /rustOptionNestingDepth\(sourceGuardCarrier, selectedGuardCarrier\)/u);
@@ -696,11 +706,13 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
     "function planForOfStatement(",
   );
   const setterAdmission = sourceSection(admission, "  const setter = (", "  const assignment = (");
+  const setterInputs = sourceSection(admission, "export function rustRuntimeSetSourceInputs(",
+    "export function analyzeRustStatementCompletions(");
   assert.equal(/if \(!validateRustFinalizedOperationAbi\(fact\.abi, context\.input\.program\.typeDefinitions\)\)/u.test(providerLowering), true,
     "provider operations and runtime setters share the unconditional total-ABI invariant guard");
   assert.equal(/fact\.kind === "provider-operation" && !rustTargetTypeRefEquals\(fact\.resultCarrier, abiResultCarrier\)/u.test(providerLowering), true,
     "only provider expressions require their logical result carrier to equal the native ABI result");
-  for (const [name, section] of [["provider expression", providerLowering], ["runtime setter admission", setterAdmission]]) {
+  for (const [name, section] of [["provider expression", providerLowering], ["runtime setter admission", setterInputs]]) {
     assert.match(section, /\.abi\.(?:targetReceiver|targetArguments|result|sourceArguments)/u, `${name} must consume finalized ABI fields`);
     assert.doesNotMatch(section, /\.argModes|\.argOrder|\.argConversions|\.receiverMode|\.indexConversion|\.resultConversion|\.parameterCarriers|\.sourceArgumentCount/u, `${name} must not interpret sparse authoring metadata`);
   }
@@ -714,7 +726,10 @@ test("backend provider lowering consumes only total finalized operation ABI", ()
     "both finalized operation kinds use the canonical operation-form renderer");
   assert.match(expressionFacts, /function providerSelectedCallMatches\(/u);
   assert.match(expressionFacts, /selectedCall\.get\(node\)/u);
-  assert.match(setterAdmission, /operation\.abi\.operationKind !== expectedKind/u);
+  assert.match(setterInputs, /operation\.abi\.operationKind !== expectedKind/u);
+  assert.match(setterAdmission, /const inputs = rustRuntimeSetSourceInputs\(ast, node, operation\)/u);
+  assert.match(setterAdmission, /if \(inputs === undefined\) \{\s*reject\(node, "RUST_SETTER_ABI_NOT_PROVEN"/u);
+  assert.match(setterAdmission, /publish\(setters, node, inputs\)/u);
   assert.match(runtimeSet, /finishProviderOperationExpression\(context, fact, native, expression\)/u);
   assert.match(setterAdmission, /runtimeCarrier\.get\(value\)/u);
   assert.equal(/selected\?\.operationKind === "operator"/u.test(setterAdmission), true,
@@ -766,12 +781,12 @@ test("call-argument conversion consumes the checked expression carrier, not a se
     join(sourceRoot, "analysis/operations/provider/conversions.ts"),
     "utf8",
   );
-  const conversion = sourceSection(
+  const callArgument = sourceSection(
     semantics,
-    "export function selectRustCheckedConversion(",
-    "function selectProjectDowncast(",
+    'if (request.conversionKind === "call-argument") {',
+    "  const sourceCarrier = rustEffectiveValueCarrier(context.records, request.sourceExpression)",
   );
-  const callArgument = conversion.slice(0, conversion.indexOf("const targetCarrier = resolveRustTargetTypeRef(request.explicitTargetTypeNode"));
+  assert.match(callArgument, /rustEffectiveValueCarrier\(context\.records, request\.expression\)/u);
   assert.match(callArgument, /resolveRustTargetTypeRef\(request\.expression, context, options\)/u);
   assert.doesNotMatch(callArgument, /resolveRustTargetTypeRef\(request\.source, context, options\)/u);
   assert.doesNotMatch(callArgument, /asNode\(request\.source, context\)/u);
@@ -896,8 +911,10 @@ test("malformed compiler collection slots fail closed instead of disappearing", 
   assert.match(statements, /planStatementSequence\(children, node, construction\?\.context \?\? context\)/u);
   assert.equal(/const child = children\[index\];\s*if \(child === undefined\) \{\s*failRustPlannerInvariant\("Statement sequence requires its dense checked source nodes\.", diagnosticNode\)/u.test(statements), true,
     "an undefined checked source slot fails the dense-sequence invariant instead of disappearing");
-  assert.match(declarations, /Enum declaration contains an undefined member slot/u);
-  assert.match(declarations, /Interface declaration contains an undefined member slot/u);
+  const enumAdmission = readFileSync(join(sourceRoot, "analysis/declarations/enum-facts.ts"), "utf8");
+  const interfaceAdmission = readFileSync(join(sourceRoot, "analysis/declarations/native-value-declarations.ts"), "utf8");
+  assert.match(enumAdmission, /if \(!isDenseDataArray\(members\) \|\| members\.some\(member => member === undefined\)\) \{\s*appendRustDiagnostic\(walk, "RUST_SOURCE_AST_INCOMPLETE",\s*"Enum declaration contains an undefined member slot\."/u);
+  assert.match(interfaceAdmission, /if \(!isDenseDataArray\(members\) \|\| members\.some\(member => member === undefined\)\) \{\s*return reject\(declaration, "RUST_SOURCE_AST_INCOMPLETE", "Interface declaration contains an undefined member slot\."/u);
   assert.match(semantics, /RUST_SOURCE_AST_INCOMPLETE/u);
   assert.match(semantics, /function requireDenseSourceNodes\(/u);
   assert.match(semantics, /isDenseDataArray\(rawSourceFiles\)/u);
