@@ -2,7 +2,7 @@ import type { SourceFile } from "@tsonic/tsts";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustInitializationErrorRecords, RustInitializerSelection, RustModuleErrorInitializer } from "../../target-model/records/error-regions.js";
-import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand } from "../../target-model/records/physical-emission-contexts.js";
+import type { RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionRole } from "../../target-model/records/physical-emission-contexts.js";
 import type { Node } from "@tsonic/tsts";
 import { prepareRustCallableEmissionContexts, prepareRustEmissionContextRequests, rustEmissionIdentityBindings,
   type RustCallableEmissionPreparation, type RustCallableEmissionPreparationInput, type RustEmissionContextRequest } from "../callables/emission-contexts.js";
@@ -30,7 +30,8 @@ export function prepareRustPhysicalEmissionContexts(
       modules.set(module.sourceFile, { module, initializers: Object.freeze([...selected?.initializers ?? [], initializer]) });
     }
   for (const [sourceFile, { module, initializers }] of modules) {
-    requests.push({ use: targetUseSiteRef(sourceFile, "module-initializer", module.identity), declaration: sourceFile,
+    requests.push({ use: targetUseSiteRef(sourceFile, "module-initializer", module.identity), role: "module-initializer",
+      specialization: Object.freeze({ kind: "ordinary" }), declaration: sourceFile,
       source: { kind: "module", module, initializers },
       bindings, returnDestination: Object.freeze({ kind: "none" }),
       error: Object.freeze({ kind: "region", owner: sourceFile, region: module.region }), sourceCarriers: [],
@@ -38,7 +39,8 @@ export function prepareRustPhysicalEmissionContexts(
       demands: input.emissionRequests.filter(demand => demand.owner === sourceFile) });
   }
   for (const worker of input.initialization.workers) {
-    requests.push({ use: targetUseSiteRef(worker.sourceFile, "worker-initializer", input.ast.getFileName(worker.sourceFile)),
+    requests.push({ use: targetUseSiteRef(worker.sourceFile, "worker-initializer", input.ast.getFileName(worker.sourceFile)), role: "worker-initializer",
+      specialization: Object.freeze({ kind: "ordinary" }),
       source: { kind: "worker", initializer: worker.initializer },
       declaration: worker.sourceFile, bindings, returnDestination: Object.freeze({ kind: "none" }), demands: [],
       error: Object.freeze({ kind: "initializer", owner: worker.sourceFile, initializer: worker.initializer }), sourceCarriers: [],
@@ -50,6 +52,7 @@ export function prepareRustPhysicalEmissionContexts(
   const contexts = parts.flatMap(part => part.contexts.contexts);
   const operands = parts.flatMap(part => part.contexts.operands);
   const contextIndex = new Map<TargetUseSiteRef, RustPhysicalEmissionContext>();
+  const ownerIndex = new Map<object, Map<RustPhysicalEmissionRole, RustPhysicalEmissionContext>>();
   const operandIndex = new Map<TargetUseSiteRef, RustPhysicalEmissionOperand>();
   const owners = new Map<TargetUseSiteRef, RustCallableEmissionPreparation>();
   for (const part of parts) {
@@ -58,6 +61,12 @@ export function prepareRustPhysicalEmissionContexts(
         category: "error", source: "tsonic-rust", sourceNode: context.declaration,
         message: "One physical emission use has more than one canonical owner." }]);
       contextIndex.set(context.use, context);
+      const owner = ownerIndex.get(context.use.subject) ?? new Map<RustPhysicalEmissionRole, RustPhysicalEmissionContext>();
+      if (owner.has(context.role)) return rejectedTargetStage([{ code: "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED",
+        category: "error", source: "tsonic-rust", sourceNode: context.declaration,
+        message: "One original physical emission owner and role has multiple selected contexts." }]);
+      owner.set(context.role, context);
+      ownerIndex.set(context.use.subject, owner);
       owners.set(context.use, part);
     }
     for (const operand of part.contexts.operands) {
@@ -69,6 +78,7 @@ export function prepareRustPhysicalEmissionContexts(
     physicalOperands: Object.freeze([...new Set(parts.flatMap(part => part.physicalOperands))]),
     contexts: Object.freeze({ contexts: Object.freeze(contexts), operands: Object.freeze(operands), sourceOccurrences: input.sourceOccurrences,
       contextFor: (use: TargetUseSiteRef) => contextIndex.get(use),
+      contextForOwner: (subject: object, role: RustPhysicalEmissionRole) => ownerIndex.get(subject)?.get(role),
       operandFor: (use: TargetUseSiteRef) => operandIndex.get(use),
       carrierFor: (use: TargetUseSiteRef, carrier: Parameters<RustCallableEmissionPreparation["contexts"]["carrierFor"]>[1]) =>
         owners.get(use)?.contexts.carrierFor(use, carrier),

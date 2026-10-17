@@ -10,6 +10,10 @@ import type {
 } from "./type-policy.js";
 import { rustTargetTypeParameterIdentities } from "../../target-model/types/index.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
+import type { RustTargetGenericArgument } from "../../target-model/types/model.js";
+import { rustSourceTypeCarrierValue } from "../../target-model/types/carriers/source-types.js";
+import { rustGenericCallablePhysicalBindings, snapshotRustCallableBindings } from "../callables/generic-bindings.js";
 
 export interface RustProjectMethodDispatchVariant {
   readonly declaration: Node;
@@ -19,11 +23,31 @@ export interface RustProjectMethodDispatchVariant {
   readonly exactSlot: string;
 }
 
+export interface RustProjectMethodBodySelection {
+  readonly concrete: RustProjectTypeDefinition;
+  readonly declaration: Node;
+  readonly owner: RustProjectTypeDefinition;
+  readonly ownerCarrier: TargetTypeRef;
+  readonly contractVariant: RustProjectMethodDispatchVariant | undefined;
+  readonly variant: RustProjectMethodDispatchVariant | undefined;
+  readonly targetName: string;
+  readonly targetTypeArguments: readonly TargetTypeRef[];
+  readonly bindings: RustTargetGenericBindings;
+  readonly contractBindings: RustTargetGenericBindings;
+  readonly contractMethodBindings: ReadonlyMap<string, TargetTypeRef> | undefined;
+}
+
 export type RustProjectMethodDispatchRegistration =
   | { readonly kind: "accepted" }
   | { readonly kind: "rejected"; readonly reason: string };
 
 export interface RustProjectMethodDispatchPlan {
+  readonly bodies: readonly RustProjectMethodBodySelection[];
+  readonly bodyIssues: readonly { readonly node: Node; readonly reason: string }[];
+  bodyFor(concrete: RustProjectTypeDefinition, declaration: Node,
+    variant: RustProjectMethodDispatchVariant | undefined): RustProjectMethodBodySelection | undefined;
+  implementationFor(concrete: RustProjectTypeDefinition, variant: RustProjectMethodDispatchVariant,
+    role: "virtual" | "exact"): RustProjectMethodBodySelection | undefined;
   variantsForMember(declaration: Node): readonly RustProjectMethodDispatchVariant[];
   variantForMember(
     declaration: Node,
@@ -65,6 +89,10 @@ export function createRustProjectMethodDispatchPlanRegistry(): RustProjectMethod
     return current;
   };
   const registry: RustProjectMethodDispatchPlanRegistry = {
+    get bodies() { return requireCurrent().bodies; },
+    get bodyIssues() { return requireCurrent().bodyIssues; },
+    bodyFor(concrete, declaration, variant) { return requireCurrent().bodyFor(concrete, declaration, variant); },
+    implementationFor(concrete, variant, role) { return requireCurrent().implementationFor(concrete, variant, role); },
     record(declaration, targetTypeArguments, ast, projectTypes, sourceLifetimes) {
       if (current !== undefined) {
         throw new Error("Rust project method dispatch requests cannot be recorded after initialization.");
@@ -229,22 +257,145 @@ function createRustProjectMethodDispatchPlan(
       byMember.set(member, Object.freeze(variants));
     }
   }
+  const variantForMember: RustProjectMethodDispatchPlan["variantForMember"] = (declaration, targetTypeArguments, receiverCarrier) => {
+    const owner = input.projectTypes.definitionContainingDeclaration(declaration);
+    if (owner === undefined) return undefined;
+    const receiver = receiverCarrier ?? input.projectTypes.openCarrier(owner);
+    const matches = (byMember.get(declaration) ?? []).filter(variant => {
+      const instantiated = instantiateRustProjectMethodDispatchArguments(
+        declaration, variant.targetTypeArguments, receiver, input.projectTypes);
+      return instantiated !== undefined && targetTypeRefListsEqual(instantiated, targetTypeArguments);
+    });
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+  const bodies: RustProjectMethodBodySelection[] = [];
+  const bodyIssues: { readonly node: Node; readonly reason: string }[] = [];
+  const bodyIndex = new Map<RustProjectTypeDefinition,
+    Map<Node, Map<RustProjectMethodDispatchVariant | undefined, RustProjectMethodBodySelection>>>();
+  const dispatchBodies = new Map<RustProjectTypeDefinition,
+    Map<RustProjectMethodDispatchVariant, { readonly virtual: Node; readonly exact: Node | undefined }>>();
+  const ownerBindings = (owner: RustProjectTypeDefinition, carrier: TargetTypeRef): RustTargetGenericBindings | undefined => {
+    const arguments_ = rustSourceTypeCarrierValue(carrier)?.genericArguments;
+    const parameters: RustTargetGenericArgument[] = owner.genericParameters.map(parameter => parameter.kind === "type"
+      ? { kind: "type", type: { kind: "type-parameter", identity: parameter.identity, name: parameter.targetName } }
+      : { kind: "lifetime", lifetime: parameter.lifetime });
+    return arguments_ === undefined ? undefined : rustGenericCallablePhysicalBindings(parameters, arguments_);
+  };
+  const prepareBody = (concrete: RustProjectTypeDefinition, declaration: Node,
+    contractVariant: RustProjectMethodDispatchVariant | undefined): void => {
+    const members = bodyIndex.get(concrete) ?? new Map<Node, Map<RustProjectMethodDispatchVariant | undefined, RustProjectMethodBodySelection>>();
+    const variants = members.get(declaration) ?? new Map<RustProjectMethodDispatchVariant | undefined, RustProjectMethodBodySelection>();
+    if (variants.has(contractVariant)) return;
+    const reject = (reason: string): void => { bodyIssues.push({ node: declaration, reason }); };
+    const owner = input.projectTypes.definitionContainingDeclaration(declaration);
+    const root = input.projectTypes.openCarrier(concrete);
+    const relation = owner === undefined ? undefined : input.projectTypes.relationship(root, owner);
+    if (owner === undefined || relation?.kind !== "related" || input.ast.body(declaration) === undefined) {
+      reject("A concrete native body requires its selected source implementation and exact owner relation.");
+      return;
+    }
+    const inherited = ownerBindings(owner, relation.targetType);
+    const contractOwner = contractVariant === undefined ? owner
+      : input.projectTypes.definitionContainingDeclaration(contractVariant.declaration);
+    const contractRelation = contractOwner === undefined ? undefined : input.projectTypes.relationship(root, contractOwner);
+    const contractBindings = contractOwner === undefined || contractRelation?.kind !== "related" ? undefined
+      : ownerBindings(contractOwner, contractRelation.targetType);
+    const targetTypeArguments = contractVariant === undefined ? Object.freeze([])
+      : instantiateRustProjectMethodDispatchArguments(contractVariant.declaration, contractVariant.targetTypeArguments, root, input.projectTypes);
+    const variant = contractVariant === undefined || targetTypeArguments === undefined ? undefined
+      : variantForMember(declaration, targetTypeArguments, root);
+    const role = input.ast.kindName(declaration) === "KindGetAccessor" ? "read" : "write";
+    const targetName = contractVariant === undefined ? input.projectTypes.memberSlotName(declaration, role) : variant?.exactSlot;
+    if (inherited === undefined || contractBindings === undefined || targetTypeArguments === undefined || targetName === undefined ||
+      contractVariant !== undefined && variant === undefined) {
+      reject("A concrete native body requires its unique selected dispatch variant and exact declared binding vector.");
+      return;
+    }
+    const methodBindings = variant === undefined ? undefined : new Map(variant.sourceTypeParameterIdentities.map((identity, index) =>
+      [identity, targetTypeArguments[index]!] as const));
+    const contractMethodBindings = contractVariant === undefined ? undefined
+      : new Map(contractVariant.sourceTypeParameterIdentities.map((identity, index) => [identity, targetTypeArguments[index]!] as const));
+    if (variant !== undefined && (variant.sourceTypeParameterIdentities.length !== targetTypeArguments.length ||
+      methodBindings?.size !== targetTypeArguments.length) || contractVariant !== undefined &&
+      (contractVariant.sourceTypeParameterIdentities.length !== targetTypeArguments.length ||
+        contractMethodBindings?.size !== targetTypeArguments.length)) {
+      reject("A concrete dispatch body requires each original method binder exactly once.");
+      return;
+    }
+    const bindings = snapshotRustCallableBindings({ types: new Map([...inherited.types, ...methodBindings ?? []]),
+      lifetimes: inherited.lifetimes, consts: inherited.consts });
+    const selectedContractBindings = snapshotRustCallableBindings({
+      types: new Map([...contractBindings.types, ...contractMethodBindings ?? []]),
+      lifetimes: contractBindings.lifetimes, consts: contractBindings.consts });
+    const body = Object.freeze({ concrete, declaration, owner, ownerCarrier: relation.targetType, contractVariant, variant, targetName,
+      targetTypeArguments, bindings,
+      contractBindings: selectedContractBindings,
+      contractMethodBindings: contractMethodBindings === undefined ? undefined : snapshotRustCallableBindings({ types: contractMethodBindings,
+        lifetimes: contractBindings.lifetimes, consts: contractBindings.consts }).types });
+    variants.set(contractVariant, body);
+    members.set(declaration, variants);
+    bodyIndex.set(concrete, members);
+    bodies.push(body);
+  };
+  for (const concrete of new Set(input.projectTypes.definitions.flatMap(definition => input.projectTypes.concreteClassesFor(definition)))) {
+    if (concrete.kind !== "class" || !input.projectTypes.isPolymorphic(concrete) || input.ast.hasModifierKind(concrete.declaration, "abstract")) continue;
+    const contracts = input.projectTypes.contractsForClass(concrete);
+    if (contracts === undefined) {
+      bodyIssues.push({ node: concrete.declaration, reason: "A concrete native root requires its completed instance contract set." });
+      continue;
+    }
+    for (const contract of contracts) {
+      const contractMembers = denseNodes(input.ast.members(contract.declaration));
+      if (contractMembers === undefined) {
+        bodyIssues.push({ node: contract.declaration, reason: "A concrete body requires its complete dense original contract-member vector." });
+        continue;
+      }
+      for (const member of contractMembers) {
+        if (input.ast.hasModifierKind(member, "static")) continue;
+        const kind = input.ast.kindName(member);
+        if (kind !== "KindMethodDeclaration" && kind !== "KindMethodSignature" && kind !== "KindGetAccessor" && kind !== "KindSetAccessor") continue;
+        const variants = byMember.get(member);
+        if ((kind === "KindMethodDeclaration" || kind === "KindMethodSignature") && (variants === undefined || variants.length === 0)) continue;
+        const selected = input.projectTypes.memberImplementation(concrete, member);
+        if (selected.kind !== "resolved") {
+          bodyIssues.push({ node: member, reason: selected.kind === "unresolved" ? selected.reason : "A concrete root requires its exact selected member implementation." });
+          continue;
+        }
+        if (kind === "KindGetAccessor" || kind === "KindSetAccessor") {
+          prepareBody(concrete, selected.implementation.declaration, undefined);
+          continue;
+        }
+        for (const variant of variants ?? []) {
+          prepareBody(concrete, selected.implementation.declaration, variant);
+          let exactDeclaration: Node | undefined;
+          if (contract.kind === "class" && !input.ast.hasModifierKind(member, "abstract") && input.projectTypes.classLineage(concrete)?.includes(contract) === true) {
+            const exact = input.projectTypes.memberImplementation(contract, member);
+            if (exact.kind === "resolved") {
+              exactDeclaration = exact.implementation.declaration;
+              prepareBody(concrete, exactDeclaration, variant);
+            } else bodyIssues.push({ node: member, reason: "An inherited exact body requires its original selected member implementation." });
+          } else if (contract.kind === "class" && !input.ast.hasModifierKind(member, "abstract")) {
+            exactDeclaration = selected.implementation.declaration;
+          }
+          const selectedBodies = dispatchBodies.get(concrete) ?? new Map<RustProjectMethodDispatchVariant,
+            { readonly virtual: Node; readonly exact: Node | undefined }>();
+          selectedBodies.set(variant, Object.freeze({ virtual: selected.implementation.declaration, exact: exactDeclaration }));
+          dispatchBodies.set(concrete, selectedBodies);
+        }
+      }
+    }
+  }
   const plan: RustProjectMethodDispatchPlan = {
+    bodies: Object.freeze(bodies), bodyIssues: Object.freeze(bodyIssues.map(issue => Object.freeze(issue))),
+    bodyFor: (concrete, declaration, variant) => bodyIndex.get(concrete)?.get(declaration)?.get(variant),
+    implementationFor(concrete, variant, role) {
+      const declaration = dispatchBodies.get(concrete)?.get(variant)?.[role];
+      return declaration === undefined ? undefined : bodyIndex.get(concrete)?.get(declaration)?.get(variant);
+    },
     variantsForMember(declaration) {
       return byMember.get(declaration) ?? Object.freeze([]);
     },
-    variantForMember(declaration, targetTypeArguments, receiverCarrier) {
-      const owner = input.projectTypes.definitionContainingDeclaration(declaration);
-      if (owner === undefined) return undefined;
-      const receiver = receiverCarrier ?? input.projectTypes.openCarrier(owner);
-      const matches = (byMember.get(declaration) ?? []).filter((variant) => {
-        const instantiated = instantiateRustProjectMethodDispatchArguments(
-          declaration, variant.targetTypeArguments, receiver, input.projectTypes,
-        );
-        return instantiated !== undefined && targetTypeRefListsEqual(instantiated, targetTypeArguments);
-      });
-      return matches.length === 1 ? matches[0] : undefined;
-    },
+    variantForMember,
   };
   return Object.freeze(plan);
 }

@@ -290,7 +290,6 @@ export function prepareRustPhysicalCallableEmissionRequests(
         ? rustCallableTargetType(protocol.parameters, protocol.result) : undefined;
       const carrier = independent ?? records.receiverIndependentMethod.get(node)?.carrier ?? operation.resultCarrier;
       if (rustCallableProtocol(carrier) !== undefined) producer(owner, node, node, carrier);
-      visitConstruct(node, node);
     } else if (operation?.kind === "record-literal") {
       for (const [index, contribution] of operation.contributions.entries()) {
         if (contribution.kind === "property") {
@@ -317,6 +316,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
       else for (const child of children) visitUse(child.expression, owner, inputRole(child), child.owner);
       if (input.projectTypes.definitionForDeclaration(node) !== undefined) visitConstruct(node, node);
     }
+    if (input.nativeProducers.forDeclaration(node) !== undefined) visitConstruct(node, node);
     rows.set(key, "closed");
   };
   const visitConstruct = (node: Node, owner: Node): void => {

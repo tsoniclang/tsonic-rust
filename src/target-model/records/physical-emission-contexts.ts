@@ -67,8 +67,19 @@ export type RustEmissionErrorContext =
   | { readonly kind: "region"; readonly owner: Node; readonly region: RustErrorRegionSelection }
   | { readonly kind: "initializer"; readonly owner: SourceFile; readonly initializer: RustInitializerSelection };
 
+export type RustPhysicalEmissionRole =
+  | "native-body" | "specialized-body" | "project-body"
+  | "helper" | "body" | "member" | "native-input" | "native-backing" | "frame"
+  | "constructor" | "constructor-layer" | "module-initializer" | "worker-initializer";
+
+export type RustEmissionCallableSpecialization =
+  | { readonly kind: "ordinary" }
+  | { readonly kind: "finite"; readonly typeParameterIdentities: readonly string[] };
+
 export interface RustPhysicalEmissionContext {
   readonly use: TargetUseSiteRef;
+  readonly role: RustPhysicalEmissionRole;
+  readonly specialization: RustEmissionCallableSpecialization;
   readonly declaration: Node;
   readonly bindings: RustTargetGenericBindings;
   readonly returnDestination: RustEmissionReturnDestination;
@@ -125,6 +136,7 @@ export interface RustCallableEmissionContexts {
   readonly operands: readonly RustPhysicalEmissionOperand[];
   readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
   contextFor(use: TargetUseSiteRef): RustPhysicalEmissionContext | undefined;
+  contextForOwner(subject: object, role: RustPhysicalEmissionRole): RustPhysicalEmissionContext | undefined;
   operandFor(use: TargetUseSiteRef): RustPhysicalEmissionOperand | undefined;
   carrierFor(use: TargetUseSiteRef, source: TargetTypeRef): TargetTypeRef | undefined;
   sourceFor(node: Node, operation: RustEmissionProviderOperation): RustPhysicalEmissionSourceOccurrence | undefined;

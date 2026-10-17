@@ -1,12 +1,12 @@
 import type { Node } from "@tsonic/tsts";
-import type { RustProjectConstructionPlan } from "../../../../analysis/project-types/construction-plan.js";
+import type { RustProjectConstructionPlan, RustConstructionLayer } from "../../../../analysis/project-types/construction-plan.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import type { RustExpr, RustStmt, RustType } from "../../../target-ast/syntax/nodes.js";
 import { failRustPlannerInvariant, unsupportedConstructDiagnostic } from "../../diagnostics.js";
 import { allocateRustSyntheticName } from "../../names/synthetic.js";
 import { renderRustReceiverAlias } from "../../objects/polymorphism/receiver-aliases.js";
 import { rustTypeFromCarrierInContext } from "../../types/render.js";
-import { diagnosticInput, type RustPlanContext, type RustConstructionPreparation } from "../../program/plan-context.js";
+import { diagnosticInput, requireRustEmissionContext, rustContextForEmission, type RustPlanContext, type RustConstructionPreparation } from "../../program/plan-context.js";
 import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import { rustConstructionFieldStorage } from "../../objects/construction-field-storage.js";
 import { planRustValueFieldInput } from "../../objects/value-fields.js";
@@ -32,7 +32,8 @@ export interface RustConstructionBody {
   input(declaration: Node, node: Node, context: RustPlanContext, planValue: () => RustExpr | undefined): RustExpr | undefined;
   exportInitialized(declarations: readonly Node[], statements: readonly RustStmt[]): readonly RustStmt[];
   prepare(node: Node, context: RustPlanContext): RustConstructionPreparation | undefined;
-  contextForLayer(context: RustPlanContext, returnLabel?: { readonly id: number; readonly label: string }): RustPlanContext;
+  contextForLayer(context: RustPlanContext, layer: RustConstructionLayer,
+    returnLabel?: { readonly id: number; readonly label: string }): RustPlanContext;
   finish(): readonly RustStmt[];
 }
 
@@ -105,8 +106,8 @@ export function planRustConstructionBody(
     const admitted = plan.emission.preparationFor(node);
     if (admitted === undefined) return undefined;
     const point = admitted.point;
-    const emission = context.input.program.physicalEmissionContexts.contexts.find(selected => selected.use.subject === admitted.layer && selected.use.role === "constructor-layer");
-    if (emission === undefined) failRustPlannerInvariant("Construction requires its admitted exact physical layer context.", node);
+    const emission = requireRustEmissionContext(context, admitted.layer, "constructor-layer", node);
+    selectedContext = rustContextForEmission(selectedContext, emission);
     if (frame !== undefined && frameCounter !== undefined) {
       const frameOwners = new Map(selectedContext.frameOwners);
       const owner = retainedOwner !== undefined && retainsFrameAt(node) ? retainedOwner
@@ -174,8 +175,9 @@ export function planRustConstructionBody(
       },
     };
   };
-  const contextForLayer: RustConstructionBody["contextForLayer"] = (selectedContext, returnLabel) => ({
-    ...selectedContext,
+  const contextForLayer: RustConstructionBody["contextForLayer"] = (selectedContext, layer, returnLabel) => ({
+    ...rustContextForEmission(selectedContext, requireRustEmissionContext(selectedContext, layer, "constructor-layer",
+      layer.constructor ?? layer.definition.declaration)),
     construction: {
       prepare,
       returnFor(node, returnContext) {

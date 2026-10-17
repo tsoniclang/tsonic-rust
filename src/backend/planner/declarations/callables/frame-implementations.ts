@@ -3,7 +3,7 @@ import type { RustFrameCallableDefinition, RustFrameCallableEntryDefinition, Rus
 import type { RustExpr, RustGenerics, RustItem, RustPattern, RustType } from "../../../target-ast/syntax/nodes.js";
 import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType } from "../../program/plan-context.js";
+import { diagnosticInput, rustCurrentErrorBoundary, rustErrorType, requireRustEmissionContext, rustContextForEmission } from "../../program/plan-context.js";
 import { missingFactDiagnostic } from "../../diagnostics.js";
 import { rustGeneratedTypeParameterContext } from "../../names/type-parameters.js";
 import { rustFrameCallableTypes } from "../../types/frame-callables.js";
@@ -27,7 +27,8 @@ function shared(type: RustType): RustType {
 
 function definitionContext(definition: RustFrameCallableDefinition, context: RustPlanContext): RustPlanContext {
   return rustGeneratedTypeParameterContext(definition.environmentParameters, [],
-    { ...context, callableDeclaration: definition.activation.ownerDeclaration });
+    { ...rustContextForEmission(context, requireRustEmissionContext(context, definition, "frame", definition.activation.ownerDeclaration)),
+      callableDeclaration: definition.activation.ownerDeclaration });
 }
 
 function definitionGenerics(definition: RustFrameCallableDefinition, context: RustPlanContext): RustGenerics {
@@ -151,7 +152,8 @@ function planFrameEntry(
     const helperContext = rustFrameBindingContext(definition, owner,
       rustCallablePayloadContext(implementation, { kind: "path", path: stateName }, context));
     const helper = planNativeModuleFunction(implementation.declaration, implementation.declaration,
-      implementation.functionName, true, helperContext);
+      implementation.functionName, true, helperContext,
+      requireRustEmissionContext(context, implementation.declaration, "native-body", implementation.declaration));
     if (helper?.kind !== "function" || helper.isAsync === true) return undefined;
     const parameters = helper.params;
     argumentTypes ??= parameters.map(parameter => parameter.type);

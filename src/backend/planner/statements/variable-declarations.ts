@@ -11,7 +11,7 @@ import { nativeRustArrayType } from "../expressions/native-arrays.js";
 
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { collectVariableDeclarations, resourceDisposalReceiverMode } from "./resources.js";
-import { diagnosticInput, isValidRustIdentifier } from "../program/plan-context.js";
+import { diagnosticInput, isValidRustIdentifier, requireRustEmissionContext } from "../program/plan-context.js";
 import {
   rustCarrierReferentMutationRequiresMutableBinding,
   rustOptionElementCarrier,
@@ -81,7 +81,8 @@ function planVariableDeclaration(
         "rust.backend.lexical-function", lexical.reason));
       return undefined;
     }
-    const item = planNativeModuleFunction(declaration, initializer!, name, false, context);
+    const item = planNativeModuleFunction(declaration, initializer!, name, false, context,
+      requireRustEmissionContext(context, initializer!, "native-body", initializer!));
     return item === undefined ? undefined : [{ kind: "item", item }];
   }
   const physical = context.input.program.callableValues.nativeStorage.valueFor(declaration);

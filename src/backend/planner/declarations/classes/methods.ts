@@ -8,6 +8,8 @@ import {
   isValidRustIdentifier,
   rustCurrentErrorBoundary,
   rustSourceItemIsPubliclyReachable,
+  requireRustEmissionContext,
+  rustContextForEmission,
 } from "../../program/plan-context.js";
 import { rustAuthoredDeadCodeDisposition } from "../../program/reachability-directives.js";
 import { isRustNeverCarrier, isRustUnitCarrier } from "../../../../target-model/types/index.js";
@@ -15,7 +17,7 @@ import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDi
 import { Node_Type } from "@tsonic/target-api/source";
 import { planBlockLike } from "../../statements/index.js";
 import { planExpression } from "../../expressions/index.js";
-import { planRustCallableGenerics, rustCallableSpecialization } from "../callables/generics.js";
+import { planRustCallableGenerics } from "../callables/generics.js";
 import { planRustCallableParameterPrelude, planRustCallableParameters } from "../callables/parameters.js";
 import { rustSelfParameter } from "../callables/self-parameter.js";
 import { projectOwnMethods } from "../../objects/polymorphism/model.js";
@@ -39,6 +41,7 @@ import { emptyRustGenerics } from "../../../target-ast/syntax/nodes.js";
 import { planRustSuspendedReceiver } from "../callables/suspended-receiver.js";
 import { planRustPromiseBodyObjectAdapter, rustPromiseBodyGenericArguments } from "../callables/promise-body-adapters.js";
 import type { RustSourceCallableSpecializationVariant } from "../../../../analysis/callables/specializations.js";
+import type { RustPhysicalEmissionContext } from "../../../../target-model/records/physical-emission-contexts.js";
 
 export function planProjectMethod(
   member: Node,
@@ -46,14 +49,17 @@ export function planProjectMethod(
   options?: {
     readonly targetName?: string;
     readonly safetyPlacement?: "getter" | "setter";
-    readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
     readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
     readonly promiseBody?: true;
     readonly specialization?: RustSourceCallableSpecializationVariant;
+    readonly emissionContext?: RustPhysicalEmissionContext;
   },
 ): RustImplFunction | undefined {
   const { promiseBody: _enclosingPromiseBody, promiseBodyName: _enclosingPromiseBodyName, ...methodContext } = outerContext;
-  let context = rustClassMemberEnvironmentContext(member, methodContext);
+  const emissionContext = options?.emissionContext ?? (options?.specialization === undefined
+    ? requireRustEmissionContext(methodContext, member, "native-body", member)
+    : requireRustEmissionContext(methodContext, options.specialization, "specialized-body", member));
+  let context = rustContextForEmission(rustClassMemberEnvironmentContext(member, methodContext), emissionContext);
   if (options?.promiseBody !== true && context.input.program.promiseBodies.declarations.has(member))
     return planProjectPromiseObjectMethod(member, context, options);
   if (options?.promiseBody === true) context = { ...context, promiseBody: true,
@@ -92,7 +98,6 @@ export function planProjectMethod(
   const genericPlan = planRustCallableGenerics(
     member,
     context,
-    options?.typeArgumentSubstitutions,
   );
   if (genericPlan === undefined) {
     return undefined;
@@ -398,8 +403,8 @@ function planProjectPromiseObjectMethod(
   const nativeName = options?.specialization === undefined ? body.name : options.specialization.nativeBodyName;
   if (nativeName === undefined) failRustPlannerInvariant(
     "A specialized Promise method adapter requires its exact native-body name.", member);
-  const genericPlan = planRustCallableGenerics(member, outerContext, options?.typeArgumentSubstitutions);
-  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true }, options?.typeArgumentSubstitutions);
+  const genericPlan = planRustCallableGenerics(member, outerContext);
+  const nativeGenerics = planRustCallableGenerics(member, { ...outerContext, promiseBody: true });
   if (genericPlan === undefined || nativeGenerics === undefined) return undefined;
   const syntheticNames = createRustSyntheticNameState(ast, member, []);
   const context = { ...genericPlan.context, syntheticNames };
@@ -523,25 +528,17 @@ export function planProjectMethodVariants(
   }
   const methods: RustImplFunction[] = [];
   for (const variant of variants) {
-    const specialization = rustCallableSpecialization(
-      variant.sourceTypeParameterIdentities,
-      variant.targetTypeArguments,
-    );
-    if (specialization === undefined) {
-      return undefined;
-    }
     if (context.input.program.promiseBodies.declarations.has(member)) {
       if (variant.nativeBodyName === undefined) failRustPlannerInvariant(
         "A selected native Promise method specialization requires its physical name.", member);
       const native = planProjectMethod(member, context, { targetName: variant.nativeBodyName,
-        typeArgumentSubstitutions: specialization, promiseBody: true, specialization: variant });
+        promiseBody: true, specialization: variant });
       if (native === undefined) return undefined;
       methods.push(native);
       if (!context.input.program.promiseBodies.objects.has(member)) continue;
     }
     const method = planProjectMethod(member, context, {
       targetName: variant.targetName,
-      typeArgumentSubstitutions: specialization,
       specialization: variant,
     });
     if (method === undefined) {
