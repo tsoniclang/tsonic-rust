@@ -77,10 +77,10 @@ function compileObserved(options) {
   return { result, analyzed, inventory };
 }
 
-function construction(text, wrapCaptures = captures => captures, wrapRecords = records => records) {
+function construction(text, wrapCaptures = captures => captures, wrapRecords = records => records, wrapStorage = storage => storage) {
   const { program, source: checked } = analyzeRust({ surfaces: [], files: { "index.ts": text } });
   const source = createTargetSourceProgram(checked);
-  const storage = createSourceStorageQuery(source, program.sourceFiles);
+  const storage = wrapStorage(createSourceStorageQuery(source, program.sourceFiles));
   const records = wrapRecords(program.records);
   const participation = sourceNodesOutsideErasedSubtrees(source.ast, storage.nodes,
     node => program.records.nativeParticipation.get(node) === "erased");
@@ -93,7 +93,8 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   const input = { ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
-    physicalCarrierFor: (carrier, ownerFileName, producers) => physical.carrierFor(carrier, ownerFileName, producers) };
+    physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
+      physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {
@@ -219,6 +220,190 @@ const factorySource = `
     return <Value>(value: Value): Value => { callback(); return value; };
   }
 `;
+
+test("equal native members retain every original source producer and selecting binding before interning", () => {
+  const observations = [];
+  const activationObservations = [];
+  const current = construction(`
+    type Identity = <Value>(value: Value) => Value;
+    function make(first: number, second: number): Identity {
+      return <Value>(value: Value): Value => first > second ? value : value;
+    }
+    export function choose(leftFirst: number, leftSecond: number, rightFirst: number, rightSecond: number, select: boolean): Identity {
+      const left = make(leftFirst, leftSecond); const right = make(rightFirst, rightSecond); return select ? left : right;
+    }
+  `, undefined, undefined, storage => Object.freeze({ ...storage,
+    storageProducersFor(subject, bindings) {
+      const selection = storage.storageProducersFor(subject, bindings);
+      observations.push({ subject, bindings, selection });
+      return selection;
+    },
+    boundActivationsFor(declaration, bindings) {
+      const selection = storage.boundActivationsFor(declaration, bindings);
+      activationObservations.push({ declaration, bindings, selection });
+      return selection;
+    },
+  }));
+  const owner = current.declaration("choose");
+  const selected = current.queries.prepareReturn(owner);
+  assert.equal(selected.kind, "selected", selected.reason ?? "the actual returned callable has selected physical storage");
+  const source = selected.sources.find(source => source.kind === "complete" && source.subject.node === owner && source.subject.kind === "return");
+  assert.equal(source !== undefined, true, "the exact return selection retains its original source producer relation");
+  assert.equal(source.producers.length, 2, "two source constructions remain separate before native-member interning");
+  assert.equal(source.producers[0].producer.bindings !== source.producers[1].producer.bindings, true,
+    "equal native captures never identify two different source creation activations");
+  const definition = current.physical.plan.definitionFor(selected.carrier);
+  assert.equal(definition !== undefined && definition.members.length === 1, true, "the same native representation is interned once");
+  assert.equal(source.producers.every(row => row.member === definition.members[0]), true,
+    "each original producer is forward-mapped to the admitted native member, not reverse-matched by target equality");
+  const original = observations.find(row => row.subject === source.subject && row.bindings === source.bindings &&
+    row.selection.kind === "complete" && row.selection.producers.includes(source.producers[0].producer));
+  assert.equal(original !== undefined, true, "the relation retains its exact selecting query subject and owned bindings");
+  assert.equal(source.producers.every(row => original.selection.producers.includes(row.producer)), true,
+    "every row is the original checked producer object rather than a reconstructed source origin");
+  const formalSubjects = current.ast.parameters(current.declaration("make")).map(parameter => current.storage.subject(parameter, "input"));
+  const actualSubjects = current.ast.parameters(owner).slice(0, 4).map(parameter => current.storage.subject(parameter, "input"));
+  assert.equal([...formalSubjects, ...actualSubjects].every(subject => subject.kind === "resolved"), true,
+    "all source formal and actual inputs retain their original checked subject identities");
+  const actualPairs = new Set();
+  for (const row of source.producers) {
+    const selectedInputs = formalSubjects.map(subject => current.storage.boundOriginsFor(subject.subject, row.producer.bindings));
+    assert.equal(selectedInputs.every(selection => selection.kind === "resolved"), true,
+      "every input in one original alternative is queried with that identical actual source binding token");
+    const selectedPair = selectedInputs.map(selection => actualSubjects.findIndex(subject => selection.subjects.includes(subject.subject)));
+    assert.equal(selectedPair[0] === 0 && selectedPair[1] === 1 || selectedPair[0] === 2 && selectedPair[1] === 3, true,
+      "the two equal-native alternatives keep their original input pairs without a Cartesian product");
+    assert.equal(selectedInputs.every((selection, index) => actualSubjects.filter(subject => selection.subjects.includes(subject.subject)).length === 1 &&
+      selection.subjects.includes(actualSubjects[selectedPair[index]].subject)), true,
+    "a native member shared by both alternatives never merges their distinct source inputs");
+    actualPairs.add(selectedPair.join(":"));
+    const generic = current.queries.genericBindingsFor(current.declaration("make"), row.producer.bindings);
+    assert.equal(generic.kind, "resolved", "the actual producer creation selects its completed native substitutions");
+    assert.equal(generic.sourceActivations.kind, "resolved", "the same selector retains its original source activation rows");
+    assert.equal(generic.sourceActivations.rows.length > 0, true, "a real invocation has retained source alternatives");
+    const observed = activationObservations.find(observation => observation.declaration === current.declaration("make") &&
+      observation.bindings === row.producer.bindings && observation.selection.kind === "resolved" &&
+      observation.selection.activations.includes(generic.sourceActivations.rows[0].activation));
+    assert.equal(observed !== undefined, true, "activation data comes from the original query, not an inverse native binding match");
+    assert.equal(generic.sourceActivations.rows.every(alternative => observed.selection.activations.includes(alternative.activation)), true,
+      "every source activation remains the original object before native substitution reduction");
+    assert.equal(generic.sourceActivations.rows[generic.sourceActivations.rows.length - 1].targetBindings === generic.bindings, true,
+      "the existing generic join returns its last actual native substitution without replacing the per-source rows");
+    assert.equal(generic.sourceActivations.rows.every(alternative => Object.isFrozen(alternative) &&
+      alternative.targetBindings.types !== undefined && alternative.targetBindings.lifetimes !== undefined &&
+      alternative.targetBindings.consts !== undefined), true, "every original alternative retains its complete native substitution");
+    assert.equal(generic.sourceActivations.rows.every(alternative =>
+      [alternative.targetBindings.types, alternative.targetBindings.lifetimes, alternative.targetBindings.consts].every(view =>
+        Object.isFrozen(view) && !("set" in view) && !("delete" in view) && !("clear" in view))), true,
+    "published activation substitutions expose only the existing canonical immutable map views");
+  }
+  assert.equal(actualPairs.has("0:1") && actualPairs.has("2:3") && actualPairs.size === 2, true,
+    "both original source alternatives survive despite identical native representations and substitutions");
+  assert.equal(Object.isFrozen(selected.sources) && Object.isFrozen(source) && Object.isFrozen(source.producers) &&
+    source.producers.every(Object.isFrozen), true, "source selection and forward correspondences publish as immutable data");
+  const before = selected.sources;
+  current.physical.closeAdmission();
+  current.physical.closeKeys();
+  current.physical.publish();
+  assert.equal(current.queries.returnFor(owner).sources === before, true, "publication preserves the same prepared source relation");
+  assert.equal(current.queries.prepareReturn(owner) === selected, true, "the one return owner never reselects producers after publication");
+});
+
+test("closed native substitutions distinguish original source activations from unavailable evidence", () => {
+  const actual = construction("export function closed(): number { return 7; }");
+  const owner = actual.declaration("closed");
+  const selected = actual.queries.genericBindingsFor(owner, actual.storage.emptyBindings);
+  const activations = actual.storage.boundActivationsFor(owner, actual.storage.emptyBindings);
+  assert.equal(selected.kind, "resolved", "a closed native substitution does not manufacture a generic environment");
+  assert.equal(selected.bindings.types.size + selected.bindings.lifetimes.size + selected.bindings.consts.size, 0);
+  assert.equal(selected.sourceActivations.kind, activations.kind, "native target emptiness never determines source availability");
+  if (activations.kind === "resolved") {
+    assert.equal(selected.sourceActivations.rows.length, activations.activations.length, "all actual source alternatives are retained");
+    for (const [index, row] of selected.sourceActivations.rows.entries()) {
+      assert.equal(row.activation.declaration === owner, true, "the exact checked declaration owns the activation");
+      assert.equal(row.activation.bindings === activations.activations[index].bindings, true, "actual owned source tokens are retained");
+      assert.equal(row.targetBindings === selected.bindings, true, "a real source row may have an empty native substitution");
+      assert.equal([row.targetBindings.types, row.targetBindings.lifetimes, row.targetBindings.consts].every(view =>
+        Object.isFrozen(view) && !("set" in view) && !("delete" in view) && !("clear" in view)), true,
+      "target emptiness does not permit a mutable map builder on a published activation");
+    }
+  } else assert.equal(selected.sourceActivations.reason, activations.reason, "unavailable remains distinct from resolved empty");
+  const reason = "the actual source activation is unfinished";
+  const pending = construction("export function closed(): number { return 7; }", undefined, undefined,
+    storage => Object.freeze({ ...storage, boundActivationsFor: () => Object.freeze({ kind: "unresolved", reason }) }));
+  const unavailable = pending.queries.genericBindingsFor(pending.declaration("closed"), pending.storage.emptyBindings);
+  assert.equal(unavailable.kind, "resolved", "the independently proven closed target substitution stays valid");
+  assert.equal(unavailable.sourceActivations.kind, "unresolved", "no source activation is guessed from native emptiness");
+  assert.equal(unavailable.sourceActivations.reason, reason, "the original source refusal is preserved");
+  assert.equal(Object.isFrozen(unavailable.sourceActivations), true, "unavailability is immutable data");
+});
+
+test("nested generic captures retain their original source selections rather than only the outer native member", () => {
+  const observations = [];
+  const current = construction(`
+    type Identity = <Value>(value: Value) => Value;
+    function make(callback: () => number): Identity {
+      return <Value>(value: Value): Value => { callback(); return value; };
+    }
+    function wrap(inner: Identity): Identity {
+      return <Value>(value: Value): Value => inner<Value>(value);
+    }
+    export function choose(callback: () => number): Identity { return wrap(make(callback)); }
+  `, undefined, undefined, storage => Object.freeze({ ...storage,
+    storageProducersFor(subject, bindings) {
+      const selection = storage.storageProducersFor(subject, bindings);
+      observations.push({ subject, bindings, selection });
+      return selection;
+    },
+  }));
+  const owner = current.declaration("choose");
+  const selected = current.queries.prepareReturn(owner);
+  assert.equal(selected.kind, "selected", selected.reason ?? "the nested native callable captures its actual inner storage");
+  const complete = selected.sources.filter(source => source.kind === "complete");
+  const outer = complete.find(source => source.subject.node === owner && source.subject.kind === "return");
+  assert.equal(outer !== undefined, true, "the exact outer return relation is retained");
+  const inner = complete.filter(source => source !== outer);
+  assert.equal(inner.length > 0, true, "nested captured physical selections are not discarded by the outer selector");
+  for (const source of inner) {
+    assert.equal(source.producers.length > 0, true, "each nested source selection has its real original producers");
+    const original = observations.find(observation => observation.subject === source.subject && observation.bindings === source.bindings &&
+      observation.selection.kind === "complete" && observation.selection.producers.includes(source.producers[0].producer));
+    assert.equal(original !== undefined, true, "the nested selection retains its actual selecting query rather than outer bindings");
+    assert.equal(source.producers.every(row => original.selection.producers.includes(row.producer) &&
+      row.member.implementation.declaration === row.producer.subject.node && Object.isFrozen(row)), true,
+    "the original nested source rows retain their exact admitted implementation correspondence");
+  }
+  const declarations = new Set(complete.flatMap(source => source.producers.map(row => row.producer.subject.node)));
+  const arrows = current.storage.nodes.filter(node => current.ast.is.IsArrowFunction(node));
+  assert.equal(arrows.length, 2, "both original generic callable constructions are checked");
+  assert.equal(arrows.every(node => declarations.has(node)), true, "the same vector retains both outer and captured original producers");
+  assert.equal(selected.sources.every(Object.isFrozen), true, "nested sources remain immutable data, not a query service");
+});
+
+test("physical source correspondence rejects foreign source roots and bindings and the removed carrier-only form", () => {
+  const current = construction(factorySource);
+  const owner = current.declaration("make");
+  const selected = current.queries.prepareReturn(owner);
+  assert.equal(selected.kind, "selected", selected.reason ?? "the real factory has a prepared physical return");
+  const source = selected.sources.find(row => row.kind === "complete" && row.subject.node === owner);
+  assert.equal(source !== undefined && source.producers.length !== 0, true, "the actual selection retains all original producer inputs");
+  const logical = current.program.records.sourceCallableReturn.get(owner).returnCarrier;
+  const file = current.ast.getFileName(current.ast.getSourceFile(owner));
+  const producers = source.producers.map(row => row.producer);
+  assert.throws(() => current.physical.carrierFor(logical, file, producers),
+    /requires its original source subject, bindings and producer vector/u, "the removed carrier-only signature is not a compatibility path");
+  assert.equal(current.physical.carrierFor(logical, file, { ...source.subject }, source.bindings, producers) === undefined, true,
+    "an equal-looking foreign source subject cannot acquire the selected correspondence");
+  assert.equal(current.physical.carrierFor(logical, file, source.subject, { ...source.bindings }, producers) === undefined, true,
+    "an equal-looking foreign source binding token cannot acquire the selected correspondence");
+  for (const foreign of [
+    { ...producers[0], subject: { ...producers[0].subject } },
+    { ...producers[0], bindings: { ...producers[0].bindings } },
+  ]) assert.equal(current.physical.carrierFor(logical, file, source.subject, source.bindings, [foreign]) === undefined, true,
+    "every supplied producer must keep its actual checked source subject and owned creation binding");
+  assert.equal(current.physical.carrierFor(logical, file, source.subject, source.bindings, []) === undefined, true,
+    "a required generic callable cannot manufacture a known-empty physical producer set");
+});
 
 test("the physical family inventory closes before retained inventories and backend planning cannot extend it", () => {
   const current = compileObserved({ surfaces: [], target: { id: "rust", options: { outputType: "bin", crateName: "physical_closure" } },
