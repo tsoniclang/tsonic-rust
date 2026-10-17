@@ -1,10 +1,10 @@
 import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import { targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
-import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, Node_Type, sourceClassFieldHasStorage,
+import { ForStatement_Initializer, IsTypeSyntaxNode, Node_Initializer, sourceClassFieldHasStorage,
   VariableDeclarationList_Declarations, VariableStatement_DeclarationList,
   sourceConstructValueInputs, sourceExpressionValueInputs, type SourceValueInput } from "@tsonic/target-api/source";
-import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
+import { rustLifetimeKey, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
@@ -46,12 +46,53 @@ export interface RustPhysicalCallableEmissionRequestInput {
   readonly identitySources: RustGenericCallableIdentitySources;
 }
 
+export function rustEmissionDeclarationBindings(
+  parameters: readonly RustTargetGenericArgument[], environment: readonly RustTargetGenericArgument[],
+): RustTargetGenericBindings | undefined {
+  const identity = (argument: RustTargetGenericArgument): { readonly key: string; readonly name: string } | undefined => {
+    if (argument.kind === "type" && argument.type.kind === "type-parameter")
+      return { key: `type\0${argument.type.identity}`, name: argument.type.name };
+    if (argument.kind === "lifetime" && (argument.lifetime.kind === "parameter" || argument.lifetime.kind === "bound"))
+      return { key: `lifetime\0${rustLifetimeKey(argument.lifetime)}`, name: argument.lifetime.name };
+    if (argument.kind === "const" && argument.value.kind === "parameter")
+      return { key: `const\0${argument.value.identity}`, name: argument.value.name };
+    return undefined;
+  };
+  const declared = new Map<string, string>();
+  for (const parameter of parameters) {
+    const selected = identity(parameter);
+    if (selected === undefined || declared.has(selected.key)) return undefined;
+    declared.set(selected.key, selected.name);
+  }
+  const arguments_ = [...parameters];
+  const captured = new Set<string>();
+  for (const argument of environment) {
+    const selected = identity(argument);
+    if (selected === undefined || captured.has(selected.key)) return undefined;
+    captured.add(selected.key);
+    const name = declared.get(selected.key);
+    if (name === undefined) arguments_.push(argument);
+    else if (name !== selected.name) return undefined;
+  }
+  return rustEmissionIdentityBindings(arguments_);
+}
+
 export function prepareRustPhysicalCallableEmissionRequests(
   input: RustPhysicalCallableEmissionRequestInput,
 ): TargetStageResult<readonly RustPhysicalCallableEmissionRequest[]> {
   const { ast, records } = input;
   const requests: RustPhysicalCallableEmissionRequest[] = [];
   const diagnostics: TargetDiagnostic[] = [];
+  const sourceFiles = new Set(input.sourceFiles);
+  const checkedSourceFile = (node: Node): SourceFile | undefined => {
+    const sourceFile = ast.getSourceFile(node);
+    if (sourceFile === undefined || !sourceFiles.has(sourceFile)) {
+      diagnostics.push(emissionDiagnostic(node,
+        "An emitted source occurrence requires its exact checked owning SourceFile in the current source-file domain."));
+      return undefined;
+    }
+    return sourceFile;
+  };
   const contexts = new Map<Node, { readonly identity: string; readonly bindings: RustTargetGenericBindings }>();
   const constructs = new Set<Node>();
   const states = new Map<Node, Map<TargetUseSiteRef, "visiting" | "closed">>();
@@ -72,14 +113,15 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const definition = input.projectTypes.definitionForDeclaration(owner);
     const contract = input.sourceLifetimes.contractFor(owner);
     const parameters = definition?.genericParameters ?? contract?.parameters;
-    if (identity === undefined || parameters === undefined && ast.typeParameters(owner).length !== 0) {
+    if (identity === undefined || parameters === undefined && records.sourceCallableReturn.get(owner) !== undefined &&
+      ast.typeParameters(owner).length !== 0) {
       diagnostics.push(emissionDiagnostic(owner, "An actual emitted use requires its original declaration identity and canonical generic parameter contract."));
       return undefined;
     }
-    const arguments_: RustTargetGenericArgument[] = [...producer?.environment ?? [], ...(parameters ?? []).map(parameter =>
+    const arguments_: RustTargetGenericArgument[] = (parameters ?? []).map(parameter =>
       parameter.kind === "lifetime" ? { kind: "lifetime" as const, lifetime: parameter.lifetime }
-        : { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } })];
-    const bindings = rustEmissionIdentityBindings(arguments_);
+        : { kind: "type" as const, type: { kind: "type-parameter" as const, identity: parameter.identity, name: parameter.targetName } });
+    const bindings = rustEmissionDeclarationBindings(arguments_, producer?.environment ?? []);
     if (bindings === undefined) {
       diagnostics.push(emissionDiagnostic(owner, "An actual emitted use has no exact type, lifetime and const identity bindings."));
       return undefined;
@@ -121,10 +163,6 @@ export function prepareRustPhysicalCallableEmissionRequests(
   const type = (owner: Node, subject: Node, role: string, carrier: TargetTypeRef | undefined): void => {
     if (carrier === undefined) diagnostics.push(emissionDiagnostic(subject, "An emitted declaration, member, parameter or return requires its exact selected type carrier."));
     else request(owner, subject, role, { kind: "type", carrier }, subject);
-  };
-  const annotation = (owner: Node, subject: Node): void => {
-    const node = Node_Type(ast, subject);
-    if (node !== undefined) type(owner, node, "annotation", records.runtimeCarrier.get(node)?.carrier);
   };
   const runtime = (owner: Node, subject: Node, role: string, sourceOwner: object): void => {
     request(owner, subject, role, { kind: "value" }, sourceOwner);
@@ -217,8 +255,14 @@ export function prepareRustPhysicalCallableEmissionRequests(
         }
       }
     } else if (operation?.kind === "source-call") {
-      const checked = input.carrierHost.semantics(ast.getSourceFile(node)).operations.call(node);
+      const sourceFile = checkedSourceFile(node);
+      if (sourceFile === undefined) {
+        rows.set(key, "closed");
+        return;
+      }
+      const checked = input.carrierHost.semantics(sourceFile).operations.call(node);
       const target = operation.target;
+      if (target.form === "constructor" || target.form === "constructor-value") runtime(owner, node, role, sourceOwner);
       if (target.form === "callable" || target.form === "constructor-value") {
         const callee = checked?.sourceCallee.expression;
         if (callee === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted native callable invocation requires its original checked callee."));
@@ -282,7 +326,6 @@ export function prepareRustPhysicalCallableEmissionRequests(
     if (!owners.has(node)) owners.set(node, owner);
     const native = input.nativeProducers.forDeclaration(node);
     if (native !== undefined) {
-      annotation(node, node);
       const returned = records.sourceCallableReturn.get(node);
       const generator = records.generator.get(node);
       request(node, node, "body-return", { kind: "return" }, node);
@@ -293,7 +336,6 @@ export function prepareRustPhysicalCallableEmissionRequests(
         const abi = records.sourceParameterAbi.get(parameter);
         type(node, parameter, "parameter-value", abi?.valueCarrier);
         type(node, parameter, "parameter-abi", abi?.parameterCarrier);
-        annotation(node, parameter);
         for (const child of sourceConstructValueInputs(ast, parameter)) visitUse(child.expression, node, inputRole(child), child.owner);
       }
       const lexical = input.lexicalFunctions.forDeclaration(node);
@@ -312,9 +354,9 @@ export function prepareRustPhysicalCallableEmissionRequests(
       for (const member of ast.members(node)) {
         if (member === undefined) continue;
         if (sourceClassFieldHasStorage(ast, member)) {
-          const storageOwner = ast.hasModifierKind(member, "static") ? ast.getSourceFile(node) : node;
+          const storageOwner = ast.hasModifierKind(member, "static") ? checkedSourceFile(member) : node;
+          if (storageOwner === undefined) continue;
           type(storageOwner, member, "member-type", records.runtimeCarrier.get(member)?.carrier);
-          annotation(storageOwner, member);
           const initializer = Node_Initializer(ast, member);
           if (initializer !== undefined) visitUse(initializer, storageOwner, "initializer", member);
         } else visitConstruct(member, member);
@@ -330,17 +372,14 @@ export function prepareRustPhysicalCallableEmissionRequests(
     const signature = records.sourceCallableReturn.get(node);
     if (signature !== undefined) {
       type(node, node, "signature-return", signature.returnCarrier);
-      annotation(node, node);
       for (const parameter of ast.parameters(node)) if (parameter !== undefined) {
         const abi = records.sourceParameterAbi.get(parameter);
         type(node, parameter, "signature-parameter-value", abi?.valueCarrier);
         type(node, parameter, "signature-parameter-abi", abi?.parameterCarrier);
-        annotation(node, parameter);
       }
       return;
     }
     if (IsTypeSyntaxNode(ast, node) || ast.is.IsTypeLiteralNode(node)) return;
-    if (ast.is.IsVariableDeclaration(node)) annotation(owner, node);
     const declarationList = VariableStatement_DeclarationList(ast, node) ?? ForStatement_Initializer(ast, node);
     for (const declaration of VariableDeclarationList_Declarations(ast, declarationList) ?? []) {
       if (declaration === undefined || records.compileTimeSource.get(declaration) === true ||

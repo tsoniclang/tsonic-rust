@@ -19,6 +19,7 @@ import { rustTargetTypeChildren } from "../../target-model/types/carriers/childr
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import { rustGenericCallableMemberBindings, snapshotRustCallableBindings } from "./generic-bindings.js";
+import type { RustPhysicalCallableSourceSelection } from "../../target-model/records/physical-emission-contexts.js";
 
 export interface RustGenericCallablePhysicalMember {
   readonly implementation: RustGenericCallableImplementation;
@@ -55,8 +56,9 @@ export interface RustGenericCallablePhysicalPlan {
 }
 
 export type RustGenericCallablePhysicalCarrierSelector = (carrier: TargetTypeRef, ownerFileName: string,
-  producers: readonly SourceStorageProducer[]) =>
-  { readonly carrier: TargetTypeRef; readonly inputs: readonly RustNativeCallableInput[] } | undefined;
+  subject: SourceStorageSubject, bindings: SourceStorageBindings, producers: readonly SourceStorageProducer[]) =>
+  { readonly carrier: TargetTypeRef; readonly inputs: readonly RustNativeCallableInput[];
+    readonly sources: readonly RustPhysicalCallableSourceSelection[] } | undefined;
 
 export interface RustGenericCallablePhysicalConstruction {
   readonly plan: RustGenericCallablePhysicalPlan;
@@ -247,16 +249,22 @@ export function createRustGenericCallablePhysicalPlan(
   });
   return Object.freeze({
     plan,
-    carrierFor(carrier: TargetTypeRef, ownerFileName: string, producers: readonly SourceStorageProducer[]) {
+    carrierFor(carrier: TargetTypeRef, ownerFileName: string, subject: SourceStorageSubject,
+      bindings: SourceStorageBindings, producers: readonly SourceStorageProducer[]) {
+      if (!Array.isArray(producers)) throw new Error("Generic callable physical selection requires its original source subject, bindings and producer vector.");
       if (closedKeys !== undefined) (published ? failTargetPlannerInvariant : failTargetAnalysisInvariant)("tsonic-rust",
         "Generic callable physical construction cannot run after key closure.");
       const value = rustGenericCallableValue(carrier);
       const family = value === undefined ? undefined : familyFor(carrier);
       if (value === undefined || family === undefined || producers.length === 0) return undefined;
-      const members = new Map<string, RustGenericCallableStorageMember>();
+      if (input.storage.typeFor(subject).kind === "unresolved" ||
+        input.storage.boundOriginsFor(subject, bindings).kind === "unresolved") return undefined;
+      const members = new Map<string, { readonly member: RustGenericCallableStorageMember; readonly index: number }>();
+      const producerMembers: { readonly producer: SourceStorageProducer; readonly index: number }[] = [];
       const arguments_: RustTargetGenericArgument[] = [];
       const argumentIndexes = new Map<string, number>();
       const selectedInputs = new Set<RustNativeCallableInput>();
+      const nestedSources: RustPhysicalCallableSourceSelection[] = [];
       for (const producer of producers) {
         if (input.storage.boundOriginsFor(producer.subject, producer.bindings).kind === "unresolved") return undefined;
         if (producer.subject.projection.length !== 0) return undefined;
@@ -280,6 +288,7 @@ export function createRustGenericCallablePhysicalPlan(
             substituteRustTargetTypeParameters(selectedInput.carrier, substitutions), producer.bindings);
           if (selected.kind === "unresolved") return undefined;
           if (selected.kind === "selected") for (const sourceInput of selected.inputs) selectedInputs.add(sourceInput);
+          for (const source of selected.sources) nestedSources.push(source);
           memberArguments.push(Object.freeze({ kind: "type", type: selected.carrier }));
         }
         const indexes = memberArguments.map(argument => {
@@ -292,13 +301,26 @@ export function createRustGenericCallablePhysicalPlan(
           return index;
         });
         const member = snapshotClosedMetadata({ origin, arguments: indexes });
-        members.set(closedMetadataKey(member), member);
+        const key = closedMetadataKey(member);
+        const existing = members.get(key);
+        const index = existing?.index ?? members.size;
+        if (existing === undefined) members.set(key, Object.freeze({ member, index }));
+        producerMembers.push(Object.freeze({ producer, index }));
       }
-      const selected = [...members.values()];
+      const selected = [...members.values()].map(value => value.member);
       const physicalOwner = selected.length === 1 ? selected[0]!.origin.fileName : ownerFileName;
       const result = rustGenericCallableCarrier({ ...value, physical: { ownerFileName: physicalOwner, members: selected, arguments: arguments_ } });
-      return select(result, inventory === undefined ? "admit" : "prepare") === undefined ? undefined
-        : Object.freeze({ carrier: result, inputs: Object.freeze([...selectedInputs]) });
+      const admitted = select(result, inventory === undefined ? "admit" : "prepare");
+      if (admitted === undefined) return undefined;
+      const sources: Extract<RustPhysicalCallableSourceSelection, { readonly kind: "complete" | "open" }>["producers"][number][] = [];
+      for (const row of producerMembers) {
+        const member = admitted.definition.members[row.index];
+        if (member === undefined) return undefined;
+        sources.push(Object.freeze({ producer: row.producer, member }));
+      }
+      return Object.freeze({ carrier: result, inputs: Object.freeze([...selectedInputs]),
+        sources: Object.freeze([Object.freeze({ kind: "complete" as const, subject, bindings, producers: Object.freeze(sources) }),
+          ...nestedSources]) });
     },
     closeAdmission(): void {
       if (inventory !== undefined) throw new Error("Generic callable physical family admission closes exactly once.");

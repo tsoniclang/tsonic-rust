@@ -38,7 +38,8 @@ function fixture(text, options = {}) {
   const input = { ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
-    physicalCarrierFor: (carrier, ownerFileName, producers) => physical.carrierFor(carrier, ownerFileName, producers) };
+    physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
+      physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {

@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/target-api/source";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
+import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callables/emission-requests.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustPhysicalEmissionContexts } from "../../../dist/analysis/program/physical-emission-contexts.js";
 import { analyzeRustInitializationErrors } from "../../../dist/analysis/errors/initialization.js";
@@ -93,6 +94,86 @@ function actual(source, surfaces) {
   return analyzeRust({ surfaces, target: { id: "rust", options: { outputType: "lib" } },
     files: { "index.ts": source } }).program;
 }
+
+test("declaration bindings keep full formals and only free captured generic identities", () => {
+  const value = Object.freeze({ kind: "type-parameter", identity: "declared:value", name: "Value" });
+  const outer = Object.freeze({ kind: "type-parameter", identity: "captured:value", name: "Value" });
+  const unused = Object.freeze({ kind: "type-parameter", identity: "declared:unused", name: "Unused" });
+  const region = Object.freeze({ kind: "bound", binderIdentity: "declared", identity: "region", name: "region" });
+  const outerRegion = Object.freeze({ kind: "bound", binderIdentity: "captured", identity: "region", name: "region" });
+  const length = Object.freeze({ kind: "parameter", identity: "declared:length", name: "Length" });
+  const outerLength = Object.freeze({ kind: "parameter", identity: "captured:length", name: "Length" });
+  const parameters = Object.freeze([
+    { kind: "type", type: value }, { kind: "type", type: unused },
+    { kind: "lifetime", lifetime: region }, { kind: "const", value: length },
+  ]);
+  const environment = Object.freeze([
+    { kind: "type", type: { ...value } }, { kind: "type", type: outer },
+    { kind: "lifetime", lifetime: { ...region } }, { kind: "lifetime", lifetime: outerRegion },
+    { kind: "const", value: { ...length } }, { kind: "const", value: outerLength },
+  ]);
+  const bindings = rustEmissionDeclarationBindings(parameters, environment);
+  assert.equal(bindings !== undefined, true, "the same declared reference in the producer environment is not a second formal");
+  assert.equal(bindings.types.size, 3, "all declared, unused and same-spelling outer type binders remain present");
+  for (const parameter of [value, outer, unused]) assert.equal(bindings.types.get(parameter.identity)?.identity,
+    parameter.identity, parameter.identity + ": exact original type identity");
+  assert.equal(bindings.lifetimes.size, 2, "equal lifetime spelling never merges different actual binders");
+  for (const lifetime of [region, outerRegion]) assert.equal(rustLifetimeKey(bindings.lifetimes.get(rustLifetimeKey(lifetime))),
+    rustLifetimeKey(lifetime), lifetime.binderIdentity + ": exact native lifetime binder");
+  assert.equal(bindings.consts.size, 2, "declared and free captured const binders remain separate");
+  for (const parameter of [length, outerLength]) assert.equal(bindings.consts.get(parameter.identity)?.identity,
+    parameter.identity, parameter.identity + ": exact const identity");
+  assert.equal(bindings.types.has("foreign:value"), false, "no unselected source type identity is invented");
+  assert.equal(Object.isFrozen(bindings) && typeof bindings.types.set === "undefined" &&
+    typeof bindings.lifetimes.set === "undefined" && typeof bindings.consts.set === "undefined", true,
+  "the selecting owner publishes one immutable binding value");
+  const freeOnly = rustEmissionDeclarationBindings([], environment);
+  assert.equal(freeOnly !== undefined && freeOnly.types.size === 2 && freeOnly.lifetimes.size === 2 && freeOnly.consts.size === 2,
+    true, "an enclosing free environment is retained even when this declaration has no formals");
+});
+
+test("declaration environment admission still rejects duplicate and incompatible binding inputs", () => {
+  const parameter = Object.freeze({ kind: "type", type: { kind: "type-parameter", identity: "value", name: "Value" } });
+  const lifetime = Object.freeze({ kind: "lifetime", lifetime: { kind: "parameter", identity: "region", name: "region" } });
+  const constant = Object.freeze({ kind: "const", value: { kind: "parameter", identity: "length", name: "Length" } });
+  for (const [name, argument] of [["type", parameter], ["lifetime", lifetime], ["const", constant]]) {
+    assert.equal(rustEmissionDeclarationBindings([argument, argument], []) === undefined, true,
+      name + ": a duplicate declaration is not repaired by the selection owner");
+    assert.equal(rustEmissionDeclarationBindings([], [argument, argument]) === undefined, true,
+      name + ": a malformed duplicate free environment is not silently deduplicated");
+    assert.equal(rustEmissionIdentityBindings([argument, argument]) === undefined, true,
+      name + ": the existing strict generic binding matcher remains unchanged");
+  }
+  for (const [name, owned, incompatible] of [
+    ["type", parameter, { ...parameter, type: { ...parameter.type, name: "Contradictory" } }],
+    ["lifetime", lifetime, { ...lifetime, lifetime: { ...lifetime.lifetime, name: "contradictory" } }],
+    ["const", constant, { ...constant, value: { ...constant.value, name: "Contradictory" } }],
+  ]) assert.equal(rustEmissionDeclarationBindings([owned], [incompatible]) === undefined, true,
+    name + ": a contradictory reference to the identical declared binder is rejected");
+  for (const [name, argument] of [
+    ["concrete type", { kind: "type", type: { kind: "source-primitive", name: "int32" } }],
+    ["static lifetime", { kind: "lifetime", lifetime: { kind: "static" } }],
+    ["literal const", { kind: "const", value: { kind: "integer", value: "2" } }],
+  ]) {
+    assert.equal(rustEmissionDeclarationBindings([argument], []) === undefined, true, name + ": not a declared parameter");
+    assert.equal(rustEmissionDeclarationBindings([], [argument]) === undefined, true, name + ": not a free generic reference");
+  }
+});
+
+test("real generic declarations retain owned, unused and captured binders without duplicate self bindings", () => {
+  const source = `
+export function identity<Value, Unused>(value: Value): Value { return value; }
+export function make<Outer>(captured: Outer): <Value>(value: Value) => Outer {
+  return <Value>(value: Value): Outer => captured;
+}
+`;
+  for (const surfaces of [[], ["js"]]) {
+    const result = compileRust({ surfaces, files: { "index.ts": source } }).result;
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.code + ": " + issue.message).join("\n").slice(0, 2048));
+    assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
+      "actual checked native generic declarations and captured outer binders emit Rust");
+  }
+});
 
 test("higher-ranked emission identity bindings preserve distinct actual binder identities", () => {
   const first = Object.freeze({ kind: "bound", binderIdentity: "first", identity: "region", name: "region" });
@@ -617,18 +698,18 @@ export function ordinary(value: number): number { const stored = value; return s
   assert.throws(() => source.ast.kindName(program.sourceFiles[0]), /after publication/u, "the source guard is live");
 });
 
-test("a required missing physical operand refuses at the preparation owner before publication", () => {
-  const arithmetic = actual("export function value(input: number): number { return input + 1; }", []);
-  assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
-    "ordinary arithmetic retains its real body context without artificial callable-storage reads");
-  const program = actual("export function contains(input: string): boolean { return input.includes(\"value\"); }", ["js"]);
+function verifyRequiredMissingOperand(program, observations) {
   const prepared = program.physicalEmissionContexts;
   const operand = prepared.operands.find(operand => operand.origin.kind === "operand");
   assert.equal(operand !== undefined, true, "the negative control starts from an actual checked operand");
-  const result = prepareRustEmissionContextRequests({ ast: program.source.ast, records: program.records, sourceOccurrences: [], errorRegions: program.errorRegions,
-    nativeStorage: { ...program.callableValues.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
+  const original = observations.preparations.find(preparation => preparation.requests.some(request => request.use === operand.context.use));
+  assert.equal(original !== undefined, true, "the operand retains its actual complete preparation input");
+  const owner = original.requests.find(request => request.use === operand.context.use);
+  const result = prepareRustEmissionContextRequests({ ...original.input, sourceOccurrences: [],
+    nativeStorage: { ...original.input.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
   [{ use: targetUseSiteRef(operand.node, "missing-control", "actual-native-owner"), declaration: operand.context.declaration,
     bindings: operand.context.bindings, returnDestination: operand.context.returnDestination, error: operand.context.error,
+    source: owner.source,
     demands: [Object.freeze({ kind: "value", subject: operand.node, owner: operand.context.declaration,
       bindings: operand.context.bindings, context: operand.use })], sourceCarriers: [], physicalCarriers: [] }]);
   assert.equal(result.kind, "rejected");
@@ -636,6 +717,43 @@ test("a required missing physical operand refuses at the preparation owner befor
     diagnostic.sourceNode === operand.node && diagnostic.message === "missing native producer proof"), true,
   "the source occurrence and owning refusal survive unchanged; no internal or missing-key fallback");
   assert.equal(Object.hasOwn(result, "value"), false, "no incomplete context product is published");
+}
+
+test("a required missing physical operand refuses at the preparation owner before publication", () => {
+  const arithmetic = actual("export function value(input: number): number { return input + 1; }", []);
+  assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
+    "ordinary arithmetic retains its real body context without artificial callable-storage reads");
+  const preparationUrl = new URL("../../../dist/analysis/callables/emission-contexts.js", import.meta.url).href;
+  const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
+  const key = "r14-actual-missing-operand-preparation";
+  const script = `
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import { targetUseSiteRef } from "@tsonic/target-api/analysis";
+const observations = { preparations: [], anchors: 0 };
+globalThis[Symbol.for(${JSON.stringify(key)})] = observations;
+registerHooks({ load(url, context, nextLoad) {
+  const loaded = nextLoad(url, context);
+  if (url !== ${JSON.stringify(preparationUrl)}) return loaded;
+  const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+  const anchor = "export function prepareRustEmissionContextRequests(";
+  assert.equal(source.split(anchor).length, 2, "one actual request preparation observation anchor");
+  observations.anchors++;
+  const extension = 'export function prepareRustEmissionContextRequests(input, requests) { const result = observedPrepareRustEmissionContextRequests(input, requests); globalThis[Symbol.for(${JSON.stringify(key)})].preparations.push({input, requests}); return result; }';
+  return { ...loaded, source: source.replace(anchor, "function observedPrepareRustEmissionContextRequests(") + "\\n" + extension };
+} });
+const { analyzeRust } = await import(${JSON.stringify(helperUrl)});
+const { prepareRustEmissionContextRequests } = await import(${JSON.stringify(preparationUrl)});
+const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } }, files: {
+  "index.ts": 'export function contains(input: string): boolean { return input.includes("value"); }',
+} });
+(${verifyRequiredMissingOperand.toString()})(program, observations);
+assert.equal(observations.anchors, 1, "one real observation without a production observer or invented late inputs");
+process.stdout.write("R14_INSTRUMENTED_MISSING_OPERAND_PROOF");
+`;
+  const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(observed.status, 0, `instrumented missing operand proof: ${observed.error?.message ?? ""}\n${observed.stderr.slice(-4096)}\n${observed.stdout.slice(-2048)}`);
+  assert.equal(observed.stdout, "R14_INSTRUMENTED_MISSING_OPERAND_PROOF", "explicit instrumented missing operand proof label");
 });
 
 test("the removed native-node context input is rejected instead of becoming an implicit demand inventory", () => {
@@ -665,18 +783,12 @@ export const seed: number = checked(1);`,
     components: program.sourcePackageComponents, facades: program.sourcePackageFacades, regions: program.errorRegions,
     binaryHooks: [], outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
   assert.equal(selected.kind, "resolved", "the existing initializer owner supplies the exact worker composition");
-  const callable = program.callableValues;
   assert.equal(observations.calls, 1, "the actual selecting owner ran exactly once");
   assert.equal(observations.requests.kind, "resolved", "the actual checked source use inventory was admitted");
-  const result = prepareRustPhysicalEmissionContexts({ ast: source.ast, sourceFiles: program.sourceFiles,
-    isNativeNode: () => true, records: program.records, sourceLifetimes: program.sourceLifetimes,
-    generic: callable.generic, frames: callable.frames, suspended: callable.suspended, native: callable.native,
-    nativeStorage: callable.nativeStorage, nativeProducers: callable.nativeProducers,
-    genericCompletions: callable.genericCompletions, genericErrors: program.genericCallableErrors,
-    declarationGenericRequirements: program.declarationGenericRequirements, errorRegions: program.errorRegions,
-    sourceOccurrences: program.physicalEmissionContexts.sourceOccurrences, emissionRequests: observations.requests.value,
-    constructions: [], projectTypes: program.projectTypes,
-    initialization: selected.value });
+  assert.equal(observations.preparationInput !== undefined, true, "the full original late preparation inputs were observed");
+  assert.equal(observations.preparationInput.emissionRequests === observations.requests.value, true,
+    "the existing complete selecting-owner request vector remains identical");
+  const result = prepareRustPhysicalEmissionContexts({ ...observations.preparationInput, initialization: selected.value });
   assert.equal(result.kind, "resolved", result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   const context = result.value.contexts.contexts.find(context => context.use.role === "worker-initializer" && context.declaration === worker);
   assert.equal(context !== undefined && context.error.kind === "initializer", true, "a wrapper is not silently treated as its source module");
@@ -700,6 +812,14 @@ const observations = { calls: 0, anchors: 0 };
 globalThis[Symbol.for(${JSON.stringify(key)})] = observations;
 registerHooks({ load(url, context, nextLoad) {
   const loaded = nextLoad(url, context);
+  if (url === ${JSON.stringify(preparationUrl)}) {
+    const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+    const anchor = "export function prepareRustPhysicalEmissionContexts(";
+    assert.equal(source.split(anchor).length, 2, "one original late preparation input observation anchor");
+    observations.preparationAnchors = (observations.preparationAnchors ?? 0) + 1;
+    const extension = 'export function prepareRustPhysicalEmissionContexts(input) { globalThis[Symbol.for(${JSON.stringify(key)})].preparationInput = input; return observedPrepareRustPhysicalEmissionContexts(input); }';
+    return { ...loaded, source: source.replace(anchor, "function observedPrepareRustPhysicalEmissionContexts(") + "\\n" + extension };
+  }
   if (url !== ${JSON.stringify(collectorUrl)}) return loaded;
   const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
   const anchor = "export function prepareRustPhysicalCallableEmissionRequests(";
@@ -713,9 +833,106 @@ const { analyzeRustInitializationErrors } = await import(${JSON.stringify(initia
 const { prepareRustPhysicalEmissionContexts } = await import(${JSON.stringify(preparationUrl)});
 (${verifyActualWorkerContexts.toString()})(observations);
 assert.equal(observations.anchors, 1, "one observation, no production observer or altered source input");
+assert.equal(observations.preparationAnchors, 1, "one original preparation input observation without a fake source-storage port");
 process.stdout.write("R14_INSTRUMENTED_WORKER_CONTEXT_PROOF");
 `;
   const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
   assert.equal(observed.status, 0, `instrumented actual worker proof: ${observed.error?.message ?? ""}\n${observed.stderr.slice(-4096)}\n${observed.stdout.slice(-2048)}`);
   assert.equal(observed.stdout, "R14_INSTRUMENTED_WORKER_CONTEXT_PROOF", "explicit instrumented worker proof label");
+});
+
+function verifyEmissionSourceFileBoundaries(input, prepare, genuine, observations) {
+  assert.equal(genuine.kind, "resolved", "the genuine checked source request vector is admitted");
+  const nodes = [];
+  const visit = node => {
+    nodes.push(node);
+    input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  input.sourceFiles.forEach(visit);
+  const call = nodes.find(node => input.records.targetOperation.get(node)?.kind === "source-call");
+  const declaration = nodes.find(node => input.projectTypes.definitionForDeclaration(node) !== undefined);
+  assert.equal(call !== undefined && declaration !== undefined, true, "actual source has both boundary consumers");
+  const fields = input.ast.members(declaration).filter(member => member !== undefined && sourceClassFieldHasStorage(input.ast, member));
+  const staticField = fields.find(member => input.ast.hasModifierKind(member, "static"));
+  const instanceField = fields.find(member => !input.ast.hasModifierKind(member, "static"));
+  assert.equal(staticField !== undefined && instanceField !== undefined, true, "both actual field ownership modes participate");
+  const file = input.ast.getSourceFile(call);
+  const foreign = input.sourceFiles.find(sourceFile => sourceFile !== file);
+  assert.equal(file !== undefined && foreign !== undefined, true, "two genuine checked source files provide distinct identity controls");
+  assert.equal(genuine.value.some(request => request.subject === staticField && request.owner === file && request.kind === "type"), true,
+    "a static field retains its original checked module owner");
+  assert.equal(genuine.value.some(request => request.subject === instanceField && request.owner === declaration && request.kind === "type"), true,
+    "an instance field retains its original class owner");
+  const sourceFiles = input.sourceFiles.filter(sourceFile => sourceFile !== foreign);
+  const domain = new Set(sourceFiles);
+  for (const [name, subject] of [["call", call], ["static-field", staticField]]) {
+    for (const mode of ["missing", "foreign"]) {
+      const ast = Object.freeze(Object.create(Object.getPrototypeOf(input.ast), {
+        ...Object.getOwnPropertyDescriptors(input.ast),
+        getSourceFile: { value(node) {
+          return node === subject ? mode === "missing" ? undefined : foreign : input.ast.getSourceFile(node);
+        } },
+      }));
+      const carrierHost = Object.freeze({ ...input.carrierHost, semantics(sourceFile) {
+        assert.equal(sourceFile !== undefined && domain.has(sourceFile), true,
+          name + "/" + mode + ": invalid files never reach source semantics");
+        return input.carrierHost.semantics(sourceFile);
+      } });
+      const result = prepare({ ...input, ast, sourceFiles, carrierHost });
+      assert.equal(result.kind, "rejected", name + "/" + mode + ": missing ownership evidence rejects the whole stage");
+      assert.equal(result.diagnostics.length, 1, name + "/" + mode + ": one precise owning boundary failure");
+      assert.equal(result.diagnostics.some(issue => issue.code === "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED" &&
+        issue.sourceNode === subject && issue.message ===
+          "An emitted source occurrence requires its exact checked owning SourceFile in the current source-file domain."), true,
+      name + "/" + mode + ": original source identity and required diagnostic survive unchanged");
+      assert.equal(Object.hasOwn(result, "value"), false, name + "/" + mode + ": no empty or partial success fallback");
+      observations.cases++;
+    }
+  }
+}
+
+test("source call and static field requests require genuine owning files without losing instance ownership (instrumented boundary controls)", () => {
+  const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } }, files: {
+    "index.ts": `import { seed } from "./worker.js";
+class Item { static current: number = 1; instance: number = 2; }
+export function value(input: number): number { return seed(input) + Item.current; }`,
+    "worker.ts": `export function seed(value: number): number { return value; }`,
+  } };
+  const ordinary = compileRust(options);
+  assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+  assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected genuine boundary source emits normally");
+  const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
+  const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
+  const key = "r14-checked-source-file-boundary-proof";
+  const script = `
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import { sourceClassFieldHasStorage } from "@tsonic/target-api/source";
+const observations = { calls: 0, anchors: 0, cases: 0 };
+globalThis[Symbol.for(${JSON.stringify(key)})] = observations;
+observations.verify = (input, prepare, genuine) => (${verifyEmissionSourceFileBoundaries.toString()})(input, prepare, genuine, observations);
+registerHooks({ load(url, context, nextLoad) {
+  const loaded = nextLoad(url, context);
+  if (url !== ${JSON.stringify(collectorUrl)}) return loaded;
+  const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+  const anchor = "export function prepareRustPhysicalCallableEmissionRequests(";
+  assert.equal(source.split(anchor).length, 2, "one exact source-request boundary observation anchor");
+  observations.anchors++;
+  const extension = 'export function prepareRustPhysicalCallableEmissionRequests(...inputs) { const result = observedPrepareRustPhysicalCallableEmissionRequests(...inputs); const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.calls++; observations.verify(inputs[0], observedPrepareRustPhysicalCallableEmissionRequests, result); return result; }';
+  return { ...loaded, source: source.replace(anchor, "function observedPrepareRustPhysicalCallableEmissionRequests(") + "\\n" + extension };
+} });
+const { compileRust } = await import(${JSON.stringify(helperUrl)});
+const compiled = compileRust(${JSON.stringify(options)});
+assert.equal(compiled.result.diagnostics.length, 0, compiled.result.diagnostics.map(issue => issue.message).join("\\n").slice(0, 2048));
+assert.equal(observations.anchors, 1, "one real pipeline owner observed without dist writes");
+assert.equal(observations.calls, 1, "one genuine pipeline publication, separate from the four counterfactual boundary cases");
+assert.equal(observations.cases, 4, "both consumers reject both missing and genuine foreign-domain files");
+process.stdout.write("R14_INSTRUMENTED_SOURCE_BOUNDARY_PROOF " + JSON.stringify(compiled.result.artifacts));
+`;
+  const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(observed.status, 0, `instrumented actual boundary proof: ${observed.error?.message ?? ""}\n${observed.stderr.slice(-4096)}\n${observed.stdout.slice(-2048)}`);
+  const marker = "R14_INSTRUMENTED_SOURCE_BOUNDARY_PROOF ";
+  assert.equal(observed.stdout.startsWith(marker), true, "explicit boundary proof label");
+  assert.equal(JSON.stringify(JSON.parse(observed.stdout.slice(marker.length))) === JSON.stringify(ordinary.result.artifacts), true,
+    "boundary controls leave the genuine original pipeline and generated artifacts unchanged");
 });
