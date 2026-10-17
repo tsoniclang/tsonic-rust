@@ -19,6 +19,9 @@ import { createRustNativeCallableProtocolRegistry, rustNativeCallableErrorChanne
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustFutureTargetType } from "../../../dist/target-model/types/carriers/primitives.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { analyzeRustSourcePackageComponents } from "../../../dist/analysis/program/source-package-components.js";
+import { rustProgramErrorTargetType } from "../../../dist/target-model/types/carriers/js.js";
 
 const signed = { kind: "source-primitive", name: "int32" };
 const unsigned = { kind: "source-primitive", name: "uint32" };
@@ -31,6 +34,22 @@ const family = {
     genericArguments: [], associatedConstraints: [] },
 };
 const projection = { kind: "associated-type", owner: parameter, trait: family.trait, name: "Output" };
+
+let checkedErrorBoundary;
+function errorBoundaryFixture() {
+  if (checkedErrorBoundary !== undefined) return checkedErrorBoundary;
+  const context = analyzeRustErrorEffects(`
+    class AppError extends Error {}
+    export function fail(): never { throw new AppError("shape boundary"); }
+  `);
+  const components = analyzeRustSourcePackageComponents(context, "lib", node => context.records.errorEffects.get(node));
+  assert.equal(components.kind, "resolved", "the fixture has its actual completed source error component");
+  const scope = context.sourceFiles[0];
+  assert.equal(scope !== undefined, true, "the fixture has an exact checked source scope");
+  checkedErrorBoundary = { scope, input: { ast: context.ast, records: context.records,
+    definitions: context.typeDefinitions, producers: context.callableValues.nativeProducers, components: components.plan } };
+  return checkedErrorBoundary;
+}
 
 test("optional carrier selection records the exact payload independently of move or clone demand", () => {
   const native = { ...projection, trait: { ...family.trait, sourceItem: undefined } };
@@ -204,6 +223,7 @@ test("normalization uses proved implementations and rejects recursive output equ
 });
 
 test("structural shapes retain the independent requirements of nested generic records", () => {
+  const boundary = errorBoundaryFixture();
   const registry = createRustSourceTypeFamilyRegistry();
   registry.register(family);
   const declaration = {};
@@ -213,20 +233,25 @@ test("structural shapes retain the independent requirements of nested generic re
   const contract = { declaration, typeParameters: [{ identity: "T", name: "T", requirements: ["clone"] }],
     associatedTypes: [{ carrier: projection, requirements: ["default"] }] };
   const shape = { kind: "tuple", elements: [record] };
-  const selected = analyzeRustShapeGenericRequirements(shape, policy, registry, owner => owner === declaration ? contract : undefined, undefined);
+  const selected = analyzeRustShapeGenericRequirements(shape, policy, registry, owner => owner === declaration ? contract : undefined,
+    undefined, emptyRustTypeDefinitions, [], boundary.input, boundary.scope);
   assert.deepEqual(selected.typeParameters, [{ identity: "T", name: "T", requirements: ["clone"] }]);
   assert.deepEqual(selected.associatedTypes, [{ carrier: projection, requirements: ["default"] }]);
-  assert.equal(analyzeRustShapeGenericRequirements(shape, policy, registry, () => undefined, undefined), undefined);
+  assert.equal(analyzeRustShapeGenericRequirements(shape, policy, registry, () => undefined, undefined,
+    emptyRustTypeDefinitions, [], boundary.input, boundary.scope) === undefined, true, "the exact nested declaration contract is required");
 });
 
 test("nongeneric shapes acquire no speculative generic bounds", () => {
+  const boundary = errorBoundaryFixture();
   const registry = createRustSourceTypeFamilyRegistry();
   const selected = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [signed, unsigned] },
-    { definitionForCarrier: () => undefined }, registry, () => undefined, undefined);
+    { definitionForCarrier: () => undefined }, registry, () => undefined, undefined,
+    emptyRustTypeDefinitions, [], boundary.input, boundary.scope);
   assert.deepEqual(selected, { typeParameters: [], associatedTypes: [] });
 });
 
 test("nested generated sum instantiations retain independent payload requirements", () => {
+  const boundary = errorBoundaryFixture();
   const registry = createRustSourceTypeFamilyRegistry();
   assert.equal(registry.register(family), true);
   const definitions = createRustTypeDefinitionRegistry();
@@ -239,34 +264,79 @@ test("nested generated sum instantiations retain independent payload requirement
   const inner = union([parameter, projection]);
   const outer = union([inner, signed]);
   const policy = { definitionForCarrier: () => undefined };
-  const selected = analyzeRustShapeGenericRequirements(outer, policy, registry, () => undefined, undefined, definitions.seal());
+  const selected = analyzeRustShapeGenericRequirements(outer, policy, registry, () => undefined, undefined,
+    definitions.seal(), [], boundary.input, boundary.scope);
   assert.deepEqual(selected, {
     typeParameters: [{ identity: "T", name: "T", requirements: [] }],
     associatedTypes: [{ carrier: projection, requirements: [] }],
   });
   assert.equal(analyzeRustShapeGenericRequirements(union([union([parameter, { ...projection, owner: unsigned }]), signed]),
-    policy, registry, () => undefined, undefined, definitions.seal()), undefined);
+    policy, registry, () => undefined, undefined, definitions.seal(), [], boundary.input, boundary.scope) === undefined, true,
+    "a nested sum without its exact definition is refused");
   const invalidInner = union([parameter, { ...projection,
     owner: { kind: "type-parameter", identity: "Other", name: "Other" } }]);
   const invalidOuter = union([invalidInner, signed]);
   assert.equal(analyzeRustShapeGenericRequirements(invalidOuter, policy, registry, () => undefined, undefined,
     { sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, invalidInner) ? undefined :
-      [{ name: "Variant0", carrier: invalidInner }, { name: "Variant1", carrier: signed }] }), undefined);
+      [{ name: "Variant0", carrier: invalidInner }, { name: "Variant1", carrier: signed }] }, [], boundary.input, boundary.scope) === undefined, true,
+    "a nested sum with a foreign generic owner is refused");
 });
 
 test("authored recursive sums reject changing recursive instantiations and missing payload evidence", () => {
+  const boundary = errorBoundaryFixture();
   const registry = createRustSourceTypeFamilyRegistry();
   const policy = { definitionForCarrier: () => undefined };
   const authored = type => rustSourceUnionTargetType("/nested.ts", "Recursive", [{ kind: "type", type }]);
   const initial = authored(signed);
   const changed = authored(unsigned);
   assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined, undefined,
-    { sourceUnionVariants: () => [{ name: "Next", carrier: changed }] }), undefined);
+    { sourceUnionVariants: () => [{ name: "Next", carrier: changed }] }, [], boundary.input, boundary.scope) === undefined, true,
+    "changing recursive instantiation is refused");
   assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined, undefined,
-    { sourceUnionVariants: () => undefined }), undefined);
+    { sourceUnionVariants: () => undefined }, [], boundary.input, boundary.scope) === undefined, true,
+    "missing recursive payload evidence is refused");
   assert.deepEqual(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined, undefined,
-    { sourceUnionVariants: () => [{ name: "Next", carrier: initial }] }),
+    { sourceUnionVariants: () => [{ name: "Next", carrier: initial }] }, [], boundary.input, boundary.scope),
     { typeParameters: [], associatedTypes: [] });
+});
+
+test("nested shape static bounds materialize actual scoped errors without losing generic requirements", () => {
+  const boundary = errorBoundaryFixture();
+  const registry = createRustSourceTypeFamilyRegistry();
+  const declaration = {};
+  const payload = { kind: "tuple", elements: [parameter, rustProgramErrorTargetType()] };
+  const record = rustSourceTypeCarrier("/holder.ts", "Holder", "object", [{ kind: "type", type: payload }]);
+  const definition = { declaration, genericParameters: [{ kind: "type", identity: "Stored", targetName: "Stored" }] };
+  const policy = { definitionForCarrier: carrier => rustTargetTypeRefEquals(carrier, record) ? definition : undefined };
+  const contract = { declaration, typeParameters: [{ identity: "Stored", name: "Stored", requirements: ["static"] }],
+    associatedTypes: [] };
+  const selected = analyzeRustShapeGenericRequirements(record, policy, registry,
+    owner => owner === declaration ? contract : undefined, undefined, emptyRustTypeDefinitions, [], boundary.input, boundary.scope);
+  assert.equal(selected !== undefined, true, "the real checked project error boundary satisfies the nested static demand");
+  assert.equal(selected.typeParameters.length, 1, "the complete generic payload remains quantified");
+  assert.equal(selected.typeParameters[0].identity, "T", "the original generic owner is preserved");
+  assert.equal(selected.typeParameters[0].requirements.includes("static"), true, "the generic static requirement is retained");
+  assert.equal(analyzeRustShapeGenericRequirements(record, policy, registry,
+    owner => owner === declaration ? contract : undefined, undefined, emptyRustTypeDefinitions, [], boundary.input, undefined) === undefined, true,
+    "a logical error has no implicit ambient scope");
+  const missing = { ...boundary.input, components: { ...boundary.input.components, componentForFile: () => undefined } };
+  assert.equal(analyzeRustShapeGenericRequirements(record, policy, registry,
+    owner => owner === declaration ? contract : undefined, undefined, emptyRustTypeDefinitions, [], missing, boundary.scope) === undefined, true,
+    "a missing physical component is not a static guarantee");
+});
+
+test("shape static uses refuse foreign physical errors while non-static fields keep their original contract", () => {
+  const boundary = errorBoundaryFixture();
+  const registry = createRustSourceTypeFamilyRegistry();
+  const policy = { definitionForCarrier: () => undefined };
+  const logical = rustProgramErrorTargetType();
+  const foreign = rustProgramErrorTargetType({ kind: "physical", domain: "project", componentId: "foreign" });
+  assert.equal(analyzeRustShapeGenericRequirements(logical, policy, registry, () => undefined, undefined,
+    emptyRustTypeDefinitions, [], boundary.input, undefined) !== undefined, true,
+    "an ordinary field does not acquire a speculative static demand");
+  assert.equal(analyzeRustShapeGenericRequirements(foreign, policy, registry, () => undefined, undefined,
+    emptyRustTypeDefinitions, [{ carrier: foreign, requirements: ["static"] }], boundary.input, boundary.scope) === undefined, true,
+    "an unregistered physical owner never becomes static through a shape use");
 });
 
 test("indexed families distinguish exact keys and retain readonly storage and independent obligations", () => {

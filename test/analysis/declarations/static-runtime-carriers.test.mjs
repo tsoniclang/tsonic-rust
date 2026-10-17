@@ -371,6 +371,35 @@ verify();
 });
 
 for (const [label, surfaces] of [["native", []], ["js", ["js"]]]) {
+  test(`returned structural methods retain generic values and caught error identity (${label})`,
+    { timeout: 300_000 }, () => {
+      const { result } = compileRust({ surfaces, target: { id: "rust", options: {
+        outputType: "bin", crateName: `static_caught_methods_${label}`,
+      } }, files: { "index.ts": `
+class AppError extends Error {}
+
+export function hold<T>(value: T, original: Error): { read(): T } {
+  try { throw original; }
+  catch (caught) {
+    return { read(): T {
+      if (!(caught instanceof Error) || caught !== original || caught.message !== "retained method error") {
+        throw new Error("structural capture lost its actual caught payload or identity");
+      }
+      return value;
+    } };
+  }
+}
+export function verify(): void {
+  const original = new AppError("retained method error");
+  const numeric = hold(7, original);
+  const text = hold("native", original);
+  if (numeric.read() !== 7 || text.read() !== "native") throw new Error("structural capture lost a generic value");
+}
+verify();
+` } });
+      assertNoTargetDiagnostics(result.diagnostics);
+      validateGeneratedProject(`static-caught-methods-${label}`, result.artifacts, { run: true });
+    });
   test(`closed source error payloads retain their actual native static representation (${label})`, { timeout: 300_000 }, () => {
     const crateName = `static_source_errors_${label}`;
     const { result } = compileRust({ surfaces, target: { id: "rust", options: { crateName } }, files: { "index.ts": `
