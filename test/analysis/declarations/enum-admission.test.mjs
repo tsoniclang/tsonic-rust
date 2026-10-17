@@ -57,6 +57,7 @@ const numericUses = [
   ["discarded arithmetic", "export function use(value: Value): void { value + 1; }"],
   ["discarded numeric assertion", "export function use(value: Value): void { (value as number); }"],
   ["void numeric assertion", "export function use(value: Value): void { void (value as number); }"],
+  ["copied numeric assertion", "export function use(value: Value): number { const projected = value as number; const copied = projected; return copied; }"],
   ["shift", "export function use(value: Value): number { return value << 1; }"],
   ["conditional complement", "export function use(left: Value, right: Value, flag: boolean): number { const result = flag ? ~left : ~right; return result; }"],
   ["conditional bitwise", "export function use(left: Value, right: Value, flag: boolean): number { const result = flag ? left | right : left & right; return result; }"],
