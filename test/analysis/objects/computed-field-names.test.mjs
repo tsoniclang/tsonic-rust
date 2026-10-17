@@ -128,7 +128,7 @@ export function run(): number {
       if (!required) {
         assert.equal(compiled.result.diagnostics.length, 0, "the actual participation owner erases the unused body's native obligations");
         assert.equal(compiled.result.program !== undefined && compiled.result.plan !== undefined, true, "the retained native program reaches emission");
-        const output = [...compiled.artifacts.values()].join("\n");
+        const output = compiled.result.artifacts.map(artifact => artifact.text).join("\n");
         assert.equal(output.includes("42") && !/\bunused\b/u.test(output), true, "no native code is invented for the erased body");
         return;
       }
