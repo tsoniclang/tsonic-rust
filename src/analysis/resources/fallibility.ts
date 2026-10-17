@@ -200,6 +200,9 @@ function collectFallibilityFacts(
     }
   }
   const selectedProjectDeclaration = (node: Node): Node | undefined => {
+    const operation = walk.context.records.targetOperation.get(node);
+    if (operation?.kind === "source-call" && operation.target.form === "callable" &&
+      rustCallableProtocol(operation.target.carrier)?.error !== undefined) return undefined;
     const selected = walk.context.records.selectedCall.get(node);
     const declaration = asSourceNode(
       selected?.sourceDeclaration,

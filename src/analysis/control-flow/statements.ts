@@ -339,6 +339,9 @@ export function recordStatementFacts(
     if (result !== undefined) {
       const branch = result ? IfStatement_ThenStatement(walk.context.ast, statement)
         : IfStatement_ElseStatement(walk.context.ast, statement);
+      const unselectedBranch = result ? IfStatement_ElseStatement(walk.context.ast, statement)
+        : IfStatement_ThenStatement(walk.context.ast, statement);
+      if (unselectedBranch !== undefined) recordRustNativeUnreachable(walk, unselectedBranch);
       if (branch !== undefined) recordStatementFacts(walk, branch, sourceFile, returnCarrier);
       return;
     }

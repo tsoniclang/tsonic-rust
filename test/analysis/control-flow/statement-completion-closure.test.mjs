@@ -6,6 +6,113 @@ import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustNativeFixtureNodes } from "../../helpers/records.mjs";
 
+function checkedGuardNodes(program) {
+  const nodes = [];
+  const pending = [...program.sourceFiles];
+  while (pending.length !== 0) {
+    const node = pending.pop();
+    nodes.push(node);
+    program.source.ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+  }
+  return nodes;
+}
+
+for (const surfaces of [[], ["js"]]) {
+  const surface = surfaces[0] ?? "native";
+  for (const selectedThen of [false, true]) {
+    const condition = selectedThen ? 'typeof value === "number"' : "false";
+    const selected = "{ return value + 1; }";
+    const unselected = "{ interface Unused { value: number; } }";
+    const text = `export function run(value: number): number {
+      if (${condition}) ${selectedThen ? selected : unselected}
+      else ${selectedThen ? unselected : selected}
+      return value;
+    }`;
+    test(`finalized ${selectedThen ? "true" : "false"} guard publishes its exact excluded branch root (${surface})`, () => {
+      const { result } = compileRust({ surfaces, files: { "index.ts": text } });
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+      assert.equal(result.program !== undefined && result.plan !== undefined, true,
+        "the complete checked control flow reaches native publication and planning");
+      assert.equal(result.artifacts.some(artifact => String(artifact.path).endsWith(".rs")), true,
+        "the selected native branch emits source");
+      const program = result.program;
+      const ast = program.source.ast;
+      const nodes = checkedGuardNodes(program);
+      const guard = nodes.find(ast.is.IsIfStatement);
+      const statement = ast.as.AsIfStatement(guard);
+      const excludedBranch = selectedThen ? statement.ElseStatement : statement.ThenStatement;
+      const selectedBranch = selectedThen ? statement.ThenStatement : statement.ElseStatement;
+      assert.equal(program.records.nativeGuardResult.get(statement.Expression), selectedThen,
+        "the existing native guard owner supplies the exact Boolean outcome");
+      assert.equal(program.records.nativeUnreachable.get(excludedBranch), true,
+        "the canonical unreachable owner publishes the actual unselected root");
+      assert.equal(program.records.nativeUnreachable.get(selectedBranch) === true, false,
+        "the real selected branch is not erased");
+      const declaration = ast.statements(excludedBranch)[0];
+      assert.equal(ast.is.IsInterfaceDeclaration(declaration), true,
+        "the complete checked source preserves its excluded declaration");
+      assert.equal(program.statementCompletions.admitted(declaration), false,
+        "no native completion is fabricated for an excluded descendant");
+      const returned = ast.statements(selectedBranch)[0];
+      assert.equal(program.statementCompletions.admitted(returned), true,
+        "the selected return retains its existing admission");
+    });
+  }
+
+  test(`finalized guard retains selected call effects and resource disposal (${surface})`, () => {
+    const text = `
+class Resource { [Symbol.dispose](): void { throw new Error("cleanup"); } }
+function step(value: number): number {
+  if (value < 0) throw new Error("step");
+  return value + 1;
+}
+export function run(value: number): number {
+  if (true) { using resource = new Resource(); return step(value); }
+  else { interface Unused { value: number; } }
+  return value;
+}`;
+    const { result } = compileRust({ surfaces, files: { "index.ts": text } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined, true,
+      "selected effects and cleanup reach native program and plan publication");
+    const program = result.program;
+    const ast = program.source.ast;
+    const nodes = checkedGuardNodes(program);
+    const resource = nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.variableDeclarationKind(node) === "using");
+    const invocation = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "step");
+    const callable = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "run");
+    assert.equal(resource !== undefined && invocation !== undefined && callable !== undefined, true,
+      "the actual selected resource, effectful call and callable identities are retained");
+    assert.equal(program.records.resourceManagement.get(resource)?.disposal.fallible, true,
+      "the existing resource owner keeps the throwing disposal ABI");
+    const resourceStatement = ast.parent(ast.parent(resource));
+    assert.equal(ast.is.IsVariableStatement(resourceStatement), true,
+      "the selected resource has its actual checked variable statement");
+    assert.equal(program.statementCompletions.admitted(resourceStatement), true,
+      "resource lifecycle validation still admits the selected acquisition");
+    assert.equal(program.records.sourceCallEffects.get(invocation)?.invocation, "fallible",
+      "the real selected invocation retains its actual fallible ABI");
+    assert.equal(program.records.errorEffects.get(callable)?.localErrors, true,
+      "the selected call and cleanup are never rewritten as pure");
+  });
+
+  test(`unresolved guard never erases an unsupported native body (${surface})`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts": `
+export function run(flag: boolean): number {
+  if (flag) { interface Unresolved { value: number; } }
+  return 1;
+}` } });
+    assert.equal(result.diagnostics.some(issue => issue.code === "RUST_STATEMENT_NOT_SUPPORTED" &&
+      issue.message === "The Rust target does not support this runtime statement."), true,
+    "an unresolved native branch keeps the existing precise statement admission rejection");
+    assert.equal(result.program === undefined, true, "an unsupported native body publishes no program");
+    assert.equal(result.plan === undefined, true, "an unsupported native body reaches no planner");
+    assert.equal(result.artifacts.length, 0, "an unsupported native body emits no partial artifacts");
+  });
+}
+
 const source = `
 export function run(flag: boolean): number {
   let total = 0;
