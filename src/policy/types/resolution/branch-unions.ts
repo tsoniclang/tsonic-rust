@@ -50,10 +50,13 @@ export function resolveRustBranchUnion(
     } else {
       for (const member of types) {
         const indexes = options.sourceTypes.sourceUnionVariantIndexesForTypes(carrier, [member]);
-        const selected = indexes?.length === 1 ? union.variants[indexes[0]!] : undefined;
-        if (selected === undefined) return undefined;
-        members.push(member);
-        carriers.push(selected.carrier);
+        if (indexes === undefined || indexes.length === 0 || indexes.length > 4096) return undefined;
+        for (const index of indexes) {
+          const selected = Number.isInteger(index) && index >= 0 ? union.variants[index] : undefined;
+          if (selected === undefined) return undefined;
+          members.push(member);
+          carriers.push(selected.carrier);
+        }
       }
     }
     if (members.length > 4096) return undefined;
