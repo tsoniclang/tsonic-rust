@@ -5,7 +5,6 @@ import type { RustCallScopedLifetimeReconciliationFact, RustContextualValueConve
 import {
   isRustProgramErrorCarrier,
   rustJsErrorTargetType,
-  rustCarrierSupportsClone,
   rustCarrierSupportsTrait,
   rustOptionElementCarrier,
   rustCallableProtocol,
@@ -103,8 +102,7 @@ export function selectRustFlowReadProjection(
       rustTargetTypeRefEquals(selectedCarrier, rustJsErrorTargetType())))) {
     return { kind: "projection", fact: { kind: "builtin-error", sourceCarrier, selectedCarrier } };
   }
-  if (selectRustProjectTypeTestPlan(sourceCarrier, selectedCarrier, projectTypes)?.lowering.kind === "closed-native" &&
-    rustCarrierSupportsClone(selectedCarrier, definitions)) {
+  if (selectRustProjectTypeTestPlan(sourceCarrier, selectedCarrier, projectTypes)?.lowering.kind === "closed-native") {
     return { kind: "projection", fact: { kind: "closed-native", sourceCarrier, selectedCarrier } };
   }
   if (isRustProgramErrorCarrier(dispatchCarrier) || isRustSourceErrorCarrier(dispatchCarrier) ||
@@ -115,8 +113,7 @@ export function selectRustFlowReadProjection(
       : projectTypes.programErrorVariant(selectedDefinition);
     return variant !== undefined && (!(isRustSourceErrorCarrier(dispatchCarrier) || isRustRetainedErrorCarrier(dispatchCarrier) ||
       isRustClosedValueCarrier(dispatchCarrier)) ||
-      selectedDefinition !== undefined && projectTypes.sourceErrorDefinitions.includes(selectedDefinition)) &&
-      rustCarrierSupportsClone(selectedCarrier, definitions)
+      selectedDefinition !== undefined && projectTypes.sourceErrorDefinitions.includes(selectedDefinition))
       ? {
           kind: "projection",
           fact: {
@@ -136,8 +133,7 @@ export function selectRustFlowReadProjection(
   const projection = selectRustProjectProjection(dispatchCarrier, selectedCarrier, projectTypes);
   if (projection === undefined ||
     (projection.kind !== "structural" && (relationship.kind !== "related" ||
-      !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier))) ||
-    (optionalElement !== undefined && !rustCarrierSupportsClone(dispatchCarrier, definitions))) {
+      !rustTargetTypeRefEquals(relationship.targetType, dispatchCarrier)))) {
     return { kind: "incompatible" };
   }
   return {

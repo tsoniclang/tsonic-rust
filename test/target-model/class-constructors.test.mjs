@@ -6,7 +6,7 @@ import { rustTargetTypeChildren } from "../../dist/target-model/types/carriers/c
 import { rustTargetTypeParameterIdentities } from "../../dist/target-model/types/carriers/generic-references.js";
 import { substituteRustTargetTypeParameters } from "../../dist/target-model/types/carriers/substitution.js";
 import { inferRustTargetTypeParameterBindings } from "../../dist/target-model/types/carriers/generic-inference.js";
-import { isRustCopyCarrier, rustCarrierSupportsClone, rustCarrierSupportsObjectIdentity } from "../../dist/target-model/types/carriers/traits.js";
+import { isRustCopyCarrier, selectRustCloneRequirements, rustCarrierSupportsObjectIdentity } from "../../dist/target-model/types/carriers/traits.js";
 import { selectRustBinaryOperator } from "../../dist/policy/operations/operators/rules.js";
 
 const instance = (name, parameter) => rustSourceTypeCarrier("/src/model.ts", name, "object",
@@ -26,7 +26,7 @@ test("constructor values retain distinct instance identity and exact generic arg
   assert.deepEqual(inferRustTargetTypeParameterBindings(constructor, concrete, new Set(["Value"])), new Map([["Value", number]]));
   assert.equal(inferRustTargetTypeParameterBindings(constructor,
     rustClassConstructorTargetType(instance("Adapter@20", number)), new Set(["Value"])), undefined);
-  assert.equal(rustCarrierSupportsClone(constructor), true);
+  assert.equal(selectRustCloneRequirements(constructor).kind === "available", true, "the native constructor wrapper is Clone");
   assert.equal(rustCarrierSupportsObjectIdentity(constructor), true);
   assert.equal(isRustCopyCarrier(constructor), false);
   for (const operator of ["KindEqualsEqualsEqualsToken", "KindExclamationEqualsEqualsToken"]) {

@@ -5,7 +5,6 @@ import {
   Node_Initializer,
 } from "@tsonic/target-api/source";
 import {
-  rustCarrierSupportsClone,
 } from "../../../../target-model/types/index.js";
 import { rustProjectStaticFieldStorage } from "../../../../analysis/project-types/object-layout.js";
 import type { RustItem, RustStmt } from "../../../target-ast/syntax/nodes.js";
@@ -79,14 +78,6 @@ export function planRustClassInitialization(
         diagnosticInput(context, member),
         "rust.backend.static-field-carrier",
         "Static class field has no finalized renderable Rust carrier.",
-      ));
-      return undefined;
-    }
-    if (!rustCarrierSupportsClone(carrier, context.input.program.typeDefinitions)) {
-      context.diagnostics.push(unsupportedConstructDiagnostic(
-        diagnosticInput(context, member),
-        "rust.backend.static-field-carrier",
-        "Rust static class fields require one exact Clone-capable value carrier.",
       ));
       return undefined;
     }

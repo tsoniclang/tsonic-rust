@@ -7,7 +7,7 @@ import { selectedCallArgumentCarriers, selectedCallArgumentNodes } from "../oper
 import { selectedArgumentMatchScore } from "../result.js";
 import { selectedCallReceiverValueCarrier } from "./instantiation.js";
 import { selectedRustRegExpReplacementCallbackEvidence } from "../regexp-replacement-callback.js";
-import { canRequireSourceClone } from "../clone-requirements.js";
+import { sourceCloneRequirements } from "../clone-requirements.js";
 import { rustOperandSupportsSourceNumeric } from "../../generic-numeric.js";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
@@ -91,7 +91,7 @@ export function createRustJsCallRequest(
         }, options) },
       }, argument, expected);
     },
-    canRequireClone: carrier => canRequireSourceClone(carrier, request.source.call, context, options.sourceTypes.typeFamilies),
+    cloneRequirements: carrier => sourceCloneRequirements(carrier, request.source.call, context, options.sourceTypes.typeFamilies),
     numericParameterArgument: (index, carrier, domain) => {
       const argument = selectedCallArgumentNodes(request)[index];
       return argument !== undefined && carrier.kind === "type-parameter" &&

@@ -46,6 +46,8 @@ import type { RustNamedTypeCarrierValue } from "./native.js";
 import type { TargetTypeRef } from "../model.js";
 import type { RustTargetTraitRef } from "../model.js";
 import { rustTargetTypeRefEquals } from "../equality.js";
+import { inferRustTargetGenericBindings } from "./generic-inference.js";
+import { substituteRustTargetGenerics } from "./substitution.js";
 import { rustCarrierSupportsAsRef } from "./as-ref.js";
 import { rustOptionElementCarrier } from "./optional.js";
 import { rustRuntimeErrorTargetType } from "../../operations/error-boundary.js";
@@ -105,8 +107,18 @@ export function isRustJsStrictEqualityCarrier(carrier: TargetTypeRef | undefined
   return carrier?.kind === "target-named" && rustJsStrictEqualityTargetIds.has(carrier.id);
 }
 
-export function rustCarrierSupportsClone(carrier: TargetTypeRef | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
-  return supportsCloneWithContracts(carrier, () => false, () => false, definitions);
+export type RustCloneRequirementSelection =
+  | { readonly kind: "available" }
+  | { readonly kind: "required"; readonly carriers: readonly TargetTypeRef[] }
+  | { readonly kind: "unavailable" };
+
+const cloneAvailable: RustCloneRequirementSelection = Object.freeze({ kind: "available" });
+const cloneUnavailable: RustCloneRequirementSelection = Object.freeze({ kind: "unavailable" });
+
+function allCloneRequirements(selected: readonly RustCloneRequirementSelection[]): RustCloneRequirementSelection {
+  if (selected.some(value => value.kind === "unavailable")) return cloneUnavailable;
+  const carriers = selected.flatMap(value => value.kind === "required" ? value.carriers : []);
+  return carriers.length === 0 ? cloneAvailable : Object.freeze({ kind: "required", carriers: Object.freeze(carriers) });
 }
 
 type RustAssociatedTypeSupport = (
@@ -114,83 +126,112 @@ type RustAssociatedTypeSupport = (
   traitPath: string,
 ) => boolean;
 
-function supportsCloneWithContracts(
+export function selectRustCloneRequirements(
   carrier: TargetTypeRef | undefined,
-  typeParameterSupports: (name: string, traitPath: string) => boolean,
-  associatedTypeSupports: RustAssociatedTypeSupport,
-  definitions: RustTypeDefinitions,
+  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
+  typeParameterSupports: (name: string, traitPath: string) => boolean = () => false,
+  associatedTypeSupports: RustAssociatedTypeSupport = () => false,
   active: Map<string, string> = new Map(),
-): boolean {
-  if (carrier?.kind === "type-parameter") return typeParameterSupports(carrier.identity, "core::clone::Clone");
-  if (carrier?.kind === "associated-type") return associatedTypeSupports(carrier, "core::clone::Clone");
-  const supports = (type: TargetTypeRef): boolean =>
-    supportsCloneWithContracts(type, typeParameterSupports, associatedTypeSupports, definitions, active);
+): RustCloneRequirementSelection {
+  if (carrier?.kind === "type-parameter") return typeParameterSupports(carrier.identity, "core::clone::Clone") ? cloneAvailable : cloneUnavailable;
+  if (carrier?.kind === "associated-type") return associatedTypeSupports(carrier, "core::clone::Clone") ? cloneAvailable : cloneUnavailable;
+  const select = (type: TargetTypeRef): RustCloneRequirementSelection =>
+    selectRustCloneRequirements(type, definitions, typeParameterSupports, associatedTypeSupports, active);
   if (rustGenericCallableValue(carrier) !== undefined || rustFrameCallableValue(carrier) !== undefined ||
-    rustClassConstructorInstance(carrier) !== undefined) return true;
+    rustClassConstructorInstance(carrier) !== undefined) return cloneAvailable;
   if (carrier === undefined ||
     carrier.kind === "opaque" || carrier.kind === "closure" ||
     carrier.kind === "slice" ||
     carrier.kind === "reference" && carrier.mutable) {
-    return false;
+    return cloneUnavailable;
   }
   if (carrier.kind === "source-primitive" || carrier.kind === "function-pointer" ||
     carrier.kind === "pointer" || carrier.kind === "reference") {
-    return true;
+    return cloneAvailable;
   }
   if (carrier.kind === "array") {
-    return supports(carrier.element);
+    return select(carrier.element);
   }
   if (carrier.kind === "tuple") {
-    return carrier.elements.every(supports);
+    return allCloneRequirements(carrier.elements.map(select));
   }
   if (carrier.kind === "target-named") {
     if (carrier.id === rustOptionTargetId) {
       const [value] = rustOnlyTypeGenericArguments(carrier.genericArguments) ?? [];
-      return value !== undefined && supports(value);
+      return value === undefined ? cloneUnavailable : select(value);
     }
     if (carrier.id === rustJsPromiseTargetId) {
-      return true;
+      return cloneAvailable;
     }
     if (carrier.id === rustJsPromiseRejectedResultTargetId || carrier.id === rustJsPromiseSettledResultTargetId) {
       const arguments_ = rustOnlyTypeGenericArguments(carrier.genericArguments);
-      return arguments_?.length === (carrier.id === rustJsPromiseRejectedResultTargetId ? 0 : 1) && arguments_.every(supports);
+      return arguments_?.length === (carrier.id === rustJsPromiseRejectedResultTargetId ? 0 : 1)
+        ? allCloneRequirements(arguments_.map(select)) : cloneUnavailable;
     }
     if (carrier.id === rustJsPromiseResolutionTargetId ||
       carrier.id === rustJsPromiseFulfilledResultTargetId) {
       const [value] = rustTargetGenericTypeArguments(carrier.genericArguments);
-      return value !== undefined && supports(value);
+      return value === undefined ? cloneUnavailable : select(value);
     }
-    return rustUnconditionallyCloneTargetIds.has(carrier.id);
+    return rustUnconditionallyCloneTargetIds.has(carrier.id) ? cloneAvailable : cloneUnavailable;
   }
   const fixedArray = rustFixedArrayCarrierValue(carrier);
   if (fixedArray !== undefined) {
-    return supports(fixedArray.element);
+    return select(fixedArray.element);
   }
   const namedType = rustNamedTypeCarrierValue(carrier);
   if (namedType !== undefined) {
-    return rustNamedTypeSupportsTrait(namedType, "core::clone::Clone", typeParameterSupports, associatedTypeSupports, definitions, active);
+    const arguments_ = rustTargetGenericTypeArguments(namedType.genericArguments);
+    const alternatives = matchingRustNamedTraitRequirements(namedType, rustNativeTraitRef("core::clone::Clone")).map(requirements =>
+      allCloneRequirements(requirements.map(requirement => {
+        const argument = arguments_[requirement.typeArgumentIndex];
+        if (argument === undefined) return cloneUnavailable;
+        return requirement.trait.path === "core::clone::Clone" && requirement.trait.genericArguments.length === 0 &&
+          requirement.trait.associatedConstraints.length === 0 && requirement.trait.lifetimeBinder === undefined
+          ? select(argument) : rustCarrierSatisfiesTraitRef(argument, requirement.trait, typeParameterSupports, definitions)
+            ? cloneAvailable : cloneUnavailable;
+      })));
+    return alternatives.find(value => value.kind === "available") ?? alternatives.find(value => value.kind === "required") ?? cloneUnavailable;
   }
   const structuralObject = rustStructuralObjectCarrierValue(carrier);
   if (structuralObject !== undefined) {
-    return structuralObject.fields.every((field) => supports(field.type));
+    return allCloneRequirements(structuralObject.fields.map(field => select(field.type)));
   }
   const sourceUnion = rustSourceUnionCarrierValue(carrier);
   if (sourceUnion !== undefined) {
     const variants = definitions.sourceUnionVariants(carrier);
-    if (variants === undefined) return false;
+    if (variants === undefined) return cloneUnavailable;
     const identity = rustSourceUnionDefinitionIdentity(carrier)!;
     const instantiation = closedMetadataKey(carrier);
-    if (active.has(identity)) return active.get(identity) === instantiation;
+    if (active.has(identity)) return active.get(identity) === instantiation ? cloneAvailable : cloneUnavailable;
     active.set(identity, instantiation);
-    try { return variants.every(variant => supports(variant.carrier)); }
+    try { return allCloneRequirements(variants.map(variant => select(variant.carrier))); }
     finally { active.delete(identity); }
   }
-  return carrier.kind === "target-specific" &&
-    carrier.target === "rust" && carrier.name === "source-type";
+  const source = rustSourceTypeCarrierValue(carrier);
+  if (source?.shape === "enum") return cloneAvailable;
+  if (source?.shape !== "object") return cloneUnavailable;
+  const physical = definitions.sourceObjectPhysicalDefinition(carrier);
+  if (physical === undefined) return Object.freeze({ kind: "required", carriers: Object.freeze([carrier]) });
+  const references = rustTargetGenericReferences(physical.carrier);
+  const bindings = inferRustTargetGenericBindings(physical.carrier, carrier, {
+    typeIdentities: new Set(references.typeIdentities), lifetimeIdentities: new Set(references.lifetimeIdentities),
+    constIdentities: new Set(references.constIdentities),
+  });
+  if (bindings === undefined) return cloneUnavailable;
+  const identity = closedMetadataKey(["source-object", source.fileName, source.typeName]);
+  const instantiation = closedMetadataKey(carrier);
+  if (active.has(identity)) return cloneUnavailable;
+  active.set(identity, instantiation);
+  try {
+    return allCloneRequirements(physical.fields.map(field => field.clone.kind === "unconditional" ? cloneAvailable
+      : field.clone.kind === "unavailable" ? cloneUnavailable
+      : select(substituteRustTargetGenerics(field.clone.carrier, bindings.types, bindings.lifetimes, bindings.consts))));
+  } finally { active.delete(identity); }
 }
 
-export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined, definitions: RustTypeDefinitions = emptyRustTypeDefinitions): boolean {
-  if (!rustCarrierSupportsClone(carrier, definitions) || carrier === undefined) {
+export function rustCarrierHasClosedValueIdentity(carrier: TargetTypeRef | undefined): boolean {
+  if (carrier === undefined || carrier.kind === "opaque") {
     return false;
   }
   const references = rustTargetGenericReferences(carrier);
@@ -198,14 +239,14 @@ export function rustCarrierCanEnterTsValue(carrier: TargetTypeRef | undefined, d
     references.callScopedElisions.length === 0 && !references.hasUnnameableLifetime;
 }
 
-export type RustTsValueAdmission =
+export type RustTsValueProjection =
   | { readonly kind: "call"; readonly path: string }
   | { readonly kind: "project-object" };
 
-export function rustTsValueAdmission(carrier: TargetTypeRef, definitions: RustTypeDefinitions): RustTsValueAdmission | undefined {
+export function rustTsValueProjection(carrier: TargetTypeRef): RustTsValueProjection | undefined {
   if (carrier.kind === "target-named" && (carrier.id === rustJsValueTargetId || carrier.id === rustTsValueTargetId) &&
     !isRustClosedValueCarrier(carrier)) return undefined;
-  if (!rustCarrierCanEnterTsValue(carrier, definitions) || rustOptionElementCarrier(carrier) !== undefined ||
+  if (!rustCarrierHasClosedValueIdentity(carrier) || rustOptionElementCarrier(carrier) !== undefined ||
     rustSourceUnionCarrierValue(carrier) !== undefined) return undefined;
   if (carrier.kind === "source-primitive" || isRustStringCarrier(carrier) || isRustBigIntCarrier(carrier) ||
     isRustUnitCarrier(carrier) || isRustAbsenceCarrier(carrier) ||
@@ -275,7 +316,7 @@ export function rustCarrierSupportsTrait(
     return rustCarrierSupportsDefault(carrier, typeParameterSupports, associatedTypeSupports, definitions);
   }
   if (traitPath === "core::clone::Clone") {
-    return supportsCloneWithContracts(carrier, typeParameterSupports, associatedTypeSupports, definitions, active);
+    return selectRustCloneRequirements(carrier, definitions, typeParameterSupports, associatedTypeSupports, active).kind === "available";
   }
   if (carrier.kind === "target-named" && carrier.id === rustTsValueTargetId) {
     return traitPath === "core::cmp::PartialEq";
@@ -448,6 +489,19 @@ function rustNamedTypeSatisfiesTraitRef(
   active: Map<string, string> = new Map(),
 ): boolean {
   const typeArguments = rustTargetGenericTypeArguments(namedType.genericArguments);
+  return matchingRustNamedTraitRequirements(namedType, trait).some(requirements => requirements.every(requirement => {
+    const argument = typeArguments[requirement.typeArgumentIndex];
+    if (argument === undefined) return false;
+    return requirement.trait.genericArguments.length === 0 && requirement.trait.associatedConstraints.length === 0 &&
+        requirement.trait.lifetimeBinder === undefined
+      ? rustCarrierSupportsTrait(argument, requirement.trait.path, typeParameterSupports,
+        associatedTypeSupports, definitions, active)
+      : rustCarrierSatisfiesTraitRef(argument, requirement.trait, typeParameterSupports, definitions);
+  }));
+}
+
+function matchingRustNamedTraitRequirements(namedType: RustNamedTypeCarrierValue, trait: RustTargetTraitRef):
+  readonly RustNamedTypeCarrierValue["traits"]["implementations"][number]["requirements"][] {
   const nativeDefault = (selected: RustTargetTraitRef): RustTargetTraitRef =>
     (selected.path === "core::cmp::PartialEq" || selected.path === "core::cmp::PartialOrd") &&
       selected.genericArguments.length === 0
@@ -455,16 +509,8 @@ function rustNamedTypeSatisfiesTraitRef(
         namedType.id, namedType.path, namedType.genericArguments, namedType.genericDefaults) }] }
       : selected;
   const required = nativeDefault(trait);
-  return namedType.traits.implementations.some((implementation) =>
-    rustNativeTraitRefEquals(nativeDefault(implementation.trait), required) && implementation.requirements.every((requirement) => {
-      const argument = typeArguments[requirement.typeArgumentIndex];
-      if (argument === undefined) return false;
-      return requirement.trait.genericArguments.length === 0 && requirement.trait.associatedConstraints.length === 0 &&
-          requirement.trait.lifetimeBinder === undefined
-        ? rustCarrierSupportsTrait(argument, requirement.trait.path, typeParameterSupports,
-          associatedTypeSupports, definitions, active)
-        : rustCarrierSatisfiesTraitRef(argument, requirement.trait, typeParameterSupports, definitions);
-    }));
+  return namedType.traits.implementations.filter(implementation =>
+    rustNativeTraitRefEquals(nativeDefault(implementation.trait), required)).map(implementation => implementation.requirements);
 }
 
 export function rustCarrierSupportsJsEquality(carrier: TargetTypeRef | undefined): boolean {

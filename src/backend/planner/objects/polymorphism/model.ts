@@ -224,48 +224,25 @@ export function projectOwnMethodProperties(
   context: RustPlanContext,
 ): readonly ProjectMethodPropertyPlan[] | undefined {
   const properties: ProjectMethodPropertyPlan[] = [];
-  const seen = new Set<Node>();
-  for (const member of projectOwnMethods(definition, context)) {
-    if (context.input.program.source.ast.hasModifierKind(member, "static")) {
-      continue;
-    }
-    const implementation = context.input.program.sourceNavigation.callableImplementation(member);
-    const declaration = implementation.kind === "resolved"
-      ? implementation.implementation.declaration
-      : member;
-    if (seen.has(declaration)) {
-      continue;
-    }
-    const usage = context.input.program.projectMethodProperties.usageFor(member) ??
-      context.input.program.projectMethodProperties.usageFor(declaration);
-    if (usage?.writable !== true) {
-      continue;
-    }
-    if (context.input.program.source.ast.typeParameters(declaration).length !== 0) {
-      return undefined;
-    }
-    const owner = context.input.program.projectTypes.definitionContainingDeclaration(declaration);
-    const relation = owner === undefined
-      ? undefined
-      : context.input.program.projectTypes.relationship(receiverCarrier, owner);
-    const shape = owner === undefined || relation?.kind !== "related"
+  for (const usage of context.input.program.projectMethodProperties.usages) {
+    const storage = usage.storage;
+    if (storage === undefined || storage.owner !== definition.declaration || storage.declaration !== usage.declaration) continue;
+    const declaration = storage.declaration;
+    const relation = context.input.program.projectTypes.relationship(receiverCarrier, definition);
+    const shape = relation.kind !== "related"
       ? undefined
       : projectCallableShape(declaration, {
           ...context,
-          typeParameterSubstitutions: projectTypeSubstitutions(owner, relation.targetType),
-          lifetimeSubstitutions: projectLifetimeSubstitutions(owner, relation.targetType),
+          typeParameterSubstitutions: projectTypeSubstitutions(definition, relation.targetType),
+          lifetimeSubstitutions: projectLifetimeSubstitutions(definition, relation.targetType),
         }, { methodTypeArgumentSubstitutions: new Map() });
-    const targetName = owner === undefined
-      ? undefined
-      : context.input.program.projectTypes.fieldStorageName(owner, declaration);
-    if (shape === undefined || targetName === undefined || shape.isUnsafe ||
+    if (shape === undefined || shape.isUnsafe ||
       shape.errorType === undefined) {
       return undefined;
     }
-    seen.add(declaration);
     properties.push({
       declaration,
-      targetName,
+      targetName: storage.targetName,
       callableType: rustProjectMethodPropertyCallableType(shape),
       params: shape.params,
       ...(shape.returnType === undefined ? {} : { returnType: shape.returnType }),

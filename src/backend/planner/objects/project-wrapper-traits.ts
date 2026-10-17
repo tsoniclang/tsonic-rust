@@ -6,18 +6,22 @@ import type { RustExpr, RustGenerics, RustImplFunction, RustItem, RustType } fro
 export function rustProjectCloneImplementation(
   target: RustType,
   generics: RustGenerics,
-  fields: readonly string[],
+  fields: readonly { readonly name: string; readonly copy: boolean; readonly requirement?: RustType }[],
 ): RustItem {
   return {
-    kind: "impl", target, generics, trait: { kind: "named", path: "Clone" },
+    kind: "impl", target, generics: { ...generics, wherePredicates: [...generics.wherePredicates,
+      ...fields.flatMap(field => field.requirement === undefined ? [] : [{ kind: "type" as const, type: field.requirement,
+        bounds: [{ kind: "trait" as const, path: "Clone" }] }])] },
+    trait: { kind: "named", path: "Clone" },
     members: [{ kind: "function",
       name: "clone", visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"), params: [], returnType: { kind: "named", path: "Self" },
       body: { statements: [{ kind: "tail", expr: {
-        kind: "struct-literal", path: "Self", fields: fields.map(name => ({
-          name, value: { kind: "method-call", receiver: {
-            kind: "field", receiver: { kind: "path", path: "self" }, name,
-          }, method: "clone", args: [] },
+        kind: "struct-literal", path: "Self", fields: fields.map(field => ({
+          name: field.name, value: field.copy ? { kind: "field", receiver: { kind: "path", path: "self" }, name: field.name }
+            : { kind: "method-call", receiver: {
+              kind: "field", receiver: { kind: "path", path: "self" }, name: field.name,
+            }, method: "clone", args: [] },
         })),
       } }] },
     }],
@@ -37,7 +41,7 @@ export function rustProjectWrapperTraits(
     kind: "impl", target, generics, trait: { kind: "named", path: trait }, members: [method],
   });
   return [
-    rustProjectCloneImplementation(target, generics, [rustProjectObjectStateField]),
+    rustProjectCloneImplementation(target, generics, [{ name: rustProjectObjectStateField, copy: false }]),
     implementation("core::fmt::Debug", { kind: "function",
       name: "fmt", visibility: "private", generics: emptyRustGenerics,
       selfParam: rustSelfParameter("ref"), params: [{ name: "formatter", type: {

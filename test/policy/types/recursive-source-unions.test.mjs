@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRustTypeDefinitionRegistry } from "../../../dist/analysis/project-types/type-definitions.js";
 import { rustSourceUnionTargetType, rustSourcePrimitiveTargetType, rustCallableTargetType,
-  rustCarrierSupportsClone, rustCarrierSupportsTrait, rustJsArrayTargetType } from "../../../dist/target-model/types/index.js";
+  selectRustCloneRequirements, rustCarrierSupportsTrait, rustJsArrayTargetType } from "../../../dist/target-model/types/index.js";
 import { rustValueConversionContract } from "../../../dist/target-model/conversions/contracts.js";
 import { selectRustSourceValueConversion } from "../../../dist/policy/conversions/selection.js";
 import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operations/finalized-operation/finalize.js";
@@ -142,16 +142,16 @@ test("recursive clone proofs retain generic and non-Clone requirements without u
   assert.equal(registry.registerSourceUnion({ carrier: step, variants: [
     { name: "Done", carrier: parameter }, { name: "Next", carrier: step },
   ] }, true), true);
-  assert.equal(rustCarrierSupportsClone(reference("Step", integer), registry), true);
-  assert.equal(rustCarrierSupportsClone(step, registry), false);
+  assert.equal(selectRustCloneRequirements(reference("Step", integer), registry).kind === "available", true, "finite recursive integer payloads are Clone");
+  assert.equal(selectRustCloneRequirements(step, registry).kind === "available", false, "an unbound recursive payload has no Clone assumption");
   assert.equal(rustCarrierSupportsTrait(step, "core::clone::Clone", identity => identity === parameter.identity, undefined, registry), true);
   const unique = { kind: "reference", mutable: true, referent: integer };
-  assert.equal(rustCarrierSupportsClone(reference("Step", unique), registry), false);
+  assert.equal(selectRustCloneRequirements(reference("Step", unique), registry).kind === "available", false, "a mutable loan remains non-Clone");
   const expanding = reference("Growing");
   assert.equal(registry.registerSourceUnion({ carrier: expanding, variants: [
     { name: "Done", carrier: parameter }, { name: "Next", carrier: reference("Growing", rustJsArrayTargetType(parameter)) },
   ] }, true), true);
-  assert.equal(rustCarrierSupportsClone(reference("Growing", integer), registry), false);
+  assert.equal(selectRustCloneRequirements(reference("Growing", integer), registry).kind === "available", false, "an expanding recursive instantiation has no finite Clone proof");
 });
 
 for (const surfaces of [[], ["js"]]) {

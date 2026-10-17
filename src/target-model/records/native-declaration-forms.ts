@@ -3,11 +3,13 @@ import type { RustProjectTypeDefinition } from "../types/project-types.js";
 import type { RustSourceTypeFamilyImplementation } from "../types/type-families.js";
 import type {
   RustNativeAliasDeclaration,
+  RustNativeClassDeclaration,
   RustNativeEnumDeclaration,
   RustNativeInterfaceDeclaration,
 } from "./native-value-declarations.js";
 
 export type RustNativeDeclarationForm =
+  | RustNativeClassDeclaration
   | RustNativeEnumDeclaration
   | RustNativeInterfaceDeclaration
   | RustNativeAliasDeclaration;

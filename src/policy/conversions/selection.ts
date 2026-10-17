@@ -18,8 +18,8 @@ import {
   rustJsStringNumberTargetType,
   isRustNeverCarrier,
   isRustAbsenceCarrier,
-  rustCarrierSupportsClone,
-  rustCarrierCanEnterTsValue,
+  selectRustCloneRequirements,
+  rustCarrierHasClosedValueIdentity,
   rustJsArrayLikeElementTargetType,
   rustJsValueTargetType,
   rustOptionElementCarrier,
@@ -98,7 +98,7 @@ export function selectRustSourceValueConversion(
     if (error !== undefined) return error;
   }
   const nativeArrayElement = isRustJsArrayCarrier(target) ? rustJsArrayLikeElementTargetType(target) : undefined;
-  if (nativeArrayElement !== undefined && rustCarrierCanEnterTsValue(nativeArrayElement, definitions) &&
+  if (nativeArrayElement !== undefined && rustCarrierHasClosedValueIdentity(nativeArrayElement) &&
     (isRustJsValueCarrier(source) || isRustJsArrayValueCarrier(source))) {
     return { kind: "js-array-backing", source, element: nativeArrayElement };
   }
@@ -215,7 +215,7 @@ export function selectRustSourceValueConversion(
     const arrayElement = isRustJsArrayCarrier(source)
       ? rustJsArrayLikeElementTargetType(source)
       : undefined;
-    if (arrayElement !== undefined && rustCarrierCanEnterTsValue(arrayElement, definitions)) {
+    if (arrayElement !== undefined && rustCarrierHasClosedValueIdentity(arrayElement)) {
       const elementConversion = selectRustSourceValueConversion(
         arrayElement,
         jsValueCarrier,
@@ -385,7 +385,7 @@ function selectProjectedValueConversion(
   const arrayElement = isRustJsArrayCarrier(source)
     ? rustJsArrayLikeElementTargetType(source)
     : undefined;
-  if (arrayElement !== undefined && rustCarrierSupportsClone(arrayElement, definitions)) {
+  if (arrayElement !== undefined && selectRustCloneRequirements(arrayElement, definitions, () => true, () => true).kind !== "unavailable") {
     const elementConversion = selectProjectedValueConversion(
       arrayElement,
       projection,
