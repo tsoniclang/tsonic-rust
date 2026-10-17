@@ -208,7 +208,7 @@ test("registered concrete native types and explicit generic outlives inverses co
     ["factory_owned", "struct Factory<Value> { value: Value }\npub fn exact() { require_static_type::<Factory<i32>>(); }", true],
   ];
   const project = writeGeneratedProject("static-runtime-native-facts", [
-    { path: "Cargo.toml", text: `[package]\nname = "static_runtime_native_facts"\nversion = "0.0.0"\nedition = "2021"\n[workspace]\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }\ntsonic_rust_js = { path = ${JSON.stringify(javascript)} }\n` },
+    { path: "Cargo.toml", text: `[package]\nname = "static_runtime_native_facts"\nversion = "0.0.0"\nedition = "2021"\n[workspace]\n[dependencies]\ntsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }\ntsonic_rust_js = { path = ${JSON.stringify(javascript)} }\n[patch.crates-io]\ntsonic_rust_runtime = { path = ${JSON.stringify(runtime)} }\n` },
     { path: "src/lib.rs", text: positive },
     ...probes.map(([name, body]) => ({ path: `src/bin/${name}.rs`, text: `${prefix}${body}\nfn main() {}\n` })),
   ]);
@@ -280,34 +280,28 @@ export function inspect<Region extends Life>(loan: Ref<int32, Region>) {
       name.startsWith("borrowed") ? "unsatisfied" : "supported", `${name}: only its exact physical binding decides static retention`);
 });
 
-test("input-only function pointers, RegExp retention and a generated class factory retain actual native storage without extra cost", { timeout: 300_000 }, () => {
+test("input-only function pointers and RegExp retention match actual native storage and costs", { timeout: 300_000 }, () => {
   const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
     outputType: "lib", crateName: "static_runtime_generated",
   } }, files: { "index.ts": `
 import { allocateptr, loadptr } from "@tsonic/core/lang.js";
-import type { FunctionPointer, Pointer, int32 } from "@tsonic/core/types.js";
+import type { FunctionPointer, Pointer } from "@tsonic/core/types.js";
 export function retainInput<Value>(value: FunctionPointer<[Value], void>): Pointer<FunctionPointer<[Value], void>> {
   return allocateptr(value);
 }
 export function retainPattern(value: RegExp): Pointer<RegExp> { return allocateptr(value); }
-function patternFactory(value: RegExp) {
-  return new class Pattern {
-    matches(text: string): boolean { return value.test(text); }
-  }();
-}
-function consume(_value: int32): void {}
 export function verify(): void {
-  loadptr(retainInput<int32>(consume))(7);
   const pattern = loadptr(retainPattern(new RegExp("^a+$")));
-  const first = patternFactory(pattern);
-  const second = patternFactory(new RegExp("^b+$"));
-  if (!first.matches("aaa") || first.matches("bbb") || !second.matches("bbb")) throw new Error("factory identity");
+  if (!pattern.test("aaa") || pattern.test("bbb")) throw new Error("retained pattern");
 }
 ` } });
   assertNoTargetDiagnostics(result.diagnostics);
   const output = artifactText(result, "src/index.rs");
-  assert.match(output, /pub fn retainInput<Value: 'static>\(value: fn\(Value\)\)/u);
+  assert.equal(/pub fn retainInput<Value: 'static>\(\s*value: fn\(Value\) -> \(\),?\s*\) -> rt::Location<fn\(Value\) -> \(\), rt::TsonicError>/u.test(output),
+    true, "the input-only function pointer has the exact static bound, void result and native Location carrier");
   assert.match(output, /pub fn retainPattern\(value: js_abi::JsRegExp\)/u);
+  assert.equal(/pub fn retainPattern\(value: js_abi::JsRegExp\) -> rt::Location<js_abi::JsRegExp, rt::TsonicError> \{\s*rt::Location::<js_abi::JsRegExp, rt::TsonicError>::allocate\(value\)\s*\}/u.test(output),
+    true, "RegExp retention moves the actual native value into Location without an additional clone or adapter");
   const nativeCost = `${nativeOwnershipCostSupport}
 use static_runtime_generated::index;
 use tsonic_rust_js::abi as js_abi;
@@ -329,14 +323,14 @@ fn actual_generated_calls_and_locations_match_native_costs() {
         assert_eq!(generated_cost.allocations, 1);
         generated.try_load().unwrap()(7);
         native.try_load().unwrap()(7);
-        let generated_input = js_abi::JsRegExp::from_string(&js_abi::JsString::from("^a+$")).unwrap();
+        let generated_input = js_abi::JsRegExp::from_string(&js_abi::JsString::from_utf8("^a+$")).unwrap();
         let native_input = generated_input.clone();
         let (generated_pattern, generated_pattern_cost) = measure(|| index::retainPattern(generated_input));
         let (native_pattern, native_pattern_cost) = measure(|| native_location_like(&generated_pattern, native_input));
         assert_eq!(generated_pattern_cost, native_pattern_cost);
         assert_eq!(generated_pattern_cost.allocations, 1);
-        assert!(generated_pattern.try_load().unwrap().test(&js_abi::JsString::from("aaa")).unwrap());
-        assert!(native_pattern.try_load().unwrap().test(&js_abi::JsString::from("aaa")).unwrap());
+        assert!(generated_pattern.try_load().unwrap().test(&js_abi::JsString::from_utf8("aaa")).unwrap());
+        assert!(native_pattern.try_load().unwrap().test(&js_abi::JsString::from_utf8("aaa")).unwrap());
     }
 }
 `;
@@ -344,4 +338,28 @@ fn actual_generated_calls_and_locations_match_native_costs() {
   assert.equal(formatted.status, 0, "the handwritten control formats independently of generated artifacts");
   const native = { path: "tests/static_cost.rs", text: formatted.stdout };
   validateGeneratedProject("static-runtime-generated", [...result.artifacts, native]);
+});
+
+test("generated RegExp class factories retain both actual native environments", { timeout: 300_000 }, () => {
+  const { result } = compileRust({ surfaces: ["js"], target: { id: "rust", options: {
+    outputType: "bin", crateName: "static_regexp_factory",
+  } }, files: { "index.ts": `
+import { allocateptr, loadptr } from "@tsonic/core/lang.js";
+import type { Pointer } from "@tsonic/core/types.js";
+function retainPattern(value: RegExp): Pointer<RegExp> { return allocateptr(value); }
+function patternFactory(value: RegExp) {
+  return new class Pattern {
+    matches(text: string): boolean { return value.test(text); }
+  }();
+}
+export function verify(): void {
+  const pattern = loadptr(retainPattern(new RegExp("^a+$")));
+  const first = patternFactory(pattern);
+  const second = patternFactory(new RegExp("^b+$"));
+  if (!first.matches("aaa") || first.matches("bbb") || !second.matches("bbb")) throw new Error("factory identity");
+}
+verify();
+` } });
+  assertNoTargetDiagnostics(result.diagnostics);
+  validateGeneratedProject("static-regexp-factory", result.artifacts, { run: true });
 });
