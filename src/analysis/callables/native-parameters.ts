@@ -6,12 +6,13 @@ import type { RustNativeStoragePlan, RustNativeStorageQueries, RustNativeStorage
 export function finalizeRustNativeParameterStorage(input: {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly records: RustProgramRecords;
 }, queries: RustNativeStorageQueries): RustNativeStoragePlan {
   const parameters = new Map<Node, RustNativeStorageSelection>();
   const unavailable: RustNativeStorageSelection = Object.freeze({ kind: "unresolved",
     reason: "Native parameter storage requires its exact owned formal parameter." });
-  for (const node of input.storage.nodes) {
+  for (const node of input.nativeNodes) {
     const abi = input.records.sourceParameterAbi.get(node);
     if (abi === undefined || !input.ast.is.IsParameterDeclaration(node)) continue;
     const owner = input.ast.parent(node);

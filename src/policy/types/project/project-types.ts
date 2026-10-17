@@ -24,6 +24,7 @@ export interface RustProjectTypePolicyHost {
   readonly navigation: SourceProgramNavigation;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourceNodes: readonly Node[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly thrownClassDeclarations: ReadonlySet<Node>;
   readonly sourceCreatedErrorOrigins: readonly Node[];

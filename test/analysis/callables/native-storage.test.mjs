@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { createTargetSourceProgram, Node_Initializer } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
 import { createRustNativeStorageQueries } from "../../../dist/analysis/callables/native-storage.js";
@@ -25,15 +25,21 @@ function fixture(text, options = {}) {
   const guardedAst = Proxy.revocable(checkedSource.ast, {});
   const source = { ...checkedSource, ast: guardedAst.proxy };
   const storage = createSourceStorageQuery(source, program.sourceFiles);
-  const genericRegistry = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation);
+  const participation = sourceNodesOutsideErasedSubtrees(source.ast, storage.nodes,
+    node => program.records.nativeParticipation.get(node) === "erased");
+  assert.equal(participation.kind, "resolved", "the checked source has complete native participation");
+  const nativeNodes = participation.nodes;
+  const nativeNodeSet = new Set(nativeNodes);
+  const genericRegistry = createRustGenericCallablePlan(source.ast, program.sourceFiles, program.records, program.names, source.navigation,
+    node => nativeNodeSet.has(node));
   const generic = genericRegistry.plan;
   let physical;
-  const input = { ast: source.ast, storage, records: program.records, definitions: program.typeDefinitions,
+  const input = { ast: source.ast, storage, nativeNodes, records: program.records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes,
     generic, lexicalFunctions: program.lexicalFunctions, lifetimes: program.sourceLifetimes,
     physicalCarrierFor: (carrier, ownerFileName, producers) => physical.carrierFor(carrier, ownerFileName, producers) };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
-  const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: storage.nodes,
+  const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {
       const selected = queries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;

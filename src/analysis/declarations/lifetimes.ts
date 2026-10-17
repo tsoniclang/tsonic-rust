@@ -32,6 +32,7 @@ interface RustSourceGenericParameterEvidence {
 }
 
 export interface AnalyzeRustLifetimesInput {
+  readonly isNativeNode: (node: Node) => boolean;
   readonly source: TargetSourceProgram;
   readonly ast: AstReader;
   readonly sourceFiles: readonly SourceFile[];
@@ -50,7 +51,7 @@ export function analyzeRustLifetimes(
   input: AnalyzeRustLifetimesInput,
 ): AnalyzeRustLifetimesResult {
   const diagnostics: TargetDiagnostic[] = [];
-  const declarations = collectGenericDeclarations(input.ast, input.sourceFiles);
+  const declarations = collectGenericDeclarations(input.ast, input.sourceFiles, input.isNativeNode);
   if (declarations === undefined) {
     return {
       diagnostics: [diagnostic(
@@ -355,10 +356,12 @@ function flattenConstraintBounds(
 function collectGenericDeclarations(
   ast: AstReader,
   sourceFiles: readonly SourceFile[],
+  isNativeNode: (node: Node) => boolean,
 ): readonly Node[] | undefined {
   const declarations: Node[] = [];
   let malformed = false;
   const visit = (node: Node): void => {
+    if (!isNativeNode(node)) return;
     if (isGenericOwner(ast.kindName(node))) {
       const parameters = ast.typeParameters(node);
       if (!isDenseDataArray(parameters) || parameters.some((parameter) => parameter === undefined)) {

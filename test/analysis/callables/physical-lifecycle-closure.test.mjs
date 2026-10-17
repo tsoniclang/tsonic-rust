@@ -644,7 +644,7 @@ export function escaped(): (count: number) => number {
     return selected.proxy;
   };
   const frames = createRustFrameCallablePlan({ ast: guard(program.source.ast), records: guard(program.records),
-    ownership: guard(program.callableOwnership), sourceStorage: guard(sourceStorage), usedNames: new Set(),
+    ownership: guard(program.callableOwnership), sourceStorage: guard(sourceStorage), nativeNodes: sourceNodes(program), usedNames: new Set(),
     navigation: guard(source.navigation), projectTypes: guard(program.projectTypes),
     objectRepresentations: guard(program.objectRepresentations) });
   const nodes = sourceNodes(program);

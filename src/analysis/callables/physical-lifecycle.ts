@@ -46,6 +46,7 @@ interface RustPhysicalCallableLifecycleInput {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly sourceStorage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly typeDefinitions: RustTypeDefinitions;
   readonly generic: RustGenericCallablePlan;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
@@ -120,7 +121,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     if (!requests.some(existing => rustTargetTypeRefEquals(existing, carrier))) requests.push(carrier);
     producerRequests.set(declaration, requests);
   };
-  for (const node of input.sourceStorage.nodes) {
+  for (const node of input.nativeNodes) {
     if (records.sourceCallableReturn.get(node) !== undefined) {
       returned(node);
     }
@@ -216,7 +217,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       for (const flow of flows) inheritedDestination(flow.node);
       for (const node of values.keys()) inheritedDestination(node);
       const nativeProducers = input.nativeProducers.seal(producerRequests);
-      for (const node of input.sourceStorage.nodes) {
+      for (const node of input.nativeNodes) {
         const parameter = records.sourceParameterAbi.get(node);
         for (const carrier of [records.runtimeCarrier.get(node)?.carrier, records.sourceCallableReturn.get(node)?.returnCarrier,
           parameter?.valueCarrier, parameter?.parameterCarrier]) {

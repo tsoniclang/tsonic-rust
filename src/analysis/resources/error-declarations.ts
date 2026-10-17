@@ -92,6 +92,7 @@ export function collectRustErrorDeclarations(walk: RustFactWalk, projectSourceFi
   }
   for (const sourceFile of projectSourceFiles) {
     const visitCallableDeclarations = (node: Node): void => {
+      if (!walk.context.isNativeNode(node)) return;
       const operation = walk.context.records.targetOperation.get(node);
       if (ast.kindName(node) === KindFunctionDeclaration || operation?.kind === "closure" ||
         walk.context.sourceCallables.directLexicalBinding(node) !== undefined) {

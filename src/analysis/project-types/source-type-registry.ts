@@ -146,7 +146,7 @@ export function createRustSourceTypeRegistry(
       return true;
     },
     pendingSourceUnions: () => Object.freeze([...pendingUnions]),
-    registerSourceFile(sourceFile, ast) {
+    registerSourceFile(sourceFile, ast, isNativeNode) {
       const fileName = ast.getFileName(sourceFile);
       if (fileName.length === 0 || ast.isDeclarationFile(sourceFile)) {
         return;
@@ -155,7 +155,7 @@ export function createRustSourceTypeRegistry(
       if (!isDenseDataArray(statements) || statements.some((declaration) => declaration === undefined)) {
         return;
       }
-      for (const declaration of rustSourceTypeDeclarations(sourceFile, ast)) {
+      for (const declaration of rustSourceTypeDeclarations(sourceFile, ast, isNativeNode)) {
         if (ast.kindName(declaration) === "KindTypeAliasDeclaration") {
           const variants = closedStringUnionVariants(declaration, ast);
           if (variants !== undefined) {

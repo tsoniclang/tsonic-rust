@@ -59,7 +59,7 @@ export function createRustTypeOnlyDeclarationProducer(
       const visiting = new Set<Node>();
       const visited = new Set<Node>();
       const rejected = new Set<Node>();
-      for (const file of files) for (const declaration of rustSourceTypeDeclarations(file, ast)) visit(declaration);
+      for (const file of files) for (const declaration of rustSourceTypeDeclarations(file, ast, walk.context.isNativeNode)) visit(declaration);
 
       function visit(declaration: Node): boolean {
         if (rejected.has(declaration)) return false;

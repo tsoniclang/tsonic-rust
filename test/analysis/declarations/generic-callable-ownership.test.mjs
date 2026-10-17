@@ -85,12 +85,15 @@ closureCapture: { get: (node) => {
   const names = { nameForDeclaration: () => undefined, functionNameForDeclaration: () => undefined, callableValueNameForDeclaration: () => undefined };
   const navigation = { expressionValueFlow: node => ({ escapes: node === closures[1], identityCompared: false,
     hasUnclassifiedUse: false, captured: false }) };
-  return { closures, planInput: { ast, sourceFiles: files, sourcePackages: fakeSourcePackageGraph(
+  const nativeNodes = [...files, ...files.flatMap(file => file.nodes)];
+  const nativeNodeSet = new Set(nativeNodes);
+  const isNativeNode = node => nativeNodeSet.has(node);
+  return { closures, planInput: { ast, sourceFiles: files, nativeNodes, isNativeNode, sourcePackages: fakeSourcePackageGraph(
     files.map(file => ({ fileName: file.name })),
   ), sourceStorage: createSourceStorageQuery(fakeCompileInput().source, []), records, names, navigation,
     lifetimes: { contractFor: () => undefined }, classValueAdapters: [], closedSourceFiles: new Set(),
     ownership: { components: [], activations: [], failureReason: () => undefined } },
-    create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names, navigation, [], closed).plan };
+    create: (closed = new Set()) => createRustGenericCallablePlan(ast, files, records, names, navigation, isNativeNode, [], closed).plan };
 }
 
 test("callable value plans seal only after adapter classification and cannot be replaced", () => {

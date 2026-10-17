@@ -194,7 +194,8 @@ export function analyzeRustSourcePackageComponents(
   const errorComponents = new Set<string>();
   const closedErrorsByComponent = new Map<string, { thrownCarriers: TargetTypeRef[]; retained: boolean; sourceView: boolean }>();
   for (const sourceFile of context.sourceFiles) {
-    const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.records, context.typeDefinitions, context.projectTypes, effectsFor);
+    const demand = rustClosedErrorTransportDemand(sourceFile, context.ast, context.records, context.typeDefinitions, context.projectTypes,
+      effectsFor, context.isNativeNode);
     const componentId = identities.componentIdForFile(context.ast.getFileName(sourceFile));
     if (demand === undefined) return rejected("RUST_CLOSED_ERROR_DEMAND_UNRESOLVED",
       "Closed Error demand exceeds its bounded exact source-tree contract.");

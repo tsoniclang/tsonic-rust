@@ -57,6 +57,7 @@ export interface RustNativeCallableInputPlan {
 
 export function createRustNativeCallableInputPlan(input: {
   readonly ast: AstReader;
+  readonly nativeNodes: readonly Node[];
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;
@@ -143,7 +144,7 @@ export function createRustNativeCallableInputPlan(input: {
     return Object.freeze({ kind: "resolved", inputs: Object.freeze([...parameters]),
       implementations: Object.freeze([...implementations]) });
   };
-  for (const node of input.storage.nodes) {
+  for (const node of input.nativeNodes) {
     if (!input.ast.is.IsParameterDeclaration(node)) continue;
     const carrier = input.records.sourceParameterAbi.get(node)?.valueCarrier ??
       input.records.runtimeCarrier.get(node)?.carrier;
@@ -153,7 +154,7 @@ export function createRustNativeCallableInputPlan(input: {
     const subject = input.storage.subject(node, "input");
     if (subject.kind === "resolved") selectInput(subject.subject, carrier);
   }
-  for (const node of input.storage.nodes) {
+  for (const node of input.nativeNodes) {
     const carrier = input.records.runtimeCarrier.get(node)?.carrier;
     if (carrier === undefined) continue;
     const selected = rustOptionElementCarrier(carrier) ?? carrier;

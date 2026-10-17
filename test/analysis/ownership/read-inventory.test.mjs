@@ -18,6 +18,7 @@ async function fixture() {
   for (const node of selected) builder.runtimeCarriers.selected(node, { kind: "target-named", id: "rust.std.String" });
   const input = {
     storage,
+    nativeNodes: storage.nodes,
     records: builder.seal([]),
     flow: { movingReads: new Set(), captureTransfers: new Map() },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
@@ -48,7 +49,7 @@ test("an incomplete or unordered transparent inventory never silently selects a 
   const { input, selected } = await fixture();
   const operand = selected.at(-1);
   for (const nodes of [input.storage.nodes.filter(node => node !== operand), [...input.storage.nodes].reverse()]) {
-    const result = analyzeRustReadOwnership({ ...input, storage: { ...input.storage, nodes } });
+    const result = analyzeRustReadOwnership({ ...input, nativeNodes: nodes, storage: { ...input.storage, nodes } });
     assert.equal(result.kind, "rejected");
     assert.equal(result.diagnostics[0]?.code, "RUST_OWNERSHIP_SOURCE_INVENTORY_INVALID");
     assert.equal("ownership" in result, false);

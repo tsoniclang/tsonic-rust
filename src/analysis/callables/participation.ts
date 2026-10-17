@@ -1,5 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { sourceLexicalFunctionIsUnused, type SourceProgramNavigation } from "@tsonic/target-api/source";
+import { sourceLexicalFunctionIsUnused, sourceNodesOutsideErasedSubtrees,
+  type SourceProgramNavigation, type SourceSubtreeParticipation } from "@tsonic/target-api/source";
 import type { RustNativeParticipation } from "../../target-model/records/native-demand.js";
 import type { RustNativeParticipationProducer } from "../program/records/native-participation.js";
 import { requireRustRecord, type RustRequiredRecord } from "../program/records/required-records.js";
@@ -10,9 +11,9 @@ export function analyzeRustNativeParticipation(input: {
   readonly navigation: Pick<SourceProgramNavigation, "declarationUseSummary" | "callableImplementation">;
   readonly producer: RustNativeParticipationProducer;
   readonly requiredRecords: RustRequiredRecord[];
-}): void {
-  for (const node of input.nodes) {
-    if (!input.ast.is.IsFunctionDeclaration(node)) continue;
+}): SourceSubtreeParticipation {
+  return sourceNodesOutsideErasedSubtrees(input.ast, input.nodes, node => {
+    if (!input.ast.is.IsFunctionDeclaration(node)) return false;
     const parent = input.ast.parent(node);
     const moduleLevel = parent !== undefined && input.ast.is.IsSourceFile(parent);
     let participation: RustNativeParticipation;
@@ -26,5 +27,6 @@ export function analyzeRustNativeParticipation(input: {
     requireRustRecord(input.requiredRecords, "nativeParticipation", node,
       "named-function-placement", "nativeParticipations.selected");
     input.producer.selected(node, participation);
-  }
+    return participation === "erased";
+  });
 }

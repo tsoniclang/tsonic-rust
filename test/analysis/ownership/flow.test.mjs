@@ -5,12 +5,14 @@ import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustOwnershipFlow } from "../../../dist/analysis/ownership/flow.js";
 import { rustNativeArgumentBorrowsRead } from "../../../dist/analysis/ownership/uses.js";
+import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables/participation.js";
+import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 
 let sequence = 0;
 async function fixture(text, options = {}) {
   const source = createTargetSourceProgram(await checkedSource(`rust-ownership-flow-${sequence++}`, { "src/index.ts": text }));
   const storage = createSourceStorageQuery(source, source.sourceFiles);
-  const selected = analyzeRustOwnershipFlow({ source, storage, capturesFor: () => undefined,
+  const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: storage.nodes, capturesFor: () => undefined,
     isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false, ...options });
   return { source, storage, selected };
 }
@@ -20,6 +22,30 @@ function references(source, storage, name) {
     source.navigation.sourceReferenceFor(node) !== undefined &&
     source.navigation.sourceReferenceFor(node)?.declaration !== source.ast.parent(node));
 }
+
+test("ownership creates graphs only for the canonical required native body domain", async () => {
+  for (const required of [false, true]) {
+    const { source, storage } = await fixture(`export function run(): number {
+      function unused(): number {
+        ${Array.from({ length: 32 }, (_, index) => `const value${index} = ${index};`).join("\n")}
+        return value31;
+      }
+      return ${required ? "unused()" : "42"};
+    }`);
+    const builder = createRustProgramRecordBuilder();
+    const participation = analyzeRustNativeParticipation({ ast: source.ast, nodes: storage.nodes,
+      navigation: source.navigation, producer: builder.nativeParticipations, requiredRecords: [] });
+    assert.equal(participation.kind, "resolved", "checked native participation closes before graph admission");
+    const selected = analyzeRustOwnershipFlow({ source, storage, nativeNodes: participation.nodes,
+      capturesFor: () => undefined, isOnceCallable: () => false, canMoveStoredField: () => false,
+      isOwnedOperationResult: () => false, limits: { maximumPoints: 8 } });
+    assert.equal(selected.kind, required ? "rejected" : "resolved", "only a required body consumes its CFG budget");
+    if (required) assert.equal(selected.diagnostics[0]?.code, "RUST_OWNERSHIP_FLOW_UNRESOLVED",
+      "required native graph failures retain the exact owner diagnostic");
+    assert.equal(storage.nodes.length > participation.nodes.length, !required,
+      "the complete checked source domain remains distinct from physical demand");
+  }
+});
 
 for (const [name, expression, input] of [
   ["direct", "value.item", "Slot"],

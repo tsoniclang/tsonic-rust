@@ -49,6 +49,7 @@ export function createRustStructuralMethodStorage(input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
   readonly sourceStorage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
   readonly structuralShapes: RustStructuralShapePlanRegistry;
   readonly native: RustNativeCallableInputPlan;
@@ -100,7 +101,7 @@ export function createRustStructuralMethodStorage(input: {
     }
     roots.push(Object.freeze({ ...destination, subject, bindings }));
   };
-  for (const node of sourceStorage.nodes) {
+  for (const node of input.nativeNodes) {
     const operation = records.targetOperation.get(node);
     if (operation?.kind === "record-literal" && operation.storage === "structural-object") {
       const destinations = new Map<number, RustStructuralMethodDestination>();

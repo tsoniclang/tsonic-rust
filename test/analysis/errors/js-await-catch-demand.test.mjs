@@ -8,7 +8,7 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 function demand(body) {
   const context = analyzeRustErrorEffects(`export async function action(pending: Promise<number>): Promise<number> { ${body} }`);
   const selected = rustClosedErrorTransportDemand(context.sourceFiles[0], context.ast, context.records,
-    context.typeDefinitions, context.projectTypes);
+    context.typeDefinitions, context.projectTypes, node => context.records.errorEffects.get(node), context.isNativeNode);
   assert.equal(selected !== undefined, true);
   return selected;
 }

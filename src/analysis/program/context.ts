@@ -90,11 +90,14 @@ import { analyzeRustNumericLiteralAdmission } from "../numeric/literal-admission
 import { analyzeRustPromiseResultUses } from "../callables/promise-results.js";
 import type { RustPromiseResultUses } from "../../target-model/records/promise-results.js";
 import { createRustPromiseBodySelection, type RustPromiseBodySelection } from "../callables/promise-bodies.js";
+import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { selectRustSourcePackageComponentIdentities,
   type SelectRustSourcePackageComponentIdentitiesResult } from "./source-package-components.js";
 
 export interface RustAnalysisContext extends RustSourcePolicyContext {
   readonly sourceStorage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly promiseResultUses: RustPromiseResultUses;
   readonly promiseBodies: RustPromiseBodySelection;
   readonly receiverOccurrences: ReadonlyMap<Node, readonly Node[]> | undefined;
@@ -151,7 +154,6 @@ export function createRustAnalysisContext(
       : [],
   );
   const literalValues = analyzeSourceLiteralValues(ast, sourceFiles);
-  const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues);
   const sourcePackageComponentIdentities = selectRustSourcePackageComponentIdentities(input.sourcePackages, ast, sourceFiles);
   const safetyApplications = createRustSafetyApplicationFactIndex({
     ast,
@@ -168,14 +170,24 @@ export function createRustAnalysisContext(
   const sourceStorage = createSourceStorageQuery(input.source, sourceFiles, undefined,
     createRustSourceProfileStorageEffects(input.source, sourceProfiles));
   const sourceStorageFailure = sourceStorage.failureReason();
-  const promiseResultUses = analyzeRustPromiseResultUses(ast, sourceStorage.nodes);
-  const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
   const typeDefinitions = createRustTypeDefinitionRegistry(jsEnabled ? rustJsValueTargetType() : rustTsValueTargetType());
   const records = createRustProgramRecordBuilder(typeDefinitions);
+  const requiredRecords: RustRequiredRecord[] = [];
+  const participation = sourceStorageFailure === undefined
+    ? analyzeRustNativeParticipation({ ast, nodes: sourceStorage.nodes, navigation: input.source.navigation,
+      producer: records.nativeParticipations, requiredRecords })
+    : { kind: "unresolved" as const, reason: sourceStorageFailure };
+  const nativeNodes = participation.kind === "resolved" ? participation.nodes : Object.freeze([]);
+  const nativeNodeSet = new Set(nativeNodes);
+  const isNativeNode = (node: Node): boolean => nativeNodeSet.has(node);
+  const numericLiteralAdmission = analyzeRustNumericLiteralAdmission(ast, sourceFiles, literalValues, isNativeNode);
+  const promiseResultUses = analyzeRustPromiseResultUses(ast, sourceStorage.nodes);
+  const receiverOccurrences = analyzeSourceReceiverOccurrences(sourceStorage);
   const names = createRustNamePlan({
     ast,
     runtimeValueUses,
     sourceFiles,
+    isNativeNode,
   });
   const lifetimes = analyzeRustLifetimes({
     source: input.source,
@@ -183,6 +195,7 @@ export function createRustAnalysisContext(
     sourceFiles,
     records,
     names,
+    isNativeNode,
     referencedDeclaration(node) {
       return input.source.navigation.sourceReferenceFor(node)?.declaration;
     },
@@ -193,6 +206,8 @@ export function createRustAnalysisContext(
     callableRepresentation: "storage" as const,
     literalValues,
     sourceStorage,
+    nativeNodes,
+    isNativeNode,
     receiverOccurrences: receiverOccurrences.kind === "resolved" ? receiverOccurrences.occurrences : undefined,
     sourceCallables: createRustSourceCallableQueries(sourceStorage),
     retainedEnvironments: createRustRetainedEnvironmentQueries({ source: input.source, sourceStorage,
@@ -218,7 +233,7 @@ export function createRustAnalysisContext(
     promiseBodies: createRustPromiseBodySelection(),
     rootPublishesLibrary,
     records,
-    requiredRecords: [],
+    requiredRecords,
     projectTypes: createRustProjectTypePolicyRegistry(),
     objectRepresentations: createRustObjectRepresentationPlanRegistry(),
     projectMethodDispatch: createRustProjectMethodDispatchPlanRegistry(),
@@ -237,6 +252,9 @@ export function createRustAnalysisContext(
     generatedDeclarationUses: createRustGeneratedDeclarationUseRegistry(),
     names,
     diagnostics: [...numericLiteralAdmission, ...names.diagnostics, ...lifetimes.diagnostics,
+      ...(sourceStorageFailure === undefined && participation.kind === "unresolved" ? [{ code: "RUST_NATIVE_PARTICIPATION_NOT_CLOSED",
+        category: "error" as const, source: "tsonic-rust", message: participation.reason,
+        evidence: ["target.capability=rust.native-participation"] }] : []),
       ...(sourcePackageComponentIdentities.kind === "rejected" ? sourcePackageComponentIdentities.diagnostics : []),
       ...(receiverOccurrences.kind === "unresolved" ? [{ code: "RUST_RECEIVER_OCCURRENCES_UNRESOLVED",
         category: "error" as const, source: "tsonic-rust", message: receiverOccurrences.reason,

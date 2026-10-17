@@ -67,6 +67,7 @@ import type { TargetTypeRef } from "../../target-model/types/model.js";
 import { recordRustNativeGuardResult, recordRustNativeUnreachable } from "./native-control-flow.js";
 
 export function recordFunctionBodyFacts(walk: RustFactWalk, declaration: Node, sourceFile: SourceFile): void {
+  if (!walk.context.isNativeNode(declaration)) return;
   const { ast } = walk.context;
   const asyncFact = walk.context.records.asyncFunction.get(declaration);
   const generatorFact = walk.context.records.generator.get(declaration);
@@ -237,7 +238,7 @@ export function recordStatementFacts(
   sourceFile: SourceFile,
   returnCarrier: TargetTypeRef | undefined,
 ): void {
-  if (recordRustNativeUnreachable(walk, statement)) return;
+  if (!walk.context.isNativeNode(statement) || recordRustNativeUnreachable(walk, statement)) return;
   const { ast } = walk.context;
   const kind = ast.kindName(statement);
   if (kind === "KindFunctionDeclaration") {

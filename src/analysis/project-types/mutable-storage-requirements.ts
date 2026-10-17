@@ -83,6 +83,7 @@ export function collectRustMutableProjectStorageRequirements(
     }
   };
   const visit = (sourceFile: SourceFile, node: Node): void => {
+    if (!context.isNativeNode(node)) return;
     collectStructural(node);
     const { ast } = context;
     const kind = ast.kindName(node);

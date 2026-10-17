@@ -2,7 +2,7 @@ import { createRustRecordFixture } from "../../helpers/records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
-import { createTargetSourceProgram, sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceEnclosingCallable, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { createRustNativeFutureInputPlan } from "../../../dist/analysis/callables/native-future-inputs.js";
 
@@ -19,6 +19,9 @@ function fixture(text = sourceText) {
   const source = createTargetSourceProgram(checked);
   const storage = createSourceStorageQuery(source, program.sourceFiles);
   const ast = source.ast;
+  const participation = sourceNodesOutsideErasedSubtrees(ast, storage.nodes,
+    node => program.records.nativeParticipation.get(node) === "erased");
+  assert.equal(participation.kind, "resolved", "the source Future domain uses its actual selected native participation");
   const bindings = new Map();
   const bindingsFor = declaration => {
     if (bindings.has(declaration)) return bindings.get(declaration);
@@ -28,7 +31,7 @@ function fixture(text = sourceText) {
     bindings.set(declaration, result);
     return result;
   };
-  const input = { ast, storage, records: program.records, definitions: program.typeDefinitions,
+  const input = { ast, storage, nativeNodes: participation.nodes, records: program.records, definitions: program.typeDefinitions,
     lexicalFunctions: program.lexicalFunctions, bindingsFor };
   const outer = storage.nodes.find(node => ast.is.IsFunctionDeclaration(node));
   const closure = storage.nodes.find(node => ast.is.IsArrowFunction(node));

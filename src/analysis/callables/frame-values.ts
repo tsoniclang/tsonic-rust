@@ -82,6 +82,7 @@ export function createRustFrameCallablePlan(input: {
   readonly records: RustProgramRecords;
   readonly ownership: RustCallableOwnershipPlan;
   readonly sourceStorage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly usedNames: ReadonlySet<string>;
   readonly navigation: SourceProgramNavigation;
   readonly projectTypes: RustProjectTypePolicy;
@@ -326,7 +327,7 @@ export function createRustFrameCallablePlan(input: {
     for (const binding of definition.bindings) prepareCarrier(binding.carrier);
     for (const entry of definition.entries) for (const implementation of entry.implementations) prepareCarrier(implementation.carrier);
   }
-  for (const node of input.sourceStorage.nodes) {
+  for (const node of input.nativeNodes) {
     const receiverOwner = input.ownership.instanceReceiverOwner(node);
     if (receiverOwner !== undefined) receiverOwners.set(node, receiverOwner);
     const declaration = input.records.sourceBinding.get(node)?.sourceDeclaration;

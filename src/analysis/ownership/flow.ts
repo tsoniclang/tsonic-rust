@@ -14,6 +14,7 @@ export interface RustOwnershipFlow {
 export interface RustOwnershipFlowInput {
   readonly source: TargetSourceProgram;
   readonly storage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly capturesFor: (closure: Node) => RustClosureCaptureFact | undefined;
   readonly isOnceCallable: (closure: Node) => boolean;
   readonly canMoveStoredField: (field: Node) => boolean;
@@ -31,7 +32,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
   const { ast } = source;
   const movingReads = new Set<Node>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
-  for (const declaration of storage.nodes) {
+  for (const declaration of input.nativeNodes) {
     if (!isSourceCallableBodyBoundary(ast, declaration) || ast.body(declaration) === undefined) continue;
     const selected = createSourceControlFlow(source, declaration, { limits: input.limits });
     const liveness = selected.kind === "resolved" ? analyzeSourceLiveness(selected.graph, input.limits) : selected;
@@ -63,7 +64,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
       }
     }
   }
-  for (const node of storage.nodes) {
+  for (const node of input.nativeNodes) {
     if (sourceParameterIsProperty(ast, node)) {
       const summary = source.navigation.declarationUseSummary(node);
       const name = ast.name(node);
@@ -73,8 +74,8 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
       }
     }
   }
-  for (let index = storage.nodes.length - 1; index >= 0; index -= 1) {
-    const node = storage.nodes[index]!;
+  for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
+    const node = input.nativeNodes[index]!;
     if (ast.is.IsCallExpression(node) || ast.is.IsNewExpression(node) || input.isOwnedOperationResult(node)) movingReads.add(node);
     const operand = sourceTransparentExpressionOperand(ast, node);
     if (operand !== undefined && movingReads.has(operand)) movingReads.add(node);

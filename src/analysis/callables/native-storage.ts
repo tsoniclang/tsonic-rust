@@ -78,6 +78,7 @@ export type RustNativeStorageQueries = Omit<RustNativeStoragePlan, "parameterFor
 
 export function createRustNativeStorageQueries(input: {
   readonly ast: AstReader;
+  readonly nativeNodes: readonly Node[];
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
   readonly definitions: RustTypeDefinitions;

@@ -54,7 +54,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         scopeNames.set(scope, names);
         return names;
       };
-      for (const declaration of context.sourceStorage.nodes) {
+      for (const declaration of context.nativeNodes) {
         const scope = context.names.sourceScopeForDeclaration(declaration);
         if (scope !== undefined) {
           for (const name of [context.names.nameForDeclaration(declaration),
@@ -66,7 +66,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         const sourceFile = context.ast.getSourceFile(declaration);
         if (staticSlot !== undefined && sourceFile !== undefined) usedIn(sourceFile).add(staticSlot);
       }
-      if (context.jsEnabled) for (const declaration of context.sourceStorage.nodes) {
+      if (context.jsEnabled) for (const declaration of context.nativeNodes) {
         if ((!context.ast.is.IsFunctionDeclaration(declaration) && !context.ast.is.IsMethodDeclaration(declaration)) ||
           !context.ast.hasModifierKind(declaration, "async") || context.ast.body(declaration) === undefined) continue;
         if (context.ast.is.IsMethodDeclaration(declaration)) {
@@ -122,7 +122,7 @@ export function createRustPromiseBodySelection(): RustPromiseBodySelection {
         return;
       }
       for (const [declaration, entries] of recursion.invocations) pinnedInvocations.set(declaration, entries);
-      for (const declaration of context.sourceStorage.nodes) {
+      for (const declaration of context.nativeNodes) {
         const asynchronous = context.records.asyncFunction.get(declaration);
         if (asynchronous?.kind !== "js-promise") continue;
         const name = rustPromiseBodyNativeName(context, declaration);

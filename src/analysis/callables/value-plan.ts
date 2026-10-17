@@ -77,6 +77,8 @@ export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | 
 
 export interface RustCallableValuePlanInput {
   readonly ast: AstReader;
+  readonly nativeNodes: readonly Node[];
+  readonly isNativeNode: (node: Node) => boolean;
   readonly sourceFiles: readonly SourceFile[];
   readonly sourcePackages: TargetSourcePackageGraph;
   readonly records: RustProgramRecords;
@@ -214,6 +216,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   };
   for (const { subject, adapter } of input.classValueAdapters) record(subject, adapter);
   const visit = (node: Node): void => {
+    if (!input.isNativeNode(node)) return;
     for (const name of [input.names.nameForDeclaration(node), input.names.functionNameForDeclaration(node),
       input.names.callableValueNameForDeclaration(node)]) {
       if (name !== undefined) usedNames.add(name);
@@ -250,7 +253,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     input.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const sourceFile of input.sourceFiles) visit(sourceFile);
-  const genericRegistry = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.navigation,
+  const genericRegistry = createRustGenericCallablePlan(input.ast, input.sourceFiles, input.records, input.names, input.navigation, input.isNativeNode,
     flows, input.closedSourceFiles);
   const generic = genericRegistry.plan;
   for (const definition of generic.definitions) {
@@ -261,16 +264,16 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     }
   }
   const native = createRustNativeCallableInputPlan({ ast: input.ast, records: input.records, sourcePackages: input.sourcePackages,
-    storage: input.sourceStorage, definitions: input.typeDefinitions, usedNames });
+    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, usedNames });
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
-    nodes: input.sourceStorage.nodes, native, definitions: input.typeDefinitions,
+    nodes: input.nativeNodes, native, definitions: input.typeDefinitions,
     returnCarrierFor: declaration => {
       const selected = nativeStorageQueries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
-    storage: input.sourceStorage, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
+    storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
     carrierHost: input.carrierHost,
     physicalCarrierFor: (carrier, ownerFileName, producers) => {
       if (physicalCarrierFor === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
@@ -314,7 +317,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       } });
       if (storageIssues.length !== 0) return storageIssues;
       parameterStorage = finalizeRustNativeParameterStorage({ ast: input.ast, storage: input.sourceStorage,
-        records: input.records }, nativeStorageQueries);
+        nativeNodes: input.nativeNodes, records: input.records }, nativeStorageQueries);
       return Object.freeze([]);
     },
     finalizeSelected() {
@@ -325,11 +328,11 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       const frames = createRustFrameCallablePlan({ ...input, usedNames });
       physicalLifecycle = createRustPhysicalCallableLifecycle({ ...input, generic, frames, suspended,
         nativeStorage, nativeProducers, adapterFlows: flows });
-      const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
+      const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.nativeNodes,
         records: input.records, generic, native, nativeStorage, definitions: input.typeDefinitions });
-      const identityRequests = prepareRustGenericCallableIdentityRequests({ ast: input.ast, nodes: input.sourceStorage.nodes,
+      const identityRequests = prepareRustGenericCallableIdentityRequests({ ast: input.ast, nodes: input.nativeNodes,
         records: input.records, nativeStorage });
-      const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.sourceStorage.nodes, generic, nativeStorage });
+      const dispatchRequests = prepareRustGenericCallableDispatchRequests({ ...input, nodes: input.nativeNodes, generic, nativeStorage });
       physical.closeAdmission();
       const nativeCaptures = captures.complete();
       const nativeGenericProducers = createRustNativeGenericProducerPlan({ records: input.records, generic, nativeStorage,

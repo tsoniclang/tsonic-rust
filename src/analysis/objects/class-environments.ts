@@ -26,6 +26,7 @@ export function recordRustClassEnvironmentDemands(walk: RustFactWalk): void {
     for (const child of rustTargetTypeChildren(carrier)) record(child);
   };
   const visit = (node: Node): void => {
+    if (!walk.context.isNativeNode(node)) return;
     const parent = ast.parent(node);
     const declarationName = parent !== undefined && ast.name(parent) === node;
     if (!ast.is.IsClassDeclaration(node) && !declarationName && !isRustDeclarationPathUse(node, ast, records)) {

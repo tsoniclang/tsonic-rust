@@ -80,7 +80,7 @@ export interface RustStructuralInstantiation {
 
 export interface RustSourceTypeRegistry extends RustTypeDefinitions {
   readonly typeFamilies: RustSourceTypeFamilyRegistry;
-  registerSourceFile(sourceFile: SourceFile, ast: AstReader): void;
+  registerSourceFile(sourceFile: SourceFile, ast: AstReader, isNativeNode: (node: Node) => boolean): void;
   registerDeclarationCarrier(declaration: Node, carrier: TargetTypeRef): boolean;
   registerRepresentationAlias(declaration: Node, carrier: TargetTypeRef): boolean;
   carrierForDeclaration(declaration: Node, ast: AstReader): TargetTypeRef | undefined;

@@ -28,6 +28,7 @@ export function rustClosedErrorTransportDemand(
   sourceFile: SourceFile, ast: AstReader, records: RustProgramRecords,
   definitions: RustTypeDefinitions, projectTypes: RustProjectTypePolicy,
   effectsFor: (node: Node) => RustErrorEffectsFact | undefined,
+  isNativeNode: (node: Node) => boolean,
 ): RustClosedErrorTransportDemand | undefined {
   const carriers: TargetTypeRef[] = [];
   let retained = false;
@@ -68,6 +69,7 @@ export function rustClosedErrorTransportDemand(
   while (pending.length !== 0) {
     const entry = pending.pop()!;
     const node = entry.node;
+    if (!isNativeNode(node)) continue;
     if (seen.has(node) || entry.depth > 2048) return undefined;
     seen.add(node);
     const contextual = records.contextualValueConversion.get(node);

@@ -620,6 +620,7 @@ function collectFallibilityFacts(
   }
   for (const sourceFile of projectSourceFiles) {
     const visit = (node: Node): void => {
+      if (!walk.context.isNativeNode(node)) return;
       budget.step();
       const kind = ast.kindName(node);
       if (kind === "KindArrowFunction" || kind === KindFunctionExpression) {

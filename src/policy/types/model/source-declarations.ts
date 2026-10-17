@@ -10,9 +10,11 @@ export function rustSourceDeclarationTypeName(declaration: Node, ast: AstReader)
     : name;
 }
 
-export function rustSourceTypeDeclarations(sourceFile: SourceFile, ast: AstReader): readonly Node[] {
-  const declarations = ast.statements(sourceFile).filter((node): node is Node => node !== undefined);
+export function rustSourceTypeDeclarations(sourceFile: SourceFile, ast: AstReader,
+  isNativeNode: (node: Node) => boolean): readonly Node[] {
+  const declarations = ast.statements(sourceFile).filter((node): node is Node => node !== undefined && isNativeNode(node));
   const visit = (node: Node): void => {
+    if (!isNativeNode(node)) return;
     const kind = ast.kindName(node);
     if ((kind === "KindClassDeclaration" || kind === "KindClassExpression") && ast.parent(node) !== sourceFile) {
       declarations.push(node);

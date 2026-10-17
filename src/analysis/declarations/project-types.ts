@@ -35,7 +35,7 @@ export function recordMethodSelfModeFacts(walk: RustFactWalk, sourceFiles: reado
   walk.context.records.assertOpen();
   const { ast } = walk.context;
   for (const sourceFile of sourceFiles) {
-    for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, ast, walk.context.isNativeNode)) {
       if (ast.kindName(statement) !== "KindClassDeclaration" && ast.kindName(statement) !== "KindClassExpression") {
         continue;
       }

@@ -60,6 +60,7 @@ export function recordNestedCallableTypeSignatureFacts(walk: RustFactWalk, sourc
     if (node === undefined) {
       return;
     }
+    if (!walk.context.isNativeNode(node)) return;
     if (walk.context.records.compileTimeSource.get(node)) return;
     const kind = ast.kindName(node);
     if (kind === "KindFunctionType" || kind === "KindCallSignature") {

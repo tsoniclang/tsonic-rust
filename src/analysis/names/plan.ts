@@ -34,6 +34,7 @@ export function createRustNamePlan(input: {
   readonly ast: AstReader;
   readonly runtimeValueUses: RustRuntimeValueUsePlan;
   readonly sourceFiles: readonly SourceFile[];
+  readonly isNativeNode: (node: Node) => boolean;
 }): RustNamePlan {
   const candidates: RustNameCandidate[] = [];
   for (const sourceFile of input.sourceFiles) {
@@ -42,6 +43,7 @@ export function createRustNamePlan(input: {
       sourceFile,
       input.ast,
       candidates,
+      input.isNativeNode,
     );
   }
   const names = new WeakMap<Node, string>();
@@ -208,7 +210,9 @@ function collectNameCandidates(
   sourceFile: SourceFile,
   ast: AstReader,
   candidates: RustNameCandidate[],
+  isNativeNode: (node: Node) => boolean,
 ): void {
+  if (!isNativeNode(node)) return;
   const scope = declarationScope(node, sourceFile, ast);
   const role = scope === undefined
     ? undefined
@@ -238,7 +242,7 @@ function collectNameCandidates(
   }
   ast.forEachChild(node, (child) => {
     if (child !== undefined) {
-      collectNameCandidates(child, sourceFile, ast, candidates);
+      collectNameCandidates(child, sourceFile, ast, candidates, isNativeNode);
     }
   });
 }

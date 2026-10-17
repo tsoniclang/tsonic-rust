@@ -83,6 +83,7 @@ export function collectRustImplicitInterfaceContracts(walk: RustFactWalk): reado
         subject, carrier, members: Object.freeze(members) }));
   };
   const visit = (node: Node): void => {
+    if (!walk.context.isNativeNode(node)) return;
     if (["KindIdentifier", "KindNewExpression", "KindCallExpression", "KindClassExpression", "KindPropertyAccessExpression",
       "KindElementAccessExpression", "KindThisKeyword", "KindConditionalExpression"].includes(ast.kindName(node))) {
       const semantics = walk.context.semanticsFor(node);

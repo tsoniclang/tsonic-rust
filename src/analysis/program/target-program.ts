@@ -151,8 +151,8 @@ export function analyzeRustTargetProgram(
     return rejectedTargetStage(foundation.diagnostics);
   }
   const providerMutableInputs = createRustProviderMutableInputPlan({ ast: context.ast, records: context.records,
-    navigation: context.source.navigation, nodes: context.sourceStorage.nodes });
-  for (const node of context.sourceStorage.nodes) {
+    navigation: context.source.navigation, nodes: context.nativeNodes });
+  for (const node of context.nativeNodes) {
     const selection = providerMutableInputs.forOperation(node);
     if (selection?.kind === "rejected") context.diagnostics.push({ code: "RUST_PROVIDER_MUTABLE_INPUT_NOT_DISJOINT",
       category: "error", source: "tsonic-rust", message: selection.reason,
@@ -164,10 +164,10 @@ export function analyzeRustTargetProgram(
     storage: context.sourceStorage, native: context.callableValues.native, nativeStorage: context.callableValues.nativeStorage,
     components: sourcePackageComponents });
   if (retainedCallableInputs.kind === "rejected") return retainedCallableInputs;
-  analyzeRustNativeHandlers(context.sourceStorage.nodes, context.records, { get: context.safetyApplications.operationForExpression },
+  analyzeRustNativeHandlers(context.nativeNodes, context.records, { get: context.safetyApplications.operationForExpression },
     context.source.sourceFacts, context.requiredRecords);
   const records = context.records.seal(context.requiredRecords);
-  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage, nodes: context.sourceStorage.nodes,
+  const promiseResults = analyzeRustPromiseResults({ ast: context.ast, source: context.source, storage: context.sourceStorage, nodes: context.nativeNodes,
     records, uses: context.promiseResultUses, definitions: context.typeDefinitions });
   if (promiseResults.diagnostics.length > 0) return rejectedTargetStage(promiseResults.diagnostics);
   const projectConstructions = analyzeRustProjectConstructions({ ast: context.ast, records,
@@ -208,6 +208,7 @@ export function analyzeRustTargetProgram(
   const ownershipFlow = analyzeRustOwnershipFlow({
     source: context.source,
     storage: context.sourceStorage,
+    nativeNodes: context.nativeNodes,
     capturesFor,
     mayBorrowArgument: (argument, reference) => !projectConstructions.ownsExternalArgument(argument) &&
       rustNativeArgumentBorrowsRead(argument, reference, context.ast, records),
@@ -302,13 +303,13 @@ export function analyzeRustTargetProgram(
   const borrowedElementReads = analyzeRustBorrowedElementReads(context.ast, context.sourceFiles, records, context.source.navigation);
   const borrowEffectsInput = {
     sourceFacts: context.source.sourceFacts,
-    ast: context.ast, nodes: context.sourceStorage.nodes, records, navigation: context.source.navigation,
+    ast: context.ast, nodes: context.nativeNodes, records, navigation: context.source.navigation,
     projectTypes: context.projectTypes, objectRepresentations, frozenDataWrites: context.frozenDataWrites,
     structuralShapes: context.structuralShapes,
   };
   const borrowEffects = analyzeRustBorrowEffects(borrowEffectsInput);
   if (borrowEffects.kind === "rejected") return rejectedTargetStage(borrowEffects.diagnostics);
-  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, records,
+  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
     flow: ownershipFlow.flow, borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
     genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
     capturesFor, invocationTransfersCapture: owner => {

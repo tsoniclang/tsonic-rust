@@ -51,7 +51,7 @@ export function createRustProjectTypePolicy(
   for (const sourceFile of host.sourceFiles) {
     const usedNames = sourceFileIdentifierNames(sourceFile, host.ast, host.names);
     usedModuleNamesBySourceFile.set(sourceFile, usedNames);
-    for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast)) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, host.ast, host.isNativeNode)) {
       if (host.isRepresentationAlias(statement)) continue;
       if (host.ast.kindName(statement) === "KindClassDeclaration" || host.ast.kindName(statement) === "KindClassExpression") {
         const issue = rustLocalClassIssue(statement, host.ast, host.navigation, host.genericParametersFor(statement));

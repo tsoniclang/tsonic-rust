@@ -19,6 +19,7 @@ import { rustContextualRuntimeConversionContract } from "../../target-model/conv
 
 export function analyzeRustReadOwnership(input: {
   readonly storage: SourceStorageQueries;
+  readonly nativeNodes: readonly Node[];
   readonly records: RustAnalysisRecords;
   readonly flow: RustOwnershipFlow;
   readonly borrowEffects: RustBorrowEffects;
@@ -40,9 +41,9 @@ export function analyzeRustReadOwnership(input: {
     evidence: ["target.capability=rust.analysis.ownership"],
   }] });
   const storageReads = new Map<Node, boolean>();
-  for (let index = storage.nodes.length - 1; index >= 0; index -= 1) {
+  for (let index = input.nativeNodes.length - 1; index >= 0; index -= 1) {
     if (!budget.node() || !budget.step() || !budget.row()) return rejectedBudget();
-    const node = storage.nodes[index]!;
+    const node = input.nativeNodes[index]!;
     const operand = sourceTransparentExpressionOperand(ast, node);
     const inherited = operand === undefined ? undefined : storageReads.get(operand);
     if (operand !== undefined && inherited === undefined) {
@@ -57,7 +58,7 @@ export function analyzeRustReadOwnership(input: {
       ast.kindName(node) === "KindThisExpression" || ast.kindName(node) === "KindThisKeyword" ||
       operation?.kind === "source-field" && operation.valueSemantics.kind === "stored"));
   }
-  const uses = analyzeRustReadUses(ast, storage.nodes, records);
+  const uses = analyzeRustReadUses(ast, input.nativeNodes, records);
   const reads = new Map<Node, RustReadOwnershipFact>();
   const captures = new Map<Node, readonly RustCaptureReadOwnership[]>();
   const writes = new Map<Node, import("../../target-model/records/ownership.js").RustBorrowedFieldWrite>();
@@ -69,7 +70,7 @@ export function analyzeRustReadOwnership(input: {
     demand.add(later);
     borrowDemands.set(source, demand);
   };
-  for (const node of storage.nodes) {
+  for (const node of input.nativeNodes) {
     if (!budget.step()) return rejectedBudget();
     if (ast.is.IsBinaryExpression(node)) {
       const left = BinaryExpression_Left(ast, node);
@@ -110,7 +111,7 @@ export function analyzeRustReadOwnership(input: {
     }
     borrowRelationships.set(node, selected);
   }
-  for (const node of storage.nodes) {
+  for (const node of input.nativeNodes) {
     if (!budget.step()) return rejectedBudget();
     const parent = ast.parent(node);
     const implicitProperty = parent !== undefined && ast.name(parent) === node && sourceParameterIsProperty(ast, parent);

@@ -4,7 +4,6 @@ import { appendRustDiagnostic, rustResolutionContext, rustOperationContext } fro
 import { resolveRustProjectField } from "../operations/provider/project-fields.js";
 import { createRustModuleBindingPolicy } from "./module-bindings.js";
 import { recordRustModuleCallableStorage } from "../callables/module-values.js";
-import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
@@ -202,7 +201,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   // Pass 0: register every project type declaration so contextual record
   // binding works regardless of file order.
   for (const sourceFile of projectSourceFiles) {
-    sourceTypes.registerSourceFile(sourceFile, ast);
+    sourceTypes.registerSourceFile(sourceFile, ast, context.isNativeNode);
   }
   recordRustInterfaceRepresentationAliases(walk, projectSourceFiles);
   const projectTypes = context.projectTypes.initialize({
@@ -211,7 +210,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
     names: context.names,
     navigation: context.source.navigation,
     sourceFiles: projectSourceFiles,
-    sourceNodes: context.sourceStorage.nodes,
+    sourceNodes: context.nativeNodes,
+    isNativeNode: context.isNativeNode,
     sourceLifetimes: context.sourceLifetimes,
     isRepresentationAlias(declaration) {
       return context.records.typeOnlyDeclaration.get(declaration)?.reason === "representation-alias";
@@ -283,9 +283,10 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const receiverStorage = analyzeRustReceiverStorage({ ast, navigation: context.source.navigation,
     semantics: context.source.semantics, projectTypes, sourceFiles: projectSourceFiles,
   });
-  const callableOwnership = context.callableOwnership.initialize({ storage: context.sourceStorage,
+  const callableOwnership = context.callableOwnership.initialize({ storage: context.sourceStorage, nativeNodes: context.nativeNodes,
     receiverCaptures: receiverStorage.captures,
-    isRuntimeUse: (use, declaration) => context.runtimeValueUses.isRuntimeReference(declaration, use.reference),
+    isRuntimeUse: (use, declaration) => context.isNativeNode(use.reference) &&
+      context.runtimeValueUses.isRuntimeReference(declaration, use.reference),
   });
   const ownershipFailure = callableOwnership.failureReason();
   if (ownershipFailure !== undefined) {
@@ -295,6 +296,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   const callableAlias = createRustSourceProfileCallableAliasQuery(context, sourceProfiles);
   const collectPromotedStorage = (node: Node): void => {
+    if (!context.isNativeNode(node)) return;
     if (ast.is.IsVariableDeclaration(node)) {
       const alias = callableAlias(node);
       if (alias !== undefined) {
@@ -392,7 +394,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       ["target.capability=rust.callable.receiver-field-owner"]);
   }
   for (const sourceFile of projectSourceFiles) {
-    for (const statement of rustSourceTypeDeclarations(sourceFile, ast)) {
+    for (const statement of rustSourceTypeDeclarations(sourceFile, ast, context.isNativeNode)) {
       const kind = ast.kindName(statement);
       if (kind === KindFunctionDeclaration) {
         finalizeRustCallableSignature(walk, statement);
@@ -501,8 +503,6 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
       );
     }
   }
-  analyzeRustNativeParticipation({ ast, nodes: context.sourceStorage.nodes, navigation: context.source.navigation,
-    producer: context.records.nativeParticipations, requiredRecords: context.requiredRecords });
   context.projectMethodDispatch.initialize({
     ast,
     names: context.names,
@@ -569,10 +569,11 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   // structural storage plan produced while walking bodies.
   walk.context.records.projectCallableAdapterPlans.finalize(walk);
   recordRustModuleCallableStorage(walk);
-  const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.sourceFiles, context.records,
+  const lexical = createRustLexicalFunctionEnvironmentPlan(context.source, context.nativeNodes, context.records,
     context.runtimeValueUses, context.sourceCallables);
   recordRustLexicalValueEnvironments(walk, lexical);
   const callableValues = context.callableValues.initialize({ ast, sourceFiles: context.sourceFiles, records: context.records,
+    nativeNodes: context.nativeNodes, isNativeNode: context.isNativeNode,
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,

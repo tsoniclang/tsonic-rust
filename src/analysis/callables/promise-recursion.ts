@@ -21,7 +21,7 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext, bud
   | { readonly kind: "unresolved"; readonly at?: Node; readonly reason: string } {
   const rows = budget.createRows();
   const vertices = new Map<Node, readonly NativeBodyVertex[]>();
-  for (const declaration of context.sourceStorage.nodes) {
+  for (const declaration of context.nativeNodes) {
     if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
     const asynchronous = context.records.asyncFunction.get(declaration);
     const name = context.promiseBodies.nativeNameForDeclaration(declaration);
@@ -38,7 +38,7 @@ export function selectRustPromiseBodyRecursion(context: RustAnalysisContext, bud
       "A recursive native Promise body requires every selected specialization's physical name.", declaration);
     vertices.set(declaration, variants.map(variant => ({ ...variant, name: variant.name!, edges: [], pinned: new Set<Node>() })));
   }
-  for (const call of context.sourceStorage.nodes) {
+  for (const call of context.nativeNodes) {
     if (!budget.step()) return { kind: "unresolved", reason: budget.failure()! };
     const fact = context.records.targetOperation.get(call);
     if (fact?.kind !== "source-call" || fact.asyncBody?.maySuspend !== true) continue;

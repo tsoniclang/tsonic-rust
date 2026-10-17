@@ -52,7 +52,7 @@ function fixture(text, options = {}) {
     navigation: source.navigation, semantics: source.semantics, sourceFiles: [file],
     projectTypes: { definitions: [], definitionContainingDeclaration: () => undefined },
     isStoredField: declaration => source.ast.is.IsPropertyDeclaration(declaration) || sourceParameterIsProperty(source.ast, declaration), deferredFields: new Set() });
-  const input = { storage, receiverCaptures, ...options };
+  const input = { storage, nativeNodes: storage.nodes, receiverCaptures, ...options };
   const named = (name, kind) => nodes.filter(node => source.ast.kindName(node) === kind &&
     source.ast.name(node) !== undefined && source.ast.text(source.ast.name(node)) === name);
   return { source, nodes, storage, receiverCaptures, input, named,

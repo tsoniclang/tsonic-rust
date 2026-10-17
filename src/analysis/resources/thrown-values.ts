@@ -8,6 +8,7 @@ export function collectRustThrownClassDeclarations(
 ): ReadonlySet<Node> {
   const declarations = new Set<Node>();
   const visit = (node: Node): void => {
+    if (!context.isNativeNode(node)) return;
     if (context.ast.kindName(node) === "KindThrowStatement") {
       const expression = Node_Expression(context.ast, node);
       if (expression !== undefined) {

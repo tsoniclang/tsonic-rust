@@ -21,6 +21,7 @@ function planNames(sourceText) {
   const plan = createRustNamePlan({
     ast: source.ast,
     sourceFiles: [file],
+    isNativeNode: node => source.ast.getSourceFile(node) === file,
     runtimeValueUses: { hasFirstClassUse: () => true },
   });
   const declarations = [];
