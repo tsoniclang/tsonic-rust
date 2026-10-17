@@ -618,6 +618,21 @@ export function createRustNativeStorageQueries(input: {
       const operation = input.records.targetOperation.get(invocation);
       if (signature === undefined || operation?.kind !== "source-call")
         return unresolved("Native invocation input has no finalized selected signature.");
+      const declaration = asSourceNode(signature.sourceDeclaration, input.ast);
+      if (declaration === selected.owner && input.native.inputsFor(declaration).includes(selected)) {
+        const parameterIndex = input.ast.parameters(declaration).indexOf(selected.subject.node);
+        const checkedParameter = signature.sourceSelectedSignatureParameters?.[parameterIndex];
+        const parameter = parameterIndex < 0 ? undefined : operation.parameters[parameterIndex];
+        if (checkedParameter?.parameterIndex !== parameterIndex ||
+          asSourceNode(checkedParameter.parameterDeclaration, input.ast) !== selected.subject.node ||
+          parameter?.form !== input.records.sourceParameterAbi.get(selected.subject.node)?.form)
+          return unresolved("Native invocation input lost its exact checked formal declaration and selected parameter form.");
+        const carrier = parameter === undefined ? undefined : selected.subject.projection.length === 0
+          ? parameter.parameterCarrier
+          : rustSourceStorageProjectedCarrier(input.carrierHost, selected.subject, parameter.parameterCarrier);
+        return carrier === undefined ? unresolved("Native invocation input has no exact finalized formal parameter storage.")
+          : select(selected.subject, carrier, bindings.bindings);
+      }
       const generics = rustTargetGenericBindingsForArguments(signature.member.genericParameters ?? [], operation.targetGenericArguments ?? []);
       return generics === undefined ? unresolved("Native invocation input has no exact selected generic arguments.")
         : select(selected.subject, substituteRustTargetGenerics(selected.carrier, generics.types,

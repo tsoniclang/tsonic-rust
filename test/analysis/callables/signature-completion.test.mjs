@@ -4,7 +4,7 @@ import { analyzeRustOperations } from "../../helpers/rust-operation-analysis.mjs
 import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { createRustCarrierProbe } from "../../../dist/analysis/program/carrier-probe.js";
-import { rustResolutionContext } from "../../../dist/analysis/program/walk.js";
+import { rustOperationContext, rustResolutionContext } from "../../../dist/analysis/program/walk.js";
 import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../../../dist/analysis/callables/signature-query.js";
 import * as callableSignatures from "../../../dist/analysis/callables/signature-query.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
@@ -14,6 +14,8 @@ import { resolveRustCallableEnvironment } from "../../../dist/policy/types/resol
 import { resolveReferencedDeclarationType } from "../../../dist/policy/types/resolution/tuples.js";
 import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
 import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { selectedRustCheckedCallInputCarrier } from "../../../dist/analysis/operations/provider/calls/input-contract.js";
+import { selectRustClosedCallableInputs } from "../../../dist/analysis/callables/contextual-inputs.js";
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
   const { context, walk } = analyzeRustOperations(`
@@ -477,4 +479,76 @@ export function inspect(box: Box): number { return box.size + box.field; }`, { s
     assert.equal(value?.kind === "source-primitive" && value.name === "float64", true,
       name + ": the actual value annotation is still authoritative");
   }
+});
+
+const genericConstructorCapture = `
+function wrap<Value>(value: Value): Promise<Value> {
+  return new Promise<Value>(resolve => {
+    const first = (): void => { resolve(value); };
+    const second = (): void => { resolve(value); };
+    const callback = value === value ? first : second;
+    [0].forEach(callback);
+  });
+}
+export function run(): Promise<number> { return wrap(7); }
+`;
+
+function executorInputFixture() {
+  return inputFixture(genericConstructorCapture, (ast, node) => ast.is.IsArrowFunction(node) &&
+    ast.parameters(node).some(parameter => ast.text(ast.name(parameter)) === "resolve"));
+}
+
+test("a generic constructor executor publishes its actual native parameter before captured callbacks observe it", () => {
+  const input = executorInputFixture();
+  const completed = input.complete(input.current);
+  assert.equal(completed?.length, 1, "one actual authored resolve formal, not the constructor's unused trailing reject formal");
+  const resolve = rustCallableProtocol(completed[0].valueCarrier);
+  assert.equal(resolve?.parameters[0]?.kind === "target-named" && resolve.parameters[0].id === "rust.js.PromiseResolution" &&
+    resolve.error?.kind === "target-named" && resolve.error.id === "rust.js.JsValue", true,
+  "the sole native Promise constructor contract owns payload adoption and its exact rejection ABI");
+  assert.equal(resolve.lifetime?.kind, "static", "the actual native constructor contract, not source placeholder inference");
+  assert.equal(completed[0] === input.current.context.records.sourceParameterAbi.get(input.parameters[0]), true,
+    "the environment and body share the exact first canonical parameter record");
+  assert.equal(input.complete(input.current)?.[0] === completed[0], true, "a second input request is the same sealed construction fact");
+});
+
+test("checked constructor input metadata does not execute its callback environment to select that callback's ABI", () => {
+  const input = executorInputFixture();
+  const ast = input.current.context.ast;
+  const constructor = ast.parent(input.declaration);
+  assert.equal(ast.is.IsNewExpression(constructor), true, "the original executor is an actual checked constructor argument");
+  const semantics = input.current.context.semanticsFor(constructor);
+  const checked = semantics.operations.call(constructor);
+  const sourceSelectedDeclaration = semantics.declarations.signatureDeclaration(checked.selectedSignature);
+  const selected = selectedRustCheckedCallInputCarrier({ source: checked, sourceSelectedDeclaration }, 0,
+    rustOperationContext(input.current, constructor), { ...input.current.operationOptions,
+      callableParameterCarriers() { throw new Error("constructor input metadata cannot demand its own capture environment"); },
+    });
+  const executor = rustCallableProtocol(selected);
+  assert.equal(executor?.parameters.length, 2, "the actual native constructor still retains both resolve and reject slots");
+  assert.equal(rustCallableProtocol(executor.parameters[0])?.parameters[0]?.id, "rust.js.PromiseResolution",
+    "the canonical row supplies the resolve input without a raw checked-union fallback");
+});
+
+test("an eligible constructor with unavailable selected generic evidence publishes no raw parameter ABI", () => {
+  const input = executorInputFixture();
+  const context = input.current.context;
+  const constructor = context.ast.parent(input.declaration);
+  const originalSemantics = context.semanticsFor(constructor);
+  const checked = originalSemantics.operations.call(constructor);
+  const pending = { ...input.current, context: { ...context,
+    semanticsFor(node) {
+      const semantics = context.semanticsFor(node);
+      return node !== constructor ? semantics : { ...semantics, operations: { ...semantics.operations,
+        call(subject) { return subject !== constructor ? semantics.operations.call(subject)
+          : { ...checked, sourceSelectedMethodTypeArguments: [] }; },
+      } };
+    },
+  } };
+  assert.equal(selectRustClosedCallableInputs(pending, input.declaration, []) === undefined, true,
+    "missing required selected constructor evidence is not an ineligible transport or known-empty context");
+  assert.equal(input.complete(pending) === undefined, true, "the input stage remains unresolved before any environment read");
+  assert.equal(context.records.sourceParameterAbi.get(input.parameters[0]) === undefined, true,
+    "the old placeholder/source-union ABI is never published as a substitute");
+  assert.equal(input.complete(input.current)?.length, 1, "the same canonical stage completes after its real selected input becomes ready");
 });

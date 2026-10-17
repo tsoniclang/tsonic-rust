@@ -2,12 +2,15 @@ import type { RustOperationAnalysisContext } from "../../../program/operation-co
 import { isProjectSourceDeclaration, resolveSelectedSourceProfileMember } from "../../../../policy/identities/selected-source.js";
 import { resolveRustTypeComponentEvidence } from "../../../../policy/types/resolution/source-evidence.js";
 import { selectRustProviderOperation } from "../../../../policy/operations/provider-selection.js";
-import { selectJsSurfaceCallInputContract } from "../../../../policy/operations/source-profiles/js/index.js";
+import { selectJsSurfaceCallInputContract, selectJsSurfaceConstructorBySourceOwner } from "../../../../policy/operations/source-profiles/js/index.js";
 import { selectedCallProviderDeclaration } from "../../../../policy/identities/selected-source.js";
 import { providerOperationFact } from "../result.js";
 import { checkedCallIsConstruction, instantiateSelectedCallTemplate } from "./instantiation.js";
 import { selectedCallSourceParameterCarriers } from "./source-sequences.js";
-import { createRustJsCallRequest } from "./source-profile-request.js";
+import { createRustJsCallRequest, selectedSoleArgumentNumberKind } from "./source-profile-request.js";
+import { selectedCallArgumentCarriers } from "../operators.js";
+import { resolveRustTargetTypeRef } from "../../../../policy/types/resolution/index.js";
+import { createRustPropertyProjectionSelector } from "../../../conversions/property-projections.js";
 import type { RustCheckedCallSelectionInput } from "../../../../policy/operations/contracts.js";
 import type { RustOperationsProviderOptions } from "../model.js";
 import type { TargetTypeRef } from "../../../../target-model/types/model.js";
@@ -18,7 +21,7 @@ export function selectedRustCheckedCallInputCarrier(
   context: RustOperationAnalysisContext,
   options: RustOperationsProviderOptions,
 ): TargetTypeRef | undefined {
-  if (checkedCallIsConstruction(request, context)) return undefined;
+  const construction = checkedCallIsConstruction(request, context);
   if (isProjectSourceDeclaration(context, request.sourceSelectedDeclaration)) {
     const bindings = request.source.sourceArgumentBindings.filter(binding => binding.sourceArgumentIndex === argumentIndex);
     const first = bindings[0];
@@ -33,6 +36,21 @@ export function selectedRustCheckedCallInputCarrier(
   }
   const sourceMember = resolveSelectedSourceProfileMember(context, request.sourceSelectedDeclaration, options.sourceProfiles);
   if (sourceMember?.profile === "js") {
+    if (construction) {
+      const signatureContext = { ...context, callableRepresentation: "signature" as const, sourceStorageSubject: undefined };
+      const argumentCarriers = selectedCallArgumentCarriers(request, signatureContext, options);
+      const selection = selectJsSurfaceConstructorBySourceOwner({
+        sourceOwnerName: sourceMember.ownerName,
+        typeArgumentCarriers: (request.source.sourceSelectedMethodTypeArguments ?? []).map(argument =>
+          resolveRustTargetTypeRef(argument.explicitTypeNode ?? argument.selectedType, signatureContext, options)),
+        argumentCarriers,
+        soleArgumentNumberKind: selectedSoleArgumentNumberKind(request, signatureContext),
+        propertyProjection: createRustPropertyProjectionSelector(request, signatureContext, options, argumentCarriers),
+        carrierSupportsProjectIdentity: options.projectCarrierSupportsObjectIdentity,
+      }, context.typeDefinitions);
+      return selection?.fact.kind !== "provider-operation" ? undefined
+        : selectedCallSourceParameterCarriers(request, selection.fact, selection.parameterCarriers, context, options)?.get(argumentIndex);
+    }
     const nativeRequest = createRustJsCallRequest(request, context, options);
     const selection = nativeRequest === undefined ? undefined
       : selectJsSurfaceCallInputContract(nativeRequest, argumentIndex, context.typeDefinitions);
@@ -42,7 +60,7 @@ export function selectedRustCheckedCallInputCarrier(
   if (sourceMember !== undefined) return undefined;
   const provider = selectedCallProviderDeclaration(request, context);
   if (provider.kind !== "selected") return undefined;
-  const selected = selectRustProviderOperation(options.providerRows, provider.identity, "method");
+  const selected = selectRustProviderOperation(options.providerRows, provider.identity, construction ? "constructor" : "method");
   if (selected.kind !== "selected") return undefined;
   const instantiated = instantiateSelectedCallTemplate(request, providerOperationFact(selected.row), context, options);
   return instantiated === undefined ? undefined : selectedCallSourceParameterCarriers(

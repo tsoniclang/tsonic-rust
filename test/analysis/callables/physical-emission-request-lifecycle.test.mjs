@@ -11,6 +11,7 @@ import { createRustNativeStorageQueries } from "../../../dist/analysis/callables
 import { finalizeRustNativeParameterStorage } from "../../../dist/analysis/callables/native-parameters.js";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustCallableInputTargetType, rustCallableProtocol } from "../../../dist/target-model/types/carriers/callables.js";
+import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/carriers/native.js";
 import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
 import { rustLifetimesEqual } from "../../../dist/target-model/lifetimes/index.js";
 import { prepareRustGenericCallableIdentitySources, prepareRustGenericCallableIdentityRequests,
@@ -28,6 +29,7 @@ export function zero(): boolean { return true; }
 export function expose(): typeof owner { return owner; }
 export function exposeZero(): typeof zero { return zero; }
 export const stored = owner(true);
+export const invoked = expose()(true);
 `;
 
 function checkedSource(text, options = { surfaces: [] }) {
@@ -90,10 +92,15 @@ export function inspect(value: string, word: string): boolean { return value.inc
   const declaration = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "stored");
   const owner = sourceStorage.nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "owner");
   const metadata = sourceStorage.nodes.find(node => ast.is.IsTypeAliasDeclaration(node));
-  const invocation = declaration === undefined ? undefined : ast.as.AsVariableDeclaration(declaration)?.Initializer;
+  const invoked = sourceStorage.nodes.find(node => ast.is.IsVariableDeclaration(node) && ast.text(ast.name(node)) === "invoked");
+  const directInvocation = declaration === undefined ? undefined : ast.as.AsVariableDeclaration(declaration)?.Initializer;
+  const invocation = invoked === undefined ? undefined : ast.as.AsVariableDeclaration(invoked)?.Initializer;
   const operand = invocation === undefined ? undefined : ast.arguments(invocation)[0];
   assert.equal(declaration !== undefined && owner !== undefined && metadata !== undefined &&
     invocation !== undefined && operand !== undefined, true, "all request subjects are actual checked source nodes");
+  const invocationOperation = records.targetOperation.get(invocation);
+  assert.equal(invocationOperation?.kind === "source-call" && invocationOperation.target.form === "callable", true,
+    "the invocation request belongs to an actual retained callable use, not a direct native function");
   const construction = physicalConstruction(checked, { constructionErrorsReady: !pendingErrors,
     unavailableReturns: missingResult ? new Set([owner]) : new Set() });
   const storage = construction.storage;
@@ -157,7 +164,7 @@ export function inspect(value: string, word: string): boolean { return value.inc
     sourceOccurrences: construction.sourceOccurrences,
     typeDefinitions: context.typeDefinitions, lexicalFunctions: constructionInput.lexicalFunctions,
     structuralShapes: context.structuralShapes, adapterFlows: Object.freeze([]), nativeStorage, nativeProducers });
-  return { ast, records, sourceStorage, declaration, owner, metadata, invocation, operand, calls, outcomes,
+  return { ast, records, sourceStorage, declaration, owner, metadata, invocation, directInvocation, operand, calls, outcomes,
     physical, request, input, sealedRequests: () => sealedRequests, close: () => { open = false; } };
 }
 
@@ -209,6 +216,19 @@ test("all four required runtime roles materialize the exact original checked sub
       `${request.kind}: early and final views never create a second cache or replay the selector`);
   }
   assert.equal(current.calls.length, requests.length, "all repeated view reads leave exactly the four real required selections");
+});
+
+test("an invented invocation-storage request for a direct native function is rejected rather than fabricated", () => {
+  const current = fixture();
+  const operation = current.records.targetOperation.get(current.directInvocation);
+  assert.equal(operation?.kind === "source-call" && operation.target.form === "function", true,
+    "the original owner(true) source retains its direct native ABI");
+  const result = completeLifecycle(current.input([current.request("invocation", current.directInvocation)]), current.physical);
+  assert.equal(result.kind, "rejected", "only actual callable storage roles can be required");
+  assert.equal("value" in result, false, "no fabricated or partial storage publication");
+  assert.equal(result.diagnostics.length === 1 && result.diagnostics[0].sourceNode === current.directInvocation &&
+    result.diagnostics[0].message === "Native callable invocation has no exact selected storage contract.", true,
+  "the precise original direct call and missing actual storage premise are preserved");
 });
 
 test("earlier actual metadata preparation and lifecycle publication share one selection without admitting cached-only roles", () => {
@@ -357,8 +377,8 @@ test("explicit producer requests retain every actual checked source corresponden
       result.value.nativeProducers.invocationResultFor(request.declaration)), true, "the actual completed result is retained");
     assert.equal(rustTargetTypeRefEquals(signature.error,
       result.value.nativeProducers.errorFor(request.declaration, "invoke")), true, "the exact native invocation error identity is retained");
-    assert.equal(physical.genericArguments?.[0]?.kind === "lifetime" &&
-      rustLifetimesEqual(physical.genericArguments[0].lifetime, logical.lifetime), true,
+    const lifetime = rustNamedTypeCarrierValue(physical)?.genericArguments?.[0];
+    assert.equal(lifetime?.kind === "lifetime" && rustLifetimesEqual(lifetime.lifetime, logical.lifetime), true,
     "the selected native construction lifetime is retained, never defaulted");
   }
   assert.equal(current.calls.length, 0, "producer correspondence never becomes a synthetic runtime storage request");

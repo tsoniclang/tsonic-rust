@@ -19,6 +19,7 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { rustOptionElementCarrier } from "../../../dist/target-model/types/carriers/optional.js";
 import { rustCallableTargetType } from "../../../dist/target-model/types/carriers/callables.js";
 import { rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/carriers/native.js";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 import { sourcePackageCallbackErrorFiles, sourcePackageCallbackErrorGraph }
   from "../../../../tsonic/test/fixtures/source-package-callback-errors.mjs";
 
@@ -69,6 +70,57 @@ function fixture(text, options = {}) {
   return { program, source, storage, input, native, plan, declaration, initializer, exactSubject,
     revokeSource: guardedAst.revoke, revokeQueries: guardedQueries.revoke };
 }
+
+const familyNativeInputSource = `
+interface Stored<Value> { payload: Value; }
+type Storage<Value> = Value extends Stored<infer Inner> ? Inner : Value;
+function invoke<Value>(callback: (value: Storage<Value>) => number, value: Storage<Value>): number {
+  return callback(value);
+}
+export function step(): number {
+  const numeric = invoke<number>(value => value, 7);
+  const logical = invoke<boolean>(value => value ? 1 : 0, true);
+  return numeric + logical;
+}
+`;
+
+test("native invocation storage consumes the selected formal's normalized source-family ABI on each actual call", () => {
+  const current = fixture(familyNativeInputSource);
+  const owner = current.declaration("invoke");
+  const input = current.native.inputsFor(owner)[0];
+  assert.equal(input !== undefined, true, "the original generic formal has one canonical native input");
+  for (const [name, primitive] of [["numeric", "float64"], ["logical", "bool"]]) {
+    const invocation = current.initializer(name);
+    const operation = current.program.records.targetOperation.get(invocation);
+    const selected = current.plan.invocationInputFor(input, invocation);
+    assert.equal(selected.kind, "selected", `${name}: ${selected.reason ?? "exact normalized native storage"}`);
+    assert.equal(selected.carrier.kind, "reference", `${name}: the original nonretaining native input stays borrowed`);
+    const physical = rustCallablePhysicalSignature(selected.carrier.referent);
+    assert.equal(physical?.parameters[0]?.kind === "source-primitive" && physical.parameters[0].name === primitive, true,
+      `${name}: the actual selected formal is normalized before strict source-producer correspondence`);
+    assert.equal(operation?.kind === "source-call" && operation.parameters[0].form ===
+      current.program.records.sourceParameterAbi.get(input.subject.node).form, true,
+    `${name}: the checked original formal and omission form are unchanged`);
+  }
+});
+
+test("native normalized formal selection rejects missing and mismatched actual parameter plans", () => {
+  const current = fixture(familyNativeInputSource);
+  const input = current.native.inputsFor(current.declaration("invoke"))[0];
+  const invocation = current.initializer("numeric");
+  const original = current.program.records.targetOperation.get(invocation);
+  for (const [label, parameters] of [
+    ["missing", []],
+    ["wrong-form", [{ ...original.parameters[0], form: "rest" }, ...original.parameters.slice(1)]],
+  ]) {
+    const records = createRustRecordFixture({ targetOperation: {
+      get: node => node === invocation ? { ...original, parameters } : current.program.records.targetOperation.get(node),
+    } }, current.program.records);
+    const plan = createRustNativeStorageQueries({ ...current.input, records, native: current.native });
+    const selected = plan.invocationInputFor(input, invocation);
+    assert.equal(selected.kind, "unresolved", `${label}: a required checked formal cannot use its raw template instead`);
+  }
+});
 
 test("finalized formal ABI storage is a stable owned lookup without caller carrier arbitration", () => {
   const current = fixture("export function read(value: number): number { return value; }");

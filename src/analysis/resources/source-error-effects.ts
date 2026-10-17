@@ -309,8 +309,9 @@ export function createRustSourceErrorEffectSelection(walk: { readonly context: R
         origins.set(identity, { origin, selected: target });
         if (!sourceComplete) pending.set(identity, physical => {
           const completedSource = complete(source, physical);
+          if (completedSource === undefined) return undefined;
           const completedOrigin = complete(origin, physical);
-          if (completedSource === undefined || completedOrigin === undefined) return undefined;
+          if (completedOrigin === undefined) return undefined;
           const selectedType = bindings.complete(completedSource.errorType, physical);
           if (selectedType === undefined) return undefined;
           const selectedIdentity = substitutedErrorIdentity(completedSource, completedOrigin, selectedType);
