@@ -12,11 +12,10 @@ import {
   rustFixedArrayCarrierValue,
   rustJsArrayLikeElementTargetType,
   rustSourcePrimitiveTargetType,
-  rustSourceUnionTargetType,
   rustTargetConstInteger,
 } from "../../../dist/target-model/types/index.js";
 
-const header = 'import type { FixedArray, float32, int32, int64, uint32 } from "@tsonic/core/types.js";\n';
+const header = 'import type { FixedArray, float32, int8, uint8, int16, uint16, int32, int64, uint32 } from "@tsonic/core/types.js";\n';
 const fractionalForms = ["[signed, unsigned, 0.5]", "[signed, 0.5, unsigned]", "[0.5, signed, unsigned]"];
 const integerForms = ["[signed, 1]", "[1, signed]", "[signed, 1, 2]", "[1, signed, 2]", "[1, 2, signed]",
   "[signed, otherSigned, 1]", "[signed, 1, otherSigned]", "[1, signed, otherSigned]"];
@@ -88,7 +87,8 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
   const negativeZero = [signed, -0];
   const computedFloat = [signed, computed];
   const literalBoundary = [signed, 2147483648];
-  const nativeFloat32 = [narrow, 0.1];
+  const nativeFloat32 = [narrow, 0.5];
+  const fractionalFloat64 = [narrow, 0.1];
   const tuple: [int32, int32] = [signed, signed];
   const heterogeneousTuple: [int32, string] = [signed, "tuple"];
   const fixed: FixedArray<int32, 2> = [signed, 1] as const;
@@ -97,7 +97,7 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, narrow: fl
 ` } });
     const initializers = bindings(program);
     for (const name of ["widePair", "wideLiteral"]) assertArray(program, initializers, name, "int64");
-    for (const name of ["explicit", "spread", "suffix", "negativeZero", "computedFloat", "literalBoundary"]) {
+    for (const name of ["explicit", "spread", "suffix", "negativeZero", "computedFloat", "literalBoundary", "fractionalFloat64"]) {
       assertArray(program, initializers, name, "float64");
     }
     for (const name of ["signedLiteral", "parenthesized", "empty"]) assertArray(program, initializers, name, "int32");
@@ -145,18 +145,97 @@ export function inspect(signed: int32, unsigned: uint32, wide: int64, flag: bool
     assert.equal(absent?.kind === "array-literal" && absent.contributions.length === 3, true, "both nullish source forms keep one native absence lane");
   });
 
-  test(`C102 ${lane}: incompatible integer peers are refused before publication without an invented floating carrier`, () => {
-    for (const expression of ["[signed, unsigned]", "[signed, unsigned, 1]", "[signed, 1, unsigned]", "[1, signed, unsigned]"]) {
-      const { result, source } = compileRust({ surfaces, files: { "index.ts": header +
+  test(`C130 ${lane}: incompatible integer peers retain two physical arms and literal permutations retain three`, () => {
+    for (const expression of ["[signed, unsigned]", "[unsigned, signed]", "[signed, unsigned, 1]", "[signed, 1, unsigned]", "[1, signed, unsigned]"]) {
+      const { program, source } = analyzeRust({ surfaces, files: { "index.ts": header +
         `export function inspect(signed: int32, unsigned: uint32) { const values = ${expression}; return values; }` } });
-      assert.equal(result.artifacts.length, 0, `${expression}: no output from an unsupported native element set`);
+      const initializer = bindings(program).get("values");
+      const fact = program.records.targetOperation.get(initializer);
+      assert.equal(fact?.kind, "array-literal", `${expression}: exact native aggregate admitted`);
+      const names = expression.includes("1") ? ["int32", "uint32", "float64"] : ["int32", "uint32"];
+      const leaves = rustUnionLeaves(fact.elementCarrier, program.typeDefinitions);
+      assert.equal(leaves?.length, names.length, `${expression}: no peer collapsed and no arbitrary arm chosen`);
+      for (const name of names) assert.equal(leaves.some(leaf =>
+        rustTargetTypeRefEquals(leaf.carrier, rustSourcePrimitiveTargetType(name))), true, `${expression}: ${name} retained`);
+      const semantics = createTargetSourceProgram(source).semantics.forNode(initializer);
+      const sourceArray = semantics.types.expressionType(initializer);
+      const elementType = semantics.types.typeArguments(sourceArray)[0];
+      assert.equal(semantics.types.isUnion(elementType), false,
+        `${expression}: physical evidence survives checked numeric coalescence without inventing a semantic union`);
+    }
+  });
+
+  test(`C130 ${lane}: fixed float32 inference is lossless across native integer domains`, () => {
+    for (const name of ["int32", "uint32"]) {
+      for (const expression of ["[narrow, integer]", "[integer, narrow]"]) {
+        const { result, source } = compileRust({ surfaces, files: { "index.ts": header +
+          `export function inspect(narrow: float32, integer: ${name}) { const values = ${expression}; return values; }` } });
+        const issues = result.diagnostics.filter(issue => issue.category === "error");
+        assert.equal(result.artifacts.length, 0, `${name} ${expression}: no rounded native output`);
+        assert.equal(issues.length, 1, `${name} ${expression}: one admission refusal`);
+        assert.equal(issues[0].code, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", "the numeric array owner refuses invalid inference");
+        assert.equal(issues[0].message,
+          "Array literal requires a lossless native element carrier for every fixed floating and numeric contribution.");
+        const range = source.ast.authoredRange(issues[0].sourceNode);
+        const text = source.ast.getSourceText(source.ast.getSourceFile(issues[0].sourceNode));
+        assert.equal(range.kind === "authored" && text.slice(range.start, range.end) === expression, true,
+          `${name} ${expression}: exact original aggregate span`);
+      }
+    }
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
+export function inspect(narrow: float32, tiny: int8, byte: uint8, short: int16, word: uint16, signed: int32, unsigned: uint32): void {
+  const tinyPair = [narrow, tiny]; const bytePair = [byte, narrow];
+  const shortPair = [narrow, short]; const wordPair = [word, narrow];
+  const explicit: number[] = [narrow, signed, unsigned];
+  const exact = [narrow, 0.5]; const fractional = [narrow, 0.1];
+  const midpoint = [narrow, 1.000000059604644775390625];
+  const neighbor = [narrow, 1.0000000000000000000000000000000000000001];
+}
+` } });
+    const initializers = bindings(program);
+    for (const name of ["tinyPair", "bytePair", "shortPair", "wordPair", "exact"]) assertArray(program, initializers, name, "float32");
+    for (const name of ["explicit", "fractional", "midpoint", "neighbor"]) assertArray(program, initializers, name, "float64");
+  });
+
+  test(`C130 ${lane}: authored async, concise and nested returns retain their own array destination`, () => {
+    const { program } = analyzeRust({ surfaces, files: { "index.ts": header + `
+export async function asynchronous(): Promise<float32[]> { const asynchronousValues = [1, 2]; return asynchronousValues; }
+export const concise = (): float32[] => [1, 2];
+export function nested(): number[] {
+  const callback = (): float32[] => { const innerValues = [1, 2]; return innerValues; };
+  callback();
+  const outerValues = [1, 2]; return outerValues;
+}
+` } });
+    const initializers = bindings(program);
+    for (const name of ["asynchronousValues", "innerValues"]) assertArray(program, initializers, name, "float32");
+    assertArray(program, initializers, "outerValues", "float64");
+    const concise = initializers.get("concise");
+    const body = program.source.ast.body(concise);
+    const operation = program.records.targetOperation.get(body);
+    assert.equal(operation?.kind === "array-literal" && operation.elementCarrier.name === "float32", true,
+      "a concise arrow uses its nearest authored callable result, not the enclosing function");
+  });
+
+  test(`C130 ${lane}: nonnumeric subtype reduction preserves final native admission`, () => {
+    for (const declarations of [
+      "class Base { value: number = 1; } class Derived extends Base { extra: number = 2; }",
+      "interface Base { value: number; } interface Derived extends Base { extra: number; }",
+    ]) {
+      const classes = declarations.startsWith("class");
+      const body = classes ? "[new Derived(), new Base()]" : "[derived, base]";
+      const parameters = classes ? "" : "derived: Derived, base: Base";
+      const { result } = compileRust({ surfaces, files: { "index.ts": header + declarations +
+        `export function inspect(${parameters}) { const values = ${body}; return values; }` } });
       const issues = result.diagnostics.filter(issue => issue.category === "error");
-      assert.equal(issues.length, 1, `${expression}: exactly one inference-owner refusal`);
-      assert.equal(issues[0].code, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", `${expression}: original array admission owner`);
-      const range = source.ast.authoredRange(issues[0].sourceNode);
-      const text = source.ast.getSourceText(source.ast.getSourceFile(issues[0].sourceNode));
-      assert.equal(range.kind === "authored" && text.slice(range.start, range.end) === expression, true,
-        `${expression}: exact aggregate source span`);
+      assert.equal(issues.every(issue => issue.code !== "RUST_MISSING_RUNTIME_CARRIER_FACT" &&
+        !/missing.*(?:carrier|fact)|internal invariant/iu.test(issue.message)), true,
+      `${classes ? "class" : "interface"}: subtype reduction never silently loses the aggregate carrier`);
+      if (issues.length !== 0) {
+        assert.equal(result.artifacts.length, 0, "a final native admission refusal publishes no output");
+        assert.equal(issues.every(issue => ["RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", "RUST_INITIALIZER_CARRIER_MISMATCH",
+          "RUST_RETURN_CARRIER_MISMATCH"].includes(issue.code)), true, "only the existing final conversion owners may refuse");
+      } else assert.equal(result.artifacts.length > 0, true, "a natively representable subtype aggregate keeps its output");
     }
   });
 
@@ -224,52 +303,6 @@ export function inspect(): number {
     }
   });
 }
-
-test("C102 policy uses exact existing numeric and literal relations, not a synthetic promotion engine", async () => {
-  const { selectRustInferredNumericArrayElement } = await import("../../../dist/policy/types/collections/array-elements.js");
-  const select = (source, contributions) => selectRustInferredNumericArrayElement(source, contributions, []);
-  const primitive = rustSourcePrimitiveTargetType;
-  const signed = { carrier: primitive("int32"), literal: undefined };
-  const unsigned = { carrier: primitive("uint32"), literal: undefined };
-  const wide = { carrier: primitive("int64"), literal: undefined };
-  const one = { carrier: primitive("float64"), literal: { form: "numeric", number: 1, integer: 1n,
-    numeric: { kind: "authored", token: { coefficient: 1n, exponent: 0n, negative: false, decimalText: "1" } } } };
-  const fraction = { carrier: primitive("float64"), literal: { form: "numeric", number: 0.5,
-    numeric: { kind: "authored", token: { coefficient: 5n, exponent: -1n, negative: false, decimalText: "0.5" } } } };
-  const zero = { carrier: primitive("float64"), literal: { form: "prefix-unary", number: -0, integer: 0n,
-    numeric: { kind: "authored", token: { coefficient: 0n, exponent: 0n, negative: true, decimalText: "-0" } } } };
-  for (const rows of [[signed, unsigned, fraction], [signed, fraction, unsigned], [fraction, signed, unsigned]]) {
-    assert.equal(select(primitive("float64"), rows)?.name, "float64", "all actual fractional candidates considered together");
-  }
-  for (const rows of [[signed, one], [one, signed], [signed, one, one], [one, signed, one], [one, one, signed]]) {
-    assert.equal(select(primitive("float64"), rows)?.name, "int32", "integer literal defaults cannot force a float");
-  }
-  assert.equal(select(primitive("float64"), [signed, unsigned, one]) === undefined, true, "a fitting integer literal cannot rescue incompatible integer peers through float64");
-  assert.equal(select(primitive("float64"), [wide, fraction]) === undefined, true, "no lossy int64 to float64 inference");
-  assert.equal(select(primitive("float64"), [wide, one])?.name, "int64", "wide peer and exact integer literal stay exact");
-  assert.equal(select(primitive("float64"), [signed, zero])?.name, "float64", "negative zero keeps floating semantics");
-  const genuine = rustSourceUnionTargetType("/src/index.ts", "NativePair", [], "generated", {
-    kind: "physical", types: [signed.carrier, wide.carrier],
-  });
-  assert.equal(select(genuine, [signed, wide]) === undefined, true, "genuine checked native union stays with its owner");
-  assert.equal(select(primitive("float64"), [signed, { carrier: primitive("float64"), literal: undefined }])?.name,
-    "float64", "a genuine computed float64 remains a fixed contribution");
-  assert.equal(select(primitive("float64"), [signed, { carrier: primitive("float64"), literal: {
-    form: "numeric", number: 1, integer: 1n, numeric: { kind: "checked-float64", value: 1 },
-  } }])?.name, "float64", "checked float64 metadata cannot become an adaptable authored integer");
-  assert.equal(select(primitive("float64"), []) === undefined, true, "missing contributions are not invented");
-  const narrow = { carrier: primitive("int8"), literal: undefined };
-  const overflow = { ...one, literal: { ...one.literal, number: 200, integer: 200n,
-    numeric: { kind: "authored", token: { coefficient: 200n, exponent: 0n, negative: false, decimalText: "200" } } } };
-  assert.equal(select(primitive("float64"), [narrow, overflow])?.name, "float64",
-    "an unconstrained boundary literal is not forced into the first native peer");
-  assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), [narrow, overflow], [primitive("int8")])?.name,
-    "int8", "the actual destination selects canonical literal admission, not a speculative successful fit");
-  assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), [signed, one], [primitive("float64")])?.name,
-    "float64", "an actual explicit floating destination remains authoritative");
-  assert.equal(selectRustInferredNumericArrayElement(primitive("float64"), [signed, one],
-    [primitive("int32"), primitive("float64")])?.name, "int32", "inconsistent demands cannot choose the first destination");
-});
 
 test("C102 unresolved source storage cannot publish a partial aggregate native domain", () => {
   const { program, source } = analyzeRust({ files: { "index.ts": header + `

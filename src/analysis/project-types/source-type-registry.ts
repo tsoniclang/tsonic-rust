@@ -436,19 +436,18 @@ export function createRustSourceTypeRegistry(
         ) === undefined) return false;
       }
       const indexes = sourceUnionIndexesByType.get(key) ?? new WeakMap<Type, readonly number[]>();
-      const pendingIndexes = new Map<Type, readonly number[]>();
+      const pendingIndexes = new Map<Type, number[]>();
       for (const [index, variant] of union.variants.entries()) {
-        const selected = Object.freeze([index]);
         if (!isDenseDataArray(variant.sourceTypes) || variant.sourceTypes.length === 0 ||
           variant.sourceTypes.some(type => type === undefined) || new Set(variant.sourceTypes).size !== variant.sourceTypes.length) return false;
         for (const sourceType of variant.sourceTypes) {
-          const existing = pendingIndexes.get(sourceType) ?? indexes.get(sourceType);
-          if (existing !== undefined && (existing.length !== 1 || existing[0] !== index)) return false;
-          pendingIndexes.set(sourceType, selected);
+          const selected = pendingIndexes.get(sourceType);
+          if (selected === undefined) pendingIndexes.set(sourceType, [index]);
+          else selected.push(index);
         }
       }
       if (!pendingIndexes.has(union.sourceType)) {
-        pendingIndexes.set(union.sourceType, Object.freeze(union.variants.map((_, index) => index)));
+        pendingIndexes.set(union.sourceType, union.variants.map((_, index) => index));
       }
       for (const [sourceType, selected] of pendingIndexes) {
         const existing = indexes.get(sourceType);
@@ -490,7 +489,7 @@ export function createRustSourceTypeRegistry(
         const variantsKey = closedMetadataKey(union.variants.map(variant => variant.carrier));
         if (!generatedUnionCarriersByVariants.has(variantsKey)) generatedUnionCarriersByVariants.set(variantsKey, normalized.carrier);
       }
-      for (const [sourceType, selected] of pendingIndexes) indexes.set(sourceType, selected);
+      for (const [sourceType, selected] of pendingIndexes) indexes.set(sourceType, Object.freeze(selected));
       sourceUnionIndexesByType.set(key, indexes);
       if (union.declaration !== undefined) declarations.set(declarationKey, union.declaration);
       for (const [symbol, declarationsForSymbol] of pendingDeclarationsBySymbol) {

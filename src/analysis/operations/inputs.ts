@@ -432,7 +432,11 @@ function inferArrayLiteralElement(
     rows.push({ type, carrier, literal: walk.context.literalValues.literalValue.get(operand) });
   }
   const numeric = selectRustInferredNumericArrayElement(selectedElement, rows, demands);
-  if (numeric !== undefined) return numeric;
+  if (numeric.kind === "resolved") return numeric.carrier;
+  if (numeric.kind === "rejected") {
+    appendRustDiagnostic(walk, "RUST_ARRAY_ELEMENT_CARRIER_MISMATCH", numeric.reason, expression, []);
+    return undefined;
+  }
   const first = rows[0]?.carrier;
   if (rows.every(row => rustTargetTypeRefEquals(first, row.carrier))) return first;
   if (sourceElement === undefined) return undefined;
@@ -444,12 +448,14 @@ function inferArrayLiteralElement(
     return undefined;
   };
   const members = types.isUnion(sourceElement) ? types.unionOrIntersectionTypes(sourceElement) : [sourceElement];
-  if (rows.some(row => !members.some(member => {
+  const numericRows = rows.every(row => isRustNumericCarrier(row.carrier));
+  if (numericRows && rows.some(row => !members.some(member => {
     const base = types.literalBaseType(member);
     return base !== undefined && sourceBoundTypeRelationship(
       row.type, base, walk.context.semanticsFor(expression), () => undefined,
     ) === "identity";
   }))) return refuseElement();
+  const unionMembers: Type[] = [];
   const carriers: TargetTypeRef[] = [];
   for (const member of members) {
     const base = types.literalBaseType(member);
@@ -457,14 +463,23 @@ function inferArrayLiteralElement(
       row.type, base, walk.context.semanticsFor(expression), () => undefined,
     ) === "identity");
     const carrier = matches[0]?.carrier;
-    if (carrier === undefined || matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return refuseElement();
-    carriers.push(carrier);
+    if (carrier === undefined) return refuseElement();
+    if (numericRows) {
+      for (const match of matches) {
+        unionMembers.push(member);
+        carriers.push(match.carrier);
+      }
+    } else {
+      if (matches.some(row => !rustTargetTypeRefEquals(row.carrier, carrier))) return refuseElement();
+      unionMembers.push(member);
+      carriers.push(carrier);
+    }
   }
-  return resolveRustSourceUnionCarrier(carriers, values => resolveRustUnionValueCarrier(
-    values, walk.operationOptions, () => resolveRustInferredUnion(
-      sourceElement, members, carriers, rustResolutionContext(walk, expression), walk.operationOptions,
-    ),
-  )) ?? refuseElement();
+  const inferred = (): TargetTypeRef | undefined => resolveRustInferredUnion(
+    sourceElement, unionMembers, carriers, rustResolutionContext(walk, expression), walk.operationOptions,
+  );
+  return resolveRustSourceUnionCarrier(carriers, values => numericRows && !types.isUnion(sourceElement)
+    ? inferred() : resolveRustUnionValueCarrier(values, walk.operationOptions, inferred)) ?? refuseElement();
 }
 
 function resolveArrayElementCarrier(
