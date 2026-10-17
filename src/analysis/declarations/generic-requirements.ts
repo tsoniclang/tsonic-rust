@@ -310,7 +310,7 @@ export function analyzeRustDeclarationGenericRequirements(
   const shapeContracts = new Map<string, RustShapeGenericRequirementContract>();
   const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
   const shapeEvidence: RustStaticRequirementEvidence = { lifetimeContract: undefined, genericCallables,
-    frameCallables, nativeCaptures, classValues, structuralShapes: shapes, projectTypes, records };
+    frameCallables, nativeCaptures, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records };
   for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
     ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
     ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {

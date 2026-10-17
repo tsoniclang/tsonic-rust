@@ -153,7 +153,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   const staticEvidence = { lifetimeContract: input.sourceLifetimes.contractFor(declaration),
     genericCallables: input.genericCallables, structuralShapes: input.structuralShapes,
     frameCallables: input.frameCallables, nativeCaptures: input.nativeCaptures, classValues: input.classValues,
-    projectTypes: input.projectTypes, records };
+    objectRepresentations: input.objectRepresentations, projectTypes: input.projectTypes, records };
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
     (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require,
       input.typeDefinitions, staticEvidence).kind === "supported",

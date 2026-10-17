@@ -39,6 +39,7 @@ import type { RustClassValuePlan } from "../objects/class-values.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
+import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 
 interface RustStructuralMethodDestination {
   readonly carrier: TargetTypeRef;
@@ -67,6 +68,7 @@ export function createRustStructuralMethodStorage(input: {
   readonly nativeCaptures: Pick<RustNativeCaptureConstruction, "require">;
   readonly genericCallables: RustGenericCallablePlan;
   readonly projectTypes: RustProjectTypePolicy;
+  readonly objectRepresentations: RustObjectRepresentationPlan;
 }): {
   prepareConstructors(components: RustSourcePackageComponentClassifications,
     effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined,
@@ -417,7 +419,8 @@ export function createRustStructuralMethodStorage(input: {
             requirement.bindings.types, requirement.bindings.lifetimes, requirement.bindings.consts));
         const selected = rustFinalContractSupportsStatic(contract, { kind: "tuple", elements: captures }, families, input.typeDefinitions,
           { lifetimeContract: input.lifetimes.contractFor(owner), genericCallables: input.genericCallables,
-            frameCallables: frames, nativeCaptures, classValues, structuralShapes, projectTypes: input.projectTypes, records });
+            frameCallables: frames, nativeCaptures, classValues, objectRepresentations: input.objectRepresentations,
+            structuralShapes, projectTypes: input.projectTypes, records });
         if (selected.kind !== "supported") issues.push({ subject: requirement.declaration, message: selected.reason });
       }
       retentionValidated = issues.length === 0;

@@ -13,6 +13,7 @@ import { rustClassConstructorTargetType } from "../../../dist/target-model/types
 import { rustInfallibleTargetId, rustOptionTargetId, rustCallableTargetId } from "../../../dist/target-model/types/carriers/source-types.js";
 import { substituteRustTargetTypeParameters } from "../../../dist/target-model/types/carriers/substitution.js";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { recursiveCallbackProtocolCases } from "../../../../tsonic/test/fixtures/recursive-callback-protocols.mjs";
 
 const number = Object.freeze({ kind: "source-primitive", name: "float64" });
 const unit = Object.freeze({ kind: "tuple", elements: [] });
@@ -23,7 +24,8 @@ const families = Object.freeze({ implementation: () => undefined });
 const contract = fields => Object.freeze({ declaration: {}, typeParameters: [], capturedTypeParameters: [], nativeInputs: [],
   associatedTypes: [], projectProjections: [], optionalStorage: [], ...fields });
 const evidence = fields => Object.freeze({ lifetimeContract: undefined, genericCallables: undefined, structuralShapes: undefined,
-  frameCallables: undefined, nativeCaptures: undefined, classValues: undefined, projectTypes: undefined, records: undefined, ...fields });
+  frameCallables: undefined, nativeCaptures: undefined, classValues: undefined, objectRepresentations: undefined,
+  projectTypes: undefined, records: undefined, ...fields });
 const selected = (carrier, options = {}) => {
   const parameters = options.parameters ?? [];
   const demands = new Map(parameters.map(parameter => [parameter.identity, new Set()]));
@@ -149,6 +151,31 @@ test("actual source instance fields are read once and cannot be replaced by empt
   assert.equal(selected(carrier).kind, "unresolved", "no field layout is not empty owned storage");
   assert.equal(selected(carrier, { evidence: context(rustStringTargetType()) }).kind, "supported", "actual owned field");
   assert.equal(selected(carrier, { evidence: context(borrowed(scopedLifetime)) }).kind, "unsatisfied", "actual borrowed field");
+});
+
+test("polymorphic native wrappers use their admitted dispatch object, not a guessed closed class census", () => {
+  const definition = { declaration: {}, kind: "interface" };
+  const carrier = rustSourceTypeCarrier("/source.ts", "Open", "object", []);
+  const projectTypes = { definitionForCarrier: () => definition, openCarrier: () => carrier,
+    objectLayoutForDefinition: () => ({ fields: [], indexSignatures: [] }), isPolymorphic: () => true,
+    concreteClassesFor: () => assert.fail("a sealed native dispatch-object type is not a concrete-class enumeration") };
+  const run = representation => selected(carrier, { evidence: evidence({ projectTypes,
+    objectRepresentations: { representationFor: () => representation } }) });
+  assert.equal(run({ kind: "open-hierarchy", dispatchObjectLifetime: staticLifetime }).kind, "supported", "actual static dispatch object");
+  assert.equal(run({ kind: "open-hierarchy", dispatchObjectLifetime: scopedLifetime }).kind, "unsatisfied", "actual borrowed dispatch object");
+  assert.equal(run(undefined).kind, "unresolved", "no representation selection is not a static guarantee");
+});
+
+test("polymorphic dispatch lifetimes are instantiated through the existing exact native binder", () => {
+  const definition = { declaration: {}, kind: "interface" };
+  const open = rustSourceTypeCarrier("/source.ts", "Open", "object", [{ kind: "lifetime", lifetime: scopedLifetime }]);
+  const projectTypes = { definitionForCarrier: () => definition, openCarrier: () => open,
+    objectLayoutForDefinition: () => ({ fields: [], indexSignatures: [] }), isPolymorphic: () => true };
+  const context = evidence({ projectTypes,
+    objectRepresentations: { representationFor: () => ({ kind: "open-hierarchy", dispatchObjectLifetime: scopedLifetime }) } });
+  const run = lifetime => selected(rustSourceTypeCarrier("/source.ts", "Open", "object", [{ kind: "lifetime", lifetime }]), { evidence: context });
+  assert.equal(run(staticLifetime).kind, "supported", "the selected instance replaces its declaration lifetime");
+  assert.equal(run(scopedLifetime).kind, "unsatisfied", "a real borrowed dispatch remains borrowed");
 });
 
 test("full native frames prove owned activation bindings even when every entry capture is filtered out", () => {
@@ -287,22 +314,18 @@ test("real native capture producer supplies owned physical storage without laund
 });
 
 test("the real frame inventory requires native capture entries before their existing completion boundary", () => {
-  const program = analyzeRustErrorEffects(`
-    import type { int32 } from "@tsonic/core/types.js";
-    export function escaped(seed: int32): (count: int32) => int32 {
-      let selected = (count: int32): int32 => count === 0 ? seed : selected(count - 1);
-      const before = selected;
-      selected = (count: int32): int32 => count === 0 ? 2 : selected(count - 1);
-      return before;
-    }
-  `, { surfaces: [] });
+  const source = recursiveCallbackProtocolCases.find(test => test.name === "captured-class-field")?.source;
+  assert.equal(typeof source, "string", "the recorded accepted source premise exists");
+  const program = analyzeRustErrorEffects(source, { surfaces: [] });
   const plan = program.callableValues.selected;
   assert.equal(plan.frames.definitions.length, 1, "one actual owning activation");
+  const classValues = program.classValues.seal(program);
   for (const definition of plan.frames.definitions) for (const entry of definition.entries) {
     for (const implementation of entry.implementations)
       assert.equal(plan.nativeCaptures.forDeclaration(implementation.declaration).kind, "resolved", "completed actual entry capture vectors");
     assert.equal(selected(entry.implementations[0].carrier, { evidence: evidence({
       frameCallables: plan.frames, nativeCaptures: plan.nativeCaptures,
+      objectRepresentations: program.objectRepresentations, classValues, projectTypes: program.projectTypes, records: program.records,
     }) }).kind, "supported", "all actual bindings and external state are owned");
   }
 });
@@ -321,6 +344,7 @@ test("the real class factory plan preserves lexical environment fields before fi
   assert.equal(environment.captures.length, 1, "the lexical capture is not an empty signature");
   const instance = program.projectTypes.openCarrier(definition);
   const context = evidence({ classValues, projectTypes: program.projectTypes, records: program.records,
+    objectRepresentations: program.objectRepresentations,
     frameCallables: program.callableValues.selected.frames, nativeCaptures: program.callableValues.selected.nativeCaptures });
   assert.equal(selected(rustClassConstructorTargetType(instance), { evidence: context }).kind, "supported", "owned native factory storage");
   assert.equal(selected(instance, { evidence: context }).kind, "supported", "actual instance-retained class environment");
