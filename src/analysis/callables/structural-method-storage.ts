@@ -356,17 +356,25 @@ export function createRustStructuralMethodStorage(input: {
         candidates.set(root, Object.freeze(signatures));
         constructionCarriers.set(root, Object.freeze(constructed));
       }
-      const originals: readonly RustStructuralMethodConstruction[] = Object.freeze(roots.flatMap(root => {
-        const original = root.construction;
-        return original === undefined ? [] : constructionCarriers.get(root)!.map(physical => {
-          const field = structuralShapes.field(root.carrier, root.index)!;
-          const protocol = rustCallableProtocol(field.presence === "optional"
-            ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier)!;
-          const signature = rustCallablePhysicalSignature(physical.templateCarrier)!;
-          const destinationCarrier = rustCallableTargetType(signature.parameters, signature.result, protocol.lifetime, signature.error);
-          return Object.freeze({ ...original, physicalCarrier: physical.templateCarrier, destinationCarrier });
-        });
-      }));
+      const originals: ReadonlyMap<Node, readonly RustStructuralMethodConstruction[]> = (() => {
+        const constructions = new Map<Node, RustStructuralMethodConstruction[]>();
+        for (const root of roots) {
+          const original = root.construction;
+          if (original === undefined) continue;
+          const witnesses = constructions.get(original.expression) ?? [];
+          for (const physical of constructionCarriers.get(root)!) {
+            const field = structuralShapes.field(root.carrier, root.index)!;
+            const protocol = rustCallableProtocol(field.presence === "optional"
+              ? rustOptionElementCarrier(field.methodStorageCarrier) : field.methodStorageCarrier)!;
+            const signature = rustCallablePhysicalSignature(physical.templateCarrier)!;
+            const destinationCarrier = rustCallableTargetType(signature.parameters, signature.result, protocol.lifetime, signature.error);
+            witnesses.push(Object.freeze({ ...original, physicalCarrier: physical.templateCarrier, destinationCarrier }));
+          }
+          constructions.set(original.expression, witnesses);
+        }
+        for (const witnesses of constructions.values()) Object.freeze(witnesses);
+        return constructions;
+      })();
       const selections = new Map<RustStructuralShapeDefinition, Map<number, RustStructuralMethodStorageSelection>>();
       for (const root of roots) {
         if (root.spread !== undefined) {
@@ -420,8 +428,9 @@ export function createRustStructuralMethodStorage(input: {
           const actual = constructionCarriers.get(root)?.[ordinal];
           const producer = admittedProducers.get(root)?.[ordinal];
           if (actual === undefined || producer === undefined) throw new Error("Structural method storage lost its actual construction carrier.");
-          const originalSources = originals.filter(original => original.expression === producer.subject.node);
-          if (originalSources.length === 0) throw new Error("Structural method storage lost its original admitted source construction witness.");
+          const originalSources = originals.get(producer.subject.node);
+          if (originalSources === undefined || originalSources.length === 0)
+            throw new Error("Structural method storage lost its original admitted source construction witness.");
           for (const original of originalSources) {
             const physical = normalize(substituteRustTargetGenerics(original.physicalCarrier,
               actual.bindings.types, actual.bindings.lifetimes, actual.bindings.consts));
