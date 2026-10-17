@@ -4,12 +4,10 @@ import type { RustProjectTypeDefinition } from "../../../../analysis/project-typ
 import type { RustObjectRepresentation } from "../../../../analysis/project-types/object-representation.js";
 import { rustGenericsWithAssociatedBounds } from "../../types/generic-bounds.js";
 import {
-  rustSourceTypeCarrierValue,
   rustTargetGenericReferences,
 } from "../../../../target-model/types/index.js";
 import type {
   RustExpr,
-  RustGenericArgument,
   RustGenericParameter,
   RustGenerics,
   RustType,
@@ -17,12 +15,12 @@ import type {
 } from "../../../target-ast/syntax/nodes.js";
 import { rustLifetimeToAst } from "../../types/lifetime-syntax.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
-import { sourceModuleItemPath } from "../../program/plan-context.js";
-import { rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustNativeTypeInputContextForRendering, rustTypeFromCarrierInContext } from "../../types/render.js";
+import { rustNativeProjectGeneratedCarrier } from "../../../../policy/types/model/native-type-selection.js";
 import type { RustLifetimeRef } from "../../../../target-model/lifetimes/index.js";
 import { rustDeclarationAssociatedPredicates } from "../../types/associated-bounds.js";
 import { rustTypeParameterBounds } from "../../types/generic-bounds.js";
-import { rustOptionalStorageParameters, rustOptionalStorageTypeArguments } from "../../types/type-projections.js";
+import { rustOptionalStorageParameters } from "../../types/type-projections.js";
 import { rustTypeParameterFromSourceContract } from "../../../../target-model/names/type-parameters.js";
 
 export interface RustProjectGenericPlan {
@@ -205,38 +203,9 @@ function rustProjectGeneratedType(
   context: RustTypeRenderingContext,
   generatedName: (definition: RustProjectTypeDefinition) => string,
 ): RustType | undefined {
-  const value = rustSourceTypeCarrierValue(carrier);
   const definition = context.input.program.projectTypes.definitionForCarrier(carrier);
-  const path = value === undefined || definition === undefined
-    ? undefined
-    : sourceModuleItemPath(context, value.fileName, generatedName(definition));
-  const sourceArguments = value?.genericArguments ?? [];
-  if (value === undefined || definition === undefined || path === undefined ||
-    sourceArguments.length !== definition.genericParameters.length ||
-    definition.genericParameters.some((parameter, index) =>
-      sourceArguments[index]?.kind !== parameter.kind)) {
-    return undefined;
-  }
-  const genericArguments: RustGenericArgument[] = [];
-  for (const argument of sourceArguments) {
-    if (argument.kind === "lifetime") {
-      genericArguments.push({
-        kind: "lifetime",
-        lifetime: rustLifetimeToAst(argument.lifetime),
-      });
-      continue;
-    }
-    if (argument.kind !== "type") return undefined;
-    const type = rustTypeFromCarrierInContext(argument.type, context);
-    if (type === undefined) return undefined;
-    genericArguments.push({ kind: "type", type });
-  }
-  genericArguments.push(...rustOptionalStorageTypeArguments(carrier, context));
-  return {
-    kind: "named",
-    path,
-    ...(genericArguments.length === 0
-      ? {}
-      : { genericArguments: Object.freeze(genericArguments) }),
-  };
+  if (definition === undefined) return undefined;
+  const selected = rustNativeProjectGeneratedCarrier(carrier, generatedName(definition),
+    rustNativeTypeInputContextForRendering(context));
+  return selected === undefined ? undefined : rustTypeFromCarrierInContext(selected, context);
 }

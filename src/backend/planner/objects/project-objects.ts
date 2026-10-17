@@ -10,6 +10,7 @@ import type { RustObjectRepresentation } from "../../../analysis/project-types/o
 import type { RustPlannedProjectFieldDispatchRole } from "./project-field-dispatch.js";
 import type { RustCapturedFieldStorage } from "../../../target-model/types/field-storage.js";
 import { rustCapturedFieldLocation, writeRustCapturedFieldFromStorage } from "./captured-fields.js";
+import { rustNativeObjectOwnerPaths } from "../../../policy/types/model/native-type-selection.js";
 
 export const rustProjectObjectStateField = "state";
 export const rustProjectObjectIdentityField = "identity";
@@ -61,7 +62,7 @@ export function rustProjectObjectSharedStateType(
   representation: RustObjectRepresentation,
   contextType?: RustType,
 ): RustType | undefined {
-  const paths = rustProjectObjectOwnerPaths(representation);
+  const paths = rustNativeObjectOwnerPaths(representation.kind);
   return paths === undefined ? undefined : { kind: "named", path: paths.state,
     genericArguments: [{ kind: "type", type: stateType },
       ...(contextType === undefined ? [] : [{ kind: "type" as const, type: contextType }])] };
@@ -668,23 +669,7 @@ function rustProjectObjectValueRead(
 function rustSharedObjectCarrierPath(
   representation: RustObjectRepresentation,
 ): "rt::ObjectHandle" | "rt::ObjectRef" | undefined {
-  return rustProjectObjectOwnerPaths(representation)?.owner;
-}
-
-function rustProjectObjectOwnerPaths(
-  representation: RustObjectRepresentation,
-): { readonly owner: "rt::ObjectHandle" | "rt::ObjectRef";
-  readonly state: "rt::ObjectHandleState" | "rt::ObjectRefState" } | undefined {
-  switch (representation.kind) {
-    case "shared-immutable":
-      return { owner: "rt::ObjectRef", state: "rt::ObjectRefState" };
-    case "shared-mutable":
-    case "closed-hierarchy":
-    case "open-hierarchy":
-      return { owner: "rt::ObjectHandle", state: "rt::ObjectHandleState" };
-    case "value":
-      return undefined;
-  }
+  return rustNativeObjectOwnerPaths(representation.kind)?.owner;
 }
 
 function rustStructuralObjectStatePath(

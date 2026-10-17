@@ -108,6 +108,7 @@ export interface RustFixedArrayCarrierValue {
 export interface RustNamedTypeCarrierValue {
   readonly id: string;
   readonly path: string;
+  readonly nativeErrorIdentity?: string;
   readonly traits: RustNamedTypeTraitContract;
   readonly genericArguments: readonly RustTargetGenericArgument[];
   readonly genericDefaults: readonly RustTargetGenericArgument[];
@@ -130,12 +131,14 @@ export function rustNamedTargetType(
   genericDefaults: readonly RustTargetGenericArgument[] = [],
   traits: RustNamedTypeTraitContract = rustMoveOnlyNamedTypeTraits,
   upcasts: readonly RustNamedTypeUpcast[] = [],
+  nativeErrorIdentity?: string,
 ): TargetTypeRef {
   return {
     kind: "target-specific",
     target: "rust",
     name: rustNamedTypeCarrierName,
-    value: { id, path, traits, genericArguments, genericDefaults, upcasts },
+    value: { id, path, traits, genericArguments, genericDefaults, upcasts,
+      ...(nativeErrorIdentity === undefined ? {} : { nativeErrorIdentity }) },
   };
 }
 
@@ -147,11 +150,6 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return undefined;
   }
-  const keys = Object.keys(value).sort();
-  if (keys.length !== 6 || keys[0] !== "genericArguments" || keys[1] !== "genericDefaults" ||
-    keys[2] !== "id" || keys[3] !== "path" || keys[4] !== "traits" || keys[5] !== "upcasts") {
-    return undefined;
-  }
   const candidate = value as {
     readonly id?: unknown;
     readonly path?: unknown;
@@ -159,8 +157,13 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     readonly genericArguments?: unknown;
     readonly genericDefaults?: unknown;
     readonly upcasts?: unknown;
+    readonly nativeErrorIdentity?: unknown;
   };
-  if (typeof candidate.id !== "string" || candidate.id.length === 0 ||
+  if (!hasExactObjectKeys(value, ["id", "path", "traits", "genericArguments", "genericDefaults", "upcasts",
+      ...(candidate.nativeErrorIdentity === undefined ? [] : ["nativeErrorIdentity"])]) ||
+    candidate.nativeErrorIdentity !== undefined &&
+      (typeof candidate.nativeErrorIdentity !== "string" || candidate.nativeErrorIdentity.length === 0) ||
+    typeof candidate.id !== "string" || candidate.id.length === 0 ||
     typeof candidate.path !== "string" || candidate.path.length === 0 ||
     !isRustNamedTypeTraitContract(candidate.traits) ||
     !isDenseDataArray(candidate.genericArguments) ||
@@ -193,6 +196,7 @@ export function rustNamedTypeCarrierValue(carrier: TargetTypeRef | undefined): R
     genericArguments,
     genericDefaults,
     upcasts,
+    ...(candidate.nativeErrorIdentity === undefined ? {} : { nativeErrorIdentity: candidate.nativeErrorIdentity }),
   };
 }
 

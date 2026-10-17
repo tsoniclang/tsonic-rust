@@ -6,7 +6,7 @@ import { rustTypeFromCarrierInContext } from "../types/render.js";
 import type { RustTypeRenderingContext } from "../types/render.js";
 import { rustDispatchContextRootName } from "../project/dispatch-contexts.js";
 import { rustRuntimeAliasUseItems } from "./plan-context.js";
-import type { RustSourcePackageErrorDomainPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorDomainPlan } from "../../../target-model/records/error-regions.js";
 
 export function planRustDispatchContextRoots(
   context: RustTypeRenderingContext & {

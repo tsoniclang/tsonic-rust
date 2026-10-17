@@ -43,7 +43,7 @@ import { rustStructuralShapeGenerics, rustStructuralShapeContext } from "./struc
 import { planRustNumberArrayUnionImplementation } from "./number-array-unions.js";
 import { planRustConstructorShape } from "./constructor-shapes.js";
 import { rustRuntimeNativeMethodTargetType, rustRuntimeRecordFieldTargetType } from "../../../target-model/types/carriers/runtime-carriers.js";
-import type { RustSourcePackageErrorPlan } from "../program/source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 import type { TargetTypeRef } from "../../../target-model/types/model.js";
 import { planRustSourceUnionPayloadTemplate } from "../types/source-union-payloads.js";
 

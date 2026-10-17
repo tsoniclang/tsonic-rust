@@ -143,6 +143,8 @@ test("canonical physical union payloads retain enclosing anonymous type position
     const scope = { moduleName: "owner", moduleNameByFileName: new Map([["/src/owner.ts", "owner"]]),
       structuralShapesModuleName: "shapes", externalCrateNameByFileName: new Map(), externalStructuralShapeModuleByFileName: new Map(),
       input: { program: { typeDefinitions: registry.seal(), names: { nameForSourceType: (_file, name) => name },
+        sourcePackageFacades: { nativeTypeItemFor: (fileName, typeName) => fileName === "/src/owner.ts" && typeName === "Completion"
+          ? Object.freeze({ fileName, targetName: "Completion", nativeProtocol: false }) : undefined },
         callableValues: { native: { protocolForSourceItem: () => undefined } }, structuralShapes: generated } } };
     assert.equal(rustUnionTypePathInContext(carrier, scope), origin === "authored" ? "Completion"
       : `crate::shapes::${generated.unionForCarrier(carrier).targetName}`,

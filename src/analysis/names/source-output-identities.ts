@@ -1,11 +1,13 @@
 import { relative, resolve } from "node:path";
 import type {
   AstReader,
+  Node,
   SourceFile,
 } from "@tsonic/tsts";
 import type { TargetCompilationPaths } from "@tsonic/target-api";
 import type { TargetSourcePackageGraph } from "@tsonic/target-api";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
+import { rejectedTargetStage, resolvedTargetStage, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import {
   rustModuleSegmentName,
   rustPackageModuleName,
@@ -13,6 +15,8 @@ import {
 
 import { normalizeRustSourceOutputPath, rustSourceModuleSegments } from "../../target-model/names/source-output-identities.js";
 import type { RustSourceFileOutputIdentity } from "../../target-model/names/source-output-identities.js";
+import type { RustNamePlan } from "../../target-model/names/model.js";
+import { rustSourceDeclarationTypeName } from "../../policy/types/model/source-declarations.js";
 
 export type RustSourceOutputIdentityPlan =
   | {
@@ -29,6 +33,76 @@ export interface RustSourceOutputIdentityAnalysisInput {
   readonly sourceFiles: readonly SourceFile[];
   readonly paths: TargetCompilationPaths;
   readonly sourcePackages: TargetSourcePackageGraph;
+}
+
+export function selectRustNativeTypeItemNames(input: {
+  readonly ast: AstReader;
+  readonly nativeNodes: readonly Node[];
+  readonly names: Pick<RustNamePlan, "nameForSourceType">;
+  readonly protocols: readonly { readonly ownerFileName: string; readonly targetName: string }[];
+}): TargetStageResult<{
+  nativeTypeItemFor(fileName: string, sourceName: string): {
+    readonly fileName: string; readonly targetName: string; readonly nativeProtocol: boolean;
+  } | undefined;
+}> {
+  const selected = new Map<string, Map<string, {
+    readonly fileName: string; readonly targetName: string; readonly nativeProtocol: boolean;
+  }>>();
+  const diagnostics: TargetDiagnostic[] = [];
+  const admit = (fileName: string, sourceName: string, targetName: string, nativeProtocol: boolean): void => {
+    const names = selected.get(fileName) ?? new Map<string, {
+      readonly fileName: string; readonly targetName: string; readonly nativeProtocol: boolean;
+    }>();
+    const existing = names.get(sourceName);
+    if (existing !== undefined && (existing.targetName !== targetName || existing.nativeProtocol !== nativeProtocol)) {
+      diagnostics.push({ code: "RUST_NATIVE_TYPE_ITEM_NAME_CONFLICT", category: "error", source: "tsonic-rust",
+        message: `Native type item '${sourceName}' in '${fileName}' has conflicting selected names or roles.`,
+        evidence: ["target.capability=rust.native-type-item-name"] });
+    } else if (existing === undefined) names.set(sourceName, Object.freeze({ fileName, targetName, nativeProtocol }));
+    selected.set(fileName, names);
+  };
+  for (const declaration of input.nativeNodes) {
+    const kind = input.ast.kindName(declaration);
+    if (kind !== "KindClassDeclaration" && kind !== "KindClassExpression" && kind !== "KindInterfaceDeclaration" &&
+      kind !== "KindTypeAliasDeclaration" && kind !== "KindEnumDeclaration") continue;
+    const file = input.ast.getSourceFile(declaration);
+    if (file === undefined) {
+      diagnostics.push({ code: "RUST_NATIVE_TYPE_ITEM_OWNER_MISSING", category: "error", source: "tsonic-rust",
+        sourceNode: declaration, message: "A selected native type item requires its original source-file owner.",
+        evidence: ["target.capability=rust.native-type-item-name"] });
+      continue;
+    }
+    const fileName = input.ast.getFileName(file);
+    const sourceName = rustSourceDeclarationTypeName(declaration, input.ast);
+    const targetName = input.names.nameForSourceType(fileName, sourceName);
+    if (targetName !== undefined) admit(fileName, sourceName, targetName, false);
+  }
+  for (const protocol of input.protocols) admit(protocol.ownerFileName, protocol.targetName, protocol.targetName, true);
+  return diagnostics.length > 0 ? rejectedTargetStage(diagnostics) : resolvedTargetStage(Object.freeze({
+    nativeTypeItemFor: (fileName: string, sourceName: string) => selected.get(fileName)?.get(sourceName),
+  }));
+}
+
+export function allocateRustComponentSupportModuleName(
+  identities: ReadonlyMap<string, RustSourceFileOutputIdentity>,
+  componentId: string,
+  preferredName: string,
+  additionalReservedNames: readonly string[] = [],
+): string {
+  const usedNames = new Set(additionalReservedNames);
+  for (const identity of identities.values()) {
+    if (identity.componentId !== componentId) continue;
+    const topLevelName = identity.moduleSegments[0];
+    if (topLevelName !== undefined) usedNames.add(topLevelName);
+  }
+  const baseName = rustModuleSegmentName(preferredName);
+  let candidate = baseName;
+  let suffix = 2;
+  while (usedNames.has(candidate)) {
+    candidate = `${baseName}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
 }
 
 export function analyzeRustSourceOutputIdentities(

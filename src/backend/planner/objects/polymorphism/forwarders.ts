@@ -213,7 +213,7 @@ function planRootCallableImplementation(
     readonly targetName: string;
     readonly safetyPlacement?: "getter" | "setter";
     readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
-    readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
+    readonly fallibleBoundary?: import("../../../../target-model/records/error-regions.js").RustSourcePackageErrorBoundary;
   },
 ): RustImplFunction | undefined {
   const owner = context.input.program.projectTypes.definitionContainingDeclaration(implementation);

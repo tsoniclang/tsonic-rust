@@ -17,9 +17,6 @@ import {
   planRustCrateInitializer,
   planRustModuleInitializers,
 } from "./module-initialization.js";
-import {
-  allocateRustComponentSupportModuleName,
-} from "../names/source-output-identities.js";
 import { rustErrorBoundaryOperandType, rustTargetRuntimeErrorType } from "../types/error-boundary.js";
 import { planRustBinaryErrors, type RustBinaryErrorPlan } from "./binary-errors.js";
 import { rustTypeFromCarrier } from "../types/render.js";
@@ -33,9 +30,6 @@ import { materializeRustSourcePackageFacades } from "./source-package-facades.js
 import {
   planRustSourcePackageInitializers,
 } from "./source-package-initializers.js";
-import {
-  planRustSourcePackageErrors,
-} from "./source-package-errors.js";
 import { createRustSourcePackageTypeRenderingContext, planRustSourcePackageComponents } from "./source-package-components.js";
 import {
   materializeRustSourcePackageCrateArtifacts,
@@ -98,16 +92,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     return rejectedTargetStage(diagnostics);
   }
   const packageInitializers = initializerResult.plan;
-  const sourcePackageErrorResult = planRustSourcePackageErrors(
-    input,
-    componentPlans,
-  );
-  diagnostics.push(...sourcePackageErrorResult.diagnostics);
-  if (sourcePackageErrorResult.plan === undefined || diagnostics.length > 0) {
-    return rejectedTargetStage(diagnostics);
-  }
-  const sourcePackageErrors = sourcePackageErrorResult.plan;
-  const structuralShapesModuleName = rootComponentPlan.structuralShapesModuleName;
+  const sourcePackageErrors = input.program.errorTransport;
   const componentPlanById = new Map(componentPlans.map((component) =>
     [component.componentId, component] as const));
   const externalStructuralShapeModuleByFileName = new Map(
@@ -159,12 +144,7 @@ export function planRustOutput(input: RustPlanningContext): TargetStageResult<Ru
     });
     return rejectedTargetStage(diagnostics);
   }
-  const crateInitializerFunctionBase = allocateRustComponentSupportModuleName(
-    identities,
-    facadePlan.rootComponentId,
-    "initialize",
-    [structuralShapesModuleName, programModuleName, initializerFacadeModuleName],
-  );
+  const crateInitializerFunctionBase = rootComponentPlan.crateInitializerFunctionBase;
   const activeHooks = input.program.binaryHooks;
   const binaryExecution = input.program.binaryExecution;
   const hookErrorTypes = new Map<

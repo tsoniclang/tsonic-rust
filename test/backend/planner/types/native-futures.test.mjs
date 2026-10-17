@@ -43,7 +43,7 @@ test("canonical opaque carrier rendering preserves an explicitly empty capture s
     output: rustSourcePrimitiveTargetType("int32"),
     error: rustNamedTargetType("rust.core.Infallible", "core::convert::Infallible", []),
   });
-  const rendered = rustTypeFromCarrier(carrier, () => undefined, () => undefined);
+  const rendered = rustTypeFromCarrier(carrier);
   assert.equal(rendered !== undefined, true);
   assert.equal(Object.hasOwn(rendered, "captures"), true, "empty captures must not become implicit lifetime capture");
   assert.match(printRustType(rendered), / \+ use<>$/u);

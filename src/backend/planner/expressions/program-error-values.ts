@@ -10,8 +10,8 @@ import { diagnosticInput, registerAliasFromPath,
   type RustPlanContext } from "../program/plan-context.js";
 import { planRustBoundaryErrorVariants } from "../program/error-variants.js";
 import type { RustErrorPayloadVariant } from "../../../analysis/program/error-transport.js";
-import { resolveRustSourcePackageErrorBoundary,
-  type RustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
+import { resolveRustSourcePackageErrorBoundary } from "../program/source-package-errors.js";
+import type { RustSourcePackageErrorBoundary } from "../../../target-model/records/error-regions.js";
 import { lowerRustValueConversion } from "./value-conversions.js";
 
 export function planRustProgramErrorClosedValue(

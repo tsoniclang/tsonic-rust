@@ -29,7 +29,10 @@ function nativeFixture() {
     { name: "Immediate", carrier: integer }, { name: "Pending", carrier: rustFutureTargetType(unit) },
   ] }, true), true);
   const typeDefinitions = registry.seal();
-  const rendering = { typeDefinitions, pathFor: value => `crate::definitions::${value.typeName}`, additionalArgumentsFor: () => [] };
+  const rendering = { typeDefinitions, typeParameterNames: undefined,
+    pathFor: value => `crate::definitions::${value.typeName}`, additionalArgumentsFor: () => [],
+    programErrorCarrier: () => undefined, producerErrorCarrier: () => undefined,
+    nativeErrorJoinCarrier: () => undefined, structuralCarrier: () => undefined };
   const plan = planRustSourceUnionPayloadTemplate(typeDefinitions.sourceUnionPayloadTemplate(carrier), emptyRustGenerics,
     type => rustTypeFromCarrier(type, rendering));
   assert.equal(plan !== undefined, true);
@@ -172,6 +175,8 @@ test("canonical authored and generated sums admit opaque futures in native signa
     const context = { moduleName: "main", structuralShapesModuleName: "definitions",
       moduleNameByFileName: new Map([["/src/definitions.ts", "definitions"]]), externalCrateNameByFileName: new Map(),
       externalStructuralShapeModuleByFileName: new Map(), input: { program: { typeDefinitions: registry.seal(),
+        sourcePackageFacades: { nativeTypeItemFor: (fileName, typeName) => fileName === "/src/definitions.ts" && typeName === "Completion"
+          ? Object.freeze({ fileName, targetName: "Completion", nativeProtocol: false }) : undefined },
         names: { nameForSourceType: (_file, typeName) => typeName }, structuralShapes: shapes,
         callableValues: { native: { protocolForSourceItem: () => undefined } } } } };
     const plan = planRustSourceUnionPayloadTemplate(registry.sourceUnionPayloadTemplate(carrier), emptyRustGenerics, rustTypeFromCarrier);

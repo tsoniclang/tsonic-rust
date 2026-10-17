@@ -2,6 +2,7 @@ import {
   rejectedTargetStage,
   resolvedTargetStage,
   type TargetDiagnostic,
+  failTargetAnalysisInvariant,
 } from "@tsonic/target-api/artifacts";
 import {
   snapshotTargetPlanningSourceNavigation,
@@ -38,6 +39,7 @@ import {
 } from "../project/index.js";
 import {
   analyzeRustSourcePackageFacades,
+  rustSourceItemIdentity,
 } from "./source-package-facades.js";
 import {
   validateRustGenericSourcePackageComponents,
@@ -59,6 +61,7 @@ import { analyzeRustInitializationErrors } from "../errors/initialization.js";
 
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { analyzeRustErrorTransport } from "./error-transport.js";
+import { rustTypeFamilyNormalizer } from "../../policy/types/model/type-family-normalization.js";
 import { analyzeRustBorrowedInitializers } from "../storage/borrowed-initializers.js";
 import { analyzeRustNativeDeclarationForms } from "../declarations/native-forms.js";
 import { analyzeRustSourceOutputIdentities } from "../names/source-output-identities.js";
@@ -68,6 +71,9 @@ import { analyzeRustGenericCallableErrors } from "../callables/generic-errors.js
 import { analyzeRustReachability } from "../reachability/plan.js";
 import { rustNativeArgumentBorrowsRead } from "../ownership/uses.js";
 import { analyzeRustStatementCompletions } from "../control-flow/statement-completion.js";
+import { rustNativeProjectGeneratedCarrier, rustNativeTypeSelectionInput,
+  type RustNativeTypeInputContext } from "../../policy/types/model/native-type-selection.js";
+import { selectRustOptionalStorageTypeArguments } from "../declarations/type-projections.js";
 
 export function analyzeRustTargetProgram(
   request: RustTargetAnalysisRequest,
@@ -116,14 +122,14 @@ export function analyzeRustTargetProgram(
   const sourceOutputIdentities = analyzeRustSourceOutputIdentities({ ast: context.ast,
     sourceFiles: context.sourceFiles, paths: input.paths, sourcePackages: input.sourcePackages });
   if (sourceOutputIdentities.kind === "rejected") return rejectedTargetStage(sourceOutputIdentities.diagnostics);
-  const sourceStage = analyzeRustProgram(context, configuration.outputType);
+  const sourceStage = analyzeRustProgram(context, configuration.outputType, sourceOutputIdentities.identities);
   if (context.diagnostics.length > 0) {
     return rejectedTargetStage(context.diagnostics);
   }
   if (sourceStage === undefined) throw new Error("Rust program analysis completed without its sealed source-stage output.");
   const { lexicalFunctions, sourcePackageComponents } = sourceStage;
 
-  const sourcePackageFacades = analyzeRustSourcePackageFacades(context);
+  const sourcePackageFacades = analyzeRustSourcePackageFacades(context, sourceOutputIdentities.identities);
   if (sourcePackageFacades.kind === "rejected") {
     return rejectedTargetStage(sourcePackageFacades.diagnostics);
   }
@@ -331,7 +337,8 @@ export function analyzeRustTargetProgram(
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
-    sourcePackageComponents, errorStorageDemands: context.errorStorageDemands });
+    sourcePackageComponents, errorStorageDemands: context.errorStorageDemands,
+    sourceModuleConstructions: sourceModuleConstructions.index });
   if (errorTransport.kind === "rejected") return rejectedTargetStage(errorTransport.diagnostics);
   const genericCallableErrors = analyzeRustGenericCallableErrors({ ast: context.ast, sourceLifetimes: context.sourceLifetimes,
     physical: context.callableValues.generic.physical, producers: context.callableValues.nativeProducers,
@@ -366,7 +373,40 @@ export function analyzeRustTargetProgram(
       evidence: ["target.capability=rust.native-provider.disjoint-mutable-storage"] });
   }
   if (mutableInputDiagnostics.length > 0) return rejectedTargetStage(mutableInputDiagnostics);
+  const identities = sourceOutputIdentities.identities;
+  const moduleNameByFileName = new Map([...identities].map(([fileName, identity]) => [fileName, identity.moduleName]));
+  const externalCrateNameByFileName = new Map([...identities].flatMap(([fileName, identity]) =>
+    identity.externalCrateName === undefined ? [] : [[fileName, identity.externalCrateName] as const]));
+  const externalStructuralShapeModuleByFileName = new Map([...identities].flatMap(([fileName, identity]) => {
+    const component = sourcePackageComponents.forComponent(identity.componentId);
+    return identity.externalCrateName === undefined || component === undefined ? []
+      : [[fileName, `${identity.externalCrateName}::${component.structuralShapesModuleName}`] as const];
+  }));
+  const normalizeNativeFamily = rustTypeFamilyNormalizer(context.typeFamilies);
+  const nativeContextFor = (fileName: string, typeParameterNames: ReadonlyMap<string, string> | undefined,
+    callables: RustNativeTypeInputContext["callableValues"]): RustNativeTypeInputContext => {
+    const identity = identities.get(fileName);
+    const component = identity === undefined ? undefined : sourcePackageComponents.forComponent(identity.componentId);
+    if (identity === undefined || component === undefined) return failTargetAnalysisInvariant("tsonic-rust",
+      "A native declaration lost its admitted source-package output identity.");
+    return {
+      moduleName: identity.moduleName, crateName: identity.externalCrateName, moduleNameByFileName,
+      externalCrateNameByFileName, externalStructuralShapeModuleByFileName,
+      structuralShapesModuleName: component.structuralShapesModuleName, typeParameterNames,
+      externalPublicPathFor: (sourceFileName, name) => sourcePackageFacades.plan.externalItemPathByIdentity.get(
+        rustSourceItemIdentity(sourceFileName, name)),
+      nativeTypeItemFor: sourcePackageFacades.plan.nativeTypeItemFor,
+      typeDefinitions, projectTypes, objectRepresentations,
+      structuralShapes: context.structuralShapes, callableValues: callables, classValues,
+      errorRegions: completedErrorRegions,
+      additionalArgumentsFor: (carrier, parameterIndexes) => selectRustOptionalStorageTypeArguments(carrier, {
+        genericRequirements: declarationGenericRequirements.index, projectTypes, normalize: normalizeNativeFamily,
+      }, parameterIndexes),
+      programErrorBoundaryFor: owner => errorTransport.value.nativeBoundaryFor(component.componentId, owner),
+    };
+  };
   const callableValues = context.callableValues.seal({
+    nativeTypeInputFor: (fileName, callables) => rustNativeTypeSelectionInput(nativeContextFor(fileName, undefined, callables)),
     declarationGenericRequirements: declarationGenericRequirements.index, genericErrors: genericCallableErrors.value,
     errorRegions: completedErrorRegions, initialization: initializationErrors.value,
     constructions: context.projectTypes.definitions.flatMap(definition => {
@@ -455,7 +495,10 @@ export function analyzeRustTargetProgram(
     semanticsFor: context.semanticsFor,
     names: context.names, records, projectTypes, typeDefinitions, sourceLifetimes: context.sourceLifetimes,
     objectRepresentations, typeFamilies: program.typeFamilies,
-    genericRequirements: declarationGenericRequirements.index });
+    genericRequirements: declarationGenericRequirements.index,
+    nativeTypeInputFor: (fileName, typeParameterNames) => rustNativeTypeSelectionInput(nativeContextFor(fileName, typeParameterNames, callableValues.value)),
+    nativeStateCarrierFor: definition => rustNativeProjectGeneratedCarrier(projectTypes.openCarrier(definition),
+      definition.stateName, nativeContextFor(definition.fileName, undefined, callableValues.value)) });
   if (nativeDeclarations.kind === "rejected") return rejectedTargetStage(nativeDeclarations.diagnostics);
   const reachability = analyzeRustReachability(program, context.nativeNodes);
   context.callableValues.publish();

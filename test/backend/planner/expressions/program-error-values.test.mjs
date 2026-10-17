@@ -7,6 +7,7 @@ import { planRustErrorVariants } from "../../../../dist/backend/planner/program/
 import { analyzeRustErrorTransport } from "../../../../dist/analysis/program/error-transport.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 import { rustJsValueTargetType, rustTsValueTargetType } from "../../../../dist/target-model/types/index.js";
+import { selectedNativeErrorBoundaries } from "../../../helpers/native-type-selection.mjs";
 
 function context(errorDomain, thrownCarriers = [], retained = false, external = []) {
   const domain = { componentId: "root", errorOwnerComponentId: errorDomain === "project" ? "root" : undefined,
@@ -22,7 +23,8 @@ function context(errorDomain, thrownCarriers = [], retained = false, external = 
     input: { program: {
       projectTypes: { programErrorDefinitions: [], sourceErrorDefinitions: [], programErrorVariant: () => undefined },
       typeDefinitions: emptyRustTypeDefinitions,
-      errorStorageDemands: { retainedBoundaries: [] },
+      errorStorageDemands: { retainedBoundaries: [], nativeConstructors: [], storageFor: () => ({ kind: "readonly" }) },
+      sourceModuleConstructions: { entries: () => [] },
       sourcePackageComponents: { forComponent: () => ({ closedErrorDemand: { thrownCarriers, retained, sourceView: false } }) },
       source: { ast: { kindName: node => node.kind, pos: () => 0, end: () => 0,
         getFileName: () => "/src/index.ts", getSourceText: () => "" } },
@@ -34,16 +36,32 @@ function seal(input) {
   const program = input.input.program;
   const components = [...input.sourcePackageErrors.domainsByComponentId.values()].flatMap(domain => {
     const selected = program.sourcePackageComponents.forComponent(domain.componentId);
-    return selected === undefined ? [] : [{ ...domain, closedErrorDemand: selected.closedErrorDemand }];
+    return selected === undefined ? [] : [{
+      ...domain, sourceFileNames: [`/${domain.componentId}.ts`], dependencyComponentIds: [],
+      crateName: `${domain.componentId}_crate`, programModuleName: "program",
+      closedErrorDemand: { ...selected.closedErrorDemand, sourceView: domain.errorDomain === "project" },
+    }];
   });
   const result = analyzeRustErrorTransport({
     ...program, ast: program.source.ast,
     sourcePackageComponents: {
       components,
+      forComponent: id => components.find(component => component.componentId === id),
       componentForFile: () => components[0],
     },
   });
   program.errorTransport = result.kind === "resolved" ? result.value : undefined;
+  const domains = [...input.sourcePackageErrors.domainsByComponentId.values()];
+  Object.assign(input.sourcePackageErrors, selectedNativeErrorBoundaries({
+    components: domains.flatMap(domain => [
+      [domain.componentId, domain.componentId, { componentId: domain.componentId,
+        errorDomain: domain.errorDomain, errorTypeIdentity: domain.errorTypeIdentity, errorTypePath: "rt::TsonicError" }],
+      ...domain.externalErrors.map(external => [domain.componentId, external.componentId, {
+        componentId: external.componentId, errorDomain: "project", errorTypePath: external.typePath,
+        errorTypeIdentity: input.sourcePackageErrors.domainsByComponentId.get(external.componentId)?.errorTypeIdentity,
+      }]),
+    ]),
+  }));
 }
 
 test("runtime transport uses native Error admission without copying, projection probes or boxing", () => {

@@ -496,6 +496,7 @@ function substituteCarrierParts(
             ...upcast,
             target: substituteChild(upcast.target, substitutions, lifetimeSubstitutions, constSubstitutions, normalize),
           })),
+          namedType.nativeErrorIdentity,
         );
       }
       const fixedArray = rustFixedArrayCarrierValue(type);

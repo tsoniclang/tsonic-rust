@@ -19,7 +19,8 @@ function fixture() {
     export async function failRight(): Promise<string> { throw new Failure("right"); }
     export function forwarded(): Promise<string> { return failLeft(); }
   `);
-  const classified = analyzeRustSourcePackageComponents(context, "lib", subject => context.records.errorEffects.get(subject));
+  const classified = analyzeRustSourcePackageComponents(context, "lib", subject => context.records.errorEffects.get(subject),
+    context.sourceOutputIdentities);
   assert.equal(classified.kind, "resolved");
   const producers = context.callableValues.nativeProducers;
   const producer = name => producers.producers.find(candidate => {

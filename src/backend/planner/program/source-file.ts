@@ -88,7 +88,7 @@ import { completeRustAuthoredStructScopes } from "../declarations/scoped-types.j
 import { createRustObjectLiteralImplementationRegistry } from "../objects/object-literal-implementations.js";
 import { planRustSourceCallableValue } from "../expressions/source-callable-value.js";
 import { rustModuleInitializerFunctionName } from "./source-package-initializers.js";
-import type { RustSourcePackageErrorPlan } from "./source-package-errors.js";
+import type { RustSourcePackageErrorPlan } from "../../../target-model/records/error-regions.js";
 
 export interface PlannedRustSourceFile {
   readonly sourceFile: SourceFile;

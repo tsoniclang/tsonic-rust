@@ -79,46 +79,6 @@ export function materializeRustSourcePackageFacades(
   }
   exports.sort(compareFacadeExports);
 
-  const externalItemCandidates = new Map<
-    string,
-    RustSourcePackageFacadeExport[]
-  >();
-  for (const exported of exports) {
-    if (exported.componentId === classifications.rootComponentId) {
-      continue;
-    }
-    const key = rustSourceItemIdentity(
-      exported.implementationFileName,
-      exported.implementationName,
-    );
-    const candidates = externalItemCandidates.get(key) ?? [];
-    candidates.push(exported);
-    externalItemCandidates.set(key, candidates);
-  }
-  const externalItemPathByIdentity = new Map<string, string>();
-  for (const [key, candidates] of externalItemCandidates) {
-    candidates.sort(compareFacadePreference);
-    const selected = candidates[0]!;
-    const crateName = identitiesByFileName.get(
-      selected.implementationFileName,
-    )?.externalCrateName;
-    if (crateName === undefined) {
-      diagnostics.push(facadeDiagnostic(
-        "RUST_SOURCE_PACKAGE_FACADE_CRATE_IDENTITY_MISSING",
-        `External package facade '${facadeDisplayPath(selected)}' has no deterministic Rust crate identity.`,
-      ));
-      continue;
-    }
-    externalItemPathByIdentity.set(
-      key,
-      [crateName, ...selected.facadeModuleSegments, selected.facadeName]
-        .join("::"),
-    );
-  }
-  if (diagnostics.length > 0) {
-    return { diagnostics: Object.freeze(diagnostics) };
-  }
-
   const exportsByComponentId = new Map(
     classifications.componentIds.map((componentId) =>
       [componentId, Object.freeze(exports.filter((entry) =>
@@ -161,7 +121,7 @@ export function materializeRustSourcePackageFacades(
       rootComponentId: classifications.rootComponentId,
       rootExports,
       exportsByComponentId,
-      externalItemPathByIdentity,
+      externalItemPathByIdentity: classifications.externalItemPathByIdentity,
       publicTopLevelModules: Object.freeze(new Set([...publicModuleNames]
         .filter((name) => !name.includes("::")))),
       publicModuleNames,
@@ -190,14 +150,6 @@ function compareFacadeExports(
     compareNames(left.facadeName, right.facadeName) ||
     compareNames(left.implementationFileName, right.implementationFileName) ||
     compareNames(left.implementationName, right.implementationName);
-}
-
-function compareFacadePreference(
-  left: RustSourcePackageFacadeExport,
-  right: RustSourcePackageFacadeExport,
-): number {
-  return left.facadeModuleSegments.length - right.facadeModuleSegments.length ||
-    compareFacadeExports(left, right);
 }
 
 function facadeDiagnostic(code: string, message: string): TargetDiagnostic {

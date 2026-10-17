@@ -3,7 +3,7 @@ import type { SourceStorageBindings, SourceStorageBindingsSelection, SourceStora
   SourceStorageConstructionSelection, SourceStorageDomainBoundary, SourceStorageProducer,
   SourceStorageSubject, TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import type { RustTargetGenericBindings } from "../types/carriers/generic-inference.js";
-import type { TargetTypeRef } from "../types/model.js";
+import type { RustTargetGenericArgument, TargetTypeRef } from "../types/model.js";
 import type { RustErrorRegionSelection, RustInitializerSelection, RustModuleErrorInitializer } from "./error-regions.js";
 import type { RustFinalizedOperationAbi, RustFinalizedSourceArgument, RustFinalizedSourceInput } from "./finalized-operation.js";
 import type { RustTargetOperationFact } from "./operations.js";
@@ -67,6 +67,11 @@ export type RustEmissionErrorContext =
   | { readonly kind: "region"; readonly owner: Node; readonly region: RustErrorRegionSelection }
   | { readonly kind: "initializer"; readonly owner: SourceFile; readonly initializer: RustInitializerSelection };
 
+export type RustPhysicalTargetGenericArgument =
+  | Extract<RustTargetGenericArgument, { readonly kind: "const" }>
+  | { readonly kind: "type"; readonly nativeCarrier: TargetTypeRef }
+  | { readonly kind: "infer" };
+
 export interface RustPhysicalEmissionContext {
   readonly use: TargetUseSiteRef;
   readonly declaration: Node;
@@ -75,6 +80,7 @@ export interface RustPhysicalEmissionContext {
   readonly error: RustEmissionErrorContext;
   readonly operands: readonly TargetTypeRef[];
   readonly sourceOrigins: readonly RustPhysicalEmissionSourceOrigins[];
+  readonly targetGenericArguments: ReadonlyMap<RustFinalizedOperationAbi, readonly RustPhysicalTargetGenericArgument[]>;
 }
 
 export type RustEmissionProviderOperation = Extract<RustTargetOperationFact, { readonly kind: "provider-operation" | "runtime-set" }>;

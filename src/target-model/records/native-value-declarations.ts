@@ -24,18 +24,23 @@ export interface RustNativeInterfaceField {
   readonly targetName: string;
   readonly storageIndex: number;
   readonly carrier: TargetTypeRef;
+  readonly nativeCarrier: TargetTypeRef;
 }
 
 export interface RustNativeInterfaceDeclaration {
   readonly kind: "interface";
   readonly name: string;
   readonly definition: RustProjectTypeDefinition;
+  readonly nativeCarrier: TargetTypeRef;
+  readonly nativeStateCarrier: TargetTypeRef;
   readonly fields: readonly RustNativeInterfaceField[];
   readonly index?: {
     readonly declaration: Node;
     readonly targetName: string;
     readonly keyCarrier: TargetTypeRef;
     readonly valueCarrier: TargetTypeRef;
+    readonly nativeKeyCarrier: TargetTypeRef;
+    readonly nativeValueCarrier: TargetTypeRef;
   };
 }
 
@@ -43,8 +48,9 @@ export interface RustNativeAliasDeclaration {
   readonly kind: "alias";
   readonly name: string;
   readonly carrier: TargetTypeRef;
+  readonly nativeCarrier: TargetTypeRef | null;
   readonly fact: RustTypeAliasDeclarationFact;
   readonly genericContract?: RustSourceGenericContract;
-  readonly payloadTemplate?: RustSourceUnionPayloadTemplate;
+  readonly payloadTemplate: RustSourceUnionPayloadTemplate | null;
   readonly family?: RustConditionalSourceTypeFamily;
 }

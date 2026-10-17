@@ -2,16 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { rustTypeFromCarrier, rustTypeFromCarrierInContext } from "../../../../dist/backend/planner/types/render.js";
 import { rustProgramErrorTargetType, rustVecTargetType } from "../../../../dist/target-model/types/index.js";
-import { rustSourcePackageErrorTypeIdentity } from "../../../../dist/backend/planner/program/source-package-errors.js";
+import { rustSourcePackageErrorTypeIdentity } from "../../../../dist/analysis/program/error-transport.js";
+import { selectedNativeErrorBoundaries } from "../../../helpers/native-type-selection.mjs";
 import { rustRuntimeErrorTypeIdentity } from "../../../../dist/target-model/operations/error-boundary.js";
 import { rustTypeEquals } from "../../../../dist/backend/target-ast/inspection/type-equality.js";
 import { emptyRustTypeDefinitions } from "../../../../dist/target-model/types/source-union-definitions.js";
 
 function context(componentId, errorDomain) {
+  const boundary = { componentId, errorDomain, errorTypePath: "rt::TsonicError",
+    errorTypeIdentity: rustSourcePackageErrorTypeIdentity(componentId, errorDomain) };
+  const runtime = { componentId, errorDomain: "runtime", errorTypeIdentity: rustRuntimeErrorTypeIdentity,
+    errorTypePath: errorDomain === "runtime" ? "rt::TsonicError" : "tsonic_rust_runtime::TsonicError" };
+  const errorTransport = selectedNativeErrorBoundaries({ components: [[componentId, componentId, boundary]],
+    native: [[componentId, { kind: "logical" }, boundary],
+      [componentId, { kind: "physical", domain: "runtime" }, runtime]] });
   return { usedAliases: new Set(), sourcePackageComponentId: componentId,
-    input: { program: { typeDefinitions: emptyRustTypeDefinitions } },
-    sourcePackageErrors: { domainsByComponentId: new Map([[componentId, { componentId, errorDomain,
-      errorTypeIdentity: rustSourcePackageErrorTypeIdentity(componentId, errorDomain) }]]) } };
+    input: { program: { typeDefinitions: emptyRustTypeDefinitions, errorTransport } },
+    sourcePackageErrors: errorTransport };
 }
 
 test("program error rendering preserves scoped ABI identity recursively", () => {
@@ -50,7 +57,7 @@ test("physical runtime errors reuse only the actual native runtime alias and nev
 
 test("program error rendering fails closed without its selected domain or with malformed arity", () => {
   const scope = context("owner", "project");
-  scope.sourcePackageErrors.domainsByComponentId.clear();
+  scope.sourcePackageErrors.nativeBoundaries.clear();
   assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), scope) === undefined, true);
   assert.equal(rustTypeFromCarrierInContext(rustProgramErrorTargetType(), {
     input: { program: { typeDefinitions: emptyRustTypeDefinitions } },

@@ -3,6 +3,43 @@ import type { RustProgramErrorOwner, TargetTypeRef } from "../types/model.js";
 import type { RustNativeErrorSource } from "../types/native-error-joins.js";
 import type { RustProducerErrorReference } from "../types/carriers/producer-errors.js";
 import type { RustSourceErrorEffectEdge } from "./source-error-effects.js";
+import type { RustErrorDomain } from "../operations/error-boundary.js";
+import type { RustProjectTypeDefinition } from "../types/project-types.js";
+
+export interface RustExternalSourcePackageError {
+  readonly componentId: string;
+  readonly errorOwnerComponentId: string;
+  readonly crateName: string;
+  readonly typePath: string;
+  readonly variant: string;
+}
+
+export interface RustSourcePackageErrorDomainPlan {
+  readonly componentId: string;
+  readonly errorDomain: RustErrorDomain;
+  readonly errorTypeIdentity: string;
+  readonly errorOwnerComponentId: string | undefined;
+  readonly forwardModulePath?: string;
+  readonly definitions: readonly RustProjectTypeDefinition[];
+  readonly externalErrors: readonly RustExternalSourcePackageError[];
+}
+
+export interface RustSourcePackageErrorPlan {
+  readonly componentIdByFileName: ReadonlyMap<string, string>;
+  readonly componentIdByDefinition: ReadonlyMap<RustProjectTypeDefinition, string>;
+  readonly domainsByComponentId: ReadonlyMap<string, RustSourcePackageErrorDomainPlan>;
+  readonly dependencyErrorsByComponentId: ReadonlyMap<string, readonly RustExternalSourcePackageError[]>;
+  componentBoundaryFor(consumerComponentId: string, ownerComponentId: string): RustSourcePackageErrorBoundary | undefined;
+  physicalBoundaryFor(consumerComponentId: string, owner: RustProgramErrorOwner): RustSourcePackageErrorBoundary | undefined;
+  nativeBoundaryFor(consumerComponentId: string, owner: RustProgramErrorOwner): RustSourcePackageErrorBoundary | undefined;
+}
+
+export interface RustSourcePackageErrorBoundary {
+  readonly componentId: string;
+  readonly errorDomain: RustErrorDomain;
+  readonly errorTypePath: string;
+  readonly errorTypeIdentity: string;
+}
 
 export type RustPhysicalErrorOwner = Extract<RustProgramErrorOwner, { readonly kind: "physical" }>;
 

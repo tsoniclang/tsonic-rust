@@ -5,6 +5,8 @@ import type { RustNativeDeclarationForm, RustNativeDeclarationForms } from "../.
 import { admitRustNativeValueDeclaration, type RustNativeValueDeclarationInput } from "./native-value-declarations.js";
 import type { RustDeclarationGenericRequirementIndex } from "./generic-requirements.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
+import { rustGeneratedTypeParameterNames } from "../../target-model/names/type-parameters.js";
+import { selectRustNativeTypeCarrier } from "../../policy/types/model/native-type-selection.js";
 
 export type AnalyzeRustNativeDeclarationFormsResult =
   | { readonly kind: "resolved"; readonly forms: RustNativeDeclarationForms }
@@ -43,7 +45,29 @@ export function analyzeRustNativeDeclarationForms(
         evidence: ["target.capability=rust.declaration.native-form"] });
       continue;
     }
-    implementations.push(Object.freeze({ implementation,
+    let nativeTypes: RustNativeDeclarationForms["implementations"][number]["nativeTypes"] = null;
+    if (implementation.family.kind === "conditional") {
+      const nativeInput = input.nativeTypeInputFor(implementation.sourceFileName,
+        rustGeneratedTypeParameterNames(contract.typeParameters, []));
+      const owner = selectRustNativeTypeCarrier(implementation.owner, nativeInput, "general");
+      const trait = selectRustNativeTypeCarrier({ ...implementation.family.trait,
+        genericArguments: implementation.arguments }, nativeInput, "general");
+      const output = selectRustNativeTypeCarrier(implementation.output, nativeInput, "general");
+      const rejected = owner.kind === "rejected" ? owner : trait.kind === "rejected" ? trait
+        : output.kind === "rejected" ? output : undefined;
+      if (rejected !== undefined) {
+        diagnostics.push({ code: "RUST_TYPE_FAMILY_NATIVE_TYPE_NOT_REPRESENTABLE", category: "error",
+          source: "tsonic-rust", message: rejected.reason, sourceNode: implementation.family.declaration,
+          evidence: ["target.capability=rust.declaration.native-form"] });
+        continue;
+      }
+      if (owner.kind !== "resolved" || trait.kind !== "resolved" || output.kind !== "resolved") {
+        return failTargetAnalysisInvariant("tsonic-rust",
+          "A selected conditional implementation lost its admitted native type data.", implementation.family.declaration);
+      }
+      nativeTypes = Object.freeze({ owner: owner.carrier, trait: trait.carrier, output: output.carrier });
+    }
+    implementations.push(Object.freeze({ implementation, nativeTypes,
       ...(projectDefinition === undefined ? {} : { projectDefinition }) }));
   }
   return diagnostics.length > 0 ? { kind: "rejected", diagnostics: Object.freeze(diagnostics) }

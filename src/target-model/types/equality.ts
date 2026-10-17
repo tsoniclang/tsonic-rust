@@ -229,6 +229,7 @@ function rustTargetTypeRefEqualsValidated(
         return leftNamed !== undefined && rightNamed !== undefined &&
           (lifetimeContext.nativeTraitIdentity === true || leftNamed.id === rightNamed.id) &&
           leftNamed.path === rightNamed.path &&
+          leftNamed.nativeErrorIdentity === rightNamed.nativeErrorIdentity &&
           genericArgumentListsEqual(leftNamed.genericArguments, rightNamed.genericArguments, lifetimeContext) &&
           (lifetimeContext.nativeTraitIdentity === true ||
             closedMetadataEquals(leftNamed.traits, rightNamed.traits) &&

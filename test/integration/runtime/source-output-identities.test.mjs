@@ -233,8 +233,14 @@ test("facade planning ignores valid package exports outside the checked closure"
     components: [{ id: componentId, packages: [packageId], dependencies: [] }],
   };
   const ast = fakeAstReader([root]);
+  const identities = analyzeRustSourceOutputIdentities({ ast, sourceFiles: [root], sourcePackages,
+    paths: { projectFilePath: "/project/tsonic.json", projectDirectory: "/project", projectRoot: "/project",
+      sourceRoot: "/project/src", outputDirectory: "/project/generated" } });
+  assert.equal(identities.kind, "accepted", "the exact facade fixture supplies its checked native identities");
   const result = analyzeRustSourcePackageFacades({
     rootPublishesLibrary: true,
+    nativeNodes: [],
+    callableValues: { native: { protocols: [] } },
     sourcePackages,
     sourceFiles: [root],
     ast,
@@ -248,7 +254,7 @@ test("facade planning ignores valid package exports outside the checked closure"
       functionNameForDeclaration: () => undefined,
       nameForDeclaration: () => undefined,
     },
-  });
+  }, identities.identities);
 
   assert.equal(result.kind, "resolved");
   assert.deepEqual(result.plan.rootExports, []);

@@ -11,6 +11,10 @@ import type { RustNativeInterfaceField } from "../../target-model/records/native
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/model.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import type { RustProjectTypePolicy } from "../../target-model/types/project-types.js";
+import type { RustProjectTypeDefinition } from "../../target-model/types/project-types.js";
+import type { TargetTypeRef } from "../../target-model/types/model.js";
+import type { RustNativeTypeSelectionInput } from "../../policy/types/model/native-type-selection.js";
+import { selectRustNativeTypeCarrier } from "../../policy/types/model/native-type-selection.js";
 import type { RustSourceTypeFamilyPlan } from "../../target-model/types/type-families.js";
 import type { RustObjectRepresentationPlan } from "../project-types/object-representation.js";
 import { isDenseDataArray } from "../../target-model/metadata/closed-data.js";
@@ -32,6 +36,8 @@ export interface RustNativeValueDeclarationInput {
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly objectRepresentations: RustObjectRepresentationPlan;
   readonly typeFamilies: RustSourceTypeFamilyPlan;
+  readonly nativeTypeInputFor: (sourceFileName: string, typeParameterNames: ReadonlyMap<string, string> | undefined) => RustNativeTypeSelectionInput;
+  readonly nativeStateCarrierFor: (definition: RustProjectTypeDefinition) => TargetTypeRef | undefined;
 }
 
 export type RustNativeDeclarationAdmission =
@@ -110,6 +116,7 @@ function admitInterface(
     return reject(declaration, "RUST_SOURCE_AST_INCOMPLETE", "Interface declaration contains an undefined member slot.");
   }
   const fields: RustNativeInterfaceField[] = [];
+  const nativeTypes = nativeTypeInputForDeclaration(declaration, input);
   let index: Extract<RustNativeDeclarationForm, { readonly kind: "interface" }>["index"];
   for (const member of members as readonly Node[]) {
     const targetName = projectTypes.fieldStorageName(definition, member);
@@ -124,7 +131,14 @@ function admitInterface(
         return reject(member, "RUST_INTERFACE_INDEX_CARRIER_NOT_SUPPORTED",
           "Rust index-backed interfaces require a closed string/integer key, a cloneable value, and deterministic generated storage.");
       }
-      index = Object.freeze({ declaration: member, targetName, keyCarrier, valueCarrier: carrier });
+      const nativeKey = selectRustNativeTypeCarrier(keyCarrier, nativeTypes, "general");
+      if (nativeKey.kind === "rejected") return reject(selected.keyParameter,
+        "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", nativeKey.reason);
+      const nativeValue = selectRustNativeTypeCarrier(carrier, nativeTypes, "general");
+      if (nativeValue.kind === "rejected") return reject(member,
+        "RUST_INTERFACE_INDEX_TYPE_NOT_REPRESENTABLE", nativeValue.reason);
+      index = Object.freeze({ declaration: member, targetName, keyCarrier, valueCarrier: carrier,
+        nativeKeyCarrier: nativeKey.carrier, nativeValueCarrier: nativeValue.carrier });
       continue;
     }
     if (ast.kindName(member) !== "KindPropertySignature") {
@@ -135,14 +149,27 @@ function admitInterface(
       return reject(member, "RUST_INTERFACE_FIELD_NOT_CLOSED",
         "A record field requires its exact selected name, native carrier and project-object storage slot.");
     }
+    const native = selectRustNativeTypeCarrier(carrier, nativeTypes, "general");
+    if (native.kind === "rejected") return reject(member,
+      "RUST_INTERFACE_FIELD_TYPE_NOT_REPRESENTABLE", native.reason);
     fields.push(Object.freeze({ declaration: member, sourceName: selected.sourceName, targetName,
-      storageIndex: selected.storageIndex, carrier }));
+      storageIndex: selected.storageIndex, carrier, nativeCarrier: native.carrier }));
   }
   if (fields.length !== layout.fields.length) {
     return reject(declaration, "RUST_INTERFACE_FIELD_COVERAGE_NOT_CLOSED",
       "Record field selections do not cover its exact project-object storage layout.");
   }
+  const native = selectRustNativeTypeCarrier(projectTypes.openCarrier(definition), nativeTypes, "general");
+  if (native.kind === "rejected") return reject(declaration,
+    "RUST_INTERFACE_NATIVE_TYPE_NOT_REPRESENTABLE", native.reason);
+  const stateCarrier = input.nativeStateCarrierFor(definition);
+  if (stateCarrier === undefined) return reject(declaration, "RUST_INTERFACE_NATIVE_STATE_NOT_CLOSED",
+    "A record interface requires its exact selected native state identity and generic arguments.");
+  const state = selectRustNativeTypeCarrier(stateCarrier, nativeTypes, "general");
+  if (state.kind === "rejected") return reject(declaration,
+    "RUST_INTERFACE_NATIVE_TYPE_NOT_REPRESENTABLE", state.reason);
   return { kind: "accepted", form: Object.freeze({ kind: "interface", name, definition,
+    nativeCarrier: native.carrier, nativeStateCarrier: state.carrier,
     fields: Object.freeze(fields), ...(index === undefined ? {} : { index }) }) };
 }
 
@@ -162,10 +189,12 @@ function admitAlias(
       candidate.kind === "conditional" && candidate.declaration === declaration);
     if (family?.kind !== "conditional") return reject(declaration, "RUST_TYPE_FAMILY_DECLARATION_NOT_CLOSED",
       "A type-family declaration requires its exact selected native family identity.");
-    return { kind: "accepted", form: Object.freeze({ kind: "alias", name, carrier, fact, family }) };
+    return { kind: "accepted", form: Object.freeze({ kind: "alias", name, carrier, fact, family,
+      nativeCarrier: null, payloadTemplate: null }) };
   }
   if (fact.kind === "erased") {
-    return { kind: "accepted", form: Object.freeze({ kind: "alias", name, carrier, fact }) };
+    return { kind: "accepted", form: Object.freeze({ kind: "alias", name, carrier, fact,
+      nativeCarrier: null, payloadTemplate: null }) };
   }
   const genericContract = input.sourceLifetimes.contractFor(declaration);
   if (fact.kind === "native-alias" && genericContract === undefined || genericContract !== undefined &&
@@ -174,7 +203,7 @@ function admitAlias(
     return reject(declaration, "RUST_TYPE_ALIAS_GENERIC_CONTRACT_NOT_CLOSED",
       "An emitted type alias requires its exact native generic and lifetime contract.");
   }
-  const template = fact.kind === "runtime"
+  let template = fact.kind === "runtime"
     ? input.typeDefinitions.sourceUnionPayloadTemplate(rustOptionElementCarrier(carrier) ?? carrier) : undefined;
   if (fact.kind === "runtime") {
     const source = template === undefined ? undefined : rustSourceUnionCarrierValue(template.carrier);
@@ -188,12 +217,38 @@ function admitAlias(
         "Runtime union variants require one exact physical payload template and native generic correspondence.");
     }
   }
+  const nativeTypes = nativeTypeInputForDeclaration(declaration, input);
+  let nativeCarrier: TargetTypeRef | null = null;
+  if (fact.kind === "native-alias") {
+    const native = selectRustNativeTypeCarrier(fact.target, nativeTypes, "general");
+    if (native.kind === "rejected") return reject(declaration,
+      "RUST_TYPE_ALIAS_NATIVE_TYPE_NOT_REPRESENTABLE", native.reason);
+    nativeCarrier = native.carrier;
+  }
+  if (template !== undefined) {
+    const variants: (typeof template.variants)[number][] = [];
+    for (const variant of template.variants) {
+      const native = selectRustNativeTypeCarrier(variant.carrier, nativeTypes, "general");
+      if (native.kind === "rejected") return reject(declaration,
+        "RUST_TYPE_ALIAS_PAYLOAD_TYPE_NOT_REPRESENTABLE", native.reason);
+      variants.push(Object.freeze({ ...variant, carrier: native.carrier }));
+    }
+    template = Object.freeze({ ...template, variants: Object.freeze(variants) });
+  }
   return { kind: "accepted", form: Object.freeze({ kind: "alias", name, carrier, fact,
+    nativeCarrier, payloadTemplate: template ?? null,
     ...(genericContract === undefined ? {} : { genericContract }),
-    ...(template === undefined ? {} : { payloadTemplate: template }) }) };
+  }) };
 }
 
 function reject(sourceNode: Node, code: string, message: string): RustNativeDeclarationAdmission {
   return { kind: "rejected", diagnostics: Object.freeze([Object.freeze({ code, message, sourceNode,
     category: "error" as const, source: "tsonic-rust", evidence: ["target.capability=rust.declaration.native-form"] })]) };
+}
+
+function nativeTypeInputForDeclaration(declaration: Node, input: RustNativeValueDeclarationInput): RustNativeTypeSelectionInput {
+  const sourceFile = input.ast.getSourceFile(declaration);
+  if (sourceFile === undefined) return failTargetAnalysisInvariant("tsonic-rust",
+    "An admitted native declaration lost its exact source file identity.", declaration);
+  return input.nativeTypeInputFor(input.ast.getFileName(sourceFile), undefined);
 }

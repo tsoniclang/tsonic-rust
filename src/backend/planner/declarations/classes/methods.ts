@@ -47,7 +47,7 @@ export function planProjectMethod(
     readonly targetName?: string;
     readonly safetyPlacement?: "getter" | "setter";
     readonly typeArgumentSubstitutions?: ReadonlyMap<string, TargetTypeRef>;
-    readonly fallibleBoundary?: import("../../program/source-package-errors.js").RustSourcePackageErrorBoundary;
+    readonly fallibleBoundary?: import("../../../../target-model/records/error-regions.js").RustSourcePackageErrorBoundary;
     readonly promiseBody?: true;
     readonly specialization?: RustSourceCallableSpecializationVariant;
   },

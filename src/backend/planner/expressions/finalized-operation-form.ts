@@ -8,7 +8,7 @@ import type { RustCallGenericArgument, RustExpr, RustGenericArgument } from "../
 import { failRustPlannerInvariant, missingFactDiagnostic, unsupportedConstructDiagnostic } from "../diagnostics.js";
 import { diagnosticInput, registerAliasFromPath } from "../program/plan-context.js";
 import type { RustPlanContext } from "../program/plan-context.js";
-import { rustCallTypeFromCarrierInContext, rustTargetCallGenericArgumentToAstInContext,
+import { rustCallTypeFromCarrierInContext, rustConstArgumentToAst, rustTypeFromSelectedNativeCarrierInContext,
   rustTargetGenericArgumentToAstInContext, rustTypeFromCarrierInContext } from "../types/render.js";
 import { rustCarrierHasCloneContract } from "../types/generic-requirements.js";
 import { invokeRustStructuralObjectMethod } from "../objects/project-storage.js";
@@ -26,22 +26,17 @@ export function planRustFinalizedOperationForm(
   const receiverMode = abi.targetReceiver.kind === "input"
     ? abi.targetReceiver.input.mode
     : undefined;
-  const targetGenericArguments = abi.targetGenericArguments.flatMap((argument) => {
-    if (argument.kind === "lifetime") return [];
-    const planned = rustTargetCallGenericArgumentToAstInContext(argument, context);
-    return planned === undefined ? [undefined] : [planned];
-  });
-  if (targetGenericArguments.some((argument) => argument === undefined)) {
-    context.diagnostics.push(missingFactDiagnostic(
-      diagnosticInput(context, operationNode),
-      "rust.backend.provider-target-generic-arguments",
-      "Provider operation target generic arguments do not have exact Rust target forms.",
-    ));
-    return undefined;
-  }
+  const selectedGenericArguments = context.emissionContext?.targetGenericArguments.get(abi);
+  if (selectedGenericArguments === undefined) return failRustPlannerInvariant(
+    "An admitted provider operation lost its exact physical context's selected native generic arguments.", operationNode);
+  const targetGenericArguments = selectedGenericArguments.map((argument): RustCallGenericArgument => argument.kind === "infer"
+    ? { kind: "type", type: { kind: "infer" } }
+    : argument.kind === "type"
+      ? { kind: "type", type: rustTypeFromSelectedNativeCarrierInContext(argument.nativeCarrier, context) }
+      : { kind: "const", value: rustConstArgumentToAst(argument.value) });
   const concreteTargetGenericArguments = targetGenericArguments.length === 0
     ? undefined
-    : targetGenericArguments as readonly RustCallGenericArgument[];
+    : targetGenericArguments;
   switch (form.form) {
     case "numeric-cast":
       return args[0];
