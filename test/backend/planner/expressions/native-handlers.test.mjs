@@ -8,7 +8,7 @@ test("the Rust root reads one descriptor, never probes losing applicability, and
   const node = {};
   const selected = Object.freeze({ kind: "native-pointer", selection: Object.freeze({ kind: "layout-query", observation: { value: 0 } }) });
   let reads = 0;
-  const context = { input: { program: { records: new Proxy({ nativeHandler: { get(subject) {
+  const context = { input: { program: { promiseResults: new Map(), records: new Proxy({ nativeHandler: { get(subject) {
     assert.equal(subject === node, true, "the descriptor read retains its exact source subject"); reads++; return selected;
   } } }, { get(records, field) { assert.equal(field === "nativeHandler", true, `no losing query: ${String(field)}`); return records[field]; } }) } }, diagnostics: [] };
   assert.equal(isDeepStrictEqual(planRawExpression(node, context, "value"), { kind: "int-literal", text: "0usize" }), true,
@@ -22,7 +22,7 @@ test("an admitted memory binding never falls through when its operand has no exp
   const operand = {};
   const handler = { kind: "memory-binding", selection: { kind: "field", expression: operand } };
   let calls = 0;
-  const context = { input: { program: { records: new Proxy({}, { get: (_, field) => assert.fail(`No raw applicability query: ${String(field)}`) }) } }, diagnostics: [] };
+  const context = { input: { program: { promiseResults: new Map(), records: new Proxy({}, { get: (_, field) => assert.fail(`No raw applicability query: ${String(field)}`) }) } }, diagnostics: [] };
   const planned = planRustNativeHandler({}, handler, context, "discarded", node => {
     calls++; assert.equal(node === operand, true, "the selected memory operand retains source identity"); return undefined;
   });
