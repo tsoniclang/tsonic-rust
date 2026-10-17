@@ -6,7 +6,7 @@ import { Node_Name, createTargetSourceProgram } from "@tsonic/target-api/source"
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol } from "../../../dist/target-model/types/index.js";
+import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 
 const surfaces = [["native", []], ["js", ["js"]]];
@@ -429,6 +429,134 @@ export function run(value: number): number {
     assert.equal(result.diagnostics.length, 0, "the unused source capture adds no native obligation");
     assert.equal(/\bfn unused\b/u.test(rustSourceText(result)), false, "the unused capturing implementation is not emitted");
   });
+
+  test(`consumed conditional enum members retain their actual nominal carrier (${surface})`, () => {
+    const { result } = compileRust({ surfaces: selected, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+export enum Value { First = 1, Second = 2 }
+export function run(flag: boolean): boolean {
+  const selected = flag ? Value.First : Value.Second;
+  return selected === (flag ? Value.First : Value.Second);
+}
+if (!run(true) || !run(false)) throw new Error("enum composition");
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+      "the original consumed enum source reaches native publication without an annotation or erased storage query");
+    const { program } = result;
+    const ast = program.source.ast;
+    const pending = program.sourceFiles.filter(file => ast.getFileName(file).endsWith("/index.ts"));
+    const conditionals = [];
+    while (pending.length !== 0) {
+      const node = pending.pop();
+      if (ast.is.IsConditionalExpression(node)) conditionals.push(node);
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    assert.equal(conditionals.length, 2, "both original consumed choices retain their checked source nodes");
+    for (const node of conditionals) {
+      const expression = ast.as.AsConditionalExpression(node);
+      const resultCarrier = program.records.runtimeCarrier.get(node)?.carrier;
+      const trueCarrier = program.records.runtimeCarrier.get(expression.WhenTrue)?.carrier;
+      const falseCarrier = program.records.runtimeCarrier.get(expression.WhenFalse)?.carrier;
+      assert.equal(resultCarrier?.kind, "target-named", "the selected result is the native enum, never the checker's numeric approximation");
+      assert.equal(rustTargetTypeRefEquals(resultCarrier, trueCarrier), true, "the true branch retains the same exact enum carrier");
+      assert.equal(rustTargetTypeRefEquals(resultCarrier, falseCarrier), true, "the false branch retains the same exact enum carrier");
+    }
+  });
+
+  test(`native conditional selection preserves scalar domains, expected types, throws and evaluation order (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: selected, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+enum Value { First = 1, Second = 2 }
+let sequence = 0;
+function condition(flag: boolean): boolean { sequence = sequence * 10 + 1; return flag; }
+function first(): Value { sequence = sequence * 10 + 2; return Value.First; }
+function second(): Value { sequence = sequence * 10 + 3; return Value.Second; }
+function failure(): Value { sequence = sequence * 10 + 4; throw new Error("selected conditional"); }
+export function explicit(flag: boolean, value: int32): number { return flag ? value : 7; }
+export function run(flag: boolean): boolean {
+  sequence = 0;
+  const nominal = condition(flag) ? first() : second();
+  if (sequence !== (flag ? 12 : 13) || nominal !== (flag ? Value.First : Value.Second)) return false;
+  const annotated: Value = flag ? Value.First : Value.Second;
+  const bitwise = flag ? (Value.First | Value.Second) : Value.First;
+  const small: int32 = 23;
+  const numeric = flag ? small : 7;
+  const truth = flag ? true : false;
+  const text = flag ? "left" : "right";
+  const absent = flag ? null : undefined;
+  const optional = flag ? small : undefined;
+  const nominalOptional = flag ? Value.First : undefined;
+  if (annotated !== nominal || bitwise !== (flag ? (Value.First | Value.Second) : Value.First)
+    || numeric !== (flag ? 23 : 7) || explicit(flag, small) !== (flag ? 23 : 7)
+    || truth !== flag || text !== (flag ? "left" : "right") || absent !== null || absent !== undefined
+    || (flag ? optional !== 23 : optional !== undefined)
+    || (flag ? nominalOptional !== Value.First : nominalOptional !== undefined)) return false;
+  sequence = 0;
+  let caught = false;
+  try {
+    const selected = condition(flag) ? first() : failure();
+    if (!flag || selected !== Value.First) return false;
+  } catch {
+    if (flag) return false;
+    sequence = sequence * 10 + 5;
+    caught = true;
+  }
+  return caught === !flag && sequence === (flag ? 12 : 145);
+}
+if (!run(true) || !run(false)) throw new Error("conditional native domains");
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    assert.equal(result.program !== undefined && result.plan !== undefined && result.artifacts.length !== 0, true,
+      "the whole native conditional matrix reaches one published program");
+    const { program } = result;
+    const ast = program.source.ast;
+    const pending = program.sourceFiles.filter(file => ast.getFileName(file).endsWith("/index.ts"));
+    let numeric;
+    let explicit;
+    while (pending.length !== 0) {
+      const node = pending.pop();
+      const name = Node_Name(ast, node);
+      const text = name === undefined ? undefined : ast.text(name);
+      if (ast.is.IsVariableDeclaration(node) && text === "numeric") numeric = node;
+      if (ast.is.IsFunctionDeclaration(node) && text === "explicit") explicit = node;
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    assert.equal(numeric !== undefined && explicit !== undefined, true, "the exact inferred and authored numeric declarations are present");
+    assert.equal(rustTargetTypeRefEquals(program.records.runtimeCarrier.get(numeric)?.carrier,
+      rustSourcePrimitiveTargetType("int32")), true, "a whole integer literal uses its actual native integer sibling");
+    assert.equal(rustTargetTypeRefEquals(program.records.sourceCallableReturn.get(explicit)?.returnCarrier,
+      rustSourcePrimitiveTargetType("float64")), true, "an authored number result remains its explicit floating contract");
+    validateGeneratedProject(`conditional-native-domains-${surface}`, result.artifacts, { run: true });
+  });
+
+  test(`a consumed conditional does not erase the explicit enum-to-number refusal (${surface})`, () => {
+    const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+enum Value { First = 1, Second = 2 }
+export function run(flag: boolean): number {
+  const selected: number = flag ? Value.First : Value.Second;
+  return selected;
+}` } });
+    assert.equal(result.diagnostics.length, 1, "the shared enum use owns one precise explicit-context rejection");
+    assert.equal(result.diagnostics[0]?.code, "TSONIC_ENUM_NUMERIC_USE_NOT_SUPPORTED", "native branch selection does not grant enum numeric conversion");
+    assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+      "the rejected explicit context has no sealed program, plan or output");
+  });
+
+  for (const value of ["3.5e38", "-3.5e38"]) {
+    test(`a consumed conditional preserves the ${value} float32 refusal (${surface})`, () => {
+      const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+import type { float32 } from "@tsonic/core/types.js";
+export function run(flag: boolean): float32 {
+  return flag ? (${value} as float32) : 0;
+}` } });
+      assert.equal(result.diagnostics.some(issue => issue.code === "RUST_ASSERTION_UNSUPPORTED"), true,
+        "actual branch selection preserves native float32 range validation");
+      assert.equal(result.program === undefined && result.plan === undefined && result.artifacts.length === 0, true,
+        "a consumed invalid branch cannot receive a discarded-unit or widened expected carrier");
+    });
+  }
 
   for (const [wrapper, expression] of [
     ["bare", "LAMBDA"],
