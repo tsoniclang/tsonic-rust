@@ -8,7 +8,7 @@ import { analyzeRustNativeParticipation } from "../callables/participation.js";
 import { recordRustModuleValueDeclarations } from "./module-declarations.js";
 import { selectRustClassEnvironment, recordRustClassEnvironmentDemands } from "../objects/class-environments.js";
 
-import { finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
+import { finalizeRustCallableParameterAbis, finalizeRustCallableSignature, resolveRustCallableSignatureCarrier } from "../callables/signature-query.js";
 import { createRustSourceCallableAbiResolver } from "../../policy/ownership/source-callable-abi.js";
 import { createRustSourceProfileRegistry } from "../project/source-profiles.js";
 import { createRustSourceTypeRegistry } from "../project-types/source-type-registry.js";
@@ -59,8 +59,14 @@ import { rustSourceErrorTargetType, rustWritableSourceErrorTargetType } from "..
 import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js";
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
+import { analyzeRustSourcePackageComponents, type RustSourcePackageComponentClassifications } from "./source-package-components.js";
 
-export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFunctionQueries | undefined {
+interface RustSourceStageOutput {
+  readonly lexicalFunctions: RustLexicalFunctionQueries;
+  readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
+}
+
+export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bin" | "lib"): RustSourceStageOutput | undefined {
   if (context.sourcePackageComponentIdentities.kind === "rejected") return;
   const sourcePackageIdentities = context.sourcePackageComponentIdentities.identities;
   const { ast } = context;
@@ -111,6 +117,9 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourceTypes,
     callableSignatureCarrier(declaration) {
       return walk.callableSignatureCarrierFor(walk, declaration);
+    },
+    callableParameterCarriers(declaration) {
+      return finalizeRustCallableParameterAbis(walk, declaration)?.map(parameter => parameter.parameterCarrier);
     },
     callableStorageCarrier(subject, logicalCarrier, environmentFor, instanceFor) {
       const selected = selectRustCallableOwnershipCarrier({ ast, ownership: context.callableOwnership,
@@ -567,8 +576,13 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
     sourcePackages: context.sourcePackages,
     names: context.names, navigation: context.source.navigation, lifetimes: context.sourceLifetimes,
     classValueAdapters: context.classValues.valueAdapters(), closedSourceFiles, ownership: callableOwnership, sourceStorage: context.sourceStorage,
+    sourceTypes: walk.sourceTypes,
     projectTypes: context.projectTypes, objectRepresentations: context.objectRepresentations,
-    typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes });
+    typeDefinitions: context.typeDefinitions, lexicalFunctions: lexical, structuralShapes: context.structuralShapes,
+    retainedEnvironments: context.retainedEnvironments,
+    carrierHost: { sourceStorage: context.sourceStorage, sourceTypes: walk.sourceTypes,
+      projectFieldProjection: walk.operationOptions.projectFieldProjection, semantics: context.semantics,
+      types: { resolveNode: node => context.records.runtimeCarrier.get(node)?.carrier } } });
   const callableIssue = (issue: RustSourceCallableSpecializationIssue): void => appendRustDiagnostic(walk,
     "RUST_CALLABLE_VALUE_NOT_CLOSED", issue.message, issue.subject, ["target.capability=rust.callable-value.exact-implementation"]);
   callableValues.issues.forEach(callableIssue);
@@ -576,19 +590,35 @@ export function analyzeRustProgram(context: RustAnalysisContext): RustLexicalFun
   const selectedIssuePosition = context.diagnostics.length;
   context.promiseBodies.seal(context);
   if (context.diagnostics.length !== selectedIssuePosition) return undefined;
-  recordFallibilityFacts(walk, projectSourceFiles);
+  const fallibility = recordFallibilityFacts(walk, projectSourceFiles);
+  if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk, projectSourceFiles);
   recordFutureValueFacts(walk, projectSourceFiles);
+  const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
+  if (sourcePackageComponents.kind === "rejected") {
+    context.diagnostics.push(...sourcePackageComponents.diagnostics);
+    return;
+  }
+  const physicalIssues = context.callableValues.preparePhysicalStorage(sourcePackageComponents.plan, fallibility.effectsFor);
+  const sourceStorageFailure = context.sourceStorage.failureReason();
+  if (sourceStorageFailure !== undefined) {
+    appendRustDiagnostic(walk, "RUST_SOURCE_STORAGE_NOT_PROVEN", sourceStorageFailure, undefined,
+      []);
+    return;
+  }
+  physicalIssues.forEach(callableIssue);
+  if (context.diagnostics.length !== selectedIssuePosition) return;
   recordRustDeferredProducerEffects(walk);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);
   const effectDiagnosticEnd = context.diagnostics.length;
   try {
     context.callableValues.finalizeSelected().forEach(callableIssue);
+    fallibility.complete();
   } finally {
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
-  return lexicalFunctions;
+  return Object.freeze({ lexicalFunctions, sourcePackageComponents: sourcePackageComponents.plan });
 }
 
 function collectSourcePackageBoundaries(

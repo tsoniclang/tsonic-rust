@@ -16,6 +16,7 @@ export interface RustTargetTypeResolutionOptions {
   readonly sourceTypes: RustSourceTypeRegistry;
   readonly sourceErrorCarrier: (subject: SourceStorageSubject | undefined) => TargetTypeRef | undefined;
   readonly callableSignatureCarrier: (declaration: Node) => TargetTypeRef | undefined;
+  readonly callableParameterCarriers: (declaration: Node) => readonly TargetTypeRef[] | undefined;
   readonly callableStorageCarrier: (
     subject: SourceStorageSubject,
     logicalCarrier: TargetTypeRef,

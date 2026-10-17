@@ -38,6 +38,7 @@ function fixture(text, options = {}) {
       const selected = queries.returnFor(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
+  producers.selectConstructionErrors(new Map());
   input.producers = producers;
   const guardedQueries = Proxy.revocable(createRustNativeStorageQueries({ ...input, native }), {});
   const queries = guardedQueries.proxy;
@@ -427,7 +428,7 @@ test("structural native dispatch signatures are not stored callable payloads and
     ["missing", () => undefined],
     ["stored", (carrier, index) => {
       const selected = current.input.structuralShapes.field(carrier, index);
-      return selected === undefined ? undefined : { ...selected, nativeMethod: undefined };
+      return selected === undefined ? undefined : { ...selected, nativeMethod: undefined, methodStorageCarrier: undefined };
     }],
   ]) {
     const plan = createRustNativeStorageQueries({ ...current.input, native: current.native, structuralShapes: { field } });

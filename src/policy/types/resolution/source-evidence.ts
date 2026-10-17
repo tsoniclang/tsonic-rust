@@ -42,6 +42,8 @@ import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.j
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
 import { resolveRustCallableInputCarrier } from "./callable-inputs.js";
+import { sourceEnclosingCallable } from "@tsonic/target-api/source";
+import { rustRetainedValueLifetime } from "../../ownership/retained-environments.js";
 
 export function resolveRustSignatureParameterListTarget(
   parameters: SourceCallableTypeEvidence["parameters"],
@@ -140,6 +142,12 @@ function resolveRustCallableSignatureCarrier(
   resolving: Set<object>,
 ): TargetTypeRef | undefined {
   const declaration = callable.result.declaration;
+  const retainedMethod = declaration !== undefined && context.ast.is.IsMethodDeclaration(declaration) &&
+    context.ast.body(declaration) !== undefined;
+  if (retainedMethod) {
+    const owner = sourceEnclosingCallable(context.ast.parent(declaration), context.ast);
+    if (owner !== undefined && options.callableParameterCarriers(owner) === undefined) return undefined;
+  }
   const genericContract = context.sourceLifetimes.contractFor(declaration);
   const parameters = callable.parameters.map(parameter => {
     const selected = resolveRustSignatureParameterEvidence(parameter, context, options, resolving);
@@ -199,6 +207,11 @@ function resolveRustCallableSignatureCarrier(
         return { kind: "closure", args: borrowed as readonly TargetTypeRef[], result, fallible: true };
       }
     }
+  }
+  if (retainedMethod) {
+    const environment = resolveRustCallableEnvironment(declaration, context, options, resolving);
+    const lifetime = environment === undefined ? undefined : rustRetainedValueLifetime(declaration, environment, { context });
+    return lifetime === undefined ? undefined : rustCallableTargetType(parameters as readonly TargetTypeRef[], result, lifetime);
   }
   return rustCallableTargetType(parameters as readonly TargetTypeRef[], result);
 }

@@ -49,6 +49,7 @@ import { resolveProviderRecordLiteral } from "./provider-records.js";
 import { rustGenericCallableProtocol } from "../../target-model/types/carriers/generic-callables.js";
 import { rustTypeParameterFromSourceContract } from "../../target-model/names/type-parameters.js";
 import { resolveRustClosedRecordLiteral } from "./closed-records.js";
+import { retainRustStructuralInstantiation } from "../../policy/types/resolution/structural-instantiations.js";
 
 export function requireDenseSourceNodes(
   walk: RustFactWalk,
@@ -446,6 +447,15 @@ export function resolveRecordLiteralCarrier(
       if (spreadExpression === undefined || sourceCarrier === undefined ||
         sourceValueCarrier === undefined || sourceShape === undefined) {
         return undefined;
+      }
+      if (sourceShape.storage === "structural-object") {
+        const subject = walk.context.sourceStorage.subjectFor(spreadExpression);
+        if (subject.kind === "unresolved") return undefined;
+        const selected = walk.context.sourceStorage.typeFor(subject.subject);
+        if (selected.kind === "unresolved") return undefined;
+        const sourceType = walk.context.source.semantics.forFile(selected.sourceFile).types.nonNullableType(selected.type);
+        if (sourceType === undefined || !retainRustStructuralInstantiation(sourceType,
+          sourceValueCarrier, sourceValueCarrier, rustResolutionContext(walk, spreadExpression), walk.operationOptions)) return undefined;
       }
       const spreadFields: {
         readonly sourceName: string;

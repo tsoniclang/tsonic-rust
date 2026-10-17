@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests }
   from "../../../dist/analysis/callables/native-generic-producers.js";
 
@@ -8,7 +8,7 @@ const producerPlan = options => createRustNativeGenericProducerPlan({ ...options
   requests: prepareRustNativeGenericProducerRequests(options) });
 
 function fixture(text, configuration = {}) {
-  const { program } = analyzeRust({ surfaces: [], ...configuration, files: { "index.ts": text } });
+  const program = analyzeRustErrorEffects(text, { surfaces: [], ...configuration });
   const source = program.source;
   const nodes = [];
   const visit = node => {
@@ -16,7 +16,8 @@ function fixture(text, configuration = {}) {
     source.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
   };
   for (const file of program.sourceFiles) visit(file);
-  const { native, nativeStorage, nativeGenericProducers: plan, generic } = program.callableValues;
+  const { native, nativeStorage, generic } = program.callableValues;
+  const plan = program.callableValues.selected.nativeGenericProducers;
   const options = { ast: source.ast, records: program.records, nodes, generic, native, nativeStorage,
     definitions: program.typeDefinitions };
   const declaration = name => nodes.find(node => source.ast.is.IsFunctionDeclaration(node) &&

@@ -55,7 +55,7 @@ import { rustCallableInvocationResult } from "./results.js";
 import { resolveRustCallableStorageCarrier } from "../../policy/types/resolution/source-evidence.js";
 import { rustFrameCallableValue } from "../../target-model/types/carriers/frame-callables.js";
 import { selectRustCallableConversion } from "../../target-model/conversions/callable.js";
-import { rustRetainedValueLifetime } from "./retained-environments.js";
+import { rustRetainedValueLifetime } from "../../policy/ownership/retained-environments.js";
 import { selectRustClosedCallableContext } from "./contextual-inputs.js";
 
 export function resolveFunctionExpressionSignature(

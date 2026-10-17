@@ -44,43 +44,61 @@ export function selectRustClosedCallableContext(
   const protocol = carrier?.kind === "function-pointer" ? { parameters: carrier.args, result: carrier.result }
     : rustCallableProtocol(carrier) ?? rustClosureProtocol(carrier);
   if (carrier === undefined || protocol === undefined) return carrier;
+  const contexts = checkedCallableInputs(walk, expression);
+  const selected = selectClosedCallableInputs(walk, expression, protocol.parameters, contexts);
+  if (contexts === undefined || contexts.length === 0 || selected === undefined) return carrier;
+  const { ast } = walk.context;
+  const result = contexts[0]?.result;
+  const topology = result === undefined ? undefined : rustAwaitSelection(result, walk.context.typeDefinitions);
+  const contextualResult = ast.hasModifierKind(expression, "async") && ast.typeNode(expression) === undefined &&
+    topology !== undefined && rustAwaitSelectionLeaves(topology).some(leaf => leaf.future !== undefined) &&
+    contexts.every(context => rustTargetTypeRefEquals(context.result, result)) ? result! : protocol.result;
+  const nativeContext = contexts[0]?.carrier;
+  const nativeProtocol = rustCallableProtocol(nativeContext);
+  const matchingContext = nativeProtocol?.error !== undefined && contexts.every(context =>
+    rustTargetTypeRefEquals(rustCallableProtocol(context.carrier)?.error, nativeProtocol.error));
+  return rebindRustCallableCarrier(matchingContext ? nativeContext! : carrier, selected, contextualResult);
+}
+
+export function selectRustClosedCallableInputs(
+  walk: RustFactWalk,
+  expression: Node,
+  parameters: readonly TargetTypeRef[],
+): readonly TargetTypeRef[] {
+  return selectClosedCallableInputs(walk, expression, parameters, checkedCallableInputs(walk, expression)) ?? parameters;
+}
+
+function selectClosedCallableInputs(
+  walk: RustFactWalk,
+  expression: Node,
+  logical: readonly TargetTypeRef[],
+  contexts: ReturnType<typeof checkedCallableInputs>,
+): readonly TargetTypeRef[] | undefined {
   const { ast } = walk.context;
   const parameters = ast.parameters(expression);
-  if (!isDenseDataArray(parameters) || parameters.some(parameter => parameter === undefined)) return carrier;
+  if (contexts === undefined || !isDenseDataArray(parameters) || parameters.some(parameter => parameter === undefined)) return undefined;
   const broad = (parameters as readonly Node[]).map(parameter => {
     const syntax = ast.typeNode(parameter);
     const types = walk.context.semanticsFor(parameter).types;
     const type = syntax === undefined ? types.expressionType(parameter) : types.authoredType(syntax);
     return type !== undefined && (types.isUnknown(type) || types.isAny(type));
   });
-  const contexts = checkedCallableInputs(walk, expression);
-  if (contexts === undefined) return carrier;
   let inputs: readonly TargetTypeRef[] | undefined;
   for (const callable of contexts) {
-    if (callable.parameters.length < parameters.length) return carrier;
+    if (callable.parameters.length < parameters.length) return undefined;
     const current = callable.parameters.slice(0, parameters.length);
     if (current.some(type => !concrete(type)) ||
-      inputs !== undefined && !current.every((type, index) => rustTargetTypeRefEquals(type, inputs![index]))) return carrier;
+      inputs !== undefined && !current.every((type, index) => rustTargetTypeRefEquals(type, inputs![index]))) return undefined;
     inputs = current;
   }
-  if (inputs === undefined) return carrier;
-  const result = contexts[0]?.result;
-  const topology = result === undefined ? undefined : rustAwaitSelection(result, walk.context.typeDefinitions);
-  const contextualResult = ast.hasModifierKind(expression, "async") && ast.typeNode(expression) === undefined &&
-    topology !== undefined && rustAwaitSelectionLeaves(topology).some(leaf => leaf.future !== undefined) &&
-    contexts.every(context => rustTargetTypeRefEquals(context.result, result)) ? result! : protocol.result;
-  const selected = protocol.parameters.map((type, index) => {
+  if (inputs === undefined) return undefined;
+  const selected = logical.map((type, index) => {
     const input = inputs[index];
     if (input === undefined || rustTargetTypeRefEquals(input, type)) return type;
     if (broad[index]) return input;
     return selectRustParameterEntryConversion(input, type, walk.context.typeDefinitions) === undefined ? undefined : input;
   });
-  const nativeContext = contexts[0]?.carrier;
-  const nativeProtocol = rustCallableProtocol(nativeContext);
-  const matchingContext = nativeProtocol?.error !== undefined && contexts.every(context =>
-    rustTargetTypeRefEquals(rustCallableProtocol(context.carrier)?.error, nativeProtocol.error));
-  return selected.some(type => type === undefined) ? carrier
-    : rebindRustCallableCarrier(matchingContext ? nativeContext! : carrier, selected as readonly TargetTypeRef[], contextualResult);
+  return selected.some(type => type === undefined) ? undefined : selected as readonly TargetTypeRef[];
 }
 
 function concrete(type: TargetTypeRef): boolean {

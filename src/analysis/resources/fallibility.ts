@@ -24,7 +24,7 @@ import { rustSourceCallCallableStorageCarrier } from "../operations/target-opera
 import { rustGenericCallableValue } from "../../target-model/types/carriers/generic-callables.js";
 
 import type { RustGenericCallableInvocationFact } from "../../target-model/records/generic-callable-effects.js";
-import { selectRustGenericCallableInvocation } from "./generic-call-errors.js";
+import { prepareRustGenericCallableInvocation, type RustSourceGenericCallableInvocation } from "./generic-call-errors.js";
 import { rustTargetOperationIsFallible } from "../operations/target-operation.js";
 import { rustPolicyTargetDiagnostic } from "../../policy/operations/contracts.js";
 
@@ -56,23 +56,30 @@ import { selectRustAwaitSourceErrors } from "./await-source-effects.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
 import { requireRustRecord } from "../program/records/required-records.js";
 
+export interface RustSourceFallibilityConstruction {
+  effectsFor(subject: Node): RustErrorEffectsFact | undefined;
+  complete(): void;
+}
+
 export function recordFallibilityFacts(
   walk: RustFactWalk,
   projectSourceFiles: readonly SourceFile[],
   maximumWork = defaultRustEffectsWorkLimit,
-): void {
+): RustSourceFallibilityConstruction | undefined {
   walk.context.records.assertOpen();
   const budget = createRustEffectsWorkBudget(maximumWork);
-  const failure = budget.run(() => collectFallibilityFacts(walk, projectSourceFiles, budget));
+  let construction: RustSourceFallibilityConstruction | undefined;
+  const failure = budget.run(() => { construction = collectFallibilityFacts(walk, projectSourceFiles, budget); });
   if (failure !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, undefined,
     ["target.capability=rust.native-error.bounded-effects"]);
+  return failure === undefined ? construction : undefined;
 }
 
 function collectFallibilityFacts(
   walk: RustFactWalk,
   projectSourceFiles: readonly SourceFile[],
   budget: RustEffectsWorkBudget,
-): void {
+): RustSourceFallibilityConstruction | undefined {
   budget.step();
   const { ast } = walk.context;
   const inventory = collectRustErrorDeclarations(walk, projectSourceFiles);
@@ -83,7 +90,9 @@ function collectFallibilityFacts(
   const effectsByRegion = new Map<Node, RustErrorEffectsFact>();
   const effectsByExpression = new Map<Node, RustErrorEffectsFact>();
   const sourceErrorEdges = new Map<Node, RustSourceErrorEffectEdge[]>();
-  const genericInvocations = new Map<Node, RustGenericCallableInvocationFact>();
+  const genericInvocations = new Map<Node, RustSourceGenericCallableInvocation>();
+  const effectsByModule = new Map<SourceFile, RustErrorEffectsFact>();
+  const completedInvocations = new Map<Node, ReturnType<RustSourceGenericCallableInvocation["complete"]>>();
   const awaitSourceEdges = new Map<Node, readonly RustAwaitSourceErrorBranch[]>();
   const fallibleSubjects = new Set<Node>();
   for (const call of walk.context.callableValues.native.calls) {
@@ -128,21 +137,26 @@ function collectFallibilityFacts(
   const hasCompletion = (carrier: import("../../target-model/types/model.js").TargetTypeRef | undefined): boolean =>
     carrier !== undefined && rustNativeCallableCompletion(carrier, walk.context.typeDefinitions) !== undefined;
   const genericInvocation = (node: Node): RustGenericCallableInvocationFact | undefined => {
-    const selected = selectRustGenericCallableInvocation(node, walk.context, declaration => {
+    const pending = prepareRustGenericCallableInvocation(node, walk.context, declaration => {
       const result = walk.context.records.asyncFunction.get(declaration)?.futureCarrier ??
         walk.context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
       return { invocation: genericInvocationIsFallible(declaration) ? "fallible" : "infallible",
         awaiting: !hasCompletion(result) ? "not-applicable"
           : genericAwaitIsFallible(declaration) ? "fallible" : "infallible" };
-    });
-    if (selected === undefined || !selectSourceErrors.register([...selected.invocation, ...selected.awaiting])) {
+    }, selectSourceErrors);
+    const selected = pending?.selection;
+    if (pending === undefined || selected === undefined || !selectSourceErrors.register([...selected.invocation, ...selected.awaiting])) {
       appendRustDiagnostic(walk, "RUST_GENERIC_CALLABLE_EFFECTS_NOT_CLOSED",
         "A generic invocation requires one exact physical family and bound producer error channels.", node,
         ["target.capability=rust.generic-callable.effects"]);
       return undefined;
     }
+    for (const error of [...selected.invocation, ...selected.awaiting]) selectSourceErrors.pending(error, () => {
+      if (!completedInvocations.has(node)) completedInvocations.set(node, pending.complete(walk.context));
+      return completedInvocations.get(node)?.replacements.get(error.identity);
+    });
     budget.metadata(selected);
-    genericInvocations.set(node, selected);
+    genericInvocations.set(node, pending);
     return selected;
   };
   for (const usage of walk.context.projectMethodProperties.usages) {
@@ -579,9 +593,7 @@ function collectFallibilityFacts(
   for (const declaration of new Set([...declarations, ...effectsByDeclaration.keys()])) {
     const effects = declarationEffects(declaration);
     budget.metadata(effects);
-    requireRustRecord(walk.context.requiredRecords, "errorEffects", declaration,
-      "source-callable", "recordFallibilityFacts");
-    walk.context.records.errorEffectPlans.selected(declaration, effects);
+    effectsByDeclaration.set(declaration, effects);
     if (rustErrorEffectsAreFallible(effects)) fallibleSubjects.add(declaration);
   }
   for (const sourceFile of projectSourceFiles) {
@@ -601,9 +613,7 @@ function collectFallibilityFacts(
     if (selectedEffects.some(effects => effects === undefined)) return;
     const effects = mergeEffects(selectedEffects as RustErrorEffectsFact[]);
     if (effects === undefined) return;
-    requireRustRecord(walk.context.requiredRecords, "errorEffects", sourceFile,
-      "module", "recordFallibilityFacts");
-    walk.context.records.errorEffectPlans.selected(sourceFile, effects);
+    effectsByModule.set(sourceFile, effects);
     if (rustErrorEffectsAreFallible(effects)) {
       fallibleSubjects.add(sourceFile);
     }
@@ -699,43 +709,103 @@ function collectFallibilityFacts(
     };
     visit(sourceFile);
   }
-  for (const [region, effects] of effectsByRegion) {
-    budget.metadata(effects);
-    requireRustRecord(walk.context.requiredRecords, "errorEffects", region,
-      "error-region", "recordFallibilityFacts");
-    walk.context.records.errorEffectPlans.selected(region, effects);
-  }
-  for (const [node, invocation] of genericInvocations) {
-    budget.metadata(invocation);
-    requireRustRecord(walk.context.requiredRecords, "genericCallableInvocation", node,
-      "generic-invocation", "recordFallibilityFacts");
-    walk.context.records.genericCallableInvocations.selected(node, invocation);
-  }
-  for (const [node, effects] of effectsByExpression) {
-    budget.metadata(effects);
-    requireRustRecord(walk.context.requiredRecords, "errorEffects", node,
-      "expression", "recordFallibilityFacts");
-    walk.context.records.errorEffectPlans.selected(node, effects);
-  }
-  for (const [node, edges] of sourceErrorEdges) {
-    budget.step();
-    for (const edge of edges) {
-      budget.metadata(edge.effects);
-      budget.metadata(edge.nativeErrors);
-    }
-    requireRustRecord(walk.context.requiredRecords, "sourceErrorEffects", node,
-      "source-invocation", "recordFallibilityFacts");
-    walk.context.records.sourceErrorEdges.invocation(node, edges);
-  }
-  for (const [node, branches] of awaitSourceEdges) {
-    requireRustRecord(walk.context.requiredRecords, "awaitSourceErrorEffects", node,
-      "await", "recordFallibilityFacts");
-    walk.context.records.awaitSourceErrors.selected(node, branches);
-  }
   for (const subject of fallibleSubjects) {
     budget.step();
     requireRustRecord(walk.context.requiredRecords, "fallible", subject,
       "fallible-source", "recordFallibilityFacts");
     walk.context.records.fallibleSubjects.selected(subject);
   }
+  const intrinsicEffects = new Map<Node, RustErrorEffectsFact>();
+  for (const selections of [effectsByDeclaration, effectsByExpression, effectsByRegion, effectsByModule]) {
+    for (const [subject, effects] of selections) {
+      budget.step();
+      const existing = intrinsicEffects.get(subject);
+      if (existing !== undefined && !rustErrorEffectsEqual(existing, effects))
+        throw new Error("One checked intrinsic effect subject cannot have contradictory completed source effects.");
+      intrinsicEffects.set(subject, effects);
+    }
+  }
+  let published = false;
+  return Object.freeze({ effectsFor: (subject: Node) => intrinsicEffects.get(subject),
+    complete() {
+      if (published) throw new Error("Rust intrinsic error applications publish exactly once after physical binding.");
+      const failure = budget.run(() => {
+        const physical = walk.context.callableValues.nativeStorage;
+        const completeError = (error: RustErrorEffectsFact["nativeErrors"][number]) => selectSourceErrors.complete(error, physical);
+        const completedEdges = new Map<RustSourceErrorEffectEdge, RustSourceErrorEffectEdge>();
+        const completeEffects = (effects: RustErrorEffectsFact): RustErrorEffectsFact => {
+          const errors = effects.nativeErrors.map(completeError);
+          const selected = errors.some(error => error === undefined) ? undefined : mergeEffects([{ localErrors: effects.localErrors,
+            nativeErrors: errors as RustErrorEffectsFact["nativeErrors"] }]);
+          if (selected === undefined) throw new Error("Rust pending intrinsic effects lost their exact physical payload correspondence.");
+          return selected;
+        };
+        const completeEdge = (edge: RustSourceErrorEffectEdge): RustSourceErrorEffectEdge => {
+          const previous = completedEdges.get(edge);
+          if (previous !== undefined) return previous;
+          const errors = edge.nativeErrors.map(channel => ({ source: completeError(channel.source), target: completeError(channel.target) }));
+          if (errors.some(channel => channel.source === undefined || channel.target === undefined))
+            throw new Error("Rust pending source error edge lost its exact physical payload correspondence.");
+          const channels = new Map<string, RustSourceErrorEffectEdge["nativeErrors"][number]>();
+          for (const channel of errors as RustSourceErrorEffectEdge["nativeErrors"]) {
+            const previous = channels.get(channel.source.identity);
+            if (previous !== undefined && (!rustTargetTypeRefEquals(previous.source.errorType, channel.source.errorType) ||
+              previous.target.identity !== channel.target.identity || !rustTargetTypeRefEquals(previous.target.errorType, channel.target.errorType)))
+              throw new Error("Rust final source error channels require one exact source-to-target correspondence.");
+            channels.set(channel.source.identity, channel);
+          }
+          const selected = Object.freeze({ ...edge, effects: completeEffects(edge.effects), nativeErrors: Object.freeze([...channels.values()]) });
+          completedEdges.set(edge, selected);
+          return selected;
+        };
+        for (const [declaration, effects] of effectsByDeclaration) {
+          requireRustRecord(walk.context.requiredRecords, "errorEffects", declaration, "source-callable", "recordFallibilityFacts");
+          walk.context.records.errorEffectPlans.selected(declaration, completeEffects(effects));
+        }
+        for (const [sourceFile, effects] of effectsByModule) {
+          requireRustRecord(walk.context.requiredRecords, "errorEffects", sourceFile, "module", "recordFallibilityFacts");
+          walk.context.records.errorEffectPlans.selected(sourceFile, completeEffects(effects));
+        }
+        for (const [region, effects] of effectsByRegion) {
+          budget.metadata(effects);
+          requireRustRecord(walk.context.requiredRecords, "errorEffects", region,
+            "error-region", "recordFallibilityFacts");
+          walk.context.records.errorEffectPlans.selected(region, completeEffects(effects));
+        }
+        for (const [node, invocation] of genericInvocations) {
+          if (!completedInvocations.has(node)) completedInvocations.set(node, invocation.complete(walk.context));
+          const selected = completedInvocations.get(node)?.selection;
+          if (selected === undefined) throw new Error("Rust generic invocation publication requires its final physical application.");
+          budget.metadata(selected);
+          requireRustRecord(walk.context.requiredRecords, "genericCallableInvocation", node,
+            "generic-invocation", "recordFallibilityFacts");
+          walk.context.records.genericCallableInvocations.selected(node, selected);
+        }
+        for (const [node, effects] of effectsByExpression) {
+          budget.metadata(effects);
+          requireRustRecord(walk.context.requiredRecords, "errorEffects", node,
+            "expression", "recordFallibilityFacts");
+          walk.context.records.errorEffectPlans.selected(node, completeEffects(effects));
+        }
+        for (const [node, edges] of sourceErrorEdges) {
+          budget.step();
+          for (const edge of edges) {
+            budget.metadata(edge.effects);
+            budget.metadata(edge.nativeErrors);
+          }
+          requireRustRecord(walk.context.requiredRecords, "sourceErrorEffects", node,
+            "source-invocation", "recordFallibilityFacts");
+          walk.context.records.sourceErrorEdges.invocation(node, Object.freeze(edges.map(completeEdge)));
+        }
+        for (const [node, branches] of awaitSourceEdges) {
+          requireRustRecord(walk.context.requiredRecords, "awaitSourceErrorEffects", node,
+            "await", "recordFallibilityFacts");
+          walk.context.records.awaitSourceErrors.selected(node, Object.freeze(branches.map(branch => Object.freeze({ ...branch, edge: completeEdge(branch.edge) }))));
+        }
+      });
+      if (failure !== undefined) appendRustDiagnostic(walk, failure.code, failure.message, undefined,
+        ["target.capability=rust.native-error.bounded-effects"]);
+      published = true;
+    },
+  });
 }
