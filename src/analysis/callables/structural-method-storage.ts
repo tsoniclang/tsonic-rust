@@ -3,6 +3,7 @@ import type { SourceStorageBindings, SourceStorageProducer, SourceStorageQueries
 import { Node_Expression, sourceEnclosingCallable, asSourceNode } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetOperationFact } from "../../target-model/records/operations.js";
+import type { RustStructuralStorageLookup } from "../operations/target-operation.js";
 import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
 import { rustLifetimeKey, rustLifetimeOutlives, type RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
@@ -68,7 +69,7 @@ export type RustStructuralMethodConstructionLookup =
 export function rustStructuralMethodConstructionFor(expression: Node, input: {
   readonly ast: AstReader;
   readonly records: RustProgramRecords;
-  readonly structuralShapes: Pick<RustStructuralShapePlanRegistry, "field">;
+  readonly structuralShapes: RustStructuralStorageLookup;
 }): RustStructuralMethodConstructionLookup {
   const parent = input.ast.parent(expression);
   const parentOperation = input.records.targetOperation.get(parent);
