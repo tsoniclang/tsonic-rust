@@ -617,18 +617,18 @@ export function ordinary(value: number): number { const stored = value; return s
   assert.throws(() => source.ast.kindName(program.sourceFiles[0]), /after publication/u, "the source guard is live");
 });
 
-test("a required missing physical operand refuses at the preparation owner before publication", () => {
-  const arithmetic = actual("export function value(input: number): number { return input + 1; }", []);
-  assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
-    "ordinary arithmetic retains its real body context without artificial callable-storage reads");
-  const program = actual("export function contains(input: string): boolean { return input.includes(\"value\"); }", ["js"]);
+function verifyRequiredMissingOperand(program, observations) {
   const prepared = program.physicalEmissionContexts;
   const operand = prepared.operands.find(operand => operand.origin.kind === "operand");
   assert.equal(operand !== undefined, true, "the negative control starts from an actual checked operand");
-  const result = prepareRustEmissionContextRequests({ ast: program.source.ast, records: program.records, sourceOccurrences: [], errorRegions: program.errorRegions,
-    nativeStorage: { ...program.callableValues.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
+  const original = observations.preparations.find(preparation => preparation.requests.some(request => request.use === operand.context.use));
+  assert.equal(original !== undefined, true, "the operand retains its actual complete preparation input");
+  const owner = original.requests.find(request => request.use === operand.context.use);
+  const result = prepareRustEmissionContextRequests({ ...original.input, sourceOccurrences: [],
+    nativeStorage: { ...original.input.nativeStorage, valueFor: () => ({ kind: "unresolved", reason: "missing native producer proof" }) } },
   [{ use: targetUseSiteRef(operand.node, "missing-control", "actual-native-owner"), declaration: operand.context.declaration,
     bindings: operand.context.bindings, returnDestination: operand.context.returnDestination, error: operand.context.error,
+    source: owner.source,
     demands: [Object.freeze({ kind: "value", subject: operand.node, owner: operand.context.declaration,
       bindings: operand.context.bindings, context: operand.use })], sourceCarriers: [], physicalCarriers: [] }]);
   assert.equal(result.kind, "rejected");
@@ -636,6 +636,43 @@ test("a required missing physical operand refuses at the preparation owner befor
     diagnostic.sourceNode === operand.node && diagnostic.message === "missing native producer proof"), true,
   "the source occurrence and owning refusal survive unchanged; no internal or missing-key fallback");
   assert.equal(Object.hasOwn(result, "value"), false, "no incomplete context product is published");
+}
+
+test("a required missing physical operand refuses at the preparation owner before publication", () => {
+  const arithmetic = actual("export function value(input: number): number { return input + 1; }", []);
+  assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
+    "ordinary arithmetic retains its real body context without artificial callable-storage reads");
+  const preparationUrl = new URL("../../../dist/analysis/callables/emission-contexts.js", import.meta.url).href;
+  const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
+  const key = "r14-actual-missing-operand-preparation";
+  const script = `
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import { targetUseSiteRef } from "@tsonic/target-api/analysis";
+const observations = { preparations: [], anchors: 0 };
+globalThis[Symbol.for(${JSON.stringify(key)})] = observations;
+registerHooks({ load(url, context, nextLoad) {
+  const loaded = nextLoad(url, context);
+  if (url !== ${JSON.stringify(preparationUrl)}) return loaded;
+  const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+  const anchor = "export function prepareRustEmissionContextRequests(";
+  assert.equal(source.split(anchor).length, 2, "one actual request preparation observation anchor");
+  observations.anchors++;
+  const extension = 'export function prepareRustEmissionContextRequests(input, requests) { const result = observedPrepareRustEmissionContextRequests(input, requests); globalThis[Symbol.for(${JSON.stringify(key)})].preparations.push({input, requests}); return result; }';
+  return { ...loaded, source: source.replace(anchor, "function observedPrepareRustEmissionContextRequests(") + "\\n" + extension };
+} });
+const { analyzeRust } = await import(${JSON.stringify(helperUrl)});
+const { prepareRustEmissionContextRequests } = await import(${JSON.stringify(preparationUrl)});
+const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } }, files: {
+  "index.ts": 'export function contains(input: string): boolean { return input.includes("value"); }',
+} });
+(${verifyRequiredMissingOperand.toString()})(program, observations);
+assert.equal(observations.anchors, 1, "one real observation without a production observer or invented late inputs");
+process.stdout.write("R14_INSTRUMENTED_MISSING_OPERAND_PROOF");
+`;
+  const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(observed.status, 0, `instrumented missing operand proof: ${observed.error?.message ?? ""}\n${observed.stderr.slice(-4096)}\n${observed.stdout.slice(-2048)}`);
+  assert.equal(observed.stdout, "R14_INSTRUMENTED_MISSING_OPERAND_PROOF", "explicit instrumented missing operand proof label");
 });
 
 test("the removed native-node context input is rejected instead of becoming an implicit demand inventory", () => {
@@ -665,18 +702,12 @@ export const seed: number = checked(1);`,
     components: program.sourcePackageComponents, facades: program.sourcePackageFacades, regions: program.errorRegions,
     binaryHooks: [], outputType: "lib", projectRoot: "/src", entryPoint: "index.ts" });
   assert.equal(selected.kind, "resolved", "the existing initializer owner supplies the exact worker composition");
-  const callable = program.callableValues;
   assert.equal(observations.calls, 1, "the actual selecting owner ran exactly once");
   assert.equal(observations.requests.kind, "resolved", "the actual checked source use inventory was admitted");
-  const result = prepareRustPhysicalEmissionContexts({ ast: source.ast, sourceFiles: program.sourceFiles,
-    isNativeNode: () => true, records: program.records, sourceLifetimes: program.sourceLifetimes,
-    generic: callable.generic, frames: callable.frames, suspended: callable.suspended, native: callable.native,
-    nativeStorage: callable.nativeStorage, nativeProducers: callable.nativeProducers,
-    genericCompletions: callable.genericCompletions, genericErrors: program.genericCallableErrors,
-    declarationGenericRequirements: program.declarationGenericRequirements, errorRegions: program.errorRegions,
-    sourceOccurrences: program.physicalEmissionContexts.sourceOccurrences, emissionRequests: observations.requests.value,
-    constructions: [], projectTypes: program.projectTypes,
-    initialization: selected.value });
+  assert.equal(observations.preparationInput !== undefined, true, "the full original late preparation inputs were observed");
+  assert.equal(observations.preparationInput.emissionRequests === observations.requests.value, true,
+    "the existing complete selecting-owner request vector remains identical");
+  const result = prepareRustPhysicalEmissionContexts({ ...observations.preparationInput, initialization: selected.value });
   assert.equal(result.kind, "resolved", result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   const context = result.value.contexts.contexts.find(context => context.use.role === "worker-initializer" && context.declaration === worker);
   assert.equal(context !== undefined && context.error.kind === "initializer", true, "a wrapper is not silently treated as its source module");
@@ -700,6 +731,14 @@ const observations = { calls: 0, anchors: 0 };
 globalThis[Symbol.for(${JSON.stringify(key)})] = observations;
 registerHooks({ load(url, context, nextLoad) {
   const loaded = nextLoad(url, context);
+  if (url === ${JSON.stringify(preparationUrl)}) {
+    const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
+    const anchor = "export function prepareRustPhysicalEmissionContexts(";
+    assert.equal(source.split(anchor).length, 2, "one original late preparation input observation anchor");
+    observations.preparationAnchors = (observations.preparationAnchors ?? 0) + 1;
+    const extension = 'export function prepareRustPhysicalEmissionContexts(input) { globalThis[Symbol.for(${JSON.stringify(key)})].preparationInput = input; return observedPrepareRustPhysicalEmissionContexts(input); }';
+    return { ...loaded, source: source.replace(anchor, "function observedPrepareRustPhysicalEmissionContexts(") + "\\n" + extension };
+  }
   if (url !== ${JSON.stringify(collectorUrl)}) return loaded;
   const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
   const anchor = "export function prepareRustPhysicalCallableEmissionRequests(";
@@ -713,6 +752,7 @@ const { analyzeRustInitializationErrors } = await import(${JSON.stringify(initia
 const { prepareRustPhysicalEmissionContexts } = await import(${JSON.stringify(preparationUrl)});
 (${verifyActualWorkerContexts.toString()})(observations);
 assert.equal(observations.anchors, 1, "one observation, no production observer or altered source input");
+assert.equal(observations.preparationAnchors, 1, "one original preparation input observation without a fake source-storage port");
 process.stdout.write("R14_INSTRUMENTED_WORKER_CONTEXT_PROOF");
 `;
   const observed = spawnSync(process.execPath, ["--input-type=module", "--eval", script], { encoding: "utf8", maxBuffer: 2 * 1024 * 1024 });

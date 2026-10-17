@@ -1,14 +1,14 @@
 import type { AstReader, Node } from "@tsonic/tsts";
-import { targetUseSiteIdentity, targetUseSiteRef, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
+import { targetUseSiteIdentity, targetUseSiteRef, type SourceStorageQueries, type TargetUseSiteRef } from "@tsonic/target-api/analysis";
 import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustFinalizedOperationAbi, RustFinalizedValueConversion } from "../../target-model/records/finalized-operation.js";
-import type { RustErrorRegionRecords } from "../../target-model/records/error-regions.js";
+import type { RustErrorRegionRecords, RustInitializationErrorRecords } from "../../target-model/records/error-regions.js";
 import type { RustCallableEmissionContexts, RustEmissionErrorContext, RustEmissionReturnDestination,
   RustEmissionProviderOperation, RustPhysicalEmissionContext, RustPhysicalEmissionOperand, RustPhysicalEmissionOperandOrigin,
-  RustPhysicalEmissionSourceOccurrence } from "../../target-model/records/physical-emission-contexts.js";
+  RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins } from "../../target-model/records/physical-emission-contexts.js";
 import type { RustTargetGenericBindings } from "../../target-model/types/carriers/generic-inference.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
@@ -27,12 +27,17 @@ import type { RustPhysicalCallableEmissionRequest, RustPhysicalCallableStorage }
 import type { RustNativeCallableProducerPlan } from "./native-producers.js";
 import type { RustGenericCallableCompletionPlan } from "./generic-completions.js";
 import type { RustGenericCallableErrorIndex } from "./generic-errors.js";
+import type { RustNativeStoragePlan } from "./native-storage.js";
+import { createRustEmissionSourceOriginPreparation, type RustEmissionSourceOwner,
+  type RustEmissionSourceRequest } from "./emission-source-origins.js";
 
 
 export interface RustCallableEmissionPreparationInput {
   readonly ast: AstReader;
   readonly isNativeNode: (node: Node) => boolean;
   readonly records: RustProgramRecords;
+  readonly sourceStorage: SourceStorageQueries;
+  readonly genericBindingsFor: RustNativeStoragePlan["genericBindingsFor"];
   readonly sourceLifetimes: RustLifetimeIndex;
   readonly generic: RustGenericCallablePlan;
   readonly frames: RustFrameCallablePlan;
@@ -44,6 +49,7 @@ export interface RustCallableEmissionPreparationInput {
   readonly genericErrors: RustGenericCallableErrorIndex;
   readonly declarationGenericRequirements: RustDeclarationGenericRequirementIndex;
   readonly errorRegions: Pick<RustErrorRegionRecords, "get" | "sourceFor">;
+  readonly initialization: RustInitializationErrorRecords;
   readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
   readonly emissionRequests: readonly RustPhysicalCallableEmissionRequest[];
   readonly constructions: readonly RustProjectConstructionPlan[];
@@ -55,13 +61,9 @@ export interface RustCallableEmissionPreparation {
   readonly physicalOperands: readonly TargetTypeRef[];
 }
 
-export interface RustEmissionContextRequest {
-  readonly use: TargetUseSiteRef;
-  readonly declaration: Node;
-  readonly bindings: RustTargetGenericBindings;
+export interface RustEmissionContextRequest extends RustEmissionSourceRequest {
   readonly returnDestination: RustEmissionReturnDestination;
   readonly error: RustEmissionErrorContext;
-  readonly demands: readonly RustPhysicalCallableEmissionRequest[];
   readonly sourceCarriers: readonly TargetTypeRef[];
   readonly physicalCarriers: readonly TargetTypeRef[];
 }
@@ -136,7 +138,8 @@ export function prepareRustCallableEmissionContexts(
     return bindings;
   };
   const request = (subject: object, role: string, declaration: Node, identity: string,
-    bindings: RustTargetGenericBindings | undefined, demands: readonly RustPhysicalCallableEmissionRequest[], sourceCarriers: readonly TargetTypeRef[],
+    bindings: RustTargetGenericBindings | undefined, demands: readonly RustPhysicalCallableEmissionRequest[], source: RustEmissionSourceOwner,
+    sourceCarriers: readonly TargetTypeRef[],
     physicalCarriers: readonly TargetTypeRef[] = [], physicalReturn: TargetTypeRef | undefined = undefined): void => {
     if (bindings === undefined) {
       diagnostics.push(emissionDiagnostic(declaration, "An emitted native context has no exact canonical type, lifetime and const bindings."));
@@ -169,7 +172,7 @@ export function prepareRustCallableEmissionContexts(
       ...requirements.projectProjections.flatMap(value => [value.sourceCarrier, value.targetCarrier]),
       ...requirements.optionalStorage.map(value => value.carrier),
     ];
-    requests.push({ use: targetUseSiteRef(subject, role, identity), declaration, bindings, demands,
+    requests.push({ use: targetUseSiteRef(subject, role, identity), declaration, bindings, demands, source,
       returnDestination, error, sourceCarriers: [...sourceCarriers, ...required,
         ...generator === undefined ? [] : [generator.yieldType, generator.returnType, generator.nextType, generator.resultCarrier]], physicalCarriers });
   };
@@ -178,7 +181,8 @@ export function prepareRustCallableEmissionContexts(
     const bindings = declaredBindings(producer.declaration);
     if (implementation?.creation === "activation") continue;
     request(producer.declaration, "native-body", producer.declaration, producer.identity, bindings,
-      byOwner.get(producer.declaration) ?? [], producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []),
+      byOwner.get(producer.declaration) ?? [], { kind: "declaration" },
+      producer.environment.flatMap(argument => argument.kind === "type" ? [argument.type] : []),
       [input.nativeProducers.outwardReturnFor(producer.declaration), input.nativeProducers.invocationResultFor(producer.declaration),
         input.nativeProducers.bodyResultFor(producer.declaration)].filter((carrier): carrier is TargetTypeRef => carrier !== undefined));
   }
@@ -193,11 +197,12 @@ export function prepareRustCallableEmissionContexts(
       ...environment.inputs.flatMap(value => [value.implementation, value.trait]),
       ...definition.signature.parameters, definition.signature.result];
     const identity = `${definition.identity}:${implementation.sourceFileName}:${sourceNodeIdentity(input.ast, implementation.declaration)}`;
-    request(implementation, "helper", implementation.declaration, identity, environment.substitutions, [], payloads);
+    const source = { kind: "callable" as const, implementation: implementation.declaration, member: undefined };
+    request(implementation, "helper", implementation.declaration, identity, environment.substitutions, [], source, payloads);
     if (implementation.creation === "activation") {
       ownerBindings.set(implementation.declaration, environment.substitutions);
       request(implementation, "body", implementation.declaration, identity, environment.substitutions,
-        byOwner.get(implementation.declaration) ?? [], payloads);
+        byOwner.get(implementation.declaration) ?? [], source, payloads);
     }
   }
   for (const definition of input.generic.physical.definitions()) {
@@ -217,6 +222,7 @@ export function prepareRustCallableEmissionContexts(
         continue;
       }
       request(member, "member", member.implementation.declaration, definition.identity, member.bindings, [],
+        { kind: "callable", implementation: member.implementation.declaration, member },
         [...environment.captures.map(value => value.storageCarrier), ...environment.receiverFields.map(value => value.storageCarrier),
           ...environment.receivers.map(value => value.storageCarrier), ...environment.inputs.flatMap(value => [value.implementation, value.trait]),
           ...definition.signature.parameters],
@@ -231,6 +237,7 @@ export function prepareRustCallableEmissionContexts(
       continue;
     }
     request(selected, "native-input", selected.owner, identity, declaredBindings(selected.owner), [],
+      { kind: "declaration" },
       [selected.carrier, selected.implementation, selected.trait, ...selected.environment,
         ...selected.protocol.method.parameters, selected.protocol.method.result]);
   }
@@ -241,7 +248,7 @@ export function prepareRustCallableEmissionContexts(
       continue;
     }
     request(implementation, "native-backing", implementation.declaration, identity,
-      declaredBindings(implementation.declaration), [], [implementation.carrier, ...implementation.storage]);
+      declaredBindings(implementation.declaration), [], { kind: "declaration" }, [implementation.carrier, ...implementation.storage]);
   }
   for (const frame of input.frames.definitions) {
     const declaration = frame.activation.ownerDeclaration;
@@ -251,7 +258,7 @@ export function prepareRustCallableEmissionContexts(
       continue;
     }
     const bindings = declaredBindings(declaration);
-    request(frame, "frame", declaration, identity, bindings, [], [...frame.bindings.map(value => value.carrier),
+    request(frame, "frame", declaration, identity, bindings, [], { kind: "declaration" }, [...frame.bindings.map(value => value.carrier),
       ...frame.entries.flatMap(entry => [...entry.signature.parameters, entry.signature.result])]);
   }
   for (const plan of input.constructions) {
@@ -264,7 +271,7 @@ export function prepareRustCallableEmissionContexts(
       continue;
     }
     request(plan, "constructor", declaration, identity, declaredBindings(declaration),
-      [], plan.fields.map(field => field.carrier));
+      [], { kind: "construction", plan, layer: undefined }, plan.fields.map(field => field.carrier));
     const root = input.projectTypes.openCarrier(plan.definition);
     for (const layer of plan.layers) {
       const source = layer.constructor ?? layer.definition.declaration;
@@ -282,6 +289,7 @@ export function prepareRustCallableEmissionContexts(
       const demands = [...byOwner.get(layer.definition.declaration) ?? [],
         ...layer.constructor === undefined ? [] : byOwner.get(layer.constructor) ?? []];
       request(layer, "constructor-layer", source, identity, bindings, demands,
+        { kind: "construction", plan, layer },
         layer.fields.map(field => field.carrier), points.flatMap(point =>
           plan.emission.preparationFor(point.node)?.projections.flatMap(projection => projection.kind === "receiver" ? [projection.carrier] : []) ?? []));
     }
@@ -290,12 +298,14 @@ export function prepareRustCallableEmissionContexts(
 }
 
 export function prepareRustEmissionContextRequests(
-  input: Pick<RustCallableEmissionPreparationInput, "ast" | "records" | "nativeStorage" | "sourceOccurrences" | "errorRegions">,
+  input: Pick<RustCallableEmissionPreparationInput, "ast" | "records" | "nativeStorage" | "sourceOccurrences" | "errorRegions" |
+    "sourceStorage" | "genericBindingsFor" | "generic" | "emissionRequests" | "initialization">,
   requests: readonly RustEmissionContextRequest[],
 ): TargetStageResult<RustCallableEmissionPreparation> {
   const contexts: RustPhysicalEmissionContext[] = [];
   const operands: RustPhysicalEmissionOperand[] = [];
   const contextIndex = new Map<TargetUseSiteRef, RustPhysicalEmissionContext>();
+  const sourceOrigins = new Map<TargetUseSiteRef, ReadonlyMap<RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins>>();
   const operandIndex = new Map<TargetUseSiteRef, RustPhysicalEmissionOperand>();
   const applications = new Map<TargetUseSiteRef, ReadonlyMap<TargetTypeRef, TargetTypeRef>>();
   const physicalOperands = new Set<TargetTypeRef>();
@@ -308,6 +318,10 @@ export function prepareRustEmissionContextRequests(
   }
   for (const request of requests) {
     if (!Array.isArray(request.demands)) throw new Error("An emitted context requires its original selected demand rows, not a native-node inventory.");
+    if (request.source === undefined) throw new Error("An emitted context requires its original selected source owner.");
+  }
+  const prepareSourceOrigins = createRustEmissionSourceOriginPreparation({ ...input, physical: input.generic.physical }, requests);
+  for (const request of requests) {
     const carriers = new Set<TargetTypeRef>();
     const applied = new Map<TargetTypeRef, TargetTypeRef>();
     const apply = (source: TargetTypeRef): TargetTypeRef => {
@@ -330,8 +344,9 @@ export function prepareRustEmissionContextRequests(
     const returnDestination: RustEmissionReturnDestination = request.returnDestination.kind === "none" ? request.returnDestination
       : Object.freeze({ ...request.returnDestination, carrier: apply(request.returnDestination.carrier) });
     const contextCarriers: TargetTypeRef[] = [];
+    const contextOrigins: RustPhysicalEmissionSourceOrigins[] = [];
     const context: RustPhysicalEmissionContext = { use: request.use, declaration: request.declaration,
-      bindings: request.bindings, returnDestination, error: request.error, operands: contextCarriers };
+      bindings: request.bindings, returnDestination, error: request.error, operands: contextCarriers, sourceOrigins: contextOrigins };
     const add = (node: Node, origin: RustPhysicalEmissionOperandOrigin, source: TargetTypeRef,
       destination: TargetTypeRef | undefined, endpoints: readonly TargetTypeRef[], inputOrdinal?: number): void => {
       const role = origin.kind === "call-input" ? `call-input:${providerSourceInputKey(origin.input)}:${inputOrdinal}`
@@ -354,6 +369,13 @@ export function prepareRustEmissionContextRequests(
     };
     const nodes = [...new Set(request.demands.map(demand => demand.subject))];
     const occurrences = nodes.flatMap(node => [...sourceIndex.get(node)?.values() ?? []]);
+    const origins = new Map<RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceOrigins>();
+    for (const occurrence of occurrences) {
+      const selected = prepareSourceOrigins(request, occurrence);
+      contextOrigins.push(selected);
+      origins.set(occurrence, selected);
+    }
+    sourceOrigins.set(request.use, origins);
     const sourceSlots = new Set<object>(occurrences.flatMap(occurrence => occurrence.slots));
     for (const occurrence of occurrences) for (const carrier of rustPhysicalEmissionOperationCarriers(occurrence.operation.abi)) apply(carrier);
     for (const node of nodes) {
@@ -420,6 +442,7 @@ export function prepareRustEmissionContextRequests(
     }
     contextCarriers.push(...carriers);
     Object.freeze(contextCarriers);
+    Object.freeze(contextOrigins);
     Object.freeze(context);
     contexts.push(context);
     contextIndex.set(request.use, context);
@@ -431,6 +454,7 @@ export function prepareRustEmissionContextRequests(
       contextFor: (use: TargetUseSiteRef) => contextIndex.get(use),
       operandFor: (use: TargetUseSiteRef) => operandIndex.get(use),
       carrierFor: (use: TargetUseSiteRef, source: TargetTypeRef) => applications.get(use)?.get(source),
+      sourceOriginFor: (use: TargetUseSiteRef, occurrence: RustPhysicalEmissionSourceOccurrence) => sourceOrigins.get(use)?.get(occurrence),
       sourceFor: (node: Node, operation: RustEmissionProviderOperation) => sourceIndex.get(node)?.get(operation) }) }));
 }
 
