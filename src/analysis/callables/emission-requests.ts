@@ -234,6 +234,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
       }
       const checked = input.carrierHost.semantics(sourceFile).operations.call(node);
       const target = operation.target;
+      if (target.form === "constructor" || target.form === "constructor-value") runtime(owner, node, role, sourceOwner);
       if (target.form === "callable" || target.form === "constructor-value") {
         const callee = checked?.sourceCallee.expression;
         if (callee === undefined) diagnostics.push(emissionDiagnostic(node, "An emitted native callable invocation requires its original checked callee."));

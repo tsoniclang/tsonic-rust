@@ -93,7 +93,8 @@ function construction(text, wrapCaptures = captures => captures, wrapRecords = r
   const input = { ast: source.ast, storage, nativeNodes, records, definitions: program.typeDefinitions,
     structuralShapes: program.structuralShapes, generic: registry.plan, lexicalFunctions: program.lexicalFunctions,
     lifetimes: program.sourceLifetimes,
-    physicalCarrierFor: (carrier, ownerFileName, producers) => physical.carrierFor(carrier, ownerFileName, producers) };
+    physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) =>
+      physical.carrierFor(carrier, ownerFileName, subject, bindings, producers) };
   const native = createRustNativeCallableInputPlan({ ...input, sourcePackages: program.host.sourcePackages, usedNames: new Set() });
   const producers = createRustNativeCallableProducerPlan({ ...input, native, nodes: nativeNodes,
     returnCarrierFor: declaration => {

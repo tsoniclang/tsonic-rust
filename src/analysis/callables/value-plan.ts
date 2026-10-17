@@ -300,9 +300,9 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   const nativeStorageQueries = createRustNativeStorageQueries({ ast: input.ast, records: input.records,
     storage: input.sourceStorage, nativeNodes: input.nativeNodes, definitions: input.typeDefinitions, native, producers: nativeProducers, generic,
     carrierHost: input.carrierHost,
-    physicalCarrierFor: (carrier, ownerFileName, producers) => {
+    physicalCarrierFor: (carrier, ownerFileName, subject, bindings, producers) => {
       if (physicalCarrierFor === undefined) throw new Error("Generic callable physical storage requires its finalized declaration inputs.");
-      return physicalCarrierFor(carrier, ownerFileName, producers);
+      return physicalCarrierFor(carrier, ownerFileName, subject, bindings, producers);
     },
     lexicalFunctions: input.lexicalFunctions, lifetimes: input.lifetimes, structuralShapes: input.structuralShapes });
   const captures = createRustNativeCapturePlan({ records: input.records, storage: input.sourceStorage,
@@ -416,6 +416,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       }
       const emission = prepareRustPhysicalEmissionContexts({ ...late, ast: input.ast, sourceFiles: input.sourceFiles,
         isNativeNode: input.isNativeNode, records: input.records, sourceLifetimes: input.lifetimes,
+        sourceStorage: input.sourceStorage, genericBindingsFor: nativeStorage.genericBindingsFor,
         projectTypes: input.projectTypes,
         generic, frames: selectedPlan.frames, suspended: selectedPlan.suspended, native,
         nativeStorage: publication.value.nativeStorage, nativeProducers: publication.value.nativeProducers,
