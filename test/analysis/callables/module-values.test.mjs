@@ -30,6 +30,7 @@ function classify({ exported = false, kind = "first-class", direct = source, con
   ]);
   recordRustModuleCallableStorage({ context: {
     requiredRecords,
+    isNativeNode: node => node === declaration,
     ast: { forEachChild() {}, is: { IsFunctionDeclaration() { return false; } } }, sourceFiles: [declaration],
     source: { navigation: { declarationUseSummary() { return { exported }; },
       expressionValueFlow() { return { aliasDeclarations: [] }; },
