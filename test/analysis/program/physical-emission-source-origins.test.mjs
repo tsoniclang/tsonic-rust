@@ -34,6 +34,24 @@ class Item extends Base {
 export function value(text: string): boolean { return new Item(text).field; }
 `;
 
+const constructorDomainSource = constructorSource + `
+class Leaf { ready: boolean = "leaf".includes("l"); }
+class Other {
+  field: boolean;
+  constructor(text: string) { this.field = text.includes("other") && new Leaf().ready; }
+}
+type Identity = <Value>(value: Value) => Value;
+function create(): Identity {
+  return <Value>(value: Value): Value => { new Other("known"); return value; };
+}
+export function independentValue(text: string): boolean {
+  const first = new Other(text);
+  const second = new Item(text);
+  const invoke = create();
+  return invoke(first.field && second.field);
+}
+`;
+
 function observed(text, verify) {
   const preparationUrl = new URL("../../../dist/analysis/callables/emission-contexts.js", import.meta.url).href;
   const originUrl = new URL("../../../dist/analysis/callables/emission-source-origins.js", import.meta.url).href;
@@ -64,6 +82,7 @@ const { program } = analyzeRust({ surfaces: ["js"], target: {id: "rust", options
   "index.ts": ${JSON.stringify(text)},
 } });
 assert.equal(observations.anchors, 2, "both complete real-pipeline observation anchors were used");
+const verifyConstructorOrigins = ${verifyConstructorOrigins.toString()};
 (${verify.toString()})(program, observations, createRustEmissionSourceOriginPreparation);
 observations.published = true;
 const queryCount = observations.sourceQueries.length;
@@ -141,6 +160,7 @@ function verifyCallableOrigins(program, observations, create) {
     .flatMap(context => context.sourceOrigins.map(origins => ({context, origins})));
   assert.equal(actual.length > 0, true, "the actual selected generic callable body contains an emitted provider operation");
   let distinctSources = false;
+  let preservedUnavailable = false;
   for (const {context, origins} of actual) {
     assert.equal(origins.kind, "resolved", "the closed actual invocation domain remains closed");
     const alternatives = origins.alternatives;
@@ -205,6 +225,36 @@ function verifyCallableOrigins(program, observations, create) {
       else assert.equal(result.alternatives.length, 0, name + ": no fake activation fills an empty original execution set");
       if (result.kind === "open") assert.equal(result.boundaries.includes(boundary), true, "the exact controlled open boundary is retained");
     }
+    const firstProducer = alternatives[0].producer;
+    const retained = alternatives.find(origin => origin.producer !== firstProducer);
+    if (retained !== undefined) {
+      const sourceStorage = Object.freeze({...original.input.sourceStorage, contributingExecutionsFor(subject, owner, producer) {
+        return producer === firstProducer ? Object.freeze({kind: "unresolved", reason: "one original source execution unavailable"})
+          : original.input.sourceStorage.contributingExecutionsFor(subject, owner, producer);
+      }});
+      const partial = create({...original.input, sourceStorage}, [request])(request, origins.occurrence);
+      assert.equal(partial.kind, "unavailable", "one unavailable source alternative remains an explicit unavailable product");
+      assert.equal(partial.reason, "one original source execution unavailable", "the original unavailable reason is retained");
+      assert.equal(partial.alternatives.some(origin => origin.kind === "callable" && origin.producer === retained.producer &&
+        origin.member === retained.member && origin.execution === retained.execution && origin.activation === retained.activation &&
+        origin.targetBindings === retained.targetBindings), true,
+      "unavailable status retains every independently known original producer/execution/native row");
+      const partialBoundary = Object.freeze({kind: "opaque-result", subject: origins.subject,
+        exposure: origins.occurrence.node, bindings: retained.producer.bindings});
+      const partialOpen = create({...original.input, sourceStorage: Object.freeze({...sourceStorage,
+        contributingExecutionsFor(subject, owner, producer) {
+          const selected = sourceStorage.contributingExecutionsFor(subject, owner, producer);
+          return selected.kind === "unresolved" ? selected : Object.freeze({kind: "open", producers: selected.producers,
+            boundaries: Object.freeze([...selected.kind === "open" ? selected.boundaries : [], partialBoundary])});
+        },
+      })}, [request])(request, origins.occurrence);
+      assert.equal(partialOpen.kind, "unavailable", "a partial open alternative cannot turn a required missing execution into a complete domain");
+      assert.equal(partialOpen.alternatives.some(origin => origin.kind === "callable" && origin.producer === retained.producer &&
+        origin.member === retained.member && origin.execution === retained.execution && origin.activation === retained.activation &&
+        origin.targetBindings === retained.targetBindings), true, "mixed unavailable/open status retains the same exact known row");
+      assert.equal(partialOpen.boundaries.includes(partialBoundary), true, "mixed unavailable/open status retains the original source boundary");
+      preservedUnavailable = true;
+    }
     const withoutSourceVector = Object.freeze({...original.input.nativeStorage, valueFor(subject) {
       const selected = original.input.nativeStorage.valueFor(subject);
       if (selected.kind === "unresolved") return selected;
@@ -222,6 +272,7 @@ function verifyCallableOrigins(program, observations, create) {
       /complete original selection source vector/u, "the old source-less storage product is refused without a compatibility route");
   }
   assert.equal(distinctSources, true, "equal native member payloads retain both different original source creation bindings");
+  assert.equal(preservedUnavailable, true, "the real distinct-source domain exercises partial unavailable status without dropping known alternatives");
 }
 
 test("equal-native callable members preserve every distinct original producer and bound activation before interning", () => {
@@ -263,12 +314,115 @@ function verifyConstructorOrigins(program, observations) {
   assert.equal(forwarded, true, "super construction retains the original allocation/root and actual caller activation");
 }
 
+function verifyConstructorStatuses(program, observations, create) {
+  verifyConstructorOrigins(program, observations);
+  const rows = program.physicalEmissionContexts.contexts.filter(context => context.use.role === "constructor-layer")
+    .flatMap(context => context.sourceOrigins.flatMap(origins => origins.alternatives.map(origin => ({context, origins, origin}))));
+  const distinct = rows.find(row => rows.some(other => other.origin.root.root !== row.origin.root.root));
+  assert.equal(distinct !== undefined, true, "the real program contains independent original constructor roots");
+  const failing = rows.find(row => row.origin.root.root !== distinct.origin.root.root && row.origin.owner !== distinct.origin.owner);
+  assert.equal(failing !== undefined, true, "a separate actual constructor owner supplies the unavailable-origin control");
+  const original = observations.factories.find(factory => factory.requests.some(request => request.use === distinct.context.use));
+  assert.equal(original !== undefined, true, "the root isolation control uses complete actual late inputs");
+  const request = original.requests.find(request => request.use === distinct.context.use);
+  const isolated = create({...original.input, genericBindingsFor(declaration, bindings) {
+    return declaration === failing.origin.owner ? Object.freeze({kind: "unresolved", reason: "separate constructor origin unavailable"})
+      : original.input.genericBindingsFor(declaration, bindings);
+  }}, original.requests)(request, distinct.origins.occurrence);
+  assert.equal(isolated.kind, "resolved", "an unrelated root's unavailable origin cannot poison this original construction/region");
+  assert.equal(isolated.alternatives.every(origin => origin.kind === "construction" && origin.root.root === distinct.origin.root.root), true,
+    "failure isolation never replaces the successful root with an equal-native alternative");
+  const selectedRequest = original.requests.find(request => request.use === failing.context.use);
+  const affected = create({...original.input, genericBindingsFor(declaration, bindings) {
+    return declaration === failing.origin.owner ? Object.freeze({kind: "unresolved", reason: "separate constructor origin unavailable"})
+      : original.input.genericBindingsFor(declaration, bindings);
+  }}, original.requests)(selectedRequest, failing.origins.occurrence);
+  assert.equal(affected.kind, "unavailable", "only the actual affected constructor region retains its unavailable status");
+  assert.equal(affected.reason, "separate constructor origin unavailable", "the unavailable region keeps its original selecting-owner reason");
+  const callable = rows.find(row => row.origin.caller.kind === "callable");
+  assert.equal(callable !== undefined, true, "a genuine selected generic callable supplies an actual construction caller");
+  const callableRequest = original.requests.find(request => request.declaration === callable.origin.caller.activation.declaration &&
+    request.source.kind === "callable" && request.demands.some(demand => demand.subject === callable.origin.invocation));
+  assert.equal(callableRequest !== undefined, true, "the open-domain control starts at the real emitted callable request");
+  const boundary = Object.freeze({kind: "opaque-result", subject: callable.origins.subject,
+    exposure: callable.origin.invocation, bindings: callable.origin.caller.execution.bindings});
+  const sourceStorage = Object.freeze({...original.input.sourceStorage, contributingExecutionsFor(subject, owner, producer) {
+    const selected = original.input.sourceStorage.contributingExecutionsFor(subject, owner, producer);
+    return owner !== callable.origin.caller.activation.declaration || selected.kind === "unresolved" ? selected
+      : Object.freeze({kind: "open", producers: selected.producers, boundaries: Object.freeze([
+        ...selected.kind === "open" ? selected.boundaries : [], boundary,
+      ])});
+  }});
+  const prepareOpen = create({...original.input, sourceStorage}, original.requests);
+  const openRequest = original.requests.find(request => request.use === callable.context.use);
+  const opened = prepareOpen(openRequest, callable.origins.occurrence);
+  assert.equal(opened.kind, "open", "an open caller remains open instead of becoming globally unavailable");
+  assert.equal(opened.alternatives.some(origin => origin.kind === "construction" &&
+    origin.invocation === callable.origin.invocation && origin.construction === callable.origin.construction &&
+    origin.selection === callable.origin.selection && origin.activation === callable.origin.activation &&
+    origin.targetBindings === callable.origin.targetBindings), true,
+  "an open caller retains its known exact construction, source region and activation/native row");
+  assert.equal(opened.boundaries.includes(boundary), true, "the original open caller boundary survives construction forwarding");
+  const independent = rows.find(row => row.origin.root.root !== callable.origin.root.root && row.origin.caller.kind === "declaration");
+  assert.equal(independent !== undefined, true, "the open-domain control includes an independent closed root");
+  const independentRequest = original.requests.find(request => request.use === independent.context.use);
+  const closed = prepareOpen(independentRequest, independent.origins.occurrence);
+  assert.equal(closed.kind, "resolved", "an open source caller never contaminates an unrelated closed constructor root");
+  const nested = rows.find(row => row.origin.caller.kind === "construction" &&
+    row.origin.root.root !== callable.origin.root.root && row.origin.caller.root.root === callable.origin.root.root);
+  assert.equal(nested !== undefined, true, "the real open source path contains a nested independent allocation");
+  const nestedRequest = original.requests.find(request => request.use === nested.context.use);
+  const nestedOpen = prepareOpen(nestedRequest, nested.origins.occurrence);
+  assert.equal(nestedOpen.kind, "open", "open status follows the original actual caller into its nested allocation");
+  assert.equal(nestedOpen.boundaries.includes(boundary), true, "a previously visited closed path cannot erase a later original open caller boundary");
+  const reversed = create({...original.input, sourceStorage,
+    emissionRequests: Object.freeze([...original.input.emissionRequests].reverse())}, Object.freeze([...original.requests].reverse()));
+  const reversedOpen = reversed(openRequest, callable.origins.occurrence);
+  const reversedClosed = reversed(independentRequest, independent.origins.occurrence);
+  assert.equal(reversedOpen.kind, opened.kind, "reversing request enumeration preserves the affected root's status");
+  assert.equal(reversedClosed.kind, closed.kind, "reversing request enumeration preserves the independent root's status");
+  assert.equal(reversedOpen.alternatives.length, opened.alternatives.length, "reversing request order retains every known open alternative");
+  assert.equal(reversedOpen.alternatives.every(origin => opened.alternatives.some(previous =>
+    origin.kind === "construction" && previous.kind === "construction" && origin.invocation === previous.invocation &&
+    origin.construction === previous.construction && origin.root === previous.root && origin.callerBindings === previous.callerBindings &&
+    origin.owner === previous.owner && origin.region === previous.region && origin.selection === previous.selection &&
+    origin.activation === previous.activation && origin.targetBindings === previous.targetBindings)), true,
+  "reverse enumeration preserves original source identities rather than matching equal native types");
+  assert.equal(reversedOpen.boundaries.includes(boundary), true, "reverse enumeration retains the exact same original boundary");
+  const reversedUnavailable = create({...original.input,
+    emissionRequests: Object.freeze([...original.input.emissionRequests].reverse()), genericBindingsFor(declaration, bindings) {
+      return declaration === failing.origin.owner ? Object.freeze({kind: "unresolved", reason: "separate constructor origin unavailable"})
+        : original.input.genericBindingsFor(declaration, bindings);
+    }}, Object.freeze([...original.requests].reverse()));
+  assert.equal(reversedUnavailable(request, distinct.origins.occurrence).kind, "resolved",
+    "reverse enumeration preserves an unrelated root when a different exact region is unavailable");
+  assert.equal(reversedUnavailable(selectedRequest, failing.origins.occurrence).kind, "unavailable",
+    "reverse enumeration preserves the actual failing region rather than whichever failure was visited last");
+  const missing = create({...original.input, sourceStorage: Object.freeze({...original.input.sourceStorage,
+    constructionFor(invocation, bindings) {
+      const selected = original.input.sourceStorage.constructionFor(invocation, bindings);
+      return selected.kind === "unresolved" ? selected : Object.freeze({...selected,
+        alternatives: Object.freeze(selected.alternatives.filter(alternative => alternative.root !== distinct.origin.root.root))});
+    },
+  })}, original.requests)(request, distinct.origins.occurrence);
+  assert.equal(missing.kind, "unavailable", "a required constructor source without any selected execution is never an invented empty success");
+  assert.equal(missing.alternatives.length, 0, "no unavailable source execution is filled by an equal native constructor");
+  const foreignLayer = {...request, source: {...request.source, layer: {...request.source.layer}}};
+  assert.equal(create(original.input, [foreignLayer])(foreignLayer, distinct.origins.occurrence).kind, "unavailable",
+    "a copied construction layer never acquires source evidence from an equal native shape");
+}
+
 test("constructor, super and instance-initializer origins use actual construction and per-activation binding rows", () => {
   observed(constructorSource, verifyConstructorOrigins);
 });
 
+test("construction origin status preserves known alternatives and remains scoped to the actual root and region", () => {
+  observed(constructorDomainSource, verifyConstructorStatuses);
+});
+
 test("uninjected native, callable and constructor source-origin controls continue to emit ordinary Rust", () => {
-  for (const [name, text] of [["native/module", nativeSource], ["callable", callableSource], ["constructor", constructorSource]]) {
+  for (const [name, text] of [["native/module", nativeSource], ["callable", callableSource], ["constructor", constructorSource],
+    ["constructor domain", constructorDomainSource]]) {
     const result = compileRust({surfaces: ["js"], files: {"index.ts": text}}).result;
     assert.equal(result.diagnostics.length, 0, name + ": genuine source has no rejection");
     assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true, name + ": genuine source emits Rust without observation");

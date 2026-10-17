@@ -3,7 +3,7 @@ import test from "node:test";
 import { spawnSync } from "node:child_process";
 import { targetUseSiteRef } from "@tsonic/target-api/analysis";
 import { createTargetSourceProgram, sourceClassFieldHasStorage } from "@tsonic/target-api/source";
-import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustTargetProgram } from "../../../dist/analysis/program/index.js";
 import { prepareRustEmissionContextRequests, rustEmissionIdentityBindings } from "../../../dist/analysis/callables/emission-contexts.js";
 import { rustEmissionDeclarationBindings } from "../../../dist/analysis/callables/emission-requests.js";
@@ -103,6 +103,16 @@ export async function invoke(value: number): Promise<number> {
 
 const scalarReturnSource = `
 export function owner(value: boolean): boolean { return value; }
+`;
+
+const lexicalIndexSource = `
+export function accumulatedIndex(): boolean {
+  const values = [3n];
+  let indexReads = 0;
+  const index = (): number => { indexReads += 1; return 0; };
+  const accumulated = values[index()] += values[0];
+  return accumulated === 6n && values[0] === 6n && indexReads === 1;
+}
 `;
 
 const ownedCaptureSource = `
@@ -320,6 +330,33 @@ export function make<Outer>(captured: Outer): <Value>(value: Value) => Outer {
   }
 });
 
+test("module and non-callable metadata owners never enter callable TypeParameterList extraction", () => {
+  const result = compileRust({surfaces: [], files: {"index.ts": `
+export const seed: number = 1;
+export enum State { First = 1, Second = 2 }
+class Item { static value: number = 2; field: number = 3; }
+export function read(): number { return seed + Item.value + new Item().field; }
+export function state(): State { return State.First; }
+`}}).result;
+  assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+  assert.equal(result.artifacts.some(artifact => artifact.path.endsWith(".rs")), true,
+    "the actual module, enum, class and static/instance metadata requests emit without a non-callable AST panic");
+});
+
+test("annotated native parameter and return carriers stay selected at their declaration owners", () => {
+  for (const surfaces of [[], ["js"]]) {
+    const result = compileRust({surfaces, files: {"index.ts": `
+import type {float32, int64} from "@tsonic/core/types.js";
+export function narrow(value: float32): float32 { return value; }
+export function wide(value: int64): int64 { return value; }
+`}}).result;
+    assert.equal(result.diagnostics.length, 0, result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
+    const output = rustSourceText(result);
+    assert.equal(/\bf32\b/u.test(output), true, "the actual native f32 carrier is required and retained");
+    assert.equal(/\bi64\b/u.test(output), true, "the actual native i64 carrier is required and retained");
+  }
+});
+
 test("higher-ranked emission identity bindings preserve distinct actual binder identities", () => {
   const first = Object.freeze({ kind: "bound", binderIdentity: "first", identity: "region", name: "region" });
   const second = Object.freeze({ kind: "bound", binderIdentity: "second", identity: "region", name: "region" });
@@ -445,7 +482,7 @@ function observeNativeProducerSeal(producers, observations) {
 
 test("the planner phase label starts at publication, after the actual callable seal and reachability (instrumented load observation)", () => {
   const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } },
-    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource + ownedCaptureSource } };
+    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource + ownedCaptureSource + lexicalIndexSource } };
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
@@ -636,6 +673,24 @@ const lexicalContext = compiled.result.program.physicalEmissionContexts.contexts
   context.use.subject === lexicalDeclaration && context.use.role === "native-body");
 assert.equal(lexicalContext !== undefined && lexicalContext.bindings === lexicalReturn[0].bindings, true,
   "the complete published body consumes the original immutable selecting-owner binding object");
+const indexProducer = observations.requestInput.nativeProducers.producers.find(producer => {
+  const parent = sourceAst.parent(producer.declaration);
+  const name = parent === undefined ? undefined : sourceAst.name(parent);
+  return sourceAst.is.IsArrowFunction(producer.declaration) && name !== undefined && sourceAst.text(name) === "index";
+});
+assert.equal(indexProducer !== undefined, true, "the original compound index arrow has its selected native body producer");
+const indexDeclaration = indexProducer.declaration;
+const indexEnvironment = observations.requestInput.lexicalFunctions.forDeclaration(indexDeclaration);
+assert.equal(indexEnvironment?.kind === "resolved" && indexEnvironment.valueObserved === false, true,
+  "an actual call-only lexical body is not an observed stored callable value");
+const indexReturns = observations.requests.value.filter(request => request.kind === "return" && request.subject === indexDeclaration);
+assert.equal(indexReturns.length, 1, "the exact call-only index body has one canonical return preparation request");
+assert.equal(indexReturns[0].owner === indexDeclaration, true, "the index return remains owned by its original arrow body");
+assert.equal(observations.requests.value.some(request => request.kind === "value" && request.subject === indexDeclaration), false,
+  "preparing a lexical body never manufactures a stored callable value demand");
+for (const capture of indexEnvironment.captures) assert.equal(observations.requests.value.some(request =>
+  request.kind === "value" && request.subject === capture.reference && request.owner === indexDeclaration), true,
+  "the actual index mutation capture keeps its original native body-owned source request");
 const scalar = observations.published.nativeProducers.producers.find(producer => {
   const name = sourceAst.name(producer.declaration);
   return name !== undefined && sourceAst.text(name) === "owner";

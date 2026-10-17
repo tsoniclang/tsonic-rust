@@ -55,7 +55,8 @@ export type RustPhysicalEmissionSourceOrigins = {
       readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[] }
   | { readonly kind: "open"; readonly subject: SourceStorageSubject;
       readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[]; readonly boundaries: readonly SourceStorageDomainBoundary[] }
-  | { readonly kind: "unavailable"; readonly reason: string }
+  | { readonly kind: "unavailable"; readonly reason: string;
+      readonly alternatives: readonly RustPhysicalEmissionSourceOrigin[]; readonly boundaries: readonly SourceStorageDomainBoundary[] }
 );
 
 export type RustEmissionReturnDestination =
