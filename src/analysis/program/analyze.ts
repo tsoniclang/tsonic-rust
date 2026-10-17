@@ -60,10 +60,12 @@ import { analyzeRustReceiverStorage } from "../project-types/receiver-storage.js
 import { selectRustCallableOwnershipCarrier } from "../callables/ownership-carriers.js";
 import { createSourceStorageBudget, defaultSourceStorageLimits } from "@tsonic/target-api/analysis";
 import { analyzeRustSourcePackageComponents, type RustSourcePackageComponentClassifications } from "./source-package-components.js";
+import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
 
 interface RustSourceStageOutput {
   readonly lexicalFunctions: RustLexicalFunctionQueries;
   readonly sourcePackageComponents: RustSourcePackageComponentClassifications;
+  readonly sourceTypes: Pick<RustSourceTypeRegistry, "structuralObjectForType">;
 }
 
 export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bin" | "lib"): RustSourceStageOutput | undefined {
@@ -631,7 +633,8 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   } finally {
     context.diagnostics.splice(selectedIssuePosition, 0, ...context.diagnostics.splice(effectDiagnosticEnd));
   }
-  return Object.freeze({ lexicalFunctions, sourcePackageComponents: sourcePackageComponents.plan });
+  return Object.freeze({ lexicalFunctions, sourcePackageComponents: sourcePackageComponents.plan,
+    sourceTypes: Object.freeze({ structuralObjectForType: sourceTypes.structuralObjectForType }) });
 }
 
 function collectSourcePackageBoundaries(
