@@ -144,11 +144,7 @@ enum NativeValue {
 #[test]
 fn native_enum_absence_observations() {
     for flag in [true, false] {
-        let selected = if flag {
-            Some(NativeValue::First)
-        } else {
-            None
-        };
+        let selected = if flag { Some(NativeValue::First) } else { None };
         let joined = if flag {
             Some(NativeValue::Second)
         } else {
@@ -194,7 +190,7 @@ ${body}
 
   if (surfaces[0] === "js") for (const [label, body] of [
     ["console log", "export function use(value: Value): void { console.log(value); }"],
-    ["JSON stringify", "export function use(value: Value): string { return JSON.stringify(value); }"],
+    ["JSON stringify", "export function use(value: Value): string | undefined { return JSON.stringify(value); }"],
     ["Number valueOf", "export function use(value: Value): number { return value.valueOf(); }"],
     ["Number method value", "export function use(value: Value): () => number { return value.valueOf; }"],
   ]) {
