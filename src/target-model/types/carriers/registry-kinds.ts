@@ -94,6 +94,8 @@ export const kindsCarrierRegistry: readonly TargetCarrierRegistryEntry<TargetTyp
     kinds: ["target-specific"],
     declaration: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
     counterpart: { module: "src/target-model/types/model.ts", symbol: "TargetTypeRef" },
+    divergence: { register: "S11-11",
+      reason: "This structural arm includes native Rust [T; N], whose exact usize extent is part of its type; CLR arrays have no const-generic extent. This explains the fixed-array alternative only; every concrete carrier retains its own counterpart and native-constraint proof." },
     frozen: false,
   },
   {
