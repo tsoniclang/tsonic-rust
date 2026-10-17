@@ -8,6 +8,7 @@ import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
+import { rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 
 const surfaces = [["native", []], ["js", ["js"]]];
 
@@ -458,7 +459,8 @@ if (!run(true) || !run(false)) throw new Error("enum composition");
       const resultCarrier = program.records.runtimeCarrier.get(node)?.carrier;
       const trueCarrier = program.records.runtimeCarrier.get(expression.WhenTrue)?.carrier;
       const falseCarrier = program.records.runtimeCarrier.get(expression.WhenFalse)?.carrier;
-      assert.equal(resultCarrier?.kind, "target-named", "the selected result is the native enum, never the checker's numeric approximation");
+      assert.equal(rustSourceTypeCarrierValue(resultCarrier)?.shape === "enum", true,
+        "the selected result is the native enum, never the checker's numeric approximation");
       assert.equal(rustTargetTypeRefEquals(resultCarrier, trueCarrier), true, "the true branch retains the same exact enum carrier");
       assert.equal(rustTargetTypeRefEquals(resultCarrier, falseCarrier), true, "the false branch retains the same exact enum carrier");
     }

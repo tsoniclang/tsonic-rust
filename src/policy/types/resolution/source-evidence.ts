@@ -37,7 +37,6 @@ import { rustGenericCallableTargetType, rustNativeFutureCallableResult } from ".
 import { rustTypeParameterFromSourceContract } from "../../../target-model/names/type-parameters.js";
 import { rustCallableOrigin } from "../callables/callable-origins.js";
 import { closeRustSuspendedStorage } from "../storage/suspended-storage.js";
-import { resolveRustRetainedResult } from "./retained-results.js";
 import { rustSourceSelectionUsesExactBindings } from "./bound-source-selection.js";
 import { bindRustCallableEnvironment, resolveRustCallableEnvironment } from "./callable-environments.js";
 import { retainRustCallableStructuralStorage } from "./structural-instantiations.js";
@@ -146,7 +145,7 @@ export function resolveRustCallableStorageCarrier(
         if (checkedTemplate.kind === "unresolved") return undefined;
         const templateCarrier = resolveRustTargetType(checkedTemplate.type, { ...context,
           currentSemantics: context.semanticsFor(producer.subject.node), sourceStorageSubject: undefined,
-          sourceTypeParameterSubstitutions: new Map(), callableRepresentation: "signature" }, options, new Set(resolving));
+          sourceTypeParameterSubstitutions: new Map(), callableRepresentation: "signature" }, options, new Set());
         const templateProtocol = rustCallableProtocol(templateCarrier);
         if (templateProtocol === undefined || selectedProtocol !== undefined &&
           (selectedProtocol.parameters.length !== templateProtocol.parameters.length ||
@@ -191,20 +190,18 @@ function resolveRustCallableSignatureCarrier(
   const genericContract = context.sourceLifetimes.contractFor(declaration);
   const parameters = callable.parameters.map(parameter => {
     const selected = resolveRustSignatureParameterEvidence(parameter, context, options, resolving);
-    return selected === undefined ? undefined : closeRustSuspendedStorage(selected, [], genericContract, "field");
+    return selected === undefined ? undefined : closeRustSuspendedStorage(selected, "field");
   });
   if (parameters.some((parameter) => parameter === undefined)) {
     return undefined;
   }
   const returned = declaration === undefined ? undefined : context.sourceStorage.subject(declaration, "return");
-  const sourceResult = resolveRustTypeComponentEvidence(
+  const result = resolveRustTypeComponentEvidence(
     callable.result,
     { ...context, sourceStorageSubject: returned?.kind === "resolved" ? returned.subject : undefined },
     options,
     resolving,
   );
-  const result = sourceResult === undefined ? undefined : resolveRustRetainedResult(
-    declaration, callable.result.selectedType, sourceResult, parameters, context, options, resolving)?.carrier;
   if (result === undefined) return undefined;
   if (genericContract !== undefined && genericContract.parameters.length > 0 &&
     genericContract.parameters.every(parameter => parameter.kind === "type")) {

@@ -606,7 +606,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   const fallibility = recordFallibilityFacts(walk, projectSourceFiles);
   if (fallibility === undefined || context.diagnostics.length !== selectedIssuePosition) return;
   recordResourceManagementFacts(walk);
-  recordFutureValueFacts(walk);
+  recordFutureValueFacts(walk, fallibility.sourceErrors);
   const sourcePackageComponents = analyzeRustSourcePackageComponents(context, outputType, fallibility.effectsFor);
   if (sourcePackageComponents.kind === "rejected") {
     context.diagnostics.push(...sourcePackageComponents.diagnostics);
@@ -621,7 +621,7 @@ export function analyzeRustProgram(context: RustAnalysisContext, outputType: "bi
   }
   physicalIssues.forEach(callableIssue);
   if (context.diagnostics.length !== selectedIssuePosition) return;
-  recordRustDeferredProducerEffects(walk);
+  recordRustDeferredProducerEffects(walk, fallibility.sourceErrors);
   const lexicalFunctions = finalizeRustLexicalFunctionQueries(lexical, context.source, context.records, context.sourceLifetimes,
     callableValues.nativeStorage, callableValues.native);
   const effectDiagnosticEnd = context.diagnostics.length;

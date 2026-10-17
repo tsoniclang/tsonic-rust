@@ -19,7 +19,7 @@ import {
 import { allocateRustSyntheticName } from "../names/synthetic.js";
 import { planRustIndexedRecordStorage } from "../objects/indexed-records.js";
 import { diagnosticInput, sourceTypePath } from "../program/plan-context.js";
-import { effectivePlannedExpressionCarrier, requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
+import { requireExpressionCarrier, rustOperationFact } from "./fundamentals.js";
 import {
   KindSpreadAssignment,
   ObjectLiteralProperty_Value,
@@ -181,18 +181,16 @@ export function planRecordLiteral(node: Node, context: RustPlanContext): RustExp
         field?.method !== true) {
         return undefined;
       }
-      const independent = context.input.program.records.receiverIndependentMethod.get(contribution.expression);
-      const storageCarrier = independent?.carrier ?? context.input.program.structuralShapes.field(
-        fact.resultCarrier, field.storageIndex,
-      )?.methodStorageCarrier;
+      const physicalField = context.input.program.structuralShapes.field(fact.resultCarrier, field.storageIndex);
+      const storageCarrier = physicalField?.methodStorageCarrier;
       const rawStorageCarrier = field.presence === "optional"
         ? rustOptionElementCarrier(storageCarrier)
         : storageCarrier;
-      if (rawStorageCarrier === undefined ||
-        !rustTargetTypeRefEquals(
-          independent?.carrier ?? effectivePlannedExpressionCarrier(contribution.expression, context),
-          rawStorageCarrier,
-        )) {
+      const construction = physicalField?.methodConstructions?.find(selected => selected.object === node &&
+        selected.property === contribution.property && selected.expression === contribution.expression &&
+        selected.storageIndex === contribution.targetStorageIndex);
+      if (rawStorageCarrier === undefined || construction === undefined ||
+        !rustTargetTypeRefEquals(construction.destinationCarrier, rawStorageCarrier)) {
         return undefined;
       }
       const bindingName = allocateRustSyntheticName(

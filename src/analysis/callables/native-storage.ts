@@ -193,8 +193,12 @@ export function createRustNativeStorageQueries(input: {
             fail("Native aggregate storage requires its exact structural field layout owner.");
             return undefined;
           }
-          if (field.storage === "stored" && field.nativeMethod !== true)
-            children.push(field.methodStorageCarrier ?? sourceField.type);
+          if (sourceField.method === true) {
+            if (field.method !== true || field.methodStorageCarrier === undefined) {
+              fail("Native aggregate method storage requires its canonical callable field layout owner.");
+              return undefined;
+            }
+          } else if (field.storage === "stored" && field.nativeMethod !== true) children.push(sourceField.type);
         }
       } else if (type.kind !== "function-pointer") children.push(...rustTargetTypeChildren(type));
       for (const child of [...children, ...(variants?.map(variant => variant.carrier) ?? [])]) {
@@ -421,22 +425,6 @@ export function createRustNativeStorageQueries(input: {
         }
         return elements.every((element, index) => element === current.elements[index]) ? current
           : Object.freeze({ ...current, elements: Object.freeze(elements) });
-      }
-      const structural = rustStructuralObjectCarrierValue(current);
-      if (structural !== undefined) {
-        for (const [index, sourceField] of structural.fields.entries()) {
-          const field = input.structuralShapes.field(current, index);
-          if (field === undefined) return fail("Native aggregate storage requires its exact structural field layout owner.");
-          if (sourceField.method === true) {
-            if (field.methodStorageCarrier === undefined)
-              return fail("Native aggregate method storage requires its canonical callable field layout owner.");
-            continue;
-          }
-          const nested = containsCallable(sourceField.type, depth + 1);
-          if (nested !== false) return nested === undefined ? undefined
-            : fail("Native callable storage requires its existing physical aggregate layout owner.");
-        }
-        return current;
       }
       const variants = rustUnionAlternatives(current, input.definitions);
       if (variants !== undefined) {
