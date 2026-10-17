@@ -47,6 +47,9 @@ const cases = [
   ["forward-pending", `async function later<Value>(value: Value, pending: Promise<void>) { await pending; return value; }
     async function outer3<Value>(value: Value): Promise<void> { await later(value, Promise.resolve(undefined)); }`, "outer3"],
   ["resolve", "function wrap<Value>(value: Value): void { void Promise.resolve(value); }", "wrap"],
+  ["promise-like-reaction", `function likeReaction<Value>(value: Value): void {
+    const pending: PromiseLike<number> = Promise.resolve(0); void pending.then(() => value);
+  }`, "likeReaction"],
   ["named-executor", `function namedExecutor<Value>(value: Value) {
     function execute(resolve: (value: Value | PromiseLike<Value>) => void): void { resolve(value); }
     return new Promise<Value>(execute);
