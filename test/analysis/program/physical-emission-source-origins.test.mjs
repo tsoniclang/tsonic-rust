@@ -35,6 +35,7 @@ export function value(text: string): boolean { return new Item(text).field; }
 `;
 
 const constructorDomainSource = constructorSource + `
+abstract class Unselected {}
 class Leaf { ready: boolean = "leaf".includes("l"); }
 class Other {
   field: boolean;
@@ -42,7 +43,7 @@ class Other {
 }
 type Identity = <Value>(value: Value) => Value;
 function create(): Identity {
-  return <Value>(value: Value): Value => { new Other("known"); return value; };
+  return <Value>(value: Value): Value => { const Constructor = Other; new Constructor("known"); return value; };
 }
 export function independentValue(text: string): boolean {
   const first = new Other(text);
@@ -410,6 +411,82 @@ function verifyConstructorStatuses(program, observations, create) {
   const foreignLayer = {...request, source: {...request.source, layer: {...request.source.layer}}};
   assert.equal(create(original.input, [foreignLayer])(foreignLayer, distinct.origins.occurrence).kind, "unavailable",
     "a copied construction layer never acquires source evidence from an equal native shape");
+  const storage = original.input.sourceStorage;
+  const ast = storage.source.ast;
+  const unselected = ast.statements(program.sourceFiles[0]).find(node => ast.is.IsClassDeclaration(node) &&
+    ast.text(ast.name(node)) === "Unselected");
+  assert.equal(unselected !== undefined, true, "the mixed-domain control has an actual checked unselected class");
+  assert.equal(original.requests.some(request => request.source.kind === "construction" &&
+    request.source.plan.definition.declaration === unselected), false, "the actual abstract class is not a selected construction root");
+  const foreignSubject = storage.subjectFor(unselected);
+  const foreignBindings = storage.bindingsForLexicalOwner(unselected);
+  assert.equal(foreignSubject.kind !== "unresolved" && foreignBindings.kind === "resolved", true,
+    "the foreign constructor value uses genuine checked source subject and original lexical binding tokens");
+  const foreign = storage.storageProducersFor(foreignSubject.subject, foreignBindings.bindings);
+  assert.equal(foreign.kind === "complete" && foreign.producers.length > 0 &&
+    foreign.producers.every(producer => producer.subject.node === unselected), true,
+    "the unselected value has its real original class producers, not a fabricated native carrier");
+  const invocation = callable.origin.invocation;
+  const checked = storage.source.semantics.forNode(invocation).operations.call(invocation);
+  assert.equal(checked !== undefined, true, "the mixed-domain control retains its exact checked constructor call");
+  assert.equal(ast.is.IsIdentifier(checked.sourceCallee.expression) &&
+    ast.text(checked.sourceCallee.expression) === "Constructor", true,
+    "the real checked call follows a source constructor alias rather than spelling the selected class");
+  const callee = storage.subjectFor(checked.sourceCallee.expression);
+  assert.equal(callee.kind !== "unresolved", true, "the actual constructor callee has its canonical source subject");
+  const mixedBoundary = Object.freeze({kind: "opaque-result", subject: callee.subject,
+    exposure: invocation, bindings: callable.origin.callerBindings});
+  const mixedStorage = Object.freeze({...storage,
+    constructionFor(call, bindings) {
+      return call === invocation && bindings === callable.origin.callerBindings
+        ? Object.freeze({kind: "unresolved", reason: "controlled actual constructor domain remains open"})
+        : storage.constructionFor(call, bindings);
+    },
+    storageProducersFor(subject, bindings) {
+      const selected = storage.storageProducersFor(subject, bindings);
+      return subject !== callee.subject || bindings !== callable.origin.callerBindings || selected.kind === "unresolved" ? selected
+        : Object.freeze({kind: "open", producers: Object.freeze([...selected.producers, ...foreign.producers]),
+          boundaries: Object.freeze([...selected.kind === "open" ? selected.boundaries : [], mixedBoundary])});
+    },
+  });
+  const mixedPrepare = create({...original.input, sourceStorage: mixedStorage}, original.requests);
+  const mixed = mixedPrepare(openRequest, callable.origins.occurrence);
+  assert.equal(mixed.kind, "unavailable", "one unselected class producer cannot hide the known root's actual unavailable source path");
+  assert.equal(mixed.reason, "controlled actual constructor domain remains open", "the original unavailable constructor reason is preserved");
+  assert.equal(mixed.boundaries.includes(mixedBoundary), true, "the mixed class domain retains its exact original open boundary");
+  assert.equal(mixed.alternatives.some(origin => origin.kind === "construction" &&
+    origin.root.root === callable.origin.root.root && origin.invocation !== invocation), true,
+    "the same root retains its independently known closed construction alternatives");
+  assert.equal(mixedPrepare(independentRequest, independent.origins.occurrence).kind, "resolved",
+    "a mixed class domain cannot poison an unrelated original constructor root");
+  const reversedMixed = create({...original.input, sourceStorage: mixedStorage,
+    emissionRequests: Object.freeze([...original.input.emissionRequests].reverse())}, Object.freeze([...original.requests].reverse()));
+  assert.equal(reversedMixed(openRequest, callable.origins.occurrence).kind, "unavailable",
+    "mixed-domain status is not whichever root happened to be visited first");
+  assert.equal(reversedMixed(independentRequest, independent.origins.occurrence).kind, "resolved",
+    "reverse enumeration retains the unrelated root's complete proof");
+  const whollyForeign = Object.freeze({...mixedStorage,
+    storageProducersFor(subject, bindings) {
+      return subject === callee.subject && bindings === callable.origin.callerBindings
+        ? Object.freeze({kind: "open", producers: foreign.producers, boundaries: Object.freeze([mixedBoundary])})
+        : storage.storageProducersFor(subject, bindings);
+    },
+  });
+  const foreignPrepare = create({...original.input, sourceStorage: whollyForeign}, original.requests);
+  const foreignRows = foreignPrepare(openRequest, callable.origins.occurrence);
+  assert.equal(foreignRows.kind, "resolved",
+    "an actual entirely foreign class domain cannot acquire the independently closed original constructor root");
+  assert.equal(foreignRows.alternatives.every(origin => origin.kind === "construction" &&
+    origin.invocation !== invocation && origin.root.root === callable.origin.root.root), true,
+    "unassociated foreign invocations never manufacture original construction or activation rows");
+  assert.equal(foreignPrepare(independentRequest, independent.origins.occurrence).kind, "resolved",
+    "an unavailable foreign invocation is not a global failure for every constructor root");
+  const reversedForeign = create({...original.input, sourceStorage: whollyForeign,
+    emissionRequests: Object.freeze([...original.input.emissionRequests].reverse())}, Object.freeze([...original.requests].reverse()));
+  const reversedForeignRows = reversedForeign(openRequest, callable.origins.occurrence);
+  assert.equal(reversedForeignRows.kind, foreignRows.kind, "wholly foreign status does not depend on request enumeration");
+  assert.equal(reversedForeignRows.alternatives.length, foreignRows.alternatives.length,
+    "reverse enumeration preserves only the actual independently closed construction rows");
 }
 
 test("constructor, super and instance-initializer origins use actual construction and per-activation binding rows", () => {

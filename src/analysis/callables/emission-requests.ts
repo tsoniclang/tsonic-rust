@@ -170,6 +170,7 @@ export function prepareRustPhysicalCallableEmissionRequests(
     request(owner, subject, role, { kind: "operand" }, sourceOwner);
   };
   const producer = (owner: Node, subject: Node, declaration: Node, carrier: TargetTypeRef): void => {
+    if (rustFrameCallableValue(carrier) !== undefined) return;
     request(owner, subject, "native-producer", { kind: "producer", declaration, carrier }, subject);
   };
   const inputRole = (value: SourceValueInput): string => value.slot.kind +

@@ -482,7 +482,8 @@ function observeNativeProducerSeal(producers, observations) {
 
 test("the planner phase label starts at publication, after the actual callable seal and reachability (instrumented load observation)", () => {
   const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } },
-    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource + ownedCaptureSource + lexicalIndexSource } };
+    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource + ownedCaptureSource + lexicalIndexSource,
+      "frames.ts": frameSource } };
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
@@ -496,6 +497,7 @@ test("the planner phase label starts at publication, after the actual callable s
   const identityUrl = new URL("../../../dist/analysis/callables/generic-identities.js", import.meta.url).href;
   const dispatchUrl = new URL("../../../dist/analysis/callables/generic-dispatch.js", import.meta.url).href;
   const carriersUrl = new URL("../../../dist/target-model/types/carriers/generic-callables.js", import.meta.url).href;
+  const frameCarriersUrl = new URL("../../../dist/target-model/types/carriers/frame-callables.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-instrumented-callable-publication-proof";
   const registryObservation = `export function createRustCallableValuePlanRegistry() { return globalThis[Symbol.for(${JSON.stringify(key)})].registry(observedCreateRustCallableValuePlanRegistry()); }`;
@@ -621,6 +623,7 @@ registerHooks({ load(url, context, nextLoad) {
   return { ...loaded, source: observed + "\\n" + selection.extension };
 } });
 const carriers = await import(${JSON.stringify(carriersUrl)});
+const frameCarriers = await import(${JSON.stringify(frameCarriersUrl)});
 observations.registry = registry => (${observeCallablePublication.toString()})(registry, assert, carriers, observations);
 const { compileRust } = await import(${JSON.stringify(helperUrl)});
 const compiled = compileRust(${JSON.stringify(options)});
@@ -636,6 +639,17 @@ assert.equal(observations.seals, 1, "one actual late callable seal");
 assert.equal(observations.producerSeals, 1, "one actual terminal native producer seal remains inside the measured window");
 assert.equal(observations.publications, 1, "one actual planner publication");
 assert.equal(observations.requests.kind, "resolved", "only an admitted complete request inventory is published");
+const actualFrames = observations.requestInput.nativeProducers.producers.filter(producer => {
+  const operation = observations.requestInput.records.targetOperation.get(producer.declaration);
+  return operation?.kind === "closure" && frameCarriers.rustFrameCallableValue(operation.resultCarrier) !== undefined;
+});
+assert.equal(actualFrames.length > 0 && compiled.result.program.callableValues.frames.definitions.length > 0, true,
+  "the unchanged native frame source has its actual selected frame bodies and owning activation");
+assert.equal(observations.requests.value.some(request => request.kind === "producer" &&
+  frameCarriers.rustFrameCallableValue(request.carrier) !== undefined), false,
+  "an actual frame is not an ordinary native Callable producer just because it has a callable protocol");
+assert.equal(actualFrames.every(producer => observations.requests.value.some(request => request.kind === "return" &&
+  request.subject === producer.declaration)), true, "actual frame body return selection stays in the same canonical request vector");
 assert.equal(observations.requestSelections, 1, "the source-use owner is never replayed after sealing");
 assert.equal(observations.storageFactories, 1, "the single actual program constructs one canonical physical storage owner");
 assert.equal(observations.preparedConsumers, 2, "both actual early consumer owners use the canonical prepared view");

@@ -55,10 +55,15 @@ type ConstructionState =
   | { readonly kind: "open"; readonly boundaries: readonly SourceStorageDomainBoundary[] };
 type ConstructionStatus = ConstructionState & {
   readonly invocation: Node;
-  readonly root: Node | undefined;
+  readonly root: Node;
   readonly owner: Node | undefined;
   readonly region: Node | undefined;
 };
+type ConstructionRootSelection =
+  | { readonly kind: "complete"; readonly roots: readonly Node[] }
+  | { readonly kind: "open"; readonly roots: readonly Node[]; readonly boundaries: readonly SourceStorageDomainBoundary[] }
+  | { readonly kind: "unavailable"; readonly roots: readonly Node[]; readonly reason: string;
+      readonly boundaries: readonly SourceStorageDomainBoundary[] };
 type ConstructionTraceState = {
   readonly boundaries: readonly SourceStorageDomainBoundary[];
   readonly failure: string | undefined;
@@ -206,35 +211,46 @@ export function createRustEmissionSourceOriginPreparation(input: RustEmissionSou
   const constructionStatuses: ConstructionStatus[] = [];
   const constructionRoots = new Set(requests.flatMap(request => request.source.kind === "construction"
     ? [request.source.plan.definition.declaration] : []));
-  const forInvocationRoots = (demand: RustPhysicalCallableEmissionRequest, caller: RustPhysicalEmissionSourceOrigin | undefined,
-    root: Construction | undefined, select: (root: Node) => void): boolean => {
-    if (root !== undefined && !storage.source.ast.is.IsNewExpression(demand.subject)) {
-      select(root.root);
-      return true;
-    }
+  const invocationRoots = (demand: RustPhysicalCallableEmissionRequest, caller: RustPhysicalEmissionSourceOrigin | undefined,
+    root: Construction | undefined): ConstructionRootSelection => {
+    if (root !== undefined && !storage.source.ast.is.IsNewExpression(demand.subject))
+      return { kind: "complete", roots: [root.root] };
     const checked = storage.source.semantics.forNode(demand.subject).operations.call(demand.subject);
-    const declaration = checked === undefined ? undefined
-      : storage.source.navigation.sourceReferenceFor(checked.sourceCallee.expression)?.declaration;
-    if (declaration !== undefined && constructionRoots.has(declaration)) {
-      select(declaration);
-      return true;
-    }
-    if (caller !== undefined && checked !== undefined) {
-      const subject = storage.subjectFor(checked.sourceCallee.expression);
-      const selected = subject.kind === "unresolved" ? subject : storage.storageProducersFor(subject.subject, sourceBindings(caller));
-      if (selected.kind !== "unresolved" && selected.producers.length !== 0 &&
-        selected.producers.every(producer => constructionRoots.has(producer.subject.node))) {
-        for (const producer of selected.producers) select(producer.subject.node);
-        return selected.kind === "complete";
+    if (checked === undefined) return { kind: "unavailable", roots: [], boundaries: [],
+      reason: "A source construction requires its original checked invocation." };
+    const bindings = caller === undefined ? storage.bindingsForLexicalOwner(demand.subject)
+      : { kind: "resolved" as const, bindings: sourceBindings(caller) };
+    if (bindings.kind === "unresolved") return { kind: "unavailable", roots: [], boundaries: [], reason: bindings.reason };
+    const subject = storage.subjectFor(checked.sourceCallee.expression);
+    if (subject.kind === "unresolved") return { kind: "unavailable", roots: [], boundaries: [], reason: subject.reason };
+    const selected = storage.storageProducersFor(subject.subject, bindings.bindings);
+    if (selected.kind === "unresolved") return { kind: "unavailable", roots: [], boundaries: [], reason: selected.reason };
+    const roots: Node[] = [];
+    let unavailableRoot = selected.producers.length === 0;
+    for (const producer of selected.producers) {
+      if (producer.subject.kind !== "value" || producer.subject.projection.length !== 0 ||
+        !constructionRoots.has(producer.subject.node)) {
+        unavailableRoot = true;
+        continue;
       }
+      roots.push(producer.subject.node);
     }
-    return false;
+    const boundaries = selected.kind === "open" ? selected.boundaries : [];
+    if (unavailableRoot) return { kind: "unavailable", roots, boundaries,
+      reason: "A source construction domain contains no emitted original root for at least one actual producer." };
+    return selected.kind === "open" ? { kind: "open", roots, boundaries } : { kind: "complete", roots };
   };
   const invocationStatus = (demand: RustPhysicalCallableEmissionRequest, caller: RustPhysicalEmissionSourceOrigin | undefined,
     root: Construction | undefined, state: ConstructionState): void => {
-    const selected = { ...state, invocation: demand.subject, owner: undefined, region: undefined };
-    if (!forInvocationRoots(demand, caller, root, root => constructionStatuses.push({ ...selected, root })))
-      constructionStatuses.push({ ...selected, root: undefined });
+    const selected = invocationRoots(demand, caller, root);
+    const boundaries = selected.kind === "complete" ? [] : selected.boundaries;
+    for (const root of selected.roots) {
+      constructionStatuses.push({ ...state, invocation: demand.subject, root, owner: undefined, region: undefined });
+      if (boundaries.length !== 0) constructionStatuses.push({ kind: "open", invocation: demand.subject,
+        root, owner: undefined, region: undefined, boundaries });
+      if (selected.kind === "unavailable" && state.kind !== "unavailable") constructionStatuses.push({ kind: "unavailable",
+        invocation: demand.subject, root, owner: undefined, region: undefined, reason: selected.reason });
+    }
   };
   const constructionOrigins = (request: RustEmissionSourceRequest, subject: SourceStorageSubject): Origins => {
     const source = request.source;
