@@ -2,19 +2,75 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust, rustSourceText } from "../../helpers/rust-session.mjs";
 import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
-import { Node_Name, createTargetSourceProgram } from "@tsonic/target-api/source";
+import { Node_Name, Node_Expression, createTargetSourceProgram } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
-import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType } from "../../../dist/target-model/types/index.js";
+import { rustAbsenceTargetType, rustUnitTargetType, rustCallableProtocol, rustSourcePrimitiveTargetType, rustJsPromiseTargetType } from "../../../dist/target-model/types/index.js";
 import { rustFrameCallableValue } from "../../../dist/target-model/types/carriers/frame-callables.js";
 import { rustSourceTypeCarrierValue } from "../../../dist/target-model/types/carriers/source-types.js";
 import { planCallableExpression, planRustCallableExpressionBody } from "../../../dist/backend/planner/expressions/callable.js";
 import { selectRustRuntimeCallableGenerics } from "../../../dist/policy/types/callables/runtime-callable-generics.js";
 import { rustLifetimeKey } from "../../../dist/target-model/lifetimes/index.js";
 import { rustFunctionValueLifetimeBinding } from "../../../dist/target-model/lifetimes/identity.js";
+import { sourceCallSelectedMemberMatches } from "../../../dist/backend/planner/expressions/calls/arguments.js";
+import { rustSourceCallArgumentCarriers } from "../../../dist/analysis/callables/source-call-lifetimes.js";
+import { rustRetainedCallSubstitutions } from "../../../dist/analysis/callables/retained-call-lifetimes.js";
 
 const surfaces = [["native", []], ["js", ["js"]]];
+
+for (const [surface, selected] of surfaces) {
+  test(`finalized source calls retain both logical async results and exact native body ABI (${surface})`, () => {
+    const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+import type { int32 } from "@tsonic/core/types.js";
+async function read(value: int32): Promise<int32> {
+  if (value < 0) throw new Error("negative");
+  return value;
+}
+export async function run(value: int32): Promise<int32> { return await read(value); }
+` } });
+    assert.equal(result.diagnostics.length, 0,
+      result.diagnostics.map(issue => `${issue.code}: ${issue.message}`).join("; "));
+    const program = result.program;
+    assert.equal(program !== undefined && result.plan !== undefined, true,
+      "the actual source async invocation is admitted before its ABI is consumed");
+    const ast = program.source.ast;
+    const pending = [...program.sourceFiles];
+    let call;
+    while (pending.length !== 0) {
+      const node = pending.pop();
+      if (ast.is.IsCallExpression(node) && ast.text(Node_Expression(ast, node)) === "read") call = node;
+      ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+    }
+    const fact = program.records.targetOperation.get(call);
+    const signature = program.records.selectedCall.get(call);
+    assert.equal(fact?.kind === "source-call" && signature !== undefined, true,
+      "the original source call has its exact checked selected signature");
+    assert.equal(fact.asyncBody !== undefined, surface === "js",
+      "only the selected JS Promise protocol separates its logical result from the direct native body");
+    const matches = (candidate, selectedSignature = signature) => sourceCallSelectedMemberMatches(candidate,
+      selectedSignature, selectedSignature.member.returnType, program.typeFamilies.normalize, program.projectTypes,
+      rustSourceCallArgumentCarriers(call, ast, program.records), program.typeDefinitions,
+      rustRetainedCallSubstitutions(program.records, call));
+    assert.equal(matches(fact), true, "logical source return and actual native invocation are both preserved");
+    for (const [label, changed, changedSignature] of [
+      ...(fact.asyncBody === undefined ? [] : [
+        ["foreign body", { ...fact, asyncBody: { ...fact.asyncBody, declaration: {} } }, signature],
+        ["wrong logical result", { ...fact, asyncBody: { ...fact.asyncBody,
+          logicalResultCarrier: rustJsPromiseTargetType(rustSourcePrimitiveTargetType("bool")) } }, signature],
+      ]),
+      ["wrong physical result", { ...fact, resultCarrier: rustSourcePrimitiveTargetType("bool") }, signature],
+      ["invented projection", { ...fact, resultProjection: { kind: "closed-native",
+        sourceCarrier: fact.asyncBody?.logicalResultCarrier ?? fact.resultCarrier, selectedCarrier: fact.resultCarrier } }, signature],
+      ["wrong selected operation", fact, { ...signature, member: { ...signature.member, id: "foreign" } }],
+      ["wrong selected parameter", fact, { ...signature, member: { ...signature.member,
+        parameters: signature.member.parameters.map(parameter => ({ ...parameter, type: rustSourcePrimitiveTargetType("bool") })) } }],
+    ]) {
+      assert.equal(matches(changed, changedSignature), false,
+        `${label}: neither source nor native ABI can bypass the finalized correspondence`);
+    }
+  });
+}
 
 test("source function lifetime binding preserves every exact formal and substituted outlives edge", () => {
   const first = { kind: "lifetime", declaration: {}, sourceName: "First",
