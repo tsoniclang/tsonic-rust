@@ -24,7 +24,7 @@ for (const surface of ["native", "js"]) {
       export function incomplete(): Promise<number> { return new Promise<number>(resolve => { resolve(); }); }
     ` } }));
     assert.equal(diagnostics.match(/TS\d+:/gu)?.length, 1, "exactly one original nonvoid arity error");
-    assert.match(diagnostics, /TS2554: Expected 1 arguments, but got 0\./u,
+    assert.match(diagnostics, /TS2794: Expected 1 arguments, but got 0\. Did you forget to include 'void' in your type argument to 'Promise'\?/u,
       "the native checked signature retains the precise nonvoid argument requirement");
     assert.doesNotMatch(diagnostics, /TSEXT\d+:/u,
       "the source arity refusal is not an extension fallback");
