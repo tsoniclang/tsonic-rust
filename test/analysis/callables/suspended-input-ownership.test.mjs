@@ -75,8 +75,12 @@ for (const surfaces of [[], ["js"]]) {
     const asynchronous = current.records.asyncFunction.get(owner);
     assert.equal(asynchronous !== undefined, true);
     if (surfaces.length !== 0) {
-      assert.equal(asynchronous.storage.kind, "lifetime");
-      assert.equal(asynchronous.storage.lifetime.identity, value.parameterCarrier.lifetime.identity);
+      assert.equal(asynchronous.lowering.kind, "settled", "the exact borrowed read completes before its Promise escapes");
+      const retained = current.context.callableValues.nativeStorage.parameterFor(current.ast.parameters(owner)[0]);
+      assert.equal(retained.kind === "selected" && retained.carrier.kind === "reference" &&
+        retained.carrier.lifetime?.kind === "parameter" &&
+        retained.carrier.lifetime.identity === value.parameterCarrier.lifetime.identity, true,
+      "the eager native body retains its exact enclosing input region, not a Promise storage lifetime");
       assert.equal(rustTargetTypeRefEquals(asynchronous.futureCarrier, rustJsPromiseTargetType(asynchronous.outputCarrier)), true,
         "the JS Promise carrier names its output only, with no storage lifetime argument");
     }

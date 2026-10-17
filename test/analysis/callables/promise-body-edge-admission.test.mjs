@@ -106,6 +106,6 @@ export async function read(): Promise<int32> { return await value(); }` }, compi
     true, "the existing result owner preserves the complete Promise wrapper, not a projected payload");
   assert.equal(rustDirectPromiseBodyCallee(context, call, carrier) === operation.asyncBody.declaration,
     true, "the same result contract admits the actual edge");
-  assert.equal(rustDirectPromiseBodyCallee(context, call, operation.resultCarrier), undefined,
+  assert.equal(rustDirectPromiseBodyCallee(context, call, operation.resultCarrier) === undefined, true,
     "the physical settled payload cannot masquerade as a logical JS Promise result");
 });

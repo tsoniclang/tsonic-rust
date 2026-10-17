@@ -34,8 +34,8 @@ await main();
   assertNoTargetDiagnostics(result.diagnostics);
   const source = artifactText(result, "src/index.rs");
   assert.equal(/impl<Value: Clone \+ 'static>/u.test(source), true, "owning captured generic payload");
-  assert.equal(/JsPromise<'static, \(\), rt::TsonicError>/u.test(source), true, "exact owning input promise");
-  assert.equal(/JsPromise<'static, String, rt::TsonicError>/u.test(source), true, "exact owning string result");
+  assert.equal(/JsPromise<\(\)>/u.test(source), true, "exact owning input promise");
+  assert.equal(/JsPromise<String>/u.test(source), true, "exact owning string result");
   assert.equal(/impl<'input|transmute|\.then\(|\.then_async\(/u.test(source), false,
     "closed owning inputs introduce no fictitious loan or continuation adapter");
   validateGeneratedProject("suspended-input-lifetimes", result.artifacts, { run: true });

@@ -5,6 +5,8 @@ import { Node_Expression, sourceEnclosingCallable } from "@tsonic/target-api/sou
 import { analyzeRustErrorEffects } from "../../../helpers/rust-error-analysis.mjs";
 import { rustAwaitSelectionLeaves } from "../../../../dist/target-model/types/await.js";
 import { rustTargetTypeRefEquals } from "../../../../dist/target-model/types/equality.js";
+import { rustJsValueTargetType } from "../../../../dist/target-model/types/carriers/js.js";
+import { rustJsRejectionErrorIdentity } from "../../../../dist/target-model/records/error-effects.js";
 
 function fixture(text, surfaces = ["js"]) {
   const context = analyzeRustErrorEffects(text, { surfaces });
@@ -71,28 +73,39 @@ test("native awaits publish exact value and source-error branches through the sa
   assert.equal(Object.isFrozen(errors) && Object.isFrozen(errors.branches), true);
 });
 
-test("aliased JS futures preserve source edge object identity and exact native error ownership", () => {
+for (const surface of ["native", "js"]) test(`aliased ${surface} futures preserve their exact selected rejection transport`, () => {
   const current = fixture(`
     export async function source(callback: () => Promise<number>) { return await callback(); }
     export async function consumer(callback: () => Promise<number>) {
       const pending = source(callback); const alias = pending; return await alias;
     }
-  `);
+  `, surface === "js" ? ["js"] : []);
   const consumer = current.nodes.find(node => current.ast.is.IsFunctionDeclaration(node) &&
     current.ast.text(current.ast.name(node)) === "consumer");
   const awaited = current.nodes.find(node => current.ast.kindName(node) === "KindAwaitExpression" &&
     sourceEnclosingCallable(node, current.ast) === consumer);
   assert.equal(consumer !== undefined && awaited !== undefined, true);
   const branches = current.records.awaitSourceErrorEffects.get(awaited).branches;
-  assert.equal(branches.length, 1);
-  const route = branches[0].edge;
   const input = current.context.callableValues.native.inputsFor(consumer)[0];
   assert.equal(input !== undefined, true);
-  assert.equal(route.effects.localErrors, false);
-  assert.equal(route.nativeErrors.length, 2);
-  assert.equal(route.effects.nativeErrors.every(error => error.errorType.owner.identity === input.implementation.identity), true);
-  const routes = current.nodes.flatMap(node => current.records.sourceErrorEffects.get(node)?.edges ?? []);
-  assert.equal(routes.some(edge => edge === route), true);
+  if (surface === "native") {
+    assert.equal(branches.length, 1);
+    const route = branches[0].edge;
+    assert.equal(route.effects.localErrors, false);
+    assert.equal(route.nativeErrors.length, 2);
+    assert.equal(route.effects.nativeErrors.every(error => error.errorType.owner.identity === input.implementation.identity), true);
+    const routes = current.nodes.flatMap(node => current.records.sourceErrorEffects.get(node)?.edges ?? []);
+    assert.equal(routes.some(edge => edge === route), true, "the exact native source-error edge remains canonical");
+  } else {
+    assert.equal(branches.length, 0, "F1/C01: a shared Promise boundary does not expose its producer's native error edges");
+    const errors = current.records.errorEffects.get(awaited);
+    assert.equal(errors.localErrors, false);
+    assert.equal(errors.nativeErrors.length, 1, "one canonical JS rejection transport survives aliasing");
+    assert.equal(errors.nativeErrors[0].identity, rustJsRejectionErrorIdentity);
+    assert.equal(rustTargetTypeRefEquals(errors.nativeErrors[0].errorType, rustJsValueTargetType()), true,
+      "the rejected value uses the canonical identity-preserving JS carrier");
+    assert.equal(Object.isFrozen(errors) && Object.isFrozen(errors.nativeErrors), true);
+  }
   const alias = Node_Expression(current.ast, awaited);
   assert.equal(current.records.futureValue.get(alias) !== undefined, true);
   assert.equal(current.records.fallible.get(consumer)?.fallible, true);
@@ -181,12 +194,12 @@ test("accessor effects keep selected read and write effects separate without dup
   assert.equal(current.records.fallible.get(setter)?.fallible, true);
 });
 
-test("deferred generic future completion preserves exact activated native error and frozen channels", () => {
+for (const surface of ["native", "js"]) test(`deferred generic ${surface} completion preserves its exact rejection ABI and frozen channels`, () => {
   const current = fixture(`
     export function retain<Value>(callback: () => Promise<Value>) { return callback(); }
     export function forward<Other>(callback: () => Promise<Other>) { return retain(callback); }
     export function concrete(callback: () => Promise<string>) { return forward(callback); }
-  `);
+  `, surface === "js" ? ["js"] : []);
   const declarations = current.nodes.filter(node => current.ast.is.IsFunctionDeclaration(node));
   assert.equal(declarations.length, 3);
   for (const declaration of declarations) {
@@ -197,8 +210,13 @@ test("deferred generic future completion preserves exact activated native error 
     assert.equal(fact.kind, "futures");
     assert.equal(fact.channels.length, 1);
     assert.equal(fact.channels[0].awaiting, "fallible");
-    assert.equal(fact.channels[0].errorCarrier.kind, "associated-type");
-    assert.equal(fact.channels[0].errorCarrier.owner.identity, input.implementation.identity);
+    if (surface === "native") {
+      assert.equal(fact.channels[0].errorCarrier.kind, "associated-type");
+      assert.equal(fact.channels[0].errorCarrier.owner.identity, input.implementation.identity);
+    } else {
+      assert.equal(rustTargetTypeRefEquals(fact.channels[0].errorCarrier, rustJsValueTargetType()), true,
+        "F1/C01: the shared JS Promise transports one rejection type, not a callback-specific native projection");
+    }
     assert.equal(Object.isFrozen(fact) && Object.isFrozen(fact.channels) && Object.isFrozen(fact.channels[0]), true);
   }
 });
