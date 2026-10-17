@@ -602,9 +602,10 @@ function applyOptionLane(
       if (reconciliation.kind === "call-scoped-lifetime" ||
         reconciliation.kind === "conversion" || reconciliation.kind === "project-upcast") {
         recordRustValueCarrierReconciliation(walk.context.records, walk.context.requiredRecords, expression, reconciliation);
-        projected = reconciliationTarget;
+        projected = reconciliation.kind === "call-scoped-lifetime"
+          ? reconciliation.fact.selectedCarrier : reconciliation.fact.targetCarrier;
         if (reconciliation.kind === "project-upcast" && !isRustOptionCarrier(expected)) {
-          recordRustConversionSelection(walk.context.records, walk.context.requiredRecords, expression, reconciliationTarget);
+          recordRustConversionSelection(walk.context.records, walk.context.requiredRecords, expression, projected);
         }
       }
       if (reconciliation.kind === "incompatible" && reconciliation.reason === "unrelated") {

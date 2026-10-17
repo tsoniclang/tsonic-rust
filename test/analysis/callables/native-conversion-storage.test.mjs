@@ -1,8 +1,9 @@
 import { assertRustRecordRequirement } from "../../helpers/required-records.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Node_Initializer } from "@tsonic/target-api/source";
+import { Node_Expression, Node_Initializer } from "@tsonic/target-api/source";
 import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
 
 import { rustValueCarrierBeforeContextualConversion } from "../../../dist/analysis/conversions/value-carrier-queries.js";
 import { rustNativeCallableOperand, rustNativeCallablePhysicalSource } from "../../../dist/analysis/callables/native-conversions.js";
@@ -14,6 +15,15 @@ import { rustCallableProtocol } from "../../../dist/target-model/types/carriers/
 
 function fixture(text) {
   const { program, requiredRecords } = analyzeRust({ captureRequiredRecords: true, surfaces: [], files: { "index.ts": text } });
+  return inspectFixture(program, requiredRecords);
+}
+
+function constructionFixture(text) {
+  const program = analyzeRustErrorEffects(text, { surfaces: [] });
+  return inspectFixture(program, program.requiredRecords);
+}
+
+function inspectFixture(program, requiredRecords) {
   const { ast } = program.source;
   const declarations = new Map();
   const visit = node => {
@@ -299,6 +309,21 @@ test("returned adapters preserve exact invocation bindings through forwarded sou
       return fromRight;
     }
   `);
+  const adapted = current.program.records.runtimeCarrier.get(current.declaration("widened"))?.carrier;
+  const adaptedInput = current.initializer("widened");
+  const conversion = current.program.records.contextualValueConversion.get(adaptedInput);
+  assert.equal(conversion?.conversion.kind, "callable-adapter", "the required argument adapter is retained");
+  assert.equal(rustTargetTypeRefEquals(adapted, conversion.targetCarrier), true,
+    "binding storage publishes the selected exact destination, not its annotation's placeholder");
+  const returns = [];
+  const visit = node => {
+    if (current.ast.is.IsReturnStatement(node)) returns.push(Node_Expression(current.ast, node));
+    current.ast.forEachChild(node, child => { if (child !== undefined) visit(child); });
+  };
+  visit(current.declaration("adapt"));
+  assert.equal(returns.length, 1, "one original returned adapter value");
+  assert.equal(current.program.records.contextualValueConversion.get(returns[0]) === undefined, true,
+    "an already adapted return does not acquire a lifetime-only adapter");
   const inputs = current.program.callableValues.native.inputsFor(current.declaration("forward"));
   for (const [index, name] of ["fromLeft", "fromRight"].entries()) {
     const selected = current.input.storage.valueFor(current.declaration(name));
@@ -314,7 +339,7 @@ test("returned adapters preserve exact invocation bindings through forwarded sou
 });
 
 test("captured native inputs bind through their actual lexical invocation without rebinding the outer declaration", () => {
-  const current = fixture(`import type { int32 } from "@tsonic/core/types.js";
+  const current = constructionFixture(`import type { int32 } from "@tsonic/core/types.js";
     export function outer(left: () => int32, right: () => int32): int32 {
       function inner(): int32 { return right(); }
       function unrelated(): int32 { return left(); }

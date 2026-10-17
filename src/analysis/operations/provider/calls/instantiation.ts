@@ -600,7 +600,8 @@ function selectedCallSourceCarriers(
         if (reconciliation.kind === "call-scoped-lifetime" ||
           reconciliation.kind === "project-upcast" || targetExpected === undefined) {
           reconciliations.push({ sourceIndex: index, reconciliation });
-          effective = expected;
+          effective = reconciliation.kind === "call-scoped-lifetime"
+            ? reconciliation.fact.selectedCarrier : reconciliation.fact.targetCarrier;
         }
       } else if (reconciliation.kind === "incompatible") {
         incompatibility ??= { kind: "incompatible", sourceIndex: index, actual: effective, expected };

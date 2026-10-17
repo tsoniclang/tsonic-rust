@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { compileRust } from "../../helpers/rust-session.mjs";
 import { analyzeRustErrorEffects } from "../../helpers/rust-error-analysis.mjs";
+import { createRustRecordFixture } from "../../helpers/records.mjs";
 
 import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equality.js";
 import { createRustNativeCapturePlan } from "../../../dist/analysis/callables/native-captures.js";
@@ -107,12 +108,20 @@ test("native capture query rejects foreign declarations without inspecting custo
   const foreign = Object.defineProperty({}, "kind", { get() { inspected += 1; throw Error("not owned"); } });
   assert.equal(current.plan.forDeclaration(foreign).kind, "unresolved");
   assert.equal(inspected, 0);
-  const declaration = current.plan.forDeclaration(current.declaration("make"));
+  const make = current.declaration("make");
+  assert.equal(current.program.records.closureCapture.get(make) !== undefined, true,
+    "the actual native source has complete capture evidence before constructing a missing-fact inverse");
+  const missing = createRustNativeCapturePlan({ records: createRustRecordFixture({ closureCapture: {
+    get: subject => subject === make ? undefined : current.program.records.closureCapture.get(subject),
+  } }, current.program.records), storage: current.storage, nativeStorage: current.program.callableValues.nativeStorage });
+  const declaration = missing.forDeclaration(make);
   assert.equal(declaration.kind === "unresolved" && /exact finalized capture declarations/u.test(declaration.reason), true,
     "only declarations with finalized capture facts are accepted");
-  const unrequired = current.plan.complete().forDeclaration(current.declaration("make"));
+  const unrequired = missing.complete().forDeclaration(make);
   assert.equal(unrequired.kind === "unresolved" && /only for its required/u.test(unrequired.reason), true,
     "a failed construction probe does not become a published required environment");
   assert.equal(current.program.callableValues.selected.nativeCaptures.forDeclaration(current.declaration("make")).kind,
     "unresolved", "the actual completed owner also excludes an unrequired declaration");
+  assert.equal(current.plan.complete().forDeclaration(make).kind, "unresolved",
+    "the valid fresh construction plan does not publish an unrequested outer declaration");
 });

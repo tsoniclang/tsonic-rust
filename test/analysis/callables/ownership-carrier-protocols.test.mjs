@@ -19,7 +19,7 @@ function input(carrier, selection) {
     subject: { kind: "value", node: {}, projection: [] },
     ownership: { storageFor: () => selection },
     environmentFor: () => assert.fail("ordinary storage must not select a frame environment"),
-    instanceFor: () => assert.fail("ordinary storage must not select a frame instance"),
+    classFrameFor: () => assert.fail("ordinary storage must not select a class frame instantiation"),
   };
 }
 

@@ -12,6 +12,66 @@ import { rustFrameCallableValue } from "../../../dist/target-model/types/carrier
 const surfaces = [["native", []], ["js", ["js"]]];
 
 for (const [surface, selected] of surfaces) {
+  for (const generic of [false, true]) {
+    test(`class-frame invocation and owner arguments use the same exact instantiation (${surface}, ${generic ? "generic" : "concrete"})`, () => {
+      const { program } = analyzeRust({ surfaces: selected, files: { "index.ts": `
+class Value<T> {
+  constructor(readonly seed: T) {}
+  recurse = (count: number, value: T): T => count === 0 ? value : this.recurse(count - 1, value);
+  rebind(): void { this.recurse = (count: number, value: T): T => count === 0 ? value : this.recurse(count - 1, value); }
+}
+export function escaped${generic ? "<U>(seed: U)" : "(seed: string)"}: (count: number, value: ${generic ? "U" : "string"}) => ${generic ? "U" : "string"} {
+  const value = new Value(seed);
+  const before = value.recurse;
+  value.rebind();
+  return before;
+}` } });
+      const ast = program.source.ast;
+      const pending = [...program.sourceFiles];
+      let factory;
+      let before;
+      while (pending.length !== 0) {
+        const node = pending.pop();
+        const name = ast.name(node);
+        if (name !== undefined && ast.is.IsIdentifier(name)) {
+          if (ast.is.IsFunctionDeclaration(node) && ast.text(name) === "escaped") factory = node;
+          if (ast.is.IsVariableDeclaration(node) && ast.text(name) === "before") before = node;
+        }
+        ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+      }
+      assert.equal(factory !== undefined && before !== undefined, true, "the retained source identities are exact");
+      const local = program.records.runtimeCarrier.get(before)?.carrier;
+      const returned = program.records.sourceCallableReturn.get(factory)?.returnCarrier;
+      assert.equal(rustTargetTypeRefEquals(local, returned), true, "owner, invocation signature and captured environment are one complete instantiation");
+      const frame = rustFrameCallableValue(returned);
+      assert.equal(frame?.owner.kind, "class", "the retained value uses the same class frame");
+      const protocol = rustCallableProtocol(returned);
+      const instance = frame.owner.instance.value.genericArguments[0];
+      assert.equal(instance?.kind, "type", "the class has its exact original generic parameter slot");
+      assert.equal(rustTargetTypeRefEquals(protocol.parameters[1], instance.type), true,
+        "the invocation input never substitutes independently of the actual receiver");
+      assert.equal(rustTargetTypeRefEquals(protocol.result, instance.type), true,
+        "the invocation result uses the same concrete or factory parameter, never the class declaration T");
+    });
+  }
+
+  test(`retained class callback entries preserve their real rebinding behavior (${surface})`, { timeout: 300_000 }, () => {
+    const { result } = compileRust({ surfaces: selected, target: { id: "rust", options: { outputType: "bin" } }, files: { "index.ts": `
+class Value<T> {
+  constructor(readonly seed: T) {}
+  recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
+  rebind(): void { this.recurse = (count: number): number => count === 0 ? 2 : this.recurse(count - 1); }
+}
+const value = new Value("seed");
+const before = value.recurse;
+value.rebind();
+if (before(0) !== 1 || value.recurse(0) !== 2 || before(1) !== 2) throw new Error("frame entry identity");
+` } });
+    assert.equal(result.diagnostics.length, 0, "the actual retained frame reaches native output without a binder reconciliation");
+    assert.equal(result.program !== undefined && result.plan !== undefined, true, "native publication keeps the exact selected physical frame");
+    validateGeneratedProject(`retained-class-frame-entries-${surface}`, result.artifacts, { run: true });
+  });
+
   for (const mixed of [false, true]) {
     test(`class callback storage validates every actual receiver instance (${surface}, ${mixed ? "mixed" : "same"})`, () => {
       const { result } = compileRust({ surfaces: selected, files: { "index.ts": `

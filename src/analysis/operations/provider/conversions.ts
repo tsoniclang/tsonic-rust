@@ -89,10 +89,23 @@ export function selectRustCheckedConversion(
     const reconciliation = sourceCarrier === undefined
       ? undefined
       : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
+    if (reconciliation?.kind === "identity") {
+      return acceptRustPolicy({ convertedType: sourceCarrier }, [
+        { message: "rust selected call argument retains its exact native value carrier" },
+      ]);
+    }
+    if (reconciliation?.kind === "conversion") {
+      recordRustValueCarrierReconciliation(context.records, context.requiredRecords, request.expression, reconciliation);
+      return acceptRustPolicy({ convertedType: reconciliation.fact.targetCarrier }, [
+        { message: "rust selected call argument uses its exact selected native conversion carrier" },
+      ]);
+    }
     if (reconciliation?.kind === "call-scoped-lifetime" ||
       reconciliation?.kind === "project-upcast") {
       recordRustValueCarrierReconciliation(context.records, context.requiredRecords, request.expression, reconciliation);
-      return acceptRustPolicy({ convertedType: targetCarrier }, [
+      const convertedType = reconciliation.kind === "call-scoped-lifetime"
+        ? reconciliation.fact.selectedCarrier : reconciliation.fact.targetCarrier;
+      return acceptRustPolicy({ convertedType }, [
         { message: reconciliation.kind === "call-scoped-lifetime"
           ? "rust selected call argument uses an exact call-scoped lifetime reconciliation"
           : "rust selected call argument uses an exact project-type upcast" },
@@ -139,10 +152,10 @@ export function selectRustCheckedConversion(
       "Checked source assertion has no closed source and target Rust carriers from TSTS evidence.",
     );
   }
-  const identity = rustTargetTypeRefEquals(sourceCarrier, targetCarrier);
-  const reconciliation = identity
-    ? { kind: "identity" as const }
-    : selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier, options.projectTypes, context.typeDefinitions);
+  const reconciliation = selectRustValueCarrierReconciliation(sourceCarrier, targetCarrier,
+    options.projectTypes, context.typeDefinitions);
+  const identity = reconciliation.kind === "identity";
+  const selectedCarrier = identity ? sourceCarrier : targetCarrier;
   const projectUpcast = reconciliation.kind === "project-upcast";
   if (projectUpcast) {
     recordRustValueCarrierReconciliation(context.records, context.requiredRecords, request.expression, reconciliation);
@@ -176,7 +189,7 @@ export function selectRustCheckedConversion(
     kind: "source-conversion",
     operationId,
     ...(conversion === undefined ? {} : { conversion }),
-    resultCarrier: targetCarrier,
+    resultCarrier: selectedCarrier,
   };
   const operation: RustTargetOperationSelection = {
     operationId,
@@ -188,7 +201,7 @@ export function selectRustCheckedConversion(
         : projectDowncast
           ? "project-downcast"
           : "runtime-conversion",
-    resultType: targetCarrier,
+    resultType: selectedCarrier,
     provenance: {
       sourceExpression: request.sourceExpression,
       sourceSelectedSymbol: request.sourceSelectedSymbol,
@@ -203,7 +216,7 @@ export function selectRustCheckedConversion(
       : projectDowncast
         ? "rust selected assertion project-type downcast"
       : `rust selected assertion conversion '${rustValueConversionIdentity(conversion!)}'` }];
-  return acceptRustPolicy({ convertedType: targetCarrier, targetFact: fact, operation }, evidence);
+  return acceptRustPolicy({ convertedType: selectedCarrier, targetFact: fact, operation }, evidence);
 }
 
 export function mapProviderCheckedOperation(

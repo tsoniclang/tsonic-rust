@@ -258,6 +258,28 @@ test("ambient finalization preserves statement admission, then diagnostics, then
   assert.equal(diagnostics.length, 1, "the original diagnostic is not duplicated");
 });
 
+test("source-ready ambient statement admission precedes native binding work without reading unfinished families", () => {
+  const builder = createRustProgramRecordBuilder();
+  const selected = ambientFixture(builder, { runtime: true });
+  const families = selected.walk.context.typeFamilies;
+  selected.walk.context.typeFamilies = { families: () => assert.fail("ambient source admission needs no native family realization") };
+  const statement = builder.typeOnlyDeclarations.statement(selected.walk, selected.statement);
+  assert.equal(statement?.reason, "ambient", "the one source-ready producer admits the exact statement");
+  assert.equal(builder.typeOnlyDeclaration.get(selected.statement) === statement, true, "the published reader sees the same statement fact");
+  assert.equal(builder.typeOnlyDeclaration.get(selected.declaration)?.reason, "ambient", "its exact declaration is source-only before storage");
+  assert.equal(selected.events.length, 1, "the existing runtime-use check runs once at the source boundary");
+  assert.equal(selected.walk.context.diagnostics.length, 1, "the actual runtime-use refusal remains precise");
+  assert.equal(selected.walk.context.diagnostics[0].code, "RUST_AMBIENT_VALUE_IMPLEMENTATION_MISSING", "source-only storage is not a native runtime implementation");
+  assert.equal(builder.typeOnlyDeclarations.statement(selected.walk, selected.statement) === statement, true,
+    "a repeated native-body request reads the same completed fact");
+  selected.walk.context.typeFamilies = families;
+  builder.typeOnlyDeclarations.finalize(selected.walk, [selected.file]);
+  assert.equal(builder.typeOnlyDeclaration.get(selected.statement) === statement, true,
+    "late conditional/interface finalization does not replace the source-ready fact");
+  assert.equal(selected.events.length, 1, "late finalization never repeats the ambient source-use decision");
+  assert.equal(selected.walk.context.diagnostics.length, 1, "late family readiness never duplicates the original diagnostic");
+});
+
 test("malformed ambient declarations retain the original early statement admission and invariant refusal", () => {
   const builder = createRustProgramRecordBuilder();
   const selected = ambientFixture(builder, { malformed: true });
