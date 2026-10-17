@@ -1,4 +1,4 @@
-import type { Node, SourceFile } from "@tsonic/tsts";
+import type { AstReader, Node, SourceFile } from "@tsonic/tsts";
 import type { TargetDiagnostic } from "@tsonic/target-api/artifacts";
 import { failTargetAnalysisInvariant } from "@tsonic/target-api/artifacts";
 import {
@@ -49,6 +49,30 @@ const supportedStatements: ReadonlySet<string> = new Set([
   "KindExpressionStatement", "KindIfStatement", "KindWhileStatement", "KindDoStatement",
   "KindForStatement", "KindForInStatement", "KindForOfStatement", "KindThrowStatement", "KindTryStatement",
 ]);
+
+export function rustRuntimeSetSourceInputs(
+  ast: AstReader, node: Node, operation: Extract<RustTargetOperationFact, { readonly kind: "runtime-set" }>,
+): RustRuntimeSetterCompletion | undefined {
+  const update = ast.is.IsPrefixUnaryExpression(node) || ast.is.IsPostfixUnaryExpression(node);
+  const sourceTarget = update ? Node_Operand(ast, node) : BinaryExpression_Left(ast, node);
+  const value = update ? sourceTarget : BinaryExpression_Right(ast, node);
+  let target = sourceTarget;
+  if (target !== undefined) for (let operand = sourceTransparentExpressionOperand(ast, target); operand !== undefined;
+    operand = sourceTransparentExpressionOperand(ast, target)) target = operand;
+  const receiver = target === undefined ? undefined : Node_Expression(ast, target);
+  const index = target !== undefined && ast.is.IsElementAccessExpression(target)
+    ? ast.as.AsElementAccessExpression(target)?.ArgumentExpression : undefined;
+  const expectedKind = target !== undefined && ast.is.IsPropertyAccessExpression(target) ? "property-set"
+    : target !== undefined && ast.is.IsElementAccessExpression(target) ? "index-set" : undefined;
+  const argumentsList = value === undefined ? [] : index === undefined ? [value] : [index, value];
+  if (target === undefined || value === undefined || expectedKind === undefined ||
+    operation.abi.operationKind !== expectedKind ||
+    expectedKind === "index-set" && index === undefined || argumentsList.length !== operation.abi.sourceArguments.length ||
+    operation.abi.sourceArguments.some(argument => argument.disposition !== "runtime") ||
+    operation.abi.effects.awaiting !== "not-applicable" || operation.abi.result.kind !== "sync" || !isRustUnitCarrier(operation.abi.result.carrier))
+    return undefined;
+  return Object.freeze({ receiver, sourceArguments: Object.freeze(argumentsList) });
+}
 
 export function analyzeRustStatementCompletions(input: RustStatementCompletionInput): RustStatementCompletionSelection {
   const { source, records, names } = input;
@@ -225,30 +249,13 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       }
     }
   };
-  const unwrap = (node: Node): Node => {
-    let current = node;
-    for (let operand = sourceTransparentExpressionOperand(ast, current); operand !== undefined;
-      operand = sourceTransparentExpressionOperand(ast, current)) current = operand;
-    return current;
-  };
   const setter = (node: Node, operation: Extract<RustTargetOperationFact, { readonly kind: "runtime-set" }>): void => {
-    const update = ast.is.IsPrefixUnaryExpression(node) || ast.is.IsPostfixUnaryExpression(node);
-    const sourceTarget = update ? Node_Operand(ast, node) : BinaryExpression_Left(ast, node);
-    const value = update ? sourceTarget : BinaryExpression_Right(ast, node);
-    const target = sourceTarget === undefined ? undefined : unwrap(sourceTarget);
-    const receiver = target === undefined ? undefined : Node_Expression(ast, target);
-    const index = target !== undefined && ast.is.IsElementAccessExpression(target) ? ast.as.AsElementAccessExpression(target)?.ArgumentExpression : undefined;
-    const expectedKind = target !== undefined && ast.is.IsPropertyAccessExpression(target) ? "property-set"
-      : target !== undefined && ast.is.IsElementAccessExpression(target) ? "index-set" : undefined;
-    const argumentsList = value === undefined ? [] : index === undefined ? [value] : [index, value];
-    if (target === undefined || value === undefined || expectedKind === undefined ||
-      operation.abi.operationKind !== expectedKind ||
-      expectedKind === "index-set" && index === undefined || argumentsList.length !== operation.abi.sourceArguments.length ||
-      operation.abi.sourceArguments.some(argument => argument.disposition !== "runtime") ||
-      operation.abi.effects.awaiting !== "not-applicable" || operation.abi.result.kind !== "sync" || !isRustUnitCarrier(operation.abi.result.carrier)) {
+    const inputs = rustRuntimeSetSourceInputs(ast, node, operation);
+    if (inputs === undefined) {
       reject(node, "RUST_SETTER_ABI_NOT_PROVEN", "Assignment requires one exact synchronous native setter ABI and checked source operands.");
       return;
     }
+    const value = inputs.sourceArguments[inputs.sourceArguments.length - 1]!;
     const compound = records.compoundWrite.get(node);
     const selected = records.selectedOperation.get(node);
     const direct = compound === undefined && selected?.operationKind === "operator" && selected.operationId === operation.operationId &&
@@ -258,7 +265,7 @@ export function analyzeRustStatementCompletions(input: RustStatementCompletionIn
       reject(node, "RUST_SETTER_SELECTION_NOT_PROVEN", "Assignment requires its identical checked native setter and result selection.");
       return;
     }
-    publish(setters, node, Object.freeze({ receiver, sourceArguments: Object.freeze(argumentsList) }));
+    publish(setters, node, inputs);
   };
   const assignment = (node: Node, operation: RustAssignmentCompletion): void => {
     if (!isRustAssignmentOperator(operation.operator)) return;

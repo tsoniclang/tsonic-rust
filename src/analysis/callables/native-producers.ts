@@ -1,5 +1,6 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import { sourceNodeIdentity } from "@tsonic/target-api/source";
+import { rejectedTargetStage, resolvedTargetStage, type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
 import type { RustTargetGenericArgument, TargetTypeRef } from "../../target-model/types/model.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
@@ -18,6 +19,12 @@ import type { RustDeferredProducerChannel } from "../../target-model/records/def
 import type { RustNativeCallableInputPlan } from "./native-inputs.js";
 import { createRustNativeOutwardResults } from "./native-outward-results.js";
 import { mapRustTargetTypes } from "../../target-model/types/carriers/substitution.js";
+import type { RustPhysicalCallableEmissionRequest } from "./physical-lifecycle.js";
+
+type RustRequiredNativeProducer = Extract<RustPhysicalCallableEmissionRequest, { readonly kind: "producer" }>;
+type RustNativeProducerPhysicalSelection =
+  | { readonly kind: "selected"; readonly carrier: TargetTypeRef }
+  | { readonly kind: "unresolved" | "pending"; readonly reason: string };
 
 export interface RustNativeCallableProducer {
   readonly declaration: Node;
@@ -41,7 +48,7 @@ export interface RustNativeCallableProducerPlan {
 
 export interface RustNativeCallableProducerConstruction extends RustNativeCallableProducerPlan {
   selectConstructionErrors(errors: ReadonlyMap<Node, TargetTypeRef>): void;
-  seal(requests: ReadonlyMap<Node, readonly TargetTypeRef[]>): RustNativeCallableProducerPlan;
+  seal(requests: readonly RustRequiredNativeProducer[]): TargetStageResult<RustNativeCallableProducerPlan>;
 }
 
 export function createRustNativeCallableProducerPlan(input: {
@@ -127,6 +134,48 @@ export function createRustNativeCallableProducerPlan(input: {
   const outward = createRustNativeOutwardResults({ ...input, producers: {
     forDeclaration: declaration => byDeclaration.get(declaration), errorFor, deferredFor,
   } });
+  const selectPhysical = (declaration: Node, carrier: TargetTypeRef): RustNativeProducerPhysicalSelection => {
+    const unresolved = (reason: string): RustNativeProducerPhysicalSelection => Object.freeze({ kind: "unresolved", reason });
+    const producer = byDeclaration.get(declaration);
+    if (producer === undefined) return unresolved("A required native callable has no exact admitted source producer.");
+    const signature = rustCallableProtocol(carrier);
+    if (signature === undefined) return unresolved("A required native callable producer has no selected callable invocation protocol.");
+    const retained = rustCallableInputProtocol(carrier) === undefined;
+    if (retained && constructionErrors === undefined) return Object.freeze({ kind: "pending",
+      reason: "Native retained constructors require their completed source-error ABI selection." });
+    const intrinsic = errorFor(declaration, "invoke");
+    const error = retained && constructionErrors?.has(declaration) ? constructionErrors.get(declaration) : intrinsic;
+    if (error === undefined) return unresolved("A required native callable producer has no completed exact invocation error.");
+    const operation = input.records.targetOperation.get(declaration);
+    const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(
+      input.records.receiverIndependentMethod.get(declaration)?.carrier ?? operation.resultCarrier) : undefined;
+    const asynchronous = input.records.asyncFunction.get(declaration);
+    const expectedParameters = sourceSignature?.parameters ?? input.ast.parameters(declaration).map(parameter =>
+      input.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
+    const expectedResult = sourceSignature?.result ?? asynchronous?.futureCarrier ??
+      input.records.sourceCallableReturn.get(declaration)?.returnCarrier;
+    if (expectedParameters.length !== signature.parameters.length ||
+      !expectedParameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, signature.parameters[index])) ||
+      !rustTargetTypeRefEquals(expectedResult, signature.result))
+      return unresolved("A required native callable producer does not match its exact source parameter and result ABI.");
+    const key = `${producer.identity}:${closedMetadataKey(carrier)}`;
+    if (resolving.has(key) || resolving.size >= 128)
+      return unresolved("A required native callable producer exceeds its bounded physical result selection.");
+    resolving.add(key);
+    let resultCarrier: TargetTypeRef | undefined;
+    try { resultCarrier = outward.invocationFor(declaration); }
+    finally { resolving.delete(key); }
+    if (resultCarrier === undefined) return unresolved("A required native callable producer has no completed exact invocation result.");
+    if (retained && signature.lifetime === undefined)
+      return unresolved("A required retained native callable producer has no exact construction lifetime.");
+    const arguments_: TargetTypeRef = { kind: "tuple", elements: signature.parameters };
+    const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([resultCarrier, error]));
+    const physical = retained
+      ? rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [rustLifetimeGenericArgument(signature.lifetime!),
+        ...rustTypeGenericArguments([arguments_, result])])
+      : rustClosureTargetType([arguments_], result);
+    return Object.freeze({ kind: "selected", carrier: physical });
+  };
   const plan: RustNativeCallableProducerPlan = Object.freeze({ producers: Object.freeze([...byDeclaration.values()]), errorFor,
     outwardReturnFor: (declaration: Node) => published === undefined ? outward.returnFor(declaration) : published.outwardReturnFor(declaration),
     invocationResultFor: (declaration: Node) => published === undefined ? outward.invocationFor(declaration) : published.invocationResultFor(declaration),
@@ -137,56 +186,46 @@ export function createRustNativeCallableProducerPlan(input: {
     deferredErrorFor: (declaration: Node, ordinal: number) => deferredFor(declaration, ordinal)?.errorCarrier,
     physicalFor(declaration: Node, carrier: TargetTypeRef): TargetTypeRef | undefined {
       if (published !== undefined) return published.physicalFor(declaration, carrier);
-      const producer = byDeclaration.get(declaration);
-      const signature = rustCallableProtocol(carrier);
-      const intrinsic = errorFor(declaration, "invoke");
-      const retained = rustCallableInputProtocol(carrier) === undefined;
-      if (retained && constructionErrors === undefined)
-        throw new Error("Native retained constructors require their completed source-error ABI selection.");
-      const error = retained && constructionErrors?.has(declaration) ? constructionErrors.get(declaration) : intrinsic;
-      if (producer === undefined || signature === undefined || error === undefined) return undefined;
-      const operation = input.records.targetOperation.get(declaration);
-      const sourceSignature = operation?.kind === "closure" ? rustCallableProtocol(
-        input.records.receiverIndependentMethod.get(declaration)?.carrier ?? operation.resultCarrier) : undefined;
-      const asynchronous = input.records.asyncFunction.get(declaration);
-      const expectedParameters = sourceSignature?.parameters ?? input.ast.parameters(declaration).map(parameter =>
-        input.records.sourceParameterAbi.get(parameter)?.parameterCarrier);
-      const expectedResult = sourceSignature?.result ?? asynchronous?.futureCarrier ??
-        input.records.sourceCallableReturn.get(declaration)?.returnCarrier;
-      if (expectedParameters.length !== signature.parameters.length ||
-        !expectedParameters.every((parameter, index) => rustTargetTypeRefEquals(parameter, signature.parameters[index])) ||
-        !rustTargetTypeRefEquals(expectedResult, signature.result)) return undefined;
-      const key = `${producer.identity}:${closedMetadataKey(carrier)}`;
-      if (resolving.has(key) || resolving.size >= 128) return undefined;
-      resolving.add(key);
-      let resultCarrier: TargetTypeRef | undefined;
-      try { resultCarrier = outward.invocationFor(declaration); }
-      finally { resolving.delete(key); }
-      if (resultCarrier === undefined) return undefined;
-      const arguments_: TargetTypeRef = { kind: "tuple", elements: signature.parameters };
-      const result = rustNamedTargetType("rust.core.Result", "Result", rustTypeGenericArguments([resultCarrier, error]));
-      return rustCallableInputProtocol(carrier) === undefined
-        ? signature.lifetime === undefined ? undefined
-          : rustNamedTargetType("rust.runtime.Callable", "rt::Callable", [rustLifetimeGenericArgument(signature.lifetime),
-            ...rustTypeGenericArguments([arguments_, result])])
-        : rustClosureTargetType([arguments_], result);
+      const selected = selectPhysical(declaration, carrier);
+      if (selected.kind === "pending") throw new Error(selected.reason);
+      return selected.kind === "selected" ? selected.carrier : undefined;
     },
   });
   let sealed = false;
   return Object.freeze({ ...plan,
     selectConstructionErrors(errors: ReadonlyMap<Node, TargetTypeRef>): void {
-      if (constructionErrors !== undefined || [...errors.keys()].some(declaration => !byDeclaration.has(declaration)))
+      if (sealed || constructionErrors !== undefined || [...errors.keys()].some(declaration => !byDeclaration.has(declaration)))
         throw new Error("Native retained construction errors select once from exact admitted producer declarations.");
       constructionErrors = new Map(errors);
     },
-    seal(requests: ReadonlyMap<Node, readonly TargetTypeRef[]>): RustNativeCallableProducerPlan {
+    seal(requests: readonly RustRequiredNativeProducer[]): TargetStageResult<RustNativeCallableProducerPlan> {
       if (sealed) throw new Error("Native callable producer results seal exactly once after selected effects and storage.");
+      if (!Array.isArray(requests)) throw new Error("Native callable producer sealing requires its complete selecting-owner request vector.");
+      sealed = true;
+      const diagnostics: TargetDiagnostic[] = [];
+      const physical = new Map<Node, Map<string, RustNativeProducerPhysicalSelection>>();
+      for (const request of requests) {
+        let selection: RustNativeProducerPhysicalSelection;
+        if (!byDeclaration.has(request.declaration)) selection = selectPhysical(request.declaration, request.carrier);
+        else {
+          const selections = physical.get(request.declaration) ?? new Map<string, RustNativeProducerPhysicalSelection>();
+          const key = closedMetadataKey(request.carrier);
+          selection = selections.get(key) ?? selectPhysical(request.declaration, request.carrier);
+          selections.set(key, selection);
+          physical.set(request.declaration, selections);
+        }
+        if (selection.kind !== "selected") diagnostics.push({ code: "RUST_NATIVE_CALLABLE_PRODUCER_NOT_PROVEN", category: "error",
+          source: "tsonic-rust", sourceNode: request.subject, message: selection.reason,
+          evidence: ["rust.callable-value.required-native-producer", `role=${request.context.role}`,
+            `contract=${request.context.enclosingContract}`,
+            ...(request.context.specialization === undefined ? [] : [`specialization=${request.context.specialization}`])] });
+      }
+      if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
       const errors = new Map<Node, ReadonlyMap<RustProducerErrorReference["channel"], TargetTypeRef>>();
       const deferred = new Map<Node, ReadonlyMap<number, RustDeferredProducerChannel>>();
       const outwardReturns = new Map<Node, TargetTypeRef>();
       const invocationResults = new Map<Node, TargetTypeRef>();
       const bodyResults = new Map<Node, TargetTypeRef>();
-      const physical = new Map<Node, ReadonlyMap<string, TargetTypeRef | undefined>>();
       for (const producer of plan.producers) {
         const declaration = producer.declaration;
         const result = input.records.sourceCallableReturn.get(declaration);
@@ -212,14 +251,7 @@ export function createRustNativeCallableProducerPlan(input: {
         if (outwardResult !== undefined) outwardReturns.set(declaration, outwardResult);
         if (invocationResult !== undefined) invocationResults.set(declaration, invocationResult);
         if (bodyResult !== undefined) bodyResults.set(declaration, bodyResult);
-        const selections = new Map<string, TargetTypeRef | undefined>();
-        for (const carrier of requests.get(declaration) ?? []) {
-          const key = closedMetadataKey(carrier);
-          if (!selections.has(key)) selections.set(key, plan.physicalFor(declaration, carrier));
-        }
-        physical.set(declaration, selections);
       }
-      sealed = true;
       published = Object.freeze({ producers: plan.producers, forDeclaration: plan.forDeclaration, forIdentity: plan.forIdentity,
         errorFor: (declaration: Node, channel: RustProducerErrorReference["channel"]) => errors.get(declaration)?.get(channel),
         deferredFor: (declaration: Node, ordinal: number) => deferred.get(declaration)?.get(ordinal),
@@ -227,9 +259,12 @@ export function createRustNativeCallableProducerPlan(input: {
         outwardReturnFor: (declaration: Node) => outwardReturns.get(declaration),
         invocationResultFor: (declaration: Node) => invocationResults.get(declaration),
         bodyResultFor: (declaration: Node) => bodyResults.get(declaration),
-        physicalFor: (declaration: Node, carrier: TargetTypeRef) => physical.get(declaration)?.get(closedMetadataKey(carrier)),
+        physicalFor(declaration: Node, carrier: TargetTypeRef) {
+          const selected = physical.get(declaration)?.get(closedMetadataKey(carrier));
+          return selected?.kind === "selected" ? selected.carrier : undefined;
+        },
       });
-      return published;
+      return resolvedTargetStage(published);
     },
   });
 }
