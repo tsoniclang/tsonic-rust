@@ -24,7 +24,7 @@ const families = Object.freeze({ implementation: () => undefined });
 const contract = fields => Object.freeze({ declaration: {}, typeParameters: [], capturedTypeParameters: [], nativeInputs: [],
   associatedTypes: [], projectProjections: [], optionalStorage: [], ...fields });
 const evidence = fields => Object.freeze({ lifetimeContract: undefined, genericCallables: undefined, structuralShapes: undefined,
-  frameCallables: undefined, nativeCaptures: undefined, classValues: undefined, objectRepresentations: undefined,
+  frameCallables: undefined, classValues: undefined, objectRepresentations: undefined,
   projectTypes: undefined, records: undefined, ...fields });
 const selected = (carrier, options = {}) => {
   const parameters = options.parameters ?? [];
@@ -184,18 +184,16 @@ test("full native frames prove owned activation bindings even when every entry c
   assert.equal(carrier !== undefined, true, "valid native frame carrier");
   const declaration = {};
   const capturedDeclaration = {};
-  const capture = { declaration: capturedDeclaration, reference: {}, carrier: number };
-  const implementation = { declaration, carrier, capture: { captures: [capture], receiverFields: [], receivers: [] },
-    captures: [], receiverFields: [], receivers: [] };
-  const entry = { implementations: [implementation], environmentIndexes: [] };
-  const definition = stored => ({ storage: { kind: "standalone" }, entries: [entry], bindings: [
-    { declaration: capturedDeclaration, carrier: stored, entry: undefined },
-    { declaration, carrier, entry },
-  ], environmentParameters: [] });
   const run = stored => {
-    const exact = definition(stored);
-    return selected(carrier, { evidence: evidence({ frameCallables: { definitionFor: () => exact, entryFor: () => entry },
-      nativeCaptures: { forDeclaration: () => ({ kind: "resolved", captures: [stored], receiverFields: [], receivers: [] }) } }) });
+    const capture = { declaration: capturedDeclaration, reference: {}, carrier: stored };
+    const implementation = { declaration, carrier, capture: { captures: [capture], receiverFields: [], receivers: [] },
+      captures: [], receiverFields: [], receivers: [] };
+    const entry = { implementations: [implementation], environmentIndexes: [] };
+    const definition = { storage: { kind: "standalone" }, entries: [entry], bindings: [
+      { declaration: capturedDeclaration, carrier: stored, entry: undefined },
+      { declaration, carrier, entry },
+    ], environmentParameters: [] };
+    return selected(carrier, { evidence: evidence({ frameCallables: { definitionFor: () => definition, entryFor: () => entry } }) });
   };
   assert.equal(run(rustStringTargetType()).kind, "supported", "owned activation is checked, not recursive entry handles");
   assert.equal(run(borrowed(scopedLifetime)).kind, "unsatisfied", "empty filtered entries cannot hide a borrowed activation field");
@@ -206,15 +204,14 @@ test("native frame external state fields preserve their exact physical vector co
   const owner = { fileName: "/source.ts", declarationIdentity: "owner" };
   const carrier = rustFrameCallableTargetType([], number, { kind: "lexical", origin: owner });
   assert.equal(carrier !== undefined, true, "valid native frame carrier");
-  const capture = { declaration: {}, reference: {}, carrier: number };
-  const implementation = { declaration: {}, carrier, capture: { captures: [capture], receiverFields: [], receivers: [] },
-    captures: [capture], receiverFields: [], receivers: [] };
-  const entry = { implementations: [implementation], environmentIndexes: [] };
-  const definition = { storage: { kind: "standalone" }, entries: [entry], bindings: [], environmentParameters: [] };
-  const run = captures => selected(carrier, { evidence: evidence({
-    frameCallables: { definitionFor: () => definition, entryFor: () => entry },
-    nativeCaptures: { forDeclaration: () => ({ kind: "resolved", captures, receiverFields: [], receivers: [] }) },
-  }) });
+  const run = carriers => {
+    const capture = { declaration: {}, reference: {}, carrier: carriers[0] ?? number };
+    const implementation = { declaration: {}, carrier, capture: { captures: [capture], receiverFields: [], receivers: [] },
+      captures: carriers.length === 0 ? [] : [capture], receiverFields: [], receivers: [] };
+    const entry = { implementations: [implementation], environmentIndexes: [] };
+    const definition = { storage: { kind: "standalone" }, entries: [entry], bindings: [], environmentParameters: [] };
+    return selected(carrier, { evidence: evidence({ frameCallables: { definitionFor: () => definition, entryFor: () => entry } }) });
+  };
   assert.equal(run([rustStringTargetType()]).kind, "supported", "actual owned entry storage");
   assert.equal(run([borrowed(scopedLifetime)]).kind, "unsatisfied", "actual borrowed entry storage");
   assert.equal(run([]).kind, "unresolved", "missing physical capture is not an empty environment");
@@ -231,11 +228,29 @@ test("native frame bindings use the selected activation's exact generic argument
   const definition = { storage: { kind: "standalone" }, entries: [entry], bindings: [{ declaration: capture.declaration, carrier: parameter, entry: undefined }],
     environmentParameters: [parameter] };
   const run = argument => selected(substituteRustTargetTypeParameters(template, new Map([[parameter.identity, argument]])), {
-    evidence: evidence({ frameCallables: { definitionFor: () => definition, entryFor: () => entry },
-      nativeCaptures: { forDeclaration: () => ({ kind: "resolved", captures: [parameter], receiverFields: [], receivers: [] }) } }),
+    evidence: evidence({ frameCallables: { definitionFor: () => definition, entryFor: () => entry } }),
   });
   assert.equal(run(rustStringTargetType()).kind, "supported", "selected owned activation argument");
   assert.equal(run(borrowed(scopedLifetime)).kind, "unsatisfied", "selected borrowed activation argument is not the template identity");
+});
+
+test("every admitted frame entry alternative contributes its actual stored payload", () => {
+  const owner = { fileName: "/source.ts", declarationIdentity: "alternatives-owner" };
+  const carrier = rustFrameCallableTargetType([], number, { kind: "lexical", origin: owner });
+  assert.equal(carrier !== undefined, true, "valid native alternative protocol");
+  const run = stored => {
+    const implementations = [rustStringTargetType(), stored].map(field => {
+      const capture = { declaration: {}, reference: {}, carrier: field };
+      return { declaration: {}, carrier, capture: { captures: [capture], receiverFields: [], receivers: [] },
+        captures: [capture], receiverFields: [], receivers: [] };
+    });
+    const entry = { implementations, environmentIndexes: [] };
+    const definition = { storage: { kind: "standalone" }, entries: [entry], bindings: [], environmentParameters: [] };
+    return selected(carrier, { evidence: evidence({ frameCallables: { definitionFor: () => definition, entryFor: () => entry } }) });
+  };
+  assert.equal(run(number).kind, "supported", "all actual alternatives are owned");
+  assert.equal(run(borrowed(scopedLifetime)).kind, "unsatisfied", "the second alternative cannot hide a real borrow");
+  assert.equal(run({ kind: "closure", args: [], result: number }).kind, "unresolved", "a logical callable is not a physical stored capture proof");
 });
 
 test("class factories and instances inspect the actual sealed capture and static-field environment", () => {
@@ -313,18 +328,25 @@ test("real native capture producer supplies owned physical storage without laund
     "supported", "actual physical family binds its captured field once");
 });
 
-test("the real frame inventory requires native capture entries before their existing completion boundary", () => {
+test("the real frame inventory proves the exact emitted fields without a fictitious external self handle", () => {
   const source = recursiveCallbackProtocolCases.find(test => test.name === "captured-class-field")?.source;
   assert.equal(typeof source, "string", "the recorded accepted source premise exists");
   const program = analyzeRustErrorEffects(source, { surfaces: [] });
   const plan = program.callableValues.selected;
+  assert.equal(program.diagnostics.length, 0, "the real source premise has no diagnostics");
   assert.equal(plan.frames.definitions.length, 1, "one actual owning activation");
   const classValues = program.classValues.seal(program);
   for (const definition of plan.frames.definitions) for (const entry of definition.entries) {
-    for (const implementation of entry.implementations)
-      assert.equal(plan.nativeCaptures.forDeclaration(implementation.declaration).kind, "resolved", "completed actual entry capture vectors");
+    assert.equal(definition.bindings.length, 2, "the actual frame stores both seed and its callable entry slot");
+    assert.equal(definition.bindings.some(binding => binding.entry === entry), true, "the self slot stores the exact entry enum");
+    for (const implementation of entry.implementations) {
+      assert.equal(implementation.receiverFields.length, 0, "there is no external self handle in the emitted entry payload");
+      assert.equal(implementation.capture.receiverFields.length, 2, "original source capture evidence is not discarded");
+      assert.equal(implementation.capture.receiverFields.every(capture =>
+        definition.bindings.some(binding => binding.declaration === capture.declaration)), true, "every removed field lives in its actual owning frame");
+    }
     assert.equal(selected(entry.implementations[0].carrier, { evidence: evidence({
-      frameCallables: plan.frames, nativeCaptures: plan.nativeCaptures,
+      frameCallables: plan.frames,
       objectRepresentations: program.objectRepresentations, classValues, projectTypes: program.projectTypes, records: program.records,
     }) }).kind, "supported", "all actual bindings and external state are owned");
   }
@@ -345,7 +367,7 @@ test("the real class factory plan preserves lexical environment fields before fi
   const instance = program.projectTypes.openCarrier(definition);
   const context = evidence({ classValues, projectTypes: program.projectTypes, records: program.records,
     objectRepresentations: program.objectRepresentations,
-    frameCallables: program.callableValues.selected.frames, nativeCaptures: program.callableValues.selected.nativeCaptures });
+    frameCallables: program.callableValues.selected.frames });
   assert.equal(selected(rustClassConstructorTargetType(instance), { evidence: context }).kind, "supported", "owned native factory storage");
   assert.equal(selected(instance, { evidence: context }).kind, "supported", "actual instance-retained class environment");
 });

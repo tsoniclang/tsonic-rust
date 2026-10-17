@@ -276,7 +276,6 @@ export function analyzeRustTargetProgram(
     errorRegions.value,
     context.promiseBodies.plan,
     context.callableValues.nativeStorage,
-    context.callableValues.selected.nativeCaptures,
     classValues,
   );
   if (declarationGenericRequirements.kind === "rejected") {

@@ -51,7 +51,6 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
-import type { RustNativeCapturePlan } from "../callables/native-captures.js";
 import type { RustClassValuePlan } from "../objects/class-values.js";
 import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
@@ -86,7 +85,6 @@ interface ClassifyCallableInput {
   readonly nativeCallables: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
   readonly frameCallables: RustFrameCallablePlan;
-  readonly nativeCaptures: RustNativeCapturePlan;
   readonly classValues: RustClassValuePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
@@ -152,7 +150,7 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   const dependencies = new Set<string>();
   const staticEvidence = { lifetimeContract: input.sourceLifetimes.contractFor(declaration),
     genericCallables: input.genericCallables, structuralShapes: input.structuralShapes,
-    frameCallables: input.frameCallables, nativeCaptures: input.nativeCaptures, classValues: input.classValues,
+    frameCallables: input.frameCallables, classValues: input.classValues,
     objectRepresentations: input.objectRepresentations, projectTypes: input.projectTypes, records };
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
     (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require,
