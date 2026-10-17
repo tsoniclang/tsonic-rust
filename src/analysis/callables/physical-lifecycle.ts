@@ -1,10 +1,12 @@
 import type { AstReader, Node } from "@tsonic/tsts";
 import type { SourceStorageQueries, TargetUseSiteRef } from "@tsonic/target-api/analysis";
-import { failTargetPlannerInvariant, rejectedTargetStage, resolvedTargetStage,
+import { failTargetAnalysisInvariant, failTargetPlannerInvariant, rejectedTargetStage, resolvedTargetStage,
   type TargetDiagnostic, type TargetStageResult } from "@tsonic/target-api/artifacts";
 import { ConditionalExpression_WhenFalse, ConditionalExpression_WhenTrue,
   Node_Expression, Node_Initializer, sourceEnclosingCallable } from "@tsonic/target-api/source";
 import type { RustProgramRecords } from "../../target-model/records/program.js";
+import type { RustPhysicalEmissionSourceOccurrence, RustPhysicalEmissionSourceSlot }
+  from "../../target-model/records/physical-emission-contexts.js";
 import type { RustPhysicalCallableFlowApplication, RustPhysicalCallableFlowApplications }
   from "../../target-model/records/physical-callables.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
@@ -26,6 +28,7 @@ import type { RustGenericCallablePhysicalConstruction } from "./generic-physical
 import type { RustLexicalFunctionEnvironments } from "./lexical-functions.js";
 import type { RustNativeStoragePlan, RustNativeStorageSelection } from "./native-storage.js";
 import type { RustNativeCallableProducerConstruction, RustNativeCallableProducerPlan } from "./native-producers.js";
+import { rustEmissionSourceIdentity } from "./emission-contexts.js";
 
 export type RustPhysicalCallableStorage = Pick<RustNativeStoragePlan,
   "issues" | "parameterFor" | "futureEnvironmentFor" | "returnFor" | "valueFor" | "operandFor" |
@@ -59,6 +62,7 @@ interface RustPhysicalCallableLifecycleInput {
   readonly records: RustProgramRecords;
   readonly sourceStorage: SourceStorageQueries;
   readonly requests: readonly RustPhysicalCallableEmissionRequest[];
+  readonly sourceOccurrences: readonly RustPhysicalEmissionSourceOccurrence[];
   readonly typeDefinitions: RustTypeDefinitions;
   readonly lexicalFunctions: RustLexicalFunctionEnvironments;
   readonly structuralShapes: RustStructuralStorageLookup;
@@ -75,13 +79,35 @@ const unpreparedStorage: RustNativeStorageSelection = Object.freeze({ kind: "unr
 
 export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableLifecycleInput): RustPhysicalCallableLifecycle {
   if (!Array.isArray(input.requests)) throw new Error("Physical callable storage requires its complete selecting-owner request vector.");
+  if (!Array.isArray(input.sourceOccurrences)) throw new Error("Physical callable storage requires its original selected source occurrence vector.");
   const { ast, records, nativeStorage: queries } = input;
   const diagnostics: TargetDiagnostic[] = [];
-  const sourceNodes = new Set<object>(input.sourceStorage.nodes);
+  const sourceNodes = new Map<object, Node>(input.sourceStorage.nodes.map(node => [node, node]));
+  const sourceSlots = new Map<object, RustPhysicalEmissionSourceSlot>();
+  const ownerContexts = new Map<Node, { readonly identity: string | undefined; readonly bindings: RustTargetGenericBindings }>();
+  const parents = new Map<Node, Node | undefined>();
+  const contains = (ancestor: Node, subject: Node): boolean => {
+    const visited = new Set<Node>();
+    for (let current: Node | undefined = subject; current !== undefined && !visited.has(current);) {
+      if (current === ancestor) return true;
+      visited.add(current);
+      if (!parents.has(current)) parents.set(current, ast.parent(current));
+      current = parents.get(current);
+    }
+    return false;
+  };
   const reject = (subject: Node, message: string): void => {
     diagnostics.push({ code: "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED", category: "error", source: "tsonic-rust",
       sourceNode: subject, message, evidence: ["rust.callable-value.physical-emission-context"] });
   };
+  for (const occurrence of input.sourceOccurrences) for (const slot of occurrence.slots) {
+    if (!sourceNodes.has(occurrence.node) || !sourceNodes.has(slot.node) || sourceSlots.has(slot) ||
+      slot.operationNode !== occurrence.node || slot.operation !== occurrence.operation) {
+      reject(occurrence.node, "A required physical source slot has no exact original checked occurrence and operation correspondence.");
+      continue;
+    }
+    sourceSlots.set(slot, slot);
+  }
   for (const request of input.requests) {
     if (!sourceNodes.has(request.subject) || !sourceNodes.has(request.owner) ||
       request.kind === "producer" && !sourceNodes.has(request.declaration)) {
@@ -89,18 +115,37 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       continue;
     }
     if (request.context === undefined || request.bindings === undefined ||
-      request.context.subject === undefined || !sourceNodes.has(request.context.subject) ||
+      request.context.subject === undefined ||
       typeof request.context.role !== "string" || request.context.role.length === 0 ||
       typeof request.context.enclosingContract !== "string" || request.context.enclosingContract.length === 0 ||
       request.bindings.types === undefined || request.bindings.lifetimes === undefined || request.bindings.consts === undefined ||
-      (request.kind === "type" || request.kind === "producer") && request.carrier === undefined)
+      (request.kind === "type" || request.kind === "producer") && request.carrier === undefined) {
       reject(request.subject, "A required physical callable use has no complete original use-site, binding or carrier input.");
+      continue;
+    }
+    const sourceSlot = sourceSlots.get(request.context.subject);
+    const sourceNode = sourceNodes.get(request.context.subject);
+    if (sourceSlot !== undefined ? sourceSlot.node !== request.subject || sourceSlot.key !== request.context.role ||
+        request.kind !== "value" && request.kind !== "operand"
+      : sourceNode === undefined || !contains(sourceNode, request.subject)) {
+      reject(request.subject, "A required physical callable use has no exact original source node or selected source-slot correlation.");
+      continue;
+    }
+    let context = ownerContexts.get(request.owner);
+    if (context === undefined) {
+      context = { identity: rustEmissionSourceIdentity(ast, request.owner), bindings: request.bindings };
+      ownerContexts.set(request.owner, context);
+    }
+    if (context.identity === undefined || context.identity !== request.context.enclosingContract ||
+      context.bindings !== request.bindings)
+      reject(request.subject, "A required physical callable use has no exact selecting-owner contract and original binding identity.");
   }
   const values = new Map<Node, RustNativeStorageSelection>();
   const operands = new Map<Node, RustNativeStorageSelection>();
   const returns = new Map<Node, RustNativeStorageSelection>();
   const invocations = new Map<Node, RustNativeStorageSelection>();
-  const producerRequests = new Map<Node, TargetTypeRef[]>();
+  const producerRequests = Object.freeze(input.requests.filter((request): request is
+    Extract<RustPhysicalCallableEmissionRequest, { readonly kind: "producer" }> => request.kind === "producer"));
   const flows: { readonly node: Node; readonly conversion: RustGenericCallableConversion }[] = [];
   const destinations = new Map<Node, TargetTypeRef | undefined>();
   let storageReady = false;
@@ -138,15 +183,6 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     returns.set(node, selection);
     return selection;
   };
-  const requestProducer = (declaration: Node, carrier: TargetTypeRef): void => {
-    if (rustCallableProtocol(carrier) === undefined) {
-      reject(declaration, "A required native producer has no selected callable invocation protocol.");
-      return;
-    }
-    const requests = producerRequests.get(declaration) ?? [];
-    if (!requests.some(existing => rustTargetTypeRefEquals(existing, carrier))) requests.push(carrier);
-    producerRequests.set(declaration, requests);
-  };
   const requestStorage = (request: RustPhysicalCallableEmissionRequest): RustNativeStorageSelection | undefined => {
     switch (request.kind) {
       case "value": return value(request.subject);
@@ -170,8 +206,7 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
     }
   };
   if (diagnostics.length === 0) for (const request of input.requests) {
-    if (request.kind === "producer") requestProducer(request.declaration, request.carrier);
-    else requestStorage(request);
+    requestStorage(request);
     if (request.kind === "value" || request.kind === "operand") {
       const conversion = records.contextualValueConversion.get(request.subject)?.conversion;
       if (conversion?.kind === "generic-callable-flow") flows.push({ node: request.subject, conversion });
@@ -223,15 +258,22 @@ export function createRustPhysicalCallableLifecycle(input: RustPhysicalCallableL
       if (diagnostics.length !== 0) return rejectedTargetStage(diagnostics);
       for (const flow of flows) inheritedDestination(flow.node);
       for (const node of values.keys()) inheritedDestination(node);
-      const nativeProducers = input.nativeProducers.seal(producerRequests);
+      const finalizedProducers = input.nativeProducers.seal(producerRequests);
+      if (finalizedProducers.kind === "rejected") return rejectedTargetStage(finalizedProducers.diagnostics);
+      const nativeProducers = finalizedProducers.value;
       for (const request of input.requests) if (request.kind === "type") physical.prepare(request.carrier);
       for (const selections of [values, operands, returns, invocations]) for (const selection of selections.values()) {
         if (selection.kind !== "unresolved") physical.prepare(selection.carrier);
       }
       for (const producer of nativeProducers.producers) for (const carrier of [nativeProducers.outwardReturnFor(producer.declaration),
-        nativeProducers.invocationResultFor(producer.declaration), nativeProducers.bodyResultFor(producer.declaration),
-        ...(producerRequests.get(producer.declaration) ?? []).map(carrier => nativeProducers.physicalFor(producer.declaration, carrier))]) {
+        nativeProducers.invocationResultFor(producer.declaration), nativeProducers.bodyResultFor(producer.declaration)]) {
         if (carrier !== undefined) physical.prepare(carrier);
+      }
+      for (const request of producerRequests) {
+        const carrier = nativeProducers.physicalFor(request.declaration, request.carrier);
+        if (carrier === undefined) return failTargetAnalysisInvariant("tsonic-rust",
+          "A completed required native producer lost its selected physical result.", request.subject);
+        physical.prepare(carrier);
       }
       for (const [node, destination] of destinations) {
         if (destination === undefined) continue;
