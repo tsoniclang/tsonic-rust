@@ -30,15 +30,19 @@ test("checked native guards publish both Boolean outcomes and the exact unreacha
   const guards = nodes.filter(node => program.records.nativeGuardResult.get(node) !== undefined);
   const unreachable = nodes.filter(node => program.records.nativeUnreachable.get(node) === true);
   assert.equal(guards.length, 2);
-  assert.equal(unreachable.length, 1);
+  assert.equal(unreachable.length, 2);
   assert.equal(program.records.nativeGuardResult.get(guards[0]), false);
   assert.equal(program.records.nativeGuardResult.get(guards[1]), true);
-  assert.equal(source.ast.kindName(unreachable[0]), "KindReturnStatement");
+  for (const node of unreachable) assert.equal(source.ast.kindName(node), "KindReturnStatement");
   const declaration = nodes.find(node => source.ast.is.IsFunctionDeclaration(node));
   const statements = source.ast.statements(source.ast.body(declaration));
+  const excludedBranch = source.ast.as.AsIfStatement(statements[0]).ThenStatement;
+  assertRustRecordRequirement(requiredRecords, "nativeUnreachable", excludedBranch);
   assertRustRecordRequirement(requiredRecords, "nativeUnreachable", statements[2]);
   for (const statement of statements.slice(0, 2)) assertRustRecordRequirement(requiredRecords, "nativeGuardResult", source.ast.as.AsIfStatement(statement).Expression);
-  assert.equal(unreachable[0] === statements[2], true,
+  assert.equal(unreachable.includes(excludedBranch), true,
+    "the known-false guard retains its actual nonselected then-branch root");
+  assert.equal(unreachable.includes(statements[2]), true,
     "the unconditional native string guard returns before the exact source tail");
   assert.equal(program.records.nativeGuardResult.get({}) === undefined, true);
   assert.equal(program.records.nativeUnreachable.get({}) === undefined, true);

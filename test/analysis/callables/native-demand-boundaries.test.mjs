@@ -124,6 +124,52 @@ export function run(): number {
     assert.equal(/\bfn unused\b/u.test(rustSourceText(result)), false, "a type reference is not an implementation demand");
   });
 
+  for (const implementationThrows of [false, true]) {
+    test(`callable ABI never attributes an invoked value to its separately called signature declaration (${surface}, ${implementationThrows ? "throwing" : "pure"})`, () => {
+      const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
+export function run(): number {
+  function signature(value: number): number { return value + 1; }
+  const callback: typeof signature = (value: number): number => {
+    ${implementationThrows ? 'if (value < 0) throw new Error("callback");' : ""}
+    return value * 2;
+  };
+  return callback(21) + signature(1);
+}` } });
+      assert.equal(result.diagnostics.length, 0,
+        result.diagnostics.slice(0, 6).map(issue => `${issue.code}: ${issue.message}`).join("; "));
+      assert.equal(result.program !== undefined && result.plan !== undefined, true,
+        "both actual call routes reach native program and plan publication");
+      assert.equal(result.artifacts.some(artifact => String(artifact.path).endsWith(".rs")), true,
+        "the complete actual callable program emits native source");
+      const program = result.program;
+      const ast = program.source.ast;
+      const pending = [...program.sourceFiles];
+      const nodes = [];
+      while (pending.length !== 0) {
+        const node = pending.pop();
+        nodes.push(node);
+        ast.forEachChild(node, child => { if (child !== undefined) pending.push(child); });
+      }
+      const signature = nodes.find(node => ast.is.IsFunctionDeclaration(node) && ast.text(ast.name(node)) === "signature");
+      const implementation = nodes.find(ast.is.IsArrowFunction);
+      const valueCall = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "callback");
+      const directCall = nodes.find(node => ast.is.IsCallExpression(node) && ast.text(ast.as.AsCallExpression(node).Expression) === "signature");
+      assert.equal(signature !== undefined && implementation !== undefined && valueCall !== undefined && directCall !== undefined, true,
+        "the actual signature, implementation and both calls retain their checked identities");
+      assert.equal(program.records.errorEffects.get(signature)?.localErrors, false,
+        "the separately called signature declaration really has completed source effects");
+      assert.equal(program.records.errorEffects.get(implementation)?.localErrors, implementationThrows,
+        "the actual arrow keeps its own throwing or pure body effects");
+      assert.equal(program.records.sourceCallEffects.get(valueCall)?.invocation, "fallible",
+        "the selected runtime Callable ABI is authoritative even for a pure known implementation");
+      assert.equal(program.records.sourceErrorEffects.get(valueCall)?.edges.some(edge => edge.declaration === signature) === true, false,
+        "a type signature is never substituted for the invoked value's implementation");
+      const direct = program.records.sourceErrorEffects.get(directCall)?.edges;
+      assert.equal(direct?.length, 1, "the real direct call retains its one exact source edge");
+      assert.equal(direct[0].declaration === signature, true, "the direct source edge keeps its actual declaration");
+    });
+  }
+
   test(`actual default parameters keep their native rejection (${surface})`, () => {
     const { result } = compileRust({ surfaces: selected, files: { "index.ts": `
 export function run(): number {
