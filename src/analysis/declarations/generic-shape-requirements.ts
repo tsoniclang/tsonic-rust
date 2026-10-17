@@ -9,8 +9,9 @@ import { rustTargetGenericReferences } from "../../target-model/types/carriers/g
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import { substituteRustTargetTypeParameters } from "../../target-model/types/carriers/substitution.js";
-import { emptyRustTypeDefinitions, rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
+import { rustSourceUnionDefinitionIdentity, type RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { closedMetadataKey } from "../../target-model/metadata/closed-data.js";
+import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 
 export type RustShapeGenericRequirementContract = Pick<RustDeclarationGenericRequirementContract, "typeParameters" | "associatedTypes">;
 
@@ -20,15 +21,20 @@ export function analyzeRustShapeGenericRequirements(
   families: RustSourceTypeFamilyRegistry,
   contractFor: (declaration: Node) => RustDeclarationGenericRequirementContract | undefined,
   evidence: RustStaticRequirementEvidence | undefined,
-  definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
-  uses: readonly { readonly carrier: TargetTypeRef; readonly requirements: readonly RustGenericRequirement[] }[] = [],
+  definitions: RustTypeDefinitions,
+  uses: readonly { readonly carrier: TargetTypeRef; readonly requirements: readonly RustGenericRequirement[] }[],
+  errorTypes: RustErrorTypeContext,
+  sourceScope: Node | undefined,
 ): RustShapeGenericRequirementContract | undefined {
   const bindings = rustTargetGenericReferences(carrier).typeParameters;
   const names = bindings.map(parameter => parameter.identity);
   const declared = new Set(names);
   const parameters = new Map(names.map(name => [name, new Set<RustGenericRequirement>()] as const));
-  const classify = (type: TargetTypeRef, requirements: readonly RustGenericRequirement[]): boolean =>
-    classifyCarrierRequirements(type, requirements, declared, parameters, associated.require, definitions, evidence).kind === "supported";
+  const classify = (type: TargetTypeRef, requirements: readonly RustGenericRequirement[]): boolean => {
+    const physical = requirements.includes("static") ? normalizeRustErrorType(type, errorTypes, sourceScope) : type;
+    return physical !== undefined && classifyCarrierRequirements(physical, requirements, declared, parameters,
+      associated.require, definitions, evidence).kind === "supported";
+  };
   const associated = createRustAssociatedRequirementCollector(declared, families, classify, () => false);
   const activeUnions = new Map<string, string>();
   const visit = (type: TargetTypeRef): boolean => {

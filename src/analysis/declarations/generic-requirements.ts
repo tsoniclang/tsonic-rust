@@ -27,7 +27,7 @@ import type { TargetSourceProgram } from "@tsonic/target-api/source";
 import type { RustNamePlan } from "../../target-model/names/model.js";
 import type { RustAnalysisRecords } from "../program/records/model.js";
 import { rustTargetTypeRefEquals } from "../../target-model/types/equality.js";
-import { rustCarrierSupportsTrait } from "../../target-model/types/index.js";
+import { rustCarrierSupportsTrait, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
 import type { TargetTypeRef } from "../../target-model/types/model.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 
@@ -311,10 +311,23 @@ export function analyzeRustDeclarationGenericRequirements(
   const viewContracts = new Map<string, RustShapeGenericRequirementContract>();
   const shapeEvidence: RustStaticRequirementEvidence = { lifetimeContract: undefined, genericCallables,
     frameCallables, classValues, objectRepresentations, structuralShapes: shapes, projectTypes, records };
-  for (const carrier of [...shapes.definitions.map(definition => definition.carrier),
-    ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers),
-    ...typeFamilies.implementations().map(implementation => ({ kind: "tuple" as const, elements: [implementation.owner, implementation.output] }))]) {
-    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor, shapeEvidence, definitions);
+  const sourceScopes = new Map<string, Node | undefined>();
+  for (const sourceFile of source.sourceFiles) {
+    const fileName = ast.getFileName(sourceFile);
+    sourceScopes.set(fileName, sourceScopes.has(fileName) && sourceScopes.get(fileName) !== sourceFile ? undefined : sourceFile);
+  }
+  const shapeInputs = [...shapes.definitions.map(definition => ({
+    carrier: definition.carrier, sourceFileName: definition.ownerFileName,
+  })), ...shapes.unionDefinitions.flatMap(definition => definition.sourceCarriers.map(carrier => ({
+    carrier, sourceFileName: rustSourceUnionCarrierValue(carrier)?.fileName,
+  }))), ...typeFamilies.implementations().map(implementation => ({
+    carrier: { kind: "tuple" as const, elements: [implementation.owner, implementation.output] },
+    sourceFileName: implementation.sourceFileName,
+  }))];
+  for (const { carrier, sourceFileName } of shapeInputs) {
+    const sourceScope = sourceFileName === undefined ? undefined : sourceScopes.get(sourceFileName);
+    const contract = analyzeRustShapeGenericRequirements(carrier, projectTypes, typeFamilies, index.contractFor,
+      shapeEvidence, definitions, [], errorTypes, sourceScope);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_SHAPE_GENERIC_CONTRACT_NOT_PROVEN", "A structural source carrier has no exact generic or associated-output requirements.",
     )]) };
@@ -323,7 +336,7 @@ export function analyzeRustDeclarationGenericRequirements(
   for (const view of structuralViews) {
     const uses = rustStructuralViewRequirementUses(view);
     const contract = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [view.sourceCarrier, view.targetCarrier] },
-      projectTypes, typeFamilies, index.contractFor, shapeEvidence, definitions, uses);
+      projectTypes, typeFamilies, index.contractFor, shapeEvidence, definitions, uses, errorTypes, view.declaration);
     if (contract === undefined) return { kind: "rejected", diagnostics: Object.freeze([diagnostic(
       "RUST_STRUCTURAL_VIEW_GENERIC_CONTRACT_NOT_PROVEN",
       "A selected structural implementation has no exact generic or associated-output requirements.", view.declaration,

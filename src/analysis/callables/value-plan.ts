@@ -47,7 +47,7 @@ import type { RustValueDomainCarrierHost } from "../../policy/types/objects/valu
 import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
-import { normalizeRustErrorType } from "../errors/error-types.js";
+import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 import { asSourceNode } from "@tsonic/target-api/source";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
@@ -117,7 +117,8 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan): readonly RustSourceCallableSpecializationIssue[];
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
+    errorTypes: RustErrorTypeContext): readonly RustSourceCallableSpecializationIssue[];
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -129,7 +130,8 @@ interface RustCallableValueLifecycle {
   finalizeSelected(): { readonly plan: RustCallableValueSelection; readonly issues: readonly RustSourceCallableSpecializationIssue[] };
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan): readonly RustSourceCallableSpecializationIssue[];
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
+    errorTypes: RustErrorTypeContext): readonly RustSourceCallableSpecializationIssue[];
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -177,8 +179,9 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     seal: () => requireLifecycle().seal(),
     finalizeStructuralStorage: (errors: Pick<RustErrorRegionRecords, "producerError">) => requireLifecycle().finalizeStructuralStorage(errors),
     validateStructuralRetention: (requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-      families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan) =>
-      requireLifecycle().validateStructuralRetention(requirements, families, classValues),
+      families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
+      errorTypes: RustErrorTypeContext) =>
+      requireLifecycle().validateStructuralRetention(requirements, families, classValues, errorTypes),
     publish(): void {
       requireSelected();
       requireLifecycle().publish();
@@ -356,10 +359,11 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       structuralMethodStorage.validateErrors(errors);
     },
     validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-      families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan) {
+      families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan,
+      errorTypes: RustErrorTypeContext) {
       if (structuralMethodStorage === undefined || selectedPlan === undefined)
         throw new Error("Structural retention requires completed physical field selection.");
-      return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, classValues);
+      return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, classValues, errorTypes);
     },
     seal(): RustCallableValuePlan {
       if (publishedPlan !== undefined) return publishedPlan;

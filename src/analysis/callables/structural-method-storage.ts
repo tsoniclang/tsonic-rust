@@ -25,7 +25,7 @@ import { rustRetainedValueLifetime } from "../../policy/ownership/retained-envir
 import type { RustRetainedEnvironmentQueries } from "../../policy/ownership/retained-environment-queries.js";
 import type { RustErrorEffectsFact } from "../../target-model/records/error-effects.js";
 import type { RustSourcePackageComponentClassifications } from "../program/source-package-components.js";
-import { normalizeRustErrorType } from "../errors/error-types.js";
+import { normalizeRustErrorType, type RustErrorTypeContext } from "../errors/error-types.js";
 import { rustInfallibleTargetId } from "../../target-model/types/carriers/source-types.js";
 import { rustHasOpenOwnedStorage } from "../../policy/ownership/retained-environments.js";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
@@ -77,7 +77,7 @@ export function createRustStructuralMethodStorage(input: {
   validateErrors(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
     families: Pick<RustSourceTypeFamilyRegistry, "implementation">, frames: RustFrameCallablePlan,
-    classValues: RustClassValuePlan): readonly RustSourceCallableSpecializationIssue[];
+    classValues: RustClassValuePlan, errorTypes: RustErrorTypeContext): readonly RustSourceCallableSpecializationIssue[];
 } {
   const { ast, records, sourceStorage, structuralShapes } = input;
   const canonical = new Map(structuralShapes.definitions.map(definition =>
@@ -402,7 +402,7 @@ export function createRustStructuralMethodStorage(input: {
     },
     validateRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
       families: Pick<RustSourceTypeFamilyRegistry, "implementation">, frames: RustFrameCallablePlan,
-      classValues: RustClassValuePlan) {
+      classValues: RustClassValuePlan, errorTypes: RustErrorTypeContext) {
       if (!complete || retentionValidated) throw new Error("Structural retention validates once against the completed declaration requirements.");
       const issues: RustSourceCallableSpecializationIssue[] = [];
       for (const requirement of retainedRequirements) {
@@ -417,7 +417,13 @@ export function createRustStructuralMethodStorage(input: {
         const captures = [...physical.captures, ...physical.receiverFields, ...physical.receivers].map(carrier =>
           requirement.bindings === undefined ? carrier : substituteRustTargetGenerics(carrier,
             requirement.bindings.types, requirement.bindings.lifetimes, requirement.bindings.consts));
-        const selected = rustFinalContractSupportsStatic(contract, { kind: "tuple", elements: captures }, families, input.typeDefinitions,
+        const normalized = normalizeRustErrorType({ kind: "tuple", elements: captures }, errorTypes, requirement.declaration);
+        if (normalized === undefined) {
+          issues.push({ subject: requirement.declaration,
+            message: "Structural method retention requires its actual admitted physical error-boundary carriers." });
+          continue;
+        }
+        const selected = rustFinalContractSupportsStatic(contract, normalized, families, input.typeDefinitions,
           { lifetimeContract: input.lifetimes.contractFor(owner), genericCallables: input.genericCallables,
             frameCallables: frames, classValues, objectRepresentations: input.objectRepresentations,
             structuralShapes, projectTypes: input.projectTypes, records });
