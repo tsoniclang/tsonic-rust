@@ -20,17 +20,23 @@ import { rustOptionElementCarrier } from "../../target-model/types/carriers/opti
 import { substituteRustTargetGenerics } from "../../target-model/types/carriers/substitution.js";
 import type { RustLifetimeIndex } from "../../target-model/lifetimes/index.js";
 import type { RustGenericCallablePlan } from "./generic-values.js";
+import type { RustPhysicalCallableSourceActivations } from "../../target-model/records/physical-emission-contexts.js";
+
+type RustNativeStorageTargetBindingsSelection =
+  | { readonly kind: "resolved"; readonly bindings: RustTargetGenericBindings }
+  | { readonly kind: "unresolved"; readonly reason: string };
 
 interface RustNativeStorageGenericInput {
   readonly ast: AstReader;
   readonly storage: SourceStorageQueries;
   readonly records: RustProgramRecords;
   readonly genericInvocationBindingsFor: (declaration: Node, invocation: Node, bindings: SourceStorageBindings,
-    arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings) => RustNativeStorageGenericSelection | undefined;
+    arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings) => RustNativeStorageTargetBindingsSelection | undefined;
 }
 
 export type RustNativeStorageGenericSelection =
-  | { readonly kind: "resolved"; readonly bindings: RustTargetGenericBindings }
+  | { readonly kind: "resolved"; readonly bindings: RustTargetGenericBindings;
+      readonly sourceActivations: RustPhysicalCallableSourceActivations }
   | { readonly kind: "unresolved"; readonly reason: string };
 
 export const rustNativeStorageProjectionSteps = 4096;
@@ -48,7 +54,8 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
   readonly step: (depth: number) => boolean;
 }): (declaration: Node | undefined, bindings: SourceStorageBindings, depth: number) => RustNativeStorageGenericSelection {
   const empty: RustNativeStorageGenericSelection = Object.freeze({ kind: "resolved",
-    bindings: Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() }) });
+    bindings: Object.freeze({ types: new Map(), lifetimes: new Map(), consts: new Map() }),
+    sourceActivations: Object.freeze({ kind: "unresolved", reason: "An absent source declaration has no callable activation selection." }) });
   const cache = new Map<Node, Map<SourceStorageBindings, RustNativeStorageGenericSelection | "resolving">>();
   const unresolved = (reason: string): RustNativeStorageGenericSelection => Object.freeze({ kind: "unresolved", reason });
   const lexicalOwners = new Map<Node, Node | null>();
@@ -99,11 +106,16 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
     if (!ownBindings(declaration) && lexicalOwner === null) {
       const subject = input.storage.subject(declaration, "value");
       const validated = subject.kind === "unresolved" ? subject : input.storage.boundOriginsFor(subject.subject, bindings);
-      return finish(validated.kind === "unresolved" ? validated : empty);
+      if (validated.kind === "unresolved") return finish(validated);
+      const selected = input.storage.boundActivationsFor(declaration, bindings);
+      return finish(Object.freeze({ kind: "resolved", bindings: empty.bindings,
+        sourceActivations: selected.kind === "unresolved" ? selected : Object.freeze({ kind: "resolved",
+          rows: Object.freeze(selected.activations.map(activation => Object.freeze({ activation, targetBindings: empty.bindings }))) }) }));
     }
     const selected = input.storage.boundActivationsFor(declaration, bindings);
     if (selected.kind === "unresolved") return finish(selected);
     let result: RustTargetGenericBindings | undefined;
+    const rows: Extract<RustPhysicalCallableSourceActivations, { readonly kind: "resolved" }>["rows"][number][] = [];
     for (const activation of selected.activations) {
       if (!input.step(depth)) return finish(unresolved("Native callable activation exceeds its bounded projection budget."));
       const lexical = select(lexicalOwner ?? undefined, activation.bindings, depth + 1);
@@ -128,12 +140,14 @@ export function createRustNativeStorageGenericSelection(input: RustNativeStorage
           return finish(unresolved("Native callable activation has inconsistent selected generic arguments."));
         actual = merged;
       }
+      rows.push(Object.freeze({ activation, targetBindings: actual }));
       if (result !== undefined && !sameBindings(result, actual))
         return finish(unresolved("Native callable activation has distinct generic substitutions requiring a sealed join."));
       result = actual;
     }
     return finish(result === undefined ? unresolved("Native callable activation has no selected generic environment.")
-      : Object.freeze({ kind: "resolved", bindings: result }));
+      : Object.freeze({ kind: "resolved", bindings: result,
+          sourceActivations: Object.freeze({ kind: "resolved", rows: Object.freeze(rows) }) }));
   };
   return select;
 }
@@ -145,14 +159,14 @@ export function selectRustSourceCallableInvocationBindings(input: {
   readonly lifetimes: RustLifetimeIndex;
   readonly generic: Pick<RustGenericCallablePlan, "implementationFor">;
 }, declaration: Node, invocation: Node, bindings: SourceStorageBindings,
-  arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings): RustNativeStorageGenericSelection | undefined {
+  arguments_: readonly RustTargetGenericArgument[], caller: RustTargetGenericBindings): RustNativeStorageTargetBindingsSelection | undefined {
   const operation = input.records.targetOperation.get(invocation);
   if (operation?.kind !== "source-call") return undefined;
   const target = operation.target;
   const logical = target.form === "callable" ? target.carrier
     : target.form === "structural-method" || target.form === "constructor-value" ? target.callableCarrier : undefined;
   if (rustGenericCallableValue(logical) === undefined) return undefined;
-  const unresolved = (): RustNativeStorageGenericSelection => Object.freeze({ kind: "unresolved",
+  const unresolved = (): RustNativeStorageTargetBindingsSelection => Object.freeze({ kind: "unresolved",
     reason: "A generic activation lost its exact source implementation-to-invocation correspondence." });
   const callee = Node_Expression(input.ast, invocation);
   const subject = callee === undefined ? undefined : input.storage.subjectFor(callee);
