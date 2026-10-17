@@ -51,6 +51,8 @@ import { rustAwaitSelectionLeaves } from "../../target-model/types/await.js";
 import type { RustGenericRequirement } from "./generic-requirements.js";
 import { normalizeRustGenericRequirements } from "./generic-requirement-contract.js";
 import type { RustGenericCallablePlan } from "../callables/generic-values.js";
+import type { RustNativeCapturePlan } from "../callables/native-captures.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
 import { rustGenericCallableMemberInvocationBindings } from "../callables/generic-bindings.js";
 import type { RustNativeCallableInputPlan } from "../callables/native-inputs.js";
 import { rustNativeCallableErrorChannel } from "../callables/native-protocols.js";
@@ -84,6 +86,8 @@ interface ClassifyCallableInput {
   readonly nativeCallables: RustNativeCallableInputPlan;
   readonly nativeStorage: RustNativeStoragePlan;
   readonly frameCallables: RustFrameCallablePlan;
+  readonly nativeCaptures: RustNativeCapturePlan;
+  readonly classValues: RustClassValuePlan;
   readonly structuralShapes: RustStructuralShapePlan;
   readonly structuralViewsFor: (declaration: Node) => readonly RustProjectStructuralView[];
   readonly idByDeclaration: WeakMap<Node, string>;
@@ -146,8 +150,13 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
   }
   const uses: RequirementUse[] = [...input.inheritedBody?.uses ?? []];
   const dependencies = new Set<string>();
+  const staticEvidence = { lifetimeContract: input.sourceLifetimes.contractFor(declaration),
+    genericCallables: input.genericCallables, structuralShapes: input.structuralShapes,
+    frameCallables: input.frameCallables, nativeCaptures: input.nativeCaptures, classValues: input.classValues,
+    projectTypes: input.projectTypes, records };
   const associated = createRustAssociatedRequirementCollector(declared, input.typeFamilies,
-    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require, input.typeDefinitions),
+    (carrier, requirements) => classifyCarrierRequirements(carrier, requirements, declared, byParameter, associated.require,
+      input.typeDefinitions, staticEvidence).kind === "supported",
     carrier => nativeBindings.some(binding => rustNativeCallableErrorChannel(binding, binding.implementation, carrier) !== undefined));
   for (const parameter of [...input.inheritedBody?.typeParameters ?? [], ...input.inheritedBody?.capturedTypeParameters ?? [],
     ...input.inheritedBody?.nativeInputs ?? []])
@@ -181,8 +190,10 @@ export function classifyRustCallableRequirements(input: ClassifyCallableInput):
       byParameter,
       associated.require,
       input.typeDefinitions,
+      staticEvidence,
     );
-    if (!classified) {
+    if (classified.kind === "unresolved") return classified.reason;
+    if (classified.kind === "unsatisfied") {
       return `A generated Rust operation requires ${rustRequirementDescription(normalized)} that its exact target carrier does not provide.`;
     }
     if (!uses.some((use) => use.node === node &&

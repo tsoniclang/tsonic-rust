@@ -52,6 +52,7 @@ import { asSourceNode } from "@tsonic/target-api/source";
 import type { RustDeclarationGenericRequirementIndex } from "../declarations/generic-requirements.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { RustSourceTypeRegistry } from "../../policy/types/model/source-type-registry.js";
+import type { RustClassValuePlan } from "../objects/class-values.js";
 
 export interface RustCallableValuePlan {
   readonly generic: RustGenericCallablePlan;
@@ -116,7 +117,7 @@ export interface RustCallableValuePlanRegistry extends RustCallableValueConstruc
   initializeCompletions(input: RustGenericCallableCompletionInput): void;
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): readonly RustSourceCallableSpecializationIssue[];
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan): readonly RustSourceCallableSpecializationIssue[];
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -128,7 +129,7 @@ interface RustCallableValueLifecycle {
   finalizeSelected(): { readonly plan: RustCallableValueSelection; readonly issues: readonly RustSourceCallableSpecializationIssue[] };
   finalizeStructuralStorage(errors: Pick<RustErrorRegionRecords, "producerError">): void;
   validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-    families: Pick<RustSourceTypeFamilyRegistry, "implementation">): readonly RustSourceCallableSpecializationIssue[];
+    families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan): readonly RustSourceCallableSpecializationIssue[];
   seal(): RustCallableValuePlan;
   publish(): void;
 }
@@ -176,7 +177,8 @@ export function createRustCallableValuePlanRegistry(): RustCallableValuePlanRegi
     seal: () => requireLifecycle().seal(),
     finalizeStructuralStorage: (errors: Pick<RustErrorRegionRecords, "producerError">) => requireLifecycle().finalizeStructuralStorage(errors),
     validateStructuralRetention: (requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-      families: Pick<RustSourceTypeFamilyRegistry, "implementation">) => requireLifecycle().validateStructuralRetention(requirements, families),
+      families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan) =>
+      requireLifecycle().validateStructuralRetention(requirements, families, classValues),
     publish(): void {
       requireSelected();
       requireLifecycle().publish();
@@ -304,7 +306,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     preparePhysicalStorage(components: RustSourcePackageComponentClassifications,
       effectsFor: (declaration: Node) => RustErrorEffectsFact | undefined) {
       if (structuralMethodStorage !== undefined) throw new Error("Physical callable storage prepares once after its intrinsic source effects.");
-      structuralMethodStorage = createRustStructuralMethodStorage({ ...input, native, nativeStorage, nativeProducers });
+      structuralMethodStorage = createRustStructuralMethodStorage({ ...input, native, nativeStorage, nativeProducers,
+        nativeCaptures: captures, genericCallables: generic });
       const constructorIssues = structuralMethodStorage.prepareConstructors(components, effectsFor, nativeProducers);
       if (constructorIssues.length !== 0) return constructorIssues;
       const context = { ast: input.ast, components, producers: nativeProducers, definitions: input.typeDefinitions,
@@ -326,6 +329,8 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
         Object.freeze({ forDeclaration: captures.require }));
       for (const implementation of suspended.implementations) usedNames.add(implementation.stateName);
       const frames = createRustFrameCallablePlan({ ...input, usedNames });
+      for (const definition of frames.definitions) for (const entry of definition.entries)
+        for (const implementation of entry.implementations) captures.require(implementation.declaration);
       physicalLifecycle = createRustPhysicalCallableLifecycle({ ...input, generic, frames, suspended,
         nativeStorage, nativeProducers, adapterFlows: flows });
       const producerRequests = prepareRustNativeGenericProducerRequests({ ast: input.ast, nodes: input.nativeNodes,
@@ -353,9 +358,10 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
       structuralMethodStorage.validateErrors(errors);
     },
     validateStructuralRetention(requirements: Pick<RustDeclarationGenericRequirementIndex, "contractFor">,
-      families: Pick<RustSourceTypeFamilyRegistry, "implementation">) {
-      if (structuralMethodStorage === undefined) throw new Error("Structural retention requires completed physical field selection.");
-      return structuralMethodStorage.validateRetention(requirements, families);
+      families: Pick<RustSourceTypeFamilyRegistry, "implementation">, classValues: RustClassValuePlan) {
+      if (structuralMethodStorage === undefined || selectedPlan === undefined)
+        throw new Error("Structural retention requires completed physical field selection.");
+      return structuralMethodStorage.validateRetention(requirements, families, selectedPlan.frames, selectedPlan.nativeCaptures, classValues);
     },
     seal(): RustCallableValuePlan {
       if (publishedPlan !== undefined) return publishedPlan;

@@ -11,7 +11,7 @@ import { rustNamedTargetType } from "../../../dist/target-model/types/carriers/n
 const retained = rustRetainedErrorTargetType();
 const obligation = { kind: "trait-ref", id: "core::convert::Into", path: "core::convert::Into",
   genericArguments: [{ kind: "type", type: retained }], associatedConstraints: [] };
-const accepts = carrier => classifyCarrierRequirements(carrier, ["js-rejection"], new Set(), new Map(), () => false, emptyRustTypeDefinitions);
+const accepts = carrier => classifyCarrierRequirements(carrier, ["js-rejection"], new Set(), new Map(), () => false, emptyRustTypeDefinitions, undefined).kind === "supported";
 
 test("JS rejection obligations use the exact native Into<RetainedError> contract", () => {
   for (const [label, carrier] of [
@@ -61,13 +61,13 @@ test("generic JS rejection obligations stay on their exact type and associated b
   const parameter = { kind: "type-parameter", identity: "source/Error", name: "Error" };
   const requirements = new Map([[parameter.identity, new Set()]]);
   assert.equal(classifyCarrierRequirements(parameter, ["js-rejection"], new Set([parameter.identity]), requirements,
-    () => false, emptyRustTypeDefinitions), true);
+    () => false, emptyRustTypeDefinitions, undefined).kind === "supported", true);
   assert.deepEqual([...requirements.get(parameter.identity)], ["js-rejection"]);
   assert.equal(classifyCarrierRequirements(parameter, ["js-rejection"], new Set(), new Map(),
-    () => false, emptyRustTypeDefinitions), false);
+    () => false, emptyRustTypeDefinitions, undefined).kind === "supported", false);
   const associated = { kind: "associated-type", owner: parameter, name: "Error" };
   assert.equal(classifyCarrierRequirements(associated, ["js-rejection"], new Set(), new Map(),
-    (carrier, requirement) => carrier === associated && requirement === "js-rejection", emptyRustTypeDefinitions), true);
+    (carrier, requirement) => carrier === associated && requirement === "js-rejection", emptyRustTypeDefinitions, undefined).kind === "supported", true);
   assert.equal(classifyCarrierRequirements(associated, ["js-rejection"], new Set(), new Map(),
-    () => false, emptyRustTypeDefinitions), false);
+    () => false, emptyRustTypeDefinitions, undefined).kind === "supported", false);
 });

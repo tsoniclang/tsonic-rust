@@ -4,7 +4,7 @@ import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustSourceTypeFamilyRegistry } from "../../target-model/types/type-families.js";
 import type { Node } from "@tsonic/tsts";
 import { createRustAssociatedRequirementCollector } from "./associated-requirements.js";
-import { classifyCarrierRequirements } from "./generic-carrier-requirements.js";
+import { classifyCarrierRequirements, type RustStaticRequirementEvidence } from "./generic-carrier-requirements.js";
 import { rustTargetGenericReferences } from "../../target-model/types/carriers/generic-references.js";
 import { rustTargetTypeChildren } from "../../target-model/types/carriers/children.js";
 import { rustSourceTypeCarrierValue, rustSourceUnionCarrierValue } from "../../target-model/types/index.js";
@@ -19,6 +19,7 @@ export function analyzeRustShapeGenericRequirements(
   projectTypes: RustProjectTypePolicy,
   families: RustSourceTypeFamilyRegistry,
   contractFor: (declaration: Node) => RustDeclarationGenericRequirementContract | undefined,
+  evidence: RustStaticRequirementEvidence | undefined,
   definitions: RustTypeDefinitions = emptyRustTypeDefinitions,
   uses: readonly { readonly carrier: TargetTypeRef; readonly requirements: readonly RustGenericRequirement[] }[] = [],
 ): RustShapeGenericRequirementContract | undefined {
@@ -27,7 +28,7 @@ export function analyzeRustShapeGenericRequirements(
   const declared = new Set(names);
   const parameters = new Map(names.map(name => [name, new Set<RustGenericRequirement>()] as const));
   const classify = (type: TargetTypeRef, requirements: readonly RustGenericRequirement[]): boolean =>
-    classifyCarrierRequirements(type, requirements, declared, parameters, associated.require, definitions);
+    classifyCarrierRequirements(type, requirements, declared, parameters, associated.require, definitions, evidence).kind === "supported";
   const associated = createRustAssociatedRequirementCollector(declared, families, classify, () => false);
   const activeUnions = new Map<string, string>();
   const visit = (type: TargetTypeRef): boolean => {

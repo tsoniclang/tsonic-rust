@@ -275,11 +275,13 @@ export function analyzeRustTargetProgram(
     errorRegions.value,
     context.promiseBodies.plan,
     context.callableValues.nativeStorage,
+    context.callableValues.selected.nativeCaptures,
+    classValues,
   );
   if (declarationGenericRequirements.kind === "rejected") {
     return rejectedTargetStage(declarationGenericRequirements.diagnostics);
   }
-  const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies);
+  const retentionIssues = context.callableValues.validateStructuralRetention(declarationGenericRequirements.index, context.typeFamilies, classValues);
   if (retentionIssues.length !== 0) return rejectedTargetStage(retentionIssues.map(issue => ({
     code: "RUST_CALLABLE_VALUE_NOT_CLOSED", category: "error", source: "tsonic-rust", message: issue.message,
     sourceNode: issue.subject, evidence: ["target.capability=rust.callable-value.exact-implementation"],

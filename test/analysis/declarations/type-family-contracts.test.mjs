@@ -213,16 +213,16 @@ test("structural shapes retain the independent requirements of nested generic re
   const contract = { declaration, typeParameters: [{ identity: "T", name: "T", requirements: ["clone"] }],
     associatedTypes: [{ carrier: projection, requirements: ["default"] }] };
   const shape = { kind: "tuple", elements: [record] };
-  const selected = analyzeRustShapeGenericRequirements(shape, policy, registry, owner => owner === declaration ? contract : undefined);
+  const selected = analyzeRustShapeGenericRequirements(shape, policy, registry, owner => owner === declaration ? contract : undefined, undefined);
   assert.deepEqual(selected.typeParameters, [{ identity: "T", name: "T", requirements: ["clone"] }]);
   assert.deepEqual(selected.associatedTypes, [{ carrier: projection, requirements: ["default"] }]);
-  assert.equal(analyzeRustShapeGenericRequirements(shape, policy, registry, () => undefined), undefined);
+  assert.equal(analyzeRustShapeGenericRequirements(shape, policy, registry, () => undefined, undefined), undefined);
 });
 
 test("nongeneric shapes acquire no speculative generic bounds", () => {
   const registry = createRustSourceTypeFamilyRegistry();
   const selected = analyzeRustShapeGenericRequirements({ kind: "tuple", elements: [signed, unsigned] },
-    { definitionForCarrier: () => undefined }, registry, () => undefined);
+    { definitionForCarrier: () => undefined }, registry, () => undefined, undefined);
   assert.deepEqual(selected, { typeParameters: [], associatedTypes: [] });
 });
 
@@ -239,17 +239,17 @@ test("nested generated sum instantiations retain independent payload requirement
   const inner = union([parameter, projection]);
   const outer = union([inner, signed]);
   const policy = { definitionForCarrier: () => undefined };
-  const selected = analyzeRustShapeGenericRequirements(outer, policy, registry, () => undefined, definitions.seal());
+  const selected = analyzeRustShapeGenericRequirements(outer, policy, registry, () => undefined, undefined, definitions.seal());
   assert.deepEqual(selected, {
     typeParameters: [{ identity: "T", name: "T", requirements: [] }],
     associatedTypes: [{ carrier: projection, requirements: [] }],
   });
   assert.equal(analyzeRustShapeGenericRequirements(union([union([parameter, { ...projection, owner: unsigned }]), signed]),
-    policy, registry, () => undefined, definitions.seal()), undefined);
+    policy, registry, () => undefined, undefined, definitions.seal()), undefined);
   const invalidInner = union([parameter, { ...projection,
     owner: { kind: "type-parameter", identity: "Other", name: "Other" } }]);
   const invalidOuter = union([invalidInner, signed]);
-  assert.equal(analyzeRustShapeGenericRequirements(invalidOuter, policy, registry, () => undefined,
+  assert.equal(analyzeRustShapeGenericRequirements(invalidOuter, policy, registry, () => undefined, undefined,
     { sourceUnionVariants: carrier => rustTargetTypeRefEquals(carrier, invalidInner) ? undefined :
       [{ name: "Variant0", carrier: invalidInner }, { name: "Variant1", carrier: signed }] }), undefined);
 });
@@ -260,11 +260,11 @@ test("authored recursive sums reject changing recursive instantiations and missi
   const authored = type => rustSourceUnionTargetType("/nested.ts", "Recursive", [{ kind: "type", type }]);
   const initial = authored(signed);
   const changed = authored(unsigned);
-  assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined,
+  assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined, undefined,
     { sourceUnionVariants: () => [{ name: "Next", carrier: changed }] }), undefined);
-  assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined,
+  assert.equal(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined, undefined,
     { sourceUnionVariants: () => undefined }), undefined);
-  assert.deepEqual(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined,
+  assert.deepEqual(analyzeRustShapeGenericRequirements(initial, policy, registry, () => undefined, undefined,
     { sourceUnionVariants: () => [{ name: "Next", carrier: initial }] }),
     { typeParameters: [], associatedTypes: [] });
 });
