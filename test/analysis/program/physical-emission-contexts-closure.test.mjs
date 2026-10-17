@@ -72,6 +72,10 @@ export async function invoke(value: number): Promise<number> {
 }
 `;
 
+const scalarReturnSource = `
+export function owner(value: boolean): boolean { return value; }
+`;
+
 const frameSource = `
 class Value {
   recurse = (count: number): number => count === 0 ? 1 : this.recurse(count - 1);
@@ -117,7 +121,7 @@ function observeCallablePublication(registry, assertions, carriers, observations
     ...descriptors,
     finalizeSelected: { value() {
       try { return registry.finalizeSelected(); }
-      finally { observations.earlyStoragePhase = "closed"; }
+      finally { observations.earlyStoragePhase = "consumers"; }
     } },
     seal: { value(input) {
       observations.seals++;
@@ -132,7 +136,9 @@ function observeCallablePublication(registry, assertions, carriers, observations
       } });
       assertions.equal(invariantCode(() => physical.definitionFor(reordered)), "TSONIC_INTERNAL_ANALYSIS_INVARIANT", "closed, not sealed");
       assertions.equal(observations.components.at(-1)?.kind, "resolved", "the existing component owner completes before publication");
+      observations.earlyStoragePhase = "materializing";
       const published = registry.seal(input);
+      observations.earlyStoragePhase = "consumers";
       assertions.equal(published.kind, "resolved", "the real late-stage tuple seals successfully");
       assertions.equal(published.value !== registry.selected, true, "publication does not expose the analysis construction view");
       assertions.equal(registry.seal(input) === published, true, "repeated seals read the same completed publication");
@@ -152,7 +158,7 @@ function observeCallablePublication(registry, assertions, carriers, observations
 
 function observeNativeStorage(queries, observations) {
   observations.storageFactories++;
-  const methods = Object.fromEntries(["valueFor", "operandFor", "returnFor", "invocationCallableFor"].map(method => {
+  const methods = Object.fromEntries(["valueFor", "operandFor", "invocationCallableFor"].map(method => {
     const reads = new Map();
     observations.rawSelections.set(method, reads);
     return [method, node => {
@@ -167,12 +173,49 @@ function observeNativeStorage(queries, observations) {
       return selected;
     }];
   }));
-  return Object.freeze({ ...queries, ...methods });
+  observations.rawSelections.set("returnFor", observations.returnSelections);
+  return Object.freeze({ ...queries, ...methods,
+    prepareReturn(node) {
+      const selected = queries.prepareReturn(node);
+      observations.returnPreparations++;
+      if (observations.producerSealing) observations.terminalReturnReads.add(node);
+      if (selected.kind !== "unresolved") assert.equal(observations.returnSelections.get(node)?.selected === selected, true,
+        "each actual producer preparation reads the sole canonical return record");
+      return selected;
+    },
+    returnFor(node) {
+      const before = observations.returnMaterializations;
+      const selected = queries.returnFor(node);
+      observations.returnLookups++;
+      const stored = observations.returnSelections.get(node);
+      assert.equal(stored === undefined ? selected.kind === "unresolved" : stored.selected === selected, true,
+        "a return lookup reads the original canonical record or honest unprepared state");
+      assert.equal(observations.returnMaterializations, before, "pure return lookup never prepares a missing record");
+      return selected;
+    },
+  });
+}
+
+function observeNativeProducerSeal(producers, observations) {
+  return Object.freeze({ ...producers,
+    seal(...inputs) {
+      observations.producerSeals++;
+      observations.producerSealing = true;
+      const before = observations.returnPreparations;
+      try {
+        const result = producers.seal(...inputs);
+        assert.equal(result.kind, "resolved", "actual native producer sealing completes on the unchanged source");
+        assert.equal(observations.returnPreparations > before, true,
+          "actual outward, invocation and body sealing reads canonical physical returns");
+        return result;
+      } finally { observations.producerSealing = false; }
+    },
+  });
 }
 
 test("the planner phase label starts at publication, after the actual callable seal and reachability (instrumented load observation)", () => {
   const options = { surfaces: [], target: { id: "rust", options: { outputType: "lib" } },
-    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource } };
+    files: { "index.ts": genericSource + nativeHandlerSource + earlyStorageConsumerSource + scalarReturnSource } };
   const ordinary = compileRust(options);
   assert.equal(ordinary.result.diagnostics.length, 0, ordinary.result.diagnostics.map(issue => issue.message).join("\n").slice(0, 2048));
   assert.equal(ordinary.result.artifacts.length > 0, true, "uninjected ordinary pipeline reaches emission");
@@ -181,6 +224,7 @@ test("the planner phase label starts at publication, after the actual callable s
   const handlerUrl = new URL("../../../dist/analysis/operations/native-handlers.js", import.meta.url).href;
   const collectorUrl = new URL("../../../dist/analysis/callables/emission-requests.js", import.meta.url).href;
   const storageUrl = new URL("../../../dist/analysis/callables/native-storage.js", import.meta.url).href;
+  const producersUrl = new URL("../../../dist/analysis/callables/native-producers.js", import.meta.url).href;
   const lifecycleUrl = new URL("../../../dist/analysis/callables/physical-lifecycle.js", import.meta.url).href;
   const identityUrl = new URL("../../../dist/analysis/callables/generic-identities.js", import.meta.url).href;
   const dispatchUrl = new URL("../../../dist/analysis/callables/generic-dispatch.js", import.meta.url).href;
@@ -192,6 +236,7 @@ test("the planner phase label starts at publication, after the actual callable s
   const handlerObservation = `export function analyzeRustNativeHandlers(...inputs) { const result = observedAnalyzeRustNativeHandlers(...inputs); globalThis[Symbol.for(${JSON.stringify(key)})].handlers(inputs); return result; }`;
   const requestObservation = `export function prepareRustPhysicalCallableEmissionRequests(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.beforeRequests(inputs[0]); const result = observedPrepareRustPhysicalCallableEmissionRequests(...inputs); observations.requests = result; observations.requestSelections++; return result; }`;
   const storageObservation = `export function createRustNativeStorageQueries(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; return observations.storage(observedCreateRustNativeStorageQueries(...inputs)); }`;
+  const producerObservation = `export function createRustNativeCallableProducerPlan(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; return observations.producers(observedCreateRustNativeCallableProducerPlan(...inputs)); }`;
   const lifecycleObservation = `export function createRustPhysicalCallableLifecycle(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.earlyStoragePhase = "materializing"; const result = observedCreateRustPhysicalCallableLifecycle(...inputs); observations.lifecycle = result; observations.earlyStoragePhase = "consumers"; return result; }`;
   const identityObservation = `export function prepareRustGenericCallableIdentityRequests(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.assertPrepared(inputs[0]); observations.identityComparisons = inputs[0].sources.comparisons.length; return observedPrepareRustGenericCallableIdentityRequests(...inputs); }`;
   const dispatchObservation = `export function prepareRustGenericCallableDispatchRequests(...inputs) { const observations = globalThis[Symbol.for(${JSON.stringify(key)})]; observations.assertPrepared(inputs[0]); const result = observedPrepareRustGenericCallableDispatchRequests(...inputs); observations.dispatched = result.length; return result; }`;
@@ -201,9 +246,20 @@ import { registerHooks } from "node:module";
 import { sourceMarkerFactKey } from "@tsonic/tsts";
 const observationKey = Symbol.for(${JSON.stringify(key)});
 const observations = { seals: 0, publications: 0, components: [], anchors: new Set(), handlerSelections: 0,
-  requestSelections: 0, rawSelections: new Map(), earlyStoragePhase: "idle", preparedConsumers: 0, storageFactories: 0 };
+  requestSelections: 0, rawSelections: new Map(), earlyStoragePhase: "idle", preparedConsumers: 0, storageFactories: 0,
+  returnSelections: new Map(), returnMaterializations: 0, returnPreparations: 0, returnLookups: 0, earlyReturnSelections: 0,
+  returnWriteAnchors: 0, producerSeals: 0, producerSealing: false, terminalReturnReads: new Set() };
 globalThis[observationKey] = observations;
 observations.storage = queries => (${observeNativeStorage.toString()})(queries, observations);
+observations.producers = producers => (${observeNativeProducerSeal.toString()})(producers, observations);
+observations.returnSelected = (node, selected) => {
+  assert.equal(selected.kind !== "unresolved" && Object.isFrozen(selected), true,
+    "only an actually completed immutable physical return is materialized");
+  const previous = observations.returnSelections.get(node);
+  observations.returnSelections.set(node, { count: (previous?.count ?? 0) + 1, selected });
+  observations.returnMaterializations++;
+  if (observations.lifecycle === undefined) observations.earlyReturnSelections++;
+};
 observations.assertPrepared = input => {
   assert.equal(input.nativeStorage === observations.lifecycle.prepared, true, "the real caller supplies the SAME canonical prepared view");
   observations.preparedConsumers++;
@@ -253,6 +309,8 @@ registerHooks({ load(url, context, nextLoad) {
       replacement: "function observedPrepareRustPhysicalCallableEmissionRequests(", extension: ${JSON.stringify(requestObservation)} },
     { url: ${JSON.stringify(storageUrl)}, anchor: "export function createRustNativeStorageQueries(",
       replacement: "function observedCreateRustNativeStorageQueries(", extension: ${JSON.stringify(storageObservation)} },
+    { url: ${JSON.stringify(producersUrl)}, anchor: "export function createRustNativeCallableProducerPlan(",
+      replacement: "function observedCreateRustNativeCallableProducerPlan(", extension: ${JSON.stringify(producerObservation)} },
     { url: ${JSON.stringify(lifecycleUrl)}, anchor: "export function createRustPhysicalCallableLifecycle(",
       replacement: "function observedCreateRustPhysicalCallableLifecycle(", extension: ${JSON.stringify(lifecycleObservation)} },
     { url: ${JSON.stringify(identityUrl)}, anchor: "export function prepareRustGenericCallableIdentityRequests(",
@@ -265,7 +323,15 @@ registerHooks({ load(url, context, nextLoad) {
   const source = typeof loaded.source === "string" ? loaded.source : Buffer.from(loaded.source).toString("utf8");
   assert.equal(source.split(selection.anchor).length, 2, "one exact instrumented observation anchor: " + selection.url);
   observations.anchors.add(url);
-  return { ...loaded, source: source.replace(selection.anchor, selection.replacement) + "\\n" + selection.extension };
+  let observed = source.replace(selection.anchor, selection.replacement);
+  if (url === ${JSON.stringify(storageUrl)}) {
+    const anchor = "returns.set(declaration, selection);";
+    assert.equal(observed.split(anchor).length, 2, "one exact actual return-materialization write anchor");
+    observations.returnWriteAnchors++;
+    observed = observed.replace(anchor, "{ " + anchor + " globalThis[Symbol.for(" +
+      ${JSON.stringify(JSON.stringify(key))} + ")].returnSelected(declaration, selection); }");
+  }
+  return { ...loaded, source: observed + "\\n" + selection.extension };
 } });
 const carriers = await import(${JSON.stringify(carriersUrl)});
 observations.registry = registry => (${observeCallablePublication.toString()})(registry, assert, carriers, observations);
@@ -276,8 +342,10 @@ assert.equal(compiled.result.program === observations.published, false, "the obs
 assert.equal(compiled.result.program.callableValues === observations.published, true, "the pipeline publishes the exact observed completed product");
 assert.equal(observations.anchors.has(${JSON.stringify(registryUrl)}) && observations.anchors.has(${JSON.stringify(componentsUrl)}), true,
   "both original production functions are observed without writing dist");
-assert.equal(observations.anchors.size, 8, "each original stage and each required input observer has one exact anchor");
+assert.equal(observations.anchors.size, 9, "each original stage, required input and actual producer-seal observer has one exact anchor");
+assert.equal(observations.returnWriteAnchors, 1, "one exact write anchor belongs to the existing canonical return owner");
 assert.equal(observations.seals, 1, "one actual late callable seal");
+assert.equal(observations.producerSeals, 1, "one actual terminal native producer seal remains inside the measured window");
 assert.equal(observations.publications, 1, "one actual planner publication");
 assert.equal(observations.requests.kind, "resolved", "only an admitted complete request inventory is published");
 assert.equal(observations.requestSelections, 1, "the source-use owner is never replayed after sealing");
@@ -285,6 +353,29 @@ assert.equal(observations.storageFactories, 1, "the single actual program constr
 assert.equal(observations.preparedConsumers, 2, "both actual early consumer owners use the canonical prepared view");
 assert.equal(observations.identityComparisons > 0 && observations.dispatched > 0, true,
   "real native identity comparisons and generic dispatch exercise both consumer paths");
+assert.equal(observations.earlyReturnSelections > 0, true,
+  "the actual source preserves legitimate return materialization before lifecycle creation");
+assert.equal(observations.returnLookups > 0 && observations.terminalReturnReads.size > 0, true,
+  "both pure readers and actual terminal producer projections consume canonical return records");
+assert.equal("prepareReturn" in observations.published.nativeStorage, false,
+  "published storage never exposes its return construction writer");
+const sourceAst = compiled.result.program.source.ast;
+const scalar = observations.published.nativeProducers.producers.find(producer => {
+  const name = sourceAst.name(producer.declaration);
+  return name !== undefined && sourceAst.text(name) === "owner";
+});
+assert.equal(scalar !== undefined, true, "the exact native-valid boolean identity owner participates");
+const scalarSelection = observations.returnSelections.get(scalar.declaration);
+assert.equal(scalarSelection !== undefined && scalarSelection.count === 1, true,
+  "the scalar physical return is selected once through all actual producer modes");
+assert.equal(observations.terminalReturnReads.has(scalar.declaration), true,
+  "the actual terminal producer seal exercises the scalar regression control");
+assert.equal(observations.published.nativeProducers.outwardReturnFor(scalar.declaration) === scalarSelection.selected.carrier, true,
+  "scalar outward ABI consumes the same selected physical return");
+assert.equal(observations.published.nativeProducers.invocationResultFor(scalar.declaration) === scalarSelection.selected.carrier, true,
+  "scalar invocation ABI consumes the same selected physical return");
+assert.equal(observations.published.nativeProducers.bodyResultFor(scalar.declaration) === undefined, true,
+  "the synchronous scalar owner does not invent an asynchronous body ABI");
 let primed = 0;
 observations.earlyStoragePhase = "verifying";
 for (const [method, reads] of observations.rawSelections) {
@@ -294,7 +385,7 @@ for (const [method, reads] of observations.rawSelections) {
   for (const [node, row] of reads) {
     assert.equal(observations.lifecycle.prepared[method](node) === row.selected, true,
       method + ": original materialization identity survives all real caller stages");
-    assert.equal(reads.get(node).count, 1, method + ": no raw reselection after the one early materialization");
+    assert.equal(reads.get(node).count, 1, method + ": no raw reselection from first materialization through terminal publication");
     primed++;
   }
 }

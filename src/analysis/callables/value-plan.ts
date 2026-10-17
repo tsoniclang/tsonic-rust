@@ -23,7 +23,7 @@ import type { SourceStorageQueries } from "@tsonic/target-api/analysis";
 import type { RustProjectTypePolicy } from "../project-types/type-policy.js";
 import type { RustTypeDefinitions } from "../../target-model/types/source-union-definitions.js";
 import { createRustNativeCallableInputPlan, type RustNativeCallableInputPlan } from "./native-inputs.js";
-import { createRustNativeStorageQueries, type RustNativeStoragePlan } from "./native-storage.js";
+import { createRustNativeStorageQueries, type RustNativeStorageConstruction, type RustNativeStoragePlan } from "./native-storage.js";
 import { finalizeRustNativeParameterStorage } from "./native-parameters.js";
 import { createRustNativeCallableProducerPlan, type RustNativeCallableProducerPlan } from "./native-producers.js";
 import { createRustNativeGenericProducerPlan, prepareRustNativeGenericProducerRequests,
@@ -82,7 +82,7 @@ export interface RustCallableValuePlan {
 
 export type RustCallableValueSelection = Omit<RustCallableValuePlan, "native" | "nativeStorage" | "flowApplications" | "emissionContexts"> & {
   readonly native: RustNativeCallableInputPlan;
-  readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeStorage: RustNativeStorageConstruction;
 };
 
 export interface RustCallableValueSealInput {
@@ -120,7 +120,7 @@ export interface RustCallableValuePlanInput {
 export interface RustCallableValueConstruction {
   readonly generic: RustGenericCallablePlan;
   readonly native: RustNativeCallableInputPlan;
-  readonly nativeStorage: RustNativeStoragePlan;
+  readonly nativeStorage: RustNativeStorageConstruction;
   readonly nativeProducers: RustNativeCallableProducerPlan;
   readonly issues: readonly RustSourceCallableSpecializationIssue[];
 }
@@ -293,7 +293,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
   const nativeProducers = createRustNativeCallableProducerPlan({ ast: input.ast, records: input.records,
     nodes: input.nativeNodes, native, definitions: input.typeDefinitions,
     returnCarrierFor: declaration => {
-      const selected = nativeStorageQueries.returnFor(declaration);
+      const selected = nativeStorageQueries.prepareReturn(declaration);
       return selected.kind === "unresolved" ? undefined : selected.carrier;
     } });
   let physicalCarrierFor: RustGenericCallablePhysicalCarrierSelector | undefined;
@@ -312,7 +312,7 @@ function createRustCallableValueLifecycle(input: RustCallableValuePlanInput,
     boundSubjectFor: (subject, carrier, bindings) => nativeStorageQueries.boundSubjectFor(subject, carrier, bindings) });
   physicalCarrierFor = physical.carrierFor;
   let parameterStorage: RustNativeStoragePlan | undefined;
-  const nativeStorage: RustNativeStoragePlan = Object.freeze({ ...nativeStorageQueries,
+  const nativeStorage: RustNativeStorageConstruction = Object.freeze({ ...nativeStorageQueries,
     parameterFor(parameter: Node) {
       if (parameterStorage === undefined) throw new Error("Native parameter storage requires completed intrinsic effects and constructor ABI selection.");
       return parameterStorage.parameterFor(parameter);
