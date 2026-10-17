@@ -96,7 +96,7 @@ function planProjectedExpression(
   if (selectedBorrow) access = ownership.flowResultBorrow ? "shared-receiver" : "shared-place";
   const override = context.expressionOverrides?.get(node);
   const key = context.input.program.records.indexedFieldKeyArgument.get(node);
-  if (key !== undefined && finalStage !== "source" && override === undefined) {
+  if (key !== undefined && finalStage !== "source" && !sourceFormation && override === undefined) {
     const type = rustTypeFromCarrierInContext(key.carrier, context);
     if (type?.kind !== "named" || type.genericArguments?.some(argument => argument.kind !== "type" && argument.kind !== "const")) return undefined;
     const value: RustExpr = { kind: "path", path: type.path,
