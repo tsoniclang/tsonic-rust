@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeRust } from "../../helpers/rust-session.mjs";
+import { analyzeRust, compileRust } from "../../helpers/rust-session.mjs";
+import { analyzeRustCheckedContext } from "../../helpers/rust-session/analysis-context.mjs";
 import { createTargetSourceProgram, Node_Initializer, sourceNodesOutsideErasedSubtrees } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { createRustNativeCallableInputPlan } from "../../../dist/analysis/callables/native-inputs.js";
@@ -410,13 +411,29 @@ test("concrete quantified producers retain the existing sealed family through al
 });
 
 test("physical selection rejects ambiguous mutation alternatives and seals concrete producers", () => {
-  const current = fixture(`
+  const source = `
     export function choose(left: () => number, right: () => number): () => number {
       left = right; const selected = left; return selected;
     }
     export function create(): () => number { return () => 7; }
     export function concrete(): () => number { const supplied = create(); return supplied; }
-  `);
+  `;
+  let context;
+  const { result } = compileRust({ surfaces: [], files: { "index.ts": source }, compileTarget(request) {
+    context = analyzeRustCheckedContext(request);
+    return { kind: "resolved", value: { artifacts: [] }, diagnostics: context.diagnostics };
+  } });
+  assert.equal(context !== undefined, true, "the actual private storage construction owns this checked source");
+  assert.deepEqual(result.diagnostics.map(issue => ({ code: issue.code, message: issue.message })), Array.from({ length: 2 }, () => ({
+    code: "RUST_PHYSICAL_EMISSION_CONTEXT_NOT_PREPARED",
+    message: "Native callable storage has distinct physical input alternatives requiring a sealed join.",
+  })), "both required ambiguous uses reject before any physical program is published");
+  assert.equal(result.artifacts.length, 0, "a rejected physical storage program emits nothing");
+  const declaration = name => context.sourceStorage.nodes.find(node => context.ast.name(node) !== undefined &&
+    context.ast.text(context.ast.name(node)) === name &&
+    (context.ast.is.IsFunctionDeclaration(node) || context.ast.is.IsVariableDeclaration(node)));
+  const current = { plan: context.callableValues.nativeStorage, declaration,
+    initializer: name => Node_Initializer(context.ast, declaration(name)) };
   for (const result of [current.plan.prepareReturn(current.declaration("choose")),
     current.plan.prepareValue(current.declaration("selected"))])
     assert.equal(result.kind, "unresolved", "no signature-based choice, closed error guess, or silent fallback");

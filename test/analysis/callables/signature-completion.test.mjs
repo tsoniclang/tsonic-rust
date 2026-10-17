@@ -11,6 +11,9 @@ import { rustTargetTypeRefEquals } from "../../../dist/target-model/types/equali
 import { closedMetadataEquals } from "../../../dist/target-model/metadata/closed-data.js";
 import { recordClassSignatureFacts, recordInterfaceFacts } from "../../../dist/analysis/declarations/project-types.js";
 import { resolveRustCallableEnvironment } from "../../../dist/policy/types/resolution/callable-environments.js";
+import { resolveReferencedDeclarationType } from "../../../dist/policy/types/resolution/tuples.js";
+import { rustCallablePhysicalSignature } from "../../../dist/target-model/conversions/callable-physical.js";
+import { compileRust } from "../../helpers/rust-session.mjs";
 
 test("source callable captures read their completed native input value and never replace a missing ABI with checked primitive evidence", () => {
   const { context, walk } = analyzeRustOperations(`
@@ -373,4 +376,104 @@ for (const [name, path] of [
   const module = new URL(`../../../dist/analysis/callables/${path}.js`, import.meta.url).href;
   const source = `import { ${name} } from ${JSON.stringify(module)};`;
   await assert.rejects(import("data:text/javascript," + encodeURIComponent(source)), /does not provide an export named/u);
+});
+
+for (const [surface, surfaces] of [["native", []], ["js", ["js"]]]) {
+  for (const [name, source] of [
+    ["direct", "function owner(value: boolean): boolean { return value; } export function step(): typeof owner { return owner; }"],
+    ["immutable alias", "function owner(value: boolean): boolean { return value; } const alias = owner; export function step(): typeof owner { return alias; }"],
+    ["forward reference", "export function step(): typeof owner { return owner; } function owner(value: boolean): boolean { return value; }"],
+    ["function expression", "const owner = function(value: boolean): boolean { return value; }; export function step(): typeof owner { return owner; }"],
+    ["arrow", "const owner = (value: boolean): boolean => value; export function step(): typeof owner { return owner; }"],
+    ["parenthesized alias", "function owner(value: boolean): boolean { return value; } const alias = (owner); export function step(): typeof owner { return (alias); }"],
+  ]) test(`${surface} ${name} callable return retains the function value rather than its result annotation`, () => {
+    const { context } = analyzeRustOperations(source, { surfaces });
+    const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === "step");
+    assert.equal(declaration !== undefined, true, name + ": actual returned function owner");
+    const returned = context.records.sourceCallableReturn.get(declaration)?.returnCarrier;
+    assert.equal(returned !== undefined, true, name + ": actual completed retained result");
+    const signature = rustCallablePhysicalSignature(returned);
+    assert.equal(signature !== undefined, true, name + ": return is a callable, not bool");
+    assert.equal(signature.parameters.length, 1, name + ": full parameter arity preserved");
+    assert.equal(signature.parameters[0].kind === "source-primitive" && signature.parameters[0].name === "bool", true,
+      name + ": original native input preserved");
+    assert.equal(signature.result.kind === "source-primitive" && signature.result.name === "bool", true,
+      name + ": bool remains the callable result, not the callable value");
+  });
+
+  test(`${surface} referenced function values require their existing canonical signature reader`, () => {
+    const { context, walk } = analyzeRustOperations(
+      "function owner(value: boolean): boolean { return value; } export function step(value: boolean): boolean { return owner(value); }",
+      { surfaces });
+    const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === "owner");
+    const reference = context.sourceStorage.nodes.find(node => context.ast.is.IsIdentifier(node) &&
+      context.source.navigation.referenceFor(node)?.declaration === declaration);
+    assert.equal(declaration !== undefined && reference !== undefined, true, "actual function reference correspondence");
+    const resolution = { ...rustResolutionContext(walk, reference), records: createRustRecordFixture({ runtimeCarrier: {
+      get: node => node === declaration ? undefined : context.records.runtimeCarrier.get(node),
+    } }, context.records) };
+    const canonical = walk.operationOptions.callableSignatureCarrier(declaration);
+    assert.equal(canonical !== undefined && rustCallablePhysicalSignature(canonical) !== undefined, true,
+      "the existing callable owner has complete signature evidence");
+    let queries = 0;
+    const selected = resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier(subject) {
+        queries++;
+        assert.equal(subject === declaration, true, "the actual selected declaration owns this request");
+        return walk.operationOptions.callableSignatureCarrier(subject);
+      },
+    });
+    assert.equal(selected === canonical, true, "the complete callable carrier is consumed without reconstruction");
+    assert.equal(queries, 1, "one canonical reader, not a return-annotation path");
+    assert.equal(resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier: () => undefined }) === undefined, true,
+    "unavailable function evidence is unresolved rather than its bool return annotation");
+  });
+
+  test(`${surface} generic function references cannot turn their result type parameter into a function value`, () => {
+    const { context, walk } = analyzeRustOperations(
+      "function owner<Value>(value: Value): Value { return value; } export function step(value: boolean): boolean { return owner(value); }",
+      { surfaces });
+    const declaration = context.sourceStorage.nodes.find(node => context.ast.is.IsFunctionDeclaration(node) &&
+      context.ast.text(context.ast.name(node)) === "owner");
+    const reference = context.sourceStorage.nodes.find(node => context.ast.is.IsIdentifier(node) &&
+      context.source.navigation.referenceFor(node)?.declaration === declaration);
+    assert.equal(declaration !== undefined && reference !== undefined, true, "actual generic invocation reference");
+    const resolution = { ...rustResolutionContext(walk, reference), records: createRustRecordFixture({ runtimeCarrier: {
+      get: node => node === declaration ? undefined : context.records.runtimeCarrier.get(node),
+    } }, context.records) };
+    assert.equal(resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier: () => undefined }) === undefined, true,
+    "generic completion remains owned by its canonical reader, never the generic return annotation");
+  });
+
+  test(`${surface} a wrong callable signature remains a checked source rejection`, () => {
+    const { result } = compileRust({ surfaces, files: { "index.ts":
+      "function owner(value: number): number { return value; } export function step(): (value: boolean) => boolean { return owner; }" } });
+    assert.equal(result.diagnostics.some(issue => issue.code === "TS2322"), true, "the incompatible native callable is not admitted");
+    assert.equal(result.artifacts.length, 0, "no program is emitted for the wrong signature");
+  });
+}
+
+test("referenced getter, property, parameter and local values retain their value annotations", () => {
+  const { context, walk } = analyzeRustOperations(`
+export class Box { field: number = 1; get size(): number { return this.field; } }
+export function step(value: number): number { const local: number = value; return local; }
+export function inspect(box: Box): number { return box.size + box.field; }`, { surfaces: [] });
+  for (const name of ["size", "field", "value", "local"]) {
+    const reference = context.sourceStorage.nodes.find(node => context.ast.is.IsIdentifier(node) &&
+      context.ast.text(node) === name && context.source.navigation.referenceFor(node)?.declaration !== undefined);
+    assert.equal(reference !== undefined, true, name + ": checked value reference");
+    const declaration = context.source.navigation.referenceFor(reference).declaration;
+    const resolution = { ...rustResolutionContext(walk, reference), records: createRustRecordFixture({ runtimeCarrier: {
+      get: node => node === declaration ? undefined : context.records.runtimeCarrier.get(node),
+    } }, context.records) };
+    const value = resolveReferencedDeclarationType(reference, resolution, { ...walk.operationOptions,
+      callableSignatureCarrier() { throw new Error("a non-function value must not query a callable signature"); },
+    });
+    assert.equal(value?.kind === "source-primitive" && value.name === "float64", true,
+      name + ": the actual value annotation is still authoritative");
+  }
 });

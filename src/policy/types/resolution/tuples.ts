@@ -137,6 +137,10 @@ export function resolveReferencedDeclarationType(
       if (declarationCarrier !== undefined) {
         return declarationCarrier;
       }
+      if (ast.is.IsFunctionDeclaration(declaration) || ast.is.IsFunctionExpression(declaration) ||
+        ast.is.IsArrowFunction(declaration)) {
+        return options.callableSignatureCarrier(declaration);
+      }
       const typeNode = Node_Type(ast, declaration);
       if (typeNode !== undefined) {
         const target = resolveRustAuthoredTargetType(typeNode, context, options, new Set<object>());
