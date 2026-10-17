@@ -11,6 +11,7 @@ import { finalizeRustProviderOperationAbi } from "../../../dist/analysis/operati
 import { planExpression } from "../../../dist/backend/planner/expressions/entry.js";
 import { planProviderOperationExpression } from "../../../dist/backend/planner/expressions/conversions.js";
 import { planRustProviderEvaluationScope } from "../../../dist/backend/planner/project/provider-evaluation-scope.js";
+import { selectRustProviderSourceOccurrence } from "../../../dist/analysis/operations/provider-source-inputs.js";
 import { printRustExpr } from "../../../dist/print/source/expressions/core.js";
 import { rustNamedTypeCarrierValue } from "../../../dist/target-model/types/index.js";
 
@@ -307,7 +308,11 @@ export function borrowingUnwind(): number {
     evaluationOnlySourceArgumentIndexes: [0], resultCarrier: number, isAsync: false, isFallible: false });
   assert.equal(abi !== undefined, true, "the existing finalizer explicitly admits the omitted owned operand");
   const fact = { kind: "provider-operation", operationId: "r14-drop-owner-contract", resultCarrier: number, abi };
-  const context = { input: { program }, sourceFile: ast.getSourceFile(omitted), diagnostics: [],
+  const occurrence = selectRustProviderSourceOccurrence(omitted, fact, undefined, argumentsList);
+  assert.equal(occurrence !== undefined, true, "the admitted native operation has its exact original evaluation-only source slots");
+  const physicalEmissionContexts = Object.freeze({ ...program.physicalEmissionContexts,
+    sourceFor: (node, operation) => node === omitted && operation === fact ? occurrence : program.physicalEmissionContexts.sourceFor(node, operation) });
+  const context = { input: { program: { ...program, physicalEmissionContexts } }, sourceFile: ast.getSourceFile(omitted), diagnostics: [],
     expressionOverrides: new Map(argumentsList.map((node, index) => [node, {
       expression: { kind: "call", path: `crate::index::drop_probe::${index === 0 ? "receiver" : "value"}`, args: [] },
       carrier: index === 0 ? token : number, valueForm: "value",

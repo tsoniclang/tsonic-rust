@@ -19,7 +19,7 @@ test("synchronous JS Future output preserves producer error identity before defe
       forDeclaration: producers.forDeclaration, errorFor: producers.errorFor,
       deferredFor() { throw new Error("JS output shape cannot depend on unfinished deferred-effect selection"); },
     }, returnCarrierFor(node) {
-      const result = context.callableValues.nativeStorage.returnFor(node);
+      const result = context.callableValues.nativeStorage.prepareReturn(node);
       return result.kind === "unresolved" ? undefined : result.carrier;
     },
   });

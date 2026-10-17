@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeRust, compileRust, artifactText, acmePlatformPackage, acmeTestingPackage, boolCarrier, unitCarrier } from "../../helpers/rust-session.mjs";
-import { analyzeRustStatementCompletions } from "../../../dist/analysis/control-flow/statement-completion.js";
+import { analyzeRustStatementCompletions, rustRuntimeSetSourceInputs } from "../../../dist/analysis/control-flow/statement-completion.js";
 import { createRustProviderPackage } from "../../../dist/public/provider.js";
 import { validateGeneratedProject } from "../../helpers/cargo-projects.mjs";
 import { rustNativeFixtureNodes } from "../../helpers/records.mjs";
@@ -419,6 +419,44 @@ main();
   assert.match(generated, /\.count = /u, "selected direct storage assignment is emitted");
   assert.doesNotMatch(generated, /\.set_count\(/u, "the renderer does not substitute another provider operation");
   validateGeneratedProject("r05-native-field-setter", result.artifacts, { run: true });
+});
+
+test("early native setter source inputs and final admission share every checked operand and ABI refusal", () => {
+  const { program, nodes, ast } = checked(`
+import { Store } from "@acme/platform";
+export function update(): void {
+  const store = new Store("seed");
+  store.count = 1;
+  (store.count) += 2;
+  ++store.count;
+  store.count--;
+  store[0] = 3;
+  ++store[0];
+  (store[1])--;
+}`, { packages: [acmePlatformPackage({ includeSetters: true })] });
+  const setters = nodes.filter(node => program.records.targetOperation.get(node)?.kind === "runtime-set");
+  assert.equal(setters.length, 7, "direct, compound, prefix, postfix, property, index and wrapper source cases remain");
+  for (const [ordinal, node] of setters.entries()) {
+    const operation = program.records.targetOperation.get(node);
+    const early = rustRuntimeSetSourceInputs(ast, node, operation);
+    const final = program.statementCompletions.setterFor(node);
+    const label = `native setter ${ordinal}`;
+    assert.equal(early !== undefined && final !== undefined, true, `${label}: one exact early/final source projection`);
+    assert.equal(early.receiver === final.receiver, true, `${label}: original receiver identity`);
+    assert.equal(early.sourceArguments.length === final.sourceArguments.length &&
+      early.sourceArguments.every((argument, index) => argument === final.sourceArguments[index]), true,
+    `${label}: every original source argument and its order`);
+    assert.equal(Object.isFrozen(early) && Object.isFrozen(early.sourceArguments), true, `${label}: immutable projection`);
+    for (const [name, abi] of [
+      ["kind", { ...operation.abi, operationKind: "method" }],
+      ["arity", { ...operation.abi, sourceArguments: [] }],
+      ["erased argument", { ...operation.abi, sourceArguments: operation.abi.sourceArguments.map(argument =>
+        ({ ...argument, disposition: "erased" })) }],
+      ["awaiting", { ...operation.abi, effects: { ...operation.abi.effects, awaiting: "infallible" } }],
+      ["result", { ...operation.abi, result: { ...operation.abi.result, carrier: boolCarrier } }],
+    ]) assert.equal(rustRuntimeSetSourceInputs(ast, node, { ...operation, abi }) === undefined, true,
+      `${label}: existing ${name} refusal remains at the single source-input owner`);
+  }
 });
 
 test("the canonical setter renderer preserves receiver and value effects for a selected native macro", () => {

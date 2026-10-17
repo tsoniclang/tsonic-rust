@@ -10,6 +10,7 @@ import { planExpression } from "../../../../dist/backend/planner/expressions/ent
 import { finalizeRustProviderOperationAbi } from "../../../../dist/analysis/operations/finalized-operation/finalize.js";
 import { rustFutureTargetType } from "../../../../dist/target-model/types/index.js";
 import { planRustProviderEvaluationScope } from "../../../../dist/backend/planner/project/provider-evaluation-scope.js";
+import { selectRustProviderSourceOccurrence } from "../../../../dist/analysis/operations/provider-source-inputs.js";
 
 test("provider evaluation retains exact existing borrows across readonly representation changes", () => {
   const { program } = analyzeRust({ surfaces: ["js"], files: { "index.ts": `
@@ -88,7 +89,11 @@ export function observed(): number { return target(first(), second()); }
       evaluationOnlySourceArgumentIndexes: [0], resultCarrier: number, isAsync: false, isFallible: false });
     assert.equal(abi !== undefined, true, `${label}: existing canonical ABI admission`);
     const fact = { kind: "provider-operation", operationId: "fixture::consume", resultCarrier: number, abi };
-    const context = { input: { program }, sourceFile: ast.getSourceFile(node), diagnostics: [],
+    const occurrence = selectRustProviderSourceOccurrence(node, fact, undefined, argumentsList);
+    assert.equal(occurrence !== undefined, true, `${label}: exact original source slots are admitted before rendering`);
+    const physicalEmissionContexts = Object.freeze({ ...program.physicalEmissionContexts,
+      sourceFor: (subject, operation) => subject === node && operation === fact ? occurrence : undefined });
+    const context = { input: { program: { ...program, physicalEmissionContexts } }, sourceFile: ast.getSourceFile(node), diagnostics: [],
       expressionOverrides: new Map([[argumentsList[0], { expression, carrier, valueForm: "value" }],
         [argumentsList[1], { expression: { kind: "call", path: "fixture::value", args: [] }, carrier: number, valueForm: "value" }]]) };
     const selected = planRustProviderEvaluationScope(context, fact, node, undefined, argumentsList, planExpression, () => undefined);

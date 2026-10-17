@@ -62,6 +62,7 @@ export interface RustPlanningHost {
 }
 
 export interface RustTargetProgram {
+  readonly physicalEmissionContexts: import("../../target-model/records/physical-emission-contexts.js").RustCallableEmissionContexts;
   readonly statementCompletions: RustStatementCompletionIndex;
   readonly reachability: import("../reachability/model.js").RustReachability;
   readonly errorRegions: import("../../target-model/records/error-regions.js").RustErrorRegionRecords;
@@ -103,7 +104,7 @@ export interface RustTargetProgram {
   readonly frozenDataWrites: import("../objects/frozen-data-writes.js").RustFrozenDataWritePlan;
   readonly classValues: import("../objects/class-values.js").RustClassValuePlan;
   readonly runtimeReferences: RustRuntimeReferencePlan;
-  readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextCatalog;
+  readonly dispatchContexts: import("../project/dispatch-contexts.js").RustDispatchContextDeclarations;
   readonly dispatchContextDemand: import("../project/dispatch-demand.js").RustDispatchContextDemandPlan;
   readonly binaryDispatchDemand: import("../project/binary-dispatch-demand.js").RustBinaryDispatchDemandPlan;
   readonly foundation: RustFoundationPlan;

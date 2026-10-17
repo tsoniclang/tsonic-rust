@@ -219,7 +219,8 @@ function physicalLifecycleInputs({ beforeInitialize, afterInitialize }) {
   assert.equal(registry !== undefined && input !== undefined && construction !== undefined && components !== undefined, true,
     "source effects and the one component classification precede physical storage preparation");
   assert.equal(preparationIssues?.length, 0, "all actual physical storage is prepared without issues");
-  assert.equal(selectionIssues?.length, 0, "source-selected families finalize without issues");
+  assert.equal(selectionIssues?.kind, "resolved", "source-selected families reach their complete admission result");
+  assert.equal(selectionIssues.value.length, 0, "source-selected families finalize without issues");
   return { registry, input, construction, components };
 }
 

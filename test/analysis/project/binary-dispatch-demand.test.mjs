@@ -19,7 +19,8 @@ function fixture(demanded = [], rows = [
     errorDomain: "project", root: componentId === "root" }));
   const byId = new Map(components.map(component => [component.componentId, component]));
   const selections = new Map(components.map(component => {
-    const selected = catalog.plan.compose(demanded.includes(component.componentId) ? ["acme.dispatch"] : []);
+    const selected = catalog.plan.compose({ demandedContextIds: demanded.includes(component.componentId) ? ["acme.dispatch"] : [],
+      accessContextIds: ["acme.dispatch"] });
     assert.equal(selected.kind, "resolved");
     return [component.componentId, selected.plan];
   }));
@@ -77,7 +78,8 @@ test("multiple context selectors retain independent roots in one component group
   const catalog = analyzeRustDispatchContextCatalog([first, second], ["acme_dispatch"]);
   assert.equal(catalog.kind, "resolved");
   input.contexts = catalog.plan;
-  const selected = catalog.plan.compose(["acme.dispatch", "other.dispatch"]);
+  const selected = catalog.plan.compose({ demandedContextIds: ["acme.dispatch", "other.dispatch"],
+    accessContextIds: ["acme.dispatch", "other.dispatch"] });
   assert.equal(selected.kind, "resolved");
   const original = input.demand.forComponent;
   input.demand.forComponent = id => id === "leaf" ? selected.plan : original(id);
