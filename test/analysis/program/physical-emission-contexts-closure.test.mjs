@@ -1075,6 +1075,7 @@ test("a required missing physical operand refuses at the preparation owner befor
   assert.equal(arithmetic.physicalEmissionContexts.contexts.some(context => context.use.role === "native-body"), true,
     "ordinary arithmetic retains its real body context without artificial callable-storage reads");
   const preparationUrl = new URL("../../../dist/analysis/callables/emission-contexts.js", import.meta.url).href;
+  const programPreparationUrl = new URL("../../../dist/analysis/program/physical-emission-contexts.js", import.meta.url).href;
   const helperUrl = new URL("../../helpers/rust-session.mjs", import.meta.url).href;
   const key = "r14-actual-missing-operand-preparation";
   const script = `
@@ -1095,6 +1096,7 @@ registerHooks({ load(url, context, nextLoad) {
 } });
 const { analyzeRust } = await import(${JSON.stringify(helperUrl)});
 const { prepareRustEmissionContextRequests } = await import(${JSON.stringify(preparationUrl)});
+const { prepareRustPhysicalEmissionContexts } = await import(${JSON.stringify(programPreparationUrl)});
 const { program } = analyzeRust({ surfaces: ["js"], target: { id: "rust", options: { outputType: "lib" } }, files: {
   "index.ts": 'export function contains(input: string): boolean { return input.includes("value"); }' +
     'class FieldOwner { values = [1, 2].map(value => value + 1); constructor() {} }' +

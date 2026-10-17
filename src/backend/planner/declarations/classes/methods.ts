@@ -31,7 +31,6 @@ import { planRustAbsentValue } from "../../expressions/optional-storage.js";
 import type { RustPlanContext } from "../../program/plan-context.js";
 import type { RustProjectTypeDefinition } from "../../../../analysis/project-types/type-policy.js";
 import type { RustExpr, RustImplFunction, RustStmt } from "../../../target-ast/syntax/nodes.js";
-import type { TargetTypeRef } from "../../../../target-model/types/model.js";
 import { wrapRustJsPromiseBody } from "../callables/async-promise.js";
 import { planRustReturnExit } from "../../statements/completion-exits.js";
 import { requireRustCarrierRequirements } from "../../types/generic-requirements.js";
