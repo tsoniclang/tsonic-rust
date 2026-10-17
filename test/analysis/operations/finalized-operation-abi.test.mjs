@@ -46,7 +46,7 @@ function nativeReturnedLoanOptions() {
     receiver: { kind: "shared", lifetime, type: { kind: "reference", lifetime, mutable: false,
       target: { kind: "primitive", name: "str" } } }, asynchronous: false, unsafe: false, abi: "Rust", variadic: false };
   fn.resultLoans = selectRustCompilerResultLoans(fn);
-  return { operationKind: "method", form: { form: "receiver-method", method: "as_str", receiverMode: "ref" },
+  return { operationKind: "method", form: { form: "receiver-method", name: "as_str" },
     sourceReceiver: { kind: "runtime", carrier: string }, sourceArgumentCarriers: [], resultCarrier: string,
     resultConversion: rustBorrowedStrToStringValueConversion, resultLoans: projectRustNativeResultLoans(fn, result),
     isAsync: false, isFallible: false };

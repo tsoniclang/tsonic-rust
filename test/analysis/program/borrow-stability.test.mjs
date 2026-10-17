@@ -172,6 +172,7 @@ function indexedBindingFixture({ uses = 1_100, bindingWritten = false, scope = "
     }, as: {
       AsPostfixUnaryExpression: node => ({ Operand: node.operand }),
       AsElementAccessExpression: node => ({ Expression: node.receiver }),
+      IsVariableDeclarationList: () => false,
     }, parent: node => useNodes.includes(node) ? { kindName: "KindExpressionStatement" } : undefined,
     forEachChild: (node, visit) => (node.children ?? (node.operand === undefined
       ? node.receiver === undefined ? [] : [node.receiver] : [node.operand])).forEach(visit) },

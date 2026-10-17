@@ -24,6 +24,8 @@ export interface RustBorrowedFieldWrite {
 
 export interface RustReadOwnershipFact {
   readonly carrier: TargetTypeRef;
+  readonly operandCarrier: TargetTypeRef;
+  readonly formation: RustValueReadOwnership;
   readonly source: RustValueReadOwnership;
   readonly value: RustValueReadOwnership;
   readonly snapshot: RustValueReadOwnership | undefined;

@@ -74,7 +74,7 @@ export function analyzeRustNativeInputs(input: RustNativePlaceInput & {
       }
     }
     const carrier = input.physicalEmissionContexts.carrierFor(operand.use, value.sourceCarrier);
-    if (carrier === undefined || !rustTargetTypeRefEquals(carrier, operand.carrier)) {
+    if (carrier === undefined) {
       reject(slot.node, "A native input place has no exact selected source carrier for its actual use.");
       continue;
     }
@@ -96,12 +96,12 @@ export function analyzeRustNativeInputs(input: RustNativePlaceInput & {
     }
     if (demand === "value") {
       const read = input.ownership.reads.get(node);
-      const carrier = read === undefined ? undefined : input.physicalEmissionContexts.carrierFor(operand.use, read.carrier);
+      const carrier = read === undefined ? undefined : input.physicalEmissionContexts.carrierFor(operand.use, read.operandCarrier);
       if (read === undefined || carrier === undefined || !rustTargetTypeRefEquals(carrier, operand.carrier)) {
         reject(node, "A native value input requires its already-admitted source read and exact actual physical carrier.");
         continue;
       }
-      if (read.value.kind === "borrow" && !(value.sourceCarrier.kind === "reference" || read.sharedReference)) {
+      if (read.formation.kind === "borrow" && !(value.sourceCarrier.kind === "reference" || read.sharedReference)) {
         reject(node, "A native by-value input cannot consume an uncorrelated borrowed storage read.");
         continue;
       }
@@ -131,6 +131,10 @@ export function selectRustNativePlace(
 ): RustNativePlaceSelection {
   const { ast, records } = input;
   const unresolved = (reason: string): RustNativePlaceSelection => Object.freeze({ kind: "unresolved", node, reason });
+  const read = input.ownership.reads.get(node);
+  const actualCarrier = read === undefined ? undefined : input.physicalEmissionContexts.carrierFor(operand.use, read.operandCarrier);
+  if (read === undefined || actualCarrier === undefined || !rustTargetTypeRefEquals(actualCarrier, operand.carrier))
+    return unresolved("A native place requires the original physical formation read in its exact selected input context.");
   const root = rustNativeStorageRoot(node, input);
   const projections = root === undefined ? undefined : rustNativeStorageProjections(node, root, input);
   const sourcePath = root === undefined || projections === undefined ? undefined
@@ -210,10 +214,7 @@ export function selectRustNativePlace(
   if (direct) {
     return resolved({ kind: "direct" });
   }
-  const read = input.ownership.reads.get(node);
-  const actualCarrier = read === undefined ? undefined : input.physicalEmissionContexts.carrierFor(operand.use, read.carrier);
-  if (read === undefined || actualCarrier === undefined || !rustTargetTypeRefEquals(actualCarrier, operand.carrier) ||
-    read.readsStorage || read.sharedReference || read.source.kind === "borrow" || read.value.kind === "borrow")
+  if (read.readsStorage || read.sharedReference || read.formation.kind === "borrow")
     return unresolved("The native borrow requires an admitted addressable source place or an already-formed owned native value.");
-  return resolved({ kind: "owned", read: read.value });
+  return resolved({ kind: "owned", read: read.formation });
 }

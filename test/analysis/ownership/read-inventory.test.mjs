@@ -26,12 +26,17 @@ async function fixture() {
       builder.sourceBindings.lexical(node, declaration, "value");
     }
   }
+  const records = builder.seal([]);
   const input = {
     storage,
     nativeNodes: storage.nodes,
-    records: builder.seal([]),
+    records,
     movingReads: new Set(),
     captures: new Map(),
+    nativeStorage: { operandFor(node) {
+      assert.equal(nativeNodes.has(node), true, "only the original checked source can obtain native formation");
+      return { kind: "resolved", carrier: records.runtimeCarrier.get(node).carrier };
+    } },
     borrowEffects: { pureValues: new Set(), fieldWrites: new Map(), stableBindings: new Set(), nativeWrites: new Map() },
     borrowEffectsInput: { ast: source.ast, isNativeNode: node => nativeNodes.has(node) },
     definitions: emptyRustTypeDefinitions,

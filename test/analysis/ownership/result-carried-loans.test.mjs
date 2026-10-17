@@ -25,7 +25,9 @@ function fixture(options = {}) {
   const sourceCarrier = options.sourceCarrier ?? ownerCarrier;
   const resultCarrier = options.resultCarrier ?? guardCarrier;
   const abi = finalizeRustProviderOperationAbi({ operationKind: "method",
-    form: { form: "receiver-method", method: "guard", receiverMode: options.receiverMode ?? "ref" },
+    form: options.receiverMode === "value"
+      ? { form: "free-call", path: "native::guard", receiverMode: "value" }
+      : { form: "receiver-method", name: "guard", ...(options.receiverMode === "mut-ref" ? { mutatesReceiver: true } : {}) },
     sourceReceiver: { kind: "runtime", carrier: sourceCarrier }, sourceArgumentCarriers: [], resultCarrier,
     resultLoans: contract, ...(options.resultConversion === undefined ? {} : { resultConversion: options.resultConversion }),
     isAsync: options.isAsync ?? false, isFallible: false });
@@ -48,7 +50,8 @@ function fixture(options = {}) {
     origin: { kind: "call-input", operationNode: node, operation, input: selectedInput },
     carrier: sourceCarrier, destination: selectedInput.parameterCarrier });
   const place = Object.freeze({ kind: options.receiverMode === "value" ? "value" : "place", input: selectedInput, key: "receiver", node: sourceNode, slot, operand,
-    ...(options.receiverMode === "value" ? { read: Object.freeze({ carrier: sourceCarrier, value: { kind: "move" }, source: { kind: "move" },
+    ...(options.receiverMode === "value" ? { read: Object.freeze({ carrier: sourceCarrier, operandCarrier: sourceCarrier,
+      formation: { kind: "move" }, value: { kind: "move" }, source: { kind: "move" },
       snapshot: undefined, stablePlace: false, readsStorage: true, pure: true, sharedReference: false, borrowedAcross: new Set() }) }
       : { place: Object.freeze({ node: sourceNode, operand, carrier: sourceCarrier,
       sourcePath: { declaration, projections: [] }, storage: { kind: "direct" } }) }) });

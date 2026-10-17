@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTargetSourceProgram } from "@tsonic/target-api/source";
+import { createTargetSourceProgram, sourceLexicalEnvironment } from "@tsonic/target-api/source";
 import { createSourceStorageQuery } from "@tsonic/target-api/analysis";
 import { checkedSource } from "../../../../tsonic/test/fixtures/source-navigation.mjs";
 import { analyzeRustOwnershipFlow, completeRustNativeReadTransfers } from "../../../dist/analysis/ownership/flow.js";
@@ -10,6 +10,7 @@ import { analyzeRustNativeParticipation } from "../../../dist/analysis/callables
 import { createRustProgramRecordBuilder } from "../../../dist/analysis/program/records/create.js";
 import { prepareRustCaptureReadRequirements, completeRustCaptureReadOwnership } from "../../../dist/analysis/ownership/reads.js";
 import { emptyRustTypeDefinitions } from "../../../dist/target-model/types/source-union-definitions.js";
+import { rustJsPromiseTargetType, rustStringTargetType } from "../../../dist/target-model/types/index.js";
 
 let sequence = 0;
 function analyzeFlow(input) {
@@ -333,5 +334,43 @@ for (const [name, body, lexical, storageKind, expected] of [
       assert.equal(completeRustNativeReadTransfers(selected.flow, forged).has(awaited), false,
         "a copied source witness cannot discharge an original physical capture requirement");
     }
+  });
+}
+
+for (const [name, body, expected] of [
+  ["transitive direct helper remains live", "const value = await pending; relay(); return value;", false],
+  ["transitive direct helper is consumed first", "relay(); return await pending;", true],
+  ["stored aggregate callable is observed later", "const holder = { invoke: relay }; const value = await pending; holder.invoke(); return value;", false],
+  ["exclusive return does not retain a foreign branch's environment", "if (flag) return relay; return await pending;", true],
+  ["finally observes the actual expanded environment", "try { return await pending; } finally { relay(); }", false],
+]) {
+  test(`one native flow preserves ${name}`, async () => {
+    const { source, storage } = await fixture(`async function run(pending: Promise<string>, flag: boolean) {
+      function later(): Promise<string> { return pending; }
+      const relay = () => later();
+      ${body}
+    }`);
+    const owner = storage.nodes.find(node => source.ast.is.IsArrowFunction(node));
+    const domain = new Set(storage.nodes);
+    const environment = sourceLexicalEnvironment(owner, [owner], source.ast, source.navigation, domain);
+    assert.equal(environment.kind, "resolved", "the actual source environment supplies its direct-call expansion");
+    assert.equal(environment.captures.length, 1, "the native boundary has one original expanded source binding");
+    const captured = environment.captures[0];
+    const capture = { declaration: captured.declaration, reference: captured.references[0],
+      carrier: rustJsPromiseTargetType(rustStringTargetType()), storage: "value" };
+    const selected = analyzeFlow({ source, storage, nativeNodes: storage.nodes,
+      capturesFor: node => node === owner ? { receivers: [], receiverFields: [], captures: [capture] } : undefined,
+      lexicalFunctions: { forDeclaration: node => node === owner ? { kind: "resolved", valueObserved: true,
+        singleInvocation: false, captures: [{ declaration: capture.declaration, mutable: false }] } : undefined },
+      isOnceCallable: () => false, canMoveStoredField: () => false, isOwnedOperationResult: () => false });
+    assert.equal(selected.kind, "resolved", "the same original graph and native formation owner complete");
+    const awaited = references(source, storage, "pending").find(node => source.ast.is.IsAwaitExpression(source.ast.parent(node)));
+    assert.equal(awaited !== undefined, true, "the checked awaited source occurrence is preserved");
+    assert.equal(selected.movingReads.has(awaited), expected,
+      "only the actual later native environment use retains the original source binding");
+    const requirement = selected.flow.captureRequirements.get(owner)[0];
+    assert.equal(requirement.capture === capture, true, "physical formation uses the original admitted capture row");
+    assert.equal(selected.captures.get(owner)[0].source === requirement.source, true,
+      "source-graph dependencies never replace the native storage witness");
   });
 }

@@ -61,6 +61,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     evidence: ["target.capability=rust.analysis.ownership"],
   }] };
   const nativeNodes = new Set(input.nativeNodes);
+  const invocations = new Set([...storage.invocations, ...storage.accessorInvocations]);
   const readTransfers = new Map<Node, RustReadTransferRequirement>();
   const captureTransfers = new Map<Node, ReadonlySet<Node>>();
   const graphs = new Map<Node, SourceControlFlowGraph>();
@@ -85,7 +86,7 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
       sourceExpressionResultDisposition(ast, point.source).kind === "awaited-in-scope") awaitedReads.add(point.source);
     const ownedCaptures = new Set((input.capturesFor(declaration)?.captures ?? [])
       .filter(capture => capture.storage === "value").map(capture => capture.declaration));
-    const nativeDependencies = analyzeCaptureDependencies(graph, input, nativeNodes);
+    const nativeDependencies = analyzeCaptureDependencies(graph, input, nativeNodes, invocations);
     if (nativeDependencies.kind === "unresolved") return { kind: "rejected", diagnostics: [{
       code: "RUST_OWNERSHIP_FLOW_UNRESOLVED", category: "error", source: "tsonic-rust",
       message: nativeDependencies.reason, sourceNode: nativeDependencies.source ?? declaration,
@@ -94,15 +95,11 @@ export function analyzeRustOwnershipFlow(input: RustOwnershipFlowInput):
     for (const point of graph.points) {
       if (!liveness.reachable.has(point.id) || point.source === undefined) continue;
       if (point.operation.kind === "capture") {
-        const binding = point.operation.binding;
         const capture = input.capturesFor(point.source)?.captures.find(value =>
           sourceNodesEqual(ast, value.declaration, point.operation.kind === "capture" ? point.operation.binding : undefined));
         if (capture === undefined || capture.storage !== "value" ||
           liveness.after.get(point.id)!.has(point.operation.binding) ||
           !bindingCanTransfer(point.operation.binding, declaration, input, awaitedReads, nativeNodes)) continue;
-        const dependencies = [...nativeDependencies.after.get(point.id)!].filter(value =>
-          value.declaration === binding && value.owner !== point.source);
-        if (dependencies.some(value => !independentCaptureFormation(value, captureTransfers))) continue;
         const transferred = new Set(captureTransfers.get(point.source));
         transferred.add(capture.declaration);
         captureTransfers.set(point.source, transferred);
@@ -186,11 +183,18 @@ function independentCaptureFormation(dependency: RustNativeCaptureDependency,
 }
 
 function analyzeCaptureDependencies(graph: SourceControlFlowGraph, input: RustOwnershipFlowInput,
-  nativeNodes: ReadonlySet<Node>) {
+  nativeNodes: ReadonlySet<Node>, invocations: ReadonlySet<Node>) {
   type State = ReadonlySet<RustNativeCaptureDependency>;
   const dependencies = new Map<Node, Map<Node, RustNativeCaptureDependency>>();
   for (const point of graph.points) {
     if (point.operation.kind !== "capture" || point.source === undefined) continue;
+    const requirements = input.captureRequirements.get(point.source);
+    if (requirements !== undefined) {
+      if (!dependencies.has(point.source)) dependencies.set(point.source, new Map(requirements.map(requirement =>
+        [requirement.capture.declaration, Object.freeze({ owner: point.source!,
+          declaration: requirement.capture.declaration, requirement })])));
+      continue;
+    }
     const rows = dependencies.get(point.source) ?? new Map<Node, RustNativeCaptureDependency>();
     if (!rows.has(point.operation.binding)) rows.set(point.operation.binding, Object.freeze({ owner: point.source,
       declaration: point.operation.binding, requirement: input.captureRequirements.get(point.source)?.find(value =>
@@ -198,7 +202,6 @@ function analyzeCaptureDependencies(graph: SourceControlFlowGraph, input: RustOw
     dependencies.set(point.source, rows);
   }
   const uses = new Map<number, Set<RustNativeCaptureDependency>>();
-  const boundary = new Set<RustNativeCaptureDependency>();
   for (const [owner, rows] of dependencies) {
     const aliases = input.source.navigation.expressionValueFlow(owner);
     const summary = input.source.ast.is.IsFunctionDeclaration(owner) ? input.borrowUses.useSummaryFor(owner) : undefined;
@@ -211,18 +214,32 @@ function analyzeCaptureDependencies(graph: SourceControlFlowGraph, input: RustOw
         for (const dependency of rows.values()) selected.add(dependency);
         uses.set(id, selected);
       }
-      if (use.role === "return" || use.role === "yield" || use.role === "storage" && use.throughMember)
-        for (const dependency of rows.values()) boundary.add(dependency);
     }
+  }
+  for (const point of graph.points) {
+    if (point.operation.kind !== "evaluate" || point.source === undefined || !invocations.has(point.source)) continue;
+    const region = graph.executionRegions.get(point.id);
+    const selected = input.storage.invocationImplementationsFor(point.source,
+      region?.selection.kind === "resolved" ? region.selection.bindings : undefined);
+    if (selected.kind !== "resolved") continue;
+    const values = uses.get(point.id) ?? new Set<RustNativeCaptureDependency>();
+    for (const owner of selected.nodes) {
+      const rows = dependencies.get(owner);
+      if (!input.borrowUses.reserve(1 + (rows?.size ?? 0))) break;
+      for (const dependency of rows?.values() ?? []) values.add(dependency);
+    }
+    if (values.size > 0) uses.set(point.id, values);
   }
   return solveSourceFlow<State>(graph, {
     direction: "backward",
-    boundary: new Map([[graph.exit, boundary], [graph.exceptionExit, boundary]]),
+    boundary: new Map([[graph.exit, new Set<RustNativeCaptureDependency>()],
+      [graph.exceptionExit, new Set<RustNativeCaptureDependency>()]]),
     lattice: {
       empty: () => new Set<RustNativeCaptureDependency>(),
       join(left, right, work) {
         if (left === right || right.size === 0) return left;
-        const selected = new Set(left);
+        const selected = new Set<RustNativeCaptureDependency>();
+        for (const dependency of left) { work.step(); selected.add(dependency); }
         for (const dependency of right) { work.step(); selected.add(dependency); }
         return selected;
       },
@@ -234,7 +251,8 @@ function analyzeCaptureDependencies(graph: SourceControlFlowGraph, input: RustOw
       },
     },
     transfer(point, later, work) {
-      const selected = new Set(later);
+      const selected = new Set<RustNativeCaptureDependency>();
+      for (const dependency of later) { work.step(); selected.add(dependency); }
       for (const dependency of uses.get(point.id) ?? []) { work.step(); selected.add(dependency); }
       if (point.operation.kind === "capture") for (const dependency of selected) {
         work.step();

@@ -337,12 +337,6 @@ export function analyzeRustTargetProgram(
     genericRequirements: declarationGenericRequirements.index });
   if (captureOwnership.kind === "rejected") return rejectedTargetStage(captureOwnership.diagnostics);
   const movingReads = completeRustNativeReadTransfers(ownershipFlow.flow, captureOwnership.captures);
-  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
-    movingReads, captures: captureOwnership.captures,
-    borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
-    genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
-  });
-  if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   const typeDefinitions = context.typeDefinitions.seal();
   const projectTypes = context.projectTypes.seal();
   const errorTransport = analyzeRustErrorTransport({ ast: context.ast, projectTypes, typeDefinitions,
@@ -381,6 +375,12 @@ export function analyzeRustTargetProgram(
       return plan === undefined ? [] : [plan];
     }) });
   if (callableValues.kind === "rejected") return callableValues;
+  const ownership = analyzeRustReadOwnership({ storage: context.sourceStorage, nativeNodes: context.nativeNodes, records,
+    movingReads, captures: captureOwnership.captures, nativeStorage: context.callableValues.nativeStorage,
+    borrowEffects: borrowEffects.effects, borrowEffectsInput, definitions: context.typeDefinitions,
+    genericRequirements: declarationGenericRequirements.index, genericCallables: context.callableValues.generic,
+  });
+  if (ownership.kind === "rejected") return rejectedTargetStage(ownership.diagnostics);
   const nativeInputs = analyzeRustNativeInputs({ ast: context.ast, records,
     navigation: context.source.navigation, definitions: typeDefinitions,
     projectTypes, objectRepresentations,
